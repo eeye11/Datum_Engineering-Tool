@@ -28,7 +28,8 @@ const SCENES = {
         await page.click("text=Engineering Drawing");
         await page.click('.drawing-category[data-category="STATICS"]');
         await page.click('.drawing-tool[data-tool-id="body"]');
-        await page.click('[data-submenu-id="beam"]');
+        // Bodies opens an INLINE section now, not a popup submenu.
+        await page.click('#statics-body-tools .drawing-tool[data-tool-id="beam"]');
         const r = await page.evaluate(() => document.querySelector(".drawing-canvas").getBoundingClientRect().toJSON());
         for (const fx of [0.3, 0.7]) {
             const x = Math.round(r.left + r.width * fx), y = Math.round(r.top + r.height * 0.55);
