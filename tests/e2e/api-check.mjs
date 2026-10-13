@@ -80,10 +80,23 @@ try {
     // [data-submenu-id] item. The old selector matched nothing and timed out.
     await page.click('#statics-body-tools .drawing-tool[data-tool-id="beam"]');
     const box = await page.evaluate(() => document.querySelector(".drawing-canvas").getBoundingClientRect().toJSON());
-    for (const fx of [0.3, 0.7]) {
-        const x = box.left + box.width * fx, y = box.top + box.height * 0.6;
-        await page.mouse.move(x, y); await page.mouse.click(x, y); await page.waitForTimeout(200);
-    }
+    /*
+     * A BEAM IS DRAWN BY PRESS-DRAG-RELEASE, not by two separate clicks.
+     *
+     * Line, Beam and the other PATH tools are drag-creation tools: a bare
+     * click is read as "I am finished with this tool" and exits to Select,
+     * so two independent clicks place nothing and the beam never appears.
+     * The gesture the tool is built for is one press, a move, and a release.
+     */
+    const y = box.top + box.height * 0.6;
+    const x1 = box.left + box.width * 0.3;
+    const x2 = box.left + box.width * 0.7;
+    await page.mouse.move(x1, y);
+    await page.mouse.down();
+    await page.mouse.move(x2, y, { steps: 10 });
+    await page.waitForTimeout(80);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
     if (await page.evaluate(() => !!document.querySelector(".drawing-creation-dimension"))) {
         await page.keyboard.type("100"); await page.keyboard.press("Enter"); await page.waitForTimeout(200);
     }
