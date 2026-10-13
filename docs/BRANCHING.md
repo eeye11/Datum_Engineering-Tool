@@ -1,0 +1,241 @@
+# DAETUM — Branching and Collaboration Workflow
+
+How the 11 engineering categories are developed without stepping on each
+other. This documents the branch structure, who owns what, and the exact
+commands for each step.
+
+---
+
+## 1. The branch structure
+
+```
+main                    stable, tested releases
+└── develop             shared integration branch (everyone's work lands here)
+    ├── category/geometry
+    ├── category/annotate
+    ├── category/statics
+    ├── category/dynamics
+    ├── category/fluids
+    ├── category/thermodynamics
+    ├── category/heat-transfer
+    ├── category/solid-mechanics
+    ├── category/mechanical-design
+    ├── category/controls
+    └── category/math-analysis
+```
+
+| Branch | Purpose | Integration destination |
+| --- | --- | --- |
+| `main` | Stable, tested releases only | — |
+| `develop` | Shared integration; reviewed category work merges here | `main` after checks pass |
+| `category/*` | The persistent working branch for one category | `develop` via pull request |
+
+`develop` is the **common baseline**. Every `category/*` branch was cut
+from it, and it is the only place category work is combined.
+
+---
+
+## 2. Coworker workflow
+
+1. **Fetch the latest state**
+
+   ```powershell
+   git fetch origin --prune
+   ```
+
+2. **Check out your category branch**
+
+   ```powershell
+   git switch category/statics
+   git pull --ff-only
+   ```
+
+3. **Confirm the working tree is clean** before you start
+
+   ```powershell
+   git status --short --branch
+   ```
+
+4. **Work, and run the checks locally** before committing
+
+   ```powershell
+   npm run lint
+   npm test
+   npm run build
+   ```
+
+5. **Commit logically grouped changes** (one idea per commit)
+
+   ```powershell
+   git add <files>
+   git commit -m "feat(statics): ..."
+   ```
+
+6. **Push to your category branch**
+
+   ```powershell
+   git push origin category/statics
+   ```
+
+7. **Open a pull request** from `category/statics` into `develop`, and
+   merge it once reviewed and green.
+
+> Do not have two people commit to the same working directory at once.
+> Different branches do **not** prevent conflicts when the same shared
+> file is edited — see section 4.
+
+---
+
+## 3. Several people inside one category
+
+If two or more people work on the same category, do not all commit to the
+category branch directly. Cut a short-lived task branch from it:
+
+```
+category/annotate
+├── task/annotate-smart-dimension
+├── task/annotate-table
+```
+
+```powershell
+git switch category/annotate
+git pull --ff-only
+git switch -c task/annotate-table
+# ... work, commit ...
+git push -u origin task/annotate-table
+```
+
+Then open a pull request from `task/annotate-table` into
+`category/annotate`. Once merged, the updated category branch can go into
+`develop` in the usual way.
+
+Keep the `category/*` branches as the persistent collaboration branches;
+task branches are for work that is substantial or likely to conflict.
+
+---
+
+## 4. Shared infrastructure — read this before you edit it
+
+Some code is used by **every** category. Changing it on one category
+branch and nowhere else is how the branches silently drift apart.
+
+| Shared system | Where |
+| --- | --- |
+| Universal units and value parsing | `core/units/quantities.js`, `core/scale/` |
+| Shared geometry model | `core/geometry/`, `core/model/drawing-state.js` |
+| Snapping and direct manipulation | `core/snapping/object-snap.js`, `editor/drag.js`, `editor/handles.js` |
+| Feature registration and tool list | `editor/tools.js`, `editor/toolbar-render.js` |
+| Selection and canvas interaction | `editor/selection.js`, `editor/canvas-click.js`, `editor/canvas-events.js`, `editor/pointer.js` |
+| Rendering and annotation primitives | `rendering/renderer.js`, `rendering/canvas-palette.js` |
+| Undo/redo and persistence | `core/model/drawing-state.js`, `file/` |
+| Common property inputs and Features panel | `editor/feature-panel*.js`, `editor/property-binding.js`, `editor/property-update.js` |
+| Analysis data types and interfaces | `features/analysis/` |
+
+**When a change touches one of these:**
+
+1. Write down what the shared change is and why.
+2. List which category branches are affected.
+3. Agree the interface or data contract with the other owners **first**.
+4. Make the change in `develop` (or an agreed shared branch), with tests.
+5. Merge it into `develop`, then bring `develop` back into each affected
+   category branch (section 6).
+
+Do **not** make a different version of a shared file on each category
+branch. That is the failure mode this structure exists to prevent.
+
+---
+
+## 5. Integration and release
+
+- Category work → `develop` through review and validation.
+- `develop` → `main` only after the integrated application passes its checks.
+- Do not merge all 11 branches just because they exist. A category branch
+  merges when it contains intended, tested changes.
+- A freshly created category branch contains no feature work. Its
+  existence is not a claim that the category is implemented.
+
+---
+
+## 6. Keeping a category branch up to date with `develop`
+
+```powershell
+git switch category/statics
+git fetch origin
+git merge origin/develop      # or: git rebase origin/develop, if the branch is private
+```
+
+Resolve conflicts here, in the category branch, and push. Never
+force-push a branch other people are working on.
+
+---
+
+## 7. What "green" means
+
+`.github/workflows/ci.yml` runs, on every push and pull request:
+
+| Step | Command |
+| --- | --- |
+| Lint | `npm run lint` |
+| Unit and integration tests | `npm test` |
+| Build | `npm run build` |
+| Integration API in the browser | `tests/e2e/static-server.mjs` + `tests/e2e/api-check.mjs` |
+
+All four must pass. The browser step drives the real UI in Chrome, so a
+test that clicks the wrong element fails there even when lint and unit
+tests are green — check the actual DOM, not just the selector you expect.
+
+---
+
+## 8. Source-code ownership per category
+
+Category names do **not** map to directories. Each category's tools are
+registered in `editor/tools.js` and travel the shared pipeline in
+`docs/TOOL-MAP.md`. Ownership below means *the files a category's work
+will most often change*, not exclusive ownership.
+
+| Category | Branch | Registered tools (from `editor/tools.js`) | Primary files |
+| --- | --- | --- | --- |
+| GEOMETRY | `category/geometry` | Select, Point, Line, Triangle, Rectangle, Circle, Arc, Polygon, Coordinate System | `editor/geometry-creation.js`, `editor/construction-geometry.js`, `editor/creation-sizing.js`, `core/geometry/` |
+| ANNOTATE | `category/annotate` | Variable Dimension, Smart Dimension, Note / Text, Label, Leader, Callout, Arrow, Symbol, Tolerance, Table | `editor/annotate-creation.js`, `editor/annotation-tool.js`, `features/annotations/annotate-model.js`, `features/dimensions/`, `ui/editors/symbol-picker.js`, `ui/editors/table-picker.js` |
+| STATICS | `category/statics` | Bodies, Point Force, Loads, Moment, Supports, Connections; Resultant, Force Components, SFD, BMD, AFD; Coordinate System, Reference Point/Line/Arc | `editor/statics-creation.js`, `editor/statics-attachment.js`, `editor/statics-tools.js`, `editor/statics-panel.js`, `editor/analysis-tools.js`, `features/analysis/` |
+| DYNAMICS | `category/dynamics` | Particle, Rigid Body, Velocity, Acceleration, Rotation, Motion Path | `editor/tools.js` (registration), shared creation path |
+| FLUIDS | `category/fluids` | Pipe, Reservoir, Valve, Pump, Flow Arrow, Pressure | `editor/tools.js` (registration), shared creation path |
+| THERMODYNAMICS | `category/thermodynamics` | Control Volume, System Boundary, State Point, Process Path, Heat Transfer, Work | `editor/tools.js` (registration), shared creation path |
+| HEAT TRANSFER | `category/heat-transfer` | Wall, Layer, Heat Flux, Temperature, Convection, Radiation | `editor/tools.js` (registration), shared creation path |
+| SOLID MECHANICS | `category/solid-mechanics` | Beam, Shaft, Load, Stress, Strain, Boundary Condition | `editor/tools.js` (registration), shared creation path |
+| MECHANICAL DESIGN | `category/mechanical-design` | Part, Hole, Shaft, Gear, Fastener, Section View | `editor/tools.js` (registration), shared creation path |
+| CONTROLS | `category/controls` | Block, Input, Output, Sensor, Controller, Signal Arrow | `editor/tools.js` (registration), shared creation path |
+| MATH / ANALYSIS | `category/math-analysis` | Point, Function, Vector, Graph, Equation | `editor/tools.js` (registration), shared creation path |
+
+**Important:** the six categories from DYNAMICS to MATH / ANALYSIS are
+listed in the `engineeringTools` registry but do not yet have their own
+feature modules — they route through the shared creation pipeline. Their
+branches exist and are ready; the work to give them real tools is theirs
+to do. Do not commit placeholder panels that imply unsupported features
+work.
+
+---
+
+## 9. Quick command reference
+
+```powershell
+# See every branch and what it tracks
+git branch -vv
+
+# Start on a category
+git switch category/geometry
+
+# New task branch inside a category
+git switch -c task/geometry-circle
+
+# Publish a new branch
+git push -u origin task/geometry-circle
+
+# Bring develop into your category branch
+git switch category/geometry
+git fetch origin
+git merge origin/develop
+
+# Confirm your branch is level with the remote
+git status --short --branch
+```
