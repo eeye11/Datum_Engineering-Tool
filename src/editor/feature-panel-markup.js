@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { isSaturationCurve } from "../features/thermodynamics/saturation-curve.js";
 import { isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
@@ -1223,6 +1224,7 @@ export function featurePropertyMarkup(object) {
      * should not be reached by any feature DAETUM ships.
      */
     const displayLabel =
+        (isSaturationCurve(object) ? "Saturation Curve" : "") ||
         (isPistonCylinder(object) ? "Piston Cylinder" : "") ||
         staticsRoleLabel(object) ||
         STATICS_FEATURE_LABELS[object.type] ||
@@ -2145,6 +2147,18 @@ export function featurePropertyMarkup(object) {
             if (geometry.hasStoppers) {
                 rows.push(scalar("Stopper Height", "stopperHeight",
                     mmOf(geometry.height * stopperFraction(geometry)).value, mmOf(geometry.height).unit));
+            }
+        }
+        if (isSaturationCurve(object)) {
+            rows.push(section("AXIS LABELS"));
+            for (const [caption, key, value] of [
+                ["Horizontal Axis", "xLabel", geometry.xLabel ?? ""],
+                ["Vertical Axis", "yLabel", geometry.yLabel ?? ""]
+            ]) {
+                rows.push(panels.row({
+                    label: caption,
+                    control: `<input type="text" class="drawing-property-input" data-saturation-axis-label="${key}" aria-label="${caption}" value="${escapeHtmlText(value)}">`
+                }));
             }
         }
         rows.push(scalar("Rotation", "rotation", geometry.rotation || 0, "°"));

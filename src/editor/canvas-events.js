@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { installAxisLabelEditor } from "./axis-label-editor.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import { isIdleForEditing } from "./annotation-tool.js";
 import { beginCreationDrag, finishCreationDrag, moveCreationDrag } from "./creation-drag.js";
@@ -32,6 +33,7 @@ export function installCanvasEvents() {
     if (
         drawingCanvas
     ) {
+        installAxisLabelEditor();
         drawingCanvas.addEventListener(
             "mousemove",
             updateDrawingCoordinates

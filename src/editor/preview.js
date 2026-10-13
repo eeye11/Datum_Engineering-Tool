@@ -557,6 +557,7 @@ export function updatePreview(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
+        drawingState.activeTool === "saturation-curve" ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         interaction.preview =
@@ -567,6 +568,10 @@ export function updatePreview(
                     point
                 )
             );
+
+        if (drawingState.activeTool === "saturation-curve") {
+            interaction.preview.metadata = { thermodynamicsKind: "saturation-curve" };
+        }
 
         setToolMessage(
             "Specify opposite corner"

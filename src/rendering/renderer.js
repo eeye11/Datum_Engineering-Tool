@@ -2,6 +2,7 @@
 import enggErrorLog from "../app/error-log.js";
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { isSaturationCurve, saturationPaths } from "../features/thermodynamics/saturation-curve.js";
 import { selectionBounds, selectionCorners } from "../core/selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction, stopperPaths } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms, rigidBodyHandles, trussJoints } from "../core/geometry/feature-handles.js";
@@ -5123,6 +5124,33 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             return;
         }
 
+        if (isSaturationCurve(entity)) {
+            for (const [index, points] of saturationPaths(geometry).entries()) {
+                const screen = points.map(toScreen);
+                const path = createSvgElement("path", {
+                    d: screen.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+                });
+                applyStyle(path, { ...style, fill: "none" });
+                if (index === 1 || index === 2) {
+                    path.setAttribute("fill", paintColour(style.stroke || enggTheme.defaultLineColour()));
+                    path.setAttribute("stroke", "none");
+                }
+                svg.appendChild(path);
+            }
+            for (const [key, x, y] of [["yLabel", 0.04, 0.94], ["xLabel", 0.98, 0.02]]) {
+                const label = geometry[key] || "insert axis label";
+                const point = toScreen(cylinderPoint(geometry, x, y));
+                const text = createSvgElement("text", {
+                    x: point.x, y: point.y, fill: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                    "font-size": 12, "text-anchor": "end", "font-family": "sans-serif",
+                    "data-saturation-axis": key, "data-axis-feature-id": entity.id,
+                    cursor: "text"
+                });
+                text.textContent = label;
+                svg.appendChild(text);
+            }
+        }
+
         if (isPistonCylinder(entity)) {
             const level = pistonFraction(geometry);
             const thickness = Math.min(0.04, level / 2);
@@ -5151,7 +5179,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          */
         if (
             (entity.type ===
-                "rectangle" && !isPistonCylinder(entity)) ||
+                "rectangle" && !isPistonCylinder(entity) && !isSaturationCurve(entity)) ||
             entity.type ===
                 "rigid-body"
         ) {
@@ -7945,6 +7973,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         state,
         bounds
     ) {
+        if (isSaturationCurve(state.interaction.preview)) {
+            appendEntity(svg, state.interaction.preview, state, bounds);
+            return;
+        }
         const toScreenAll =
             point =>
                 enggDrawingState.engineeringToScreen(point, bounds, state);

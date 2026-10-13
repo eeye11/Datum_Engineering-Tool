@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { isSaturationCurve, saturationPaths } from "../features/thermodynamics/saturation-curve.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms } from "../core/geometry/feature-handles.js";
 import enggDrawingState from "../core/model/drawing-state.js";
@@ -874,6 +875,11 @@ export function objectAtPoint(
                         }
                     }
                     return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
+                }
+
+                if (isSaturationCurve(object)) {
+                    return saturationPaths(geometry).some(path => path.some((start, index) =>
+                        index > 0 && distanceToSegment(point, path[index - 1], start) <= tolerance));
                 }
 
                 if (

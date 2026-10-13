@@ -774,6 +774,7 @@ export function beginOrCompleteGeometry(
 
                     : (drawingState.activeTool === "rectangle" ||
                         drawingState.activeTool === "control-volume" ||
+                        drawingState.activeTool === "saturation-curve" ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
 
@@ -1642,6 +1643,7 @@ export function beginOrCompleteGeometry(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
+        drawingState.activeTool === "saturation-curve" ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         const rectangle =
@@ -1651,8 +1653,9 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
+        const isSaturation = drawingState.activeTool === "saturation-curve";
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isControlVolume || isPiston) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isControlVolume || isPiston || isSaturation) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -1675,7 +1678,7 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isPiston ? { lineType: "solid", fill: "none" } : {})
+                        ...(isPiston || isSaturation ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
@@ -1685,6 +1688,10 @@ export function beginOrCompleteGeometry(
         if (isPiston && drawingState.activeTool === "piston-cylinder-stoppers") {
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
+        }
+        if (isSaturation) {
+            object.name = "Saturation Curve";
+            object.metadata = { thermodynamicsKind: "saturation-curve" };
         }
     } else if (
         drawingState.activeTool ===
@@ -1843,9 +1850,9 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["control-volume", "piston-cylinder"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["control-volume", "piston-cylinder", "saturation-curve"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (object.metadata.thermodynamicsKind === "piston-cylinder") {
+            if (["piston-cylinder", "saturation-curve"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
@@ -1854,7 +1861,9 @@ export function beginOrCompleteGeometry(
                 ? (object.geometry.hasStoppers
                     ? "Drag a stopper dot to adjust the stops, the centre dot to move the piston, or a corner to resize"
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
-                : "Control volume created");
+                : object.metadata.thermodynamicsKind === "saturation-curve"
+                    ? "Saturation curve created - drag the corner dots to resize"
+                    : "Control volume created");
             renderProperties();
             renderCurrentDrawing();
             return;
