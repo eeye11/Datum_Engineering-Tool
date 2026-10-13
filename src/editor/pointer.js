@@ -83,6 +83,17 @@ function selectedForceAnchorPoints() {
 function resolvePointerPoint(
     rawPoint
 ) {
+    // Control volumes outline a region with clearance from nearby equipment.
+    // Keep both corners at the pointer, without snapping or held guides.
+    if (drawingState.activeTool === "control-volume") {
+        return {
+            rawPointerPoint: { ...rawPoint },
+            effectiveConstructionPoint: { ...rawPoint },
+            snappedPoint: null, inferredPoint: null,
+            snapCandidate: null, hoveredEntity: null,
+            inference: null, guideline: null
+        };
+    }
     /*
      * THE ANALYSIS AXIS PLACEMENT IS NOT A CONSTRUCTION TOOL, BUT IT
      * STILL NEEDS THE POINTER.
@@ -668,6 +679,7 @@ export function resolveManipulationPoint(
     // The piston also slides freely within its cylinder. Corner resizing
     // still uses the normal snap and inference pipeline.
     if (
+        drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
         (drag?.kind === "body" &&
             ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||
         (["piston-height", "stopper-height"].includes(drag?.kind) &&

@@ -541,7 +541,7 @@ export function finishManipulationDrag(
     const drag =
         editorState.manipulationDrag;
 
-    if (drag.kind === "body" && !drag.placing) {
+    if (drag.kind === "body" && drag.moved && !drag.placing) {
         drag.awaitingPlacement = true;
         if (drawingCanvas.hasPointerCapture(event.pointerId)) drawingCanvas.releasePointerCapture(event.pointerId);
         editorState.selectionClickSuppressed = true;

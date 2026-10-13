@@ -407,6 +407,9 @@ export function handleCanvasClick(
             event
         )
     ) {
+        if (drawingState.activeTool !== "select") {
+            activateTool("select");
+        }
         selectFromCanvasClick(
             event
         );
