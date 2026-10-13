@@ -302,7 +302,7 @@ export const drawingToolGroups = [
 			{ id: "triangle", label: "Triangle", shortcut: "T" },
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
-			{ id: "arc", label: "Arc", shortcut: "A", submenu: true },
+			{ id: "arc", label: "Arc", shortcut: "A" },
 			{ id: "polygon", label: "Polygon", shortcut: "G" }
 		]
 	},
@@ -416,18 +416,29 @@ export const annotateToolGroups = [
 			{ id: "callout", label: "Callout" }
 		]
 	},
+
+	/*
+	 * ========================================================
+	 * SYMBOLS - and the two V1 EXCLUSIONS
+	 * ========================================================
+	 *
+	 * The standalone ARROW and TOLERANCE tools are NOT part of V1. Both are
+	 * removed from the TOOLSET here, and from the toolset only.
+	 *
+	 * THE FEATURE KINDS REMAIN. `arrow` and `tolerance` are still declared in
+	 * annotate-model.js and still render, select, move, save and load - so a
+	 * drawing made with an earlier version keeps working, and the arrowheads the
+	 * task explicitly keeps (Leader and Callout endpoint symbols) are untouched.
+	 * Removing the kinds would have broken existing files; removing the TOOLS
+	 * takes the entry out of the V1 menu and nothing else.
+	 *
+	 * Markup is gone as a heading for the same reason: with Arrow out of V1 it
+	 * would be a category holding no command.
+	 */
 	{
-		id: "annotate-markup",
-		label: "Markup",
-		tools: [{ id: "arrow", label: "Arrow" }]
-	},
-	{
-		id: "annotate-symbols-tolerances",
-		label: "Symbols & Tolerances",
-		tools: [
-			{ id: "symbol", label: "Symbol" },
-			{ id: "tolerance", label: "Tolerance" }
-		]
+		id: "annotate-symbols",
+		label: "Symbols",
+		tools: [{ id: "symbol", label: "Symbol" }]
 	},
 	{
 		id: "annotate-tables",

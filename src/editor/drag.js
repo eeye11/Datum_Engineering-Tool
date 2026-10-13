@@ -14,7 +14,7 @@ import { drawingState, editorState } from "./editor-state.js";
 import { renderProperties } from "./feature-panel.js";
 import { handleAtPoint, isConstructionInProgress, moveObjectAndChildren, rectangleCorners } from "./handles.js";
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
-import { resolvePointerEvent, updateInteractionFeedback } from "./pointer.js";
+import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "./statics-attachment.js";
 import { canvasPointFromEvent } from "./tool-activation.js";
 import { setToolMessage } from "./toolbar-render.js";
@@ -146,6 +146,21 @@ export function beginManipulationDrag(
             start: { ...point },
 
             /*
+             * THE DRAG'S STABLE INFERENCE REFERENCE.
+             *
+             * A handle drags ONE POINT of the feature, so the point being
+             * manipulated is its own alignment reference: the movement is
+             * squared to the row or column the handle STARTED on, which is
+             * how a student drags an endpoint exactly level with where it
+             * was. It is captured here, once, and never re-read - a reference
+             * that followed the cursor could only ever measure the cursor
+             * against itself.
+             */
+            anchor: hit.handle.point
+                ? { x: hit.handle.point.x, y: hit.handle.point.y }
+                : { ...point },
+
+            /*
              * The WHOLE object is snapshotted, not just its geometry.
              *
              * A drag can move more than a shape: an annotation moves by
@@ -233,6 +248,13 @@ export function beginManipulationDrag(
             moved: false,
             pending: true,
             start: { ...point },
+
+            /*
+             * A dimension and an annotate feature follow the cursor exactly
+             * and do not snap (see `updateManipulationDrag`), so they keep a
+             * reference only for symmetry - it is never consulted.
+             */
+            anchor: { ...point },
             originals: {
                 [overlay.id]:
                     JSON.parse(
@@ -283,6 +305,18 @@ export function beginManipulationDrag(
             kind: "body",
             moved: false,
             start: { ...point },
+
+            /*
+             * WHOLE-FEATURE MOVE: the inference reference is where the student
+             * GRABBED the feature.
+             *
+             * A body drag translates everything by the pointer's delta from
+             * the press, so aligning the cursor to the grab point's row or
+             * column moves the feature exactly horizontally or vertically
+             * from where it was picked up - which is the gesture the task
+             * describes as "drag it approximately horizontally".
+             */
+            anchor: { ...point },
             originals: Object.fromEntries(
                 objectsByIds(
                     drawingState.selection
@@ -326,11 +360,6 @@ export function updateManipulationDrag(
         return;
     }
 
-    const resolution =
-        resolvePointerEvent(
-            event
-        );
-
     /*
      * A DIMENSION FOLLOWS THE CURSOR EXACTLY.
      *
@@ -361,6 +390,27 @@ export function updateManipulationDrag(
         editorState.manipulationDrag.object
             ?.type === "annotate";
 
+    /*
+     * GEOMETRY IS RESOLVED THROUGH THE SHARED SNAP PIPELINE.
+     *
+     * A feature, an endpoint and a body all write REAL geometry, so snapping
+     * may legitimately constrain them - the same way it constrains a feature
+     * being drawn. The drag's captured reference is fed in as the anchor, so
+     * horizontal and vertical inference runs relative to where the drag began
+     * AND the ordinary snap candidates are still available.
+     *
+     * The dimension and the annotate case keep the raw pointer, because what
+     * they write is a DRAWING position rather than a measurement - see the
+     * two comments above.
+     */
+    const resolution =
+        draggingDimension || draggingAnnotate
+            ? resolvePointerEvent(event)
+            : resolveManipulationPoint(
+                  event,
+                  editorState.manipulationDrag
+              );
+
     const point =
         draggingDimension || draggingAnnotate
             ? resolution.rawPointerPoint ||
@@ -369,6 +419,33 @@ export function updateManipulationDrag(
 
     if (!point) {
         return;
+    }
+
+    /*
+     * THE GUIDE IS DRAWN FROM THE DRAG, TOO.
+     *
+     * A horizontal or vertical inference is a line on the screen as well as a
+     * constraint, and the renderer reads it from the interaction. Setting it
+     * here is what puts the alignment guide and the snap marker up while the
+     * feature is dragged; clearing it when there is no inference is what takes
+     * them down again, so the guide can never outlive the snap it describes.
+     *
+     * `setInteraction` is the same path a construction uses, so the guideline
+     * hold and its expiry timer behave identically for a drag.
+     */
+    if (!draggingDimension && !draggingAnnotate) {
+        enggDrawingState.setInteraction(
+            drawingState,
+            {
+                snapCandidate: resolution.snapCandidate,
+                inference: resolution.inference,
+                guideline: resolution.guideline
+            }
+        );
+
+        scheduleGuidelineExpiry(
+            resolution.guideline
+        );
     }
 
     /*
@@ -432,6 +509,25 @@ export function finishManipulationDrag(
 
     editorState.manipulationDrag =
         null;
+
+    /*
+     * THE DRAG'S TRANSIENT SNAP STATE IS CLEARED WITH IT.
+     *
+     * A guide, a snap marker and an inference label are all pictures of the
+     * drag that has just ended. Left behind they would sit on the drawing
+     * describing a relationship nothing is holding any more - which is the
+     * "snap status stuck on screen" report in its drag form. So the moment the
+     * drag is over, the transient state goes with it and one redraw puts the
+     * drawing back to plain.
+     */
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            snapCandidate: null,
+            inference: null,
+            guideline: null
+        }
+    );
 
     if (
         drawingCanvas.hasPointerCapture(
@@ -601,6 +697,32 @@ function applyManipulation(
             return true;
         }
 
+        /*
+         * A LABEL'S ANCHOR, moved deliberately.
+         *
+         * This is the DEDICATED handle for changing what a label is about, and
+         * it writes the anchor point (`geometry.start`) and nothing else - the
+         * text stays where it was, so the student can see the leader stretch as
+         * they move the anchor to a new place on the body.
+         */
+        if (drag.kind === "annotate-anchor") {
+            geometry.start = { x: point.x, y: point.y };
+            return true;
+        }
+
+        /*
+         * A LABEL'S TEXT, moved on its own.
+         *
+         * The same handle kind a point-placed mark uses, but for a label the
+         * position IS the text - so this moves the words while the anchor set
+         * above stays put. This is the handle a student grabs to make a label
+         * legible without changing what it marks.
+         */
+        if (drag.kind === "position" && object.annotateKind === "label") {
+            geometry.position = { x: point.x, y: point.y };
+            return true;
+        }
+
         if (drag.kind === "annotate-endpoint") {
             geometry.end = { x: point.x, y: point.y };
             return true;
@@ -687,6 +809,29 @@ function applyManipulation(
         object.geometry = JSON.parse(
             JSON.stringify(original.geometry)
         );
+
+        /*
+         * A LABEL'S TEXT MOVES AND ITS ANCHOR STAYS.
+         *
+         * A label marks a point on a body; dragging the label moves the TEXT
+         * so it can be made legible, and the anchor must not travel with it -
+         * otherwise the label would stop marking the thing it names. Only the
+         * text position is moved, and the renderer draws the leader that
+         * bridges the gap when it grows (see `labelLeaderGap`).
+         *
+         * Every other annotate kind relocates whole, which is what dragging a
+         * note, a leader or an arrow means.
+         */
+        if (object.annotateKind === "label" && object.geometry?.position) {
+            object.geometry.position = {
+                x:
+                    (original.geometry?.position?.x ?? 0) + deltaX,
+                y:
+                    (original.geometry?.position?.y ?? 0) + deltaY
+            };
+
+            return true;
+        }
 
         enggAnnotate.translateAnnotation(
             object,

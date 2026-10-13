@@ -13,6 +13,7 @@ import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import enggSketchEditor from "../ui/editors/sketch-editor.js";
 import enggPropertyPanel from "../ui/feature-panel/property-panel.js";
 import { drawingState } from "./editor-state.js";
+import { mmOf } from "./handles.js";
 import { relativeCoordinateRows } from "./relative-coordinates.js";
 import { staticsSupportSection } from "./statics-tools.js";
 
@@ -1212,7 +1213,8 @@ export function supportPanelRows(
     `);
 
     /*
-     * WHERE ALONG THE BODY, in millimetres, and the label says so.
+     * WHERE ALONG THE BODY, in the selected length unit, and the selector
+     * beside it says which.
      *
      * Calling this simply "Position X" invited the reading that it is an
      * x coordinate in its own right, and the value a student would then
@@ -1226,6 +1228,11 @@ export function supportPanelRows(
      * resized underneath it. Showing the distance and storing the
      * fraction is the translation made once, here, rather than by every
      * other part of the application guessing which one it is holding.
+     *
+     * THE DISTANCE IS READ IN THE FEATURE'S OWN UNIT, the same one the
+     * rest of its panel would use - converted from the sheet's
+     * millimetres through the shared table, and selectable beside the
+     * number like every other length row.
      */
     const parentFrame = parent
         ? enggBodyFrames.frameOf(parent)
@@ -1238,9 +1245,21 @@ export function supportPanelRows(
           )
         : 0;
 
-    const alongBody = parentFrame
+    const alongBodyWorld = parentFrame
         ? attachmentFraction * parentFrame.length
         : 0;
+
+    const lengthUnit =
+        enggQuantities.isUnitFor("length", object.lengthUnit)
+            ? object.lengthUnit
+            : "mm";
+
+    const alongBody = enggQuantities.convertValue(
+        mmOf(alongBodyWorld).value,
+        "length",
+        "mm",
+        lengthUnit
+    );
 
     rows.push(`
         <div class="drawing-property-grid drawing-property-grid-value">
@@ -1249,7 +1268,22 @@ export function supportPanelRows(
                 data-support-distance
                 aria-label="Position Along Body"
                 value="${number(alongBody)}">
-            <span class="drawing-property-unit">mm</span>
+            <span class="drawing-property-unit">
+                <select class="drawing-property-unit-select"
+                    data-property="lengthUnit"
+                    aria-label="Position unit"
+                    title="Position unit">
+                    ${enggQuantities
+                        .unitsFor("length")
+                        .map(
+                            unit =>
+                                `<option value="${unit}"${
+                                    unit === lengthUnit ? " selected" : ""
+                                }>${unit}</option>`
+                        )
+                        .join("")}
+                </select>
+            </span>
             <span></span>
         </div>
     `);
@@ -1296,13 +1330,27 @@ export function supportPanelRows(
 
     rows.push(section("REAL POSITION"));
 
+    /*
+     * THE DERIVED POSITION IS READ IN THE SAME UNIT the editable rows
+     * above use, converted from the sheet's millimetres through the one
+     * shared conversion - a derived row stating a different unit from the
+     * fields around it is a second reading of one number.
+     */
+    const shownWorld = point =>
+        enggQuantities.convertValue(
+            mmOf(point).value,
+            "length",
+            "mm",
+            lengthUnit
+        );
+
     rows.push(`
         <div class="drawing-property-grid drawing-property-grid-value">
             <span class="drawing-property-grid-label">X</span>
             <span class="drawing-property-derived">${
-                number(placement?.render?.x ?? geometry.position?.x)
+                number(shownWorld(placement?.render?.x ?? geometry.position?.x))
             }</span>
-            <span class="drawing-property-unit">mm</span>
+            <span class="drawing-property-unit">${lengthUnit}</span>
             <span></span>
         </div>
     `);
@@ -1311,9 +1359,9 @@ export function supportPanelRows(
         <div class="drawing-property-grid drawing-property-grid-value">
             <span class="drawing-property-grid-label">Y</span>
             <span class="drawing-property-derived">${
-                number(placement?.render?.y ?? geometry.position?.y)
+                number(shownWorld(placement?.render?.y ?? geometry.position?.y))
             }</span>
-            <span class="drawing-property-unit">mm</span>
+            <span class="drawing-property-unit">${lengthUnit}</span>
             <span></span>
         </div>
     `);

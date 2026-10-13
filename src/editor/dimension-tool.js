@@ -376,6 +376,26 @@ function dimensionMeasurementInDrawingUnits(
  * identical code, rather than one calling the other and leaving it
  * unclear which is the real one.
  */
+/*
+ * Whether the drawing already states this measurement.
+ *
+ * A thin local wrapper over the dimension model's own redundancy check, asked
+ * with the same `{ dimensionType, refs }` shape a proposal uses - so the check
+ * that suppresses a redundant dimension during inference and the check that
+ * decides a new dimension defaults to Driven are the SAME rule, read the same
+ * way.
+ */
+function isAlreadyStated({ dimensionType, refs }) {
+    try {
+        return enggDimensionModel.alreadyStated(
+            { dimensionType, refs },
+            drawingState
+        );
+    } catch (error) {
+        return false;
+    }
+}
+
 function commitDimensionNow({
     dimensionType,
     refs,
@@ -413,7 +433,30 @@ function commitDimensionNow({
     const object = enggDrawingState.geometryFactories.dimension({
         dimensionType,
         refs,
-        placement
+        placement,
+
+        /*
+         * ====================================================
+         * A NEW DIMENSION DEFAULTS TO DRIVING - UNLESS IT IS REDUNDANT
+         * ====================================================
+         *
+         * The requirement is that a new dimension Driving by default whenever
+         * the geometry can reliably support it, and Driven when it would make
+         * the drawing redundant or otherwise unable to solve - WITH AN
+         * EXPLANATION.
+         *
+         * The one redundancy this build can detect without a constraint solver
+         * is "this same measurement is already stated on the sheet": the
+         * `alreadyStated` check the inference already uses. A second dimension
+         * of the same measurement of the same geometry is exactly the
+         * over-dimensioning a checker marks down, so it is created as DRIVEN -
+         * it still reports the value, in the Driven colour, and the student is
+         * told why.
+         *
+         * Everything else is Driving, which is what an ordinary dimension on
+         * geometry that can support it should be.
+         */
+        driven: isAlreadyStated({ dimensionType, refs })
     });
 
     enggDrawingState.addObject(
@@ -447,9 +490,11 @@ function commitDimensionNow({
         );
 
     setToolMessage(
-        measured
-            ? `Dimension placed - ${measured}`
-            : "Dimension placed"
+        object.driven
+            ? `Dimension placed as Driven - ${measured} - this measurement is already stated`
+            : measured
+              ? `Dimension placed - ${measured}`
+              : "Dimension placed"
     );
 
     renderProperties();
@@ -499,34 +544,62 @@ function openVariablePrompt({ previousObjects, refs, placement }) {
          */
         expression: true,
 
+        /*
+         * CONTENT IS MANDATORY ON CREATION.
+         *
+         * A blank Variable Dimension must never be committed, so an empty box
+         * is refused and the editor stays open for correction. This is the one
+         * place the requirement differs from every other value prompt.
+         */
+        requireContent: true,
+
         onConfirm: ({ text }) => {
+            /*
+             * ====================================================
+             * CONTENT IS REQUIRED - A BLANK VARIABLE IS NEVER CREATED
+             * ====================================================
+             *
+             * The popup refuses an empty field before reaching here, and this
+             * guards the same rule a second time so no future caller can create
+             * a blank Variable Dimension by another route. An empty answer
+             * abandons the creation WITHOUT creating a feature, without an undo
+             * entry and without a placeholder - the interaction is released so
+             * the tool is ready for the next attempt.
+             */
+            const answered = String(text ?? "").trim();
+
+            if (!answered) {
+                enggDrawingState.clearInteraction(drawingState);
+
+                setToolMessage(
+                    "Variable Dimension needs a value, expression or text - nothing was created"
+                );
+
+                renderCurrentDrawing();
+
+                return;
+            }
+
             const previous =
                 previousObjects ||
                 enggDrawingState.snapshotDrawing(drawingState);
 
             /*
-             * THE THREE STATES, FROM ONE ANSWER.
+             * THE CONTENT, KEPT VERBATIM.
              *
-             *   "L/2"   what the student wrote
-             *   (empty) asked and answered UNKNOWN - not an error, and not zero
-             *
-             * There is deliberately NO "measured value" case: the geometry the
-             * student selected decided the dimension TYPE, and it never becomes
-             * the value. A 100-long line named `L` states `L`, not `100 mm`.
+             * A number, a unit-aware value, an expression, a variable or
+             * custom text - whatever the student wrote is stored as the symbol
+             * and shows on the sheet. There is deliberately NO "measured
+             * value" case: the geometry the student selected decided the
+             * dimension TYPE, and it never becomes the value. A 100-long line
+             * named `L` states `L`, not `100 mm`.
              */
-            const answered = String(text ?? "").trim();
-
             const object =
                 enggDrawingState.geometryFactories["variable-dimension"]({
                     refs,
                     placement,
-
-                    /*
-                     * EMPTY MEANS THE SYMBOL IS CLEARED AND THE UNKNOWN MARK
-                     * GOES ON, which `variableText` reports as "Unknown".
-                     */
                     symbol: answered,
-                    unknown: !answered
+                    unknown: false
                 });
 
             /*
@@ -746,17 +819,74 @@ export function openDimensionValuePrompt(object) {
                 );
 
                 if (answer.kind === "number") {
+                    /*
+                     * THE TYPED UNIT IS A LENGTH UNIT. The measured-units
+                     * list includes N and kN so the same popup can serve a
+                     * force-labelled readout, but a number typed WITH such a
+                     * suffix into a length dimension is a category error the
+                     * student would not see - it would drive the geometry to
+                     * a length of "1 newton". The value is converted through
+                     * the length table only when the suffix names a length
+                     * unit; anything else is refused, and the last valid
+                     * measurement stands.
+                     */
+                    if (
+                        answer.unit &&
+                        !enggQuantities?.isUnitFor?.("length", answer.unit)
+                    ) {
+                        setToolMessage(
+                            `A dimension measures a length - "${answer.unit}" is not a length unit`
+                        );
+
+                        previewSnapshot = null;
+
+                        return;
+                    }
+
                     const millimetres =
                         answer.value *
                         (enggQuantities?.LENGTH_UNITS?.[
                             answer.unit
                         ]?.mm ?? 1);
 
-                    enggDimensionEdit.applyDimensionValue(
+                    /*
+                     * ================================================
+                     * EDITING A DRIVEN DIMENSION PROMOTES IT TO DRIVING
+                     * ================================================
+                     *
+                     * A Driven dimension cannot move geometry - that is what
+                     * Driven means. Typing a value into one is the student's
+                     * request to make it CONTROL the geometry, so the promotion
+                     * is attempted and only STANDS IF THE GEOMETRY CAN ACTUALLY
+                     * BE MOVED to satisfy the value.
+                     *
+                     * The order matters: the edit is applied while the
+                     * dimension is temporarily Driving, and if it is refused
+                     * - the measurement is one no typed value can move, such
+                     * as an angle between two features - the dimension is put
+                     * back to Driven and the geometry is left exactly as it
+                     * was. Nothing is half-changed and the state is not
+                     * silently relaxed.
+                     */
+                    const wasDriven = object.driven === true;
+
+                    if (wasDriven) {
+                        object.driven = false;
+                    }
+
+                    const applied = enggDimensionEdit.applyDimensionValue(
                         object,
                         drawingState,
                         millimetres
                     );
+
+                    if (wasDriven && !applied?.ok) {
+                        object.driven = true;
+
+                        setToolMessage(
+                            "This dimension cannot drive the geometry - it stays Driven"
+                        );
+                    }
                 } else if (answer.kind === "symbol") {
                     /*
                      * A SYMBOL ON A DIMENSION IS ITS LABEL, which the panel
@@ -915,7 +1045,22 @@ function restorePreview() {
 /*
  * The units a measured dimension may be stated in, offered by the popup.
  */
-const MEASURED_UNITS = ["mm", "cm", "m", "in", "ft"].concat(["N", "kN"]);
+/*
+ * THE UNITS A MEASURED DIMENSION CAN BE READ IN.
+ *
+ * The length units are the quantity's own, from the shared table - the
+ * literal list this replaced was a second copy that would drift from it.
+ * N and kN are appended so the same popup can serve a readout that is a
+ * force, but a number typed WITH a force suffix into a length dimension is
+ * refused on confirm (see the onConfirm path), never silently converted.
+ */
+const MEASURED_UNITS = [
+    ...(
+        enggQuantities?.unitsFor?.("length") || ["mm", "cm", "m", "in", "ft"]
+    ),
+    "N",
+    "kN",
+];
 
 /*
  * WHICH FEATURE IS BEING DIMENSIONED

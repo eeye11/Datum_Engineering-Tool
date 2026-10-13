@@ -366,6 +366,7 @@ examples:
 | `enggdraw-round-trip.test.cjs` | the whole `.enggdraw` format: every feature kind and relationship through save → text → load (§15) |
 | `statics-value-prompt-and-support.test.cjs` | a typed answer (number / Unknown / symbol), unit-control widths, the fixed support's wall and hatch (§17) |
 | `dimension-driving.test.cjs` | a dimension stays DRIVING: its value is read from geometry, never stored; Variable states the symbol instead (§18) |
+| `circular-dimension-driving.test.cjs` | radius/diameter/arc-length targets move the ACTUAL geometry; an arc length holds its sweep and grows the radius; a Driven circular dimension leaves the circle untouched |
 | `variable-dimension.test.cjs` | Variable Dimension's three states, the shared inference, expressions stored verbatim (§12, §18) |
 | `feature-recognition.test.cjs` | **every feature type** in the shared systems: box selection and Fit bounds, one row per type (§19) |
 | `dual-creation.test.cjs`, `statics-dual-creation.test.cjs` | click-move-click AND click-drag for every creation tool |
@@ -417,8 +418,14 @@ style               fontSize, stroke, arrowhead, leaderStyle
 tools listed directly under them — **categories, not submenus**:
 
 ```
-Selection · Dimensions · Text · Leaders · Markup · Symbols & Tolerances · Tables
+Selection · Dimensions · Text · Leaders · Symbols · Tables
 ```
+
+**V1 EXCLUSIONS.** The standalone **Arrow** and **Tolerance** tools are NOT part
+of V1, so they are not listed in the toolset. The `arrow` and `tolerance`
+FEATURE KINDS remain (in `ANNOTATE_KINDS`) so drawings made with an earlier
+version still render, select, save and load — only the V1 menu entries are gone.
+Arrowheads stay configurable through Leader and Callout.
 
 Tool id === kind id, and `ANNOTATE_TOOL_KINDS` is derived from the model's own
 `ANNOTATE_KINDS`, so a kind cannot end up with no tool.
@@ -818,6 +825,101 @@ and no value does.
 
 `tests/dimension-driving.test.cjs` and `tests/variable-dimension.test.cjs` cover
 all of this.
+
+### Driving and Driven are STATES of one Smart Dimension
+
+A dimension carries a stored `driven` bit (`dimension-model.js → createDimension`).
+**Driving** controls geometry - a typed value moves it through
+`dimension-edit.applyDimensionValue`. **Driven** only REPORTS: `applyDimensionValue`
+refuses a Driven dimension (`{ ok: false, reason: "driven" }`), and
+`dimensionEditable` returns false, so no route can move geometry a Driven
+dimension claims only to be reading.
+
+- The **Driven colour** is `dimension-model.js → DRIVEN_COLOUR`, read by the
+  renderer and stated once so canvas, preview and panel agree.
+- The panel shows a **Status** row (Driving/Driven) written through the ONE setter
+  (`property-update.js`, `key === 'driven'`), so the stored bit is the single source
+  of truth.
+- A new dimension defaults to **Driving**, except when the measurement is **already
+  stated** on the sheet (`dimension-tool.js → isAlreadyStated`), where it is created
+  **Driven** with an explanation.
+- Editing a Driven dimension **promotes it to Driving** only if the geometry can be
+  moved to satisfy the value; otherwise it stays Driven and the geometry is untouched.
+
+### Variable Dimension REQUIRES content on creation
+
+The creation prompt opens the shared value popup with **`requireContent: true`**
+(`load-value-popup.js`), so an empty field is refused and the editor stays open.
+`dimension-tool.js` guards the same rule a second time, and **cancelling leaves no
+feature and no undo entry**. A Variable Dimension never drives geometry.
+
+### Labels, the symbol library and the table picker
+
+- **Labels** use a drawing-wide `A..Z, AA, AB` sequence (`annotate-model.js →
+  nextLabelName`, lowest free name reused). A label's **anchor** is `geometry.start`
+  and its **text** is `geometry.position`; a leader appears when the text is more
+  than ~2.5 text heights away (`labelLeaderGap`, checked in screen px so it holds at
+  every zoom).
+- **Symbol** opens a searchable/browsable library (`ui/editors/symbol-picker.js`),
+  places ONE symbol, then returns to Select.
+- **Table** opens a hover grid (`ui/editors/table-picker.js`) to choose its size;
+  cells are edited by double-click (`canvas-click.js → openTableCellEditorFor`), and
+  row/column commands live on the context menu (`context-menu.js → runTableEdit`),
+  all going through `annotate-model.js`'s grid arithmetic so no operation can leave
+  a grid with holes.
+
+### The V1 Annotate exclusions
+
+The standalone **Arrow** and **Tolerance** TOOLS are removed from
+`tools.js → annotateToolGroups`. The `arrow` and `tolerance` KINDS remain in the
+model, so saved drawings still open. Arrowheads stay configurable through Leader
+and Callout (including **dot** and **tick**, wired through the `data-style` handler
+which had been writing every non-width control into `style.lineType`).
+
+`tests/annotate-v1.test.cjs` covers all of this.
+
+### Circular dimensions: one reference, several measurements
+
+`dimension-inference.js → dimensionReferenceForFeature` gives a circle or an arc a
+`circular` reference carrying **`offered`** — every measurement the shape's own
+layer declares (`circle → diameter, radius`; `arc → radius, arc-length, diameter`)
+— ordered by the cursor. `circularCandidateDescriptors(reference)` turns one
+reference into the **candidate list** the placement holds, so **Tab cycles
+diameter ↔ radius (↔ arc length) on the same feature**. Before this, a circle
+collapsed to a single candidate and Tab had nowhere to go.
+
+Rendering follows the measurement, not a stale type:
+
+- **Diameter** (`dimension-model.js → radialGraphics`) is a line **through the true
+  centre** with opposing arrowheads whose inside/outside choice comes from
+  `decideArrowStyle`. The text carries the `⌀` prefix (`⌀40.00 mm`).
+- **Arc length** has its own graphic (`arcLengthGraphics` + `arcBetween`), drawn as
+  a **polyline along the feature's own sweep** — no ±π clamping, so a major arc
+  stays major — with radii out to each end and a tangent arrowhead at each. The
+  value is `radius × |sweep|`, never the chord.
+
+**Driving a circle or an arc** (`dimension-edit.js`):
+
+- **Diameter** writes the `diameter` size key; **radius** writes `radius`.
+- **Arc length** had no size key at all, so it was reported as a reading and
+  refused with `unsupported-type`. It is now driven by **holding the sweep and
+  changing the radius** (`radius = target / |sweep|`); `dimensionEditable` agrees,
+  and a zero-sweep arc is refused rather than divided by.
+
+Two defects this fixed, both about state that was dropped rather than wrong:
+
+- The **`dimension` geometry factory** (`drawing-state.js`) copied every field
+  except `driven`, so a Driven dimension built through the normal creation path
+  arrived without its state and could move geometry it claimed only to read. The
+  bit now travels with the rest.
+- The **help/settings dialog body** had no background of its own, so `--datum-ink`
+  text was drawn onto the dialog's dark backdrop scrim — in **light mode** the
+  User Guide and Drawing Help pages were dark-on-dark. The body now carries
+  `--datum-surface` (white on light, panel ink on dark) so one rule fixes both.
+
+`tests/circular-dimension-driving.test.cjs` covers radius, diameter and arc-length
+driving, the sweep surviving an arc-length change, the degenerate-sweep refusal,
+and a Driven circular dimension leaving the circle untouched.
 
 ---
 

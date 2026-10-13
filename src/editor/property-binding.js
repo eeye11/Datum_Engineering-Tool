@@ -4,6 +4,7 @@
 
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggDrawingState from "../core/model/drawing-state.js";
+import enggQuantities from "../core/units/quantities.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../features/analysis/rotational-arrow.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
@@ -15,10 +16,204 @@ import { renderProperties } from "./feature-panel.js";
 import { openAnalysisEditorFor } from "./feature-tree.js";
 import { currentPropertyValue, setRigidBodyShape } from "./property-inputs.js";
 import { updateFeatureProperty } from "./property-update.js";
+
+const { readQuantity } = enggQuantities;
 import { setToolMessage } from "./toolbar-render.js";
 import { optimizeTrussStructure } from "./truss-optimizer.js";
 
+/*
+ * WHICH QUANTITY A FIELD IS, AND WHICH UNIT IT IS SHOWING
+ * ============================================================
+ *
+ * A property field is bound by its `data-property` name, and the name is what
+ * says which quantity the number is. Almost every editable field on a feature
+ * panel is a LENGTH - a coordinate, a radius, a side, a spacing - so that is
+ * the default; the angle fields are the ones that are not, and the statics
+ * magnitudes are the rest.
+ *
+ * `readQuantity` needs this so it can refuse "5 mm" in a field that is really
+ * an angle, and so it can tell "5 kN" from a malformed "5 furlong".
+ */
+const ANGLE_PROPERTIES = new Set([
+    'angle',
+    'angle1',
+    'angle2',
+    'angle3',
+    'startAngle',
+    'endAngle',
+    'sweep',
+    'rotation',
+    'inclination',
+]);
+
+/*
+ * THE STATICS MAGNITUDES, each with the quantity it is and the geometry
+ * key that names the unit it is currently stated in.
+ *
+ * A force, a moment and a distributed load are different DIMENSIONS, so the
+ * unit the field's selector shows - and the unit a bare number is read in -
+ * has to be resolved per quantity. The geometry key is read live so a unit
+ * typed beside the number (which the setter has just recorded) is the unit
+ * the next read uses.
+ */
+const STATIC_QUANTITIES = [
+    { properties: new Set(['magnitude', 'forceX', 'forceY']), geometryType: 'force', unitKey: 'unit' },
+    { properties: new Set(['torque']), geometryType: 'moment', unitKey: 'momentUnit' },
+    { properties: new Set(['startIntensity', 'endIntensity']), geometryType: 'distributedLoad', unitKey: 'loadUnit' },
+];
+
+function staticQuantityFor(property) {
+    return STATIC_QUANTITIES.find(quantity =>
+        quantity.properties.has(property)
+    ) || null;
+}
+
+function quantityTypeFor(property, object) {
+    if (!property) {
+        return 'length';
+    }
+
+    if (ANGLE_PROPERTIES.has(property)) {
+        return 'angle';
+    }
+
+    const statics = staticQuantityFor(property);
+
+    if (statics) {
+        /*
+         * A MOMENT'S `magnitude` IS A MOMENT, A FORCE'S IS A FORCE. The
+         * feature type decides which family the key belongs to, because
+         * `magnitude` is a word several features use and the quantity is
+         * not in the key alone.
+         */
+        if (property === 'magnitude') {
+            if (object?.type === 'moment') {
+                return 'moment';
+            }
+
+            if (object?.type === 'load' || object?.type === 'varying-load') {
+                return 'distributedLoad';
+            }
+
+            return 'force';
+        }
+
+        return statics.geometryType;
+    }
+
+    return 'length';
+}
+
+/*
+ * THE UNIT THE FIELD IS CURRENTLY DISPLAYING.
+ *
+ * A unit selector sits beside the number, so the field's unit is what the
+ * FEATURE stores - the same source the setter reads. Asking the object rather
+ * than the DOM means the parser and the setter cannot be looking at two
+ * different dropdowns.
+ *
+ * Length resolves through `lengthUnit`; angle is stored in degrees; the
+ * statics magnitudes resolve through their own unit keys on the geometry.
+ */
+function currentUnitFor(property, object) {
+    const quantityType = quantityTypeFor(property, object);
+
+    if (quantityType === 'length') {
+        const stored = object && object.lengthUnit;
+
+        return stored && enggQuantities.isUnitFor('length', stored)
+            ? stored
+            : 'mm';
+    }
+
+    if (quantityType === 'angle') {
+        return enggQuantities.defaultUnitFor('angle');
+    }
+
+    /*
+     * A STATICS MAGNITUDE'S UNIT lives on the geometry beside the value it
+     * denominates. A unit the quantity does not have falls back to the
+     * quantity's base unit, which is what the setter stores by default.
+     */
+    const statics = staticQuantityFor(property);
+
+    if (statics && object?.geometry) {
+        const stored = object.geometry[statics.unitKey];
+
+        if (enggQuantities.isUnitFor(quantityType, stored)) {
+            return stored;
+        }
+    }
+
+    return enggQuantities.defaultUnitFor(quantityType);
+}
+
+/*
+ * MOVE THE FIELD'S UNIT SELECTOR TO MATCH A UNIT TYPED BESIDE THE NUMBER.
+ *
+ * Writing the same unit property the selector writes means the change is one
+ * ordinary undoable edit, and it is the ONE place the unit lives - so the
+ * dropdown cannot be left saying metres while the number is millimetres.
+ *
+ * Length writes `lengthUnit` on the feature; the statics magnitudes write
+ * their own unit key on the geometry, through the same setter the panel's
+ * unit dropdown uses.
+ */
+function setUnitFor(property, object, unit) {
+    const quantityType = quantityTypeFor(property, object);
+
+    if (!unit || !enggQuantities.isUnitFor(quantityType, unit)) {
+        return;
+    }
+
+    if (currentUnitFor(property, object) === unit) {
+        return;
+    }
+
+    if (quantityType === 'length') {
+        updateFeatureProperty(object, 'lengthUnit', unit);
+
+        return;
+    }
+
+    /*
+     * A STATICS UNIT IS RECORDED, NOT CONVERTED. The stored number is in the
+     * unit the feature states, so recording the newly named unit beside the
+     * value that is about to be written with it keeps the two naming the
+     * same quantity - the same rule the load popup applies.
+     */
+    const statics = staticQuantityFor(property);
+
+    if (statics && object?.geometry) {
+        object.geometry[statics.unitKey] = unit;
+    }
+}
+
 export function bindFeaturePropertyControls(object) {
+    /*
+     * THE DIMENSION'S "Edit Value" BUTTON.
+     *
+     * The panel's own route into the shared value popup, alongside the
+     * double-click on the canvas. It is offered only for a Driving dimension
+     * (the row is not rendered for a Driven one), because a Driven dimension
+     * reports rather than controls.
+     *
+     * `openDimensionValuePrompt` is imported lazily to keep this module free of
+     * a cycle: dimension-tool.js pulls in the panel, so importing it eagerly
+     * here would close the loop at load time.
+     */
+    drawingProperties
+        .querySelectorAll('[data-dimension-edit-value]')
+        .forEach(button => {
+            button.addEventListener('click', async () => {
+                const { openDimensionValuePrompt } = await import(
+                    './dimension-tool.js'
+                );
+
+                openDimensionValuePrompt(object);
+            });
+        });
+
     drawingProperties.querySelectorAll('[data-triangle-mode]').forEach(input => {
         input.addEventListener('click', () => {
             trianglePanelModes.set(
@@ -280,6 +475,20 @@ export function bindFeaturePropertyControls(object) {
 
                 object.style.pointSize =
                     size;
+            } else if (key === 'arrowhead' || key === 'leaderStyle') {
+                /*
+                 * A LEADER'S OR CALLOUT'S OWN STYLE FIELDS.
+                 *
+                 * THE SELECT'S OWN KEY IS WHAT IS WRITTEN, not a fixed
+                 * `lineType`. The default branch below used to assign
+                 * `object.style.lineType = input.value` for EVERY other
+                 * control - so choosing an Arrowhead (or a Leader line style)
+                 * wrote the word "dot" into the feature's LINE TYPE and left
+                 * the arrowhead exactly as it was. The dropdown then snapped
+                 * back on the next repaint, silently, which is why an endpoint
+                 * symbol could not be changed at all.
+                 */
+                object.style[key] = input.value;
             } else {
                 object.style.lineType =
                     input.value;
@@ -337,27 +546,38 @@ export function bindFeaturePropertyControls(object) {
                         drawingState
                     );
 
-                const clamped =
-                    Math.min(
-                        frame.length,
-                        Math.max(0, distance)
-                    );
-
                 /*
                  * Typed as a distance along the body, STORED as the
                  * fraction that distance represents.
                  *
-                 * The panel speaks in millimetres because that is the
-                 * number a student reasons about; the model stores the
-                 * fraction because that is what survives the body being
-                 * resized. Converting here is the last half of that
-                 * translation, and it means the rest of the application
-                 * never has to work out which of the two it is holding.
+                 * The panel speaks the length unit the student has
+                 * selected, and `pointAt` projects in WORLD units, so the
+                 * typed distance is converted through the document scale
+                 * IN THE FIELD'S OWN UNIT first - the same conversion every
+                 * other length write runs. The model stores the fraction
+                 * because that is what survives the body being resized.
+                 */
+                const worldDistance =
+                    enggQuantities.isUnitFor('length', parent?.lengthUnit)
+                        ? enggQuantities.convertValue(
+                            distance,
+                            'length',
+                            parent.lengthUnit,
+                            'mm'
+                        )
+                        : distance;
+
+                /*
+                 * THE TYPED DISTANCE IS CLAMPED IN WORLD UNITS, since the
+                 * frame it is measured along is a world length.
                  */
                 const point =
                     enggBodyFrames.pointAt(
                         frame,
-                        clamped
+                        Math.min(
+                            frame.length,
+                            Math.max(0, worldDistance)
+                        )
                     );
 
                 const placement =
@@ -559,6 +779,24 @@ export function bindFeaturePropertyControls(object) {
                 const bends = Array.isArray(object.geometry?.bends)
                     ? object.geometry.bends.length
                     : 0;
+
+                /*
+                 * THE ELBOW LIMIT IS ENFORCED HERE TOO, not only by the
+                 * button's disabled state - so the action cannot exceed it by
+                 * any route. A leader takes one elbow in V1.
+                 */
+                const maxBends =
+                    enggAnnotate.maxBendsFor?.(object.annotateKind) ?? 1;
+
+                if (bends >= maxBends) {
+                    setToolMessage(
+                        object.annotateKind === "leader"
+                            ? "A leader takes one elbow - move it instead"
+                            : "Bend limit reached"
+                    );
+
+                    return;
+                }
 
                 enggAnnotate.addLeaderBend(object, bends);
 
@@ -1072,15 +1310,63 @@ export function bindFeaturePropertyControls(object) {
             const raw =
                 input.value.trim();
 
-            const value =
-                Number(raw);
+            /*
+             * ====================================================
+             * THE TYPED TEXT IS READ, NOT JUST CONVERTED TO A NUMBER
+             * ====================================================
+             *
+             * `Number("5 mm")` is NaN, so the old field discarded a student's
+             * correct, unambiguous entry and snapped the box back - the entry
+             * looked like it had been ignored. A field labelled in metres that
+             * received "5 mm" had no way to tell the two apart at all.
+             *
+             * `readQuantity` answers both questions at once: what the number
+             * is, and which unit the student named for it. A bare "5" is read
+             * in the unit the field is already showing, so the label keeps its
+             * promise; a suffixed "5 mm" is read in millimetres whatever the
+             * dropdown says.
+             *
+             * It returns null for a malformed or empty entry, and that is
+             * handled by the branch below rather than by defaulting to zero.
+             */
+            const quantity = readQuantity(
+                raw,
+                quantityTypeFor(input.dataset.property, object),
+                currentUnitFor(input.dataset.property, object)
+            );
 
-            if (
-                raw === "" ||
-                !Number.isFinite(value)
-            ) {
+            if (!quantity) {
+                /*
+                 * A REFUSED ENTRY IS NOT A ZERO.
+                 *
+                 * The geometry is left exactly as it was, and the `change`
+                 * handler restores the box from the model, so the field snaps
+                 * back to the last valid committed value. Coercing to zero
+                 * here would collapse the feature to nothing - the more
+                 * destructive of the two outcomes, and the one that looks like
+                 * a successful edit.
+                 */
                 return false;
             }
+
+            /*
+             * AN EXPLICIT UNIT BECOMES THE FIELD'S UNIT.
+             *
+             * If the student typed "5 mm" while the selector read metres, the
+             * selector is moved to millimetres so the label and the number
+             * cannot be left disagreeing. A bare number leaves the selector
+             * alone, because the student said nothing about the unit and the
+             * dropdown is already stating it.
+             */
+            if (quantity.explicit) {
+                setUnitFor(
+                    input.dataset.property,
+                    object,
+                    quantity.unit
+                );
+            }
+
+            const value = quantity.value;
 
             if (applied === raw) {
                 return true;
@@ -1091,17 +1377,19 @@ export function bindFeaturePropertyControls(object) {
             /*
              * THE SETTER PERFORMS THE CONVERSION, SO NOTHING IS DONE HERE.
              *
-             * A physical coordinate is shown in the sheet's millimetres and
+             * A physical coordinate is shown in the unit the field states and
              * stored in world units, and `updateFeatureProperty` is the one
              * place that converts - for the panel's coordinate fields and
              * for the lengths it owns (see SETTER_OWNED_LENGTHS). Converting
              * again on the way in would be a different length, so the typed
-             * number is handed over exactly as it was entered.
+             * number is handed over exactly as it was entered, together with
+             * the unit it was entered in.
              */
             return updateFeatureProperty(
                 object,
                 input.dataset.property,
-                value
+                value,
+                quantity.unit
             );
         };
 

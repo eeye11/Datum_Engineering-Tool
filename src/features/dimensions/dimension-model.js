@@ -134,6 +134,7 @@ function createDimension({
   label = null,
   name,
   displayUnit = null,
+  driven = false,
 } = {}) {
   const normalisedRefs = normaliseReferences(refs);
 
@@ -209,6 +210,32 @@ function createDimension({
      * the drawing.
      */
     resolved: true,
+
+    /*
+     * ========================================================
+     * DRIVING OR DRIVEN - ONE FEATURE, TWO STATES
+     * ========================================================
+     *
+     * A Driving dimension CONTROLS its measurement: typing a value makes the
+     * geometry satisfy it (that is `dimension-edit.applyDimensionValue`). A
+     * Driven dimension only REPORTS the measurement of geometry that is
+     * already fixed by other geometry or constraints.
+     *
+     * They are STATES OF THE SAME FEATURE, not two tools: a dimension carries
+     * the same references, the same type, the same formatting and the same
+     * rendering either way, and the two differ only in whether a typed value
+     * is allowed to move the geometry. `driven` is the one stored bit that
+     * says which.
+     *
+     * WHY IT IS STORED, when `resolved` is deliberately computed: unlike
+     * `resolved`, which is a fact about the geometry, Driving/Driven is a
+     * choice about how the dimension participates in the drawing - so it is the
+     * user's statement and it is remembered. It defaults to DRIVING, because a
+     * new dimension on geometry that can support it should control that
+     * geometry; a caller creating one that cannot (a measurement already
+     * stated, or geometry that is otherwise fixed) passes `driven: true`.
+     */
+    driven: driven === true,
   };
 }
 
@@ -1256,22 +1283,35 @@ function formatMeasurement(
   /*
    * THE DISPLAY UNIT.
    *
-   * The measurement is always taken in the sheet's own unit (mm), because
-   * that is what the World Scale gives. The student may READ it in another
-   * length unit - cm, m, in, ft - and that changes the NUMBER SHOWN, never
-   * the geometry or the measurement.
+   * The measurement is always taken in millimetres, because that is the one
+   * canonical unit the World Scale reports. The student may READ it in another
+   * length unit - cm, m, in, ft - and that changes the NUMBER SHOWN, never the
+   * geometry or the measurement.
    *
-   * This is the one place the conversion happens, and it is a CONVERSION,
-   * not a relabel: 100 mm read in cm is 10 cm, not 100 cm. The stored
-   * reference and the world-scale relationship are untouched, so a dimension
-   * stays DRIVING and keeps updating in whichever unit is chosen.
+   * THE FALLBACK IS THE SHEET'S OWN UNIT, NOT THE MEASUREMENT'S.
+   *
+   * This used to fall back to `measurement.unit`. While `toEngineering` returned
+   * the figure already divided by the sheet's unit, that happened to be the
+   * sheet's unit and a metre document formatted as "1.50 m". Now that the value
+   * is always millimetres - so that a panel can convert it into whatever the
+   * field is displaying - `measurement.unit` is always "mm", and falling back to
+   * it would print a metre document as "1500.00 mm".
+   *
+   * The unit a dimension reads in when nothing per-dimension is set is therefore
+   * asked of the SCALE, which is where that choice lives. A dimension with its
+   * own `displayUnit` still honours it; only the default moved.
    *
    * An ANGLE is not a length and has no length unit, so it is left alone.
    */
+  const sheetUnit =
+    !measurement.angular && enggDimensions?.readScale
+      ? enggDimensions.readScale(state)?.unit
+      : null;
+
   const displayUnit =
     measurement.angular
       ? null
-      : dimension.displayUnit || measurement.unit;
+      : dimension.displayUnit || sheetUnit || measurement.unit;
 
   const shown =
     !measurement.angular &&
@@ -1648,6 +1688,26 @@ function graphicsFor(
     );
   }
 
+  /*
+   * AN ARC LENGTH RUNS ALONG ITS ARC
+   *
+   * `arc-length` is declared with `graphic: "linear"` in the type table, so
+   * without this branch it fell through to `linearGraphics` and was drawn as a
+   * straight chord between the arc's two ends - a different number from the one
+   * printed on it, and one that looks like a plain linear dimension. The value
+   * was right; the picture contradicted it.
+   */
+  if (
+    dimension.dimensionType === "arc-length"
+  ) {
+    return arcLengthGraphics(
+      dimension,
+      state,
+      measurement,
+      text
+    );
+  }
+
   return linearGraphics(
     dimension,
     state,
@@ -1899,14 +1959,197 @@ function decideArrowStyle(
   );
 
   /*
-   * A dimension line shorter than about six times the arrowhead
-   * cannot fit arrows outside its ends without them overlapping the
-   * text, so inside is the readable choice.
+   * A SHORT DIMENSION LINE TAKES INSIDE ARROWS.
+   *
+   * The test compares the line against the space the arrows need, not against a
+   * fixed number: a straight dimension between two close points and a diameter
+   * across a small circle are both "short" relative to their own geometry, and a
+   * hard six-unit cutoff called a 2-unit circle's diameter long enough to put its
+   * arrows outside. The offset is added because a dimension standing well clear of
+   * the geometry has room for outside arrows even when the line itself is short.
    */
-  return Math.abs(offset) > 0 &&
-    length < 6
+  const reach = Math.max(1e-6, Math.abs(offset));
+
+  return length < reach * 6
     ? "inside"
     : "outside";
+}
+
+/*
+ * AN ARC LENGTH, DRAWN ALONG THE ARC.
+ *
+ * The dimension follows the referenced arc's own sweep - a concentric arc at the
+ * placement's offset from the centre - with a radius line out to each end, so the
+ * reader can see WHICH sweep is being measured. The value is the same
+ * `radius x |sweep|` the measurement layer computed; this function only decides
+ * where to draw it.
+ *
+ * The sweep is taken from the feature's own start and end anchors rather than
+ * from their difference clamped to +/-180 degrees. A major arc is a legitimate
+ * arc, and a dimension that always drew the minor sweep would state a length the
+ * geometry does not have.
+ */
+function arcLengthGraphics(
+  dimension,
+  state,
+  measurement,
+  text
+) {
+  const reference = (dimension.sourceRefs || [])[0];
+  const object = findObject(state, reference?.featureId);
+  const geometry = object?.geometry || {};
+
+  const centre = enggMeasurement.resolveAnchor(object, "center");
+  const start = enggMeasurement.resolveAnchor(object, "start");
+  const end = enggMeasurement.resolveAnchor(object, "end");
+
+  const radius = featureRadius(object);
+
+  if (!centre || !start || !end || radius === null) {
+    return null;
+  }
+
+  /*
+   * The arc's true sweep, in the direction the geometry stores it. The stored
+   * start/end angles are the authority; the anchor points are used only to keep
+   * the drawn arc on the same side as the geometry when the angles are absent.
+   */
+  const startAngle = Number.isFinite(Number(geometry.startAngle))
+    ? Number(geometry.startAngle)
+    : Math.atan2(start.y - centre.y, start.x - centre.x);
+
+  const endAngle = Number.isFinite(Number(geometry.endAngle))
+    ? Number(geometry.endAngle)
+    : Math.atan2(end.y - centre.y, end.x - centre.x);
+
+  /*
+   * The offset the placement asks for: how far outside (or inside) the arc the
+   * dimension line sits. A placement beyond the boundary pushes the arc outwards,
+   * which is the conventional look; a placement inside pulls it in, but never
+   * past the centre.
+   */
+  const placementDistance = Math.hypot(
+    dimension.placement.x - centre.x,
+    dimension.placement.y - centre.y
+  );
+
+  const offsetRadius = Math.max(
+    radius * 0.2,
+    placementDistance
+  );
+
+  const arc = arcBetween(
+    centre,
+    offsetRadius,
+    startAngle,
+    endAngle
+  );
+
+  /*
+   * THE RADII OUT TO EACH END, so the arc is visibly tied to the two ends of the
+   * measured sweep rather than floating as a curve near the geometry.
+   */
+  const outerStart = {
+    x: centre.x + Math.cos(startAngle) * offsetRadius,
+    y: centre.y + Math.sin(startAngle) * offsetRadius
+  };
+
+  const outerEnd = {
+    x: centre.x + Math.cos(endAngle) * offsetRadius,
+    y: centre.y + Math.sin(endAngle) * offsetRadius
+  };
+
+  const midpoint = arc[Math.floor(arc.length / 2)] || outerStart;
+
+  return {
+    kind: "arc-length",
+    dimensionType: dimension.dimensionType,
+    measurement,
+    arc,
+    extensions: [
+      [centre, outerStart],
+      [centre, outerEnd]
+    ],
+    /*
+     * Arrowheads at the two ends of the measured arc, pointing along the sweep.
+     * The renderer draws these directly because they are not on a straight
+     * dimension line.
+     */
+    arrowheads: [
+      {
+        at: outerStart,
+        direction: tangentDirection(centre, outerStart, endAngle > startAngle ? 1 : -1)
+      },
+      {
+        at: outerEnd,
+        direction: tangentDirection(centre, outerEnd, endAngle > startAngle ? -1 : 1)
+      }
+    ],
+    text,
+    textFrame: textFrame(midpoint, text)
+  };
+}
+
+/*
+ * The points along a circular sweep, from the feature's own angles.
+ *
+ * Unlike `arcFrom`, the sweep is NOT clamped to a half turn: a major arc is drawn
+ * as the major arc it is. The samples are taken at the centre the geometry names,
+ * so an off-centre arc is drawn where it actually sits.
+ */
+function arcBetween(
+  centre,
+  radius,
+  startAngle,
+  endAngle
+) {
+  let sweep = endAngle - startAngle;
+
+  while (sweep <= -Math.PI * 2) sweep += Math.PI * 2;
+  while (sweep > Math.PI * 2) sweep -= Math.PI * 2;
+
+  const steps = 32;
+  const points = [];
+
+  for (let index = 0; index <= steps; index += 1) {
+    const angle = startAngle + (sweep * index) / steps;
+
+    points.push({
+      x: centre.x + Math.cos(angle) * radius,
+      y: centre.y + Math.sin(angle) * radius
+    });
+  }
+
+  return points;
+}
+
+/*
+ * The unit tangent at a point on a circle, for an arrowhead.
+ *
+ * The tangent is perpendicular to the radius; the sign says which way along the
+ * sweep the arrow points, so the two ends of an arc-length dimension point
+ * outwards from the measured segment rather than both the same way.
+ */
+function tangentDirection(
+  centre,
+  point,
+  sign
+) {
+  const radial = {
+    x: point.x - centre.x,
+    y: point.y - centre.y
+  };
+
+  const length = Math.hypot(radial.x, radial.y);
+
+  if (length < 1e-9) {
+    return { x: 1, y: 0 };
+  }
+
+  return {
+    x: (-radial.y / length) * sign,
+    y: (radial.x / length) * sign
+  };
 }
 
 function radialGraphics(
@@ -2029,7 +2272,21 @@ function radialGraphics(
     centre,
     edge,
     line: [start, tip],
-    arrowStyle: "outside",
+    /*
+     * ARROWS FIT INSIDE A BIG ENOUGH DIAMETER, OUTSIDE A SMALL ONE.
+     *
+     * `outside` was hard-coded, so a diameter whose line crossed the whole
+     * circle still pushed its arrowheads past the ends of the line - leaving the
+     * arrows outside the geometry and the line bare. `decideArrowStyle` is the
+     * existing rule for exactly this, and the placement's distance from the
+     * centre is the room available: a diameter placed near the circumference has
+     * little, and asks for outside arrows; one placed through the middle has room
+     * and keeps them inside, which is how a diameter is conventionally drawn.
+     */
+    arrowStyle:
+      dimension.dimensionType === "diameter"
+        ? decideArrowStyle(start, tip, Math.hypot(toPlacement.x, toPlacement.y))
+        : "outside",
     leader: {
       from: tip,
       to: {
@@ -2441,6 +2698,18 @@ const enggDimensionModel = {
   DEFAULT_PRECISION,
   ORIENTATIONS,
   REFERENCE_KINDS,
+
+  /*
+   * THE DRIVEN COLOUR - the chosen visual indicator of a Driven dimension.
+   *
+   * A distinct colour is what the requirement asks for, and it is stated HERE,
+   * once, so the canvas, the preview and the panel cannot pick three different
+   * shades. It sits beside the model rather than in the theme because it marks
+   * a STATE OF THE FEATURE, like the blue construction colour marks an
+   * in-progress construction - not a themed surface.
+   */
+  DRIVEN_COLOUR: "#8A5CC7",
+
   alreadyStated,
   createDimension,
   describesSameAs,

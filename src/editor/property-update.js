@@ -2,7 +2,6 @@
  * Applying an edited property to a feature.
  */
 
-import enggDimensions from "../core/scale/dimensions.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggQuantities from "../core/units/quantities.js";
 import { COORDINATE_SYSTEM_TYPE } from "./constants.js";
@@ -10,9 +9,51 @@ import { drawingState } from "./editor-state.js";
 import { moveRigidBodyTo, resizeRigidBody, setRigidBodyRadius } from "./property-inputs.js";
 import { isLoadGeometry, pointAtStation, relativeParentOf } from "./relative-coordinates.js";
 import { worldLengthOf } from "./handles.js";
+
+/*
+ * ========================================================
+ * THE DISPLAY UNIT A LENGTH FIELD IS READ IN, RESOLVED ONCE
+ * ========================================================
+ *
+ * Every length field on a Features panel is captioned by the unit the
+ * student has SELECTED for that feature (`object.lengthUnit`) - mm, cm, m,
+ * in or ft - and the panel converts the stored world length into that unit
+ * for display. The setter must therefore read the same unit back when a
+ * value is typed, or the number crosses the boundary a second time.
+ *
+ * That is the metre/millimetre defect: the panel showed 5 m and the setter
+ * converted the typed number as though it were millimetres, so the value
+ * landed at a thousandth of what the student entered and read back as 0.005.
+ *
+ * So the resolution lives HERE, once, as a helper every length branch below
+ * shares. The fallback is the sheet's own base unit (mm), which is what a
+ * feature that predates the unit field was always read in - the same
+ * convention the coordinate reader in feature-panel-markup follows.
+ */
+function displayLengthUnitOf(object) {
+    const stored = object?.lengthUnit;
+
+    return enggQuantities.isUnitFor("length", stored)
+        ? stored
+        : "mm";
+}
+
+/*
+ * A length typed in the field's own display unit, in WORLD units.
+ *
+ * `worldLengthOf` forwards to `dimensions.fromEngineering`, which is the ONE
+ * conversion from a typed engineering length to geometry units. Every branch
+ * below goes through this helper rather than calling `fromEngineering` with a
+ * hardcoded unit of its own, so a coordinate, a radius, a width and a side
+ * length cannot resolve the typed unit differently - which is exactly how the
+ * metre field came to be read in millimetres.
+ */
+function worldLengthInDisplayUnits(object, value) {
+    return worldLengthOf(value, displayLengthUnitOf(object));
+}
 import { applyTriangleSidesAndAngles } from "./triangle-editing.js";
 
-export function updateFeatureProperty(object, key, value) {
+export function updateFeatureProperty(object, key, value, typedUnit) {
     const g = object.geometry;
     const fixed = name => Boolean(object.constraints?.[name]);
     const positive = value > 0;
@@ -135,6 +176,10 @@ export function updateFeatureProperty(object, key, value) {
      * IT WRITES THE UNIT TOO. `lengthUnit` is itself a property, so changing the
      * selector is one undoable edit like any other, and it persists in the
      * document with the drawing.
+     *
+     * THE RESOLUTION IS THE SHARED HELPER ABOVE, not an inline fallback - the
+     * same one function every length branch below reads, so the setter and the
+     * panel cannot resolve the unit differently.
      */
     if (key === 'lengthUnit') {
         const unit = String(value ?? '');
@@ -159,10 +204,23 @@ export function updateFeatureProperty(object, key, value) {
         return true;
     }
 
-    const displayUnit =
-        object.lengthUnit && enggQuantities.isUnitFor('length', object.lengthUnit)
-            ? object.lengthUnit
-            : 'mm';
+    /*
+     * ========================================================
+     * A UNIT TYPED BESIDE THE NUMBER OVERRIDES THE FIELD'S
+     * ========================================================
+     *
+     * The field's selector states the unit a BARE number is in - that is what
+     * the label promises - but a student who types "5 mm" has named their unit
+     * explicitly, and that choice must win over the dropdown. Reading "5 mm" as
+     * five of whatever the dropdown says is a thousand-fold error in the
+     * direction the student guarded against.
+     *
+     * So `typedUnit`, when the panel has one, is used here instead of the
+     * feature's stored unit. It arrives already canonicalised by the shared
+     * table, so this trusts it as far as the length quantity goes and falls
+     * back to the stored unit when it is absent.
+     */
+    const displayUnit = displayLengthUnitOf(object);
 
     /*
      * ========================================================
@@ -290,14 +348,13 @@ export function updateFeatureProperty(object, key, value) {
          * This is the SAME conversion the creation popup uses, which
          * is what keeps the two routes from disagreeing about what a
          * millimetre is.
+         *
+         * IT IS TYPED IN THE FIELD'S OWN SELECTED UNIT, so the resolution
+         * goes through the one display-unit helper rather than assuming
+         * millimetres - a student reading in metres types 5 and means 5 m,
+         * which is 5000 world units on a 1 mm-per-unit sheet, not 5.
          */
-        const world = enggDimensions?.fromEngineering
-            ? enggDimensions.fromEngineering(
-                drawingState,
-                value,
-                'mm'
-            )
-            : value;
+        const world = worldLengthInDisplayUnits(object, value);
 
         g.end = {
             x: g.start.x + (dx / current) * world,
@@ -348,26 +405,22 @@ export function updateFeatureProperty(object, key, value) {
         const axis = relative[1];
 
         /*
-         * A RELATIVE NUMBER IS WRITTEN IN MILLIMETRES.
+         * A RELATIVE NUMBER IS A LENGTH, SO IT IS WRITTEN IN THE FIELD'S
+         * OWN DISPLAY UNIT.
          *
-         * The reader above prints the offset through mmOf, so the
-         * panel shows engineering units. Writing it straight into the
-         * geometry treats those millimetres as world units, which on
-         * any calibrated sheet lands the child at a completely
-         * different place than the number just read - the row stops
-         * being the same measurement it is supposed to be editable.
+         * The reader above prints the offset through mmOf and the unit
+         * selector, so the panel shows engineering units. Writing it
+         * straight into the geometry treats that number as world units,
+         * which on any calibrated sheet lands the child at a completely
+         * different place than the number just read - the row stops being
+         * the same measurement it is supposed to be editable.
          *
-         * Converting here with the sheet's own scale is what makes
-         * Relative To a live measurement in both directions: what the
-         * panel prints is exactly what the panel accepts.
+         * Converting here through the shared display-unit helper is what
+         * makes Relative To a live measurement in both directions: what
+         * the panel prints is exactly what the panel accepts, in whatever
+         * unit the field is read in.
          */
-        const worldValue = enggDimensions?.fromEngineering
-            ? enggDimensions.fromEngineering(
-                  drawingState,
-                  value,
-                  'mm'
-              )
-            : value;
+        const worldValue = worldLengthInDisplayUnits(object, value);
 
         /*
          * The same places the panel reads as this feature's
@@ -496,13 +549,15 @@ export function updateFeatureProperty(object, key, value) {
             const sideKey = `side${index + 1}`;
 
             /*
-             * THE SOLVER WORKS IN WORLD UNITS, so the typed millimetres are
-             * converted first. It compares the new length against the other
-             * two sides, which are world lengths, so handing it millimetres
-             * would both break that triangle inequality test and stretch the
-             * edge by the scale factor.
+             * THE SOLVER WORKS IN WORLD UNITS, so the typed length is
+             * converted first, in the field's own display unit - the same
+             * shared helper every other length branch uses. It compares the
+             * new length against the other two sides, which are world
+             * lengths, so handing it the raw number would both break that
+             * triangle-inequality test and stretch the edge by the scale
+             * factor.
              */
-            const world = worldLengthOf(value);
+            const world = worldLengthInDisplayUnits(object, value);
 
             if (!Number.isFinite(world)) {
                 return false;
@@ -530,7 +585,7 @@ export function updateFeatureProperty(object, key, value) {
          * was typed.
          */
         if (key.startsWith('side')) {
-            const world = worldLengthOf(value);
+            const world = worldLengthInDisplayUnits(object, value);
 
             if (!Number.isFinite(world)) {
                 return false;
@@ -623,8 +678,12 @@ export function updateFeatureProperty(object, key, value) {
              * which is what keeps the two routes from disagreeing: a
              * length typed at creation and the same length typed in
              * the panel move the beam by the same amount.
+             *
+             * TYPED IN THE FIELD'S OWN UNIT, so the shared helper
+             * resolves the display unit rather than this branch assuming
+             * millimetres.
              */
-            const world = worldLengthOf(value, 'mm');
+            const world = worldLengthInDisplayUnits(object, value);
 
             const target = fixed('end') ? start : end;
             const anchor = fixed('end') ? end : start;
@@ -727,6 +786,14 @@ export function updateFeatureProperty(object, key, value) {
              *
              * `convertValue` returns the value unchanged when the unit is
              * unknown, so a feature with no unit at all is unaffected.
+             *
+             * AN EXPLICITLY TYPED UNIT WINS over the field's stored unit - the
+             * same rule the length fields follow. "5 kN" typed into a field
+             * reading N means 5 kN, and the selector is moved to match by the
+             * binding layer, which writes `forceUnit` before this value is
+             * applied. So the resolution reads the CURRENT unit of the
+             * geometry, which already reflects the typed unit when there was
+             * one.
              */
             const entered =
                 enggQuantities?.convertValue?.(
@@ -772,16 +839,30 @@ export function updateFeatureProperty(object, key, value) {
         if (key === 'forceX' || key === 'forceY') {
             if (fixed(key)) return false;
 
+            /*
+             * A COMPONENT IS STATED IN THE FORCE'S OWN UNIT, exactly as the
+             * magnitude is. The panel shows Fx and Fy converted from N into
+             * the force's unit, so a number typed back is taken from that
+             * unit to N before the vector is composed - the mirror of the
+             * display conversion. Without it, typing 2 against a kN force
+             * stored 2 N and the arrow shrank a thousandfold.
+             */
+            const unit = enggLoadProfile.forceUnit(g);
+
+            const enteredX =
+                key === 'forceX'
+                    ? enggQuantities?.convertValue?.(value, 'force', unit, 'N') ?? value
+                    : vector.fx;
+
+            const enteredY =
+                key === 'forceY'
+                    ? enggQuantities?.convertValue?.(value, 'force', unit, 'N') ?? value
+                    : vector.fy;
+
             enggLoadProfile.setForceVector(
                 g,
-                Math.hypot(
-                    key === 'forceX' ? value : vector.fx,
-                    key === 'forceY' ? value : vector.fy
-                ),
-                Math.atan2(
-                    key === 'forceY' ? value : vector.fy,
-                    key === 'forceX' ? value : vector.fx
-                ) * 180 / Math.PI
+                Math.hypot(enteredX, enteredY),
+                Math.atan2(enteredY, enteredX) * 180 / Math.PI
             );
 
             return true;
@@ -803,6 +884,11 @@ export function updateFeatureProperty(object, key, value) {
          * The defining points are the shape of the profile, and a
          * position is stored as a fraction along the body so
          * moving or resizing the body carries the profile with it.
+         *
+         * EITHER WAY the value is a length typed in the field's own
+         * display unit: with a parent it is a station along the body's
+         * axis, without one it is a coordinate on the sheet - and both
+         * cross the scale the same way, which `worldValue` already is.
          */
         if (
             key === 'start.x' ||
@@ -842,7 +928,24 @@ export function updateFeatureProperty(object, key, value) {
              * not one arrow's share of it. The profile is written as two
              * points of the same value, which is exactly what a uniform
              * load is, and the derived intensity follows from them.
+             *
+             * AN EXPLICITLY TYPED UNIT IS RECORDED ALONGSIDE THE VALUE.
+             * The stored number is in the unit the load states, so "5
+             * N/mm" typed into a field reading kN/m is a different
+             * physical load from "5 kN/m" by a factor of a thousand -
+             * storing the number and keeping the old unit would silently
+             * multiply the load. Recording the typed unit keeps the
+             * number and the unit naming the same quantity, which is the
+             * same rule every unit-bearing field follows.
              */
+            if (
+                typedUnit &&
+                enggQuantities.isUnitFor('distributedLoad', typedUnit) &&
+                typedUnit !== enggLoadProfile.loadUnit(g)
+            ) {
+                enggLoadProfile.setLoadUnit(g, typedUnit);
+            }
+
             enggLoadProfile.setProfilePoints(
                 g,
                 [
@@ -974,6 +1077,22 @@ export function updateFeatureProperty(object, key, value) {
 
         if (key === 'startIntensity' || key === 'endIntensity') {
             if (fixed(key)) return false;
+
+            /*
+             * AN INTENSITY IS A PHYSICAL QUANTITY stated in the load's own
+             * distributed-load unit - not a length and not a bare number.
+             * The unit travels beside the value: an explicitly typed unit is
+             * recorded so the number and the unit keep naming the same
+             * quantity, exactly as the uniform load's magnitude does.
+             */
+            if (
+                typedUnit &&
+                enggQuantities.isUnitFor('distributedLoad', typedUnit) &&
+                typedUnit !== enggLoadProfile.loadUnit(g)
+            ) {
+                enggLoadProfile.setLoadUnit(g, typedUnit);
+            }
+
             g[key] = Math.max(0, value);
             return true;
         }
@@ -1031,6 +1150,10 @@ export function updateFeatureProperty(object, key, value) {
              * point ON THE PARENT'S AXIS, which is where a station means
              * what it says.
              *
+             * A STATION IS TYPED IN THE FIELD'S OWN DISPLAY UNIT, so the
+             * shared helper resolves it - the same rule every other length
+             * write follows.
+             *
              * THE Y IS NOT WRITTEN AT ALL.
              *
              * It used to be writable, and it was the load's outline height
@@ -1051,10 +1174,16 @@ export function updateFeatureProperty(object, key, value) {
                     relativeParentOf(object);
 
                 if (parent) {
+                    /*
+                     * THE STATION IS TYPED IN THE FIELD'S OWN DISPLAY UNIT,
+                     * and `pointAtStation` projects in WORLD units - so the
+                     * shared conversion runs first, exactly as it does for
+                     * the coordinate fields above.
+                     */
                     const placed =
                         pointAtStation(
                             parent,
-                            value
+                            worldLengthInDisplayUnits(object, value)
                         );
 
                     if (!placed) {
@@ -1068,7 +1197,12 @@ export function updateFeatureProperty(object, key, value) {
                 }
             }
 
-            g[pointKey][axis] = value;
+            /*
+             * NO PARENT, so the value is a plain coordinate. It is still a
+             * length typed in the field's own unit, and it crosses the
+             * scale the same way every other coordinate does.
+             */
+            g[pointKey][axis] = worldLengthInDisplayUnits(object, value);
 
             return true;
         }
@@ -1126,15 +1260,13 @@ export function updateFeatureProperty(object, key, value) {
                          * Converted here for the same reason as the relative-offset
                          * branch above: one conversion, so what the panel shows is
                          * what the panel accepts.
+                         *
+                         * TYPED IN THE FIELD'S OWN UNIT, so the shared helper
+                         * resolves the display unit rather than this branch
+                         * assuming millimetres.
                          */
                         const station =
-                            enggDimensions?.fromEngineering
-                                ? enggDimensions.fromEngineering(
-                                    drawingState,
-                                    value,
-                                    'mm'
-                                )
-                                : value;
+                            worldLengthInDisplayUnits(object, value);
 
                         const placed = parent
                             ? pointAtStation(parent, station)
@@ -1155,7 +1287,13 @@ export function updateFeatureProperty(object, key, value) {
                 target.x = placed.x;
                 target.y = placed.y;
             } else {
-                target.x = value;
+                /*
+                 * A FORCE IN FREE SPACE has no axis to be measured along, so
+                 * the x the field shows is a coordinate - and it is a length
+                 * typed in the field's own unit, crossing the scale like
+                 * every other coordinate.
+                 */
+                target.x = worldLengthInDisplayUnits(object, value);
             }
 
             /*
@@ -1254,16 +1392,18 @@ export function updateFeatureProperty(object, key, value) {
             if (fixed(key) || !positive) return false;
 
             /*
-             * MILLIMETRES IN, WORLD UNITS STORED - the same contract
-             * every other length in the panel works to, so a body
-             * sized in the creation popup and one sized in its own
-             * properties come out the same size.
-             */
-            const millimetres = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+               * MILLIMETRES IN, WORLD UNITS STORED - the same contract
+               * every other length in the panel works to, so a body
+               * sized in the creation popup and one sized in its own
+               * properties come out the same size.
+               *
+               * TYPED IN THE FIELD'S OWN UNIT, so the shared helper
+               * resolves the display unit - the same rule every length
+               * branch follows.
+               */
+             const millimetres = worldLengthInDisplayUnits(object, value);
 
-            resizeRigidBody(object, key === 'rigidWidth' ? 'width' : 'height', millimetres);
+             resizeRigidBody(object, key === 'rigidWidth' ? 'width' : 'height', millimetres);
             return true;
         }
 
@@ -1273,10 +1413,10 @@ export function updateFeatureProperty(object, key, value) {
             /*
              * MILLIMETRES IN, WORLD UNITS STORED - as for every other
              * length the panel edits.
+             *
+             * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            const millimetres = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+            const millimetres = worldLengthInDisplayUnits(object, value);
 
             setRigidBodyRadius(object, millimetres);
             return true;
@@ -1338,6 +1478,22 @@ export function updateFeatureProperty(object, key, value) {
         ) {
             if (fixed(key)) return false;
             if (!Number.isFinite(value)) return false;
+
+            /*
+             * A SHAFT'S TORQUE IS A MOMENT, so it is stated in the feature's
+             * moment unit and an explicitly typed unit is recorded beside
+             * the value - the same rule every other statics magnitude
+             * follows. The panel reads the number back in that unit.
+             */
+            if (
+                key === 'torque' &&
+                typedUnit &&
+                enggQuantities.isUnitFor('moment', typedUnit) &&
+                typedUnit !== enggLoadProfile.momentUnit(g)
+            ) {
+                enggLoadProfile.setMomentUnit(g, typedUnit);
+            }
+
             g[key] = value;
             return true;
         }
@@ -1357,7 +1513,7 @@ export function updateFeatureProperty(object, key, value) {
         if (key === 'height') {
             if (fixed(key)) return false;
 
-            const worldHeight = worldLengthOf(value);
+            const worldHeight = worldLengthInDisplayUnits(object, value);
 
             if (!Number.isFinite(worldHeight)) return false;
 
@@ -1399,14 +1555,16 @@ export function updateFeatureProperty(object, key, value) {
             /*
              * MILLIMETRES IN, WORLD UNITS STORED - the same contract
              * the span and rectangle setters use, and the same
-             * conversion the creation popup applies. A Diameter is
-             * halved on the way in, after the conversion, so "50 mm"
-             * becomes a radius of 25 mm whether it was typed in the
-             * panel or in the creation popup.
-             */
-            const millimetres = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+               * conversion the creation popup applies. A Diameter is
+               * halved on the way in, after the conversion, so "50 mm"
+               * becomes a radius of 25 mm whether it was typed in the
+               * panel or in the creation popup.
+               *
+               * TYPED IN THE FIELD'S OWN UNIT, through the shared helper -
+               * the same rule every other length branch follows, so a
+               * radius read in metres is typed in metres too.
+               */
+             const millimetres = worldLengthInDisplayUnits(object, value);
 
             g.radius =
                 key === 'radius'
@@ -1482,17 +1640,13 @@ export function updateFeatureProperty(object, key, value) {
              * The panel shows these as MILLIMETRES and the geometry
              * stores WORLD UNITS, so the value crosses the document
              * scale on the way in. This is the same conversion the
-             * creation popup applies, which is what makes a Width
-             * typed at creation and a Width typed in the panel produce
-             * the same rectangle.
-             */
-            g[key] = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(
-                    drawingState,
-                    value,
-                    'mm'
-                )
-                : value;
+               * creation popup applies, which is what makes a Width
+               * typed at creation and a Width typed in the panel produce
+               * the same rectangle.
+               *
+               * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
+               */
+             g[key] = worldLengthInDisplayUnits(object, value);
             return true;
         }
         if (key === 'rotation' && !fixed(key)) {
@@ -1527,10 +1681,10 @@ export function updateFeatureProperty(object, key, value) {
             /*
              * MILLIMETRES IN, WORLD UNITS STORED - as for every other
              * length in the panel.
+             *
+             * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g.radius = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+            g.radius = worldLengthInDisplayUnits(object, value);
 
             return true;
         }
@@ -1579,10 +1733,10 @@ export function updateFeatureProperty(object, key, value) {
              * through one route and wrong through another is worse
              * than one that is consistently wrong, because there is
              * then no single place to look for the mistake.
+             *
+             * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g.axisLength = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+            g.axisLength = worldLengthInDisplayUnits(object, value);
 
             return true;
         }
@@ -1617,10 +1771,10 @@ export function updateFeatureProperty(object, key, value) {
              * MILLIMETRES IN, WORLD UNITS STORED - as for every other
              * length the panel edits, and for the same reason: a raw
              * write would make a 50 mm axis 50 world units long.
+             *
+             * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g[key] = enggDimensions?.fromEngineering
-                ? enggDimensions.fromEngineering(drawingState, value, 'mm')
-                : value;
+            g[key] = worldLengthInDisplayUnits(object, value);
 
             return true;
         }
@@ -1672,6 +1826,27 @@ export function updateFeatureProperty(object, key, value) {
              * the state every dimension had before this field existed.
              */
             object.displayUnit = unit && unit !== 'mm' ? unit : null;
+
+            return true;
+        }
+
+        /*
+         * THE DRIVING / DRIVEN STATE.
+         *
+         * A Driven dimension reports the geometry instead of controlling it.
+         * The panel offers it as a word - "Driving" or "Driven" - so this is
+         * read as a statement rather than as a boolean, exactly as a moment's
+         * `direction` is.
+         *
+         * NOTHING ELSE IS TOUCHED. Switching to Driven RELEASES the constraint
+         * implicitly, because a Driven dimension simply refuses to move
+         * geometry (see `dimension-edit.applyDimensionValue`) - and the current
+         * geometry is preserved exactly, which is what the requirement asks
+         * for. Switching back to Driving re-enables the control without moving
+         * anything until the student next edits the value.
+         */
+        if (key === 'driven') {
+            object.driven = value === true || value === 'driven';
 
             return true;
         }
@@ -1741,8 +1916,15 @@ export function updateFeatureProperty(object, key, value) {
         if (key.startsWith('placement.')) {
             const axis = key.split('.')[1];
 
+            /*
+             * A PLACEMENT IS A POSITION ON THE SHEET, so it is a length
+             * typed in the field's own display unit - the same conversion
+             * every other coordinate write runs. Writing the raw number
+             * would put a moved annotation four times too far on any
+             * calibrated sheet.
+             */
             g.placement = g.placement || { x: 0, y: 0 };
-            g.placement[axis] = value;
+            g.placement[axis] = worldLengthInDisplayUnits(object, value);
 
             return true;
         }

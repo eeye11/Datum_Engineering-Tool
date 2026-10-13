@@ -553,14 +553,51 @@ export function featurePropertyMarkup(object) {
          * A LENGTH IS CONVERTED; A QUANTITY IS NOT.
          *
          * The geometry holds world units, which are meaningless until the
-         * sheet's scale gives them a size, so a field captioned "mm" must
-         * be given millimetres - not the raw number. `isLength` marks the
-         * fields that are a physical length; the rest are quantities
-         * exactly as they say they are.
+         * sheet's scale gives them a size, so a length field must be given
+         * a physical number - not the raw world value.
+         *
+         * IT IS READ IN THE FEATURE'S OWN SELECTED UNIT, exactly as the
+         * coordinate fields are: `object.lengthUnit` is the one reading
+         * preference, and every length row on the panel - a coordinate, a
+         * radius, a width, a span - shows its number in it and offers the
+         * same selector to change it. A panel whose coordinates read in
+         * metres while its radius still read in millimetres was two units
+         * for one feature, and the student had no way to tell which number
+         * was in which.
+         *
+         * THE VALUE ARRIVES ALREADY IN MILLIMETRES - every caller resolves
+         * the world length through `mmOf` first - so the display conversion
+         * is mm -> chosen unit, the same chain the coordinate helper runs.
+         *
+         * THE SELECTOR IS THE ONLY STATEMENT OF THE UNIT. The static label
+         * is suppressed when a selector is rendered, so the row can never
+         * show "5 m [m v]" - the duplication the specification calls out.
          */
-        const converts = isLength && unit === "mm";
+        const chosenUnit = isLength
+            ? (enggQuantities.isUnitFor("length", object.lengthUnit)
+                ? object.lengthUnit
+                : "mm")
+            : unit;
 
-        const shown = converts ? mmOf(value).value : value;
+        const shown = isLength
+            ? enggQuantities.convertValue(
+                  mmOf(value).value,
+                  "length",
+                  "mm",
+                  chosenUnit
+              )
+            : value;
+
+        const lengthUnitControl =
+            isLength && panels.unitSelect
+                ? panels.unitSelect({
+                      property: "lengthUnit",
+                      units: enggQuantities.unitsFor("length"),
+                      current: chosenUnit,
+                      label: `${label} unit`,
+                      disabled: fixed(key),
+                  })
+                : null;
 
         /*
          * An unknown value has no number to state, so the value slot is left
@@ -572,7 +609,8 @@ export function featurePropertyMarkup(object) {
             label,
             key,
             value: isUnknown ? "" : shown,
-            unit: converts ? mmOf(value).unit : unit,
+            unit: lengthUnitControl ? "" : unit,
+            unitControl: lengthUnitControl,
             disabled: !editable || isUnknown || fixed(key),
             /*
              * TWO CONTROLS, TWO SLOTS - AND NEITHER WITHOUT THE OTHER.
@@ -830,7 +868,30 @@ export function featurePropertyMarkup(object) {
             label,
             key,
             value: shown,
-            unit: converts ? chosenUnit : unit,
+
+            /*
+             * ================================================
+             * THE UNIT IS SHOWN ONCE - BY THE SELECTOR ITSELF
+             * ================================================
+             *
+             * When a unit SELECTOR is rendered, the unit's own text must NOT
+             * also be printed beside it. The row renders
+             *
+             *     <static unit><unitExtra>
+             *
+             * and `unitExtra` already carries the selector, so passing
+             * `chosenUnit` here as well produced the duplication the
+             * specification calls out:
+             *
+             *     [ 5 ]  m  [ m ▼ ]      <- the reported arrangement
+             *
+             * The selector IS the statement of the unit - it shows the
+             * current choice and is the only control that changes it - so it
+             * is the one authority. The static label is passed only when no
+             * selector is offered, which is the case that still needs to say
+             * what the number is denominated in.
+             */
+            unit: lengthUnitControl ? "" : converts ? chosenUnit : unit,
             unitControl: lengthUnitControl,
             disabled: fixed(key),
 
@@ -1722,22 +1783,53 @@ export function featurePropertyMarkup(object) {
                 )
             );
         } else {
+            /*
+             * THE COMPONENTS ARE STATED IN THE FORCE'S OWN UNIT.
+             *
+             * The stored vector is in N, and the magnitude row above reads
+             * in the force's unit, so the components read in that same
+             * unit - a force of 5 kN at 37 degrees has components of
+             * "4" and "3" in kN, not in N. They used to print the raw N
+             * numbers under a kN caption, a thousandfold misstatement the
+             * student would copy straight into a calculation.
+             *
+             * The unit selector is the same one the magnitude row uses,
+             * writing the same `forceUnit` property, so the two rows
+             * cannot disagree about what the force is denominated in.
+             */
+            const forceUnitControl =
+                panels.unitSelect
+                    ? panels.unitSelect({
+                          property: "forceUnit",
+                          units: enggLoadProfile.FORCE_UNITS,
+                          current: forceUnitValue,
+                          label: "Force unit",
+                      })
+                    : null;
+
+            const componentField = (label, key, component) =>
+                panels.scalar({
+                    label,
+                    key,
+                    value: enggQuantities.convertValue(
+                        component,
+                        "force",
+                        "N",
+                        forceUnitValue
+                    ),
+                    unit: forceUnitControl ? "" : forceUnitValue,
+                    unitControl: forceUnitControl,
+                    disabled: fixed(key),
+                    unitExtra: showKnown ? knownBox(key, label) : "",
+                    state: fixBox(key, label),
+                });
+
             rows.push(
-                scalar(
-                    "X Component",
-                    "forceX",
-                    vector.fx,
-                    forceUnitValue
-                )
+                componentField("X Component", "forceX", vector.fx)
             );
 
             rows.push(
-                scalar(
-                    "Y Component",
-                    "forceY",
-                    vector.fy,
-                    forceUnitValue
-                )
+                componentField("Y Component", "forceY", vector.fy)
             );
         }
 
@@ -2344,12 +2436,25 @@ export function featurePropertyMarkup(object) {
                 ? geometry.bends.length
                 : 0;
 
+            /*
+             * HOW MANY ELBOWS THIS KIND MAY HAVE, from the model - so the
+             * button's enabled state and the action's own guard cannot
+             * disagree. A leader takes ONE elbow in V1.
+             */
+            const maxBends =
+                annotate.maxBendsFor?.(kind) ??
+                (kind === "leader" ? 1 : 3);
+
+            const atLimit = bends >= maxBends;
+
             rows.push(section("PATH"));
 
             rows.push(`
                 <div class="drawing-property-grid drawing-property-grid-value">
                     <span class="drawing-property-grid-label">Bends</span>
-                    <span class="drawing-property-derived">${bends}</span>
+                    <span class="drawing-property-derived">${bends}${
+                        kind === "leader" ? " of 1" : ""
+                    }</span>
                     <span class="drawing-property-unit"></span>
                     <span></span>
                 </div>
@@ -2362,7 +2467,8 @@ export function featurePropertyMarkup(object) {
                         <button type="button"
                             class="drawing-property-action"
                             data-annotate-add-bend
-                            aria-label="Add a bend to the leader">Add Bend</button>
+                            aria-label="Add a bend to the leader"
+                            ${atLimit ? "disabled" : ""}>Add Bend</button>
                         <button type="button"
                             class="drawing-property-action"
                             data-annotate-remove-bend
@@ -2400,6 +2506,8 @@ export function featurePropertyMarkup(object) {
         rows.push(section("GENERAL"));
         rows.push(dimensionValueRow(object));
         rows.push(dimensionTypeRow(object));
+        rows.push(dimensionStatusRow(object));
+        rows.push(dimensionEditRow(object));
         rows.push(dimensionUnitRow(object));
     } else if (object.type === "variable-dimension") {
         /*
@@ -2672,6 +2780,8 @@ function leaderStyleRows(object) {
                 ${option("none", "None", arrowhead === "none")}
                 ${option("open", "Open", arrowhead === "open")}
                 ${option("closed", "Closed", arrowhead === "closed")}
+                ${option("dot", "Dot", arrowhead === "dot")}
+                ${option("tick", "Tick", arrowhead === "tick")}
             </select>
             <span class="drawing-property-unit"></span>
             <span></span>
@@ -2835,6 +2945,76 @@ function variableMeasureLabel(dimensionType) {
             radius: "Radius"
         }[dimensionType] || String(dimensionType)
     );
+}
+
+/*
+ * THE DRIVING / DRIVEN STATE, AS A PANEL ROW.
+ *
+ * The requirement is explicit: the panel must display the dimension's ACTUAL
+ * state, and must let the student switch modes. This row does both - it shows
+ * Driving or Driven, and offers the one control that changes it.
+ *
+ * IT IS A SELECT, not a derived reading, because the state IS a setting the
+ * student owns (see `driven` in dimension-model.js). The value is written
+ * through the ordinary property setter, so the canvas, the Driven colour and
+ * the editability rule all follow from the one stored bit.
+ *
+ * THE HINT EXPLAINS WHY A DIMENSION IS DRIVEN when the drawing already states
+ * the same measurement - the one case DAETUM itself chooses Driven at creation
+ * - so a student who finds a purple dimension does not have to guess.
+ */
+function dimensionStatusRow(object) {
+    const driven = object.driven === true;
+
+    return `
+        <div class="drawing-property-grid drawing-property-grid-value">
+            <span class="drawing-property-grid-label">Status</span>
+            <select data-property="driven" aria-label="Dimension status">
+                <option value="driving"${
+                    driven ? "" : " selected"
+                }>Driving</option>
+                <option value="driven"${
+                    driven ? " selected" : ""
+                }>Driven</option>
+            </select>
+            <span class="drawing-property-unit"></span>
+            <span></span>
+        </div>
+    `;
+}
+
+/*
+ * A DRIVING DIMENSION IS EDITED, A DRIVEN ONE IS NOT.
+ *
+ * The Edit button opens the value popup, which moves geometry - so it is only
+ * offered for a Driving dimension. A Driven dimension reports, and its row says
+ * so rather than offering an edit that would be refused.
+ */
+function dimensionEditRow(object) {
+    if (object.driven === true) {
+        return `
+            <div class="drawing-property-grid drawing-property-grid-value">
+                <span class="drawing-property-grid-label">Edit</span>
+                <span class="drawing-property-derived">Read-only while Driven</span>
+                <span class="drawing-property-unit"></span>
+                <span></span>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="drawing-property-grid drawing-property-grid-value">
+            <span class="drawing-property-grid-label">Edit</span>
+            <span class="drawing-property-path-actions">
+                <button type="button"
+                    class="drawing-property-action"
+                    data-dimension-edit-value
+                    aria-label="Edit the dimension value">Edit Value</button>
+            </span>
+            <span class="drawing-property-unit"></span>
+            <span></span>
+        </div>
+    `;
 }
 
 /*

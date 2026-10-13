@@ -29,6 +29,7 @@
  * the control to match, so the box never shows one unit while the value was
  * entered in another.
  */
+import enggQuantities from "../../core/units/quantities.js";
 import enggLoadProfile from "../../features/analysis/load-profile.js";
 
 /*
@@ -117,7 +118,21 @@ export function openLoadValuePopup({
      * non-numeric answer is returned verbatim as `{ text }` instead of being
      * read as a number.
      */
-    expression = false
+    expression = false,
+
+    /*
+     * WHETHER AN EMPTY FIELD MAY BE CONFIRMED.
+     *
+     * Off by default, so every existing caller keeps its behaviour: an empty
+     * box is UNKNOWN, which is a real answer for a force or a load magnitude.
+     *
+     * ON for a Variable Dimension being CREATED, where the requirement is
+     * explicit - a new Variable Dimension must always carry content and a blank
+     * one must never be committed. An empty box is refused with a message and
+     * the editor STAYS OPEN so the student can correct it, rather than closing
+     * and leaving nothing behind with no explanation.
+     */
+    requireContent = false
 } = {}) {
     closeLoadValuePopup();
 
@@ -245,6 +260,22 @@ export function openLoadValuePopup({
          * to read through `readStaticsValue`, which answers Unknown.
          */
         if (!text) {
+            /*
+             * MANDATORY CONTENT: AN EMPTY BOX IS REFUSED, NOT CONFIRMED.
+             *
+             * The editor is kept OPEN so the answer can be corrected - the
+             * alternative, closing on an empty field, is what used to create a
+             * blank feature the student never asked for.
+             */
+            if (requireContent) {
+                errorEl.textContent = "Enter a value, expression or text";
+                errorEl.hidden = false;
+
+                input.focus();
+
+                return;
+            }
+
             errorEl.hidden = true;
 
             const confirmed = { text: "", unknown: true };
@@ -561,22 +592,38 @@ export function readStaticsValue(text, unit) {
  * can never be read as a unit this quantity does not use. A trailing unit is
  * optional, so "5" also arrives here and is handed to the plain-number path
  * below - one reader, two shapes.
+ *
+ * THE CANDIDATES COME FROM THE SHARED QUANTITY TABLES, across every family
+ * the popups serve - length, force, moment, distributed load, angle - rather
+ * than a second hand-typed list. The second list was exactly the drift the
+ * shared tables exist to prevent: it spelled a moment's imperial unit
+ * "lb·ft" where the table spells it "lbf·ft", so the one answer the student
+ * typed the table's way was refused. Reading the tables means the popups and
+ * the Features panel accept the same spellings, always.
+ *
+ * Longest first, so `kN·m` is not read as `kN` and `N/mm` as `N`.
  */
 function readNumberWithUnit(raw, unit) {
     const known = [
-        "N·m",
-        "kN·m",
-        "N·mm",
-        "lb·ft",
-        "kN/m",
-        "N/mm",
-        "kN",
-        "N",
-        "mm",
+        ...(
+            enggQuantities?.unitsFor?.("length") || ["mm", "cm", "m"]
+        ),
+        ...(
+            enggQuantities?.unitsFor?.("force") || ["N", "kN"]
+        ),
+        ...(
+            enggQuantities?.unitsFor?.("moment") || ["N·m", "kN·m"]
+        ),
+        ...(
+            enggQuantities?.unitsFor?.("distributedLoad") || ["kN/m", "N/mm"]
+        ),
+        ...(
+            enggQuantities?.unitsFor?.("angle") || ["°", "rad"]
+        ),
     ];
 
     /* Longest first, so `kN·m` is not read as `kN`. */
-    const candidates = [...known].sort((a, b) => b.length - a.length);
+    const candidates = [...new Set(known)].sort((a, b) => b.length - a.length);
 
     for (const candidate of candidates) {
         if (!raw.toLowerCase().endsWith(candidate.toLowerCase())) {

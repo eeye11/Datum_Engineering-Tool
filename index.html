@@ -85,21 +85,22 @@
         <!--
             THE IDENTITY: THE DAETUM MARK AND THE WORDMARK.
 
-            THE MARK IS THE LETTER D, ENGINEERED. A vertical SPINE is the flat
-            left-hand edge of the letter, and a ROUNDED ARC is its bowl - and the
-            arc's centre IS the spine, at the central dot, so the spine is a
-            DIAMETER of the bowl rather than a line beside it. The arc is
-            therefore the right-hand SEMICIRCLE of that circle, and the letter is
-            closed by its own stem: the wide opening on the left is the half the
-            spine replaces. Inside sit the solid central point and a short
-            horizontal axis, which are the coordinate-system reading of the same
-            figure.
+            THE MARK IS A TARGETING RETICLE WITH AN OPEN ORBIT. A long VERTICAL
+            RULE and an ASYMMETRIC HORIZONTAL BAR cross at the solid CENTRAL DOT,
+            and an OPEN CIRCULAR ARC wraps around the top, right and bottom of the
+            same point. The arc's centre IS that point - the same origin the dot
+            and both axes share - so nothing is offset and the opening, 124
+            degrees wide, is the LEFT flank.
+
+            THE RULE OVERSHOOTS THE ARC at both ends and the bar reaches further
+            LEFT than right, so the figure reads as an engineered targeting mark
+            rather than as a conventional letter D or a closed crosshair. The
+            arc's two ends hang clear of the rule in the upper-left and lower-left.
 
             IT IS THE SAME GEOMETRY AS THE BROWSER TAB ICON, generated from
             `app/daetum-mark.js`. The coordinates below are that module's, placed
             here as static markup because the header must paint before any script
-            runs - and a test asserts the two agree, so the header and the tab
-            cannot drift into two different drawings of one brand.
+            runs.
 
             THE COLOUR FOLLOWS THE THEME, NOT THE ACCENT. The mark is
             `currentColor`, which `--logo-color` sets - dark ink on the light
@@ -115,12 +116,12 @@
             <span class="header-mark" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="24" height="24" focusable="false">
                     <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-                        d="M6.2 4.2V19.8"/>
+                        d="M11.2 -0.2V24.2"/>
                     <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-                        d="M6.2 8.714A7 7 0 1 1 6.2 15.286"/>
+                        d="M3 12H15.3"/>
                     <path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
-                        d="M1.6 12H11.6"/>
-                    <circle cx="6.2" cy="12" r="2.5" fill="currentColor"/>
+                        d="M6.787 3.7A9.4 9.4 0 1 1 6.787 20.3"/>
+                    <circle cx="11.2" cy="12" r="2.9" fill="currentColor"/>
                 </svg>
             </span>
 
@@ -861,7 +862,18 @@
                         <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><text x="9" y="9" text-anchor="middle" fill="currentColor" font-family="Georgia, serif" font-size="11" font-style="italic">F</text><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 14h14M13.5 10.5L17 14l-3.5 3.5"/></svg>
                     </button>
 
-                    <button class="drawing-status-toggle" id="drawingFitView" type="button" data-toggle-name="Fit" aria-pressed="false" title="Fit: off" aria-label="Fit drawing to view">
+                    <!--
+                        FIT: A ONE-SHOT ACTION, NOT A TOGGLE.
+
+                        Fit is a COMMAND, not a workspace setting. It has no
+                        persistent on/off state of its own - pressing it fits
+                        the drawing to the view once and leaves nothing to turn
+                        back off - so it is NOT a `drawing-status-toggle` and
+                        carries no `aria-pressed` or active treatment. It is a
+                        plain action button, styled like the zoom controls
+                        beside it, so it does not read as a fifth switch.
+                    -->
+                    <button class="drawing-action-button" id="drawingFitView" type="button" title="Fit drawing to view" aria-label="Fit drawing to view">
                         <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M7 3H3v4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
                     </button>
 

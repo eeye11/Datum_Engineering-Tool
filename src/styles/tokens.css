@@ -230,8 +230,64 @@
      * toolbar, which sits above the panels.
      */
     --datum-chrome: #ffffff;
-    --datum-menu: #ffffff;
-    --datum-menu-hover: var(--precision-slate-100);
+    /*
+     * ========================================================
+     * THE MENU SURFACE IS A RAISED STEP, NOT THE CHROME ITSELF
+     * ========================================================
+     *
+     * A dropdown hangs OVER the workspace, so it has to sit one step above the
+     * surface it covers - and it used to be declared as the SAME white as the
+     * chrome (`--datum-chrome`) with only a pale border between them. On a white
+     * menu bar that reads as a flat white block, which is exactly the regression
+     * that was reported: readability had been fixed, but the panel no longer
+     * looked like a panel.
+     *
+     * WHY IT STILL LOOKED LIKE A WHITE BLOCK, AND WHY THE VALUE MOVED AGAIN.
+     *
+     * The next attempt gave the panel the ice wash (`slate-100`, `#EDF5F4`) on
+     * the reasoning that it should step off the white chrome. It did - but the
+     * panel drops over the DRAWING WORKSPACE, not over the bar, and the workspace
+     * itself is `--datum-panel`, which is ALSO `slate-100`. Measured from the
+     * running application, the panel and the surface beneath it were the SAME
+     * colour (`#EDF5F4`, a per-channel distance of 7 out of 441): the menu had no
+     * surface of its own at all, and only its 1px border and its shadow made it
+     * visible. That is the literal definition of "a rectangle placed on top of
+     * the interface", and no amount of border, radius or text-colour work can fix
+     * a panel painted in the colour of the thing behind it.
+     *
+     * So the panel takes the NEXT STEP IN THE SAME FAMILY - `slate-200`, one rung
+     * up from the workspace in the ice-teal ladder the palette already uses for
+     * exactly this purpose (see `--datum-menu-hover` below and the raised/panel
+     * relationship noted above). It is not a new colour: it is the existing token
+     * `--precision-slate-200`, so menu is still unmistakably DAETUM's ice and
+     * now reads as a surface that belongs to the interface rather than a hole in
+     * it.
+     */
+    --datum-menu: var(--precision-slate-200);
+    /*
+     * A MENU'S OWN BORDER, one step stronger than a panel's.
+     *
+     * `--datum-border` (`slate-200`) is right for a division INSIDE a panel; it
+     * is too quiet to draw the edge of a floating menu on light chrome. This
+     * token is the menu's edge specifically, so the panel and the submenu can
+     * share it and neither has to reach for a raw colour.
+     */
+    --datum-menu-border: var(--precision-slate-400);
+    /*
+     * THE HOVER SURFACE MUST DIFFER FROM THE PANEL IT SITS ON.
+     *
+     * The panel is `slate-200`, so the hovered row steps to `slate-300` - the
+     * next step in the same family. A hover that reused the panel's own colour
+     * would light the row up by exactly the colour it already is; stepping one
+     * rung keeps the feedback on the row without turning each item into a card.
+     */
+    --datum-menu-hover: var(--precision-slate-300);
+    /*
+     * The label of an open menu, on the WHITE bar. It matches the panel it has
+     * just opened (`slate-200`), so the pressed label and the surface dropping
+     * out of it read as one object rather than two washes that happen to touch.
+     */
+    --datum-menu-open: var(--precision-slate-200);
     --datum-rail: var(--precision-slate-50);
 
     /* Inputs: a distinct surface so a field reads as editable. */
@@ -460,8 +516,24 @@
     --datum-raised: var(--precision-night-800);
 
     --datum-chrome: #1B3032;
-    --datum-menu: #1B3032;
-    --datum-menu-hover: var(--precision-night-800);
+    /*
+     * THE MENU IS ONE STEP UP FROM THE CHROME, in the dark theme.
+     *
+     * It was the same `#1B3032` as the bar, so the panel had no surface of its
+     * own and read as a flat block in dark mode too. `--precision-night-800` is
+     * the palette's raised step - the same one a dialog uses - so the menu now
+     * lifts off the bar the way every other floating surface does.
+     */
+    --datum-menu: var(--precision-night-800);
+    /*
+     * The menu's edge: one step lighter than the raised surface, so the boundary
+     * is visible without a bright outline. `--datum-border-strong` was tuned for
+     * panels sitting on the page; this is the edge of a floating panel over it.
+     */
+    --datum-menu-border: #2E4F50;
+    --datum-menu-hover: #274346;
+    /* The open label on dark chrome: a shade lighter, not the accent. */
+    --datum-menu-open: #274346;
     --datum-rail: var(--precision-night-900);
 
     /*
@@ -669,8 +741,30 @@
         --datum-raised: var(--precision-night-800);
 
         --datum-chrome: #1B3032;
-        --datum-menu: #1B3032;
-        --datum-menu-hover: var(--precision-night-800);
+        /*
+         * THE MENU IS ONE STEP UP FROM THE WORKSPACE, as it is in the explicit
+         * dark palette above. It used to be `#1B3032` here - the SAME value as
+         * the chrome and the workspace panel - which left a System Default user
+         * with the very defect the light theme had: a menu flush with the surface
+         * beneath it and no surface of its own. `night-800` is the palette's
+         * raised step, so the menu lifts off the bar the way every other floating
+         * surface does.
+         */
+        --datum-menu: var(--precision-night-800);
+        /*
+         * THE MENU'S EDGE, ITS HOVER AND ITS OPEN LABEL. The explicit dark palette
+         * defines these, so the System Default block must too - otherwise a user on
+         * System Default gets a menu with no visible edge and an unhighlighted
+         * open label, and `theme-tokens.test.cjs` reports the interface as half
+         * themed.
+         *
+         * The hover steps to `night-700`, one rung ABOVE the `night-800` panel -
+         * `night-800` was the panel's own colour, so a hovered row would have lit
+         * up by exactly the colour it already was.
+         */
+        --datum-menu-border: #2E4F50;
+        --datum-menu-hover: var(--precision-night-700);
+        --datum-menu-open: #274346;
         --datum-rail: var(--precision-night-900);
 
         --datum-input: var(--precision-night-950);

@@ -248,6 +248,18 @@ function lengthKeyFor(object, dimension) {
  *   { ok: false, reason }
  */
 export function applyDimensionValue(dimension, state, millimetres) {
+  /*
+   * A DRIVEN DIMENSION DOES NOT DRIVE.
+   *
+   * The guard is here rather than only in the UI, so EVERY route to a geometry
+   * change - the popup, a future panel field, a scripted edit - is refused by
+   * the same rule. A Driven dimension will not move geometry, whatever asks it
+   * to.
+   */
+  if (dimension?.driven === true) {
+    return { ok: false, reason: "driven" };
+  }
+
   const value = Number(millimetres);
 
   if (!Number.isFinite(value)) {
@@ -282,6 +294,46 @@ export function applyDimensionValue(dimension, state, millimetres) {
 
     return moved
       ? { ok: true, featureId: object.id, key: sizeKey, applied: value }
+      : { ok: false, reason: "refused" };
+  }
+
+  /*
+   * ========================================================
+   * AN ARC LENGTH DRIVES THE RADIUS
+   * ========================================================
+   *
+   * An arc's length is `radius x |sweep|`, and nothing in the model maps
+   * `arc-length` to a size key - so before this branch an arc-length dimension fell
+   * all the way through to `unsupported-type` and could never be driven at all.
+   *
+   * THE SWEEP IS PRESERVED AND THE RADIUS ABSORBS THE CHANGE, which is the honest
+   * reading of "make this arc longer": the arc keeps the angle the student drew and
+   * grows. The sweep is taken from the arc's own geometry, so a major arc is
+   * measured as the major arc it is - `radius x |endAngle - startAngle|` is exactly
+   * the formula `measureArcLength` used to state the value being replaced, so the
+   * target and the change cannot disagree about what an arc length is.
+   *
+   * A degenerate sweep - a zero-length arc - has no radius that yields the target,
+   * so it is refused rather than divided by and silently turned into Infinity.
+   */
+  if (dimensionType === "arc-length" && object.type === "arc") {
+    const sweep = Math.abs(
+      Number(object.geometry?.endAngle) - Number(object.geometry?.startAngle),
+    );
+
+    if (!Number.isFinite(sweep) || sweep < 1e-9) {
+      return { ok: false, reason: "unsupported-type" };
+    }
+
+    /*
+     * The target arrives in MILLIMETRES, and so does every other value here, so
+     * the radius is written in the same millimetre units the size keys already
+     * expect - the single conversion happens in the setter, not here.
+     */
+    const moved = updateFeatureProperty(object, "radius", value / sweep);
+
+    return moved
+      ? { ok: true, featureId: object.id, key: "radius", applied: value }
       : { ok: false, reason: "refused" };
   }
 
@@ -365,6 +417,23 @@ export function applyDimensionValue(dimension, state, millimetres) {
  * silently accepted and doing nothing.
  */
 export function dimensionEditable(dimension, state) {
+  /*
+   * A DRIVEN DIMENSION IS A READING, NOT A CONTROL.
+   *
+   * A Driven dimension reports the geometry's measurement and cannot move it
+   * while it remains Driven - that is the whole distinction between the two
+   * states. So it is reported as not editable here, and the edit path refuses
+   * it, which is what stops a typed value silently moving geometry a Driven
+   * dimension claimed only to be reading.
+   *
+   * The dimension is still fully live: it measures, updates when the geometry
+   * changes, and can be switched back to Driving through the panel or by
+   * double-clicking it.
+   */
+  if (dimension?.driven === true) {
+    return false;
+  }
+
   const reference = movableReference(dimension);
 
   if (!reference) {
@@ -380,6 +449,25 @@ export function dimensionEditable(dimension, state) {
   }
 
   const dimensionType = dimension?.dimensionType;
+
+  /*
+   * AN ARC LENGTH IS EDITABLE ON AN ARC.
+   *
+   * `applyDimensionValue` drives an arc length by holding the sweep and changing
+   * the radius - one feature's own value, which is exactly what makes a dimension
+   * editable rather than a reading between two things. This has to say so too:
+   * without it the popup would refuse to open on a dimension the solver can
+   * actually satisfy, so the capability would exist and be unreachable. It sits
+   * with the size keys below because that is what it is - a size edit expressed
+   * through the radius.
+   */
+  if (dimensionType === "arc-length" && object.type === "arc") {
+    const sweep = Math.abs(
+      Number(object.geometry?.endAngle) - Number(object.geometry?.startAngle),
+    );
+
+    return Number.isFinite(sweep) && sweep >= 1e-9;
+  }
 
   if (sizeKeyFor(object, dimensionType)) {
     return true;

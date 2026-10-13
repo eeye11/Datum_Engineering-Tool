@@ -793,7 +793,20 @@ import enggCanvasPalette from "./canvas-palette.js";
             return;
         }
 
-        const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+        /*
+         * A DRIVEN DIMENSION IS DRAWN IN THE DRIVEN COLOUR.
+         *
+         * The requirement asks for a distinct colour as the visual indicator of
+         * the Driving/Driven state, and NOT parentheses. The colour is read from
+         * the model so the canvas, the preview and the panel agree, and it falls
+         * back to the normal dimension colour for a Driving dimension - which is
+         * what every dimension created before this state existed is.
+         */
+        const stroke = paintColour(
+            entity.driven === true && model.DRIVEN_COLOUR
+                ? model.DRIVEN_COLOUR
+                : style.stroke || enggTheme.defaultLineColour()
+        );
         const lineWidth = Number(style.lineWidth) || 0.5;
         const head = arrowHeadSize(lineWidth);
 
@@ -832,6 +845,75 @@ import enggCanvasPalette from "./canvas-palette.js";
          * the same two directions, so the arc cannot disagree with the
          * number printed beside it.
          */
+        /*
+         * AN ARC LENGTH, DRAWN ALONG ITS ARC.
+         *
+         * The model supplies the concentric arc (following the feature's own
+         * sweep), the two radii out to its ends, and an arrowhead at each end
+         * lying along the tangent. The arrows are drawn from those directions
+         * instead of from a single dimension line, because this dimension has no
+         * straight line to hang them on - that is exactly what distinguishes it
+         * from the chord a linear dimension would draw between the two ends.
+         */
+        if (graphics.kind === "arc-length") {
+            const arc = (graphics.arc || []).filter(
+                (point) =>
+                    point &&
+                    Number.isFinite(point.x) &&
+                    Number.isFinite(point.y)
+            );
+
+            (graphics.extensions || []).forEach(([from, to]) => {
+                drawLine(from, to, true);
+            });
+
+            if (arc.length >= 2) {
+                svg.appendChild(
+                    createSvgElement("polyline", {
+                        points: arc
+                            .map((point) => {
+                                const p = toScreen(point);
+                                return `${p.x},${p.y}`;
+                            })
+                            .join(" "),
+                        fill: "none",
+                        stroke,
+                        "stroke-width":
+                            Math.max(0.6, lineWidth * 1.4)
+                    })
+                );
+            }
+
+            (graphics.arrowheads || []).forEach((arrow) => {
+                if (
+                    !arrow?.at ||
+                    !arrow.direction ||
+                    !Number.isFinite(arrow.at.x) ||
+                    !Number.isFinite(arrow.at.y)
+                ) {
+                    return;
+                }
+
+                appendDimensionArrowHead(
+                    svg,
+                    arrow.at,
+                    arrow.direction,
+                    head,
+                    stroke
+                );
+            });
+
+            appendDimensionText(
+                svg,
+                graphics.text,
+                graphics.textFrame,
+                stroke,
+                toScreen
+            );
+
+            return;
+        }
+
         if (graphics.kind === "angular") {
             const arc = (graphics.arc || []).filter(
                 (point) =>
@@ -1389,6 +1471,64 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             );
         }
 
+        /*
+         * A LABEL'S LEADER APPEARS WITH DISTANCE.
+         *
+         * A label marks a point on a body; its text may be moved away for
+         * legibility. A short offset needs no line, so none is drawn; once the
+         * text is more than about 2.5 text heights from the anchor a leader is
+         * drawn from the anchor to the text, and it disappears again when the
+         * text is brought back close.
+         *
+         * THE DECISION IS THE MODEL'S, read through `labelLeaderGap`, so the
+         * threshold is stated once in world/text units and cannot drift between
+         * the renderer and anything else that asks. The gap is compared in
+         * SCREEN space here because the text is sized in screen pixels - which
+         * is what makes the rule hold at every zoom rather than only at 1:1.
+         */
+        if (kind === "label" && model.labelLeaderGap) {
+            const labelAnchor =
+                geometry.start && toScreen(geometry.start);
+
+            const labelText =
+                geometry.position && toScreen(geometry.position);
+
+            if (labelAnchor && labelText) {
+                const gap = Math.hypot(
+                    labelText.x - labelAnchor.x,
+                    labelText.y - labelAnchor.y
+                );
+
+                if (gap > 2.5 * fontSize) {
+                    svg.appendChild(
+                        createSvgElement("line", {
+                            x1: labelAnchor.x,
+                            y1: labelAnchor.y,
+                            x2: labelText.x,
+                            y2: labelText.y,
+                            stroke,
+                            "stroke-width": 1
+                        })
+                    );
+                }
+
+                /*
+                 * AN ANCHOR MARKER is drawn at the marked point, so the label's
+                 * attachment is visible on the body rather than only implied by
+                 * where the line ends. It is a small filled dot at a fixed screen
+                 * size, like every other marker in the application.
+                 */
+                svg.appendChild(
+                    createSvgElement("circle", {
+                        cx: labelAnchor.x,
+                        cy: labelAnchor.y,
+                        r: 2.5,
+                        fill: stroke
+                    })
+                );
+            }
+        }
+
         if (start && end) {
             /*
              * THE ARROWHEAD SITS AT THE POINTED END.
@@ -1618,6 +1758,52 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     "stroke-width": 1.2,
                     "stroke-linecap": "round",
                     "stroke-linejoin": "round"
+                })
+            );
+
+            return;
+        }
+
+        /*
+         * A DOT: a filled marker at the pointed end.
+         *
+         * The engineering convention for a leader that touches a surface
+         * rather than pointing at an edge - a small solid dot where the pen
+         * lands. It is a circle on the head, so it needs no direction, which is
+         * why it is drawn before the arrowhead geometry below.
+         */
+        if (headStyle === "dot") {
+            svg.appendChild(
+                createSvgElement("circle", {
+                    cx: head.x,
+                    cy: head.y,
+                    r: 2.6,
+                    fill: stroke
+                })
+            );
+
+            return;
+        }
+
+        /*
+         * A TICK: a short stroke across the pen at the pointed end.
+         *
+         * The convention for a leader that stops AT a line rather than
+         * touching it. It is perpendicular to the pen so it reads as a mark on
+         * the drawing, not a stray spur.
+         */
+        if (headStyle === "tick") {
+            const tick = 4.5;
+
+            svg.appendChild(
+                createSvgElement("line", {
+                    x1: head.x - uy * tick,
+                    y1: head.y + ux * tick,
+                    x2: head.x + uy * tick,
+                    y2: head.y - ux * tick,
+                    stroke,
+                    "stroke-width": 1.4,
+                    "stroke-linecap": "round"
                 })
             );
 

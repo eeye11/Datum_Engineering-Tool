@@ -228,6 +228,130 @@ export function dimensionReferenceAtClick(
 }
 
 /*
+ * The measurements a circle or an arc can state, from the measurement layer.
+ *
+ * Read from `dimensionCandidates`, which is the ONE place a feature's own
+ * measurements are declared, then filtered to the circular ones. A circle and an
+ * arc therefore offer exactly what the rest of the application believes they
+ * can measure, and a future circular measurement is offered here without a
+ * second list to keep in step.
+ *
+ * `coordinate` and `angular` are deliberately left OUT of the offers: a
+ * coordinate is a position rather than a size, and an arc's included angle is
+ * measured between its two radii as an angular dimension elsewhere - neither is
+ * a radius/diameter/arc-length choice the cursor should cycle through here.
+ */
+const CIRCULAR_MEASUREMENTS = ["diameter", "radius", "arc-length"];
+
+function circularMeasurementTypes(object) {
+  const declared = enggMeasurement.dimensionCandidates(object) || [];
+
+  const offered = CIRCULAR_MEASUREMENTS.filter((type) =>
+    declared.includes(type)
+  );
+
+  /*
+   * A circle is never offered an arc length: it has no sweep, and a full
+   * circumference is a different claim that the requirement says must not be
+   * dressed up as one. Belt-and-braces over the declaration, which is the point
+   * of stating it.
+   */
+  const shapeFiltered =
+    object.type === "circle"
+      ? offered.filter((type) => type !== "arc-length")
+      : offered;
+
+  return shapeFiltered.length ? shapeFiltered : ["radius"];
+}
+
+/*
+ * EVERY measurement a circle or an arc can state, as descriptors.
+ *
+ * The placement keeps a LIST of candidate dimensions so Tab can cycle them, and a
+ * plain line contributes exactly one. A circle contributes several - diameter and
+ * radius, an arc also arc length - and they are all the SAME reference measured
+ * differently, which is why the leader (the default) is `first.dimensionType`
+ * and the rest follow in the shape's own declared order.
+ *
+ * Nothing is invented here: every type comes from `circularMeasurementTypes`, the
+ * filter over the measurement layer's own declaration. A shape that can only
+ * state a radius yields a single candidate and Tab simply has nowhere to go,
+ * which is the correct behaviour rather than cycling through impossible claims.
+ */
+export function circularCandidateDescriptors(reference) {
+  const offered =
+    Array.isArray(reference?.offered) && reference.offered.length
+      ? reference.offered
+      : [reference?.dimensionType];
+
+  const ordered = [
+    reference?.dimensionType,
+    ...offered.filter((type) => type !== reference?.dimensionType)
+  ].filter(Boolean);
+
+  return ordered.map((dimensionType) => ({
+    dimensionType,
+    refs: [
+      {
+        kind: "between",
+        featureId: reference.featureId,
+        anchor: reference.anchor
+      }
+    ]
+  }));
+}
+
+/*
+ * Which circular measurement the cursor is asking for.
+ *
+ * TWO HONEST SIGNALS, and no guessing:
+ *
+ *   1. A cursor OUTSIDE the circle reads as a leader-style annotation, which is
+ *      how a radius is conventionally placed - so a cursor beyond the boundary
+ *      prefers RADIUS.
+ *   2. A cursor near the centre, or on the circle a diameter runs through,
+ *      prefers DIAMETER.
+ *
+ * An arc prefers RADIUS unless the cursor sits far out along the sweep, where an
+ * arc-length annotation is the convention - so the same distance test decides it.
+ * When the shape cannot state the preferred type at all, the first offered type
+ * is used, so the answer is always one the shape genuinely supports.
+ */
+function preferredCircularType(object, point, offered) {
+  const geometry = object.geometry || {};
+  const centre = geometry.center;
+
+  const pick = (preferred) =>
+    offered.includes(preferred) ? preferred : offered[0];
+
+  if (!centre || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    return offered[0];
+  }
+
+  const radius = Number(geometry.radius) || 0;
+
+  const distance = Math.hypot(point.x - centre.x, point.y - centre.y);
+
+  /*
+   * Inside the circle, or close to it: the cursor is on the body, which is where
+   * a diameter is drawn ACROSS. Outside it: a leader, which is a radius.
+   */
+  if (distance > radius * 1.15) {
+    /*
+     * Far out along an arc's sweep is where an arc-length annotation is placed;
+     * a full circle has no arc length to offer, so it falls to a radius.
+     */
+    if (object.type === "arc" && offered.includes("arc-length")) {
+      return "arc-length";
+    }
+
+    return pick("radius");
+  }
+
+  return pick(object.type === "arc" ? "radius" : "diameter");
+}
+
+/*
  * The reference a whole feature offers, by its shape.
  *
  * A straight body is referenced as a LINE - so selecting it once
@@ -278,30 +402,45 @@ function dimensionReferenceForFeature(
 
     const geometry = object.geometry || {};
 
+    /*
+     * ========================================================
+     * A CIRCLE OR AN ARC OFFERS EVERY MEASUREMENT IT SUPPORTS
+     * ========================================================
+     *
+     * THIS IS THE CIRCLE-DIMENSION DEFECT. The reference used to name ONE
+     * measurement - a circle always "diameter", an arc always "radius" - so a
+     * circle could never be measured by its RADIUS, an arc could never be
+     * measured by its ARC LENGTH, and Tab had nothing to cycle because there was
+     * only ever one candidate.
+     *
+     * The measurement layer ALREADY knows what each shape can state:
+     *
+     *     circle   diameter, radius, coordinate
+     *     arc      radius, arc-length, diameter, angular
+     *
+     * so those are carried here as the `refs` of ONE reference of kind
+     * `circular`, in the layer's own order, and `inferDimensionDescriptor`
+     * expands them into the candidate list Tab cycles through. The FIRST is the
+     * default; the cursor then biases the choice (see `preferredCircularType`).
+     *
+     * The reference stays PERSISTENT: it names the feature and an anchor, never a
+     * frozen coordinate, so a circular dimension follows its circle or arc when
+     * the geometry moves - exactly as every other reference does.
+     */
     if (
-        object.type === "circle" &&
-        Number.isFinite(Number(geometry.radius))
+      (object.type === "circle" || object.type === "arc") &&
+      Number.isFinite(Number(geometry.radius))
     ) {
-        return {
-            kind: "circle",
-            featureId: object.id,
-            dimensionType: "diameter",
-            anchor: "east",
-            object
-        };
-    }
+      const offered = circularMeasurementTypes(object);
 
-    if (
-        object.type === "arc" &&
-        Number.isFinite(Number(geometry.radius))
-    ) {
-        return {
-            kind: "arc",
-            featureId: object.id,
-            dimensionType: "radius",
-            anchor: "center",
-            object
-        };
+      return {
+        kind: "circular",
+        featureId: object.id,
+        dimensionType: preferredCircularType(object, point, offered),
+        offered,
+        anchor: object.type === "circle" ? "east" : "center",
+        object
+      };
     }
 
     /*
@@ -520,6 +659,34 @@ export function inferDimensionDescriptor(
         }
 
         if (first.kind === "circle" || first.kind === "arc") {
+            return {
+                dimensionType: first.dimensionType,
+                refs: [
+                    {
+                        kind: "between",
+                        featureId: first.featureId,
+                        anchor: first.anchor
+                    }
+                ]
+            };
+        }
+
+        /*
+         * ========================================================
+         * A CIRCLE OR AN ARC RETURNS ITS PRIMARY MEASUREMENT
+         * ========================================================
+         *
+         * ONE descriptor here, as for every other reference - the caller expects
+         * a single choice. The FULL candidate list a circle or an arc offers is
+         * built by `circularCandidateDescriptors` and passed to the placement as
+         * `dimensionCandidates`, so Tab can cycle it.
+         *
+         * Returning an array here was the tempting mistake: every caller of this
+         * function reads `descriptor.dimensionType` and `descriptor.refs`, so an
+         * array would have been a descriptor-shaped hole in the interaction -
+         * the preview, the commit and the panel would all have read undefined.
+         */
+        if (first.kind === "circular") {
             return {
                 dimensionType: first.dimensionType,
                 refs: [

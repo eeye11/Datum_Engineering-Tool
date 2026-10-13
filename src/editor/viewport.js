@@ -1173,7 +1173,6 @@ export function zoomAtCanvasPoint(
     nextZoom,
     event
 ) {
-    clearFitButtonHighlight();
     const bounds =
         drawingCanvas.getBoundingClientRect();
 
@@ -1275,7 +1274,6 @@ export function updateDrawingZoom(
         return;
     }
 
-    clearFitButtonHighlight();
     enggDrawingState.setCameraZoom(
         drawingState,
         percent / 100
@@ -1306,31 +1304,21 @@ export function updateDrawingZoom(
  * "turning it off leaves text that cannot be turned back" fault this fixes.
  * The label lives in the tooltip now, and the icon is never touched.
  */
-let cameraBeforeFit = null;
-
+/*
+ * FIT IS A ONE-SHOT ACTION, NOT A TOGGLE.
+ *
+ * It used to behave as a mode: the first press fitted the drawing and set an
+ * active highlight, and a second press put the camera back. That made Fit look
+ * like the fifth workspace switch beside Grid and Snap, and it gave the button
+ * a persistent visual state it never really had. Fit is a COMMAND - fit now,
+ * once - so this simply performs it.
+ *
+ * The camera memory and the highlight are gone with it. There is nothing to
+ * toggle back to, so there is no previous camera to remember and no active
+ * class to clear; the button stays in its neutral action style.
+ */
 export function toggleFitDrawing() {
-    const button = document.getElementById("drawingFitView");
-    if (!button) return;
-
-    if (button.getAttribute("aria-pressed") === "true") {
-        if (cameraBeforeFit) {
-            Object.assign(drawingState.camera, cameraBeforeFit);
-            syncActiveSheetViewport();
-        }
-        clearFitButtonHighlight();
-        renderCurrentDrawing();
-        return;
-    }
-
-    cameraBeforeFit = { ...drawingState.camera };
     fitDrawingToView();
-    setToggleLabel(button, "Fit", true);
-}
-
-function clearFitButtonHighlight() {
-    const button = document.getElementById("drawingFitView");
-    if (button) setToggleLabel(button, "Fit", false);
-    cameraBeforeFit = null;
 }
 
 export function toggleWorkspaceSetting(

@@ -1,22 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!--
-    DAETUM - the geometric capital D, in ONE FIXED BRAND COLOUR.
+    DAETUM - the targeting mark, in ONE FIXED BRAND COLOUR.
 
     THE SAME GEOMETRY AS THE HEADER MARK (app/daetum-mark.js), scaled from its
-    24-unit grid to this 32-unit one and given a heavier stroke so it stays
-    legible at 16 x 16. The bowl's centre is the spine, at the central dot: the
-    vertical spine forms the straight left edge, and the arc is its rounded
-    right-hand side. The transparent ground lets the tab strip show through.
+    24-unit grid to this 32-unit one by 4/3 and given a heavier stroke so it stays
+    legible at 16 x 16. A long vertical rule and an asymmetric horizontal bar cross
+    at the solid central dot, and an open circular arc wraps around the top, right
+    and bottom of that SAME point: the arc's centre is the dot and the axis
+    crossing, so all four elements are concentric and the opening - the left flank
+    - stays open. The rule overshoots the arc at both ends and the bar reaches
+    further left than right. The transparent ground lets the tab strip show
+    through.
 
     THE COLOUR (#087E83) IS DELIBERATELY NOT A THEME TOKEN. A browser tab is a
     separate document and cannot read the page's CSS variables, so this icon is
     one constant colour under every theme - it must never be swapped or recoloured
     when the application switches between light and dark.
   -->
-  <g fill="none" stroke="#087E83" stroke-width="2.27" stroke-linecap="round">
-    <path d="M8.27 5.6V26.4"/>
-    <path d="M8.27 11.62A9.33 9.33 0 1 1 8.27 20.38"/>
-    <path d="M2.13 16H15.47"/>
+  <g fill="none" stroke="#087E83" stroke-width="2.267" stroke-linecap="round">
+    <path d="M14.933 -0.267V32.267"/>
+    <path d="M4 16H20.4"/>
+    <path d="M9.049 4.933A12.533 12.533 0 1 1 9.049 27.067"/>
   </g>
-  <circle cx="8.27" cy="16" r="3.33" fill="#087E83"/>
+  <circle cx="14.933" cy="16" r="3.867" fill="#087E83"/>
 </svg>

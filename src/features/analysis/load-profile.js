@@ -84,14 +84,61 @@ import enggQuantities from "../../core/units/quantities.js";
             : DEFAULT_LOAD_UNIT;
     }
 
+    /*
+     * CHANGING A LOAD'S UNIT CONVERTS THE STORED NUMBER.
+     *
+     * The stored magnitude is in the unit the load states, so that convention
+     * only survives a unit change if the number is taken to the new unit with
+     * it. kN/m and N/mm are numerically identical - one kilonewton per metre
+     * IS one newton per millimetre - so between those the conversion is the
+     * identity and nothing moves. But the table also carries lbf/ft, which is
+     * a genuinely different scale, and relabelling a 5 kN/m load as "5 lbf/ft"
+     * would silently multiply it by fourteen.
+     *
+     * So `convertValue` runs over every magnitude the load carries - the
+     * profile points, the derived intensity and the two varying-load ends -
+     * through the shared table. The physical load never changes; only the
+     * number it is written as does, which is what switching a unit means.
+     */
     function setLoadUnit(geometry, unit) {
         if (!geometry) {
             return DEFAULT_LOAD_UNIT;
         }
 
-        geometry.loadUnit = isLoadUnit(unit)
-            ? unit
-            : DEFAULT_LOAD_UNIT;
+        if (!isLoadUnit(unit)) {
+            return loadUnit(geometry);
+        }
+
+        const previous = loadUnit(geometry);
+
+        if (previous !== unit) {
+            const convert = value =>
+                enggQuantities.convertValue(
+                    value,
+                    "distributedLoad",
+                    previous,
+                    unit
+                );
+
+            if (Array.isArray(geometry.points) && geometry.points.length) {
+                geometry.points = geometry.points.map(point => ({
+                    ...point,
+                    magnitude: Math.max(0, convert(point.magnitude))
+                }));
+            }
+
+            if (Number.isFinite(Number(geometry.intensity))) {
+                geometry.intensity = Math.max(0, convert(geometry.intensity));
+            }
+
+            for (const key of ["startIntensity", "endIntensity"]) {
+                if (Number.isFinite(Number(geometry[key]))) {
+                    geometry[key] = Math.max(0, convert(geometry[key]));
+                }
+            }
+        }
+
+        geometry.loadUnit = unit;
 
         return geometry.loadUnit;
     }
@@ -117,10 +164,15 @@ import enggQuantities from "../../core/units/quantities.js";
      */
     const DEFAULT_FORCE_UNIT = "N";
 
-    const FORCE_UNITS = ["N", "kN", "lbf"];
+    /*
+     * THE FORCE UNITS COME FROM THE SHARED QUANTITY TABLE, like the load
+     * and moment lists, so the three families cannot drift apart.
+     */
+    const FORCE_UNITS =
+        enggQuantities.unitsFor("force");
 
     function isForceUnit(value) {
-        return FORCE_UNITS.includes(value);
+        return enggQuantities.isUnitFor("force", value);
     }
 
     function forceUnit(geometry) {
@@ -168,10 +220,21 @@ import enggQuantities from "../../core/units/quantities.js";
      */
     const DEFAULT_MOMENT_UNIT = "N\u00b7m";
 
-    const MOMENT_UNITS = ["N\u00b7m", "kN\u00b7m"];
+    /*
+     * THE MOMENT UNITS COME FROM THE SHARED QUANTITY TABLE, not from a
+     * local list.
+     *
+     * There were TWO moment unit lists in the application - this literal
+     * and a second one beside the moment's value popup - so the units a
+     * moment could be stated in depended on which part of the code was
+     * asking. `unitsFor("moment")` is the ONE list, so a unit added to the
+     * table appears everywhere and a unit removed disappears everywhere.
+     */
+    const MOMENT_UNITS =
+        enggQuantities.unitsFor("moment");
 
     function isMomentUnit(value) {
-        return MOMENT_UNITS.includes(value);
+        return enggQuantities.isUnitFor("moment", value);
     }
 
     function momentUnit(geometry) {

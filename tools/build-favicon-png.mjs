@@ -19,12 +19,15 @@ const browser = await chromium.launch({ channel: "chrome" });
 const page = await browser.newPage({ viewport: { width: 200, height: 200 } });
 
 const render = async (size, file) => {
-    await page.setViewportSize({ width: size, height: size });
-    await page.setContent(
-        `<style>html,body{margin:0;background:transparent}svg{display:block}</style>` +
-        svg.replace('viewBox="0 0 32 32"', `viewBox="0 0 32 32" width="${size}" height="${size}"`),
-    );
-    await page.screenshot({ path: file, omitBackground: true });
+  await page.setViewportSize({ width: size, height: size });
+  await page.setContent(
+    `<style>html,body{margin:0;background:transparent}svg{display:block}</style>` +
+      svg.replace(
+        'viewBox="0 0 32 32"',
+        `viewBox="0 0 32 32" width="${size}" height="${size}"`,
+      ),
+  );
+  await page.screenshot({ path: file, omitBackground: true });
 };
 
 await render(32, pngPath);

@@ -81,13 +81,28 @@ console.log("\nUnits");
 const cm = d.calibrate(state, 40, 20, "cm");
 near("40 units = 20 cm is still 5 mm per unit", cm.mmPerUnit, 5);
 check("the document reads in cm", d.readScale(state).unit, "cm");
+/*
+ * THE VALUE IS ALWAYS MILLIMETRES.
+ *
+ * These two rows used to expect the SHEET's unit - 50 cm, 500 cm - because
+ * `toEngineering` divided the millimetres by the sheet's own unit as well as
+ * multiplying by the scale. On a centimetre sheet that made the number
+ * smaller; on a METRE sheet it made it a thousand times smaller, and a panel
+ * that asks for millimetres then converted them into the field's display unit
+ * received a metre figure labelled as millimetres. Entering 5 m came back as
+ * 0.005 - the reported defect.
+ *
+ * The scale already carries the unit, so the value does not have to as well:
+ * 100 units at 5 mm each IS 500 mm, and 5 m IS 5000 mm. The caller converts
+ * into whatever unit it is displaying.
+ */
 near(
-  "100 units at 5 mm each is 500 mm, shown as 50 cm",
+  "100 units at 5 mm each is 500 mm, shown as 50 cm by the caller",
   d.toEngineering(state, 100).value,
-  50
+  500
 );
 near("5 m is 5000 mm, which is 1000 units", d.fromEngineering(state, 5, "m"), 1000);
-near("and reads back as 500 cm", d.toEngineering(state, 1000).value, 500);
+near("and reads back as 5000 mm", d.toEngineering(state, 1000).value, 5000);
 
 console.log("\nRefusals");
 check("a zero measurement is refused", d.calibrate(state, 0, 200).ok, false);

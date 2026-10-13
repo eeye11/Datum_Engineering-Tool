@@ -243,8 +243,8 @@ console.log("\n  a Moment is placed, and THEN asked about\n");
   check(
     "with MOMENT units, not a force's or a load's",
     /MOMENT_UNITS/.test(preview) &&
-      /kN·m/.test(preview) &&
-      /lb·ft/.test(preview),
+      /unitsFor\?.{0,10}moment|kN\u00b7m/.test(preview) &&
+      /unitsFor\("moment"\)|unitsFor\?\.\("moment"\)/.test(preview),
   );
 
   check(

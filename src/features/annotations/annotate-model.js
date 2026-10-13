@@ -180,7 +180,35 @@ export const SYMBOL_LIBRARY = [
       { id: "plus-minus", label: "Plus / Minus", text: "±" },
       { id: "square", label: "Square", text: "□" },
       { id: "counterbore", label: "Counterbore", text: "⌴" },
-      { id: "countersink", label: "Countersink", text: "⌵" }
+      { id: "countersink", label: "Countersink", text: "⌵" },
+      { id: "delta", label: "Delta", text: "Δ" },
+      { id: "micro", label: "Micro", text: "µ" }
+    ]
+  },
+
+  /*
+   * GREEK AND MATHEMATICAL NOTATION.
+   *
+   * The letters and operators an engineering statement needs - an angle is
+   * `θ`, a stress is `σ`, a change is `Δ`, a sum is `Σ`. Offered as a group so
+   * they are browsable, and searchable by their LATIN name, which is how a
+   * student who cannot type the glyph finds it.
+   */
+  {
+    id: "greek-math",
+    label: "Greek & Mathematical",
+    symbols: [
+      { id: "theta", label: "Theta", text: "θ" },
+      { id: "alpha", label: "Alpha", text: "α" },
+      { id: "beta", label: "Beta", text: "β" },
+      { id: "gamma", label: "Gamma", text: "γ" },
+      { id: "delta-sym", label: "Delta symbol", text: "Δ" },
+      { id: "sigma", label: "Sigma", text: "σ" },
+      { id: "mu", label: "Mu", text: "μ" },
+      { id: "omega", label: "Omega", text: "ω" },
+      { id: "pi", label: "Pi", text: "π" },
+      { id: "sum", label: "Sum", text: "Σ" },
+      { id: "integral", label: "Integral", text: "∫" }
     ]
   }
 ];
@@ -271,6 +299,7 @@ export function createAnnotate({
   position = { x: 0, y: 0 },
   start = null,
   end = null,
+  anchor = null,
   targetFeatureId = null,
   symbolId = null,
   toleranceMode = "symmetric",
@@ -325,7 +354,6 @@ export function createAnnotate({
       x: Number(end.x) || 0,
       y: Number(end.y) || 0
     };
-
     /*
      * A LEADER OR CALLOUT MAY CARRY BENDS - the ordered intermediate points
      * between attachment and endpoint. They are stored on the geometry rather
@@ -353,6 +381,34 @@ export function createAnnotate({
 
   if (kind === "symbol") {
     geometry.symbolId = symbolId || "datum";
+  }
+
+  /*
+   * ========================================================
+   * A LABEL'S ANCHOR IS A POINT ON THE FEATURE IT NAMES
+   * ========================================================
+   *
+   * A label is a POINT-ASSOCIATED annotation: it marks a place on a body and
+   * states the body's name there. The place it marks is the ANCHOR, and the text
+   * may be moved away from it - which is what the optional leader exists to
+   * bridge (see `labelLeaderGap`).
+   *
+   * The anchor is stored as `geometry.start`, the SAME field a leader's
+   * attachment uses, so the renderer, the handles and the leader drawing all
+   * read one point and cannot disagree about where the label is attached. The
+   * text sits at `geometry.position`, moved on its own.
+   *
+   * `anchor` is accepted as an explicit point; when it is absent the label's own
+   * placement is the anchor, which is the state a label created by a single
+   * click is in until its text is dragged away.
+   */
+  if (kind === "label") {
+    const anchorPoint = anchor || position || { x: 0, y: 0 };
+
+    geometry.start = {
+      x: Number(anchorPoint.x) || 0,
+      y: Number(anchorPoint.y) || 0
+    };
   }
 
   if (kind === "tolerance") {
@@ -761,12 +817,159 @@ export function hasLeaderPath(kind) {
 }
 
 /*
+ * ========================================================
+ * HOW MANY ELBOWS A ROUTE MAY HAVE
+ * ========================================================
+ *
+ * A LEADER takes ONE elbow in V1: either a straight route, or a single bend
+ * that carries the pen around the thing it annotates. A callout may take more,
+ * because a reference balloon often has to reach further across a drawing.
+ *
+ * Stated HERE, with the kinds, so the panel's Add Bend control, the drag and
+ * any future caller read the SAME limit - a second copy of "one" at a call
+ * site is a second place for it to become "two".
+ */
+export function maxBendsFor(kind) {
+  if (kind === "leader") {
+    return 1;
+  }
+
+  if (kind === "callout") {
+    return 3;
+  }
+
+  return 0;
+}
+
+/*
  * Whether this annotation has a drawn body beyond a single point, so the
  * interaction layer and the renderer agree about which kinds flow from a
  * gesture and which do not.
  */
 export function isGeometricKind(kind) {
   return ANNOTATE_KINDS[kind]?.geometric === true;
+}
+
+/*
+ * ========================================================
+ * A LABEL'S LEADER APPEARS WITH DISTANCE, AND HIDES AGAIN
+ * ========================================================
+ *
+ * A label sits at the place it marks while its text sits where it is legible,
+ * and a small offset needs no line between them. Once the text is more than
+ * about 2.5 text heights from the anchor, a leader is drawn so the reader can
+ * tell which letter belongs to which point; bring the text back close and the
+ * leader disappears.
+ *
+ * THE THRESHOLD IS IN TEXT HEIGHTS, NOT CANVAS PIXELS, because it is about how
+ * the two read together rather than about how far apart they are drawn. That is
+ * what makes it correct at every zoom: the gap is measured in the SAME world
+ * units as the geometry and compared against the text's own world height, so
+ * zooming in does not make a leader appear where none was.
+ *
+ * Returns whether a leader should be drawn, plus the two endpoints - the anchor
+ * and the text position - so the caller draws exactly the line this decided on.
+ */
+export function labelLeaderGap(annotation, options = {}) {
+  const geometry = annotation?.geometry;
+
+  if (!geometry?.start || !geometry?.position) {
+    return { show: false, from: null, to: null };
+  }
+
+  const fontSize = Number(annotation.style?.fontSize) || 12;
+
+  /*
+   * THE WORLD LENGTH OF ONE FONT PIXEL.
+   *
+   * The threshold is stated in text heights, and a text height is the font size
+   * converted into drawing units by the caller's scale. Without a scale the
+   * font's own size is used, which keeps the rule meaningful in a model-only
+   * context (tests, export) rather than silently doing nothing.
+   */
+  const worldPerFont =
+    Number.isFinite(options.worldPerFontUnit) && options.worldPerFontUnit > 0
+      ? options.worldPerFontUnit
+      : 1;
+
+  const gapPx =
+    Math.hypot(
+      geometry.position.x - geometry.start.x,
+      geometry.position.y - geometry.start.y
+    ) / worldPerFont;
+
+  const thresholdPx = 2.5 * fontSize;
+
+  return {
+    show: gapPx > thresholdPx,
+    from: { x: geometry.start.x, y: geometry.start.y },
+    to: { x: geometry.position.x, y: geometry.position.y }
+  };
+}
+
+/*
+ * ========================================================
+ * LABEL NAMES: ONE DRAWING-WIDE SEQUENCE, A..Z then AA, AB
+ * ========================================================
+ *
+ * A label is a short identifier, and a drawing reads best when its labels
+ * run A, B, C... rather than "Label 1", "Label 2". The sequence is
+ * CONTINUOUS ACROSS THE WHOLE DRAWING - not restarted per body or region -
+ * because a reader scans the sheet as one document.
+ *
+ * IT REUSES THE LOWEST FREE NAME. Delete C and the next label is C again,
+ * so a sheet tidied by deleting a stray label does not carry a gap. The
+ * sequence is spreadsheets' own column order: A..Z, then AA, AB, ... AZ, BA.
+ *
+ * The FIRST free name is taken, not the count of labels, so the rule is
+ * "fill the first gap" rather than "one more than the last" - which is what
+ * makes reuse fall out of the same rule instead of being a second one.
+ */
+function labelSequenceName(index) {
+  let name = "";
+  let n = index;
+
+  do {
+    name = String.fromCharCode(65 + (n % 26)) + name;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+
+  return name;
+}
+
+/*
+ * The next label name for a document.
+ *
+ * Read from the DRAWING STATE, so the sequence is drawing-wide. `state` is
+ * optional: without one the first name, "A", is returned, which is the
+ * honest answer when there is no drawing yet.
+ */
+export function nextLabelName(state) {
+  const taken = new Set(
+    (state?.objects || [])
+      .filter(
+        (object) =>
+          object?.type === "annotate" &&
+          object.annotateKind === "label"
+      )
+      .map((object) => String(object.name || ""))
+  );
+
+  /*
+   * Bounded generously rather than by a magic count: the sequence is
+   * effectively infinite (A..Z, AA..ZZ, AAA...), and the loop stops at the
+   * first free name long before any bound is reached on a real sheet. The
+   * bound exists only so a pathological document cannot spin forever.
+   */
+  for (let index = 0; index < 26 * 27; index += 1) {
+    const candidate = labelSequenceName(index);
+
+    if (!taken.has(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "A";
 }
 
 /*
@@ -884,6 +1087,184 @@ export function tableHeightOf(annotation) {
 }
 
 /*
+ * WHICH CELL A POINT IS IN, from the table's own geometry.
+ *
+ * The table is a grid of fixed cell size anchored at its position, so a world
+ * point maps to a cell by simple division - the SAME layout the renderer draws
+ * from, so a double-click lands in the cell the student sees. Returns the cell
+ * INDEX (row * columns + column), or null when the point is outside the table.
+ */
+export function tableCellAt(annotation, point) {
+  const geometry = annotation?.geometry;
+
+  if (!geometry?.position || !point) {
+    return null;
+  }
+
+  const rows = Math.max(1, Number(geometry.rows) || 1);
+  const columns = Math.max(1, Number(geometry.columns) || 1);
+
+  const dx = point.x - geometry.position.x;
+  const dy = point.y - geometry.position.y;
+
+  if (dx < 0 || dy < 0) {
+    return null;
+  }
+
+  const column = Math.floor(dx / TABLE_CELL_W);
+  const row = Math.floor(dy / TABLE_CELL_H);
+
+  if (row >= rows || column >= columns) {
+    return null;
+  }
+
+  return row * columns + column;
+}
+
+/*
+ * ========================================================
+ * TABLE ROW AND COLUMN OPERATIONS
+ * ========================================================
+ *
+ * Every one of these REBUILDS the cell grid from the stored rows and columns,
+ * moving each existing cell to its place in the new shape - so a row added at
+ * the bottom leaves every cell above it untouched, a column added at the right
+ * leaves the rest of each row in order, and a deletion removes the right cells
+ * and keeps the others. There is one reconcile function (`resizeCells`) behind
+ * all four, so the arithmetic that maps old positions to new cannot be written
+ * four times and diverge.
+ *
+ * The table's OWN `rows`/`columns` are the source of truth; the cell list is
+ * always exactly rows*columns long, which is what stops a grid with holes.
+ */
+function resizeCells(cells, oldRows, oldColumns, newRows, newColumns, mapper) {
+  const grid = [];
+
+  for (let row = 0; row < newRows; row += 1) {
+    grid.push(new Array(newColumns).fill(""));
+  }
+
+  for (let row = 0; row < oldRows; row += 1) {
+    for (let column = 0; column < oldColumns; column += 1) {
+      const target = mapper(row, column, oldRows, oldColumns);
+
+      if (!target) {
+        continue;
+      }
+
+      const [nextRow, nextColumn] = target;
+
+      if (
+        nextRow >= 0 &&
+        nextRow < newRows &&
+        nextColumn >= 0 &&
+        nextColumn < newColumns
+      ) {
+        grid[nextRow][nextColumn] = cells[row * oldColumns + column] ?? "";
+      }
+    }
+  }
+
+  return grid.flat();
+}
+
+function tableShape(annotation) {
+  const geometry = annotation?.geometry || {};
+
+  return {
+    rows: Math.max(1, Number(geometry.rows) || 1),
+    columns: Math.max(1, Number(geometry.columns) || 1),
+    cells: Array.isArray(geometry.cells) ? geometry.cells : []
+  };
+}
+
+function applyShape(annotation, rows, columns, cells) {
+  annotation.geometry.rows = rows;
+  annotation.geometry.columns = columns;
+  annotation.geometry.cells = cells;
+}
+
+/* Append a row at the bottom; every existing cell keeps its position. */
+export function addTableRow(annotation, at = null) {
+  const { rows, columns, cells } = tableShape(annotation);
+
+  const index =
+    at === null || at === undefined
+      ? rows
+      : Math.max(0, Math.min(rows, Math.trunc(at)));
+
+  const next = resizeCells(cells, rows, columns, rows + 1, columns, (row, column) =>
+    row >= index ? [row + 1, column] : [row, column]
+  );
+
+  applyShape(annotation, rows + 1, columns, next);
+
+  return true;
+}
+
+/* Delete a row; the rows below move up and nothing else changes. */
+export function deleteTableRow(annotation, at = null) {
+  const { rows, columns, cells } = tableShape(annotation);
+
+  if (rows <= 1) {
+    return false;
+  }
+
+  const index =
+    at === null || at === undefined
+      ? rows - 1
+      : Math.max(0, Math.min(rows - 1, Math.trunc(at)));
+
+  const next = resizeCells(cells, rows, columns, rows - 1, columns, (row, column) =>
+    row === index ? null : row > index ? [row - 1, column] : [row, column]
+  );
+
+  applyShape(annotation, rows - 1, columns, next);
+
+  return true;
+}
+
+/* Append a column at the right; each row's cells keep their order. */
+export function addTableColumn(annotation, at = null) {
+  const { rows, columns, cells } = tableShape(annotation);
+
+  const index =
+    at === null || at === undefined
+      ? columns
+      : Math.max(0, Math.min(columns, Math.trunc(at)));
+
+  const next = resizeCells(cells, rows, columns, rows, columns + 1, (row, column) =>
+    column >= index ? [row, column + 1] : [row, column]
+  );
+
+  applyShape(annotation, rows, columns + 1, next);
+
+  return true;
+}
+
+/* Delete a column; the columns to its right move left. */
+export function deleteTableColumn(annotation, at = null) {
+  const { rows, columns, cells } = tableShape(annotation);
+
+  if (columns <= 1) {
+    return false;
+  }
+
+  const index =
+    at === null || at === undefined
+      ? columns - 1
+      : Math.max(0, Math.min(columns - 1, Math.trunc(at)));
+
+  const next = resizeCells(cells, rows, columns, rows, columns - 1, (row, column) =>
+    column === index ? null : column > index ? [row, column - 1] : [row, column]
+  );
+
+  applyShape(annotation, rows, columns - 1, next);
+
+  return true;
+}
+
+/*
  * ========================================================
  * THE PUBLIC SURFACE
  * ========================================================
@@ -901,14 +1282,23 @@ const enggAnnotate = {
   displayTextOf,
   isPlaceholder,
   isGeometricKind,
+  labelLeaderGap,
+  labelSequenceName,
+  nextLabelName,
   leaderPathPoints,
   addLeaderBend,
   removeLeaderBend,
   hasLeaderPath,
+  maxBendsFor,
   translateAnnotation,
   boundsOf,
   tableWidthOf,
   tableHeightOf,
+  tableCellAt,
+  addTableRow,
+  addTableColumn,
+  deleteTableRow,
+  deleteTableColumn,
   TABLE_CELL_W,
   TABLE_CELL_H
 };

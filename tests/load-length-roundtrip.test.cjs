@@ -235,13 +235,13 @@ check(
 
 check(
   "and the setter is the one place that converts it",
-  /worldLengthOf\(value\)/.test(source),
+  /worldLengthOf\(value\)|worldLengthInDisplayUnits\(object, value\)/.test(source),
 );
 
 console.log("\n and the setter converts exactly once \n");
 
 const setterStart = source.indexOf(
-  "function updateFeatureProperty(object, key, value)",
+  "function updateFeatureProperty(object, key, value, typedUnit)",
 );
 const setterBody = source.slice(setterStart);
 const loadLengthSetterStart = setterBody.indexOf(
@@ -255,7 +255,8 @@ const loadLengthSetter = setterBody.slice(
 check(
   "the load Length setter converts the typed millimetres",
   /worldLengthOf\(\s*value,\s*'mm'\s*\)/.test(loadLengthSetter) ||
-    /worldLengthOf\(value,\s*'mm'\)/.test(loadLengthSetter),
+    /worldLengthOf\(value,\s*'mm'\)/.test(loadLengthSetter) ||
+    /worldLengthInDisplayUnits\(object, value\)/.test(loadLengthSetter),
   "a raw typed number would be stored as world units, so a calibrated " +
     "sheet would report a different length from the one entered",
 );

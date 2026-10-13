@@ -735,6 +735,72 @@ export function openNoteEditorFor(object) {
 }
 
 /*
+ * OPEN THE EDITOR FOR ONE TABLE CELL.
+ *
+ * A table is a grid of cells, and the cell a double-click landed in is the thing
+ * the student wants to write - so this opens the SAME editor a note uses, seeded
+ * with that cell's current text, and writes the result back to THAT cell. The
+ * cell index comes from the model's own layout (`tableCellAt`), so the editor
+ * and the drawn grid agree about which cell was hit.
+ *
+ * It is a single-line box: a cell holds a short value, not prose, so Enter
+ * commits, which is what a spreadsheet does.
+ */
+export function openTableCellEditorFor(table, cellIndex) {
+    if (
+        !table ||
+        table.type !== "annotate" ||
+        table.annotateKind !== "table"
+    ) {
+        return false;
+    }
+
+    const geometry = table.geometry || {};
+
+    if (!Array.isArray(geometry.cells)) {
+        return false;
+    }
+
+    const current = geometry.cells[cellIndex] ?? "";
+
+    enggNoteEditor?.open({
+        text: current,
+        multiline: false,
+        placeholder: "Enter text",
+        title: "Edit Cell",
+
+        onApply: (text) => {
+            const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
+
+            /*
+             * ONLY THE ONE CELL IS WRITTEN, and the grid is left the size it is -
+             * editing a cell changes a VALUE, never the table's shape, so the
+             * rows, columns and every other cell are untouched.
+             */
+            table.geometry.cells[cellIndex] = String(text ?? "");
+
+            enggDrawingState.commitDrawingChange(
+                drawingState,
+                previousObjects
+            );
+
+            setToolMessage("Cell updated");
+
+            renderProperties();
+            renderCurrentDrawing();
+        },
+
+        onCancel: () => {
+            setToolMessage("Cell edit cancelled");
+
+            renderCurrentDrawing();
+        }
+    });
+
+    return true;
+}
+
+/*
  * ========================================================
  * FINISHING WITH A TOOL: BACK TO SELECT IN ONE CLICK
  * ========================================================

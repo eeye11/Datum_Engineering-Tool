@@ -513,6 +513,55 @@ function isUnitFor(quantityType, unit) {
 }
 
 /*
+ * THE UNIT A QUANTITY FALLS BACK TO when the caller has not named one.
+ *
+ * The base unit, which is the first key of the row - the unit the model stores
+ * and the one a panel shows before the student changes it. Null for a quantity
+ * this module does not know, so a caller is never handed another quantity's
+ * default.
+ */
+function defaultUnitFor(quantityType) {
+  return QUANTITY_UNITS[quantityType]?.base ?? null;
+}
+
+/*
+ * A UNIT NAMED IN TEXT, MATCHED BACK TO ITS CANONICAL SPELLING.
+ *
+ *     canonicalUnitFor("length", "MM")  ->  "mm"
+ *     canonicalUnitFor("force",  "kn")  ->  "kN"
+ *     canonicalUnitFor("length", "furlong") -> null
+ *
+ * A student typing a suffix should not have to match the table's capitalisation
+ * exactly - "mm", "MM" and "Mm" are the same unit - so the comparison folds
+ * case. A token that names no unit of THIS quantity returns null rather than a
+ * neighbouring quantity's unit, so "5 mm" is refused as a force instead of being
+ * read as five of something the student did not write.
+ */
+function canonicalUnitFor(quantityType, unit) {
+  if (typeof unit !== "string" || !unit) {
+    return null;
+  }
+
+  const units = QUANTITY_UNITS[quantityType]?.units;
+
+  if (!units) {
+    return null;
+  }
+
+  if (units[unit]) {
+    return unit;
+  }
+
+  const folded = unit.toLowerCase();
+
+  return (
+    Object.keys(units).find(
+      candidate => candidate.toLowerCase() === folded
+    ) ?? null
+  );
+}
+
+/*
  * HOW MANY BASE UNITS ONE OF `unit` IS WORTH.
  *
  * Null for a unit the quantity does not have, so a conversion is refused
@@ -579,6 +628,105 @@ function convertValue(value, quantityType, fromUnit, toUnit) {
   return (base - unitOffset(quantityType, toUnit)) / to;
 }
 
+/*
+ * ============================================================
+ * READING A NUMBER THAT MAY CARRY ITS OWN UNIT
+ * ============================================================
+ *
+ *     readQuantity("5",     "length", "m")  ->  { value: 5,   unit: "m",  explicit: false }
+ *     readQuantity("5 mm",  "length", "m")  ->  { value: 5,   unit: "mm", explicit: true  }
+ *     readQuantity("5",     "force",  "N")  ->  { value: 5,   unit: "N",  explicit: false }
+ *     readQuantity("5 kN",  "force",  "N")  ->  { value: 5,   unit: "kN", explicit: true  }
+ *
+ * ============================================================
+ * WHY THIS EXISTS, AND WHY IT IS NOT `Number()`
+ * ============================================================
+ *
+ * A property field is labelled with the unit the student is reading in, but
+ * students type the unit anyway - "5 mm", "2 kN", "30 deg" - because the unit
+ * is part of how they think about the number. `Number("5 mm")` is NaN, so the
+ * old field treated a correct, unambiguous entry as garbage and discarded it.
+ *
+ * THE SUFFIX OVERRIDES THE FIELD'S UNIT. That is the whole point: if the
+ * dropdown says metres and the student types "5 mm", they meant five
+ * millimetres, and reading it as five metres would be a thousand-fold error in
+ * the direction they explicitly guarded against. A bare number, by contrast,
+ * has nothing to say about its unit, so it is taken in the unit the field is
+ * already showing - which is what the label promises.
+ *
+ * `explicit` is returned so a caller can TELL THE TWO APART. A field that has
+ * just read "5 mm" knows the student has chosen millimetres for this entry and
+ * can update its selector to match, so the two cannot disagree afterwards. A
+ * field that read a bare "5" leaves the selector alone.
+ *
+ * A MALFORMED ENTRY IS REFUSED, NOT GUESSED. A number followed by something
+ * that is not a unit of this quantity - "5 furlongs" for a length, "5 mm" for
+ * a force - returns null rather than falling back to the field's unit. The
+ * alternative is to accept the 5 and silently drop the part the student
+ * deliberately wrote, which is how a wrong number gets committed.
+ */
+function readQuantity(text, quantityType, fallbackUnit) {
+  if (typeof text !== "string") {
+    return null;
+  }
+
+  /*
+   * A NUMBER, then optionally a unit token. The exponent forms are accepted
+   * because "1e3" and "2.5e-2" are numbers a student may reasonably type.
+   *
+   * THE UNIT TOKEN CARRIES THE WHOLE SYMBOL. A moment is written "kN·m"
+   * with a middle dot, a load is written "N/mm" with a slash, and an area is
+   * written "m²" with a superscript - so the token admits any of the
+   * characters the shared tables spell their units with, and the token is
+   * then matched against THIS quantity's list. A token naming no unit of the
+   * quantity is still refused below, so the wider character set cannot let
+   * "5 N" be read as a length.
+   */
+  const match = text
+    .trim()
+    .match(
+      /^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*([A-Za-z°²³·\/][A-Za-z°²³·\/]*)?$/
+    );
+
+  if (!match) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  const suffix = match[2];
+
+  /*
+   * NO SUFFIX. The number is in the unit the field is already showing, so the
+   * fallback is the answer and nothing was overridden.
+   */
+  if (!suffix) {
+    const unit =
+      fallbackUnit && isUnitFor(quantityType, fallbackUnit)
+        ? fallbackUnit
+        : defaultUnitFor(quantityType);
+
+    return unit ? { value, unit, explicit: false } : null;
+  }
+
+  /*
+   * A SUFFIX. It must name a unit of THIS quantity - case-insensitively, so
+   * "MM" and "mm" are the same unit - or the entry is refused rather than
+   * half-read.
+   */
+  const named = canonicalUnitFor(quantityType, suffix);
+
+  if (!named) {
+    return null;
+  }
+
+  return { value, unit: named, explicit: true };
+}
+
 const enggQuantities = {
   LENGTH_UNITS,
   DEFAULT_LENGTH_UNIT,
@@ -599,6 +747,9 @@ const enggQuantities = {
   unitOffset,
   convertValue,
   isUnitFor,
+  defaultUnitFor,
+  canonicalUnitFor,
+  readQuantity,
 };
 
 export default enggQuantities;

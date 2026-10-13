@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="DAETUM">
+<path
+            d="M11.2 -0.2V24.2"
+            fill="none"
+            stroke="#087E83"
+            stroke-width="1.7"
+            stroke-linecap="round"
+        />
+        <path
+            d="M3 12H15.3"
+            fill="none"
+            stroke="#087E83"
+            stroke-width="1.7"
+            stroke-linecap="round"
+        />
+        <path
+            d="M6.787 3.7A9.4 9.4 0 1 1 6.787 20.3"
+            fill="none"
+            stroke="#087E83"
+            stroke-width="1.7"
+            stroke-linecap="round"
+        />
+        <circle
+            cx="11.2"
+            cy="12"
+            r="2.9"
+            fill="#087E83"
+        />
+</svg>

@@ -91,6 +91,23 @@ export function cancelManipulationDrag() {
     editorState.manipulationDrag =
         null;
 
+    /*
+     * A CANCELLED DRAG LEAVES NO SNAP STATE BEHIND.
+     *
+     * The guide and the snap marker belong to the drag that is being thrown
+     * away, so they go with it - exactly as they do on a committed release.
+     * A cancelled gesture must not leave a horizontal or vertical guide
+     * pointing at a relationship that no longer exists.
+     */
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            snapCandidate: null,
+            inference: null,
+            guideline: null
+        }
+    );
+
     if (
         drawingCanvas.hasPointerCapture(
             drag.pointerId
@@ -488,6 +505,31 @@ function manipulationHandles(
                 kind: "position",
                 point: object.placement
             }
+        ];
+    }
+
+    /*
+     * A LABEL HAS TWO HANDLES: ITS TEXT AND ITS ANCHOR.
+     *
+     * The text handle moves the words; the anchor handle deliberately moves the
+     * POINT THE LABEL MARKS, which is the one act that is allowed to change what
+     * a label is about. They are separate because they mean different things -
+     * moving the text is legibility, moving the anchor is a decision about the
+     * drawing.
+     *
+     * Both are plain points on the stored geometry (`position` and `start`), so
+     * the drag applies them through the same branch every other annotate handle
+     * uses.
+     */
+    if (
+        object.type === "annotate" &&
+        object.annotateKind === "label" &&
+        g.position &&
+        g.start
+    ) {
+        return [
+            { kind: "position", point: g.position },
+            { kind: "annotate-anchor", point: g.start }
         ];
     }
 

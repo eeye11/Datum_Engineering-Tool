@@ -185,6 +185,17 @@ export function commitAnnotate(options) {
   const previousObjects =
     enggDrawingState.snapshotDrawing(drawingState);
 
+  /*
+   * A LABEL'S NAME COMES FROM THE DRAWING-WIDE A..Z SEQUENCE.
+   *
+   * Not from the type numbering `addObject` applies by default - that would
+   * call it "Label 1". The sequence is read from the LIVE DRAWING STATE, so it
+   * is continuous across the whole sheet and the next free letter is taken (see
+   * `nextLabelName`). Every other kind keeps its ordinary numbered name.
+   */
+  const labelName =
+    kind === "label" ? enggAnnotate.nextLabelName(drawingState) : undefined;
+
   const object =
     enggDrawingState.geometryFactories.annotate({
       kind,
@@ -192,8 +203,37 @@ export function commitAnnotate(options) {
       position: options.position,
       start: options.start,
       end: options.end,
+
+      /*
+       * A LABEL'S ANCHOR IS THE POINT IT WAS PLACED ON. The click point is the
+       * place on the body the label marks; its text starts there too and may be
+       * moved away, which is what the auto-leader bridges.
+       */
+      anchor: kind === "label" ? options.position : null,
+
+      /*
+       * A CHOSEN SYMBOL, when the caller supplied one - the Symbol tool's picker
+       * passes it here. `defaultsFor` supplies "datum" otherwise, so a symbol
+       * added by any other route still has a glyph.
+       */
+      symbolId: options.symbolId || undefined,
+
       targetFeatureId: options.targetFeatureId,
-      ...defaultsFor(kind)
+      ...defaultsFor(kind),
+
+      /*
+       * THE CHOSEN TABLE SIZE WINS OVER THE DEFAULT.
+       *
+       * Placed AFTER the defaults spread, so the grid picker's rows and columns
+       * replace the 3x3 that `defaultsFor` supplies - a `rows: undefined` from a
+       * caller that did not choose leaves the default in place.
+       */
+      ...(Number.isFinite(Number(options.rows)) &&
+      Number.isFinite(Number(options.columns))
+        ? { rows: options.rows, columns: options.columns }
+        : {}),
+
+      name: labelName
     });
 
   /*
@@ -206,6 +246,17 @@ export function commitAnnotate(options) {
    */
   if (kind === "note") {
     object.text = "";
+  }
+
+  /*
+   * A LABEL STARTS CARRYING ITS OWN NAME.
+   *
+   * The A..Z sequence letter IS the label's content, so it is seeded as the
+   * text. The student may overwrite it through the editor, exactly as before -
+   * the name is only the starting content, not a lock.
+   */
+  if (kind === "label" && labelName) {
+    object.text = labelName;
   }
 
   enggDrawingState.addObject(drawingState, object);
@@ -224,7 +275,50 @@ export function commitAnnotate(options) {
   renderProperties();
   renderCurrentDrawing();
 
+  /*
+   * ========================================================
+   * A WRITTEN ANNOTATION OPENS ITS EDITOR AS IT IS PLACED
+   * ========================================================
+   *
+   * A note, a label, a leader and a callout are the student's own WORDS, so
+   * placing one and then having to go and find its text is a step that exists
+   * for no reason: the student has just said where it goes. The editor is
+   * therefore opened at once, on the feature just created.
+   *
+   * IT IS THE SAME EDITOR a double-click opens - `openNoteEditorFor` - so there
+   * is one write box for the whole application and both routes into it behave
+   * identically. Imported LAZILY because canvas-click.js already reaches the
+   * annotate layer, and a static import here would close that loop at load
+   * time.
+   *
+   * The feature is committed BEFORE this runs, so cancelling the editor leaves
+   * the (empty or defaulted) annotation in place rather than removing it - the
+   * placement is its own act and the writing is another, exactly as the note
+   * panel has always worked.
+   */
+  if (isEditableAnnotate(object)) {
+    void import("./canvas-click.js").then((module) => {
+      module.openNoteEditorFor?.(object);
+    });
+  }
+
   return object;
+}
+
+/**
+ * Put the armed tool back to Select.
+ *
+ * Used by the Symbol tool, whose workflow is ONE placement per operation: after
+ * a symbol is placed the tool hands back to Select so a stray click cannot place
+ * a second. `setActiveTool` is the one place the active tool changes, so this
+ * behaves exactly as a click on the Select button does.
+ */
+function returnToSelect() {
+  enggDrawingState.setActiveTool(drawingState, "select");
+
+  setToolMessage("Symbol placed - Select is active");
+
+  renderCurrentDrawing();
 }
 
 function annotatePlacedMessage(kind) {
@@ -313,6 +407,116 @@ export function handleAnnotateClick(resolution) {
    * A POINT-PLACED KIND commits on its single click, at the click point.
    */
   if (!geometric) {
+    /*
+     * ========================================================
+     * SYMBOL: CHOOSE FROM THE LIBRARY, THEN PLACE ONCE
+     * ========================================================
+     *
+     * The Symbol tool places ONE symbol and returns to Select. The symbol is
+     * chosen from the searchable library FIRST - so the student sees the glyph
+     * before committing to it - and the choice is held on the interaction
+     * (`annotateSymbolId`) until the placement click.
+     *
+     * A first click with nothing chosen OPENS THE PICKER rather than placing the
+     * default; once a symbol is chosen, the next click PLACES it and the tool
+     * hands back to Select. That is the whole workflow the requirement asks for,
+     * and it keeps one placement per operation.
+     */
+    if (kind === "symbol") {
+      const chosen = interaction.annotateSymbolId;
+
+      if (!chosen) {
+        void import("../ui/editors/symbol-picker.js").then((module) => {
+          module.default?.open({
+            onPick: (symbolId) => {
+              enggDrawingState.setInteraction(drawingState, {
+                annotateSymbolId: symbolId
+              });
+
+              setToolMessage(
+                "Symbol chosen - click the canvas to place it"
+              );
+
+              renderCurrentDrawing();
+            },
+
+            onCancel: () => {
+              setToolMessage(annotateInstruction(drawingState.activeTool));
+            }
+          });
+        });
+
+        return true;
+      }
+
+      commitAnnotate({
+        kind,
+        position: here,
+        symbolId: chosen,
+        targetFeatureId: null
+      });
+
+      /*
+       * ONE SYMBOL PER OPERATION, THEN BACK TO SELECT. The interaction's symbol
+       * choice is spent with the placement, and the tool is put back to Select
+       * so a stray click does not place a second symbol.
+       */
+      enggDrawingState.setInteraction(drawingState, {
+        annotateSymbolId: null
+      });
+
+      returnToSelect();
+
+      return true;
+    }
+
+    if (kind === "table") {
+      /*
+       * The table's SHAPE is chosen first, from the grid picker, and held on the
+       * interaction until the placement click - exactly as the symbol's choice
+       * is. The grid is a real preview, so what is placed is what was chosen.
+       */
+      const chosen = interaction.annotateTableSize;
+
+      if (!chosen) {
+        void import("../ui/editors/table-picker.js").then((module) => {
+          module.default?.open({
+            onPick: ({ rows, columns }) => {
+              enggDrawingState.setInteraction(drawingState, {
+                annotateTableSize: { rows, columns }
+              });
+
+              setToolMessage(
+                `Table ${rows} x ${columns} - click the canvas to place it`
+              );
+
+              renderCurrentDrawing();
+            },
+
+            onCancel: () => {
+              setToolMessage(annotateInstruction(drawingState.activeTool));
+            }
+          });
+        });
+
+        return true;
+      }
+
+      commitAnnotate({
+        kind,
+        position: here,
+        rows: chosen.rows,
+        columns: chosen.columns,
+        targetFeatureId: null
+      });
+
+      enggDrawingState.setInteraction(drawingState, {
+        annotateTableSize: null
+      });
+
+      return true;
+    }
+
     commitAnnotate({
       kind,
       position: here,

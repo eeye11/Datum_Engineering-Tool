@@ -75,7 +75,7 @@ check(
   "and nothing is created until the student answers",
   (() => {
     const at = tool.indexOf("function openVariablePrompt(");
-    const body = tool.slice(at, at + 2200);
+    const body = tool.slice(at, at + 4000);
 
     /* The factory call lives inside onConfirm, after the popup is opened. */
     return (

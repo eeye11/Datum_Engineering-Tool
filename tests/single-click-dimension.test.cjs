@@ -144,6 +144,18 @@ const pieces = [
   "perpendicularDistanceDescriptor",
   "inferDimensionDescriptor",
   "inferDimensionSelection",
+  /*
+   * THE CIRCULAR HELPERS TOO.
+   *
+   * `dimensionReferenceForFeature` asks `circularMeasurementTypes` which
+   * measurements a circle or an arc offers, and `circularPreference` which one the
+   * cursor is pointing at. They live beside it in drawing.js and are lifted out
+   * the same way, so the circle and arc references below are resolved by the real
+   * implementation rather than by a stand-in - which is the whole point of
+   * extracting the functions instead of reimplementing them.
+   */
+  "circularMeasurementTypes",
+  "preferredCircularType",
 ].map(extract).filter(Boolean);
 
 check(
@@ -153,7 +165,14 @@ check(
 );
 
 vm.runInContext(
-  pieces.join("\n") +
+  /*
+   * `circularMeasurementTypes` filters the layer's declared measurements to the
+   * circular ones, and the list it filters is a module-level constant rather than
+   * a function - the extractor finds functions by brace matching, so the constant
+   * is restored here, at the same value, before the functions run.
+   */
+  'const CIRCULAR_MEASUREMENTS = ["diameter", "radius", "arc-length"];' +
+    pieces.join("\n") +
     "\nthis.refForFeature = dimensionReferenceForFeature;" +
     "\nthis.infer = inferDimensionDescriptor;" +
     "\nthis.inferSelection = inferDimensionSelection;",

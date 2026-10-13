@@ -2,7 +2,6 @@
  * Coordinates relative to a parent feature.
  */
 
-import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggPropertyPanel from "../ui/feature-panel/property-panel.js";
 import { drawingState } from "./editor-state.js";
 import { mmOf } from "./handles.js";
@@ -317,14 +316,13 @@ export function relativeCoordinateRows(
         </div>
     `;
 
-    const unit =
-        enggLoadProfile.loadStationUnit(
-            parent
-        );
-
     /*
      * A LOAD IS A REGION, and its two stations are the answer to the only
      * question a student has about where it acts.
+     *
+     * THE STATIONS ARE LENGTH ROWS, so they are read in the feature's own
+     * selected unit through the shared coordinate helper - the same rows
+     * every other length field uses, with the same selector.
      */
     if (
             object.type === "load" ||
@@ -355,13 +353,15 @@ export function relativeCoordinateRows(
                     "Start",
                     "start.x",
                     mmOf(stationOf(geometry.start, parent)).value,
-                    unit
+                    "mm",
+                    true
                 ),
                 coordinate(
                     "End",
                     "end.x",
                     mmOf(stationOf(geometry.end, parent)).value,
-                    unit
+                    "mm",
+                    true
                 )
             ]);
         }
@@ -396,7 +396,8 @@ export function relativeCoordinateRows(
             "Along Body",
             "relative.x",
             mmOf(stationOf(anchor, parent)).value,
-            mmOf(stationOf(anchor, parent)).unit
+            "mm",
+            true
         )
     ]);
 }

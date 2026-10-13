@@ -1,55 +1,55 @@
 /*
  * ============================================================
- * THE DAETUM MARK - A CUSTOM GEOMETRIC CAPITAL D
+ * THE DAETUM MARK - AN OPEN TARGETING RETICLE
  * ============================================================
  *
- * The product's symbol is a capital D built from instrumentation:
+ * The product's symbol is a targeting mark built from instrumentation:
  *
- *       |‾‾‾|
- *       |   )      a vertical SPINE (the flat left edge)
- *       |__.|      a ROUNDED BOWL (the curve on the right)
- *          ·       a solid CENTRAL POINT at the origin
- *        ────      a short HORIZONTAL AXIS
+ *       |        a LONG VERTICAL AXIS running the figure's full height,
+ *       |)       well past the arc at both ends
+ *     ──·──      a solid CENTRAL DOT at the origin, with an ASYMMETRIC
+ *      (___)      HORIZONTAL AXIS reaching further left than right
+ *                 and a large OPEN ARC sweeping the top, right and bottom
  *
- * The D is not a letter placed behind a diagram. It EMERGES from the geometry:
- * the spine is the letter's straight edge, and the arc is its bowl. Every other
- * element is subordinate and sits inside the letterform.
+ * The mark is NOT a conventional capital D. Its D-like quality is a by-product
+ * of the open arc, not its purpose: the figure is a target surrounded by an open
+ * orbit, and the vertical axis is a RULE THROUGH that orbit rather than the
+ * closed left edge of a letter.
  *
  * ============================================================
- * THE BOWL'S CENTRE SITS ON THE SPINE - THE PROPERTY THAT MAKES IT A D
+ * THE ARC IS A FULL CIRCLE ABOUT THE ORIGIN - NOT A BOWL ON THE SPINE
  * ============================================================
  *
  * A ring with a dot in it is an orbit, a target, a compass rose - anything but a
- * letter. What makes these shapes read as a D is a single geometric fact:
+ * letter. What makes this mark read as a D at all is a single geometric fact:
  *
- *     THE ARC IS THE RIGHT-HAND SEMICIRCLE OF A CIRCLE WHOSE CENTRE LIES ON
- *     THE SPINE, AT THE CENTRAL DOT.
+ *     THE ARC IS A CIRCLE WHOSE CENTRE IS THE CENTRAL DOT ITSELF.
  *
- * The spine is a DIAMETER of the bowl's circle rather than a chord beside it. So
- * the arc leaves the TOP of the spine, sweeps right, and returns to the BOTTOM
- * of the spine - and the letter is CLOSED by the spine itself. The opening on
- * the left is therefore not a small gap in a ring; it is the whole left half of
- * the circle, which the spine occupies and REPLACES.
- *
- * ============================================================
- * THE OPENING IS A WIDE SEMICIRCLE, DELIBERATELY
- * ============================================================
- *
- * The arc spans 180 degrees plus a small margin - a semicircle, give or take -
- * which is what a capital D's bowl is. An earlier version drew 300 degrees of
- * circle with a narrow gap, and that reads as an almost-closed orbit rather than
- * as a letter. The wider opening is a design requirement, not a tolerance: it is
- * what leaves room for the spine to be seen AS the left edge.
+ * The dot is the centre of the circle, not a point on its circumference. So the
+ * arc wraps AROUND the dot - top, right and bottom - and the vertical axis, which
+ * also passes through the dot, is NOT the closed edge of the arc but a rule that
+ * crosses it. The opening on the left is the MISSING ARC between the two ends,
+ * not a space the spine occupies.
  *
  * ============================================================
- * THE ARC IS LARGER THAN THAT EARLIER READING, ON PURPOSE
+ * THE OPENING IS A WIDE GAP, WIDER THAN A SEMICIRCLE'S WORTH
+ * ============================================================
+ *
+ * The arc spans 236 degrees, leaving a 124-degree opening on the left flank. A
+ * semicircle would leave the arc looking like a bowl hung on the spine; an
+ * almost-closed circle would read as an orbit. 236 degrees sits between the two:
+ * an open, deliberate gap that leaves the two ends standing free in the upper-left
+ * and lower-left, clear of the vertical axis.
+ *
+ * ============================================================
+ * THE ARC IS LARGER THAN THE OLDER READING, ON PURPOSE
  * ============================================================
  *
  * An earlier drawing centred the bowl to the RIGHT of the spine, so the letter
  * was as tall as it was wide and the arc read as a modest bulge. Making the
- * arc's centre the dot itself - radius 7 against a half-height of 7.8 - gives
- * the generous rounded side the design calls for while keeping the two ends of
- * the arc landing exactly on the spine.
+ * arc's centre the dot itself - radius 9.4 against a half-height of 12.2 - gives
+ * the generous open orbit the design calls for while the vertical axis reaches
+ * well beyond it at both ends.
  *
  * ============================================================
  * ONE SOURCE OF TRUTH, TWO RENDERINGS
@@ -75,21 +75,27 @@
 /*
  * The viewBox the mark is drawn in.
  *
- * THE COMPOSITION IS NOT CENTRED ON 12, and that is deliberate. The letter D is
- * a SPINE at the left with a BOWL to its right, so the whole figure sits left of
- * the viewBox's middle. `LETTER_MID_Y` is the vertical middle of the letterform -
- * the spine's midpoint and the axes' crossing - and it is the one reference every
- * element below is placed from.
- *
- * The viewBox itself stays 24x24 with the mark centred inside it, because the
- * negative space on the right is what stops the bowl touching the edge at small
- * sizes. `VISUAL_MID_X` records the middle of the drawn figure so a caller that
- * needs to align to the mark has one number rather than an approximation.
+ * THE COMPOSITION IS BUILT ON A 24-UNIT GRID AND CENTRED ON `CENTRE_X` /
+ * `CENTRE_Y`. That point is the origin of the whole figure: the dot, the crossing
+ * of the two axes, AND the centre of the arc's circle. All four elements share it,
+ * so there is no offset to compensate for and the mark is already centred in the
+ * viewBox - the vertical rule and the arc each overshoot it by a balanced amount.
  */
 const VIEW_BOX = 24;
 
-/* The vertical middle of the letter - the spine's midpoint, and the origin. */
-const LETTER_MID_Y = 12;
+/*
+ * The origin: the dot, the axes' crossing, and the arc's own centre.
+ *
+ * X IS 11.2, NOT 12. The figure is NOT symmetric about the vertical - the
+ * horizontal bar reaches further left than right - so its optical centre sits
+ * LEFT of the geometric one. Placing the origin a little left of 12 keeps the
+ * whole mark visually centred in the viewBox instead of sitting right-heavy.
+ */
+const CENTRE_X = 11.2;
+const CENTRE_Y = 12;
+
+/* The origin's y under the older name, kept for the many callers using it. */
+const LETTER_MID_Y = CENTRE_Y;
 
 /*
  * THE ONE STROKE WEIGHT, shared by the spine, the bowl and both axes, so the
@@ -97,160 +103,140 @@ const LETTER_MID_Y = 12;
  * assembled from parts.
  *
  * 1.7 is heavy enough to survive a 16 px favicon - where the whole symbol is
- * about sixteen pixels across - without making the mark look like a glyph.
+ * about sixteen pixels across - without making the mark look like a glyph, and it
+ * gives the arc, the two axes and the crosshair the same visual weight so the
+ * figure reads as one instrument rather than a heavy circle with thin spokes.
  */
 const STROKE_WIDTH = 1.7;
 
 /*
- * THE SPINE - AND THE VERTICAL AXIS IS THE SAME LINE.
+ * THE VERTICAL AXIS - A LONG RULE THROUGH THE ORIGIN.
  *
- * This is the correction the design asks for. The spine and the vertical axis
- * are NOT two elements that happen to line up: they are ONE stroke with ONE job,
- * and it does both. It is the flat left-hand edge of the letter D, and it is the
- * vertical coordinate axis the central point is measured from.
+ * It runs straight through the dot and reaches WELL PAST the arc at both ends,
+ * which is what gives the mark its instrument character: the circle is something
+ * the rule passes through, not something the rule closes. Its centre IS the
+ * origin, so the two ends are equal and the figure is symmetric about the
+ * horizontal.
  *
- * Drawing them as one line is what makes the figure read as a letterform rather
- * than as a curve with a crosshair laid over it. An earlier version drew the
- * vertical axis at the CENTRE of the bowl (x = 12) and a separate, shorter stem
- * at x = 6.2 - so the mark had two verticals, the dot sat in the middle of the
- * circle, and the result read as a ring with a cross through it.
- *
- * It is the tallest element and it defines the letter's height.
+ * IT IS THE LONGEST ELEMENT, AND IT STANDS CLEARLY PROUD OF THE ARC. At a
+ * half-length of 12.2 against an arc of radius 9.4 it runs 2.8 units past the arc
+ * at each end - enough that the stem reads unmistakably as a rule PASSING THROUGH
+ * the circle, its tips floating free above and below the bowl. The reference draws
+ * the overshoot generously; a shorter one starts to read as a closed letter D.
  */
-const SPINE_X = 6.2;
-const SPINE_HALF_HEIGHT = 7.8;
+const SPINE_X = CENTRE_X;
+const SPINE_HALF_HEIGHT = 12.2;
+
+const SPINE_TOP_Y = CENTRE_Y - SPINE_HALF_HEIGHT;
+const SPINE_BOTTOM_Y = CENTRE_Y + SPINE_HALF_HEIGHT;
+
+/*
+ * DEGREES TO RADIANS, stated before the geometry that needs it.
+ */
+const toRadians = (degrees) => (degrees * Math.PI) / 180;
+
+/*
+ * THE ARC'S OPENING, AND THE SWEEP THAT FOLLOWS FROM IT.
+ *
+ * The opening is centred on DUE-WEST (180 degrees) - the left flank - so the two
+ * ends sit symmetrically in the upper-left and lower-left. A 124-degree opening
+ * leaves a 236-degree sweep: comfortably past a semicircle without closing up.
+ *
+ * WHERE THE ENDS LAND. At a 124-degree opening on a radius of 9.4 the ends sit at
+ * about (6.9, 4.4) and (6.9, 19.6) - high and low on the left, roughly ten and
+ * eight o'clock. That is far enough out that they stand clear of BOTH the vertical
+ * rule and the horizontal bar, so the mouth reads as a deliberate gap; a narrower
+ * opening swings them round toward nine o'clock, where they crowd the rule and the
+ * mark starts to look like a dollar sign.
+ *
+ * THE SWEEP FOLLOWS FROM THE OPENING: 360 - 124 = 236 degrees. Both are the same
+ * decision seen from either end, so only one is stated.
+ */
+const ARC_GAP_DEGREES = 124;
 
 /*
  * ============================================================
- * THE BOWL - AN EXTENDED ARC WHOSE CENTRE IS OFFSET TO THE RIGHT
+ * THE ARC - AN OPEN ORBIT CENTRED ON THE ORIGIN
  * ============================================================
  *
- * THIS IS THE DEFINING REFINEMENT, and it changed the mark from a semicircle D
- * into a targeting reticle.
+ * THE ARC'S CENTRE IS THE ORIGIN - the same point as the dot and the crossing of
+ * the two axes. Nothing is offset. The arc is therefore a circle ABOUT the target
+ * rather than a bowl hung on one side of it, which is what the reference draws.
  *
- * `BOWL_CX` sits to the RIGHT of the spine rather than on it. The arc is then
- * struck from a centre that is NOT the central dot, which is what lets the curve
- * sweep PAST a semicircle - 250 degrees instead of 180 - and wrap back toward the
- * lower-left. A centre on the spine could only ever draw a half-circle, because
- * the spine would be a diameter; an offset centre makes the spine a CHORD far to
- * the left of the circle, and a chord near the left edge of a circle is subtended
- * by almost the whole circumference.
+ * ITS TWO ENDS DO NOT TOUCH ANYTHING. They stand in the upper-left and lower-left,
+ * clear of the vertical rule and clear of the horizontal bar, with the 124-degree
+ * opening between them. An earlier draft pulled the ends onto the vertical line to
+ * close a letterform; the reference leaves them hanging in the open, and that gap
+ * is the mark's most recognisable feature.
  *
- *     ARC_SWEEP_DEGREES   250   the arc's travel: top -> right -> bottom -> lower-left
- *     ARC_GAP_DEGREES     110   the deliberate opening on the left
+ * THE RADIUS IS 9.4 - LARGE, so the circle's diameter (18.8) is close to the
+ * vertical rule's whole span (24.4). The circle is therefore nearly as big as the
+ * figure, which is what the reference draws: a wide open orbit with a modest cross
+ * inside it. This is the property to check first if the mark ever looks wrong - a
+ * circle that is small against the rule reads as a ring on a spike, not an orbit.
  *
- * 250 + 110 = 360, so the two are one decision stated from either end, and the
- * gap is held between the requirement's 100 and 120 degrees.
- *
- * THE CENTRE IS A DESIGNED CONSTANT, never derived from the dot. The dot stays
- * on the spine; the arc's centre is offset so the curve can reach round the
- * bottom-left. Deriving one from the other is what produced the semicircle, and
- * the requirement rules it out explicitly.
- *
- * WHY THOSE TWO NUMBERS. The arc's two ENDS must sit on the spine's line, at the
- * spine's ends. Those ends are not the circle's westernmost point; they are the
- * points at -215 and +125 degrees, and both are placed explicitly by the code
- * below, which snaps their x to the spine. What the centre and radius DECIDE is
- * the shape between them: how far the curve bulges.
- *
- * A centre at `12.6` and a radius of `8.8` put the circle's westernmost point at
- * `12.6 - 8.8 = 3.8`, eight tenths of a unit to the LEFT of the spine. So the
- * arc's two left-hand ends, held on the spine at `6.2`, sit a little inside the
- * circle's left extreme - which is exactly what makes the spine a CHORD and the
- * curve an extended orbit rather than a half-circle.
- *
- * The radius is stated rather than derived so the curve's curvature is a choice:
- * 8.8 gives a generous, round orbit that reaches `BOWL_CX + ARC_RADIUS = 21.4`
- * on the right, filling the viewBox's right-hand side without touching its edge.
- *
- * The arc is therefore MASSIVELY larger than the dot - radius 8.8 against a dot
- * radius of 2.5 - which is what gives the extended orbit its presence.
+ * The arc is MASSIVELY larger than the dot - radius 9.4 against 2.9 - which is
+ * what gives the orbit its presence without swallowing the point of aim.
  */
-const BOWL_CX = 12.6;
-const ARC_RADIUS = 8.8;
+const ARC_RADIUS = 9.4;
+const BOWL_CX = CENTRE_X;
+const BOWL_CY = CENTRE_Y;
 
 /*
- * THE TWO ANGLES THAT DEFINE THE EXTENDED ARC.
+ * THE CENTRAL POINT - THE TARGETING DOT.
  *
- * Angles are measured in the SVG convention this file uses: 0 degrees EAST and
- * increasing CLOCKWISE on screen, so -90 is the top, 0 the right, +90 the bottom
- * and 180 the left.
+ * It sits at the ORIGIN, which is also the arc's centre and the crossing of the
+ * two axes, so all four elements share one point.
  *
- * The arc OPENS from `-90 - SWEEP/2` and runs clockwise to `-90 + SWEEP/2`: with
- * a 250-degree sweep it starts at -215 degrees (up on the left, past the top) and
- * ends at +125 degrees (down on the left, past the bottom). The 110-degree gap
-the two leaves between them straddles due-west - the left flank - which is where
- * the spine stands.
- *
- * So the opening is not a break in a ring: it is the segment of the circle the
- * spine replaces, and the arc's two ends meet the spine's ends.
+ * RADIUS 2.9 against a stroke of 1.7 is a diameter of 5.8, which is 3.4 times the
+ * stroke - just inside the design's 3.5 to 4 times band, and heavy enough to read
+ * as a solid point rather than as a bead on two crossing lines.
  */
-const ARC_SWEEP_DEGREES = 250;
-const ARC_GAP_DEGREES = 360 - ARC_SWEEP_DEGREES;
+const DOT_RADIUS = 2.9;
+const DOT_X = CENTRE_X;
+const DOT_Y = CENTRE_Y;
 
 /*
- * THE CENTRAL POINT - THE TARGETING DOT, ON THE SPINE.
+ * THE HORIZONTAL BAR: an ASYMMETRIC cross through the dot.
  *
- * Its x IS `SPINE_X`, so the dot is embedded in the vertical line rather than
- * floating beside it, and it is where the horizontal crosshair crosses the
- * spine. It is the visual FOCAL POINT of the mark - the point of aim in the
- * reticle and the origin of the coordinate system at once.
+ * IT REACHES FURTHER LEFT THAN RIGHT. The left arm is roughly twice the right
+ * arm's length, and the crossing sits left of the viewBox's centre to keep the
+ * figure optically centred. The reference draws this imbalance deliberately, so
+ * it is reproduced rather than tidied into a symmetric cross.
  *
- * RADIUS 3.1 against a stroke of 1.7 is a diameter of 6.2, which is 3.6 times
- * the stroke - inside the design's 3.5 to 4 times, and heavy enough to read as a
- * solid point of aim rather than as a bead on two crossing lines.
- *
- * IT IS NOT THE ARC'S CENTRE. The arc's centre is `BOWL_CX`, offset to the right
- * - see the bowl's note above. The dot marks the spine, which is what makes the
- * mark a reticle rather than a ring with a cross through it.
+ * BOTH ARMS STOP WELL INSIDE THE ARC - 8.2 left and 4.1 right against a radius
+ * of 9.4 - so the bar never touches the circle and the orbit stays the outermost
+ * edge of the mark.
  */
-const DOT_RADIUS = 3.1;
-const DOT_X = SPINE_X;
-const DOT_Y = LETTER_MID_Y;
+const HORIZONTAL_LEFT = 8.2;
+const HORIZONTAL_RIGHT = 4.1;
 
 /*
- * THE HORIZONTAL CROSSHAIR: the targeting bar through the dot.
- *
- * It runs through the dot and crosses the spine to BOTH sides, which is what
- * gives the figure its reticle character. The arms are deliberately modest: the
- * D's silhouette is the first thing to be read, and a crosshair that reached out
- * to the arc would compete with it.
- *
- * The LEFT ARM is short - it reaches back off the spine into open space. The
- * RIGHT ARM is longer, so it reaches toward the centre of the bowl the arc is
- * struck around rather than stopping dead at the dot. The asymmetry is what
- * balances a figure whose mass sits on the right.
- */
-const HORIZONTAL_LEFT = 4.4;
-const HORIZONTAL_RIGHT = 6.6;
-
-/*
- * The spine already spans the letter's full height, so there is no separate
- * vertical axis: it IS the spine. This constant is kept as the exported name for
- * callers that describe the axis, and it equals the spine's half-height.
+ * THE VERTICAL AXIS IS THE SPINE - the stem and the axis are one line, so there
+ * is no separate vertical element to draw. This constant is kept as the exported
+ * name for callers that describe the axis, and it equals the spine's half-height.
  */
 const VERTICAL_ARM = SPINE_HALF_HEIGHT;
 
 /*
  * THE FIGURE'S HORIZONTAL MIDDLE, for a caller that needs to centre the mark.
  *
- * The left extreme is the spine and the right extreme is the bowl
- * (`SPINE_X + ARC_RADIUS`), so the midpoint of those two is the visual centre.
- * It is exported so the header and a favicon can align to one number rather than
- * each approximating the same idea.
+ * The visual extremes are the horizontal bar's long LEFT tip and the bowl's
+ * right edge. Because the bar reaches further left than right, the visual centre
+ * is the midpoint of those two, NOT `CENTRE_X` - and it is exported so the header
+ * and the favicon can align to one number rather than each approximating it.
  */
-const VISUAL_MID_X = SPINE_X + ARC_RADIUS / 2;
+const VISUAL_MID_X = (SPINE_X - HORIZONTAL_LEFT + SPINE_X + ARC_RADIUS) / 2;
 
 /*
- * THE SPINE'S OWN ENDPOINTS, derived from the letter's middle and half-height.
+ * THE VERTICAL RULE'S OWN ENDPOINTS.
  *
- * They are stated once and read by both the spine's line and the arc's two ends,
- * so the arc can never drift off the tips of the stem: the ends of the arc and
- * the ends of the spine are the same two heights by construction.
+ * It spans the figure's full height and OVERSHOOTS the arc's ends at both ends
+ * of the stem - the rule's tips float free of the bowl rather than stopping at
+ * it. The overshoot is symmetric about the origin so the stem stays balanced.
  */
-const SPINE_TOP = LETTER_MID_Y - SPINE_HALF_HEIGHT;
-const SPINE_BOTTOM = LETTER_MID_Y + SPINE_HALF_HEIGHT;
-
+const SPINE_TOP = SPINE_TOP_Y;
+const SPINE_BOTTOM = SPINE_BOTTOM_Y;
 /*
  * ============================================================
  * THE FAVICON COLOUR - ONE CONSTANT, NOT A THEME VARIABLE
@@ -269,8 +255,6 @@ const SPINE_BOTTOM = LETTER_MID_Y + SPINE_HALF_HEIGHT;
  */
 const FAVICON_COLOUR = "#087E83";
 
-const toRadians = (degrees) => (degrees * Math.PI) / 180;
-
 /*
  * A point on the bowl's circle.
  *
@@ -280,33 +264,44 @@ const toRadians = (degrees) => (degrees * Math.PI) / 180;
  */
 const arcPoint = (degrees) => ({
     x: BOWL_CX + ARC_RADIUS * Math.cos(toRadians(degrees)),
-    y: LETTER_MID_Y + ARC_RADIUS * Math.sin(toRadians(degrees)),
+    y: BOWL_CY + ARC_RADIUS * Math.sin(toRadians(degrees)),
 });
 
 /*
- * The arc is SYMMETRIC ABOUT DUE-NORTH (-90 degrees).
+ * The OPENING is symmetric about DUE-WEST (180 degrees) - the left flank.
  *
- * It opens at `-90 - SWEEP/2` and closes at `-90 + SWEEP/2`, running CLOCKWISE
- * through the top, the right and the bottom. With a 250-degree sweep that is
- * -215 degrees (upper-left) round to +125 degrees (lower-left), and the 110
- * degrees it does not cover straddle due-west - the spine's flank.
+ * The arc therefore starts at `180 + GAP/2` and ends at `180 - GAP/2`. With a
+ * 124-degree opening those are 242 and 118 degrees: the first is in the UPPER-LEFT
+ * and the second in the LOWER-LEFT, and both stand clear of the vertical rule.
  *
- * The x is then snapped to the spine EXACTLY. `arcPoint` at those angles is only
- * near the spine's line - the offset centre means the arc's ends sit a little
- * inside the circle's left extreme - so the ends are placed at the spine's x with
- * the y taken from the angle. That makes the arc's tips and the spine's tips the
- * same two points BY CONSTRUCTION, which is what closes the letter.
+ * GETTING THIS WRONG IS WHAT BROKE THE MARK BEFORE. An earlier draft centred the
+ * opening on DUE-NORTH instead of due-west, which placed the arc's two ends on top
+ * of one another - a zero-length chord - and the renderer drew a full circle with
+ * no opening at all. The opening's axis has to be the LEFT one.
  */
-const ARC_START_DEGREES = -90 - ARC_SWEEP_DEGREES / 2;
-const ARC_END_DEGREES = -90 + ARC_SWEEP_DEGREES / 2;
+const ARC_UPPER_END_DEGREES = 180 + ARC_GAP_DEGREES / 2;
+const ARC_LOWER_END_DEGREES = 180 - ARC_GAP_DEGREES / 2;
 
-const arcEndPoint = (degrees) => ({
-    x: SPINE_X,
-    y: arcPoint(degrees).y,
-});
+/*
+ * THE ENDS ARE TAKEN STRAIGHT FROM THE CIRCLE - NOT SNAPPED TO ANYTHING.
+ *
+ * This is what keeps the opening open. The two points are where the circle meets
+ * those two angles, so they land wherever the geometry puts them: left of the
+ * vertical rule, clear of it, and clear of the horizontal bar. Snapping their x to
+ * the rule - which an earlier draft did - drags them onto the axis and closes the
+ * arc into a ring.
+ */
+const ARC_UPPER_END = arcPoint(ARC_UPPER_END_DEGREES);
+const ARC_LOWER_END = arcPoint(ARC_LOWER_END_DEGREES);
 
-const ARC_START = arcEndPoint(ARC_START_DEGREES);
-const ARC_END = arcEndPoint(ARC_END_DEGREES);
+/*
+ * The path is drawn UPPER END -> LOWER END with `large-arc=1 sweep=1`, which is
+ * the clockwise route over the top, down the right and round the bottom. The
+ * opposite flags are just as valid SVG and draw the arc round the LEFT instead,
+ * leaving the mouth on the right - a mirrored mark. See `markPaths` below.
+ */
+const ARC_START = ARC_UPPER_END;
+const ARC_END = ARC_LOWER_END;
 
 const round = (value) => Number(value.toFixed(3));
 
@@ -315,12 +310,13 @@ const round = (value) => Number(value.toFixed(3));
  * THE SHAPES, IN PAINTING ORDER
  * ============================================================
  *
- *     spine -> bowl -> axes -> dot
+ *     vertical axis -> horizontal axis -> bowl -> dot
  *
- * THE SPINE AND THE BOWL ARE FIRST, so the letterform is laid down before
- * anything is placed inside it. THE DOT IS LAST, so it sits ON TOP of both axes
- * - otherwise a line would run visibly through the filled centre and the dot
- * would read as a crossing rather than as a point.
+ * THE TWO AXES ARE FIRST, so they sit BENEATH the bowl where the figure's
+ * left flank crosses them: the stem passes UNDER the arc's upper and lower ends
+ * rather than over them. THE DOT IS LAST, so it sits ON TOP of both axes -
+ * otherwise a line would run visibly through the filled centre and the dot would
+ * read as a crossing rather than as a point.
  *
  * Every element takes its colour from `currentColor`, so the caller decides the
  * colour by setting `color`. Nothing here is hardcoded to black or to a literal
@@ -341,14 +337,14 @@ function markPaths() {
             stroke-linecap="round"
         />
         <path
-            d="M${round(ARC_START.x)} ${round(ARC_START.y)}A${round(ARC_RADIUS)} ${round(ARC_RADIUS)} 0 1 1 ${round(ARC_END.x)} ${round(ARC_END.y)}"
+            d="M${round(DOT_X - HORIZONTAL_LEFT)} ${DOT_Y}H${round(DOT_X + HORIZONTAL_RIGHT)}"
             fill="none"
             stroke="currentColor"
             stroke-width="${STROKE_WIDTH}"
             stroke-linecap="round"
         />
         <path
-            d="M${round(DOT_X - HORIZONTAL_LEFT)} ${DOT_Y}H${round(DOT_X + HORIZONTAL_RIGHT)}"
+            d="M${round(ARC_START.x)} ${round(ARC_START.y)}A${round(ARC_RADIUS)} ${round(ARC_RADIUS)} 0 1 1 ${round(ARC_END.x)} ${round(ARC_END.y)}"
             fill="none"
             stroke="currentColor"
             stroke-width="${STROKE_WIDTH}"

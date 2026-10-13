@@ -258,7 +258,7 @@ console.log("\n  the prompt is asked AFTER geometry selection, via the SHARED po
     "nothing is created until the answer arrives",
     (() => {
       const at = tool.indexOf("function openVariablePrompt(");
-      const body = tool.slice(at, at + 2000);
+      const body = tool.slice(at, at + 4000);
 
       /* The factory call is inside onConfirm, not before the popup opens. */
       const popupAt = body.indexOf("openLoadValuePopup({");

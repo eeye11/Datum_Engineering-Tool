@@ -8,7 +8,7 @@ import { drawingState, editorState } from "./editor-state.js";
 import { renderComponentTree } from "./feature-tree.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import { activateGlobalTool } from "./modify-tools.js";
-import { setToggleLabel, syncWorkspaceSettingToggles } from "./sheet-controller.js";
+import { syncWorkspaceSettingToggles } from "./sheet-controller.js";
 import { performRedo, performUndo } from "./tool-activation.js";
 import { toggleFitDrawing, toggleWorkspaceSetting } from "./viewport.js";
 
@@ -55,7 +55,6 @@ export function clearGlobalToolHighlight() {
  */
 export function installWorkspaceControls() {
     const fitButton = document.getElementById("drawingFitView");
-    if (fitButton) setToggleLabel(fitButton, "Fit", false);
     fitButton?.addEventListener("click", toggleFitDrawing);
     if (
         drawingComponentsBack

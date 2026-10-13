@@ -2,9 +2,50 @@
  * The triangle's panel: sides and angles.
  */
 
+import enggQuantities from "../core/units/quantities.js";
 import { appearanceMarkup } from "./appearance-panel.js";
 import { distance } from "./construction-geometry.js";
 import { featureHeaderMarkup, finaliseRows } from "./feature-panel-markup.js";
+import { mmOf } from "./handles.js";
+
+/*
+ * THE LENGTH UNIT THE TRIANGLE'S FIELDS ARE READ IN.
+ *
+ * Every length field on a Features panel reads in the feature's own selected
+ * unit, and the triangle's are no exception: its vertices, its sides and the
+ * setter that receives them all resolve the same `lengthUnit`, so a triangle
+ * read in metres is typed in metres like every other feature. The selector is
+ * the same shared control the other length rows use, writing the same
+ * `lengthUnit` property, so the unit is stated once and changed in one place.
+ */
+function triangleLengthUnit(object) {
+    const stored = object?.lengthUnit;
+
+    return enggQuantities.isUnitFor("length", stored)
+        ? stored
+        : "mm";
+}
+
+function lengthUnitSelect(object, label) {
+    const current = triangleLengthUnit(object);
+
+    return `
+        <select class="drawing-property-unit-select"
+            data-property="lengthUnit"
+            aria-label="${label} unit"
+            title="${label} unit">
+            ${enggQuantities
+                .unitsFor("length")
+                .map(
+                    unit =>
+                        `<option value="${unit}"${
+                            unit === current ? " selected" : ""
+                        }>${unit}</option>`
+                )
+                .join("")}
+        </select>
+    `;
+}
 
 /*
  * Triangle measurements derived from the actual
@@ -133,6 +174,22 @@ export function trianglePropertyMarkup(
     const rows = [];
 
     /*
+     * THE READING UNIT, RESOLVED ONCE for every length row below. Vertices
+     * and sides are both stored in world units, so both are converted to
+     * the feature's chosen unit for display - the same chain every other
+     * length field runs (world -> mm -> chosen unit).
+     */
+    const lengthUnit = triangleLengthUnit(object);
+
+    const shownLength = world =>
+        enggQuantities.convertValue(
+            mmOf(world).value,
+            "length",
+            "mm",
+            lengthUnit
+        );
+
+    /*
      * Standard header, then the existing segmented
      * control. The rest of the Triangle layout is
      * unchanged.
@@ -183,6 +240,8 @@ export function trianglePropertyMarkup(
             </div>
         `);
 
+        const unitCell = lengthUnitSelect(object, "Point");
+
         points.forEach(
             (
                 point,
@@ -197,18 +256,33 @@ export function trianglePropertyMarkup(
                         <input type="number" step="any"
                             data-property="points.${index}.x"
                             aria-label="Point ${index + 1} X"
-                            value="${number(point.x)}"
+                            value="${number(shownLength(point.x))}"
                             ${locked ? "disabled" : ""}>
                         <input type="number" step="any"
                             data-property="points.${index}.y"
                             aria-label="Point ${index + 1} Y"
-                            value="${number(point.y)}"
+                            value="${number(shownLength(point.y))}"
                             ${locked ? "disabled" : ""}>
                         ${lockBox(`points.${index}`, `Point ${index + 1}`)}
                     </div>
                 `);
             }
         );
+
+        /*
+         * THE UNIT SELECTOR, once, after the vertex rows. It writes the same
+         * `lengthUnit` property every other length field writes, so changing
+         * it re-reads every row in the new unit and the geometry does not
+         * move.
+         */
+        rows.push(`
+            <div class="drawing-property-grid drawing-property-grid-value">
+                <span class="drawing-property-grid-label">Unit</span>
+                ${unitCell}
+                <span></span>
+                <span></span>
+            </div>
+        `);
     }
 
     if (mode === "sides" && measurements) {
@@ -227,9 +301,9 @@ export function trianglePropertyMarkup(
                         <input type="number" step="any"
                             data-property="${key}"
                             aria-label="Side ${index + 1}"
-                            value="${number(side)}"
+                            value="${number(shownLength(side))}"
                             ${fixed(key) ? "disabled" : ""}>
-                        <span class="drawing-property-unit">mm</span>
+                        <span class="drawing-property-unit">${lengthUnit}</span>
                         ${lockBox(key, `Side ${index + 1}`)}
                     </div>
                 `);

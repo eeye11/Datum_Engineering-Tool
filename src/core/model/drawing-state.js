@@ -1469,6 +1469,18 @@ const geometryFactories = {
                     label: created.label,
                     orientation:
                         created.orientation,
+                    /*
+                     * THE DRIVEN BIT TRAVELS TOO.
+                     *
+                     * It was left out here, so a Driven dimension built through the
+                     * factory - which is EVERY dimension the tool creates - arrived
+                     * without its state and behaved as Driving. A dimension that had
+                     * been created as a reading could then move geometry, which is
+                     * the exact thing the Driven state exists to prevent. The model
+                     * sets the bit; the factory has to carry it, or the two disagree
+                     * about what the feature is.
+                     */
+                    driven: created.driven === true,
                     resolved:
                         created.resolved
                 }

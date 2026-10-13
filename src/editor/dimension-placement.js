@@ -4,7 +4,7 @@
 
 import enggDrawingState from "../core/model/drawing-state.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { dimensionReferenceAtClick, inferDimensionDescriptor } from "./dimension-inference.js";
+import { circularCandidateDescriptors, dimensionReferenceAtClick, inferDimensionDescriptor } from "./dimension-inference.js";
 import { commitDimension, dimensionChoiceLabel, dimensionChoiceMessage } from "./dimension-tool.js";
 import { drawingState } from "./editor-state.js";
 import { canvasPointFromEvent } from "./tool-activation.js";
@@ -212,11 +212,32 @@ function acceptFirstDimensionReference(
  * (not "placement") to mark that distinction: the preview follows the
  * cursor, but the next click is not automatically a placement.
  */
+/*
+ * The candidate measurements to offer for an armed reference.
+ *
+ * A circle or an arc offers SEVERAL - the same reference measured as diameter,
+ * radius or arc length - so Tab can cycle them; every other shape contributes its
+ * single inferred descriptor. Kept as one short call at each site so the armed
+ * interaction object stays compact and the two stages cannot drift apart.
+ */
+function candidatesForReference(reference, descriptor) {
+    return reference?.kind === "circular"
+        ? circularCandidateDescriptors(reference)
+        : [descriptor];
+}
+
 function armSingleMeasurement(
     reference,
     descriptor,
     point
 ) {
+    /*
+     * A CIRCLE OR AN ARC ARMS SEVERAL CANDIDATES, not just the one the cursor
+     * preferred: the same reference measured as diameter, radius or arc length.
+     * Every other shape contributes one, and `circularCandidateDescriptors`
+     * returns exactly that single candidate for them - so Tab has somewhere to go
+     * only where the geometry genuinely offers alternatives.
+     */
     enggDrawingState.setInteraction(
         drawingState,
         {
@@ -232,7 +253,7 @@ function armSingleMeasurement(
             dimensionTarget:
                 reference?.featureId || null,
             dimensionTargets: [reference.featureId].filter(Boolean),
-            dimensionCandidates: [descriptor],
+            dimensionCandidates: candidatesForReference(reference, descriptor),
             dimensionRefs: descriptor.refs,
             dimensionPlacement: {
                 x: point.x,
@@ -736,7 +757,7 @@ function beginDimensionPlacement(
             dimensionTarget:
                 reference?.featureId || null,
             dimensionTargets: targets,
-            dimensionCandidates: [descriptor],
+            dimensionCandidates: candidatesForReference(reference, descriptor),
             dimensionRefs: descriptor.refs,
             dimensionPlacement: {
                 x: point.x,

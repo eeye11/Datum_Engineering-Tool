@@ -184,9 +184,12 @@ check(
 
 /*
  * THE UNIT IS THE DOCUMENT'S, and changing it must re-express every length
- * rather than change one. 500 mm is half a metre only when the document is in
- * metres; asking for the same beam in a document set to metres is the check
- * that the unit factor is applied exactly once.
+ * rather than change one. The value this function returns is the PHYSICAL
+ * length in millimetres, which is the one canonical unit the whole
+ * application works in; the unit a READER sees is chosen at the panel, not
+ * here. A document set to metres therefore does not change the millimetre
+ * figure - 500 mm is 500 mm however the sheet is labelled - and the unit
+ * factor is applied exactly once, by the caller that needs it.
  */
 drawing.scale = {
   ...drawing.scale,
@@ -194,13 +197,19 @@ drawing.scale = {
 };
 
 check(
-  "the same beam is 0.5 m in a document set to metres",
-  near(scale.toEngineering(drawing, modelLengthOf()).value, 0.5, 1e-12),
+  "the same beam is 500 mm in a document set to metres",
+  near(scale.toEngineering(drawing, modelLengthOf()).value, 500, 1e-12),
   `got ${scale.toEngineering(drawing, modelLengthOf()).value}`,
 );
 
 check(
-  "and half a metre in metres converts back to the same drawing units",
+  "and the unit the figure is in is stated as millimetres",
+  scale.toEngineering(drawing, modelLengthOf()).unit === "mm",
+  `${scale.toEngineering(drawing, modelLengthOf()).unit}`,
+);
+
+check(
+  "and 0.5 m converts back to the same drawing units",
   near(scale.fromEngineering(drawing, 0.5, "m"), modelLengthOf(), 1e-9),
   `${scale.fromEngineering(drawing, 0.5, "m")} vs ${modelLengthOf()}`,
 );

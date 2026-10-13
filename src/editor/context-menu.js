@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import enggAnnotate from "../features/annotations/annotate-model.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
 import { clipboardHasContent, copySelectionToClipboard, cutSelectionToClipboard, duplicateSelection, pasteFromClipboard } from "./clipboard-commands.js";
 import { deleteSelectedObjects } from "./delete-command.js";
@@ -34,6 +35,41 @@ import { setToolMessage } from "./toolbar-render.js";
  * copied.
  */
 let featureContextMenu = null;
+
+/*
+ * Run one table shape edit as a single undoable change.
+ *
+ * The model does the grid arithmetic; this only takes the snapshot, calls the
+ * operation and commits - so Add Row from the menu is ONE history step, exactly
+ * as editing the count in the panel is.
+ */
+function runTableEdit(table, operation) {
+    const operations = {
+        addRow: () => enggAnnotate.addTableRow(table),
+        deleteRow: () => enggAnnotate.deleteTableRow(table),
+        addColumn: () => enggAnnotate.addTableColumn(table),
+        deleteColumn: () => enggAnnotate.deleteTableColumn(table)
+    };
+
+    const run = operations[operation];
+
+    if (!run) {
+        return;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+    if (run() === false) {
+        return;
+    }
+
+    enggDrawingState.commitDrawingChange(drawingState, previous);
+
+    setToolMessage("Table updated");
+
+    renderProperties();
+    renderCurrentDrawing();
+}
 
 function closeFeatureContextMenu() {
     if (!featureContextMenu) {
@@ -113,12 +149,48 @@ function openFeatureContextMenu(
      * Offering "Delete" over empty space would be an invitation
      * to press a button that cannot do anything.
      */
+    /*
+     * A TABLE'S OWN ROW AND COLUMN COMMANDS, when a table is selected.
+     *
+     * These belong on the right-click menu because they act on the table's
+     * SHAPE, which is what a student points at when they right-click it. The
+     * model does the grid arithmetic, so a row added from here and a row added
+     * from the panel resize the same way and neither can leave a grid with
+     * holes.
+     */
+    const selectedTable = (drawingState.objects || []).find(
+        (object) =>
+            drawingState.selection.selectedObjectIds.includes(object.id) &&
+            object.type === "annotate" &&
+            object.annotateKind === "table"
+    );
+
+    const tableRows = selectedTable
+        ? `${contextMenuItem("Add Row", () => {
+              runTableEdit(selectedTable, "addRow");
+          })}
+          ${contextMenuItem("Delete Row", () => {
+              runTableEdit(selectedTable, "deleteRow");
+          }, {
+              disabled: (Number(selectedTable.geometry?.rows) || 1) <= 1
+          })}
+          ${contextMenuItem("Add Column", () => {
+              runTableEdit(selectedTable, "addColumn");
+          })}
+          ${contextMenuItem("Delete Column", () => {
+              runTableEdit(selectedTable, "deleteColumn");
+          }, {
+              disabled: (Number(selectedTable.geometry?.columns) || 1) <= 1
+          })}`
+        : "";
+
     const onSelection = hasSelection
         ? `
             ${contextMenuItem("Open Features", () => {
                 editorState.featurePanelView = "edit";
                 renderProperties();
             })}
+            ${tableRows}
             ${contextMenuItem("Cut", () => {
                 cutSelectionToClipboard();
             }, { hint: "Ctrl+X" })}

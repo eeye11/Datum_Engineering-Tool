@@ -3,6 +3,7 @@
  */
 
 import enggBodyFrames from "../core/geometry/body-frames.js";
+import enggQuantities from "../core/units/quantities.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggDrawingRotationalArrow from "../features/analysis/rotational-arrow.js";
 import { analysisAxisForPlacement } from "./analysis-tools.js";
@@ -24,6 +25,18 @@ import { trussSnapGeometry, trussStageMessage } from "./truss-tool.js";
 import { isSupportType } from "../core/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../ui/editors/load-value-popup.js";
 
+/*
+ * The colour every construction preview is drawn in.
+ *
+ * It is deliberately NOT a theme token: previews are transient guides that
+ * exist only while a tool is mid-construction, so they are painted in a
+ * fixed signal colour that reads as "this is not a feature yet" in either
+ * theme. Keeping it in one named constant also means the renderer has a
+ * single thing to key off when deciding how to treat a preview stroke.
+ */
+const PREVIEW_STROKE =
+    "#1f5c38";
+
 export function createPreview(
     type,
     geometry
@@ -37,7 +50,8 @@ export function createPreview(
         geometry,
 
         style: {
-            stroke: "#1f5c38",
+            stroke:
+                PREVIEW_STROKE,
             fill: "none",
             lineWidth: 0.5,
             lineType: "dashed",
@@ -987,7 +1001,7 @@ export function updatePreview(
                                     drawingState
                                         .styleDefaults
                                         ?.stroke ||
-                                    "#1f5c38",
+                                    PREVIEW_STROKE,
                                 fill: "none",
                                 lineWidth: 0.5,
                                 lineType:
@@ -1088,7 +1102,7 @@ export function updatePreview(
                                     drawingState
                                         .styleDefaults
                                         ?.stroke ||
-                                    "#1f5c38",
+                                    PREVIEW_STROKE,
                                 fill: "none",
                                 lineWidth: 0.5,
                                 lineType:
@@ -1325,7 +1339,8 @@ export function updatePreview(
                                 interaction.radiusPx
                         },
                         style: {
-                            stroke: "#1f5c38",
+                            stroke:
+                                PREVIEW_STROKE,
                             fill: "none",
                             lineWidth: 0.5,
                             lineType: "dashed",
@@ -1423,7 +1438,8 @@ export function updatePreview(
                             targetBody: body,
 
                             style: {
-                                stroke: "#1f5c38",
+                                stroke:
+                                    PREVIEW_STROKE,
                                 fill: "none",
                                 lineWidth: 0.5,
                                 lineType: "dashed",
@@ -1474,7 +1490,8 @@ export function updatePreview(
                           ),
 
                     style: {
-                        stroke: "#1f5c38",
+                        stroke:
+                            PREVIEW_STROKE,
                         fill: "none",
                         lineWidth: 0.5,
                         lineType: "dashed",
@@ -1767,14 +1784,18 @@ function staticsPreviewType(
     }
 
     /*
-     * The units a moment is stated in.
+     * The units a moment is stated in, FROM THE SHARED QUANTITY TABLE.
      *
      * A moment is a force times a length, so its units are the force-length
-     * pairs a student actually writes - N·m and kN·m - plus the imperial pair
-     * where a drawing is in feet. Kept beside the moment's own code rather than
-     * in the shared load table, because it is THIS quantity's vocabulary.
+     * pairs a student actually writes. This used to be its own literal list,
+     * which disagreed with the one on the load profile - the two code paths
+     * offered different units for the same quantity. `unitsFor("moment")` is
+     * the ONE list, so the popup and the Features panel offer the same
+     * choices and a unit added to the table appears in both.
      */
-    const MOMENT_UNITS = ["N·m", "kN·m", "N·mm", "lb·ft"];
+    const MOMENT_UNITS =
+        enggQuantities?.unitsFor?.("moment") ||
+        ["N\u00b7m", "kN\u00b7m"];
 
     /* The unit a moment is currently stated in, or the default. */
     function momentUnit(object) {

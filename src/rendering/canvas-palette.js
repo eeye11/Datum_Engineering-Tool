@@ -81,8 +81,8 @@
  * asks. A test asserts the two agree, so the duplication cannot drift silently.
  */
 export const CANVAS_BACKGROUND = {
-    light: "#ffffff",
-    dark: "#142426",
+  light: "#ffffff",
+  dark: "#142426",
 };
 
 /*
@@ -94,8 +94,8 @@ export const CANVAS_BACKGROUND = {
  * default ink and one drawn in pure black both land on the same answer.
  */
 export const NEUTRAL_INK = {
-    light: "#193335",
-    dark: "#E8F5F3",
+  light: "#193335",
+  dark: "#E8F5F3",
 };
 
 /*
@@ -122,43 +122,46 @@ const clamp255 = (value) => Math.max(0, Math.min(255, Math.round(value)));
  * into a colour would fill every rectangle in the drawing.
  */
 export function parseColour(colour) {
-    if (typeof colour !== "string") {
-        return null;
-    }
-
-    const text = colour.trim().toLowerCase();
-
-    const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(text);
-
-    if (short) {
-        return {
-            r: parseInt(short[1] + short[1], 16),
-            g: parseInt(short[2] + short[2], 16),
-            b: parseInt(short[3] + short[3], 16),
-        };
-    }
-
-    const long = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/.exec(text);
-
-    if (long) {
-        return {
-            r: parseInt(long[1], 16),
-            g: parseInt(long[2], 16),
-            b: parseInt(long[3], 16),
-        };
-    }
-
-    const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)$/.exec(text);
-
-    if (rgb) {
-        return {
-            r: Number(rgb[1]),
-            g: Number(rgb[2]),
-            b: Number(rgb[3]),
-        };
-    }
-
+  if (typeof colour !== "string") {
     return null;
+  }
+
+  const text = colour.trim().toLowerCase();
+
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(text);
+
+  if (short) {
+    return {
+      r: parseInt(short[1] + short[1], 16),
+      g: parseInt(short[2] + short[2], 16),
+      b: parseInt(short[3] + short[3], 16),
+    };
+  }
+
+  const long = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/.exec(text);
+
+  if (long) {
+    return {
+      r: parseInt(long[1], 16),
+      g: parseInt(long[2], 16),
+      b: parseInt(long[3], 16),
+    };
+  }
+
+  const rgb =
+    /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)$/.exec(
+      text,
+    );
+
+  if (rgb) {
+    return {
+      r: Number(rgb[1]),
+      g: Number(rgb[2]),
+      b: Number(rgb[3]),
+    };
+  }
+
+  return null;
 }
 
 /*
@@ -169,25 +172,25 @@ export function parseColour(colour) {
  * is far more luminous than pure blue at the same channel value.
  */
 export function luminance({ r, g, b }) {
-    const channel = (value) => {
-        const scaled = value / 255;
+  const channel = (value) => {
+    const scaled = value / 255;
 
-        return scaled <= 0.03928
-            ? scaled / 12.92
-            : ((scaled + 0.055) / 1.055) ** 2.4;
-    };
+    return scaled <= 0.03928
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
+  };
 
-    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
 }
 
 /*
  * The contrast ratio between two luminances, 1 (identical) to 21 (black/white).
  */
 export function contrastRatio(first, second) {
-    const lighter = Math.max(first, second);
-    const darker = Math.min(first, second);
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
 
-    return (lighter + 0.05) / (darker + 0.05);
+  return (lighter + 0.05) / (darker + 0.05);
 }
 
 /*
@@ -198,20 +201,20 @@ export function contrastRatio(first, second) {
  * meaningful: a colour whose channels are nearly equal has no hue to preserve.
  */
 export function isNeutral(colour) {
-    const parsed = typeof colour === "string" ? parseColour(colour) : colour;
+  const parsed = typeof colour === "string" ? parseColour(colour) : colour;
 
-    if (!parsed) {
-        return false;
-    }
+  if (!parsed) {
+    return false;
+  }
 
-    const max = Math.max(parsed.r, parsed.g, parsed.b);
-    const min = Math.min(parsed.r, parsed.g, parsed.b);
+  const max = Math.max(parsed.r, parsed.g, parsed.b);
+  const min = Math.min(parsed.r, parsed.g, parsed.b);
 
-    return (max - min) / 255 <= NEUTRAL_CHROMA_LIMIT;
+  return (max - min) / 255 <= NEUTRAL_CHROMA_LIMIT;
 }
 
 const toHex = ({ r, g, b }) =>
-    `#${[r, g, b].map((channel) => clamp255(channel).toString(16).padStart(2, "0")).join("")}`;
+  `#${[r, g, b].map((channel) => clamp255(channel).toString(16).padStart(2, "0")).join("")}`;
 
 /*
  * ============================================================
@@ -228,19 +231,19 @@ const toHex = ({ r, g, b }) =>
  * exactly reversible when the adjustment is not applied.
  */
 function lighten(colour, amount) {
-    return {
-        r: colour.r + (255 - colour.r) * amount,
-        g: colour.g + (255 - colour.g) * amount,
-        b: colour.b + (255 - colour.b) * amount,
-    };
+  return {
+    r: colour.r + (255 - colour.r) * amount,
+    g: colour.g + (255 - colour.g) * amount,
+    b: colour.b + (255 - colour.b) * amount,
+  };
 }
 
 function darken(colour, amount) {
-    return {
-        r: colour.r * (1 - amount),
-        g: colour.g * (1 - amount),
-        b: colour.b * (1 - amount),
-    };
+  return {
+    r: colour.r * (1 - amount),
+    g: colour.g * (1 - amount),
+    b: colour.b * (1 - amount),
+  };
 }
 
 /*
@@ -252,30 +255,34 @@ function darken(colour, amount) {
  * untouched, and one that is not moves only as far as it has to.
  */
 function adjustForContrast(parsed, theme) {
-    const background = parseColour(CANVAS_BACKGROUND[theme] || CANVAS_BACKGROUND.light);
-    const backgroundLuminance = luminance(background);
+  const background = parseColour(
+    CANVAS_BACKGROUND[theme] || CANVAS_BACKGROUND.light,
+  );
+  const backgroundLuminance = luminance(background);
 
-    if (contrastRatio(luminance(parsed), backgroundLuminance) >= MIN_CONTRAST) {
-        return parsed;
+  if (contrastRatio(luminance(parsed), backgroundLuminance) >= MIN_CONTRAST) {
+    return parsed;
+  }
+
+  const toward =
+    theme === "dark"
+      ? (colour, amount) => lighten(colour, amount)
+      : (colour, amount) => darken(colour, amount);
+
+  let adjusted = parsed;
+
+  for (let step = 1; step <= 20; step += 1) {
+    adjusted = toward(parsed, step / 20);
+
+    if (
+      contrastRatio(luminance(adjusted), backgroundLuminance) >= MIN_CONTRAST
+    ) {
+      return adjusted;
     }
+  }
 
-    const toward =
-        theme === "dark"
-            ? (colour, amount) => lighten(colour, amount)
-            : (colour, amount) => darken(colour, amount);
-
-    let adjusted = parsed;
-
-    for (let step = 1; step <= 20; step += 1) {
-        adjusted = toward(parsed, step / 20);
-
-        if (contrastRatio(luminance(adjusted), backgroundLuminance) >= MIN_CONTRAST) {
-            return adjusted;
-        }
-    }
-
-    /* Nothing cleared it: the extreme is the best available answer. */
-    return adjusted;
+  /* Nothing cleared it: the extreme is the best available answer. */
+  return adjusted;
 }
 
 /*
@@ -291,47 +298,47 @@ function adjustForContrast(parsed, theme) {
  * `color-scheme` handles it. Guessing would be worse than passing it through.
  */
 export function displayColourFor(colour, theme = "light") {
-    const parsed = parseColour(colour);
+  const parsed = parseColour(colour);
 
-    if (!parsed) {
-        return colour;
-    }
+  if (!parsed) {
+    return colour;
+  }
 
-    const resolvedTheme = theme === "dark" ? "dark" : "light";
+  const resolvedTheme = theme === "dark" ? "dark" : "light";
 
-    /*
-     * A NEUTRAL BECOMES THE THEME'S INK.
-     *
-     * This is the case that matters most, because a drawing is usually
-     * monochrome. It is a re-pointing rather than an inversion: the authored
-     * colour is the author saying "ordinary ink", and the theme says which ink
-     * that is. Black in light mode becomes ice-white in dark mode, and comes back
-     * as black - because the AUTHORED value, pure black, never changed.
-     */
-    if (isNeutral(parsed)) {
-        const ink = parseColour(NEUTRAL_INK[resolvedTheme]) || parsed;
-        const background = parseColour(CANVAS_BACKGROUND[resolvedTheme]);
-
-        /*
-         * A neutral that is ALREADY legible keeps its value, so a drawing
-         * deliberately made in a mid grey is not silently promoted to full ink.
-         * Black on white and white on black are the cases that must move.
-         */
-        if (
-            background &&
-            contrastRatio(luminance(parsed), luminance(background)) >= MIN_CONTRAST
-        ) {
-            return colour;
-        }
-
-        return toHex(ink);
-    }
+  /*
+   * A NEUTRAL BECOMES THE THEME'S INK.
+   *
+   * This is the case that matters most, because a drawing is usually
+   * monochrome. It is a re-pointing rather than an inversion: the authored
+   * colour is the author saying "ordinary ink", and the theme says which ink
+   * that is. Black in light mode becomes ice-white in dark mode, and comes back
+   * as black - because the AUTHORED value, pure black, never changed.
+   */
+  if (isNeutral(parsed)) {
+    const ink = parseColour(NEUTRAL_INK[resolvedTheme]) || parsed;
+    const background = parseColour(CANVAS_BACKGROUND[resolvedTheme]);
 
     /*
-     * A CHROMATIC COLOUR KEEPS ITS IDENTITY - hue preserved, lightness adjusted
-     * only as far as legibility requires.
+     * A neutral that is ALREADY legible keeps its value, so a drawing
+     * deliberately made in a mid grey is not silently promoted to full ink.
+     * Black on white and white on black are the cases that must move.
      */
-    return toHex(adjustForContrast(parsed, resolvedTheme));
+    if (
+      background &&
+      contrastRatio(luminance(parsed), luminance(background)) >= MIN_CONTRAST
+    ) {
+      return colour;
+    }
+
+    return toHex(ink);
+  }
+
+  /*
+   * A CHROMATIC COLOUR KEEPS ITS IDENTITY - hue preserved, lightness adjusted
+   * only as far as legibility requires.
+   */
+  return toHex(adjustForContrast(parsed, resolvedTheme));
 }
 
 /*
@@ -347,39 +354,39 @@ export function displayColourFor(colour, theme = "light") {
  * before a preference has been stored.
  */
 export function activeCanvasTheme(scope) {
-    try {
-        const doc = scope || globalThis.document;
-        const root = doc && doc.documentElement;
+  try {
+    const doc = scope || globalThis.document;
+    const root = doc && doc.documentElement;
 
-        if (!root) {
-            return "light";
-        }
-
-        const declared = root.getAttribute("data-theme");
-
-        if (declared === "dark" || declared === "light") {
-            return declared;
-        }
-
-        const prefersDark =
-            typeof globalThis.matchMedia === "function" &&
-            globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
-
-        return prefersDark ? "dark" : "light";
-    } catch (error) {
-        return "light";
+    if (!root) {
+      return "light";
     }
+
+    const declared = root.getAttribute("data-theme");
+
+    if (declared === "dark" || declared === "light") {
+      return declared;
+    }
+
+    const prefersDark =
+      typeof globalThis.matchMedia === "function" &&
+      globalThis.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    return prefersDark ? "dark" : "light";
+  } catch (error) {
+    return "light";
+  }
 }
 
 const enggCanvasPalette = {
-    CANVAS_BACKGROUND,
-    NEUTRAL_INK,
-    activeCanvasTheme,
-    contrastRatio,
-    displayColourFor,
-    isNeutral,
-    luminance,
-    parseColour,
+  CANVAS_BACKGROUND,
+  NEUTRAL_INK,
+  activeCanvasTheme,
+  contrastRatio,
+  displayColourFor,
+  isNeutral,
+  luminance,
+  parseColour,
 };
 
 export default enggCanvasPalette;

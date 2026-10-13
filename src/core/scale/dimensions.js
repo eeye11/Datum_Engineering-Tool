@@ -170,23 +170,38 @@ function toEngineering(state, drawingUnits) {
    */
     const mmPerUnit = scale ? scale.mmPerUnit : DEFAULT_MM_PER_UNIT;
 
-    const chosen = scale ? scale.unit : DEFAULT_UNIT;
-
     /*
-     * mmPerUnit is ALREADY the millimetres each drawing unit is
-     * worth, so the product is millimetres. Converting from
-     * millimetres into the display unit is the only step needed.
+     * ========================================================
+     * ONE CANONICAL UNIT, SO NOTHING CAN CONVERT TWICE
+     * ========================================================
      *
-     * Dividing by the unit's millimetre value as well would convert
-     * twice: 100 units at 5 mm each is 500 mm, which is 50 cm and
-     * not 500 cm. The earlier draft made exactly that mistake, and
-     * the round trip was the thing that caught it.
+     * `mmPerUnit` is ALREADY the millimetres each drawing unit is worth,
+     * so the product IS millimetres. That is the one figure this function
+     * returns, and `unit` is fixed at "mm" to say so.
+     *
+     * IT USED TO DIVIDE BY THE SHEET'S OWN UNIT AS WELL:
+     *
+     *     value: millimetres / UNITS[chosen].mm
+     *
+     * On a sheet calibrated in millimetres `UNITS["mm"].mm` is 1, so the
+     * division was invisible and the round trip looked correct. On a sheet
+     * calibrated in METRES it is 1000, so the same number was divided by a
+     * thousand - and the panel, which asks for millimetres and then
+     * converts them into the field's own display unit, was handed a metre
+     * figure and told it was millimetres. That is the reported defect:
+     * entering 5 with metres selected came back as 0.005, because the value
+     * had crossed the metre/millimetre boundary twice.
+     *
+     * The arithmetic above this comment was already right; the extra
+     * division is what contradicted it. Removing it makes this the ONLY
+     * millimetre figure in the application, so a caller cannot be handed a
+     * value whose unit depends on which sheet it came from.
      */
     const millimetres = value * mmPerUnit;
 
     return {
-      value: millimetres / UNITS[chosen].mm,
-      unit: chosen,
+      value: millimetres,
+      unit: "mm",
       calibrated: scale !== null
     };
   }

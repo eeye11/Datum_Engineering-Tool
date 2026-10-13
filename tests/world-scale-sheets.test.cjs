@@ -82,13 +82,21 @@ console.log("\n  the first measurement's unit is a real conversion\n");
   );
 
   /*
-   * The sheet's working unit is what ordinary lengths are displayed in, so a
-   * longer line is a larger number OF INCHES, not of millimetres.
+   * THE VALUE IS ALWAYS MILLIMETRES, whatever unit the sheet is labelled in.
+   *
+   * This used to assert 8 in, because `toEngineering` divided the millimetres by
+   * the sheet's own unit. On an inch sheet that made the number "of inches"; on
+   * a METRE sheet it divided by a thousand, and a panel that asks for millimetres
+   * then converted them into the field's display unit received a metre figure
+   * labelled as millimetres - so 5 m came back as 0.005. The reported defect.
+   *
+   * The unit is a LABEL, not part of the value: 400 drawing units at 25.4/50 mm
+   * each is 203.2 mm, and it is the reader - the panel - that shows it as 8 in.
    */
   check(
-    "a line twice as long is 8 in, not 203.2 mm",
-    near(scale.toEngineering(state, 400).value, 8, 1e-9) &&
-      scale.toEngineering(state, 400).unit === "in",
+    "a line twice as long is 203.2 mm, whatever the sheet is labelled",
+    near(scale.toEngineering(state, 400).value, 203.2, 1e-9) &&
+      scale.toEngineering(state, 400).unit === "mm",
     JSON.stringify(scale.toEngineering(state, 400)),
   );
 }

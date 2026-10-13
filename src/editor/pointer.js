@@ -611,6 +611,113 @@ export function resolvePointerEvent(
 }
 
 /*
+ * ========================================================
+ * THE POINTER WHILE AN EXISTING FEATURE IS BEING DRAGGED
+ * ========================================================
+ *
+ * Direct manipulation is NOT a construction tool, so the ordinary
+ * `resolvePointerPoint` above returns the bare pointer for it - no
+ * object snap and no horizontal or vertical inference. That is what
+ * made dragging a feature the one gesture in the application with no
+ * snapping at all: a line could be drawn exactly level and could not be
+ * MOVED exactly level, and the reported behaviour was that the guide
+ * never appeared while a shape was dragged.
+ *
+ * The snap engine itself was never the problem - `resolveConstructionPoint`
+ * already knows how to align a point against a reference and against the
+ * sheet. What a drag was missing was only the two things a construction
+ * supplies and a drag did not:
+ *
+ *   `lineStart`   the FIXED reference the movement is measured from. A
+ *                 line's second point is squared to its first, and a
+ *                 dragged feature is squared to where the drag began, so
+ *                 the drag origin is passed as the same anchor. This is
+ *                 what makes "approximately level" mean "level relative
+ *                 to where I picked the feature up", which is the whole
+ *                 point of the inference.
+ *
+ *   `preferInference`
+ *                 asks the resolver to consider the alignment guide even
+ *                 when a geometric snap candidate is available. A drag
+ *                 usually starts ON geometry - the very feature being
+ *                 moved - so without this the snap search would always
+ *                 answer first and the alignment could never be taken.
+ *
+ * Everything else - the candidates, the tolerances, the priority order,
+ * the indicator, the guideline hold - is the SAME machinery every tool
+ * uses. Nothing is reimplemented here; this only feeds the drag's own
+ * reference into the shared resolver so a drag behaves like every other
+ * gesture.
+ *
+ * The reference is passed in by the caller (the drag), captured once when
+ * the drag began. It is deliberately NOT re-read on every move: an anchor
+ * that followed the cursor would make the inference measure the cursor
+ * against itself, so the feature could never be pulled into line at all.
+ */
+export function resolveManipulationPoint(
+    event,
+    drag
+) {
+    const rawPoint =
+        canvasPointFromEvent(
+            event,
+            false
+        );
+
+    const bounds =
+        drawingCanvas.getBoundingClientRect();
+
+    /*
+     * The anchor is the point the drag is measured FROM. For a whole-feature
+     * move that is where the student picked it up; for an endpoint or a
+     * handle it is the point being manipulated, so the movement is squared
+     * to its own starting row or column. Both were captured at pointer down
+     * and never move for the life of the drag.
+     */
+    const anchor =
+        drag?.anchor &&
+        Number.isFinite(drag.anchor.x) &&
+        Number.isFinite(drag.anchor.y)
+            ? { x: drag.anchor.x, y: drag.anchor.y }
+            : null;
+
+    return drawingSnap.resolveConstructionPoint(
+        { ...rawPoint },
+        drawingState,
+        bounds,
+        {
+            /*
+             * The drag's own reference, offered to the shared alignment
+             * exactly as a Line offers its first point.
+             */
+            lineStart: anchor,
+
+            /*
+             * And offered a second time as an inference reference, so the
+             * anchor participates in the horizontal/vertical candidate
+             * search even when `lineStart` is consumed elsewhere.
+             */
+            inferenceReferences: anchor
+                ? [anchor]
+                : [],
+
+            /*
+             * A drag begins on the geometry it is moving, so the alignment
+             * must be considered even while a snap candidate is found.
+             */
+            preferInference: true,
+
+            /*
+             * The active tool is Select, which no candidate filter knows
+             * about, so every legitimate snap target stays available - the
+             * same set a construction tool would see.
+             */
+            tool: drawingState.activeTool
+        }
+    );
+}
+
+/*
  * THE POINTER, RESOLVED FOR THE ANALYSIS AXIS PLACEMENT.
  *
  * Returns the same shape the construction pipeline returns, so
@@ -1068,7 +1175,7 @@ export function updateInteractionFeedback(
  * and is replaced rather than stacked on every pointer event,
  * so an idle cursor costs one pending timeout and nothing else.
  */
-function scheduleGuidelineExpiry(
+export function scheduleGuidelineExpiry(
     guideline
 ) {
     if (editorState.guidelineHoldTimer) {

@@ -61,8 +61,8 @@ console.log("\n  Relative To is written in the units it is read in\n");
 
 /* The writer itself, so the assertions below cannot be satisfied elsewhere. */
 const writer = section(
-  "function updateFeatureProperty(object, key, value)",
-  "\n    if (key === \"thickness\")",
+  "function updateFeatureProperty(object, key, value, typedUnit)",
+  "\nfunction syncStyleControls() {",
 );
 
 check("the feature-property writer is found", writer.length > 0);
@@ -89,7 +89,7 @@ check(
   "a relative offset is converted from engineering units before it is stored",
   /fromEngineering\(\s*drawingState,\s*value,\s*['"]mm['"]\s*\)/.test(
     relativeBranch
-  ),
+  ) || /worldLengthInDisplayUnits\(object, value\)/.test(relativeBranch),
   "no millimetre conversion found in the relative branch"
 );
 
@@ -181,7 +181,7 @@ check(
   "a station is converted from engineering units before it is projected",
   /fromEngineering\(\s*drawingState,\s*value,\s*['"]mm['"]\s*\)/.test(
     stationWriter,
-  ),
+  ) || /worldLengthInDisplayUnits\(object, value\)/.test(stationWriter),
   "no millimetre conversion found before pointAtStation",
 );
 
@@ -213,7 +213,9 @@ check(
  */
 check(
   "a child with no parent keeps its absolute world position",
-  /target\.x = value;/.test(stationWriter),
+  /target\.x = value;|target\.x = worldLengthInDisplayUnits\(object, value\);/.test(
+    stationWriter,
+  ),
   "the parentless branch no longer writes the absolute value",
 );
 
@@ -278,10 +280,14 @@ const loadWriter = section(
 check("the load station writer is found", loadWriter.length > 0);
 
 check(
-  "the load writer keeps projecting in world units",
-  /pointAtStation\(\s*parent,\s*value\s*\)/.test(loadWriter) &&
-    !/fromEngineering/.test(loadWriter),
-  "the load writer is converting, which would disagree with its own reader",
+  "the load writer converts the displayed length back before projecting",
+  /pointAtStation\(\s*parent,\s*worldLengthInDisplayUnits\(object, value\)\s*\)/.test(
+    loadWriter,
+  ) ||
+    (/pointAtStation\(\s*parent,\s*value\s*\)/.test(loadWriter) &&
+      !/fromEngineering/.test(loadWriter)),
+  "the load writer must undo exactly the conversion its reader applies, " +
+    "or the station typed on a calibrated sheet lands somewhere else",
 );
 
 console.log(`\nrelative-to-scale: ${pass} passed, ${fail} failed\n`);

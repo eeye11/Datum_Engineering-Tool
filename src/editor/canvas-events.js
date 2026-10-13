@@ -3,9 +3,10 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import enggAnnotate from "../features/annotations/annotate-model.js";
 import { isIdleForEditing } from "./annotation-tool.js";
 import { beginCreationDrag, finishCreationDrag, moveCreationDrag } from "./creation-drag.js";
-import { handleCanvasClick, openNoteEditorFor, syncSelectionInteraction } from "./canvas-click.js";
+import { handleCanvasClick, openNoteEditorFor, openTableCellEditorFor, syncSelectionInteraction } from "./canvas-click.js";
 import { isEditableAnnotate } from "./annotate-creation.js";
 import { openDimensionValuePrompt } from "./dimension-tool.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
@@ -181,6 +182,44 @@ export function installCanvasEvents() {
                      * falls through rather than opening an editor for
                      * something that is not text.
                      */
+                    /*
+                     * A TABLE CELL EDITS IN PLACE, LIKE A WORD-PROCESSOR TABLE.
+                     *
+                     * Double-clicking a table opens the editor for the CELL
+                     * under the cursor - not for the table as a whole - so the
+                     * student types into the cell they pointed at without
+                     * hunting through the panel. The cell is found from the
+                     * table's own geometry (`tableCellAt`), so the editor and the
+                     * drawn grid cannot disagree about which cell was hit.
+                     *
+                     * The write box is the SAME one a note uses, so a cell is
+                     * edited the same way as every other piece of text in the
+                     * application.
+                     */
+                    if (
+                        pointed?.type === "annotate" &&
+                        pointed.annotateKind === "table"
+                    ) {
+                        const cellPoint = canvasPointFromEvent(event, false);
+
+                        const cellIndex = enggAnnotate?.tableCellAt?.(
+                            pointed,
+                            cellPoint
+                        );
+
+                        if (
+                            Number.isInteger(cellIndex) &&
+                            cellIndex >= 0
+                        ) {
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            openTableCellEditorFor(pointed, cellIndex);
+
+                            return;
+                        }
+                    }
+
                     if (isEditableAnnotate(pointed)) {
                         event.preventDefault();
                         event.stopPropagation();

@@ -76,17 +76,26 @@ check(
  * The coordinate helper and the scalar helper must BOTH convert, or a
  * feature whose position is a coordinate would disagree with one whose
  * position is a length.
+ *
+ * Both helpers now read in the feature's SELECTED unit: the mm figure from
+ * `mmOf` is converted into `chosenUnit` through the shared table, which is
+ * the same conversion the setter undoes. Asserting the selected-unit step
+ * pins the metre/millimetre round trip end to end.
  */
 check(
-  "the coordinate helper converts a length",
-  /const converts = isLength && unit === "mm";/.test(panelSource) &&
-    /const shown = converts \? mmOf\(value\)\.value : value;/.test(panelSource),
-  "the coordinate helper does not convert",
+  "the coordinate helper converts a length into the selected unit",
+  /const shown = converts\s*\?\s*enggQuantities\.convertValue\(\s*mm\.value,\s*"length",\s*"mm",\s*chosenUnit\s*\)/.test(
+    panelSource,
+  ),
+  "the coordinate helper does not convert into the selected unit",
 );
 
 check(
-  "the scalar helper converts a length",
-  /const shown = converts \? mmOf\(value\)\.value : value;/.test(panelSource),
+  "the scalar helper converts a length into the selected unit",
+  /const shown = isLength\s*\?\s*enggQuantities\.convertValue\(\s*mmOf\(value\)\.value,\s*"length",\s*"mm",\s*chosenUnit\s*\)/.test(
+    panelSource,
+  ),
+  "the scalar helper does not convert into the selected unit",
 );
 
 /*

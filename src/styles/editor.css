@@ -499,8 +499,22 @@ body.datum-topbar-hidden .drawing-topbar-show {
  */
 .datum-menu-label:hover,
 .datum-menu-open .datum-menu-label {
-    background: var(--datum-menu-hover);
+    background: var(--datum-menu-open);
     color: var(--datum-green-ink);
+}
+
+/*
+ * AND THE PANEL MEETS THE OPEN LABEL.
+ *
+ * The panel drops from `top: 100%` of the menu, which is the label's own bottom
+ * edge, so it already starts flush under the item that opened it. The 1px the bar's
+ * border occupies would otherwise show as a seam of chrome between them, which
+ * breaks the panel off from its own label; this closes it by pulling the panel up
+ * over that line. It is a relationship between the menu and its bar item, not a
+ * decoration - nothing else is moved.
+ */
+.datum-menu-open .datum-menu-panel {
+    margin-top: -1px;
 }
 
 .datum-menu-label:focus-visible {
@@ -515,6 +529,22 @@ body.datum-topbar-hidden .drawing-topbar-show {
  * above everything else in the workspace. It is sized by its content - compact
  * rather than a fixed width - so a menu with two short items is not a vast
  * empty rectangle.
+ *
+ * IT IS ALSO CAPPED, AND THAT CAP IS WHAT STOPS IT BEING A SLAB.
+ *
+ * Sized by its content alone, a menu with as many items as Tools grew to nearly
+ * 500px tall - taller than half the canvas - so it read as a large, near-uniform
+ * sheet laid over the drawing rather than as a menu that belongs to the bar.
+ * That is the "white block" regardless of which surface colour the panel is
+ * given: no palette can rescue a rectangle that big and that empty. A dropdown
+ * must stay a dropdown.
+ *
+ * The cap and the internal scroll are the SAME treatment `.datum-search-results`
+ * already uses for its own result list, so a long menu and a long result list
+ * behave alike: the panel stops growing, the list scrolls inside it, and the
+ * border, radius and shadow - all of which stay fixed - keep reading as one
+ * panel however far the list is scrolled. `overscroll-behavior` keeps a scroll
+ * that reaches the end of the menu from scrolling the drawing underneath it.
  */
 .datum-menu-slot {
     position: static;
@@ -522,11 +552,14 @@ body.datum-topbar-hidden .drawing-topbar-show {
 
 .datum-menu-panel {
     background: var(--datum-menu);
-    border: 1px solid var(--datum-border-strong);
+    border: 1px solid var(--datum-menu-border);
     border-radius: var(--radius-md);
     box-shadow: var(--datum-shadow);
     left: 0;
+    max-height: min(60vh, 340px);
     min-width: 208px;
+    overscroll-behavior: contain;
+    overflow-y: auto;
     padding: 5px;
     position: absolute;
     top: 100%;
@@ -682,16 +715,40 @@ body.datum-topbar-hidden .drawing-topbar-show {
  * THE NESTED PANEL.
  *
  * Hidden until the row is open, then placed just past its right edge so it
- * reads as growing out of the row rather than floating somewhere near it. It
- * takes the same theme surfaces as the panel it lives in, so both themes work
- * without a rule naming either.
+ * reads as growing out of the row rather than floating somewhere near it.
+ *
+ * IT CARRIES ITS OWN SURFACE, the same one `.datum-menu-panel` uses. It used to
+ * borrow nothing but geometry - only `position` and `min-width` - and inherit no
+ * background, so the child rows were drawn straight onto the page behind them.
+ * On a dark page that went unnoticed; on a light one the Tools and Help
+ * subpanels had menu labels sitting on the same pale background as the drawing,
+ * with no panel behind them at all, which is exactly the low-contrast read the
+ * report describes. Repeating the panel's surface, border, shadow and padding
+ * here fixes it in both themes from the same tokens, so there is no second set of
+ * colours to keep in step.
  */
 .datum-menu-subpanel {
+    background: var(--datum-menu);
+    border: 1px solid var(--datum-menu-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--datum-shadow);
     display: none;
     left: calc(100% + 4px);
+    /*
+     * THE SAME CAP AND SCROLL AS THE TOP-LEVEL PANEL, for the same reason: a
+     * nested list long enough to run off the window is a slab that happens to
+     * be attached to a row. The submenu shares the panel's border, radius,
+     * shadow and padding already; it shares its height behaviour too, so the
+     * two read as the one menu at every length.
+     */
+    max-height: min(60vh, 340px);
     min-width: 172px;
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    padding: 5px;
     position: absolute;
     top: -6px;
+    z-index: 71;
 }
 
 .datum-menu-item-submenu-open .datum-menu-subpanel,
@@ -1008,6 +1065,19 @@ body.datum-topbar-hidden .drawing-topbar-show {
 
 .datum-settings-body,
 .datum-help-dialog-body {
+    /*
+     * THE BODY CARRIES THE PANEL SURFACE.
+     *
+     * `--datum-ink` text was drawn straight onto the dialog's own backdrop,
+     * because only the TITLE had a background. In light mode that backdrop is a
+     * dark scrim (`--datum-overlay`), so the User Guide and Drawing Help pages
+     * were dark ink on a dark wash - the low-contrast read that was reported. The
+     * Settings page had the same problem for the same reason.
+     *
+     * `--datum-surface` is the panel colour in BOTH themes (white on light, the
+     * panel ink on dark), so one declaration fixes both without naming a theme.
+     */
+    background: var(--datum-surface);
     color: var(--datum-ink);
     font-family: var(--datum-font);
     font-size: 12px;
@@ -1205,6 +1275,184 @@ body.datum-topbar-hidden .drawing-topbar-show {
     color: var(--datum-muted);
     font-size: 11px;
     font-style: italic;
+}
+
+/*
+ * =========================================================
+ * THE SYMBOL LIBRARY PICKER
+ * =========================================================
+ *
+ * A centred panel over a dimmed backdrop, like the settings and help dialogs,
+ * because it is the same kind of thing: a block of choices to browse and close.
+ * EVERY COLOUR IS A TOKEN, so it themes correctly - a picker only visible after
+ * a click is exactly where a hardcoded colour would be missed.
+ */
+.datum-symbol-picker {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    flex-direction: column;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 200;
+}
+
+.datum-symbol-picker > .datum-symbol-picker-title,
+.datum-symbol-picker > .datum-symbol-picker-search,
+.datum-symbol-picker > .datum-symbol-picker-body {
+    background: var(--datum-chrome);
+    box-sizing: border-box;
+    color: var(--datum-ink);
+    max-width: 620px;
+    width: 100%;
+}
+
+.datum-symbol-picker-title {
+    align-items: center;
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    font-weight: 700;
+    justify-content: space-between;
+    padding: 10px 14px;
+}
+
+.datum-symbol-picker-search {
+    border-bottom: 1px solid var(--datum-border);
+    padding: 8px 14px;
+}
+
+.datum-symbol-picker-search input {
+    width: 100%;
+}
+
+.datum-symbol-picker-body {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 12px 14px 16px;
+}
+
+.datum-symbol-picker-heading {
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-green-ink);
+    font-size: 11px;
+    letter-spacing: .04em;
+    margin: 14px 0 8px;
+    padding-bottom: 3px;
+    text-transform: uppercase;
+}
+
+.datum-symbol-picker-heading:first-child {
+    margin-top: 0;
+}
+
+.datum-symbol-picker-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+
+.datum-symbol-picker-item {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font: inherit;
+    gap: 4px;
+    padding: 8px 6px;
+}
+
+.datum-symbol-picker-item:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-green);
+}
+
+.datum-symbol-picker-glyph {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.datum-symbol-picker-label {
+    color: var(--datum-muted);
+    font-size: 10px;
+    text-align: center;
+}
+
+.datum-symbol-picker-empty {
+    color: var(--datum-muted);
+    font-size: 12px;
+    margin: 16px 0;
+}
+
+/*
+ * =========================================================
+ * THE TABLE SIZE PICKER
+ * =========================================================
+ *
+ * A hover grid: the cells under the cursor ARE the table that will be placed.
+ * Sized to fit its content and centred over the dimmed backdrop, like every
+ * other picker, and coloured entirely from tokens so it themes correctly.
+ */
+.datum-table-picker {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 200;
+}
+
+.datum-table-picker-label {
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    font-family: var(--datum-font);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 14px;
+}
+
+.datum-table-picker-readout {
+    background: var(--datum-chrome);
+    color: var(--datum-green-ink);
+    font-family: var(--datum-font);
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+.datum-table-picker-grid {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border);
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(12, 18px);
+    padding: 10px 14px 14px;
+}
+
+.datum-table-picker-cell {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+    cursor: pointer;
+    height: 18px;
+    padding: 0;
+    width: 18px;
+}
+
+.datum-table-picker-cell.active {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
 }
 
 .drawing-app-toolbar {
@@ -3194,6 +3442,51 @@ body.datum-topbar-hidden .drawing-topbar-show {
     color: var(--datum-muted);
     cursor: default;
     opacity: .45;
+}
+
+/*
+ * =========================================================
+ * A PLAIN ACTION BUTTON - A COMMAND, NOT A SWITCH
+ * =========================================================
+ *
+ * Fit belongs to this class. Unlike the four toggles before it, Fit has no
+ * on/off state: it performs an action once and there is nothing to turn back
+ * off. Giving it the toggle treatment would tell the student it was a mode.
+ *
+ * IT THEREFORE HAS NO `.active` RULE AND NO GREEN STATE. It gets the same
+ * neutral surface as an off toggle and the same hover and focus as the zoom
+ * buttons beside it, so it reads as pressable without claiming a mode.
+ */
+.drawing-action-button {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--cad-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 10.5px;
+    gap: 5px;
+    line-height: 1;
+    padding: 0 6px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+
+.drawing-action-button .drawing-toolbar-icon {
+    flex: 0 0 auto;
+}
+
+.drawing-action-button:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border-strong);
+    color: var(--cad-ink);
+}
+
+.drawing-action-button:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
 }
 
 .drawing-zoom-controls {

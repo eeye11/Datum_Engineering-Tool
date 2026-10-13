@@ -45,7 +45,7 @@ check(
 );
 
 check(
-  "it declares the seven functional categories, in order",
+  "it declares the five functional categories, in order",
   (() => {
     const labels = [...groups.matchAll(/^\t\tlabel:\s*"([^"]+)"/gm)].map(
       (m) => m[1],
@@ -53,7 +53,7 @@ check(
 
     return (
       labels.join(" | ") ===
-      "Selection | Dimensions | Text | Leaders | Markup | Symbols & Tolerances | Tables"
+      "Selection | Dimensions | Text | Leaders | Symbols | Tables"
     );
   })(),
   "Annotate is organised by WHAT AN ANNOTATION DOES, in a fixed order",
@@ -75,15 +75,26 @@ console.log("\n  every command is listed DIRECTLY under its category\n");
   "label",
   "leader",
   "callout",
-  "arrow",
   "symbol",
-  "tolerance",
   "table",
 ].forEach((id) => {
   check(
     `"${id}" is a command in the toolset`,
     new RegExp(`id:\\s*"${id}"`).test(groups),
     `${id} was not found in the Annotate groups`,
+  );
+});
+
+/*
+ * THE V1 EXCLUSIONS. The standalone Arrow and Tolerance TOOLS are not part of
+ * V1 and are not offered in the Annotate menu. The KINDS remain in the model so
+ * saved drawings still open - see the note in tools.js.
+ */
+["arrow", "tolerance"].forEach((id) => {
+  check(
+    `the standalone "${id}" tool is NOT offered in V1`,
+    !new RegExp(`id:\\s*"${id}"`).test(groups),
+    `${id} is still a command in the Annotate toolset`,
   );
 });
 
@@ -108,7 +119,7 @@ check(
 
 check(
   "the hierarchy stops at category -> tool",
-  (groups.match(/tools:\s*\[/g) || []).length === 7,
+  (groups.match(/tools:\s*\[/g) || []).length === 6,
   "one `tools` list per category, and none inside a tool",
 );
 
