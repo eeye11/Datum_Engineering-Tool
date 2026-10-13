@@ -1741,6 +1741,25 @@ function staticsPreviewType(
                     confirmed.unit
                 );
 
+                if (answer.kind === "number") {
+                    /*
+                     * THE STORED MAGNITUDE IS IN THE BASE UNIT, N·m. The
+                     * unit control says how it is WRITTEN, and the panel
+                     * converts base -> display for reading - so a number
+                     * typed in kN·m is taken back to N·m before it is
+                     * stored. Without this, typing 2.5 against a kN·m
+                     * moment stored 2.5 N·m and the moment became a
+                     * thousandth of what the student entered.
+                     */
+                    answer.value =
+                        enggQuantities.convertValue(
+                            answer.value,
+                            "moment",
+                            answer.unit || "N·m",
+                            "N·m"
+                        );
+                }
+
                 applyStaticsValue(object, answer, {
                     valueKey: "magnitude"
                 });
