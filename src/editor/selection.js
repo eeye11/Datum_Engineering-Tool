@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { finishProcessPath } from "./process-path.js";
 import enggScaleCalibration from "../core/scale/scale-calibration.js";
 import enggCreationDimension from "../features/dimensions/creation-dimension.js";
 import enggDimensionEditor from "../features/dimensions/dimension-editor.js";
@@ -1035,6 +1036,7 @@ export function resetActiveToolForCategory() {
  * left running and Enter is a no-op for them.
  */
 export function finishActiveConstruction() {
+    if (drawingState.activeTool === "process-path") return finishProcessPath();
     const interaction =
         drawingState.interaction;
 

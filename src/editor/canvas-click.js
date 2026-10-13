@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { addProcessPoint } from "./process-path.js";
 import enggNoteEditor from "../ui/editors/note-editor.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import enggAnnotationModel from "../features/annotations/annotation-model.js";
@@ -106,6 +107,11 @@ export function handleCanvasClick(
         resolvePointerEvent(
             event
         );
+
+    if (drawingState.activeTool === "process-path") {
+        addProcessPoint(resolution.rawPointerPoint);
+        return;
+    }
 
     if (
         drawingState.activeTool ===

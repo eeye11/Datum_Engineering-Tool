@@ -263,6 +263,7 @@ export function initialToolMessage(
             rectangle: "Specify first corner",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
+            "process-path": "Click inside a saturation diagram to place the first process state",
             "piston-cylinder": "Drag to draw a piston cylinder; select it and drag the centre dot to adjust piston height",
             "piston-cylinder-stoppers": "Drag to draw a piston cylinder with stoppers; drag a stopper dot to adjust its height",
             pan: "Drag to pan the view"

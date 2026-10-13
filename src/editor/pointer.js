@@ -679,6 +679,7 @@ export function resolveManipulationPoint(
     // The piston also slides freely within its cylinder. Corner resizing
     // still uses the normal snap and inference pipeline.
     if (
+        drag?.kind?.startsWith("process-label-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
         (drag?.kind === "body" &&
             ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||

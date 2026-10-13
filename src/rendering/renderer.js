@@ -2,6 +2,7 @@
 import enggErrorLog from "../app/error-log.js";
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { processLabelPoint } from "../features/thermodynamics/process-labels.js";
 import { isSaturationCurve, saturationPaths } from "../features/thermodynamics/saturation-curve.js";
 import { selectionBounds, selectionCorners } from "../core/selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction, stopperPaths } from "../features/thermodynamics/piston-cylinder.js";
@@ -5124,6 +5125,39 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             return;
         }
 
+        let processOverlay = null;
+        if (entity.metadata?.thermodynamicsKind === "process-path") {
+            processOverlay = createSvgElement("g");
+            const points = (geometry.points || []).map(toScreen);
+            const colour = paintColour(style.stroke || "#dc2626");
+            points.forEach((point, index) => {
+                if (index >= (entity.metadata.stateCount ?? points.length)) return;
+                const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
+                processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
+                processOverlay.appendChild(createSvgElement("circle", {
+                    cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
+                }));
+                const label = createSvgElement("text", {
+                    x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
+                    "text-anchor": "middle", "dominant-baseline": "central"
+                });
+                label.textContent = String(index + 1);
+                processOverlay.appendChild(label);
+                if (!index) return;
+                const previous = points[index - 1];
+                const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+                if (length < 12) return;
+                const ux = (point.x - previous.x) / length;
+                const uy = (point.y - previous.y) / length;
+                const mx = (point.x + previous.x) / 2;
+                const my = (point.y + previous.y) / 2;
+                processOverlay.appendChild(createSvgElement("polygon", {
+                    points: `${mx + ux * 4},${my + uy * 4} ${mx - ux * 4 - uy * 3},${my - uy * 4 + ux * 3} ${mx - ux * 4 + uy * 3},${my - uy * 4 - ux * 3}`,
+                    fill: colour, stroke: "none"
+                }));
+            });
+        }
+
         if (isSaturationCurve(entity)) {
             for (const [index, points] of saturationPaths(geometry).entries()) {
                 const screen = points.map(toScreen);
@@ -5512,6 +5546,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          * clicking it selects the force, which is what clicking a force
          * should do.
          */
+        if (processOverlay) svg.appendChild(processOverlay);
         if (svg.childNodes.length) {
             parentSvg.appendChild(svg);
         }
@@ -7973,6 +8008,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         state,
         bounds
     ) {
+        if (state.interaction.preview?.metadata?.thermodynamicsKind === "process-path") {
+            appendEntity(svg, state.interaction.preview, state, bounds);
+            return;
+        }
         if (isSaturationCurve(state.interaction.preview)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;

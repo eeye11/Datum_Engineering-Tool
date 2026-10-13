@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { processLabelPoint } from "../features/thermodynamics/process-labels.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../core/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../features/thermodynamics/piston-cylinder.js";
 import { isDerivedFeature } from "../core/model/feature-types.js";
@@ -89,7 +90,8 @@ export function beginManipulationDrag(
     const hit = handleAtPoint(point);
     const pistonHandle = hit && isPistonCylinder(hit.object) &&
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
-    if (selectedIds.length > 1 && box && !pistonHandle) {
+    const processLabelHandle = hit?.handle.kind.startsWith("process-label-");
+    if (selectedIds.length > 1 && box && !pistonHandle && !processLabelHandle) {
         const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
         const corners = selectionCorners(box);
         const corner = corners.findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
@@ -686,6 +688,19 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    if (drag.kind.startsWith("process-label-")) {
+        const index = Number(drag.kind.slice("process-label-".length));
+        const original = drag.originals[object.id].geometry;
+        const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+        const initial = processLabelPoint(original, index, scale);
+        g.stateLabelOffsets ??= {};
+        g.stateLabelOffsets[index] = {
+            dx: initial.x + point.x - drag.start.x - g.points[index].x,
+            dy: initial.y + point.y - drag.start.y - g.points[index].y
+        };
+        return;
+    }
 
     if (drag.kind === "body" || drag.kind === "group-resize") {
         let scale = 1;

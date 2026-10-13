@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { finishProcessPath } from "./process-path.js";
 import { installAxisLabelEditor } from "./axis-label-editor.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import { isIdleForEditing } from "./annotation-tool.js";
@@ -239,6 +240,11 @@ export function installCanvasEvents() {
                     event.preventDefault();
 
                     finishPolyline();
+                    return;
+                }
+                if (drawingState.activeTool === "process-path") {
+                    event.preventDefault();
+                    finishProcessPath();
                     return;
                 }
 

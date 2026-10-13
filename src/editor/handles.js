@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { processLabelPoint } from "../features/thermodynamics/process-labels.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms, rigidBodyHandles } from "../core/geometry/feature-handles.js";
 import enggDrawingState from "../core/model/drawing-state.js";
@@ -484,6 +485,14 @@ function manipulationHandles(
 ) {
     const g =
         object.geometry || {};
+
+    if (object.metadata?.thermodynamicsKind === "process-path") {
+        const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+        return (g.points || []).flatMap((point, index) => [
+            { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
+            { kind: `vertex${index}`, point }
+        ]);
+    }
 
     /*
      * AN ANNOTATION IS MOVED FROM ITS OWN POSITION.
@@ -991,7 +1000,7 @@ export function handleAtPoint(
 
             if (
                 !selected &&
-                object.type !== "dimension"
+                object.type !== "dimension" && object.metadata?.thermodynamicsKind !== "process-path"
             ) {
                 return;
             }
@@ -1000,6 +1009,7 @@ export function handleAtPoint(
                 object
             ).forEach(
                 handle => {
+                    if (!selected && object.metadata?.thermodynamicsKind === "process-path" && !handle.kind.startsWith("process-label-")) return;
                     const distance =
                         Math.hypot(
                             handle.point.x - point.x,

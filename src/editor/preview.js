@@ -577,8 +577,8 @@ export function updatePreview(
             "Specify opposite corner"
         );
     } else if (
-        drawingState.activeTool ===
-        "polyline"
+        drawingState.activeTool === "polyline" ||
+        drawingState.activeTool === "process-path"
     ) {
         interaction.preview =
             createPreview(
@@ -590,6 +590,11 @@ export function updatePreview(
                     ]
                 }
             );
+
+        if (drawingState.activeTool === "process-path") {
+            interaction.preview.metadata = { thermodynamicsKind: "process-path", stateCount: interaction.points.length };
+            interaction.preview.style.stroke = "#dc2626";
+        }
 
         setToolMessage(
             "Click next point or double-click to finish"
