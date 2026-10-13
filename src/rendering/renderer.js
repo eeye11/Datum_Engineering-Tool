@@ -433,21 +433,28 @@ import enggCanvasPalette from "./canvas-palette.js";
     }
 
     const ANALYSIS_DIAGRAM_AXES = {
+        /*
+         * THE AXES STATE THE QUANTITY'S BASE UNIT, the one the analysis
+         * model stores and the one every Features panel reads back. The
+         * literal kN captions here used to disagree with the panels, which
+         * read in N - the same figure captioned a thousandfold apart on one
+         * sheet. One table, one unit per quantity, everywhere.
+         */
         sfd: {
             y: "Shear force",
-            unit: "kN",
+            unit: "N",
             x: "x",
             xUnit: "m"
         },
         bmd: {
             y: "Bending moment",
-            unit: "kN·m",
+            unit: "N\u00b7m",
             x: "x",
             xUnit: "m"
         },
         afd: {
             y: "Axial force",
-            unit: "kN",
+            unit: "N",
             x: "x",
             xUnit: "m"
         }

@@ -486,19 +486,21 @@ export function analysisPanelRows(
     };
 
     /*
-     * THE ORDINATE'S UNIT, from the diagram type.
+     * THE ORDINATE'S UNIT, FROM THE SHARED QUANTITY TABLES.
      *
-     * A bending moment is kN-m and a shear force is kN, so a Y Range typed
-     * against the wrong unit would be wrong by a factor of a metre. It is
-     * read from one small table here rather than from a second copy of the
-     * diagram table, and it is the same convention the axis label uses - the
-     * two cannot end up quoting different units for the same diagram.
+     * A bending moment is a MOMENT and a shear or axial force is a FORCE, so
+     * a Y Range typed against the wrong unit would be wrong by a factor of a
+     * metre - and the base unit the model stores is what the range is typed
+     * in, not a display choice. It is read from the shared table rather than
+     * from a second copy of the diagram table, and it is the same convention
+     * the axis label uses - the two cannot end up quoting different units for
+     * the same diagram.
      */
     const ordinateUnit = () =>
         ({
-            sfd: "kN",
-            bmd: "kN\u00b7m",
-            afd: "kN",
+            sfd: "N",
+            bmd: "N\u00b7m",
+            afd: "N",
         })[geometry.diagramType] || "";
 
     const heading = {
@@ -575,19 +577,56 @@ export function analysisPanelRows(
     }
 
     if (object.type === "force-components") {
+        /*
+         * THE COMPONENTS ARE READ IN THE SOURCE FORCE'S OWN UNIT.
+         *
+         * A derived component is the same physical quantity as the force it
+         * came from, so it is stated in that force's unit - converted from
+         * the stored N through the shared table, exactly as the force's own
+         * panel reads its magnitude. A raw N number under no caption invited
+         * the reader to think the decomposition had changed the quantity's
+         * scale.
+         */
+        /*
+         * THE SOURCE FORCE, resolved through the dependency model rather
+         * than a guessed geometry field, so the unit read off it is the one
+         * the decomposition is actually about.
+         */
+        const sourceForce = sources.find(
+            candidate => candidate?.type === "force"
+        );
+
+        const componentUnit = sourceForce
+            ? enggLoadProfile.forceUnit(sourceForce.geometry)
+            : "N";
+
         rows.push(section("COMPONENTS"));
         rows.push(
             readOnly(
                 "Horizontal",
-                number(geometry.forceX),
-                "N"
+                number(
+                    enggQuantities.convertValue(
+                        geometry.forceX,
+                        "force",
+                        "N",
+                        componentUnit
+                    )
+                ),
+                componentUnit
             )
         );
         rows.push(
             readOnly(
                 "Vertical",
-                number(geometry.forceY),
-                "N"
+                number(
+                    enggQuantities.convertValue(
+                        geometry.forceY,
+                        "force",
+                        "N",
+                        componentUnit
+                    )
+                ),
+                componentUnit
             )
         );
 
