@@ -386,6 +386,10 @@
      */
     --datum-paper: #ffffff;
     --datum-paper-ink: #193335;
+
+    /* Code editor keeps a dark, stable palette in every theme. */
+    --editor-background: #1e1e1e;
+    --editor-foreground: #e6e6e6;
 }
 
 /*
@@ -623,6 +627,10 @@
     /* The paper stays a white sheet with dark type - see the light block. */
     --datum-paper: #ffffff;
     --datum-paper-ink: #193335;
+
+    /* Code editor keeps a dark, stable palette in every theme. */
+    --editor-background: #1e1e1e;
+    --editor-foreground: #e6e6e6;
 }
 
 /*
@@ -820,5 +828,9 @@
 
         --datum-paper: #ffffff;
         --datum-paper-ink: #193335;
+
+        /* Code editor keeps a dark, stable palette in every theme. */
+        --editor-background: #1e1e1e;
+        --editor-foreground: #e6e6e6;
     }
 }
