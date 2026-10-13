@@ -1055,6 +1055,39 @@ body.datum-topbar-hidden .drawing-topbar-show {
     padding: 0 4px;
 }
 
+.datum-help-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 48px);
+    min-height: 0;
+    overflow: hidden;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+}
+
+.datum-help-panel > .datum-help-dialog-title {
+    flex: 0 0 auto;
+}
+
+.datum-help-panel > .datum-help-dialog-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 20px 24px;
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+}
+
+.datum-help-dialog-body code {
+    padding: 2px 4px;
+    background: var(--datum-panel);
+    border-radius: 3px;
+    font-family: var(--datum-font-mono);
+    font-size: .92em;
+}
+
 .datum-settings-close:hover,
 .datum-help-close:hover {
     color: var(--datum-ink);
