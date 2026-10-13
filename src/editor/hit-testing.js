@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms } from "../core/geometry/feature-handles.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
@@ -854,6 +855,20 @@ export function objectAtPoint(
                         ) <=
                         tolerance
                     );
+                }
+
+                if (isPistonCylinder(object)) {
+                    const level = pistonFraction(geometry);
+                    const local = (x, y) => cylinderPoint(geometry, x, y);
+                    const segments = [
+                        [local(0, 1), local(0, 0)],
+                        [local(0, 0), local(1, 0)],
+                        [local(1, 0), local(1, 1)],
+                        [local(0, level), local(1, level)],
+                        [local(0, level - 0.04), local(1, level - 0.04)],
+                        [local(0.5, level), local(0.5, 1)]
+                    ];
+                    return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
 
                 if (

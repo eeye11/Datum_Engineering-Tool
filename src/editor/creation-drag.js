@@ -103,6 +103,8 @@ import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "./statics-tools.js"
 const DRAG_GEOMETRY_TOOLS = [
     "line",
     "rectangle",
+    "control-volume",
+    "piston-cylinder",
     "circle",
     "triangle",
     "polygon",

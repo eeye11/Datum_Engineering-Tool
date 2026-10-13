@@ -23,6 +23,7 @@ import { createStaticsFeature } from "./statics-creation.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "./statics-tools.js";
 import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "./tool-menus.js";
 import { setToolMessage } from "./toolbar-render.js";
+import { activateTool } from "./tool-activation.js";
 import { TRUSS_STAGES, continueTrussConstruction } from "./truss-tool.js";
 import { attachableStaticsType } from "../core/model/feature-types.js";
 
@@ -771,8 +772,9 @@ export function beginOrCompleteGeometry(
                         "circle"
                         ? "Specify radius"
 
-                    : drawingState.activeTool ===
-                        "rectangle"
+                    : (drawingState.activeTool === "rectangle" ||
+                        drawingState.activeTool === "control-volume" ||
+                        drawingState.activeTool === "piston-cylinder")
                         ? "Specify opposite corner"
 
                     : drawingState.activeTool ===
@@ -1638,14 +1640,22 @@ export function beginOrCompleteGeometry(
                 }
             );
     } else if (
-        drawingState.activeTool ===
-        "rectangle"
+        drawingState.activeTool === "rectangle" ||
+        drawingState.activeTool === "control-volume" ||
+        drawingState.activeTool === "piston-cylinder"
     ) {
         const rectangle =
             rectangleGeometry(
                 first,
                 point
             );
+
+        const isControlVolume = drawingState.activeTool === "control-volume";
+        const isPiston = drawingState.activeTool === "piston-cylinder";
+        if ((isControlVolume || isPiston) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+            setToolMessage("Specify opposite corner to enclose an area");
+            return;
+        }
 
         object =
             enggDrawingState.geometryFactories.rectangle(
@@ -1654,8 +1664,18 @@ export function beginOrCompleteGeometry(
                 rectangle.height,
                 rectangle.rotation,
                 {
+                    ...(isControlVolume ? {
+                        name: "Control Volume",
+                        metadata: { thermodynamicsKind: "control-volume" }
+                    } : {}),
+                    ...(isPiston ? {
+                        name: "Piston Cylinder",
+                        metadata: { thermodynamicsKind: "piston-cylinder" }
+                    } : {}),
                     style: {
-                        ...drawingState.styleDefaults
+                        ...drawingState.styleDefaults,
+                        ...(isControlVolume ? { lineType: "dashed", fill: "none" } : {}),
+                        ...(isPiston ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
@@ -1816,6 +1836,23 @@ export function beginOrCompleteGeometry(
         enggDrawingState.clearInteraction(
             drawingState
         );
+
+        // A control volume is a boundary around a region, so commit its
+        // drawn size without asking for a physical dimension or scale.
+        if (["control-volume", "piston-cylinder"].includes(object.metadata?.thermodynamicsKind)) {
+            commitCreatedFeature(object);
+            if (object.metadata.thermodynamicsKind === "piston-cylinder") {
+                // The finished cylinder remains selected, with its handles
+                // immediately available instead of starting another drawing.
+                activateTool("select");
+            }
+            setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
+                ? "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move"
+                : "Control volume created");
+            renderProperties();
+            renderCurrentDrawing();
+            return;
+        }
 
         /*
          * THE DOCUMENT AS IT STANDS BEFORE THE SIZE IS APPLIED.

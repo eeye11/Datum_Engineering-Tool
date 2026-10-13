@@ -2,6 +2,7 @@
 import enggErrorLog from "../app/error-log.js";
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms, rigidBodyHandles, trussJoints } from "../core/geometry/feature-handles.js";
 import enggMeasurement from "../core/geometry/measurement-core.js";
 import enggDrawingState from "../core/model/drawing-state.js";
@@ -5121,6 +5122,24 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             return;
         }
 
+        if (isPistonCylinder(entity)) {
+            const level = pistonFraction(geometry);
+            const thickness = Math.min(0.04, level / 2);
+            const paths = [
+                [[0, 1], [0, 0], [1, 0], [1, 1]],
+                [[0, level], [1, level], [1, level - thickness], [0, level - thickness], [0, level]],
+                [[0.5, level], [0.5, 1]]
+            ];
+            for (const points of paths) {
+                const screenPoints = points.map(([x, y]) => toScreen(cylinderPoint(geometry, x, y)));
+                const path = createSvgElement("path", {
+                    d: screenPoints.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+                });
+                applyStyle(path, { ...style, fill: "none" });
+                svg.appendChild(path);
+            }
+        }
+
         /*
          * RECTANGLE
          *
@@ -5129,8 +5148,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          * feature rather than four separate lines.
          */
         if (
-            entity.type ===
-                "rectangle" ||
+            (entity.type ===
+                "rectangle" && !isPistonCylinder(entity)) ||
             entity.type ===
                 "rigid-body"
         ) {
@@ -7789,6 +7808,9 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 enggFeatureGeometry
                     .rectangleCorners(geometry)
                     .forEach((point) => add(point));
+                if (isPistonCylinder(object)) {
+                    add(cylinderPoint(geometry, 0.5, pistonFraction(geometry)), "piston-height");
+                }
             } else if (object.type === "rigid-body") {
                 /*
                  * A rigid body's handles follow its current shape,

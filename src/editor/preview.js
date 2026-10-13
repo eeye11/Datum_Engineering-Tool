@@ -555,8 +555,9 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        drawingState.activeTool ===
-        "rectangle"
+        drawingState.activeTool === "rectangle" ||
+        drawingState.activeTool === "control-volume" ||
+        drawingState.activeTool === "piston-cylinder"
     ) {
         interaction.preview =
             createPreview(

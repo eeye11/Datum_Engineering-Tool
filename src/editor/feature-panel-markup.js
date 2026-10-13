@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
+import { isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
@@ -1222,6 +1223,7 @@ export function featurePropertyMarkup(object) {
      * should not be reached by any feature DAETUM ships.
      */
     const displayLabel =
+        (isPistonCylinder(object) ? "Piston Cylinder" : "") ||
         staticsRoleLabel(object) ||
         STATICS_FEATURE_LABELS[object.type] ||
         {
@@ -2137,6 +2139,10 @@ export function featurePropertyMarkup(object) {
                 mmOf(geometry.width).value, mmOf(geometry.width).unit));
         rows.push(scalar("Height", "height",
                 mmOf(geometry.height).value, mmOf(geometry.height).unit));
+        if (isPistonCylinder(object)) {
+            rows.push(scalar("Piston Height", "pistonHeight",
+                mmOf(geometry.height * pistonFraction(geometry)).value, mmOf(geometry.height).unit));
+        }
         rows.push(scalar("Rotation", "rotation", geometry.rotation || 0, "°"));
 
         /*

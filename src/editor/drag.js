@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
+import { isPistonCylinder, setPistonFromPoint } from "../features/thermodynamics/piston-cylinder.js";
 import { isDerivedFeature } from "../core/model/feature-types.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
@@ -644,6 +645,11 @@ function applyManipulation(
     const g =
         object.geometry;
 
+    if (isPistonCylinder(object) && drag.kind === "piston-height") {
+        setPistonFromPoint(g, point);
+        return;
+    }
+
     /*
      * AN ANNOTATION MOVES BY ITS PLACEMENT, and nothing else.
      *
@@ -907,7 +913,7 @@ function applyManipulation(
     }
 
     const original =
-        drag.originals;
+        drag.originals?.[object.id]?.geometry;
 
     if (object.type === "point") {
         const target =

@@ -261,6 +261,8 @@ export function initialToolMessage(
             triangle: "Specify first point",
             circle: "Specify centre point",
             rectangle: "Specify first corner",
+            "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
+            "piston-cylinder": "Drag to draw a piston cylinder; select it and drag the centre dot to adjust piston height",
             pan: "Drag to pan the view"
         }[toolId] || "Ready"
     );

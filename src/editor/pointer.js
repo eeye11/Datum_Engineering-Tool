@@ -664,6 +664,27 @@ export function resolveManipulationPoint(
             false
         );
 
+    // Thermodynamics symbols move freely with the grab offset preserved.
+    // The piston also slides freely within its cylinder. Corner resizing
+    // still uses the normal snap and inference pipeline.
+    if (
+        (drag?.kind === "body" &&
+            ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||
+        (drag?.kind === "piston-height" &&
+            drag.object?.metadata?.thermodynamicsKind === "piston-cylinder")
+    ) {
+        return {
+            rawPointerPoint: { ...rawPoint },
+            snappedPoint: { ...rawPoint },
+            inferredPoint: { ...rawPoint },
+            effectiveConstructionPoint: { ...rawPoint },
+            snapCandidate: null,
+            hoveredEntity: null,
+            inference: null,
+            guideline: null
+        };
+    }
+
     const bounds =
         drawingCanvas.getBoundingClientRect();
 

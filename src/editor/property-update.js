@@ -58,6 +58,13 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
     const fixed = name => Boolean(object.constraints?.[name]);
     const positive = value > 0;
 
+    if (key === "pistonHeight" && object.metadata?.thermodynamicsKind === "piston-cylinder") {
+        const height = worldLengthInDisplayUnits(object, value);
+        if (!Number.isFinite(height) || !(g.height > 0)) return false;
+        g.pistonFraction = Math.max(0.05, Math.min(0.95, height / g.height));
+        return true;
+    }
+
     /*
      * ========================================================
      * THE FEATURE'S LABEL, WHICH IS NOT ITS NAME
