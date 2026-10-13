@@ -2,7 +2,7 @@ const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-
 const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
 
 export const toolIcons = {
-    "Saturation Curve": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 17C6 3 11 3 15 17" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
 	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
