@@ -1055,7 +1055,8 @@ body.datum-topbar-hidden .drawing-topbar-show {
     padding: 0 4px;
 }
 
-.datum-help-panel {
+.datum-help-panel,
+.datum-settings-panel {
     display: flex;
     flex-direction: column;
     max-height: calc(100dvh - 48px);
@@ -1067,11 +1068,13 @@ body.datum-topbar-hidden .drawing-topbar-show {
     box-shadow: var(--datum-shadow-soft);
 }
 
-.datum-help-panel > .datum-help-dialog-title {
+.datum-help-panel > .datum-help-dialog-title,
+.datum-settings-panel > .datum-settings-title {
     flex: 0 0 auto;
 }
 
-.datum-help-panel > .datum-help-dialog-body {
+.datum-help-panel > .datum-help-dialog-body,
+.datum-settings-panel > .datum-settings-body {
     flex: 1 1 auto;
     min-height: 0;
     padding: 20px 24px;
