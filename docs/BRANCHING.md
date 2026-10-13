@@ -1,6 +1,6 @@
 # DAETUM — Branching and Collaboration Workflow
 
-How the 11 engineering categories are developed without stepping on each
+How the engineering categories are developed without stepping on each
 other. This documents the branch structure, who owns what, and the exact
 commands for each step.
 
@@ -21,7 +21,8 @@ main                    stable, tested releases
     ├── category/solid-mechanics
     ├── category/mechanical-design
     ├── category/controls
-    └── category/math-analysis
+    ├── category/math-analysis
+    └── category/shared-infra
 ```
 
 | Branch | Purpose | Integration destination |
@@ -29,6 +30,7 @@ main                    stable, tested releases
 | `main` | Stable, tested releases only | — |
 | `develop` | Shared integration; reviewed category work merges here | `main` after checks pass |
 | `category/*` | The persistent working branch for one category | `develop` via pull request |
+| `category/shared-infra` | Cross-cutting changes: units, geometry, snapping, rendering, registration, undo/redo, Features panel | `develop` via pull request, then merged back into the affected category branches |
 
 `develop` is the **common baseline**. Every `category/*` branch was cut
 from it, and it is the only place category work is combined.
@@ -117,7 +119,9 @@ task branches are for work that is substantial or likely to conflict.
 ## 4. Shared infrastructure — read this before you edit it
 
 Some code is used by **every** category. Changing it on one category
-branch and nowhere else is how the branches silently drift apart.
+branch and nowhere else is how the branches silently drift apart. This
+work has its own branch, **`category/shared-infra`**, cut from `develop`
+like the others.
 
 | Shared system | Where |
 | --- | --- |
@@ -136,9 +140,15 @@ branch and nowhere else is how the branches silently drift apart.
 1. Write down what the shared change is and why.
 2. List which category branches are affected.
 3. Agree the interface or data contract with the other owners **first**.
-4. Make the change in `develop` (or an agreed shared branch), with tests.
-5. Merge it into `develop`, then bring `develop` back into each affected
-   category branch (section 6).
+4. Make the change on `category/shared-infra` with tests.
+5. Merge it into `develop` via pull request, then bring `develop` back into
+   each affected category branch (section 6).
+
+`category/shared-infra` is not a place for category-specific features. A
+tool that only one category uses belongs on that category's branch; only
+the genuinely cross-cutting systems above belong here. Keep it merged
+into `develop` promptly — the longer a shared change sits unmerged, the
+more the category branches drift.
 
 Do **not** make a different version of a shared file on each category
 branch. That is the failure mode this structure exists to prevent.
@@ -149,7 +159,7 @@ branch. That is the failure mode this structure exists to prevent.
 
 - Category work → `develop` through review and validation.
 - `develop` → `main` only after the integrated application passes its checks.
-- Do not merge all 11 branches just because they exist. A category branch
+- Do not merge every branch just because it exists. A category branch
   merges when it contains intended, tested changes.
 - A freshly created category branch contains no feature work. Its
   existence is not a claim that the category is implemented.
@@ -206,6 +216,7 @@ will most often change*, not exclusive ownership.
 | MECHANICAL DESIGN | `category/mechanical-design` | Part, Hole, Shaft, Gear, Fastener, Section View | `editor/tools.js` (registration), shared creation path |
 | CONTROLS | `category/controls` | Block, Input, Output, Sensor, Controller, Signal Arrow | `editor/tools.js` (registration), shared creation path |
 | MATH / ANALYSIS | `category/math-analysis` | Point, Function, Vector, Graph, Equation | `editor/tools.js` (registration), shared creation path |
+| SHARED INFRA | `category/shared-infra` | *(none — cross-cutting)* | `core/units/`, `core/geometry/`, `core/snapping/`, `rendering/`, `editor/tools.js`, `editor/toolbar-render.js`, `editor/selection.js`, `editor/canvas-click.js`, `editor/feature-panel*.js` |
 
 **Important:** the six categories from DYNAMICS to MATH / ANALYSIS are
 listed in the `engineeringTools` registry but do not yet have their own
