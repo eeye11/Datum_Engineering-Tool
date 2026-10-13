@@ -262,11 +262,13 @@ function open(pageId) {
   dialog.setAttribute("aria-label", page.title);
 
   dialog.innerHTML = `
+      <div class="datum-help-panel">
         <div class="datum-help-dialog-title">
             <span>${page.title}</span>
             <button type="button" class="datum-help-close" data-help-close aria-label="Close">&times;</button>
         </div>
         <div class="datum-help-dialog-body">${page.body}</div>
+      </div>
     `;
 
   document.body.appendChild(dialog);

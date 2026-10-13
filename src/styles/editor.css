@@ -1125,6 +1125,42 @@ body.datum-topbar-hidden .drawing-topbar-show {
     padding: 0 4px;
 }
 
+.datum-help-panel,
+.datum-settings-panel {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 48px);
+    min-height: 0;
+    overflow: hidden;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+}
+
+.datum-help-panel > .datum-help-dialog-title,
+.datum-settings-panel > .datum-settings-title {
+    flex: 0 0 auto;
+}
+
+.datum-help-panel > .datum-help-dialog-body,
+.datum-settings-panel > .datum-settings-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 20px 24px;
+    font-size: 13px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+}
+
+.datum-help-dialog-body code {
+    padding: 2px 4px;
+    background: var(--datum-panel);
+    border-radius: 3px;
+    font-family: var(--datum-font-mono);
+    font-size: .92em;
+}
+
 .datum-settings-close:hover,
 .datum-help-close:hover {
     color: var(--datum-ink);
@@ -1755,6 +1791,111 @@ body.datum-topbar-hidden .drawing-topbar-show {
     padding: 3px 8px;
     row-gap: 4px;
 }
+
+.drawing-line-type-trigger {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+}
+
+.drawing-line-type-trigger:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.drawing-line-type-menu,
+.drawing-colour-popup {
+    position: fixed;
+    z-index: 1000;
+    width: 150px;
+    padding: 4px;
+    background: #fff;
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 12px #0002;
+    color: #263b32;
+}
+
+.drawing-line-type-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 7px 6px;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.drawing-line-type-menu button[aria-checked="true"] {
+    background: #e4f2e8;
+    color: #245d3b;
+}
+
+.drawing-line-type-menu button:hover,
+.drawing-line-type-menu button:focus-visible {
+    background: #e4f2e8;
+    color: #245d3b;
+    outline: 1px solid #a3cbb0;
+}
+
+.drawing-line-type-menu svg {
+    width: 30px;
+    height: 12px;
+    flex: 0 0 30px;
+}
+
+.drawing-thickness-dialog {
+    width: 300px;
+    max-width: calc(100vw - 32px);
+    padding: 16px;
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    color: #263b32;
+    box-shadow: 0 4px 12px #0002;
+}
+
+.drawing-thickness-dialog::backdrop { background: #0003; }
+.drawing-thickness-dialog h2 { margin: 0 0 16px; font-size: 14px; }
+.drawing-thickness-fields { display: flex; align-items: center; gap: 16px; }
+.drawing-thickness-fields label { display: grid; gap: 8px; flex: 1; min-width: 0; font-size: 11px; }
+.drawing-thickness-fields input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 7px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+}
+.drawing-thickness-preview { font-size: 11px; text-align: center; }
+.drawing-thickness-preview svg { display: block; margin-top: 4px; background: #f4f7f5; border-radius: 3px; }
+.drawing-thickness-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.drawing-thickness-actions button {
+    padding: 7px 12px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+.drawing-thickness-actions button[type="submit"],
+.drawing-thickness-actions button:hover { background: #e4f2e8; color: #245d3b; }
+.drawing-thickness-dialog :focus-visible { outline: 2px solid #a3cbb0; outline-offset: 2px; }
+.drawing-thickness-actions button:disabled { opacity: .5; cursor: default; }
 
 /*
  * A control PAIR - the label and the input it names - is one flex item.
@@ -3785,21 +3926,15 @@ body.datum-topbar-hidden .drawing-topbar-show {
 }
 
 .drawing-colour-popup {
-    background: var(--datum-panel);
-    border: 1px solid var(--cad-border);
-    border-radius: 4px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
     display: grid;
     gap: 7px;
     padding: 8px;
-    position: fixed;
     width: 208px;
-    z-index: 50;
 }
 
 .drawing-colour-section {
-    color: var(--datum-muted);
-    font-size: 8px;
+    color: inherit;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.08em;
 }
@@ -3819,9 +3954,11 @@ body.datum-topbar-hidden .drawing-topbar-show {
     width: 100%;
 }
 
-.drawing-colour-cell:hover {
-    border-color: var(--datum-green);
-    transform: scale(1.15);
+.drawing-colour-cell:hover,
+.drawing-colour-cell:focus-visible {
+    border-color: #245d3b;
+    outline: 1px solid #a3cbb0;
+    outline-offset: 1px;
 }
 
 .drawing-colour-row {
@@ -3841,27 +3978,27 @@ body.datum-topbar-hidden .drawing-topbar-show {
 }
 
 .drawing-colour-action {
-    background: var(--datum-chrome);
+    background: transparent;
     border: 1px solid var(--datum-border);
     border-radius: 3px;
-    color: var(--cad-ink);
+    color: inherit;
     cursor: pointer;
     flex: 1 1 auto;
     font: inherit;
-    font-size: 9px;
-    padding: 3px 6px;
+    font-size: 11px;
+    padding: 7px 6px;
 }
 
-.drawing-colour-action:hover {
-    background: var(--datum-panel);
-    border-color: var(--datum-green);
+.drawing-colour-action:hover,
+.drawing-colour-action:focus-visible {
+    background: #e4f2e8;
+    color: #245d3b;
+    outline: 1px solid #a3cbb0;
 }
 
 .drawing-colour-action.active {
-    background: var(--datum-green);
-    border-color: var(--datum-green-hover);
-    color: var(--datum-surface);
-    font-weight: 700;
+    background: #e4f2e8;
+    color: #245d3b;
 }
 
 .drawing-colour-recent {
@@ -3876,8 +4013,8 @@ body.datum-topbar-hidden .drawing-topbar-show {
 }
 
 .drawing-colour-empty {
-    color: var(--datum-muted);
-    font-size: 8px;
+    color: inherit;
+    font-size: 11px;
 }
 
 /*

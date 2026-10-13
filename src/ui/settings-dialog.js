@@ -478,11 +478,13 @@ function open(pageId) {
     dialog.setAttribute("aria-label", page.title);
 
     dialog.innerHTML = `
+      <div class="datum-settings-panel">
         <div class="datum-settings-title">
             <span>${escapeHtml(page.title)}</span>
             <button type="button" class="datum-settings-close" data-settings-close aria-label="Close">&times;</button>
         </div>
         <div class="datum-settings-body">${page.body()}</div>
+      </div>
     `;
 
     document.body.appendChild(dialog);
