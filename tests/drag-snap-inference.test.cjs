@@ -271,11 +271,36 @@ check(
   "a parallel snap engine for dragging is exactly what the task forbids",
 );
 
+/*
+ * The check reads the FUNCTION BODY, not a fixed distance from its name.
+ *
+ * This used to be /resolveManipulationPoint[\s\S]{0,2000}preferInference/,
+ * a window of 2000 characters after the function name. That measures how
+ * far the code sits from its own declaration, which is not a property of
+ * the software: adding a paragraph of comments to the function pushed
+ * `preferInference: true` past the limit and failed the test while the
+ * behaviour was untouched. Extracting the body asks the question the test
+ * means to ask - is the option set INSIDE this function? - and cannot be
+ * broken by re-indenting or documenting the code.
+ */
+function functionBody(source, name) {
+  const start = source.indexOf(`function ${name}`);
+  if (start === -1) return "";
+  let depth = 0;
+  let opened = false;
+  for (let i = start; i < source.length; i++) {
+    const c = source[i];
+    if (c === "{") { depth++; opened = true; }
+    else if (c === "}") { depth--; if (opened && depth === 0) return source.slice(start, i + 1); }
+  }
+  return source.slice(start);
+}
+
+const resolverBody = functionBody(pointerSource, "resolveManipulationPoint");
+
 check(
   "it prefers inference, so alignment is considered over the dragged feature itself",
-  /resolveManipulationPoint[\s\S]{0,2000}preferInference:\s*true/.test(
-    pointerSource,
-  ),
+  /preferInference:\s*true/.test(resolverBody),
 );
 
 check(
