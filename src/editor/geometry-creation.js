@@ -3,6 +3,7 @@
  */
 
 import { trussJoints } from "../core/geometry/feature-handles.js";
+import enggQuantities from "../core/units/quantities.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
@@ -1427,7 +1428,25 @@ export function beginOrCompleteGeometry(
 
                     const magnitude =
                         answer.kind === "number"
-                            ? Math.max(0, answer.value)
+                            ? /*
+                               * THE TYPED NUMBER IS IN THE UNIT THE STUDENT
+                               * CHOSE, and the stored magnitude is in the
+                               * base unit N - so it is converted back before
+                               * the vector is built, the mirror of the
+                               * display conversion the panel does. Without
+                               * it, typing 2 kN at creation stored 2 N and
+                               * the arrow became a thousandth of the force
+                               * the student asked for.
+                               */
+                              Math.max(
+                                  0,
+                                  enggQuantities.convertValue(
+                                      answer.value,
+                                      "force",
+                                      answer.unit || "N",
+                                      "N"
+                                  )
+                              )
                             : Math.max(
                                   0,
                                   Number(object.geometry.magnitude) || 0
