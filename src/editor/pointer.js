@@ -670,7 +670,7 @@ export function resolveManipulationPoint(
     if (
         (drag?.kind === "body" &&
             ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||
-        (drag?.kind === "piston-height" &&
+        (["piston-height", "stopper-height"].includes(drag?.kind) &&
             drag.object?.metadata?.thermodynamicsKind === "piston-cylinder")
     ) {
         return {

@@ -32,3 +32,26 @@ test("piston height follows the cylinder axis after rotation and resizing", asyn
     g.height = 400;
     assert.ok(Math.abs(g.height * pistonFraction(g) - 120) < 1e-9);
 });
+
+test("upper stoppers limit piston travel and lowering them keeps piston below", async () => {
+    const { cylinderPoint, setPistonFromPoint, setStoppersFromPoint, pistonFraction, stopperFraction } = await model();
+    const g = { ...geometry(), hasStoppers: true, stopperFraction: 0.8 };
+    setPistonFromPoint(g, cylinderPoint(g, 0.5, 1.5));
+    assert.equal(pistonFraction(g), 0.8);
+    setStoppersFromPoint(g, cylinderPoint(g, 0.09, 0.4));
+    assert.equal(stopperFraction(g), 0.4);
+    assert.equal(pistonFraction(g), 0.4);
+    assert.equal(g.height, 100);
+    assert.equal(g.width, 80);
+});
+
+test("stopper adjustment follows a rotated cylinder and stays within its walls", async () => {
+    const { cylinderPoint, setStoppersFromPoint, stopperFraction, stopperPaths } = await model();
+    const g = { ...geometry(), rotation: 90, hasStoppers: true };
+    setStoppersFromPoint(g, cylinderPoint(g, 0.91, 0.65));
+    assert.ok(Math.abs(stopperFraction(g) - 0.65) < 1e-9);
+    assert.equal(stopperPaths(g).length, 2);
+    setStoppersFromPoint(g, cylinderPoint(g, 0.91, 2));
+    assert.equal(stopperFraction(g), 0.95);
+    assert.deepEqual(stopperPaths(geometry()), []);
+});

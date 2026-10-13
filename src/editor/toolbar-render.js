@@ -18,7 +18,8 @@ const expandedToolbarSections = {
     load: false,
     support: false,
     connection: false,
-    "reference-arc": false
+    "reference-arc": false,
+    "piston-cylinder": false
 };
 
 function renderToolbarTool(tool) {
@@ -32,7 +33,12 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "reference-arc"
+    const children = tool.id === "piston-cylinder"
+        ? [
+            { id: "piston-cylinder", label: "Without Stoppers", iconLabel: "Piston Cylinder" },
+            { id: "piston-cylinder-stoppers", label: "With Stoppers", iconLabel: "Piston Cylinder With Stoppers" }
+        ].map(option => renderToolButton(option).replace('data-tool-id=', 'data-piston-cylinder-option="true" data-tool-id=')).join("")
+        : tool.id === "reference-arc"
         ? ARC_CREATION_MODES.map(mode => {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
             return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-reference-arc-mode="${mode.id}">${mode.label}</button>`;
@@ -121,7 +127,7 @@ export function renderEngineeringTools(
         toolList.innerHTML =
             disciplineTools
                 .map(
-                    renderToolButton
+                    renderToolbarTool
                 )
                 .join("");
     }
@@ -138,6 +144,13 @@ export function renderEngineeringTools(
                         const toolId =
                             button.dataset
                                 .toolId;
+
+                        if (button.dataset.pistonCylinderOption) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            activateTool(toolId);
+                            return;
+                        }
 
                         if (button.dataset.referenceArcMode) {
                             event.preventDefault();

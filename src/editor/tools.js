@@ -217,6 +217,7 @@ export const toolIcons = {
 	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
 	"Control Volume": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10" stroke-dasharray="2 2"/><path ${iconStroke} d="M2 10h2M16 10h2"/>`),
 	"Piston Cylinder": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 10h12M4 12h12M10 10V3"/>`),
+	"Piston Cylinder With Stoppers": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 11h12M4 13h12M10 11V3"/><path ${iconStroke} d="M4 6h3v2H4M16 6h-3v2h3"/>`),
 	"System Boundary": drawingIcon(`<rect ${iconStroke} x="4" y="4" width="12" height="12" stroke-dasharray="3 2"/>`),
 	"State Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Process Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-7 5 4 8-2s4-3 6-6"/><path ${iconStroke} d="M14 6h3v3"/>`),

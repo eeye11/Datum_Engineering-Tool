@@ -557,7 +557,7 @@ export function updatePreview(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
-        drawingState.activeTool === "piston-cylinder"
+        ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         interaction.preview =
             createPreview(

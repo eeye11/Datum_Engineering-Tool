@@ -3,7 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
-import { isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
+import { isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
@@ -2142,6 +2142,10 @@ export function featurePropertyMarkup(object) {
         if (isPistonCylinder(object)) {
             rows.push(scalar("Piston Height", "pistonHeight",
                 mmOf(geometry.height * pistonFraction(geometry)).value, mmOf(geometry.height).unit));
+            if (geometry.hasStoppers) {
+                rows.push(scalar("Stopper Height", "stopperHeight",
+                    mmOf(geometry.height * stopperFraction(geometry)).value, mmOf(geometry.height).unit));
+            }
         }
         rows.push(scalar("Rotation", "rotation", geometry.rotation || 0, "°"));
 

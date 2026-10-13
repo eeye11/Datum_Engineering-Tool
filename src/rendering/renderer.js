@@ -2,7 +2,8 @@
 import enggErrorLog from "../app/error-log.js";
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
-import { cylinderPoint, isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
+import { selectionBounds, selectionCorners } from "../core/selection/selection-transform.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction, stopperPaths } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms, rigidBodyHandles, trussJoints } from "../core/geometry/feature-handles.js";
 import enggMeasurement from "../core/geometry/measurement-core.js";
 import enggDrawingState from "../core/model/drawing-state.js";
@@ -5128,7 +5129,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             const paths = [
                 [[0, 1], [0, 0], [1, 0], [1, 1]],
                 [[0, level], [1, level], [1, level - thickness], [0, level - thickness], [0, level]],
-                [[0.5, level], [0.5, 1]]
+                [[0.5, level], [0.5, 1]],
+                ...stopperPaths(geometry)
             ];
             for (const points of paths) {
                 const screenPoints = points.map(([x, y]) => toScreen(cylinderPoint(geometry, x, y)));
@@ -7619,6 +7621,32 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             }));
         };
 
+        const frame = selectionBounds(state.objects, [...selected]);
+        if (frame) {
+            const first = toScreen({ x: frame.minX, y: frame.maxY });
+            const last = toScreen({ x: frame.maxX, y: frame.minY });
+            svg.appendChild(createSvgElement("rect", {
+                x: first.x - 8, y: first.y - 8,
+                width: Math.max(16, last.x - first.x + 16), height: Math.max(16, last.y - first.y + 16),
+                fill: "none", stroke: "#3b82f6", "stroke-width": 1,
+                "stroke-dasharray": "4 3", "pointer-events": "none"
+            }));
+            if (selected.size > 1) {
+                selectionCorners(frame).forEach(point => add(point, "group-resize"));
+                // Keep the cylinder's internal controls available even when
+                // its surrounding control volume is selected with it.
+                state.objects.filter(object => selected.has(object.id) && isPistonCylinder(object))
+                    .forEach(object => {
+                        const g = object.geometry;
+                        add(cylinderPoint(g, 0.5, pistonFraction(g)), "piston-height");
+                        if (g.hasStoppers) {
+                            [0.09, 0.91].forEach(x => add(cylinderPoint(g, x, stopperFraction(g)), "stopper-height"));
+                        }
+                    });
+                return;
+            }
+        }
+
         /*
          * THE SELECTED ANNOTATION'S BOX.
          *
@@ -7810,6 +7838,9 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     .forEach((point) => add(point));
                 if (isPistonCylinder(object)) {
                     add(cylinderPoint(geometry, 0.5, pistonFraction(geometry)), "piston-height");
+                    if (geometry.hasStoppers) {
+                        [0.09, 0.91].forEach(x => add(cylinderPoint(geometry, x, stopperFraction(geometry)), "stopper-height"));
+                    }
                 }
             } else if (object.type === "rigid-body") {
                 /*

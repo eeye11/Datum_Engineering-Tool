@@ -3,7 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
-import { cylinderPoint, isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms } from "../core/geometry/feature-handles.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
@@ -868,6 +868,11 @@ export function objectAtPoint(
                         [local(0, level - 0.04), local(1, level - 0.04)],
                         [local(0.5, level), local(0.5, 1)]
                     ];
+                    for (const path of stopperPaths(geometry)) {
+                        for (let index = 1; index < path.length; index++) {
+                            segments.push([local(...path[index - 1]), local(...path[index])]);
+                        }
+                    }
                     return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
 

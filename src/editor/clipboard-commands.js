@@ -8,6 +8,7 @@ import { renderCurrentDrawing } from "./canvas-render.js";
 import { deleteSelectedObjects } from "./delete-command.js";
 import { drawingState, editorState } from "./editor-state.js";
 import { renderProperties } from "./feature-panel.js";
+import { cancelInteraction } from "./selection.js";
 import { setToolMessage } from "./toolbar-render.js";
 
 export function objectsByIds(
@@ -57,6 +58,10 @@ export function pasteFromClipboard() {
         return;
     }
 
+    // Paste replaces the selection, so an unfinished move must release its
+    // capture and restore its originals before the new features are added.
+    cancelInteraction();
+
     const previous =
         enggDrawingState.snapshotDrawing(
             drawingState
@@ -71,6 +76,7 @@ export function pasteFromClipboard() {
         enggDrawingClipboard.PASTE_OFFSET;
 
     const created = [];
+    const pastedFeatures = [];
 
     enggDrawingClipboard
         .prepare(editorState.drawingClipboard)
@@ -86,15 +92,22 @@ export function pasteFromClipboard() {
              * the copy becomes its own feature in the tree rather
              * than a second row carrying the original's name.
              */
-            const id =
+            const stored =
                 enggDrawingState.addObject(
                     drawingState,
                     feature
                 );
 
-            feature.id = id;
-            created.push(id);
+            created.push(stored.id);
+            pastedFeatures.push(stored);
         });
+
+    const sourceIds = editorState.drawingClipboard.sourceIds;
+    const idMap = new Map(sourceIds.map((id, index) => [id, created[index]]));
+    pastedFeatures.forEach((feature, index) => {
+        const sourceParent = editorState.drawingClipboard.features[index].parentId;
+        if (idMap.has(sourceParent)) feature.parentId = idMap.get(sourceParent);
+    });
 
     if (!created.length) {
         return;

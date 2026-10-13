@@ -105,6 +105,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "rectangle",
     "control-volume",
     "piston-cylinder",
+    "piston-cylinder-stoppers",
     "circle",
     "triangle",
     "polygon",

@@ -3,17 +3,17 @@
  */
 
 import enggDrawingState from "../core/model/drawing-state.js";
-import { isPistonCylinder, setPistonFromPoint } from "../features/thermodynamics/piston-cylinder.js";
+import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../core/selection/selection-transform.js";
+import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../features/thermodynamics/piston-cylinder.js";
 import { isDerivedFeature } from "../core/model/feature-types.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { objectsByIds } from "./clipboard-commands.js";
 import { COORDINATE_SYSTEM_TYPE } from "./constants.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { drawingCanvas } from "./dom.js";
 import { drawingState, editorState } from "./editor-state.js";
 import { renderProperties } from "./feature-panel.js";
-import { handleAtPoint, isConstructionInProgress, moveObjectAndChildren, rectangleCorners } from "./handles.js";
+import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "./statics-attachment.js";
@@ -23,6 +23,15 @@ import { setToolMessage } from "./toolbar-render.js";
 export function beginManipulationDrag(
     event
 ) {
+    if (editorState.manipulationDrag?.awaitingPlacement && event.button === 0) {
+        editorState.manipulationDrag.pointerId = event.pointerId;
+        updateManipulationDrag(event);
+        editorState.manipulationDrag.awaitingPlacement = false;
+        editorState.manipulationDrag.placing = true;
+        finishManipulationDrag(event);
+        editorState.selectionClickSuppressed = true;
+        return true;
+    }
     if (
         event.button !== 0 ||
         event.shiftKey
@@ -75,6 +84,33 @@ export function beginManipulationDrag(
             false
         );
 
+    const selectedIds = drawingState.selection.selectedObjectIds;
+    const box = selectionBounds(drawingState.objects, selectedIds);
+    const hit = handleAtPoint(point);
+    const pistonHandle = hit && isPistonCylinder(hit.object) &&
+        ["piston-height", "stopper-height"].includes(hit.handle.kind);
+    if (selectedIds.length > 1 && box && !pistonHandle) {
+        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+        const corners = selectionCorners(box);
+        const corner = corners.findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
+        const inside = point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
+        if (corner >= 0 || inside) {
+            const members = selectionMembers(drawingState.objects, selectedIds);
+            if (members.some(item => item.locked || isDerivedFeature(item))) {
+                setToolMessage("Unlock the selection and remove derived features before moving or resizing it");
+                return true;
+            }
+            editorState.manipulationDrag = {
+                pointerId: event.pointerId, object: members[0],
+                kind: corner >= 0 ? "group-resize" : "body", group: true,
+                corner, bounds: box, start: { ...point }, anchor: { ...point }, moved: false,
+                originals: Object.fromEntries(members.map(item => [item.id, structuredClone(item)]))
+            };
+            drawingCanvas.setPointerCapture(event.pointerId);
+            return true;
+        }
+    }
+
     /*
      * A DERIVED CHILD IS NEVER DRAGGED.
      *
@@ -98,11 +134,6 @@ export function beginManipulationDrag(
 
         return false;
     }
-
-    const hit =
-        handleAtPoint(
-            point
-        );
 
     /*
      * A LOCKED FEATURE DOES NOT MOVE.
@@ -319,7 +350,7 @@ export function beginManipulationDrag(
              */
             anchor: { ...point },
             originals: Object.fromEntries(
-                objectsByIds(
+                selectionMembers(drawingState.objects,
                     drawingState.selection
                         .selectedObjectIds
                 ).map(
@@ -327,7 +358,7 @@ export function beginManipulationDrag(
                         item.id,
                         JSON.parse(
                             JSON.stringify(
-                                item.geometry
+                                item
                             )
                         )
                     ]
@@ -405,7 +436,9 @@ export function updateManipulationDrag(
      * two comments above.
      */
     const resolution =
-        draggingDimension || draggingAnnotate
+        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
+            ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
+            : draggingDimension || draggingAnnotate
             ? resolvePointerEvent(event)
             : resolveManipulationPoint(
                   event,
@@ -507,6 +540,15 @@ export function finishManipulationDrag(
 
     const drag =
         editorState.manipulationDrag;
+
+    if (drag.kind === "body" && !drag.placing) {
+        drag.awaitingPlacement = true;
+        if (drawingCanvas.hasPointerCapture(event.pointerId)) drawingCanvas.releasePointerCapture(event.pointerId);
+        editorState.selectionClickSuppressed = true;
+        setToolMessage("Move the selection, then click to place it. Esc cancels");
+        renderCurrentDrawing();
+        return;
+    }
 
     editorState.manipulationDrag =
         null;
@@ -645,8 +687,37 @@ function applyManipulation(
     const g =
         object.geometry;
 
+    if (drag.kind === "body" || drag.kind === "group-resize") {
+        let scale = 1;
+        let anchor = drag.start;
+        let dx = point.x - drag.start.x;
+        let dy = point.y - drag.start.y;
+        if (drag.kind === "group-resize") {
+            const corners = selectionCorners(drag.bounds);
+            anchor = corners[(drag.corner + 2) % 4];
+            const initial = corners[drag.corner];
+            const vx = initial.x - anchor.x;
+            const vy = initial.y - anchor.y;
+            scale = Math.max(0.01, ((point.x - anchor.x) * vx + (point.y - anchor.y) * vy) / Math.max(1e-18, vx * vx + vy * vy));
+            dx = 0;
+            dy = 0;
+        }
+        for (const [id, original] of Object.entries(drag.originals)) {
+            const live = drawingState.objects.find(item => item.id === id);
+            if (!live) continue;
+            const changed = transformSelectionObject(original, anchor, scale, dx, dy);
+            live.geometry = changed.geometry;
+            if (changed.placement) live.placement = changed.placement;
+        }
+        return;
+    }
+
     if (isPistonCylinder(object) && drag.kind === "piston-height") {
         setPistonFromPoint(g, point);
+        return;
+    }
+    if (isPistonCylinder(object) && drag.kind === "stopper-height" && g.hasStoppers) {
+        setStoppersFromPoint(g, point);
         return;
     }
 
@@ -880,36 +951,6 @@ function applyManipulation(
         };
 
         return true;
-    }
-
-    if (drag.kind === "body") {
-        const deltaX =
-            point.x -
-            drag.start.x;
-
-        const deltaY =
-            point.y -
-            drag.start.y;
-
-        /*
-         * A body carries its attached Statics features with
-         * it. They are restored to their pre-drag geometry
-         * and then translated by the same delta as the body,
-         * so a load or a support cannot be left behind at
-         * stale world coordinates while the body it acts on
-         * moves away.
-         */
-        const originals =
-            drag.originals;
-
-        moveObjectAndChildren(
-            object,
-            deltaX,
-            deltaY,
-            originals
-        );
-
-        return;
     }
 
     const original =

@@ -3,7 +3,7 @@
  */
 
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
-import { cylinderPoint, isPistonCylinder, pistonFraction } from "../features/thermodynamics/piston-cylinder.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
 import { coordinateSystemArms, rigidBodyHandles } from "../core/geometry/feature-handles.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggDimensions from "../core/scale/dimensions.js";
@@ -847,9 +847,16 @@ function manipulationHandles(
                 point
             })
         );
-        return isPistonCylinder(object)
-            ? [{ kind: "piston-height", point: cylinderPoint(g, 0.5, pistonFraction(g)) }, ...corners]
-            : corners;
+        if (isPistonCylinder(object)) {
+            const handles = [{ kind: "piston-height", point: cylinderPoint(g, 0.5, pistonFraction(g)) }, ...corners];
+            if (g.hasStoppers) {
+                handles.unshift(...[0.09, 0.91].map(x => ({
+                    kind: "stopper-height", point: cylinderPoint(g, x, stopperFraction(g))
+                })));
+            }
+            return handles;
+        }
+        return corners;
     }
 
     if (object.type === "triangle") {

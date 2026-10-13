@@ -774,7 +774,7 @@ export function beginOrCompleteGeometry(
 
                     : (drawingState.activeTool === "rectangle" ||
                         drawingState.activeTool === "control-volume" ||
-                        drawingState.activeTool === "piston-cylinder")
+                        ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
 
                     : drawingState.activeTool ===
@@ -1642,7 +1642,7 @@ export function beginOrCompleteGeometry(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
-        drawingState.activeTool === "piston-cylinder"
+        ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         const rectangle =
             rectangleGeometry(
@@ -1651,7 +1651,7 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
-        const isPiston = drawingState.activeTool === "piston-cylinder";
+        const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
         if ((isControlVolume || isPiston) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
@@ -1674,7 +1674,7 @@ export function beginOrCompleteGeometry(
                     } : {}),
                     style: {
                         ...drawingState.styleDefaults,
-                        ...(isControlVolume ? { lineType: "dashed", fill: "none" } : {}),
+                        ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
                         ...(isPiston ? { lineType: "solid", fill: "none" } : {})
                     },
 
@@ -1682,6 +1682,10 @@ export function beginOrCompleteGeometry(
                         currentEngineeringMetadata()
                 }
             );
+        if (isPiston && drawingState.activeTool === "piston-cylinder-stoppers") {
+            object.geometry.hasStoppers = true;
+            object.geometry.stopperFraction = 0.8;
+        }
     } else if (
         drawingState.activeTool ===
         "polyline"
@@ -1847,7 +1851,9 @@ export function beginOrCompleteGeometry(
                 activateTool("select");
             }
             setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
-                ? "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move"
+                ? (object.geometry.hasStoppers
+                    ? "Drag a stopper dot to adjust the stops, the centre dot to move the piston, or a corner to resize"
+                    : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : "Control volume created");
             renderProperties();
             renderCurrentDrawing();

@@ -41,7 +41,8 @@ export function toolDefinitionForLabel(label) {
                     /[^a-z]+/g,
                     "-"
                 ),
-        label
+        label,
+        ...(label === "Piston Cylinder" ? { submenu: true } : {})
     };
 }
 
@@ -52,6 +53,7 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
+        (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
         STATICS_TOOL_MENUS[tool.id]?.some(
             item =>
                 item.id ===
@@ -103,7 +105,7 @@ export function renderToolButton(tool) {
             ${coordinateAttributes}
         >
             <span class="drawing-tool-icon" aria-hidden="true">
-                ${toolIcons[tool.label] || ""}
+                ${toolIcons[tool.iconLabel || tool.label] || ""}
             </span>
 
             <!--

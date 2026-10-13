@@ -53,6 +53,8 @@ function worldLengthInDisplayUnits(object, value) {
 }
 import { applyTriangleSidesAndAngles } from "./triangle-editing.js";
 
+import { pistonFraction, setStopperFraction } from "../features/thermodynamics/piston-cylinder.js";
+
 export function updateFeatureProperty(object, key, value, typedUnit) {
     const g = object.geometry;
     const fixed = name => Boolean(object.constraints?.[name]);
@@ -61,7 +63,13 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
     if (key === "pistonHeight" && object.metadata?.thermodynamicsKind === "piston-cylinder") {
         const height = worldLengthInDisplayUnits(object, value);
         if (!Number.isFinite(height) || !(g.height > 0)) return false;
-        g.pistonFraction = Math.max(0.05, Math.min(0.95, height / g.height));
+        g.pistonFraction = pistonFraction({ ...g, pistonFraction: height / g.height });
+        return true;
+    }
+    if (key === "stopperHeight" && object.metadata?.thermodynamicsKind === "piston-cylinder" && g.hasStoppers) {
+        const height = worldLengthInDisplayUnits(object, value);
+        if (!Number.isFinite(height) || !(g.height > 0)) return false;
+        setStopperFraction(g, height / g.height);
         return true;
     }
 
