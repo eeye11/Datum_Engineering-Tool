@@ -19,7 +19,8 @@ const expandedToolbarSections = {
     support: false,
     connection: false,
     "reference-arc": false,
-    "piston-cylinder": false
+    "piston-cylinder": false,
+    "process-diagrams": false
 };
 
 function renderToolbarTool(tool) {
@@ -33,7 +34,13 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "piston-cylinder"
+    const children = tool.id === "process-diagrams"
+        ? [
+            { id: "saturation-curve", label: "Saturation Curve" },
+            { id: "process-path", label: "Process Path" },
+            { id: "constant-temp-pressure-lines", label: "Const Temp/Pressure Lines" }
+        ].map(renderToolButton).join("")
+        : tool.id === "piston-cylinder"
         ? [
             { id: "piston-cylinder", label: "Without Stoppers", iconLabel: "Piston Cylinder" },
             { id: "piston-cylinder-stoppers", label: "With Stoppers", iconLabel: "Piston Cylinder With Stoppers" }

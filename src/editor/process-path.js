@@ -8,6 +8,14 @@ import { renderProperties } from "./feature-panel.js";
 import { activateTool } from "./tool-activation.js";
 import { setToolMessage } from "./toolbar-render.js";
 
+export function isProcessPlotTool(tool) {
+    return ["process-path", "constant-temp-pressure-lines"].includes(tool);
+}
+
+function plotName(tool) {
+    return { "process-path": "Process Path", "constant-temp-pressure-lines": "Const Temp/Pressure Line" }[tool];
+}
+
 export function addProcessPoint(point) {
     const interaction = drawingState.interaction;
     if (interaction.phase === "idle") {
@@ -36,24 +44,25 @@ export function addProcessPoint(point) {
     drawingState.interaction.preview = {
         id: "process-path-preview", type: "polyline",
         geometry: { points: points.map(point => ({ ...point })) },
-        style: { stroke: "#dc2626", fill: "none", lineWidth: drawingState.styleDefaults.lineWidth, lineType: "dashed" },
-        metadata: { thermodynamicsKind: "process-path", stateCount: points.length }
+        style: { stroke: drawingState.activeTool === "process-path" ? "#dc2626" : "#808080", fill: "none", lineWidth: drawingState.styleDefaults.lineWidth, lineType: "dashed" },
+        metadata: { thermodynamicsKind: drawingState.activeTool, stateCount: points.length }
     };
-    setToolMessage("Click the next process state; Enter or double-click finishes. Esc cancels");
+    setToolMessage("Click the next point; Enter or double-click finishes. Esc cancels");
     renderCurrentDrawing();
 }
 
 export function finishProcessPath() {
     const interaction = drawingState.interaction;
-    if (drawingState.activeTool !== "process-path" || interaction.points.length < 2) return false;
+    if (!isProcessPlotTool(drawingState.activeTool) || interaction.points.length < 2) return false;
+    const tool = drawingState.activeTool;
     const object = model.geometryFactories.polyline(interaction.points.map(point => ({ ...point })), {
-        name: "Process Path", style: { ...drawingState.styleDefaults, stroke: "#dc2626", fill: "none", lineType: "solid" },
-        metadata: { thermodynamicsKind: "process-path" }
+        name: plotName(tool), style: { ...drawingState.styleDefaults, stroke: tool === "process-path" ? "#dc2626" : "#808080", fill: "none", lineType: tool === "process-path" ? "solid" : "dashed" },
+        metadata: { thermodynamicsKind: tool === "process-path" ? "process-path" : tool }
     });
     object.parentId = interaction.sourceId;
     commitCreatedFeature(object);
     activateTool("select");
-    setToolMessage("Process path created - drag its state dots to adjust the process");
+    setToolMessage(`${plotName(tool)} created - drag its dots to adjust`);
     renderProperties();
     renderCurrentDrawing();
     return true;

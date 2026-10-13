@@ -42,7 +42,7 @@ export function toolDefinitionForLabel(label) {
                     "-"
                 ),
         label,
-        ...(label === "Piston Cylinder" ? { submenu: true } : {})
+        ...(["Piston Cylinder", "Process Diagrams"].includes(label) ? { submenu: true } : {})
     };
 }
 
@@ -53,6 +53,7 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
+        (tool.id === "process-diagrams" && ["saturation-curve", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
         STATICS_TOOL_MENUS[tool.id]?.some(
             item =>

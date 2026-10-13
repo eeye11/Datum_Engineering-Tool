@@ -3,6 +3,7 @@
  */
 
 import enggBodyFrames from "../core/geometry/body-frames.js";
+import { isProcessPlotTool } from "./process-path.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggDrawingRotationalArrow from "../features/analysis/rotational-arrow.js";
@@ -578,7 +579,7 @@ export function updatePreview(
         );
     } else if (
         drawingState.activeTool === "polyline" ||
-        drawingState.activeTool === "process-path"
+        isProcessPlotTool(drawingState.activeTool)
     ) {
         interaction.preview =
             createPreview(
@@ -594,6 +595,11 @@ export function updatePreview(
         if (drawingState.activeTool === "process-path") {
             interaction.preview.metadata = { thermodynamicsKind: "process-path", stateCount: interaction.points.length };
             interaction.preview.style.stroke = "#dc2626";
+        }
+        if (drawingState.activeTool === "constant-temp-pressure-lines") {
+            interaction.preview.style.stroke = "#808080";
+            interaction.preview.style.lineType = "dashed";
+            interaction.preview.metadata = { thermodynamicsKind: "constant-temp-pressure-lines" };
         }
 
         setToolMessage(
