@@ -36,6 +36,7 @@ function renderToolbarTool(tool) {
 
     const children = tool.id === "process-diagrams"
         ? [
+            { id: "process-plot", label: "Process Plot" },
             { id: "saturation-curve", label: "Saturation Curve" },
             { id: "process-path", label: "Process Path" },
             { id: "constant-temp-pressure-lines", label: "Const Temp/Pressure Lines" }

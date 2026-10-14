@@ -1,6 +1,6 @@
 import model from "../../core/model/drawing-state.js";
 import { selectionBounds } from "../../core/selection/selection-transform.js";
-import { isSaturationCurve } from "../../features/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../../features/thermodynamics/saturation-curve.js";
 import { drawingState } from "../editor-state.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { commitCreatedFeature } from "../geometry/creation-sizing.js";
@@ -20,12 +20,12 @@ export function addProcessPoint(point) {
     const interaction = drawingState.interaction;
     if (interaction.phase === "idle") {
         const diagram = [...drawingState.objects].reverse().find(object => {
-            if (!isSaturationCurve(object)) return false;
+            if (!isProcessDiagram(object)) return false;
             const box = selectionBounds([object], [object.id]);
             return box && point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
         });
         if (!diagram) {
-            setToolMessage("Click inside a saturation diagram to place the first process state");
+            setToolMessage("Click inside a process diagram to place the first process state");
             return;
         }
         model.setInteraction(drawingState, {

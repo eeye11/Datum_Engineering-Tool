@@ -13,7 +13,7 @@ import { appendDimensionEntity, appendVariableDimensionEntity } from "./dimensio
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
-import { isSaturationCurve } from "../features/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../features/thermodynamics/saturation-curve.js";
 
 
     /*
@@ -46,7 +46,7 @@ import { isSaturationCurve } from "../features/thermodynamics/saturation-curve.j
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
-        if (isSaturationCurve(state.interaction.preview)) {
+        if (isProcessDiagram(state.interaction.preview)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }

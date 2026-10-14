@@ -9,7 +9,7 @@ import enggLoadProfile from "../../features/analysis/load-profile.js";
 import enggPropertyPanel from "../../ui/feature-panel/property-panel.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
-import { isSaturationCurve } from "../../features/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../../features/thermodynamics/saturation-curve.js";
 import { isPistonCylinder, pistonFraction, stopperFraction } from "../../features/thermodynamics/piston-cylinder.js";
 import { appearanceMarkup } from "./appearance-panel.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
@@ -1225,7 +1225,7 @@ export function featurePropertyMarkup(object) {
      * should not be reached by any feature DAETUM ships.
      */
     const displayLabel =
-        (isSaturationCurve(object) ? "Saturation Curve" : "") ||
+        (isProcessDiagram(object) ? (object.metadata.thermodynamicsKind === "process-plot" ? "Process Plot" : "Saturation Curve") : "") ||
         (isPistonCylinder(object) ? "Piston Cylinder" : "") ||
         staticsRoleLabel(object) ||
         STATICS_FEATURE_LABELS[object.type] ||
@@ -2141,7 +2141,7 @@ export function featurePropertyMarkup(object) {
                     mmOf(geometry.height * stopperFraction(geometry)).value, mmOf(geometry.height).unit));
             }
         }
-        if (isSaturationCurve(object)) {
+        if (isProcessDiagram(object)) {
             rows.push(section("AXIS LABELS"));
             for (const [caption, key, value] of [
                 ["Horizontal Axis", "xLabel", geometry.xLabel ?? ""],

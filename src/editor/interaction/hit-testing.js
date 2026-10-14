@@ -12,7 +12,7 @@ import enggAnnotationModel from "../../features/annotations/annotation-model.js"
 import enggAnnotate from "../../features/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../core/geometry/points.js";
-import { isSaturationCurve, saturationPaths } from "../../features/thermodynamics/saturation-curve.js";
+import { isProcessDiagram, processDiagramPaths } from "../../features/thermodynamics/saturation-curve.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
 
 /*
@@ -877,8 +877,8 @@ export function objectAtPoint(
                     return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
 
-                if (isSaturationCurve(object)) {
-                    return saturationPaths(geometry).some(path => path.some((start, index) =>
+                if (isProcessDiagram(object)) {
+                    return processDiagramPaths(geometry, object).some(path => path.some((start, index) =>
                         index > 0 && distanceToSegment(point, path[index - 1], start) <= tolerance));
                 }
 

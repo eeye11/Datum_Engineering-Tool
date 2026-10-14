@@ -774,7 +774,7 @@ export function beginOrCompleteGeometry(
 
                     : (drawingState.activeTool === "rectangle" ||
                         drawingState.activeTool === "control-volume" ||
-                        drawingState.activeTool === "saturation-curve" ||
+                        ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
 
@@ -1643,7 +1643,7 @@ export function beginOrCompleteGeometry(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
-        drawingState.activeTool === "saturation-curve" ||
+        ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         const rectangle =
@@ -1653,9 +1653,9 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
-        const isSaturation = drawingState.activeTool === "saturation-curve";
+        const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isControlVolume || isPiston || isSaturation) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -1678,7 +1678,7 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isPiston || isSaturation ? { lineType: "solid", fill: "none" } : {})
+                        ...(isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
@@ -1689,9 +1689,9 @@ export function beginOrCompleteGeometry(
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
         }
-        if (isSaturation) {
-            object.name = "Saturation Curve";
-            object.metadata = { thermodynamicsKind: "saturation-curve" };
+        if (isDiagram) {
+            object.name = drawingState.activeTool === "process-plot" ? "Process Plot" : "Saturation Curve";
+            object.metadata = { thermodynamicsKind: drawingState.activeTool };
         }
     } else if (
         drawingState.activeTool ===
@@ -1850,9 +1850,9 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["control-volume", "piston-cylinder", "saturation-curve"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["piston-cylinder", "saturation-curve"].includes(object.metadata.thermodynamicsKind)) {
+            if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
@@ -1863,7 +1863,9 @@ export function beginOrCompleteGeometry(
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : object.metadata.thermodynamicsKind === "saturation-curve"
                     ? "Saturation curve created - drag the corner dots to resize"
-                    : "Control volume created");
+                    : object.metadata.thermodynamicsKind === "process-plot"
+                        ? "Process plot created - drag the corner dots to resize"
+                        : "Control volume created");
             renderProperties();
             renderCurrentDrawing();
             return;

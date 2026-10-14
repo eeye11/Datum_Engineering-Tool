@@ -57,7 +57,7 @@ import { pistonFraction, setStopperFraction } from "../../features/thermodynamic
 
 export function updateFeatureProperty(object, key, value, typedUnit) {
     const g = object.geometry;
-    if (object.metadata?.thermodynamicsKind === "saturation-curve" && ["xLabel", "yLabel"].includes(key)) {
+    if (["saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind) && ["xLabel", "yLabel"].includes(key)) {
         g[key] = String(value ?? "");
         return true;
     }

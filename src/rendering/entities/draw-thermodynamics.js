@@ -10,7 +10,7 @@
 import enggTheme from "../../editor/workspace/theme.js";
 import { applyStyle, createSvgElement, paintColour } from "../svg-primitives.js";
 import { processLabelPoint } from "../../features/thermodynamics/process-labels.js";
-import { saturationPaths } from "../../features/thermodynamics/saturation-curve.js";
+import { processDiagramPaths } from "../../features/thermodynamics/saturation-curve.js";
 import { cylinderPoint, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
 
     /*
@@ -55,7 +55,7 @@ import { cylinderPoint, pistonFraction, stopperPaths } from "../../features/ther
     }
 
     export function drawSaturationCurve({ svg, entity, geometry, style, toScreen }) {
-        for (const [index, points] of saturationPaths(geometry).entries()) {
+        for (const [index, points] of processDiagramPaths(geometry, entity).entries()) {
             const screen = points.map(toScreen);
             const path = createSvgElement("path", {
                 d: screen.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")

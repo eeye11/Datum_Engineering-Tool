@@ -6,6 +6,7 @@ export const toolIcons = {
     "Process Diagrams": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 14C7 8 8 5 10 5S14 11 17 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
     "Const. Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15L8 10h5l4-7M3 18l5-5h5l4-6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
     "Const. Temp Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Process Plot": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M3 3l-2 3m2-3 2 3m12 11-3-2m3 2-3 2"/>`),
     "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
