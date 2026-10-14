@@ -17,7 +17,7 @@
 
 const fs = require("fs");
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -34,7 +34,7 @@ const check = (name, ok, detail) => {
 
 const events = fs.readFileSync(modulePath("canvas-events.js"), "utf8");
 const tool = fs.readFileSync(modulePath("dimension-tool.js"), "utf8");
-const renderer = fs.readFileSync(modulePath("renderer.js"), "utf8");
+const renderer = rendererSource();
 const model = fs.readFileSync(modulePath("dimension-model.js"), "utf8");
 
 console.log("\n  a double-click opens the STANDARD value popup\n");

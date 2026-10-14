@@ -21,6 +21,7 @@
  */
 
 const fs = require("fs");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 const path = require("path");
 
 let pass = 0;
@@ -36,10 +37,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const css = fs.readFileSync(
-  path.join(__dirname, "..", "src", "styles", "editor.css"),
-  "utf8",
-);
+const css = stylesheetSource("editor.css");
 
 /* The rule block for the frame, and for the SVG inside it. */
 const frameRule = (() => {

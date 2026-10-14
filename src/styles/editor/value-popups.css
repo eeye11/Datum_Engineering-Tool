@@ -1,0 +1,443 @@
+/*
+ * Live line measurement, the drawing-scale prompt, the creation-time dimension popup and the dimension editor.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * =========================================================
+   LIVE LINE MEASUREMENT
+========================================================= */
+
+/*
+ * `#drawingToolMessage` is styled with the rest of the status bar,
+ * above. It used to be re-declared here with the same two declarations,
+ * which read as a second definition of one element.
+ */
+
+/* ==========================================================================
+   SET DRAWING SCALE
+
+   The first dimension asks how big the drawing really is. It is a modal,
+   not a menu, because it is a question with two answers that has to be
+   answered before anything else can happen - a popup that could be
+   dismissed by clicking elsewhere would let a dimension be created with
+   no scale at all, which is the thing this exists to prevent.
+
+   Styled to match the existing drawing chrome rather than the browser's
+   own dialog, so it reads as part of EnggDraw.
+   ========================================================================== */
+
+.drawing-scale-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    gap: 6px;
+
+    background: rgba(255, 255, 255, 0.86);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: var(--datum-ink);
+}
+
+.drawing-scale-dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.drawing-scale-dialog-text {
+    margin: 0 0 8px;
+    max-width: 340px;
+    text-align: center;
+    line-height: 1.5;
+    color: var(--datum-ink);
+}
+
+.drawing-scale-dialog-note {
+    margin: 10px 0 0;
+    max-width: 340px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--datum-muted);
+}
+
+.drawing-scale-dialog-error {
+    margin: 8px 0 0;
+    max-width: 340px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--datum-error);
+}
+
+.drawing-scale-dialog-label {
+    display: block;
+    width: 260px;
+    margin-bottom: 3px;
+    font-size: 11px;
+    text-align: left;
+    color: var(--datum-ink);
+}
+
+.drawing-scale-dialog-input,
+.drawing-scale-dialog-select {
+    width: 260px;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-input);
+    color: var(--datum-ink);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+}
+
+.drawing-scale-dialog-input:focus,
+.drawing-scale-dialog-select:focus {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -1px;
+}
+
+.drawing-scale-dialog-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.drawing-scale-dialog-actions button {
+    min-width: 96px;
+    padding: 7px 14px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+    color: var(--datum-ink);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.drawing-scale-dialog-actions button.primary {
+    border-color: var(--datum-green);
+    background: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.drawing-scale-dialog-actions button:hover {
+    background: var(--datum-panel);
+}
+
+.drawing-scale-dialog-actions button.primary:hover {
+    background: var(--datum-green-hover);
+}
+
+/* ==========================================================================
+   CREATION-TIME DIMENSION POPUP
+
+   The one compact input a freshly drawn feature uses to say how big it is.
+   It is deliberately NOT the scale dialog's full-screen modal: the student is
+   still looking at the object they just made, and covering the drawing to ask
+   one question would hide the very thing the answer is about.
+
+   So it is a small floating card near the top of the canvas, styled from the
+   same chrome as the rest of the drawing (Arial, the same border greys, the
+   same green focus ring) so it reads as part of EnggDraw. The number and its
+   unit are shown together - "500 mm" - rather than as a value box and a unit
+   dropdown, because the document already decides the unit and a per-popup
+   selector would only invite a millimetre value in a metre document.
+   ========================================================================== */
+
+.drawing-creation-dimension {
+    position: fixed;
+    top: 72px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+
+    min-width: 172px;
+    padding: 10px 12px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    background: var(--datum-surface);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: var(--datum-ink);
+}
+
+.drawing-creation-dimension-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--datum-green);
+}
+
+.drawing-creation-dimension-body {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.drawing-creation-dimension-label {
+    font-size: 12px;
+    color: var(--datum-ink);
+    white-space: nowrap;
+}
+
+.drawing-creation-dimension-input-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+
+    padding: 2px 8px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-input);
+}
+
+.drawing-creation-dimension-input {
+    width: 88px;
+    border: none;
+    background: transparent;
+    color: var(--datum-ink);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    text-align: right;
+}
+
+.drawing-creation-dimension-input:focus {
+    outline: none;
+}
+
+.drawing-creation-dimension-input-wrap:focus-within {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-green);
+    outline-offset: -1px;
+}
+
+/*
+ * The unit is a SELECT because the student chooses the unit their
+ * number is read in - it is part of the quantity, not a caption on
+ * it. It carries no browser chrome of its own so it reads as part of the
+ * same field as the number.
+ *
+ * IT SIZES TO ITS WIDEST UNIT, NOT TO A FIXED FLOOR.
+ *
+ * This had `min-width: 38px`, chosen for the widest unit the popup was first
+ * used for - `mm`, `kN/m`. A MOMENT is stated in `kN·m` or `lb·ft`, which are
+ * wider, and a select does not grow past a width that was decided for it: the
+ * selected unit was cut off at the field's edge, with the tail of it hidden
+ * behind the caret. The number pad and the caret padding are kept, and the
+ * width is left to the CONTENT - so every unit the popup is given fits, and a
+ * longer one added later fits too without anyone measuring it.
+ *
+ * `width: auto` with the padding is what does it. A fixed width is what broke
+ * it, so there is deliberately no fixed width here at all.
+ */
+.drawing-creation-dimension-unit {
+    appearance: none;
+    -webkit-appearance: none;
+
+    /*
+     * ROOM FOR THE CARET BESIDE THE TEXT: 6px before it, the caret's own ~14px
+     * strip after it. The `ch` unit would size to a digit rather than to the
+     * unit symbol, so plain padding is what is used.
+     */
+    padding: 0 16px 0 6px;
+
+    width: auto;
+
+    border: none;
+    border-left: 1px solid var(--datum-border);
+    margin-left: 2px;
+
+    /*
+     * The browser's own dropdown arrow is removed so the control can
+     * sit inside the number's field rather than beside it - but a
+     * control that looks like the text "mm" gives a student nothing to
+     * click, so the arrow is drawn back as a small caret. That is the
+     * whole difference between a label and a choice, and it has to be
+     * visible or the unit cannot be selected at all.
+     */
+    background-image: linear-gradient(45deg, transparent 50%, var(--datum-ink) 50%),
+        linear-gradient(135deg, var(--datum-ink) 50%, transparent 50%);
+    background-position:
+        right 7px center,
+        right 3px center;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+
+    color: var(--datum-ink);
+
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    cursor: pointer;
+
+    /*
+     * NO TEXT ELLIPSIS, and the text is never wrapped. A unit is a symbol; a
+     * truncated `kN…` is worse than a wider field, so the control is allowed
+     * to take the room it needs.
+     */
+    white-space: nowrap;
+}
+
+.drawing-creation-dimension-unit:hover {
+    color: var(--datum-green);
+}
+
+.drawing-creation-dimension-unit:focus {
+    outline: none;
+    color: var(--datum-green);
+}
+
+/* The dropdown list itself, when the select is opened. */
+.drawing-creation-dimension-unit option {
+    color: var(--datum-ink);
+    background: var(--datum-surface);
+}
+
+.drawing-creation-dimension-step {
+    font-size: 10px;
+    color: var(--datum-muted);
+}
+
+.drawing-creation-dimension-error {
+    font-size: 11px;
+    color: var(--datum-error);
+}
+
+/* ==========================================================================
+   EDIT DIMENSION
+
+   Same shell as the scale-calibration dialog - both are short forms that
+   must be answered before anything else can happen - with the dialog's
+   own rhythm and the editor's two-part layout.
+
+   The two FIELDSETS are not decoration. "Display" and "Set real-world
+   size" are different kinds of act, one cosmetic and one a change to
+   the document, and putting them in one undifferentiated list would
+   invite exactly the confusion this editor exists to prevent.
+   ========================================================================== */
+
+.drawing-dimension-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    background: rgba(255, 255, 255, 0.86);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: var(--datum-ink);
+}
+
+.drawing-dimension-dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.drawing-dimension-dialog-readout {
+    min-width: 300px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-rail);
+    text-align: center;
+}
+
+.drawing-dimension-dialog-value {
+    font-size: 17px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.drawing-dimension-dialog-meta {
+    margin-top: 3px;
+    font-size: 11px;
+    color: var(--datum-muted);
+}
+
+.drawing-dimension-dialog-group {
+    min-width: 300px;
+    margin: 0 0 12px;
+    padding: 10px 12px 12px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+}
+
+.drawing-dimension-dialog-group legend {
+    padding: 0 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--datum-ink);
+}
+
+.drawing-dimension-dialog-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.drawing-dimension-dialog-check input {
+    margin: 0;
+}
+
+.drawing-dimension-dialog-label {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 11px;
+    color: var(--datum-ink);
+}
+
+.drawing-dimension-dialog-input,
+.drawing-dimension-dialog-select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    margin-bottom: 10px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-input);
+    color: var(--datum-ink);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+}
+
+.drawing-dimension-dialog-input:focus,
+.drawing-dimension-dialog-select:focus {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -1px;
+}
+
+.drawing-dimension-dialog-note {
+    margin: 0 0 10px;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--datum-muted);
+}

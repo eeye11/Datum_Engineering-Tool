@@ -1,0 +1,1005 @@
+/*
+ * Dialogs, document details and sharing, context menus, the Open launcher (templates and recents), and the feature lock.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * =========================================================
+   DIALOGS
+   ========================================================= */
+
+/*
+ * The dimmed layer behind a dialog.
+ *
+ * It intercepts what is under it, which is the point: a rename dialog
+ * that leaves the canvas live means a click meant for the dialog
+ * arrives as a click on the drawing, and the canvas moves geometry
+ * while someone is trying to type a name.
+ *
+ * z-index above every part of the workspace and below nothing else -
+ * there is nothing it should ever be under.
+ */
+.engg-dialog-backdrop {
+    align-items: center;
+    background: rgba(28, 36, 41, 0.42);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    position: fixed;
+    z-index: 100;
+}
+
+.engg-dialog {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 8px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    color: var(--datum-ink);
+    max-width: calc(100vw - 24px);
+    padding: 18px 20px 16px;
+    width: 340px;
+}
+
+.engg-dialog-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 8px;
+}
+
+.engg-dialog-description {
+    color: var(--datum-muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 0 0 14px;
+    white-space: pre-line;
+}
+
+.engg-dialog-field {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.engg-dialog-field-label {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 12px;
+}
+
+.engg-dialog-input {
+    border: 1px solid var(--datum-border);
+    border-radius: 5px;
+    flex: 1 1 auto;
+    font-family: inherit;
+    font-size: 13px;
+    min-width: 0;
+    padding: 7px 9px;
+}
+
+.engg-dialog-input:focus {
+    border-color: var(--datum-green);
+    outline: 2px solid rgba(31, 92, 56, 0.18);
+    outline-offset: 1px;
+}
+
+.engg-dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 4px;
+}
+
+.engg-dialog-button {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 6px 14px;
+}
+
+.engg-dialog-button:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+    color: var(--datum-green-ink);
+}
+
+.engg-dialog-button:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+.engg-dialog-button-primary {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.engg-dialog-button-primary:hover {
+    background: var(--datum-green-hover);
+    border-color: var(--datum-green-hover);
+}
+
+/*
+ * =========================================================
+ * A DESTRUCTIVE DIALOG BUTTON
+ * =========================================================
+ *
+ * The warning treatment, and it is the DIALOG's job rather than the menu row's.
+ * A permanently red "Move to Trash" in the File menu would be decoration; the
+ * red belongs on the button that is one click from the act, where it is a
+ * warning. It uses the theme's own error tokens, so it is legible in Light Mode
+ * and lifted for Dark Mode without a rule naming either.
+ */
+.engg-dialog-button-destructive {
+    background: var(--datum-surface);
+    border-color: var(--datum-error);
+    color: var(--datum-error);
+}
+
+.engg-dialog-button-destructive:hover {
+    background: var(--datum-error-tint);
+    border-color: var(--datum-error);
+    color: var(--datum-error);
+}
+
+.engg-dialog-button-destructive:focus-visible {
+    outline: 2px solid var(--datum-error);
+    outline-offset: 1px;
+}
+
+/*
+ * =========================================================
+ * DOCUMENT DETAILS: A READ-ONLY LABEL/VALUE TABLE
+ * =========================================================
+ *
+ * Two columns, so every value starts at the same x and the panel reads as a
+ * table rather than as sentences. The labels take the muted ink and the values
+ * the primary ink, which is what makes the pairs scannable.
+ */
+.datum-document-details {
+    display: grid;
+    gap: 0;
+}
+
+.datum-document-details-row {
+    align-items: baseline;
+    border-bottom: 1px solid var(--datum-border);
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 104px minmax(0, 1fr);
+    padding: 7px 0;
+}
+
+.datum-document-details-row:last-child {
+    border-bottom: 0;
+}
+
+.datum-document-details-label {
+    color: var(--datum-muted);
+    font-size: 11px;
+}
+
+.datum-document-details-value {
+    color: var(--datum-ink);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+/*
+ * =========================================================
+ * SHARE: THE TWO REAL ACTIONS, AND THE NOTE THAT EXPLAINS THEM
+ * =========================================================
+ */
+.datum-share-dialog {
+    display: grid;
+    gap: 12px;
+}
+
+.datum-share-note {
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.datum-share-filename {
+    color: var(--datum-ink);
+    font-family: var(--datum-font-mono);
+    font-size: 12px;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.datum-share-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.datum-share-action {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11.5px;
+    padding: 7px 12px;
+}
+
+.datum-share-action:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+    color: var(--datum-green-ink);
+}
+
+.datum-share-action:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+/*
+ * =========================================================
+ * A CONTEXT MENU
+ * =========================================================
+ *
+ * A small menu anchored to a control, with NO backdrop - deliberately. A menu
+ * belongs to the thing it is anchored to, so whatever surface that thing lives
+ * on stays visible and usable behind it. That is the difference between this
+ * and a dialog, and it is why clicking a three-dot button no longer closes the
+ * Open launcher.
+ */
+.engg-context-menu {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 6px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+    display: flex;
+    flex-direction: column;
+    min-width: 168px;
+    padding: 4px;
+    z-index: 200;
+}
+
+.engg-context-menu-item {
+    background: transparent;
+    border: none;
+    border-radius: 3px;
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    padding: 6px 10px;
+    text-align: left;
+}
+
+.engg-context-menu-item:hover {
+    background: var(--datum-green-tint);
+}
+
+.engg-context-menu-item:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -2px;
+}
+
+.engg-context-menu-item-danger {
+    color: var(--datum-error);
+}
+
+.engg-context-menu-item-danger:hover {
+    background: var(--datum-error-tint);
+}
+
+/*
+ * =========================================================
+ * THE OPEN POPUP - A DOCUMENT LAUNCHER
+ * =========================================================
+ *
+ * File -> Open shows this instead of the operating system's file panel. Three
+ * sections, in the order a person usually wants them: a starting template, a
+ * drawing they were working on, or a file from the disk.
+ *
+ * It is wider than a question dialog because it holds cards and a list, and
+ * taller so the sections are comfortable without scrolling on a normal screen.
+ */
+.engg-dialog-lg {
+    width: min(620px, calc(100vw - 32px));
+}
+
+.datum-open-body,
+.engg-dialog-body {
+    max-height: min(60vh, 560px);
+    overflow-y: auto;
+}
+
+.datum-open-section {
+    margin-bottom: 18px;
+}
+
+.datum-open-section:last-child {
+    margin-bottom: 4px;
+}
+
+.datum-open-section-title {
+    color: var(--datum-subtle);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    margin: 0 0 8px;
+    text-transform: uppercase;
+}
+
+/* Templates: compact cards, three to a row on a normal window. */
+.datum-open-templates {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.datum-open-template {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-height: 62px;
+    padding: 10px 12px;
+    text-align: left;
+}
+
+.datum-open-template:hover {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-line);
+}
+
+.datum-open-template:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+.datum-open-template-label {
+    color: var(--datum-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.datum-open-template-note {
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+/* Recents: a compact vertical list, each row a whole-file button. */
+.datum-open-recents {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/*
+ * A RECENT ITEM AND ITS MENU BUTTON.
+ *
+ * The row is the Open action and takes the width; the menu button is a small
+ * fixed-size control BESIDE it, not inside it. That is what stops the three
+ * dots reading as the right-hand end of one long button.
+ */
+.datum-open-recent-wrap {
+    align-items: center;
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+}
+
+.datum-open-recent-wrap .datum-open-recent {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/*
+ * THE MENU BUTTON IS A DAETUM PANEL BUTTON.
+ *
+ * It is the same control as `.drawing-property-action` - a white button, a thin
+ * border, the accent colour, a 3px radius - so a control in the Open popup and
+ * a control in the Features panel are recognisably the same kind of thing. The
+ * earlier version was a bare grey glyph with no border, which read as decoration
+ * rather than as something to press.
+ *
+ * The `\u22ee` glyph is set at the panel's own type scale rather than at 15px,
+ * and the box is a compact square with the glyph OPTICALLY CENTRED - three dots
+ * sit high in most faces, so nudging the line-height is what stops them looking
+ * adrift in their button.
+ */
+.datum-open-recent-menu,
+.datum-open-template-menu {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    height: 20px;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    width: 20px;
+}
+
+.datum-open-recent-menu:hover,
+.datum-open-template-menu:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.datum-open-recent-menu:active,
+.datum-open-template-menu:active {
+    background: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.datum-open-recent-menu:focus-visible,
+.datum-open-template-menu:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+/*
+ * THE THREE DOTS, DRAWN RATHER THAN TYPED.
+ *
+ * The `\u22ee` character is absent from some fonts, and a missing glyph is
+ * substituted from a fallback that can be a different size entirely. Three small
+ * circles in an inline SVG are the same mark in every browser, at exactly the
+ * size asked for.
+ */
+.datum-open-recent-menu svg,
+.datum-open-template-menu svg {
+    display: block;
+    fill: currentColor;
+    height: 12px;
+    pointer-events: none;
+    width: 12px;
+}
+
+/*
+ * In the GRID the card is a column, so the menu button sits at the card's top
+ * right - clear of the filename and of the thumbnail - rather than beside the
+ * row as it does in the list.
+ */
+.datum-open-recents-grid .datum-open-recent-wrap {
+    align-items: stretch;
+    position: relative;
+}
+
+.datum-open-recents-grid .datum-open-recent-menu {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+}
+
+.datum-open-recents-grid .datum-open-recent {
+    padding-right: 30px;
+}
+
+.datum-open-recent {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    gap: 10px;
+    padding: 7px 8px;
+    text-align: left;
+    width: 100%;
+}
+
+.datum-open-recent:hover {
+    background: var(--datum-panel);
+    border-color: var(--datum-border);
+}
+
+.datum-open-recent:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+.datum-open-recent-missing {
+    opacity: 0.75;
+}
+
+.datum-open-thumb {
+    align-items: center;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    display: flex;
+    flex: 0 0 auto;
+    height: 34px;
+    justify-content: center;
+    width: 46px;
+}
+
+.datum-open-thumb-mark {
+    color: var(--datum-green-line);
+    font-size: 16px;
+}
+
+.datum-open-recent-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.datum-open-recent-name {
+    color: var(--datum-ink);
+    font-size: 13px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.datum-open-recent-file {
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.datum-open-recent-when {
+    color: var(--datum-subtle);
+    font-size: 11px;
+}
+
+.datum-open-recent-remove {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 11.5px;
+    margin-left: auto;
+    padding: 4px 8px;
+    text-decoration: underline;
+}
+
+.datum-open-recent-remove:hover {
+    color: var(--datum-error);
+}
+
+.datum-open-empty {
+    color: var(--datum-muted);
+    font-size: 12.5px;
+    margin: 0;
+}
+
+/*
+ * Template cards.
+ *
+ * A card holds a preview when one could be made, the name the user gave it, and
+ * a small menu. The empty state above is replaced by cards the moment the user
+ * adds the first template.
+ */
+.datum-open-template-card {
+    position: relative;
+}
+
+.datum-open-template-card .datum-open-template {
+    min-height: 0;
+    width: 100%;
+}
+
+.datum-open-template-preview {
+    align-items: center;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    display: flex;
+    height: 54px;
+    justify-content: center;
+    margin-bottom: 7px;
+    overflow: hidden;
+    width: 100%;
+}
+
+/*
+ * The template menu button's own rules are the shared ones above, next to the
+ * Recent menu's - one control, defined once. The only thing stated here is where
+ * it sits on a card.
+ */
+.datum-open-template-menu {
+    position: absolute;
+    right: 4px;
+    top: 4px;
+}
+
+/*
+ * The name and the "User template" note, stacked under the preview.
+ */
+.datum-open-template-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+/*
+ * ADD TEMPLATE IS A DAETUM BUTTON, NOT A DASHED OUTLINE.
+ *
+ * It was a dashed box, which reads as a placeholder - "something goes here" -
+ * rather than as a control that does something. It is now the same button as
+ * every other action in the application: white, thin border, accent text, and
+ * the shared hover fill.
+ */
+.datum-open-add-template {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    margin-top: 8px;
+    padding: 4px 10px;
+}
+
+.datum-open-add-template:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.datum-open-add-template:active {
+    background: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.datum-open-add-template:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+/*
+ * The Recent heading and its view control.
+ *
+ * The switch sits beside the heading rather than in the footer, so it reads as
+ * part of the Recent section and not as an action on the whole popup.
+ */
+.datum-open-section-head {
+    align-items: center;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.datum-open-section-head .datum-open-section-title {
+    margin: 0;
+}
+
+.datum-open-view-switch {
+    display: flex;
+    gap: 3px;
+}
+
+/*
+ * THE VIEW SWITCH IS A SEGMENTED CONTROL.
+ *
+ * Two buttons, one active: the same idea the force panel's "Magnitude &amp;
+ * Direction / X / Y Components" control uses, so a pair of mutually exclusive
+ * choices looks the same wherever it appears. The ACTIVE one is filled with the
+ * accent tint and the accent border, which is how the segmented control says
+ * which choice is in force.
+ */
+.datum-open-view-button {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 9px;
+    height: 20px;
+    justify-content: center;
+    overflow: hidden;
+    padding: 0;
+    width: 24px;
+}
+
+.datum-open-view-button:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.datum-open-view-button.active {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.datum-open-view-button:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+/*
+ * THE VIEW BUTTON'S ICON IS A FIXED SMALL BOX.
+ *
+ * Explicitly sized and clipped, so nothing can make this control grow whatever
+ * it is drawn with.
+ */
+.datum-open-view-button svg {
+    display: block;
+    fill: currentColor;
+    height: 12px;
+    pointer-events: none;
+    width: 12px;
+}
+
+/*
+ * =========================================================
+ * THE SELECT CONTROL AND ITS BULK ACTIONS
+ * =========================================================
+ *
+ * "Select" is the ordinary way into multi-selection, so it is an ordinary DAETUM
+ * button - the same white, thin-bordered control as Add Template and the menu
+ * buttons, so the row of controls at the head of Recent reads as one family.
+ */
+.datum-open-section-controls {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+.datum-open-select-toggle {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 4px 10px;
+}
+
+.datum-open-select-toggle:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.datum-open-select-toggle:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+/*
+ * The bar that appears while selection mode is on: the count, then the actions.
+ */
+.datum-open-selection-bar {
+    align-items: center;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding: 6px 8px;
+}
+
+.datum-open-selection-count {
+    color: var(--datum-ink);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.datum-open-selection-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.datum-open-selection-action {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 8px;
+}
+
+.datum-open-selection-action:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+/*
+ * A destructive action reads as destructive, in the error colour the rest of the
+ * application uses for one.
+ */
+.datum-open-selection-action-danger {
+    color: var(--datum-error);
+}
+
+.datum-open-selection-action-danger:hover {
+    background: var(--datum-error-tint);
+    border-color: var(--datum-error);
+}
+
+.datum-open-selection-action:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+/*
+ * A ROW'S CHECKBOX, WHILE SELECTING.
+ *
+ * The same control as a property's constraint tick, and it sits in the row's
+ * own leading column so the list stays aligned whether or not it is there.
+ */
+.datum-open-select {
+    align-items: center;
+    display: inline-flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    padding: 0 2px;
+}
+
+.datum-open-select input {
+    accent-color: var(--datum-green);
+    cursor: pointer;
+    height: 13px;
+    margin: 0;
+    width: 13px;
+}
+
+.datum-open-recent-selected {
+    background: var(--datum-green-wash);
+    border-radius: 4px;
+}
+
+/*
+ * The Recent thumbnail grid.
+ *
+ * A drawing is recognised by what it looks like, so the grid is the default
+ * presentation: a picture first, the name underneath. The list view remains for
+ * anyone who works by file name.
+ */
+.datum-open-recents-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+.datum-open-recents-grid .datum-open-recent {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.datum-open-recents-grid .datum-open-thumb {
+    height: 72px;
+    width: 100%;
+}
+
+/*
+ * A thumbnail shows the drawing itself, scaled to fit its box. Pointers are
+ * disabled so the row underneath owns every click - the picture is a label,
+ * not a control.
+ */
+/*
+ * =========================================================
+ * A PREVIEW NEVER ESCAPES ITS BOX
+ * =========================================================
+ *
+ * A preview is an SVG string injected into a small square. Three things have to
+ * be true for it to stay there, and the first version of this only had one of
+ * them:
+ *
+ *   1. the BOX clips - `overflow: hidden` - so nothing can be drawn outside it
+ *      even if the SVG inside wants more room;
+ *   2. the SVG is a BLOCK at `width/height: 100%`, so it takes the box's size
+ *      rather than its own `width="160"` attribute. On the default inline
+ *      display a replaced element keeps its intrinsic width, which is how a
+ *      thumbnail came out at its full pixel size inside a 54px box;
+ *   3. `min-width`/`min-height: 0` stop the flex parent from being stretched to
+ *      fit the SVG's intrinsic size instead of the other way round.
+ *
+ * The clip is the guarantee: whatever the stored preview's own dimensions are -
+ * including one written by an older build before previews were fitted - it can
+ * only ever be drawn INSIDE the square it belongs to.
+ */
+/*
+ * THE PREVIEW SVG IS SIZED BY THE BOX, AND CANNOT FALL BACK TO ITS OWN SIZE.
+ *
+ * `height: 100%` is only definite when the PARENT has a definite height. In the
+ * grid the thumbnail is a block with a fixed height, so it worked; in the LIST
+ * the box sits in a flex row whose height is auto, so a percentage height
+ * resolves to `auto` - and the SVG then falls back to its own intrinsic size,
+ * which for a `viewBox` of 0 0 760 460 is the whole drawing. That is exactly the
+ * bug: switching to List put a full-size drawing on the page.
+ *
+ * So the box is given an EXPLICIT pixel size here, and the SVG is absolutely
+ * positioned to fill it. An absolutely positioned child is measured against its
+ * containing block's PADDING BOX regardless of that block's own height being
+ * auto - so the size is definite in both views, and there is no percentage left
+ * to resolve to `auto`.
+ */
+.datum-open-thumb,
+.datum-open-template-preview {
+    overflow: hidden;
+    position: relative;
+}
+
+.datum-open-thumb svg,
+.datum-open-template-preview svg {
+    display: block;
+    height: 100%;
+    inset: 0;
+    left: 0;
+    max-height: 100%;
+    max-width: 100%;
+    min-height: 0;
+    min-width: 0;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    width: 100%;
+}
+
+.datum-open-thumb svg {
+    height: 100%;
+    pointer-events: none;
+    width: 100%;
+}
+
+/*
+ * AN EXPLICIT SIZE FOR THE THUMBNAIL, IN BOTH VIEWS.
+ *
+ * The base rule already gave 46x34, but a flex item's `flex: 0 0 auto` with an
+ * auto cross-size can still collapse. Stating the size for the list row makes it
+ * definite, so the absolutely-positioned SVG above has a real box to fill.
+ */
+.datum-open-recents .datum-open-thumb {
+    height: 34px;
+    width: 46px;
+}
+
+.datum-open-recents-grid .datum-open-recent-when {
+    margin-top: 2px;
+}
+
+/*
+ * THE FEATURE LOCK, AS A COMPACT BOOLEAN PROPERTY.
+ *
+ * `Locked` sits with the POSITION rows, and its checkbox is placed directly
+ * beside the label rather than inside the wide value column - a small checkbox
+ * centred in a full-width field reads as a value that is missing, which is
+ * exactly how it looked when it sat under the feature name.
+ */
+.drawing-property-grid-lock .drawing-property-lock {
+    align-items: center;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.drawing-property-grid-lock .drawing-property-fix {
+    margin: 0;
+}

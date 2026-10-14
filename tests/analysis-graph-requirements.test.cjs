@@ -4,7 +4,7 @@ const { JSDOM } = require("jsdom");
 const path = require("path");
 const fs = require("fs");
 
-const { controllerSource, loadModule, locate, modulePath, sourceDir } = require("./helpers/source-path.cjs");
+const { controllerSource, loadModule, locate, modulePath, rendererSource, sourceDir } = require("./helpers/source-path.cjs");
 /*
  * ========================================================
  * WHAT THE ANALYSIS GRAPH ALREADY DOES
@@ -42,7 +42,7 @@ const editor = global.window.enggSketchEditor;
 
 const read = (name) => fs.readFileSync(locate(name), "utf8");
 
-const renderer = read("renderer.js");
+const renderer = rendererSource();
 const deps = read("analysis-dependencies.js");
 const drawing = controllerSource();
 const sketchEditor = read("sketch-editor.js");

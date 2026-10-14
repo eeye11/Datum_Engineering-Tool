@@ -1,0 +1,679 @@
+/*
+ * The side panel rails, their hide buttons and collapsed state, scrollbars, tool submenus and the box-selection rectangle.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * Each side panel now lives inside its own RAIL, and the rail -
+ * not the panel - is what the workspace grid sizes.
+ *
+ * The rail is the reason collapsing actually works. Hiding a
+ * panel with visibility or opacity leaves its grid column
+ * exactly as wide as before, so the canvas gets nothing back and
+ * the drawing is unchanged; the space is only really reclaimed
+ * when the column itself shrinks. Collapsing therefore changes
+ * the rail's width, and because the canvas column is
+ * minmax(0, 1fr) it absorbs the difference on its own.
+ *
+ * Collapsed is a width, not a display toggle, so the rail's
+ * single arrow stays on screen and the layout keeps its shape.
+ */
+/*
+ * =========================================================
+ * THE HIDE BUTTON SITS ON ITS PANEL'S OUTER EDGE
+ * =========================================================
+ *
+ * The two rails were mirrored with `row-reverse`, which put the two Hide
+ * buttons on DIFFERENT sides of their panels: measured on a 1280px window, the
+ * Tools button sat at x=21 with its panel starting at 43 (outside-left, as
+ * intended), while the Features button sat at x=1024 with its panel starting at
+ * 1046 - INSIDE, on the canvas side. Two controls doing the same job to two
+ * panels, and they did not look like the same control.
+ *
+ * So the rule is stated ONCE and each side only says WHICH edge is its outer
+ * one. The button is always the first thing in the rail on the left, and the
+ * last thing on the right, so it always sits against the window edge rather
+ * than against the canvas.
+ */
+.drawing-panel-rail {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    grid-row: 4;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.drawing-panel-rail-left {
+    border-right: 1px solid var(--cad-border);
+
+    /* The left panel's outer edge is the WINDOW's left: button first. */
+    flex-direction: row;
+}
+
+.drawing-panel-rail-right {
+    border-left: 1px solid var(--cad-border);
+
+    /* The Features control sits on the panel's left edge, beside the canvas. */
+    flex-direction: row;
+}
+
+/*
+ * The panel fills whatever its rail has left.
+ *
+ * This is `flex: 1` and not the default `flex: 0 1 auto` on
+ * purpose. A flex item's default width comes from its CONTENT, so
+ * an inspector whose only content happened to be the words "No
+ * feature selected" shrank to about half the rail and left a band
+ * of dead space between the drawing and the panel - a gap that
+ * looked like the canvas had been padded and that moved about as
+ * the panel's contents changed.
+ *
+ * Growing to fill makes the rail's width mean what it says: the
+ * panel's edge IS the panel's boundary, and the drawing runs up to
+ * it. `min-width: 0` lets a long feature name still shrink the
+ * panel's CONTENTS rather than forcing the rail wider.
+ */
+.drawing-panel-rail > .drawing-tool-panel,
+.drawing-panel-rail > .drawing-inspector {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/*
+ * The arrow.
+ *
+ * Kept as a slim vertical strip with a rotated caption, so the
+ * collapsed state costs about twenty pixels rather than a whole
+ * panel. It is deliberately not a floating overlay: an overlay
+ * would sit on top of the drawing it was meant to give more room
+ * to.
+ */
+.drawing-panel-toggle {
+    align-items: center;
+    align-self: stretch;
+    background: var(--datum-panel);
+    border: 0;
+    color: var(--cad-muted);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-start;
+    padding: 7px 2px;
+    transition: background .12s ease, color .12s ease;
+    width: 22px;
+}
+
+.drawing-panel-toggle:hover {
+    background: var(--datum-panel);
+    color: var(--cad-ink);
+}
+
+.drawing-panel-toggle:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -2px;
+}
+
+.drawing-panel-toggle svg {
+    flex: 0 0 auto;
+    height: 16px;
+    width: 16px;
+}
+
+.drawing-panel-rail-left > .drawing-panel-toggle {
+    order: 1;
+}
+
+.drawing-panel-rail-left > .drawing-panel-toggle[aria-expanded="false"] svg {
+    transform-origin: center;
+    transform: rotate(180deg);
+}
+
+.drawing-panel-rail-left > .drawing-panel-toggle[aria-expanded="true"] svg {
+    transform: rotate(0deg);
+}
+
+.drawing-panel-rail-right > .drawing-panel-toggle {
+    order: -1;
+}
+
+.drawing-panel-rail-right > .drawing-panel-toggle[aria-expanded="false"] svg {
+    transform: rotate(180deg);
+}
+
+.drawing-panel-rail-right > .drawing-panel-toggle[aria-expanded="true"] svg {
+    transform: rotate(0deg);
+}
+
+/*
+ * The caption reads bottom-to-top, so the strip says what it
+ * opens rather than needing a tooltip to be understood.
+ */
+.drawing-panel-toggle-text {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    writing-mode: vertical-rl;
+}
+
+/*
+ * COLLAPSED STATE
+ *
+ * The panel is removed from the flow and the rail narrows to the
+ * arrow. The arrow itself flips to point the other way, so it
+ * always indicates the action rather than the current state -
+ * a control that describes where it is rather than what it does
+ * is one more thing to interpret.
+ *
+ * The canvas is NOT re-zoomed here. The viewport is measured from
+ * the canvas element itself on every render, so a wider canvas
+ * simply shows more of the same drawing at the same zoom. That
+ * is why collapsing the toolbar at 150% leaves it at 150%.
+ */
+.drawing-panel-rail-collapsed {
+    width: 22px;
+}
+
+/*
+ * The grid TRACK, not the element.
+ *
+ * Narrowing the rail element is not enough on its own: the rail
+ * sits in a fixed 148px column, and a narrower element inside a
+ * track that is still 148px wide leaves that width unclaimed.
+ * The canvas column is minmax(0, 1fr), so it only grows if the
+ * tracks on either side of it actually get smaller.
+ *
+ * So collapsing rewrites the workspace's own column template. The
+ * canvas is the only flexible track, so it absorbs the whole
+ * difference and the freed width becomes drawing area.
+ */
+.drawing-workspace-tools-collapsed {
+    grid-template-columns: 22px minmax(0, 1fr) 236px;
+}
+
+.drawing-workspace-features-collapsed {
+    grid-template-columns: 202px minmax(0, 1fr) 22px;
+}
+
+/*
+ * THE TOOL PANEL IS NEVER HIDDEN BY WIDTH.
+ *
+ * There used to be an `@media (max-width: 720px)` rule here that set
+ * `.drawing-tool-panel { display: none }`, which is exactly what the
+ * responsive rules now forbid: a narrow screen simply LOST the Tools
+ * panel, and with it every tool the student might need. The panel is
+ * compressed and, at the narrowest widths, reduced to icons - never
+ * removed. Its Hide button lives in the rail, which keeps its width at
+ * every breakpoint, so the panel is always reachable.
+ *
+ * The responsive progression lives further down this file, in one place,
+ * so the column templates cannot disagree with each other again.
+ */
+
+/*
+ * Both panels collapsed.
+ *
+ * Written as ONE compound selector, `.a.b`, and not as
+ * `.a .b`. Both classes sit on the same workspace element, so a
+ * descendant selector would be looking for a CHILD carrying the
+ * second class - it could never match, and the base rule's 148px
+ * would silently win. The track stayed a full toolbar's width
+ * while the arrow strip sat in the middle of it, which is exactly
+ * the dead column that looked like the drawing had not taken the
+ * space.
+ */
+.drawing-workspace-tools-collapsed.drawing-workspace-features-collapsed {
+    grid-template-columns: 22px minmax(0, 1fr) 22px;
+}
+
+.drawing-panel-rail-collapsed .drawing-tool-panel,
+.drawing-panel-rail-collapsed .drawing-inspector {
+    display: none;
+}
+
+.drawing-panel-rail-left.drawing-panel-rail-collapsed {
+    border-right: 0;
+}
+
+.drawing-panel-rail-right.drawing-panel-rail-collapsed {
+    border-left: 0;
+}
+
+.drawing-tool-panel,
+.drawing-canvas-area {
+    grid-row: 4;
+}
+
+.drawing-tool-panel {
+    border-right: 0;
+}
+
+.drawing-inspector {
+    border-left: 0;
+}
+
+.drawing-panel-heading {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    margin: 0 0 8px;
+}
+
+.drawing-tool-list {
+    align-content: start;
+    display: grid;
+    flex: 1 1 auto;
+    gap: 1px;
+    min-height: 0;
+    min-width: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /*
+     * A SCROLLBAR YOU CAN SEE.
+     *
+     * The list scrolls because the tool set is genuinely taller than a
+     * short window - a 640px-tall laptop shows about two thirds of the
+     * STATICS tools and hides the rest. Scrolling is the right behaviour;
+     * scrolling SILENTLY is not, because nothing on screen says there is
+     * anything below. The analysis tools in particular - AFD, SFD and BMD
+     * - simply did not exist as far as the user could tell, and that is
+     * what "the buttons are missing" actually meant.
+     *
+     * So the scrollbar is given the platform's thin form rather than the
+     * default fat overlay, and painted in the panel's own ink so it
+     * reads as part of the panel rather than as a stray overlay that
+     * appears and vanishes with the pointer. Firefox is honoured through
+     * `scrollbar-width` for the same reason.
+     *
+     * `scrollbar-gutter: stable` reserves the space whether or not the
+     * list is currently overflowing, so the column of tools does not
+     * shift sideways the moment the list becomes scrollable.
+     */
+    scrollbar-color: var(--datum-border) transparent;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+}
+
+.drawing-tool-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.drawing-tool-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/*
+ * The thumb is always painted. A transparent-until-hover scrollbar is
+ * the default on some platforms and is exactly what made the content
+ * below look as though it did not exist.
+ */
+.drawing-tool-list::-webkit-scrollbar-thumb {
+    background: var(--datum-border);
+    border: 2px solid transparent;
+    border-radius: 4px;
+    background-clip: content-box;
+}
+
+.drawing-tool-list::-webkit-scrollbar-thumb:hover {
+    background: var(--datum-muted);
+    background-clip: content-box;
+}
+
+.drawing-tool-group {
+    border-bottom: 1px solid var(--datum-panel);
+
+    /*
+     * Same reason as the buttons: a grid item's default `min-width:
+     * auto` stops a section shrinking below its widest child, which
+     * kept the whole list scrolling sideways on a very narrow screen.
+     */
+    min-width: 0;
+    padding: 4px 0 5px;
+}
+
+.drawing-tool-group:last-child {
+    border-bottom: 0;
+}
+
+.drawing-tool-group-label {
+    color: var(--cad-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin: 0 1px 2px;
+    min-width: 0;
+    text-transform: uppercase;
+
+    /*
+     * A group heading wraps like everything else. It is the widest
+     * fixed content left in the panel - "BODIES" on one line, "GEOMETRY
+     * TOOLS" on two - so letting it overflow was enough on its own to
+     * keep the whole list scrolling sideways on a narrow screen.
+     */
+    overflow-wrap: break-word;
+}
+
+.drawing-tool {
+    align-items: flex-start;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font-size: 11px;
+    gap: 5px;
+
+    /*
+     * A grid item's default min-width is `auto`, so a button would
+     * refuse to be narrower than its own content and would push the
+     * list into sideways scrolling on a very narrow screen. `min-width:
+     * 0` lets it shrink to the panel, and the label below wraps
+     * instead. A tool is still reachable; it is just not given a
+     * horizontal scrollbar to find it by.
+     */
+    min-width: 0;
+
+    /*
+     * The hanging indent for a wrapped name.
+     *
+     * The row is a flex line, so the label is made a block of its
+     * own: `text-indent` moves only the FIRST line left, leaving
+     * every subsequent line at the block's own edge. The result is
+     * that a name too long for the panel breaks at a word and its
+     * second line sits under its first, instead of hanging back
+     * under the icon and reading as a separate item.
+     *
+     * `overflow-wrap` rather than `hyphens`, so a break is made
+     * between words where one is possible and only inside a word
+     * when a single word is itself too long.
+     */
+    line-height: 1.25;
+    min-height: 25px;
+    padding: 3px 5px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-tool-label {
+    /*
+     * A FLEX ITEM'S DEFAULT min-width IS `auto`, which means "never
+     * smaller than my content". The label therefore refused to shrink
+     * below the width of its longest word, the row overflowed the
+     * panel, and a narrow panel simply CUT the text off at the edge:
+     * "Point Force" became "Point Fo".
+     *
+     * `min-width: 0` lifts that floor, which is what lets the label
+     * take the width actually left over after the icon and let the
+     * wrapping above do its job. Without it the hanging indent is
+     * decoration - the text never reaches the second line, because it
+     * never gets a narrow box to wrap inside.
+     */
+    min-width: 0;
+
+    /*
+     * The label takes the width LEFT OVER, rather than only as much
+     * as its own text happens to need.
+     *
+     * A flex item's default basis is its content width, so a short
+     * name like "Select" was laid out in a box just wide enough for
+     * itself while 60-odd pixels of the panel sat empty beside it -
+     * and a long name, having no extra room to claim, broke early
+     * into two or three lines instead of using the width there
+     * plainly was. The panel looked half empty and the names looked
+     * cramped at the same time.
+     *
+     * `flex: 1 1 auto` with `min-width: 0` fixes both ends: the label
+     * grows into the space available, and may still shrink below its
+     * content when the panel is too narrow, where the wrapping above
+     * takes over. Growing and being able to shrink are not in
+     * conflict; they are what `1 1` means.
+     *
+     * It also puts the submenu marker after the LAST word, on the
+     * word it belongs to, because the label is now wide enough to hold
+     * the final word and its marker together.
+     */
+    flex: 1 1 auto;
+
+    /*
+     * WHOLE WORDS ONLY, NEVER SPLIT MID-WORD.
+     *
+     * This was `break-word`, which breaks a word at the character
+     * level when it will not fit on a line by itself. That produces
+     * "Component" / "s" and "Temperature" split across three lines:
+     * text that is not a word, and which a student has to reassemble
+     * before they can read what the tool is called.
+     *
+     * `normal` is the default and means exactly what is wanted: break
+     * BETWEEN words, and let a long word sit on a line of its own.
+     * The panel is sized to fit the longest tool name's longest word,
+     * so this rarely has to do anything - and when it does, the
+     * result is still a readable word on a line rather than a
+     * fragment.
+     */
+    overflow-wrap: normal;
+    word-break: normal;
+
+    text-indent: -0.62em;
+    padding-left: 0.62em;
+}
+
+.drawing-tool-icon {
+    align-items: center;
+    color: var(--datum-green);
+    display: inline-flex;
+
+    /*
+     * A little smaller than the 21px it used, because the panel is
+     * narrower.
+     *
+     * The icon is the one part of a row that cannot shrink or
+     * wrap: it is what tells two similar tools apart at a glance,
+     * so it has to stay whole. Taking four pixels off it and four
+     * off the gap buys back eight pixels of LABEL width in a 104px
+     * panel, and label width is the scarce thing - it is what
+     * decides whether "Bending Moment" needs three lines or two.
+     */
+    flex: 0 0 18px;
+    height: 18px;
+    justify-content: center;
+    line-height: 1;
+    text-align: center;
+
+    /*
+     * Matches the flex basis above. It was left at the old 21px,
+     * and because a fixed width wins over flex-basis the icon kept
+     * its full width even after the basis was reduced - so the panel
+     * looked narrower while the text had not gained a single pixel.
+     */
+    width: 18px;
+}
+
+.drawing-tool-icon svg {
+    display: block;
+    height: 18px;
+    width: 18px;
+}
+
+.drawing-tool:hover,
+.drawing-tool.selected {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-line);
+}
+
+.drawing-tool.active {
+    background: var(--datum-green-tint);
+    border-color: var(--cad-active-border);
+    color: var(--cad-active-ink);
+    font-weight: 700;
+}
+
+/*
+ * Caret shown on tools that open a submenu, so the
+ * affordance matches the existing menu buttons.
+ */
+.drawing-tool-caret {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    vertical-align: middle;
+    color: currentColor;
+    line-height: 0;
+}
+
+.drawing-tool-caret svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.drawing-inline-tools {
+    border-left: 1px solid var(--datum-border);
+    margin: 2px 0 4px 9px;
+    padding-left: 5px;
+    min-width: 0;
+}
+
+.drawing-tool[aria-expanded="false"] .drawing-tool-caret {
+    transform: rotate(0deg);
+}
+
+.drawing-tool[aria-expanded="true"] .drawing-tool-caret {
+    transform: rotate(180deg);
+}
+
+.drawing-canvas-area {
+    background: var(--canvas-background);
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+}
+
+.drawing-canvas {
+    background-color: var(--datum-surface);
+    background-image: none;
+    border: 1px solid var(--datum-border);
+    cursor: default;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.drawing-canvas.drawing-tool-active {
+    cursor: crosshair;
+}
+
+.drawing-renderer {
+    height: 100%;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+}
+
+.drawing-snap-marker {
+    fill: var(--datum-surface);
+    stroke: var(--datum-focus);
+    stroke-width: 1.5;
+}
+
+.drawing-snap-label {
+    fill: var(--datum-focus);
+    font-family: Arial, sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: var(--datum-surface);
+    stroke-width: 3px;
+}
+
+/*
+ * THE BOX-SELECTION RECTANGLE.
+ *
+ * A CLEAN OUTLINE, NOT A FILLED OVERLAY. It had a 12% tint, which on a large
+ * drag became a wash of colour over whatever the student was trying to read -
+ * the very geometry they were aiming at. The outline says the same thing
+ * without covering the thing being selected, and it is the convention every
+ * drawing application uses.
+ *
+ * `fill: none` rather than `transparent`, so there is no fill AT ALL: a
+ * transparent fill still catches pointer events on some renderers and would
+ * make the box itself a target.
+ */
+.drawing-selection-box {
+    fill: none;
+    pointer-events: none;
+    stroke: var(--datum-focus);
+    stroke-dasharray: 4 3;
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+}
+
+.drawing-canvas.grid-off {
+    background-image: none;
+}
+
+.drawing-axis-x,
+.drawing-axis-y {
+    position: absolute;
+}
+
+.drawing-axis-x {
+    height: 1px;
+    left: 24px;
+    right: 24px;
+    top: 50%;
+}
+
+.drawing-axis-y {
+    bottom: 24px;
+    left: 50%;
+    top: 24px;
+    width: 1px;
+}
+
+.drawing-origin {
+    background: var(--datum-green);
+    border: 2px solid var(--datum-surface);
+    border-radius: 50%;
+    height: 10px;
+    left: calc(50% - 5px);
+    position: absolute;
+    top: calc(50% - 5px);
+    width: 10px;
+}
+
+.drawing-axis-label {
+    color: var(--datum-muted);
+    font-size: 10px;
+    position: absolute;
+}
+
+.drawing-axis-label.x {
+    right: 27px;
+    top: calc(50% + 6px);
+}
+
+.drawing-axis-label.y {
+    left: calc(50% + 7px);
+    top: 27px;
+}
+
+.drawing-canvas-note {
+    background: rgba(255, 255, 255, .85);
+    color: var(--datum-muted);
+    font-size: 11px;
+    left: 14px;
+    padding: 4px 6px;
+    position: absolute;
+    top: 12px;
+}

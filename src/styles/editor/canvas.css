@@ -1,0 +1,269 @@
+/*
+ * The canvas: geometry editing, selected geometry, the engineering grid and axes.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/* =========================================================
+   GEOMETRY EDITING
+========================================================= */
+
+.drawing-geometry-handle {
+    fill: var(--datum-surface);
+    stroke: var(--datum-green);
+    stroke-width: 1.5;
+    cursor: pointer;
+    pointer-events: all;
+}
+
+.drawing-geometry-handle:hover {
+    fill: var(--datum-green-tint);
+    stroke-width: 2;
+}
+
+.drawing-geometry-handle-start,
+.drawing-geometry-handle-end {
+    cursor: crosshair;
+}
+
+.drawing-geometry-handle-center,
+.drawing-geometry-handle-origin {
+    cursor: move;
+}
+
+.drawing-geometry-handle-radius,
+.drawing-geometry-handle-x-axis,
+.drawing-geometry-handle-y-axis {
+    cursor: ew-resize;
+}
+
+.drawing-entity-selected {
+    filter: drop-shadow(0 0 1px rgba(31, 92, 56, .45));
+}
+
+/*
+ * `.drawing-selection-box` is defined once, with the rest of the canvas
+ * chrome. It used to be repeated here as well, with byte-identical
+ * declarations - a copy that could only ever drift from the original.
+ */
+
+/* =========================================================
+   EDITABLE COMPONENT PROPERTIES
+========================================================= */
+
+/*
+ * `.drawing-properties-block` is declared once, above, as a GRID - the
+ * property rows are a grid with tracks that can shrink, and that is what
+ * keeps a numeric field inside the panel.
+ *
+ * It used to be re-declared here as `display: flex`, which silently
+ * overrode the grid and undid it: the rows lost their column tracks and
+ * the old overflow came back. A later rule wins, so the flex version was
+ * the one in force while the grid version above read as live code.
+ */
+
+.drawing-property-edit {
+    align-items: center;
+    display: flex;
+    gap: 5px;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.drawing-property-edit span {
+    color: var(--cad-muted);
+    flex: 1 1 auto;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.drawing-property-edit input {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+    color: var(--cad-ink);
+    font-size: 9px;
+    height: 21px;
+    min-width: 0;
+    padding: 2px 4px;
+    width: 65px;
+}
+
+.drawing-property-edit input:focus {
+    border-color: var(--datum-green);
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(31, 92, 56, .12);
+}
+
+.drawing-property-save {
+    background: var(--datum-green);
+    border: 1px solid var(--datum-green);
+    border-radius: 2px;
+    color: var(--datum-surface);
+    cursor: pointer;
+    font-size: 9px;
+    margin-top: 4px;
+    min-height: 22px;
+    padding: 3px 7px;
+    width: 100%;
+}
+
+.drawing-property-save:hover {
+    background: var(--datum-green-hover);
+}
+
+/* =========================================================
+   SELECTED GEOMETRY
+========================================================= */
+
+/*
+ * A selected feature highlights in ONE piece, internal and
+ * external alike.
+ *
+ * Every primitive a feature can be drawn from is listed here, so
+ * a shape made of polygons, ellipses or stroked outlines looks
+ * the same as one made of a single line. A member of a truss, a
+ * rigid body's fill, a load's arrowheads and a circle's ring all
+ * read as part of the same selected object, which is what
+ * makes it obvious that ONE thing was picked rather than several.
+ *
+ * The highlight is deliberately uniform across those primitives:
+ * the same colour and the same weight everywhere, so the emphasis
+ * is on the shape as a whole and never on one edge of it.
+ */
+.drawing-renderer .drawing-entity-selected line,
+.drawing-renderer .drawing-entity-selected circle,
+.drawing-renderer .drawing-entity-selected rect,
+.drawing-renderer .drawing-entity-selected ellipse,
+.drawing-renderer .drawing-entity-selected polyline,
+.drawing-renderer .drawing-entity-selected polygon,
+.drawing-renderer .drawing-entity-selected path {
+    filter: drop-shadow(0 0 1.5px rgba(22, 119, 255, .9));
+    stroke: var(--datum-focus) !important;
+    stroke-width: 2.25px !important;
+}
+
+/*
+ * Selection is an OUTLINE, never a fill.
+ *
+ * A filled highlight hides the very thing the user selected in
+ * order to work on it. A distributed load's profile is a shaded
+ * envelope, a rigid body may be a filled outline, and a force's
+ * arrowhead is a solid triangle: painting all of that blue meant
+ * the feature could not be judged, positioned or aligned while it
+ * was selected, which is exactly when it needs to be visible.
+ *
+ * So the selection is carried entirely by the stroke, and the
+ * interior of a region is left as the feature drew it.
+ *
+ * The load's profile envelope is the case that matters most, and it
+ * is handled explicitly rather than by trying to restore whatever
+ * the element happened to carry. `revert` was the obvious way to
+ * say "use what the element had", and it is exactly wrong: it
+ * discards the element's own fill and falls back to the SVG
+ * default, which is opaque black. A selected load therefore came
+ * out as a black block hiding its own arrows. Saying "none"
+ * plainly is both correct and immune to that fallback.
+ *
+ * A load's profile is the ENVELOPE of its field of arrows, not a
+ * filled region - the area under it is where the arrows are drawn,
+ * so filling it hides the very thing being selected.
+ */
+.drawing-renderer .drawing-entity-selected .drawing-load-profile {
+    fill: none;
+    stroke: var(--datum-focus);
+    stroke-opacity: 1;
+}
+
+/*
+ * Every other closed region: the feature keeps its own fill. A
+ * rigid body that is genuinely filled stays filled, one that is a
+ * hollow outline stays hollow, and nothing is silently recoloured.
+ */
+.drawing-renderer .drawing-entity-selected path:not(.drawing-open-arc),
+.drawing-renderer .drawing-entity-selected polygon:not(.drawing-load-profile) {
+    stroke: var(--datum-focus);
+}
+
+/*
+ * Text is the one exception: a glyph has no interior to preserve,
+ * so it is recoloured outright rather than outlined.
+ */
+.drawing-renderer .drawing-entity-selected text {
+    fill: var(--datum-focus) !important;
+}
+
+.drawing-manipulation-handle {
+    fill: var(--datum-surface);
+    pointer-events: none;
+    stroke: var(--datum-focus);
+    stroke-width: 1.5px;
+}
+
+/*
+ * The selected annotation's box: an editor-only outline around the
+ * text of a selected magnitude label. The padded interior is not
+ * filled, so the text stays readable; the pointer-events are off so
+ * the click that selects the label passes to the hit test rather than
+ * to the outline itself.
+ */
+.drawing-annotation-selection-box {
+    fill: none;
+    pointer-events: none;
+    stroke: var(--datum-focus);
+    stroke-dasharray: 4 3;
+    stroke-width: 1.5px;
+    rx: 3px;
+}
+
+.drawing-manipulation-handle.origin {
+    fill: var(--datum-green);
+}
+
+/*
+ * THE ENGINEERING GRID.
+ *
+ * IT USED TO BE `--datum-panel`, WHICH IS WHY IT VANISHED IN DARK MODE. In the
+ * dark theme `--datum-panel` resolves to the SAME VALUE as the canvas background -
+ * so the grid was drawn in the precise colour of the paper under it. A token
+ * serving two purposes (panel surface and grid ink) is a token that is correct in
+ * one palette and invisible in the other.
+ *
+ * It now reads a dedicated grid token, defined per theme in `tokens.css`, where
+ * the relationship is the point: darker than the paper in light mode, LIGHTER
+ * than the paper in dark mode. Neither is a literal here, so a new palette adds
+ * one block of values rather than a rule per colour.
+ */
+.drawing-engineering-grid {
+    fill: none;
+    pointer-events: none;
+    stroke: var(--grid-minor-color);
+    stroke-width: 0.65px;
+}
+
+/*
+ * THE CANVAS IS A WORK SURFACE, not the panel it sits in, so it has its own
+ * token. It happens to resolve to the same colour today, which is deliberate -
+ * the canvas should look like the paper it is - but the two questions are now
+ * separate, so a palette can make the sheet differ from its surround.
+ */
+.drawing-canvas {
+    background-color: var(--canvas-background);
+}
+
+/*
+ * THE AXES, distinguishable from the ordinary grid.
+ *
+ * An axis is a REFERENCE, not a guide: it marks where the origin is, so it must
+ * read differently from the lines around it. It steps up from the major grid in
+ * both themes - `--axis-x-color` / `--axis-y-color` are separate names so the two
+ * axes can be told apart if a palette ever wants them to be.
+ */
+.drawing-axis-x {
+    background: var(--axis-x-color);
+}
+
+.drawing-axis-y {
+    background: var(--axis-y-color);
+}

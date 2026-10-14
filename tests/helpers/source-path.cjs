@@ -188,7 +188,7 @@ function controllerSource() {
    */
   const indexFile = path.join(editorDir, "index.js");
   const toc = [
-    ...fs.readFileSync(indexFile, "utf8").matchAll(/^ \*\s{3}([a-z-]+\.js)\s/gm),
+    ...fs.readFileSync(indexFile, "utf8").matchAll(/^ \*\s{3}((?:[a-z-]+\/)*[a-z-]+\.js)\s/gm),
   ].map((m) => path.join(editorDir, m[1]));
   const rank = (file) => {
     const at = toc.indexOf(file);
@@ -196,10 +196,12 @@ function controllerSource() {
   };
 
   return files
-    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .sort((a, b) => rank(a) - rank(b) || path.basename(a).localeCompare(path.basename(b)))
     .map((file) =>
       fs
         .readFileSync(file, "utf8")
+        /* A Windows checkout may have CRLF; the patterns below expect LF. */
+        .replace(/\r\n/g, "\n")
         .replace(/^import[^;]*;\n/gm, "")
         .replace(/^export (?=(?:async )?function |const |let |class )/gm, "")
         .replace(/^export \{[^}]*\}(?: from "[^"]*")?;\n/gm, ""),
@@ -207,9 +209,59 @@ function controllerSource() {
     .join("\n");
 }
 
+/*
+ * The renderer's source, as one text.
+ *
+ * The renderer is split by concern across src/rendering/ (primitives,
+ * dimensions, annotations, analysis, vectors, symbols, the per-feature
+ * dispatch, overlays, preview, and renderer.js itself). A test that reads
+ * "the renderer" to check how something is drawn gets all of it, in the order
+ * the code was originally written, so a function is found wherever it lives.
+ */
+const RENDERER_PARTS = [
+  "svg-primitives.js",
+  "analysis-render.js",
+  "dimension-render.js",
+  "annotation-render.js",
+  "entity-render.js",
+  "draw-forces-and-supports.js",
+  "draw-loads.js",
+  "draw-annotations.js",
+  "draw-members.js",
+  "draw-geometry.js",
+  "draw-bodies.js",
+  "vector-render.js",
+  "symbol-render.js",
+  "overlay-render.js",
+  "preview-render.js",
+  "renderer.js",
+];
+
+function rendererSource() {
+  return RENDERER_PARTS.map((name) => fs.readFileSync(modulePath(name), "utf8")).join("\n");
+}
+
+/*
+ * A stylesheet's text, with its local @imports expanded in place.
+ *
+ * editor.css is a list of @imports - one file per part of the editor, in
+ * cascade order - so a test that reads "the editor's CSS" needs the files it
+ * imports, in that order. `name` is relative to src/styles/.
+ */
+const IMPORT = /^@import url\("([^"]+)"\);\s*$/gm;
+
+function stylesheetSource(name, from = path.join(SOURCE_ROOT, "styles")) {
+  const file = path.resolve(from, name);
+  return fs
+    .readFileSync(file, "utf8")
+    .replace(IMPORT, (_, target) => stylesheetSource(target, path.dirname(file)));
+}
+
 module.exports = {
   SOURCE_ROOT,
   controllerSource,
+  rendererSource,
+  stylesheetSource,
   duplicates,
   loadModule,
   locate,

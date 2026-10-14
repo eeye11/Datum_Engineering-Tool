@@ -30,6 +30,7 @@
  */
 import enggDrawingState from "../../core/model/drawing-state.js";
 import enggLoadProfile from "./load-profile.js";
+import { isSupportType } from "../../core/model/feature-types.js";
 
 /*
  * The Analysis object types, and what each one derives itself from.
@@ -712,10 +713,7 @@ function sourceStations(
 
 function isSupportKind(type) {
     return (
-        type === "pin-support" ||
-        type === "roller-support" ||
-        type === "fixed-support" ||
-        type === "smooth-support"
+        isSupportType(type)
     );
 }
 

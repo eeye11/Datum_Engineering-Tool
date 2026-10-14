@@ -38,7 +38,7 @@
  * them.
  */
 
-import { setToolMessage } from "../../editor/toolbar-render.js";
+import { setToolMessage } from "../../editor/toolbar/toolbar-render.js";
 import { menuIcon } from "../icons.js";
 
 /*

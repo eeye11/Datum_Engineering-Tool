@@ -6,7 +6,7 @@
  * tests/e2e/api-check.mjs; everything else is checked here.
  */
 const path = require("path");
-const { bootApp, projectRoot, whenReady } = require("./helpers/boot-app.cjs");
+const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -32,7 +32,9 @@ if (error) {
 await whenReady();
 
 const datum = window.datum;
-const src = (file) => require(path.join(projectRoot, "src", file));
+/* By file name, so a module can move between folders without breaking this. */
+const { locate } = require("./helpers/source-path.cjs");
+const src = (file) => require(locate(path.basename(file)));
 const model = src("core/model/drawing-state.js").default;
 const { drawingState } = src("editor/editor-state.js");
 const { allowedEmbedOrigins } = src("api/embed-bridge.js");

@@ -1,0 +1,376 @@
+/*
+ * Responsive panels: full, compact and icon-only, by width.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * =========================================================
+ * RESPONSIVE PANELS: FULL -> COMPACT -> ICON-ONLY
+ * =========================================================
+ *
+ * The drawing is the work and the panels are navigation, so as the
+ * viewport narrows the panels give up width BEFORE the drawing does -
+ * but they never disappear. The Tools and Features panels and their
+ * Hide buttons stay present at every width; what changes is how much
+ * of each panel is shown.
+ *
+ * The progression, driven by the viewport width (so it holds for a
+ * resized desktop window, a tablet, a phone and split screen alike):
+ *
+ *   > 900px   full labels + icons, 202px / 236px rails
+ *   <= 900px  full labels, narrower Tools rail (the property grid needs
+ *             its four columns more than a tool button needs room)
+ *   <= 760px  COMPACT: smaller type, tighter padding, narrower rails
+ *   <= 620px  ICON-FOCUSED: the Tools rail drops to icons; Features
+ *             keeps its property rows but scrolls internally
+ *   <= 460px  MINIMUM VIABLE: both rails at their narrowest, drawing
+ *             still given every remaining pixel
+ *
+ * `grid-template-columns` on `.drawing-workspace` is what actually
+ * sizes the rails (the elements inside only fill their track), and the
+ * flexible canvas column is `minmax(0, 1fr)` so it absorbs every pixel
+ * the rails give up. Collapsed-state classes from the Hide buttons are
+ * re-asserted at each breakpoint so a collapsed rail stays 22px.
+ */
+@media (max-width: 900px) {
+    /*
+     * The tools rail gives up width before the Features rail does: the
+     * property grid needs its four columns far more than a tool button
+     * needs its label, so the narrow layouts take it from the left.
+     */
+    .drawing-workspace {
+        grid-template-columns: 168px minmax(0, 1fr) 220px;
+    }
+
+    .drawing-workspace-tools-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 220px;
+    }
+
+    .drawing-workspace-features-collapsed {
+        grid-template-columns: 168px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-workspace-tools-collapsed.drawing-workspace-features-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-tool {
+        font-size: 10px;
+        gap: 5px;
+        padding: 4px;
+    }
+
+    .drawing-topbar-hide .header-hide-text {
+        display: none;
+    }
+}
+
+@media (max-width: 760px) {
+    /*
+     * COMPACT. The rails narrow further and the type comes down a step,
+     * but both panels are still fully labelled - this is the width at
+     * which a tablet in portrait or a half-screen window sits.
+     */
+    .drawing-workspace {
+        grid-template-columns: 140px minmax(0, 1fr) 196px;
+    }
+
+    .drawing-workspace-tools-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 196px;
+    }
+
+    .drawing-workspace-features-collapsed {
+        grid-template-columns: 140px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-workspace-tools-collapsed.drawing-workspace-features-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-category {
+        font-size: 8px;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .drawing-tool {
+        font-size: 10px;
+        min-height: 26px;
+        padding: 3px 4px;
+    }
+
+    .drawing-tool-panel,
+    .drawing-inspector {
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    .drawing-panel-heading {
+        font-size: 9px;
+    }
+
+    .drawing-panel-toggle-text {
+        font-size: 8px;
+    }
+}
+
+@media (max-width: 620px) {
+    /*
+     * ICON-FOCUSED TOOLS. The Tools rail is now too narrow to hold a tool
+     * name beside its icon without the two competing for the same few
+     * pixels, so the LABEL is dropped and the ICON carries the tool. The
+     * name is not lost: every tool button already carries a `title` and an
+     * `aria-label`, so the name is on hover, on long-press, and to a
+     * screen reader - it is simply not painted permanently.
+     *
+     * The rail is sized for the ICON and a usable touch target, not for a
+     * word. The buttons keep their full hit area (see the min-height
+     * below), so a 24px icon is still comfortably tappable.
+     *
+     * The Features rail keeps its property rows - a value and its unit are
+     * the point of the panel and cannot be iconified - but it is narrower
+     * and scrolls internally, so it never pushes the page sideways.
+     */
+    .drawing-workspace {
+        grid-template-columns: 58px minmax(0, 1fr) 172px;
+    }
+
+    .drawing-workspace-tools-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 172px;
+    }
+
+    .drawing-workspace-features-collapsed {
+        grid-template-columns: 58px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-workspace-tools-collapsed.drawing-workspace-features-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 22px;
+    }
+
+    /*
+     * ICON-ONLY: the panel heading, the category names and the tool names
+     * all come out of the flow. The buttons become a centred column of icons.
+     *
+     * THE CATEGORY STRUCTURE SURVIVES THE NAMES. A short rule is drawn
+     * between the categories, so a student still sees WHERE one group ends
+     * and the next begins - the grouping is not lost just because its
+     * heading is. The order is untouched, because the groups are still the
+     * groups; only their labels are hidden.
+     */
+    .drawing-panel-heading {
+        display: none;
+    }
+
+    .drawing-tool-group-label {
+        display: none;
+    }
+
+    .drawing-tool-group {
+        border-bottom: 1px solid var(--datum-border);
+        margin: 3px 0;
+        padding: 8px 0;
+    }
+
+    .drawing-tool-group:first-child {
+        padding-top: 0;
+    }
+
+    .drawing-tool-group:last-child {
+        border-bottom: 0;
+    }
+
+    .drawing-tool {
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        padding: 3px;
+    }
+
+    .drawing-tool-label,
+    .drawing-tool-caret {
+        display: none;
+    }
+
+    .drawing-tool-icon,
+    .drawing-tool-icon svg {
+        flex-basis: 20px;
+        height: 20px;
+        width: 20px;
+    }
+
+    /*
+     * The Features panel keeps its rows but the panel is narrower, so the
+     * property grid's tracks are rebalanced to give the value the room and
+     * let the label wrap.
+     */
+    .drawing-property-grid {
+        grid-template-columns:
+            minmax(0, 1fr)
+            minmax(0, 1.1fr)
+            minmax(0, 18px)
+            minmax(0, 14px);
+    }
+
+    .drawing-toolbar {
+        padding-left: 3px;
+        padding-right: 3px;
+    }
+
+    .drawing-category {
+        font-size: 8px;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+}
+
+@media (max-width: 460px) {
+    /*
+     * MINIMUM VIABLE. Both rails are as narrow as they can be while
+     * keeping the icon buttons tappable and the Features rows readable.
+     * The drawing still gets everything else.
+     *
+     * The panels are NOT removed at this width - the whole point of the
+     * progression is that they survive - so the rails keep a real width
+     * and the icon buttons keep a real hit area.
+     *
+     * THE HIDE CONTROL SHRINKS TO ITS ICON, AND STAYS.
+     *
+     * At this width the style strip is reflowing onto several lines, and the
+     * word "Hide" beside an arrow is the one part of that control that is not
+     * load-bearing - the arrow says it. Dropping the label keeps the button
+     * small enough to sit on the strip's last line without pushing anything
+     * off, while its hit area stays full size (the padding and min-height
+     * above are untouched), so it is still comfortably tappable on a phone.
+     *
+     * It is never hidden and never removed: the control that folds the top
+     * bars away must itself be present at every width.
+     */
+    .drawing-topbar-hide {
+        font-size: 0;
+        gap: 0;
+        padding-left: 6px;
+        padding-right: 6px;
+    }
+
+    .drawing-topbar-hide svg {
+        height: 15px;
+        width: 15px;
+    }
+
+    .drawing-workspace {
+        grid-template-columns: 46px minmax(0, 1fr) 148px;
+    }
+
+    .drawing-workspace-tools-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 148px;
+    }
+
+    .drawing-workspace-features-collapsed {
+        grid-template-columns: 46px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-workspace-tools-collapsed.drawing-workspace-features-collapsed {
+        grid-template-columns: 22px minmax(0, 1fr) 22px;
+    }
+
+    .drawing-tool-panel,
+    .drawing-inspector {
+        padding-left: 3px;
+        padding-right: 3px;
+    }
+
+    .drawing-tool {
+        min-height: 32px;
+        padding: 2px;
+    }
+
+    .drawing-tool-icon,
+    .drawing-tool-icon svg {
+        flex-basis: 20px;
+        height: 20px;
+        width: 20px;
+    }
+
+    .drawing-toolbar {
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    .drawing-category {
+        font-size: 7px;
+        letter-spacing: 0;
+        padding-left: 3px;
+        padding-right: 3px;
+    }
+
+    /*
+     * A PROPERTY ROW STACKS ITS VALUE UNDER ITS LABEL.
+     *
+     * At this width a four-track row (label, value, unit, fix) cannot
+     * hold a readable label beside a readable number. Stacking the label
+     * above its own value keeps BOTH readable, and it is confined to the
+     * Features panel - it does not change the property model, only how
+     * the row is laid out.
+     */
+    .drawing-property-grid,
+    .drawing-property-grid-value,
+    .drawing-property-grid-pair {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .drawing-property-grid-label {
+        grid-column: 1 / -1;
+    }
+
+    .drawing-status-meta {
+        gap: 5px;
+    }
+
+    .drawing-status-meta span:nth-child(2),
+    .drawing-status-meta span:nth-child(3) {
+        display: none;
+    }
+}
+
+/* Coordinate System flyout submenu */
+.drawing-coordinate-submenu {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+    box-shadow: 0 4px 14px rgba(38, 52, 59, .14);
+    display: grid;
+    gap: 2px;
+    padding: 3px;
+    position: fixed;
+    width: 154px;
+    z-index: 10000;
+}
+
+.drawing-coordinate-submenu-item {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font-size: 9px;
+    min-height: 25px;
+    padding: 4px 6px;
+    text-align: left;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.drawing-coordinate-submenu-item:hover {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-soft);
+    color: var(--datum-green);
+}
+
+.drawing-tool[aria-expanded="true"] {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-soft);
+    color: var(--datum-green);
+}

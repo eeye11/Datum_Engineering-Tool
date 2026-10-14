@@ -17,13 +17,12 @@ already failing on `main` before the restructure (their expectations
 predate later changes to load and vector geometry) and need updating by
 someone who owns those features.
 
-## `qa/` — browser QA scripts
+## `archive/` — no longer maintained
 
-Scenario scripts written against a Playwright `page`
-(`export default async function run(page)`), from feature work on specific
-tools. They read the page through the `window.engg*` automation handles
-(`src/app/automation-hooks.js`). For whole-application checks, prefer the
-golden-master scenario in `tests/e2e/`.
+The per-feature browser QA scripts (`archive/qa/`) and one-off diagnostics
+that had accumulated in the repository root (`archive/scratch/`). Kept for
+the record; see `archive/README.md`. For whole-application checks use the
+golden-master scenario in `tests/e2e/`, which CI runs.
 
 ## `refactor/` — analysis and codemods
 

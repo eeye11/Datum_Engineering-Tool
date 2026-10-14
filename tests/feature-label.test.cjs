@@ -13,7 +13,7 @@
  */
 
 const { JSDOM } = require("jsdom");
-const { locate } = require("./helpers/source-path.cjs");
+const { locate, rendererSource } = require("./helpers/source-path.cjs");
 
 /*
  * THE EDITOR'S MODULES REACH THE DOM AT LOAD TIME.
@@ -205,7 +205,7 @@ console.log("\n  the renderer draws it, and only when there is one\n");
 
 {
     const fs = require("fs");
-    const renderer = fs.readFileSync(locate("renderer.js"), "utf8");
+    const renderer = rendererSource();
 
     check(
         "the renderer reads the feature's label",

@@ -26,7 +26,7 @@ src/
 ├── references/    drawing references: a sheet placed in the written solution
 ├── solution/      the Written Solution tab
 ├── ui/            shared panel vocabulary, dialogs, the analysis editors
-├── styles/        tokens.css, base.css, editor.css, shell.css
+├── styles/        tokens.css, base.css, editor.css (+ editor/*.css), shell.css
 └── assets/        the icon
 ```
 
@@ -59,6 +59,25 @@ Do not add load-time reads across it.
 The editor was one 39,000-line file; it is now one module per concern.
 **`editor/index.js` opens with a table of contents of every module**, in
 reading order — start there.
+
+The modules are grouped by what they do. The three engineering folders
+(`geometry/`, `annotate/`, `statics/`) match the `category/*` branches, so
+a category's tool work mostly stays inside its own folder:
+
+```
+editor/
+├── index.js, editor-state.js, dom.js, constants.js   start-up and shared state
+├── interaction/   pointer and keyboard: events, clicks, snapping feedback,
+│                  hit-testing, selection, drags, handles, context menu
+├── toolbar/       the tool registry (tools.js), toolbar, menus, tool activation,
+│                  the menu bar's commands, command search
+├── workspace/     the canvas render loop, viewport, sheets, layout, theme
+├── panels/        the Features panel: markup, tree, property binding and update
+├── commands/      document (new/open/save/export), clipboard, delete, modify, draw order
+├── geometry/      GEOMETRY tools: creation, sizing, preview, transforms, triangle
+├── annotate/      ANNOTATE tools: annotate creation, dimensions and their placement
+└── statics/       STATICS tools: bodies, loads, supports, attachment, analysis, truss
+```
 
 ### Shared state
 
@@ -158,8 +177,27 @@ the parent (`core/geometry/body-frames.js`), so they survive a resize.
 `rendering/renderer.js` draws every feature, for every output: the canvas,
 image and SVG export (`file/document-export.js`), drawing references and
 the API's `renderSheetSvg`. There is one shared vector-arrow implementation
-for forces, loads and analysis. No other module may build SVG geometry of
-its own (`tests/render-pipeline.test.cjs` enforces this).
+for forces, loads and analysis. No module outside `rendering/` may build SVG
+geometry of its own (`tests/render-pipeline.test.cjs` enforces this).
+
+`renderer.js` keeps `renderDrawing` and the public `enggDrawingRenderer`
+object; the drawing itself is split by concern, and depends only downward:
+
+| Module                 | Draws                                                          |
+| ---------------------- | -------------------------------------------------------------- |
+| `svg-primitives.js`    | shared primitives: SVG elements, zoom-aware text and stroke, line styles |
+| `entity-render.js`     | one feature: `appendEntity` walks the `ENTITY_RENDERERS` table  |
+| `entities/draw-*.js`   | the per-type draw functions that table names                   |
+| `vector-render.js`     | force and load arrows, arrowheads, the moment's rotational arrow |
+| `symbol-render.js`     | supports, connections, coordinate systems, the rigid body      |
+| `dimension-render.js`  | dimensions and variable dimensions                             |
+| `annotation-render.js` | magnitude labels, the Annotate features, feature labels        |
+| `analysis-render.js`   | SFD / BMD / AFD frames, axes, ticks, plots and sketches        |
+| `overlay-render.js`    | snap markers, inference lines, selection box and handles, grid |
+| `preview-render.js`    | the live preview of the tool in use                            |
+
+A test that reads the renderer's code uses `rendererSource()` from
+`tests/helpers/source-path.cjs`, which returns all of it.
 
 ---
 
@@ -187,6 +225,13 @@ University of Alberta palette (UAlberta green as the accent). The other
 stylesheets refer to the tokens. They load in a fixed order — tokens,
 base, editor, shell — and later files win where they overlap.
 
+`editor.css` is a list of `@import`s, one file per part of the editor in
+`styles/editor/` (workspace chrome, settings and pickers, toolbar, side
+panels, Features panel, responsive, canvas, sheets and references, dialogs
+and the Open launcher, value popups, analysis editors). The import order is
+the cascade order; the build inlines them into one stylesheet. Tests read
+the expanded text with `stylesheetSource("editor.css")`.
+
 ---
 
 ## Adding a feature
@@ -197,16 +242,18 @@ base, editor, shell — and later files win where they overlap.
    (body, support, attachable, span-shaped, …).
 2. **Measurement** — register what it can be measured as in
    `core/geometry/measurement-core.js`.
-3. **Rendering** — `rendering/renderer.js`.
-4. **Tool** — register it in `editor/tools.js`; creation in
-   `editor/geometry-creation.js` or `editor/statics-creation.js` (Statics
-   placement rules in `editor/statics-tools.js`); preview in
-   `editor/preview.js`.
-5. **Interaction** — hit-testing (`editor/hit-testing.js`,
-   `editor/box-selection.js`), handles (`editor/handles.js`), transforms
-   (`editor/transforms.js`).
-6. **Panel** — `editor/feature-panel-markup.js` (Statics sections in
-   `editor/statics-panel.js`), edits in `editor/property-update.js`.
+3. **Rendering** — a `draw…(context)` function in `rendering/entities/`, and
+   an entry `{ matches, draw }` in `ENTITY_RENDERERS` (`rendering/entity-render.js`);
+   a symbol goes in `rendering/symbol-render.js` if it has one.
+4. **Tool** — register it in `editor/toolbar/tools.js`; creation in
+   `editor/geometry/geometry-creation.js` or `editor/statics/statics-creation.js` (Statics
+   placement rules in `editor/statics/statics-tools.js`); preview in
+   `editor/geometry/preview.js`.
+5. **Interaction** — hit-testing (`editor/interaction/hit-testing.js`,
+   `editor/interaction/box-selection.js`), handles (`editor/interaction/handles.js`), transforms
+   (`editor/geometry/transforms.js`).
+6. **Panel** — `editor/panels/feature-panel-markup.js` (Statics sections in
+   `editor/statics/statics-panel.js`), edits in `editor/panels/property-update.js`.
 7. **File format** — if the stored shape changes, see
    [FILE-FORMAT.md](FILE-FORMAT.md#changing-the-format).
 8. **Tests** — `tests/`, loading modules with `loadModule()`.

@@ -31,6 +31,7 @@
  */
 
 const fs = require("fs");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 const path = require("path");
 
 const { locate } = require("./helpers/source-path.cjs");
@@ -57,10 +58,7 @@ const dimensionModel = fs.readFileSync(
   "utf8",
 );
 const loadProfile = fs.readFileSync(locate("load-profile.js"), "utf8");
-const css = fs.readFileSync(
-  path.join(__dirname, "..", "src", "styles", "editor.css"),
-  "utf8",
-);
+const css = stylesheetSource("editor.css");
 
 console.log("\n  ONE unit control, built once\n");
 

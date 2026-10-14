@@ -9,7 +9,7 @@
  * side effects in the order the application was built and tested with.
  */
 import "./app/tabs.js";
-import "./editor/tools.js";
+import "./editor/toolbar/tools.js";
 import "./sheets/sheets.js";
 import "./ui/ui.js";
 import "./core/geometry/measurement-core.js";
@@ -46,7 +46,7 @@ import "./core/snapping/object-snap.js";
 import "./references/drawing-reference.js";
 import "./sheets/sheet-tabs.js";
 import "./editor/index.js";
-import "./editor/toolbar.js";
+import "./editor/toolbar/toolbar.js";
 import "./solution/written-references.js";
 import "./solution/writing-tab.js";
 import { installAutomationHooks } from "./app/automation-hooks.js";
@@ -54,13 +54,13 @@ import enggErrorLog from "./app/error-log.js";
 import { createDatumApi } from "./api/datum-api.js";
 import { installEmbedBridge } from "./api/embed-bridge.js";
 import { installMenuBar } from "./ui/menubar/menu-bar.js";
-import { MENUS } from "./editor/menu-commands.js";
-import { installSavedTheme } from "./editor/theme.js";
-import { installThemePreference } from "./editor/theme-preference.js";
+import { MENUS } from "./editor/toolbar/menu-commands.js";
+import { installSavedTheme } from "./editor/workspace/theme.js";
+import { installThemePreference } from "./editor/workspace/theme-preference.js";
 import {
   installCommandSearch,
   installCommandSearchShortcut,
-} from "./editor/command-search.js";
+} from "./editor/toolbar/command-search.js";
 
 /*
  * THE SAVED THEME, BEFORE ANYTHING IS DRAWN.

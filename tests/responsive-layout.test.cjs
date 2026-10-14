@@ -20,6 +20,7 @@
  */
 
 const fs = require("fs");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 const path = require("path");
 
 const { SOURCE_ROOT } = require("./helpers/source-path.cjs");
@@ -37,10 +38,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const cssRaw = fs.readFileSync(
-  path.join(SOURCE_ROOT, "styles", "editor.css"),
-  "utf8",
-);
+const cssRaw = stylesheetSource("editor.css");
 
 /*
  * COMMENTS ARE STRIPPED FIRST.

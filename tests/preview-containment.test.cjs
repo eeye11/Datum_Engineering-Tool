@@ -16,16 +16,14 @@
  */
 
 const fs = require("fs");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 const path = require("path");
 
 /*
  * The stylesheet, read by path - the source-path helper indexes `.js` modules
  * only, and a stylesheet is not one.
  */
-const css = fs.readFileSync(
-  path.join(__dirname, "..", "src", "styles", "editor.css"),
-  "utf8",
-);
+const css = stylesheetSource("editor.css");
 
 let pass = 0;
 let fail = 0;

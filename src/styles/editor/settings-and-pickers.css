@@ -1,0 +1,519 @@
+/*
+ * The Settings and Help dialogs, the symbol library picker and the table size picker.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * =========================================================
+ * THE SETTINGS AND HELP DIALOGS
+ * =========================================================
+ *
+ * Both are centred panels over a dimmed backdrop: open a panel, read or change
+ * something, close it. They share this styling rather than each carrying their
+ * own, so the two cannot look like they came from different applications.
+ *
+ * EVERY COLOUR IS A TOKEN. That is what makes them theme correctly - and a
+ * dialog is exactly where a hardcoded colour would be missed, because it is
+ * only visible after a click.
+ *
+ * THE BACKDROP IS PART OF THE DIALOG, so clicking the dimmed area closes it -
+ * the behaviour every other dialog in the application already has.
+ */
+.datum-settings-dialog,
+.datum-help-dialog {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 200;
+}
+
+/*
+ * THE PANEL ITSELF.
+ *
+ * A bounded height with the BODY scrolling, rather than the whole panel growing
+ * past the window: a settings page with many rows must stay fully usable, and a
+ * panel taller than the screen would put its own Close button out of reach.
+ */
+.datum-settings-title,
+.datum-help-dialog-title {
+    align-items: center;
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    font-weight: 700;
+    justify-content: space-between;
+    padding: 10px 14px;
+}
+
+.datum-settings-body,
+.datum-help-dialog-body {
+    /*
+     * THE BODY CARRIES THE PANEL SURFACE.
+     *
+     * `--datum-ink` text was drawn straight onto the dialog's own backdrop,
+     * because only the TITLE had a background. In light mode that backdrop is a
+     * dark scrim (`--datum-overlay`), so the User Guide and Drawing Help pages
+     * were dark ink on a dark wash - the low-contrast read that was reported. The
+     * Settings page had the same problem for the same reason.
+     *
+     * `--datum-surface` is the panel colour in BOTH themes (white on light, the
+     * panel ink on dark), so one declaration fixes both without naming a theme.
+     */
+    background: var(--datum-surface);
+    color: var(--datum-ink);
+    font-family: var(--datum-font);
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-y: auto;
+    padding: 14px;
+}
+
+.datum-settings-dialog > *,
+.datum-help-dialog > * {
+    box-sizing: border-box;
+    max-width: 620px;
+    width: 100%;
+}
+
+/*
+ * THE PANEL IS ONE COLUMN: a title that stays put and a body that scrolls.
+ *
+ * The dialog element is the dimmed backdrop, so the panel inside it is given a
+ * column layout and a bounded height - otherwise a long settings page would
+ * grow taller than the window and put its own Close button out of reach.
+ */
+.datum-settings-dialog > .datum-settings-title,
+.datum-settings-dialog > .datum-settings-body,
+.datum-help-dialog > .datum-help-dialog-title,
+.datum-help-dialog > .datum-help-dialog-body {
+    flex: 0 0 auto;
+    margin: 0;
+}
+
+.datum-settings-dialog > .datum-settings-body,
+.datum-help-dialog > .datum-help-dialog-body {
+    flex: 1 1 auto;
+    max-height: 70vh;
+}
+
+.datum-settings-close,
+.datum-help-close {
+    background: transparent;
+    border: 0;
+    color: var(--datum-muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 4px;
+}
+
+.datum-settings-close:hover,
+.datum-help-close:hover {
+    color: var(--datum-ink);
+}
+
+/*
+ * A SETTINGS ROW: label, control, and an optional explanation beneath.
+ *
+ * The hint is a full-width line under the pair rather than a third column, so a
+ * long explanation cannot squeeze the control it describes.
+ */
+.datum-settings-row {
+    border-bottom: 1px solid var(--datum-border);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 150px) minmax(0, 1fr);
+    padding: 8px 0;
+}
+
+.datum-settings-label {
+    color: var(--datum-muted);
+    font-size: 11px;
+    padding-top: 3px;
+}
+
+.datum-settings-control {
+    min-width: 0;
+}
+
+.datum-settings-hint,
+.datum-settings-note {
+    color: var(--datum-muted);
+    font-size: 11px;
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+.datum-settings-control select,
+.datum-settings-control input[type="number"] {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    font: inherit;
+    height: 24px;
+    padding: 0 4px;
+}
+
+.datum-settings-value {
+    color: var(--datum-ink);
+    font-weight: 700;
+}
+
+.datum-settings-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+}
+
+.datum-settings-choice {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    gap: 5px;
+}
+
+.datum-settings-button,
+.datum-help-copy {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    padding: 5px 10px;
+}
+
+.datum-settings-button:hover,
+.datum-help-copy:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-green);
+}
+
+/* Heading rhythm inside either dialog. */
+.datum-settings-body h4,
+.datum-help-dialog-body h4 {
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-green-ink);
+    font-size: 11px;
+    letter-spacing: .04em;
+    margin: 16px 0 6px;
+    padding-bottom: 3px;
+    text-transform: uppercase;
+}
+
+.datum-settings-body h4:first-child,
+.datum-help-dialog-body h4:first-child {
+    margin-top: 0;
+}
+
+.datum-settings-body p,
+.datum-help-dialog-body p {
+    margin: 6px 0;
+}
+
+/* The shortcut reference: a name and its keys, one per line. */
+.datum-shortcut-list {
+    margin: 0;
+}
+
+.datum-shortcut-row {
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 4px 0;
+}
+
+.datum-shortcut-row dt {
+    color: var(--datum-ink);
+}
+
+.datum-shortcut-row dd {
+    color: var(--datum-muted);
+    font-family: var(--datum-font-mono);
+    font-size: 11px;
+    margin: 0;
+}
+
+/*
+ * THE DIAGNOSTIC SUMMARY the feedback page offers to copy: selectable text,
+ * monospaced, and wrapped rather than scrolled so nothing is hidden.
+ */
+.datum-help-summary {
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    font-family: var(--datum-font-mono);
+    font-size: 11px;
+    margin: 8px 0;
+    padding: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.datum-help-note {
+    color: var(--datum-muted);
+    font-size: 11px;
+    font-style: italic;
+}
+
+/*
+ * =========================================================
+ * THE SYMBOL LIBRARY PICKER
+ * =========================================================
+ *
+ * A centred panel over a dimmed backdrop, like the settings and help dialogs,
+ * because it is the same kind of thing: a block of choices to browse and close.
+ * EVERY COLOUR IS A TOKEN, so it themes correctly - a picker only visible after
+ * a click is exactly where a hardcoded colour would be missed.
+ */
+.datum-symbol-picker {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    flex-direction: column;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 200;
+}
+
+.datum-symbol-picker > .datum-symbol-picker-title,
+.datum-symbol-picker > .datum-symbol-picker-search,
+.datum-symbol-picker > .datum-symbol-picker-body {
+    background: var(--datum-chrome);
+    box-sizing: border-box;
+    color: var(--datum-ink);
+    max-width: 620px;
+    width: 100%;
+}
+
+.datum-symbol-picker-title {
+    align-items: center;
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    font-weight: 700;
+    justify-content: space-between;
+    padding: 10px 14px;
+}
+
+.datum-symbol-picker-search {
+    border-bottom: 1px solid var(--datum-border);
+    padding: 8px 14px;
+}
+
+.datum-symbol-picker-search input {
+    width: 100%;
+}
+
+.datum-symbol-picker-body {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 12px 14px 16px;
+}
+
+.datum-symbol-picker-heading {
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-green-ink);
+    font-size: 11px;
+    letter-spacing: .04em;
+    margin: 14px 0 8px;
+    padding-bottom: 3px;
+    text-transform: uppercase;
+}
+
+.datum-symbol-picker-heading:first-child {
+    margin-top: 0;
+}
+
+.datum-symbol-picker-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+}
+
+.datum-symbol-picker-item {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    font: inherit;
+    gap: 4px;
+    padding: 8px 6px;
+}
+
+.datum-symbol-picker-item:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-green);
+}
+
+.datum-symbol-picker-glyph {
+    font-size: 20px;
+    line-height: 1;
+}
+
+.datum-symbol-picker-label {
+    color: var(--datum-muted);
+    font-size: 10px;
+    text-align: center;
+}
+
+.datum-symbol-picker-empty {
+    color: var(--datum-muted);
+    font-size: 12px;
+    margin: 16px 0;
+}
+
+/*
+ * =========================================================
+ * THE TABLE SIZE PICKER
+ * =========================================================
+ *
+ * A hover grid: the cells under the cursor ARE the table that will be placed.
+ * Sized to fit its content and centred over the dimmed backdrop, like every
+ * other picker, and coloured entirely from tokens so it themes correctly.
+ */
+.datum-table-picker {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: 200;
+}
+
+.datum-table-picker-label {
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    font-family: var(--datum-font);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 14px;
+}
+
+.datum-table-picker-readout {
+    background: var(--datum-chrome);
+    color: var(--datum-green-ink);
+    font-family: var(--datum-font);
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+.datum-table-picker-grid {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border);
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(12, 18px);
+    padding: 10px 14px 14px;
+}
+
+.datum-table-picker-cell {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+    cursor: pointer;
+    height: 18px;
+    padding: 0;
+    width: 18px;
+}
+
+.datum-table-picker-cell.active {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.drawing-app-toolbar {
+    align-items: center;
+    background: var(--datum-panel);
+    border-bottom: 1px solid var(--cad-border);
+    display: flex;
+
+    /*
+     * ONE ROW, ALWAYS - AND IT SCROLLS SIDEWAYS WHEN IT MUST.
+     *
+     * This row used to WRAP. Wrapping is not wrong in itself, but on a
+     * narrow screen it is: every group that folds onto a second line
+     * makes the toolbar taller, and the toolbar's height comes straight
+     * out of the drawing below it. The drawing is the work; the toolbar
+     * is how you get to the tools. When the two compete for vertical
+     * space the toolbar must lose.
+     *
+     * So the row never wraps (`flex-wrap: nowrap`) and its groups never
+     * shrink (`flex: 0 0 auto` on each), which keeps every button its
+     * real size and its label legible. When the width runs out the row
+     * scrolls horizontally instead - the swipe/trackpad gesture the
+     * student already uses on the canvas - and the toolbar stays exactly
+     * one row high.
+     *
+     * `overflow-x: auto` alone is not enough: a flex container refuses to
+     * overflow while its items may still shrink, so `nowrap` plus the
+     * non-shrinking groups are what actually produce the overflow that
+     * the scrollbar then reveals. `overscroll-behavior-x: contain` stops
+     * a swipe that reaches the end of the toolbar from scrolling the page
+     * underneath it.
+     */
+    flex-wrap: nowrap;
+    gap: 5px;
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    padding: 2px 5px;
+    scrollbar-width: thin;
+    white-space: nowrap;
+}
+
+.drawing-app-toolbar-group,
+.drawing-app-toolbar-groups {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 2px;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.drawing-app-toolbar-group {
+    border-right: 1px solid var(--datum-border);
+    padding-right: 5px;
+}
+
+.drawing-app-toolbar-groups {
+    gap: 5px;
+}
+
+.drawing-app-toolbar-group-label {
+    color: var(--cad-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .05em;
+    margin-right: 2px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}

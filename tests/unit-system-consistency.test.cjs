@@ -13,7 +13,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const read = p => fs.readFileSync(path.join(root, p), "utf8");
+/* Source modules are found by file name, so they can move between folders. */
+const { locate } = require("./helpers/source-path.cjs");
+const read = p => fs.readFileSync(p.startsWith("src/") ? locate(path.basename(p)) : path.join(root, p), "utf8");
 
 const quantities = require(path.join(root, "src/core/units/quantities.js")).default;
 

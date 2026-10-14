@@ -34,28 +34,28 @@ core/util/clone.js        deepClone, deepCloneAll
 | I want to change… | Go to |
 |---|---|
 | How a feature is stored (geometry fields) | `src/core/model/drawing-state.js` |
-| What a tool is called in the panel | `src/editor/feature-panel-markup.js` (`displayLabel` map) |
-| The Features tab structure/content | `src/editor/feature-panel-markup.js` + `src/editor/statics-panel.js` |
+| What a tool is called in the panel | `src/editor/panels/feature-panel-markup.js` (`displayLabel` map) |
+| The Features tab structure/content | `src/editor/panels/feature-panel-markup.js` + `src/editor/statics/statics-panel.js` |
 | The shared panel row/section primitives | `src/ui/feature-panel/property-panel.js` |
-| What a click on the canvas does | `src/editor/canvas-click.js` (routed from `canvas-events.js`) |
-| Pointer down/move/up wiring | `src/editor/canvas-events.js` |
-| Dragging a feature/handle | `src/editor/drag.js` |
-| Marquee selection, annotation drag start | `src/editor/selection.js` |
-| Snapping and inference | `src/core/snapping/object-snap.js` (+ `src/editor/pointer.js`) |
-| Hit testing (what is under the cursor) | `src/editor/hit-testing.js` |
-| Creating geometry from clicks | `src/editor/geometry-creation.js` |
-| The creation-size popup (Beam length, etc.) | `src/editor/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
+| What a click on the canvas does | `src/editor/interaction/canvas-click.js` (routed from `canvas-events.js`) |
+| Pointer down/move/up wiring | `src/editor/interaction/canvas-events.js` |
+| Dragging a feature/handle | `src/editor/interaction/drag.js` |
+| Marquee selection, annotation drag start | `src/editor/interaction/selection.js` |
+| Snapping and inference | `src/core/snapping/object-snap.js` (+ `src/editor/interaction/pointer.js`) |
+| Hit testing (what is under the cursor) | `src/editor/interaction/hit-testing.js` |
+| Creating geometry from clicks | `src/editor/geometry/geometry-creation.js` |
+| The creation-size popup (Beam length, etc.) | `src/editor/geometry/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
 | Undo/redo and document changes | `src/core/model/drawing-state.js` (`commitDrawingChange`) |
-| How something is drawn on the canvas | `src/rendering/renderer.js` |
-| What fits on screen / Fit | `src/editor/viewport.js` |
-| The bottom-bar tool message | `src/editor/toolbar-render.js` (`setToolMessage`) |
-| **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate-creation.js` (interaction) |
-| Which tools the **Annotate** section shows, and their categories | `src/editor/tools.js` (`annotateToolGroups`) |
+| How something is drawn on the canvas | `src/rendering/entity-render.js` (`ENTITY_RENDERERS`: which function draws which type) → `src/rendering/entities/draw-*.js` |
+| What fits on screen / Fit | `src/editor/workspace/viewport.js` |
+| The bottom-bar tool message | `src/editor/toolbar/toolbar-render.js` (`setToolMessage`) |
+| **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate/annotate-creation.js` (interaction) |
+| Which tools the **Annotate** section shows, and their categories | `src/editor/toolbar/tools.js` (`annotateToolGroups`) |
 | **Angular dimensioning** — which of the four sectors is dimensioned | `src/features/dimensions/dimension-model.js` (`angleSectorLegs`) |
 | Point/segment maths (distance, nearest point on a segment) | `src/core/geometry/points.js` |
 | Deep-copying any value | `src/core/util/clone.js` (`deepClone`) |
-| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor.css` |
-| The responsive breakpoints and icon-only modes | `src/styles/editor.css` (the `@media` blocks near the end) |
+| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor/workspace-chrome.css` and `side-panels.css` |
+| The responsive breakpoints and icon-only modes | `src/styles/editor/responsive.css` |
 
 ---
 
@@ -187,16 +187,16 @@ keyboard-shortcuts.js  Enter/Escape/Delete → finishActiveConstruction, cancelI
 
 | File | Owns |
 |---|---|
-| `rendering/renderer.js` | Draws every feature to SVG. Forces: `appendForceArrow` + `drawnForceEnd`. Loads: the arrow field. Annotations: `appendDerivedMagnitude` and the **annotation selection box** (`renderSelectionHandles`). |
-| `styles/editor.css` | The Features panel grid (`.drawing-property-grid`), the sketch editor (`.sketch-editor*`), the popups (`.drawing-creation-dimension`), and the workspace columns (`grid-template-columns: 202px … 236px`). |
-| `editor/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
+| `rendering/renderer.js` | `renderDrawing` and the public renderer object. The drawing is split by concern beside it: `entity-render.js` (the `ENTITY_RENDERERS` table) and `entities/draw-*.js` (one draw function per feature kind), `vector-render.js` (forces: `appendForceArrow`; loads: the arrow field), `symbol-render.js`, `dimension-render.js`, `annotation-render.js` (`appendDerivedMagnitude`), `analysis-render.js`, `overlay-render.js` (the **annotation selection box**, `renderSelectionHandles`), `preview-render.js`, `svg-primitives.js`. |
+| `styles/editor.css` | Imports `styles/editor/*.css` in cascade order: the Features panel grid (`.drawing-property-grid`, `features-panel.css`), the sketch editor (`.sketch-editor*`, `analysis-editors.css`), the popups (`.drawing-creation-dimension`, `value-popups.css`), and the workspace columns (`grid-template-columns: 202px … 236px`, `side-panels.css`). |
+| `editor/workspace/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
 
 ---
 
 ## 7. The Sketch editor (BMD / SFD / AFD)
 
 `src/ui/editors/sketch-editor.js`, opened from
-`src/editor/feature-tree.js → openSketchEditorFor`.
+`src/editor/panels/feature-tree.js → openSketchEditorFor`.
 
 **Element kinds**
 | Kind | Shape | Fields |
@@ -281,7 +281,7 @@ tools lower-left, elements/properties lower-right (`.sketch-editor-lower`).
 
 **No plot-area highlight.** The tinted rectangle over the plot area is gone
 for every diagram (plot and sketch); the axes and the curve say where the plot
-is. See the `const highlighted = false` in `renderer.js`.
+is. See the `const highlighted = false` in `rendering/entities/draw-members.js`.
 
 ---
 
@@ -290,7 +290,7 @@ is. See the `const highlighted = false` in `renderer.js`.
 - **Add a new feature type**
   1. Factory in `core/model/drawing-state.js`.
   2. Panel body in `feature-panel-markup.js` (+ a `displayLabel` entry).
-  3. Renderer branch in `rendering/renderer.js`.
+  3. A draw function in `rendering/entities/` and its entry in `ENTITY_RENDERERS` (`rendering/entity-render.js`).
   4. A tool in `tools.js` / `tool-menus.js`, and a creation path in
      `geometry-creation.js` or `statics-creation.js`.
 
@@ -304,7 +304,7 @@ is. See the `const highlighted = false` in `renderer.js`.
 
 - **Change snapping behaviour**
   `core/snapping/object-snap.js` (candidates and tolerance) and the
-  `inferenceReferences` assembled in `editor/pointer.js`.
+  `inferenceReferences` assembled in `editor/interaction/pointer.js`.
 
 - **Open a value popup**
   `openLoadValuePopup({ title, label, value, unit, units, onConfirm })` for a
@@ -312,7 +312,7 @@ is. See the `const highlighted = false` in `renderer.js`.
   creation size.
 
 - **Where an annotation/dimension's grab point sits**
-  `editor/handles.js → manipulationHandles` (dimension → `graphics.textAnchor`;
+  `editor/interaction/handles.js → manipulationHandles` (dimension → `graphics.textAnchor`;
   derived label → `pickDerivedMagnitude` in `hit-testing.js`).
 
 - **Add an Annotate kind (note, label, leader, …)**
@@ -322,7 +322,7 @@ is. See the `const highlighted = false` in `renderer.js`.
   2. Add a tool to a category in `tools.js → annotateToolGroups`. The tool id
      IS the kind id, and `ANNOTATE_TOOL_KINDS` is derived from the model, so
      the two cannot drift.
-  3. Draw it in `rendering/renderer.js → appendAnnotateEntity`, and give it
+  3. Draw it in `rendering/annotation-render.js → appendAnnotateEntity`, and give it
      panel rows in `feature-panel-markup.js` (the `object.type === "annotate"`
      branch).
   Interaction, selection, moving, undo and save are already handled.
@@ -342,10 +342,10 @@ is. See the `const highlighted = false` in `renderer.js`.
   (`node --test tests/*.test.cjs`). Load modules with the harness helpers in
   `tests/helpers/source-path.cjs`; render with `tests/harness-renderer.cjs`.
 - **Lint:** `npm run lint`.
-- **Browser QA:** `tools/qa/*.mjs` run through the `browser-automation` skill:
-  `node <skill>/browser.mjs http://localhost:5173/ --script ./tools/qa/<file>.mjs`.
-  `tools/qa/qa-helpers.mjs` gives `category()`, `tool()`, `sub()`, `press()`,
-  `move()`, `at()`, `msg()`, `panel()`, `allObjects()`.
+- **Browser:** `tests/e2e/golden-scenario.mjs` drives every tool in Chrome;
+  record before and after a change and compare with `golden-compare.mjs`
+  (see `docs/TESTING.md`). The older per-feature QA scripts are in
+  `tools/archive/qa/`, unmaintained.
 
 Useful test files to copy from: `tests/sketch-editor.test.cjs` (rendering +
 DOM), `tests/load-value-popup.test.cjs` (popup keys), `tests/dimension-drag-edit.test.cjs`
@@ -430,7 +430,7 @@ Arrowheads stay configurable through Leader and Callout.
 Tool id === kind id, and `ANNOTATE_TOOL_KINDS` is derived from the model's own
 `ANNOTATE_KINDS`, so a kind cannot end up with no tool.
 
-**Rendering** is `renderer.js → appendAnnotateEntity`, one function for all
+**Rendering** is `rendering/annotation-render.js → appendAnnotateEntity`, one function for all
 eight kinds. **Hit testing** is `hit-testing.js → annotateContainsPoint` (text
 box, plus the line for a leader/arrow and the grid for a table). **Moving** is
 `drag.js` (`annotation-offset`, world-space delta from the ORIGINAL geometry,
@@ -651,9 +651,9 @@ one place "hidden" is defined.
 by POSITION. Hiding a row means setting its track to `0` and leaving the list
 SIX long — re-stating a shorter list re-assigns every remaining row to the
 wrong child and collapses the canvas. See the note above
-`body.datum-topbar-hidden .drawing-workspace` in `styles/editor.css`.
+`body.datum-topbar-hidden .drawing-workspace` in `styles/editor/workspace-chrome.css`.
 
-**Responsive rules** (all in `styles/editor.css`):
+**Responsive rules** (all in `styles/editor/responsive.css`):
 
 - the top toolbar and the tool-type bar are `nowrap` + `overflow-x: auto` —
   ONE row that scrolls, never a wrapped second line;
@@ -777,7 +777,7 @@ the unit-control widths, and the fixed support's placement and hatching.
 
 ### Zoom scales TEXT, and nothing else
 
-`renderer.js → zoomedFont(base, state)` is the ONE place a font's painted size
+`rendering/svg-primitives.js → zoomedFont(base, state)` is the ONE place a font's painted size
 is decided, and **every** `font-size` the renderer emits goes through it. It
 follows `camera.zoom` by a **square root** - so text responds across the whole
 range instead of hitting a ceiling in two steps - clamped to **0.55–1.6**

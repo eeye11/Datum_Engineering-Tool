@@ -18,8 +18,9 @@
  */
 
 const { JSDOM } = require("jsdom");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -263,10 +264,7 @@ console.log("\n  a Moment is placed, and THEN asked about\n");
 console.log("\n  a unit control is never narrower than its own symbol\n");
 
 {
-  const css = require("fs").readFileSync(
-    require("path").join(__dirname, "..", "src", "styles", "editor.css"),
-    "utf8",
-  );
+  const css = stylesheetSource("editor.css");
 
   const popupUnit = css.match(/\.drawing-creation-dimension-unit \{[^}]*\}/);
 
@@ -363,10 +361,7 @@ console.log("\n  a fixed support is a wall at the END of the member\n");
 console.log("\n  and the RENDERER draws the hatch behind the wall\n");
 
 {
-  const source = require("fs").readFileSync(
-    modulePath("renderer.js"),
-    "utf8",
-  );
+  const source = rendererSource();
 
   check(
     "the wall line is drawn ACROSS the member, at the anchor",

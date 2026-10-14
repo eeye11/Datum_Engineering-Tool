@@ -58,10 +58,8 @@ const rendererDom = new JSDOM("<!doctype html><html><body></body></html>", {
   pretendToBeVisual: true,
 });
 
-const rendererSource = fs.readFileSync(
-  locate("renderer.js"),
-  "utf8",
-);
+/* The whole renderer, which is split by concern across src/rendering/. */
+const rendererSource = require("./helpers/source-path.cjs").rendererSource();
 
 /*
  * The renderer is a large module that reaches for canvas and a projector,

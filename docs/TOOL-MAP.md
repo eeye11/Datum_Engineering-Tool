@@ -9,22 +9,22 @@ editor, and each stage has one home:
 
 | Stage                    | Where                                                         | Entry point                     |
 | ------------------------ | ------------------------------------------------------------- | ------------------------------- |
-| **Registration**         | `editor/tools.js` — id, label, icon, shortcut, toolset        | `drawingToolGroups`, `disciplineToolGroups` |
-| **Activation**           | `editor/tool-activation.js`                                   | `activateTool`                  |
-| **Submenus**             | `editor/tool-menus.js`, `editor/statics-tools.js`             | `openToolSubmenu`, `openStaticsMenu` |
-| **Pointer → point**      | `editor/pointer.js` (snapping, inference, status text)        | `resolvePointerPoint`           |
-| **Click**                | `editor/canvas-click.js`                                      | `handleCanvasClick`             |
-| **Preview**              | `editor/preview.js`                                           | `updatePreview`                 |
-| **Creation — geometry**  | `editor/geometry-creation.js`                                 | `beginOrCompleteGeometry`       |
-| **Creation — Statics**   | `editor/statics-creation.js`, `editor/statics-attachment.js`  | `createStaticsFeature`          |
-| **Creation-time sizing** | `editor/creation-sizing.js` + `features/dimensions/creation-dimensioning.js` | `beginCreationDimensioning` |
+| **Registration**         | `editor/toolbar/tools.js` — id, label, icon, shortcut, toolset        | `drawingToolGroups`, `disciplineToolGroups` |
+| **Activation**           | `editor/toolbar/tool-activation.js`                                   | `activateTool`                  |
+| **Submenus**             | `editor/toolbar/tool-menus.js`, `editor/statics/statics-tools.js`             | `openToolSubmenu`, `openStaticsMenu` |
+| **Pointer → point**      | `editor/interaction/pointer.js` (snapping, inference, status text)        | `resolvePointerPoint`           |
+| **Click**                | `editor/interaction/canvas-click.js`                                      | `handleCanvasClick`             |
+| **Preview**              | `editor/geometry/preview.js`                                           | `updatePreview`                 |
+| **Creation — geometry**  | `editor/geometry/geometry-creation.js`                                 | `beginOrCompleteGeometry`       |
+| **Creation — Statics**   | `editor/statics/statics-creation.js`, `editor/statics/statics-attachment.js`  | `createStaticsFeature`          |
+| **Creation-time sizing** | `editor/geometry/creation-sizing.js` + `features/dimensions/creation-dimensioning.js` | `beginCreationDimensioning` |
 | **Model**                | `core/model/drawing-state.js`                                 | `geometryFactories.<type>`      |
-| **Rendering**            | `rendering/renderer.js`                                       | `renderDrawing`                 |
-| **Hit-testing**          | `editor/hit-testing.js`, `editor/box-selection.js`            | `objectAtPoint`, `objectIntersectsSelection` |
-| **Handles and dragging** | `editor/handles.js`, `editor/drag.js`                         | `manipulationHandles`, `beginManipulationDrag` |
-| **Features panel**       | `editor/feature-panel.js` → `editor/feature-panel-markup.js`, `editor/statics-panel.js` | `renderProperties`, `featurePropertyMarkup` |
-| **Panel edits**          | `editor/property-binding.js` → `editor/property-update.js`    | `bindFeaturePropertyControls`, `updateFeatureProperty` |
-| **Move/rotate/mirror**   | `editor/transforms.js`                                        | `translateObject`, `rotateObjectAbout`, `mirrorObjectAcrossLine` |
+| **Rendering**            | `rendering/renderer.js` → `entity-render.js`                  | `renderDrawing`, `ENTITY_RENDERERS` |
+| **Hit-testing**          | `editor/interaction/hit-testing.js`, `editor/interaction/box-selection.js`            | `objectAtPoint`, `objectIntersectsSelection` |
+| **Handles and dragging** | `editor/interaction/handles.js`, `editor/interaction/drag.js`                         | `manipulationHandles`, `beginManipulationDrag` |
+| **Features panel**       | `editor/panels/feature-panel.js` → `editor/panels/feature-panel-markup.js`, `editor/statics/statics-panel.js` | `renderProperties`, `featurePropertyMarkup` |
+| **Panel edits**          | `editor/panels/property-binding.js` → `editor/panels/property-update.js`    | `bindFeaturePropertyControls`, `updateFeatureProperty` |
+| **Move/rotate/mirror**   | `editor/geometry/transforms.js`                                        | `translateObject`, `rotateObjectAbout`, `mirrorObjectAcrossLine` |
 
 To find every place a tool is handled, search `src/` for its id in quotes,
 for example `"pin-support"`. `editor/index.js` lists every editor module
@@ -36,17 +36,17 @@ with a one-line description.
 
 | Tool   | Id       | Where                                                   |
 | ------ | -------- | ------------------------------------------------------- |
-| Select | `select` | `editor/selection.js` (`beginSelectionDrag`, `finishSelectionDrag`), `editor/canvas-click.js` |
-| Pan    | `pan`    | `editor/canvas-events.js`                               |
-| Zoom   | `zoom`   | `editor/viewport.js` (`zoomAtCanvasPoint`)              |
-| Fit    | `fit`    | `editor/viewport.js` (`fitWholePage`, `fitSelected`)    |
-| Move   | `move`   | `editor/modify-tools.js` (`commitMove`) → `editor/transforms.js` |
-| Rotate | `rotate` | `editor/modify-tools.js` (`commitRotate`) → `rotateObjectAbout` |
-| Mirror | `mirror` | `editor/modify-tools.js` (`commitMirror`) → `mirrorObjectAcrossLine` |
-| Trim   | `trim`   | `editor/modify-tools.js` → `trimObjectToBoundary`        |
-| Extend | `extend` | `editor/modify-tools.js` → `extendObjectToBoundary`      |
+| Select | `select` | `editor/interaction/selection.js` (`beginSelectionDrag`, `finishSelectionDrag`), `editor/interaction/canvas-click.js` |
+| Pan    | `pan`    | `editor/interaction/canvas-events.js`                               |
+| Zoom   | `zoom`   | `editor/workspace/viewport.js` (`zoomAtCanvasPoint`)              |
+| Fit    | `fit`    | `editor/workspace/viewport.js` (`fitWholePage`, `fitSelected`)    |
+| Move   | `move`   | `editor/commands/modify-tools.js` (`commitMove`) → `editor/geometry/transforms.js` |
+| Rotate | `rotate` | `editor/commands/modify-tools.js` (`commitRotate`) → `rotateObjectAbout` |
+| Mirror | `mirror` | `editor/commands/modify-tools.js` (`commitMirror`) → `mirrorObjectAcrossLine` |
+| Trim   | `trim`   | `editor/commands/modify-tools.js` → `trimObjectToBoundary`        |
+| Extend | `extend` | `editor/commands/modify-tools.js` → `extendObjectToBoundary`      |
 
-The Modify and View buttons are wired in `editor/workspace-controls.js`.
+The Modify and View buttons are wired in `editor/workspace/workspace-controls.js`.
 
 ---
 
@@ -54,12 +54,12 @@ The Modify and View buttons are wired in `editor/workspace-controls.js`.
 
 | Tool         | Id             | Creation                                          |
 | ------------ | -------------- | ------------------------------------------------- |
-| Point        | `point`        | `createPointFeature` (`editor/geometry-creation.js`) |
+| Point        | `point`        | `createPointFeature` (`editor/geometry/geometry-creation.js`) |
 | Line         | `line`         | `beginOrCompleteGeometry`                          |
-| Triangle     | `triangle`     | `beginOrCompleteGeometry`; panel `editor/triangle-panel.js`, solving `editor/triangle-editing.js` |
+| Triangle     | `triangle`     | `beginOrCompleteGeometry`; panel `editor/geometry/triangle-panel.js`, solving `editor/geometry/triangle-editing.js` |
 | Rectangle    | `rectangle`    | `beginOrCompleteGeometry`                          |
 | Circle       | `circle`       | `beginOrCompleteGeometry`                          |
-| Arc          | `arc`          | 3-point or centre-point, chosen in `editor/tool-menus.js`; arc maths in `editor/construction-geometry.js` |
+| Arc          | `arc`          | 3-point or centre-point, chosen in `editor/toolbar/tool-menus.js`; arc maths in `editor/geometry/construction-geometry.js` |
 | Polygon      | `polygon`      | by sides or by centre (`polygonFromCursor`, `polygonFromCentre`) |
 | Coordinate System | `coordinate-system` | `add2DCoordinateSystem`                   |
 
@@ -72,7 +72,7 @@ All geometry is snapped by `core/snapping/object-snap.js` and measured by
 
 | Tool              | Id                | Notes                                   |
 | ----------------- | ----------------- | --------------------------------------- |
-| Reference Point   | `reference-point` | single click (`editor/statics-creation.js`) |
+| Reference Point   | `reference-point` | single click (`editor/statics/statics-creation.js`) |
 | Reference Line    | `reference-line`  | as Line; asks **Length** on creation    |
 | Reference Arc     | `reference-arc`   | a true Arc with construction styling; asks **Radius** |
 
@@ -89,9 +89,9 @@ All geometry is snapped by `core/snapping/object-snap.js` and measured by
 | ---------------------------------------- | ---------------------------------------------- |
 | Dimension data, measurement, geometry    | `features/dimensions/dimension-model.js`       |
 | Which measurement a selection means      | `features/dimensions/smart-dimension.js`       |
-| What a click refers to                   | `editor/dimension-inference.js`                |
-| Choosing and committing                  | `editor/dimension-tool.js` (`commitDimension`) |
-| Reference selection and placement        | `editor/dimension-placement.js` (`handleDimensionClick`) |
+| What a click refers to                   | `editor/annotate/dimension-inference.js`                |
+| Choosing and committing                  | `editor/annotate/dimension-tool.js` (`commitDimension`) |
+| Reference selection and placement        | `editor/annotate/dimension-placement.js` (`handleDimensionClick`) |
 | Creation-time sizing popup               | `features/dimensions/creation-dimensioning.js` |
 | Value editor                             | `features/dimensions/dimension-editor.js`      |
 | Unit formatting                          | `core/units/quantities.js`                     |
@@ -113,23 +113,23 @@ All geometry is snapped by `core/snapping/object-snap.js` and measured by
 
 | Tool                                  | Id               | Creation                         | Where                                |
 | ------------------------------------- | ---------------- | -------------------------------- | ------------------------------------ |
-| Particle                              | `particle`       | single click                     | `editor/statics-creation.js`         |
-| Rigid Body                            | `rigid-body`     | single click, then shape         | shape edits in `editor/property-inputs.js` |
-| Beam, Cable, Shaft                    | `beam`, `cable`, `shaft` | two clicks + **Length**  | `editor/statics-creation.js`         |
-| Truss                                 | `truss`          | staged, member by member         | `editor/truss-tool.js`; optimisation `editor/truss-optimizer.js` |
-| Point Force                           | `point-force`    | placement + vector drag          | `editor/statics-creation.js`; vector maths `features/analysis/load-profile.js` |
-| Distributed Load                      | `distributed-load` | body → start → end → magnitude → direction | `editor/load-tool.js`; profile `features/analysis/load-profile.js` |
-| Varying Distributed Load              | `varying-distributed-load` | as above, with profile points | `editor/load-tool.js`        |
-| Applied Moment                        | `applied-moment` | on a body or in free space       | `editor/statics-attachment.js`; arc `features/analysis/rotational-arrow.js` |
-| Couple                                | `couple`         | single click                     | `editor/statics-creation.js`         |
-| Pin / Roller / Fixed / Smooth Support | `pin-support` …  | pick the body, then the point    | `editor/statics-attachment.js`       |
-| Pin / Fixed / Slider Connection       | `pin-connection` … | between bodies                 | `editor/statics-attachment.js`       |
+| Particle                              | `particle`       | single click                     | `editor/statics/statics-creation.js`         |
+| Rigid Body                            | `rigid-body`     | single click, then shape         | shape edits in `editor/panels/property-inputs.js` |
+| Beam, Cable, Shaft                    | `beam`, `cable`, `shaft` | two clicks + **Length**  | `editor/statics/statics-creation.js`         |
+| Truss                                 | `truss`          | staged, member by member         | `editor/statics/truss-tool.js`; optimisation `editor/statics/truss-optimizer.js` |
+| Point Force                           | `point-force`    | placement + vector drag          | `editor/statics/statics-creation.js`; vector maths `features/analysis/load-profile.js` |
+| Distributed Load                      | `distributed-load` | body → start → end → magnitude → direction | `editor/statics/load-tool.js`; profile `features/analysis/load-profile.js` |
+| Varying Distributed Load              | `varying-distributed-load` | as above, with profile points | `editor/statics/load-tool.js`        |
+| Applied Moment                        | `applied-moment` | on a body or in free space       | `editor/statics/statics-attachment.js`; arc `features/analysis/rotational-arrow.js` |
+| Couple                                | `couple`         | single click                     | `editor/statics/statics-creation.js`         |
+| Pin / Roller / Fixed / Smooth Support | `pin-support` …  | pick the body, then the point    | `editor/statics/statics-attachment.js`       |
+| Pin / Fixed / Slider Connection       | `pin-connection` … | between bodies                 | `editor/statics/statics-attachment.js`       |
 
 Which tools attach to a body, how many points each takes and what each
-asks for are defined once, in `editor/statics-tools.js`.
+asks for are defined once, in `editor/statics/statics-tools.js`.
 
 **Length editing** for Beam, Cable, Truss and Shaft is one shared path:
-search `editor/property-update.js` for `key === "length"`. It converts
+search `editor/panels/property-update.js` for `key === "length"`. It converts
 millimetres to drawing units through `core/scale/dimensions.js` and moves
 the far end along the member's own direction.
 
@@ -151,7 +151,7 @@ survive a resize.
 
 | Concern                                   | File                                         |
 | ----------------------------------------- | -------------------------------------------- |
-| Placing them                              | `editor/analysis-tools.js`                   |
+| Placing them                              | `editor/statics/analysis-tools.js`                   |
 | Derived values and live updates           | `features/analysis/analysis-dependencies.js` |
 | Diagram expressions                       | `features/analysis/diagram-equations.js`     |
 | Sketch editor / Plot editor               | `ui/editors/sketch-editor.js`, `ui/editors/plot-editor.js` |
@@ -166,10 +166,10 @@ from their sources and cannot be edited into disagreeing with them.
 | Concern                                        | File                                         |
 | ---------------------------------------------- | -------------------------------------------- |
 | Annotation model (text, placement, visibility) | `features/annotations/annotation-model.js`   |
-| The annotation tools                           | `editor/annotation-tool.js`                  |
-| Magnitude boxes drawn on the canvas            | `rendering/renderer.js` (`appendDerivedMagnitude`) |
-| Magnitude box hit-testing                      | `editor/hit-testing.js` (`pickDerivedMagnitude`) |
-| Magnitude box dragging                         | `editor/selection.js` (`beginSelectionDrag`) |
+| The annotation tools                           | `editor/annotate/annotation-tool.js`                  |
+| Magnitude boxes drawn on the canvas            | `rendering/annotation-render.js` (`appendDerivedMagnitude`) |
+| Magnitude box hit-testing                      | `editor/interaction/hit-testing.js` (`pickDerivedMagnitude`) |
+| Magnitude box dragging                         | `editor/interaction/selection.js` (`beginSelectionDrag`) |
 
 A magnitude annotation is a drawing-space object linked to its source: it
 stores `sourceFeatureId`, position and visibility, never a copy of the
@@ -182,13 +182,13 @@ communicates direction.
 
 | Command                       | Where                                                   |
 | ----------------------------- | ------------------------------------------------------- |
-| New, Open, Save, Save As      | `editor/document-commands.js` → `file/file-save.js`, `file/document-file.js` |
-| Print, export PNG/JPG/SVG     | `editor/document-commands.js` → `file/document-export.js` |
-| Crash recovery                | `editor/document-commands.js` → `file/document-recovery.js` |
-| Undo, Redo                    | `editor/tool-activation.js` → `core/model/drawing-state.js` |
-| Copy, Cut, Paste, Duplicate   | `editor/clipboard-commands.js` → `core/selection/clipboard.js` |
-| Delete                        | `editor/delete-command.js`                              |
-| Right-click menu              | `editor/context-menu.js`                                |
-| Colour picker                 | `editor/colour-picker.js`                               |
-| Keyboard shortcuts            | `editor/keyboard-shortcuts.js`                          |
-| Sheets                        | `editor/sheet-controller.js`, `sheets/`                 |
+| New, Open, Save, Save As      | `editor/commands/document-commands.js` → `file/file-save.js`, `file/document-file.js` |
+| Print, export PNG/JPG/SVG     | `editor/commands/document-commands.js` → `file/document-export.js` |
+| Crash recovery                | `editor/commands/document-commands.js` → `file/document-recovery.js` |
+| Undo, Redo                    | `editor/toolbar/tool-activation.js` → `core/model/drawing-state.js` |
+| Copy, Cut, Paste, Duplicate   | `editor/commands/clipboard-commands.js` → `core/selection/clipboard.js` |
+| Delete                        | `editor/commands/delete-command.js`                              |
+| Right-click menu              | `editor/interaction/context-menu.js`                                |
+| Colour picker                 | `editor/panels/colour-picker.js`                               |
+| Keyboard shortcuts            | `editor/interaction/keyboard-shortcuts.js`                          |
+| Sheets                        | `editor/workspace/sheet-controller.js`, `sheets/`                 |

@@ -27,6 +27,8 @@ const path = require("path");
 
 const projectRoot = path.join(__dirname, "..");
 const srcRoot = path.join(projectRoot, "src");
+/* Modules are found by file name, so they can move between folders. */
+const { modulePath } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -188,7 +190,7 @@ check(
  * AND THE SPECIFIC ONE THAT BROKE, asserted by name so a regression is reported
  * as what it is rather than as a generic count.
  */
-const boxSource = sourceOf.get(path.join(srcRoot, "editor", "box-selection.js"));
+const boxSource = sourceOf.get(modulePath("box-selection.js"));
 
 check(
   "box-selection exports the dispatcher selection.js imports",
@@ -209,7 +211,7 @@ check(
  * so rather than quietly passing because nothing asks for it.
  */
 const selectionSource = sourceOf.get(
-  path.join(srcRoot, "editor", "selection.js"),
+  modulePath("selection.js"),
 );
 
 check(

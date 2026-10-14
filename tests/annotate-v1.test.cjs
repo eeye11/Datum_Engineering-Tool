@@ -42,7 +42,7 @@ const { createHarness } = require("./harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 
-const { loadModule, locate, modulePath } = require("./helpers/source-path.cjs");
+const { loadModule, locate, modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 const annotateModule = loadModule("annotate-model.js");
 const annotate = annotateModule.default || annotateModule;
@@ -203,7 +203,7 @@ console.log("\n  a Driven dimension is chosen when the measurement is already st
 console.log("\n  the Driven colour reaches the canvas\n");
 
 {
-  const renderer = require("fs").readFileSync(locate("renderer.js"), "utf8");
+  const renderer = rendererSource();
 
   check(
     "the dimension renderer reads the Driven colour for a Driven entity",
@@ -302,7 +302,7 @@ console.log("\n  a Label's anchor and its text are separate\n");
 console.log("\n  Leader and Callout endpoint symbols\n");
 
 {
-  const renderer = require("fs").readFileSync(locate("renderer.js"), "utf8");
+  const renderer = rendererSource();
 
   check("a dot marker is drawn", /headStyle === "dot"/.test(renderer));
   check("a tick marker is drawn", /headStyle === "tick"/.test(renderer));

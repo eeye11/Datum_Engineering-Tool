@@ -1,7 +1,7 @@
 /*
  * BROWSER-AUTOMATION HANDLES.
  *
- * Browser tests (tests/e2e) and the QA scripts (tools/qa) drive the
+ * Browser tests (tests/e2e) and developer scripts (tools/) drive the
  * running page and need to read its state: the document model, the sheets,
  * the export pipeline. Before the move to ES modules every module was a
  * window global, so they simply read window.enggDrawing and friends. These
@@ -20,11 +20,11 @@ import enggErrorLog from "./error-log.js";
 import enggFileSave from "../file/file-save.js";
 import enggAxisLabels from "../core/geometry/axis-labels.js";
 import enggVariableDimension from "../features/dimensions/variable-dimension.js";
-import enggDrawOrder from "../editor/draw-order.js";
-import * as enggDimensionPlacement from "../editor/dimension-placement.js";
-import * as enggDimensionInference from "../editor/dimension-inference.js";
-import * as enggDimensionPreview from "../editor/preview.js";
-import * as enggHitTesting from "../editor/hit-testing.js";
+import enggDrawOrder from "../editor/commands/draw-order.js";
+import * as enggDimensionPlacement from "../editor/annotate/dimension-placement.js";
+import * as enggDimensionInference from "../editor/annotate/dimension-inference.js";
+import * as enggDimensionPreview from "../editor/geometry/preview.js";
+import * as enggHitTesting from "../editor/interaction/hit-testing.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import { editorState } from "../editor/editor-state.js";
 import enggDrawingReference from "../references/drawing-reference.js";
