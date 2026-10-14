@@ -14,7 +14,8 @@
     "start": "node server/server.js",
     "test": "node --test tests/*.test.cjs",
     "lint": "eslint src server",
-    "test:golden": "node tests/e2e/golden-scenario.mjs"
+    "test:golden": "node tests/e2e/golden-scenario.mjs",
+    "check": "npm run lint && npm test && npm run build"
   },
   "dependencies": {
     "express": "^5.2.1",

@@ -38,3 +38,13 @@ jobs:
           node tests/e2e/static-server.mjs dist 8126 &
           sleep 1
           node tests/e2e/api-check.mjs http://localhost:8126/
+
+      # Every tool, the Modify tools, clipboard, sheets, export and the written
+      # solution, driven in Chrome against the production build. Fails if any
+      # step raises a page error.
+      - name: Every tool in the browser (golden scenario)
+        run: |
+          node tests/e2e/static-server.mjs dist 8127 &
+          sleep 1
+          node tests/e2e/golden-scenario.mjs http://localhost:8127/ scenario.golden.json
+          node tests/e2e/golden-errors.mjs scenario.golden.json

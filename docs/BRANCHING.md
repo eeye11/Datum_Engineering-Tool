@@ -189,8 +189,9 @@ force-push a branch other people are working on.
 | Unit and integration tests | `npm test` |
 | Build | `npm run build` |
 | Integration API in the browser | `tests/e2e/static-server.mjs` + `tests/e2e/api-check.mjs` |
+| Every tool in the browser | `tests/e2e/golden-scenario.mjs` + `tests/e2e/golden-errors.mjs` (no step may raise a page error) |
 
-All four must pass. The browser step drives the real UI in Chrome, so a
+All five must pass (`npm run check` runs the first three locally). The browser steps drive the real UI in Chrome, so a
 test that clicks the wrong element fails there even when lint and unit
 tests are green — check the actual DOM, not just the selector you expect.
 
