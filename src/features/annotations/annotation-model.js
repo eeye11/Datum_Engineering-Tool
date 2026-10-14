@@ -70,6 +70,7 @@
  */
 import enggMeasurement from "../../core/geometry/measurement-core.js";
 import enggLoadProfile from "../analysis/load-profile.js";
+import { CONNECTION_TYPES, SUPPORT_TYPES } from "../../core/model/feature-types.js";
 
 /*
  * ========================================================
@@ -148,21 +149,12 @@ const KINDS = {
   "support-label": {
     label: "Support label",
     generated: true,
-    describes: [
-      "pin-support",
-      "roller-support",
-      "fixed-support",
-      "smooth-support"
-    ]
+    describes: SUPPORT_TYPES
   },
   "connection-label": {
     label: "Connection label",
     generated: true,
-    describes: [
-      "pin-connection",
-      "fixed-connection",
-      "slider-connection"
-    ]
+    describes: CONNECTION_TYPES
   },
   "resultant-value": {
     label: "Resultant value",

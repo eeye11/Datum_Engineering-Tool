@@ -146,6 +146,8 @@ export function typesWith(trait) {
 
 /* The Statics bodies, in the order the Statics tools offer them. */
 export const STATICS_BODY_TYPES = Object.freeze(typesWith("body"));
+export const SUPPORT_TYPES = Object.freeze(typesWith("support"));
+export const CONNECTION_TYPES = Object.freeze(typesWith("connection"));
 
 export const isStaticsBodyType = type => traitOf(type, "body");
 export const attachableStaticsType = type => traitOf(type, "attachable");

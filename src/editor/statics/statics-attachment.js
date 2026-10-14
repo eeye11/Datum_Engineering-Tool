@@ -610,10 +610,7 @@ function commitStaticsAttachment(
                 )
             );
     } else if (
-        type === "pin-support" ||
-        type === "roller-support" ||
-        type === "fixed-support" ||
-        type === "smooth-support"
+        isSupportType(type)
     ) {
         /*
          * ========================================================

@@ -18,6 +18,7 @@ import { analysisPanelRows, arcRadiusRow, distributedLoadPanelMarkup, momentDire
 import { STATICS_FEATURE_LABELS, staticsConnectionSection } from "../statics/statics-tools.js";
 import { trianglePropertyMarkup } from "../geometry/triangle-panel.js";
 import { trussOptimizeMarkup } from "../statics/truss-optimizer.js";
+import { CONNECTION_TYPES, isConnectionType, isSupportType } from "../../core/model/feature-types.js";
 
 /*
  * Shared header for every Features panel: the feature's own name as the
@@ -1666,11 +1667,7 @@ export function featurePropertyMarkup(object) {
             rows.push(derivedCount("Supports",
                 attachedCount(object.id)));
             rows.push(derivedCount("Connections",
-                attachedCount(object.id, [
-                    "pin-connection",
-                    "fixed-connection",
-                    "slider-connection"
-                ])));
+                attachedCount(object.id, CONNECTION_TYPES)));
         }
     } else if (object.type === "force") {
         /*
@@ -1988,10 +1985,7 @@ export function featurePropertyMarkup(object) {
            )
        );
     } else if (
-        object.type === "pin-support" ||
-        object.type === "roller-support" ||
-        object.type === "fixed-support" ||
-        object.type === "smooth-support"
+        isSupportType(object.type)
     ) {
         /*
          * Each support variant is its own feature with its own
@@ -2002,9 +1996,7 @@ export function featurePropertyMarkup(object) {
             supportPanelRows(object)
         );
     } else if (
-        object.type === "pin-connection" ||
-        object.type === "fixed-connection" ||
-        object.type === "slider-connection"
+        isConnectionType(object.type)
     ) {
         /*
          * Each connection variant is a real feature, so it is

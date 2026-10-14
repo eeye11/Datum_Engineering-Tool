@@ -16,6 +16,7 @@ import enggDimensionModel from "../features/dimensions/dimension-model.js";
 import enggVariableDimension from "../features/dimensions/variable-dimension.js";
 import enggTheme from "../editor/workspace/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
+import { isConnectionType, isSupportType } from "../core/model/feature-types.js";
 
     const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 
@@ -2659,13 +2660,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
              */
             entity.type === "resultant" ||
             entity.type === "force-components" ||
-            entity.type === "pin-support" ||
-            entity.type === "roller-support" ||
-            entity.type === "fixed-support" ||
-            entity.type === "smooth-support" ||
-            entity.type === "pin-connection" ||
-            entity.type === "fixed-connection" ||
-            entity.type === "slider-connection"
+            isSupportType(entity.type) ||
+            isConnectionType(entity.type)
         ) {
             /*
                  * A FORCE AND A RESULTANT ARE DRAWN ALONG THEIR SPAN, NOT FROM
@@ -2913,10 +2909,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     );
                 }
             } else if (
-                entity.type === "pin-support" ||
-                entity.type === "roller-support" ||
-                entity.type === "fixed-support" ||
-                entity.type === "smooth-support"
+                isSupportType(entity.type)
             ) {
                 /*
                  * A SUPPORT IS DRAWN FROM ITS ATTACHMENT, NOT FROM
@@ -3075,9 +3068,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     svg.appendChild(stem);
                 }
             } else if (
-                entity.type === "pin-connection" ||
-                entity.type === "fixed-connection" ||
-                entity.type === "slider-connection"
+                isConnectionType(entity.type)
             ) {
                 appendConnectionSymbol(
                     svg,

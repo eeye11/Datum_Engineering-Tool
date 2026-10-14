@@ -14,6 +14,7 @@
  */
 import enggDrawingState from "../model/drawing-state.js";
 import enggBodyFrames from "./body-frames.js";
+import { isConnectionType, isSupportType } from "../model/feature-types.js";
 
 /*
  * The centre of a feature, in world coordinates.
@@ -218,10 +219,7 @@ function definingPoints(
      * or the arrow stops being the force it describes.
      */
     if (
-        type === "pin-support" ||
-        type === "roller-support" ||
-        type === "fixed-support" ||
-        type === "smooth-support"
+        isSupportType(type)
     ) {
         /*
          * A SUPPORT MOVES ALONG ITS BODY, NOT FREELY.
@@ -254,9 +252,7 @@ function definingPoints(
         type === "varying-load" ||
         type === "force" ||
         type === "connection" ||
-        type === "pin-connection" ||
-        type === "fixed-connection" ||
-        type === "slider-connection"
+        isConnectionType(type)
     ) {
         return valid([
             g.start,
@@ -314,10 +310,7 @@ function definingPoints(
     }
 
     if (
-        type === "pin-support" ||
-        type === "roller-support" ||
-        type === "fixed-support" ||
-        type === "smooth-support"
+        isSupportType(type)
     ) {
         return valid([
             g.position
@@ -757,10 +750,7 @@ function translateObject(
     }
 
     if (
-        object.type === "pin-support" ||
-        object.type === "roller-support" ||
-        object.type === "fixed-support" ||
-        object.type === "smooth-support"
+        isSupportType(object.type)
     ) {
         /*
          * A SUPPORT SLIDES ALONG ITS BODY, AND STAYS OUTSIDE IT.
