@@ -89,7 +89,8 @@ check(
   "a relative offset is converted from engineering units before it is stored",
   /fromEngineering\(\s*drawingState,\s*value,\s*['"]mm['"]\s*\)/.test(
     relativeBranch
-  ) || /worldLengthInDisplayUnits\(object, value\)/.test(relativeBranch),
+  ) ||
+    /worldLengthInDisplayUnits\(object, value, typedUnit\)/.test(relativeBranch),
   "no millimetre conversion found in the relative branch"
 );
 
@@ -181,7 +182,8 @@ check(
   "a station is converted from engineering units before it is projected",
   /fromEngineering\(\s*drawingState,\s*value,\s*['"]mm['"]\s*\)/.test(
     stationWriter,
-  ) || /worldLengthInDisplayUnits\(object, value\)/.test(stationWriter),
+  ) ||
+    /worldLengthInDisplayUnits\(object, value, typedUnit\)/.test(stationWriter),
   "no millimetre conversion found before pointAtStation",
 );
 
@@ -213,7 +215,7 @@ check(
  */
 check(
   "a child with no parent keeps its absolute world position",
-  /target\.x = value;|target\.x = worldLengthInDisplayUnits\(object, value\);/.test(
+  /target\.x = value;|target\.x = worldLengthInDisplayUnits\(object, value, typedUnit\);/.test(
     stationWriter,
   ),
   "the parentless branch no longer writes the absolute value",
@@ -281,7 +283,7 @@ check("the load station writer is found", loadWriter.length > 0);
 
 check(
   "the load writer converts the displayed length back before projecting",
-  /pointAtStation\(\s*parent,\s*worldLengthInDisplayUnits\(object, value\)\s*\)/.test(
+  /pointAtStation\(\s*parent,\s*worldLengthInDisplayUnits\(object, value, typedUnit\)\s*\)/.test(
     loadWriter,
   ) ||
     (/pointAtStation\(\s*parent,\s*value\s*\)/.test(loadWriter) &&

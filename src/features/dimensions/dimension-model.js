@@ -1297,12 +1297,21 @@ function formatMeasurement(
    * field is displaying - `measurement.unit` is always "mm", and falling back to
    * it would print a metre document as "1500.00 mm".
    *
-   * The unit a dimension reads in when nothing per-dimension is set is therefore
-   * asked of the SCALE, which is where that choice lives. A dimension with its
-   * own `displayUnit` still honours it; only the default moved.
+   * The unit a dimension reads in when nothing per-dimension is set is the
+   * DRAWING'S active length unit, read through the shared document-units
+   * accessor - the same setting every length dropdown in the application
+   * shows and writes. A drawing saved before the setting could be stated
+   * has none, and for those the calibrated sheet's own unit is still
+   * honoured, exactly as this fallback always did. A dimension with its own
+   * `displayUnit` outranks both.
    *
    * An ANGLE is not a length and has no length unit, so it is left alone.
    */
+  const statedUnit =
+    !measurement.angular && state?.units && enggQuantities?.isUnitFor?.("length", state.units)
+      ? state.units
+      : null;
+
   const sheetUnit =
     !measurement.angular && enggDimensions?.readScale
       ? enggDimensions.readScale(state)?.unit
@@ -1311,7 +1320,7 @@ function formatMeasurement(
   const displayUnit =
     measurement.angular
       ? null
-      : dimension.displayUnit || sheetUnit || measurement.unit;
+      : dimension.displayUnit || statedUnit || sheetUnit || measurement.unit;
 
   const shown =
     !measurement.angular &&

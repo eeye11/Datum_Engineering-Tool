@@ -22,6 +22,7 @@ import { canvasPointFromEvent } from "./tool-activation.js";
 import { closeCoordinateSystemMenu } from "./tool-menus.js";
 import { setToolMessage } from "./toolbar-render.js";
 import { finishTrussConstruction } from "./truss-tool.js";
+import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
 import { zoomAtCanvasPoint } from "./viewport.js";
 
 /*
@@ -262,6 +263,30 @@ export function installCanvasEvents() {
                 }
 
                 /*
+                 * A PIPE / DUCT PATH IS FINISHED THE SAME WAY, by a
+                 * double-click - the one explicit "I am done" a progressive
+                 * drawing needs. Each run is already committed, so nothing is
+                 * left to discard: finishing only clears the continuation, and
+                 * the tool stays armed for a fresh path.
+                 *
+                 * The test is the ARMED FLUIDS TOOL, not the phase, because a
+                 * run is committed on release and the phase is therefore idle
+                 * between legs - which is exactly when a student would
+                 * double-click to say they are done.
+                 */
+                if (
+                    drawingState.activeTool === "pipe-duct" ||
+                    drawingState.interaction.fluidsTool ===
+                        "pipe-duct" ||
+                    drawingState.interaction.phase === ROUTE_PHASE
+                ) {
+                    event.preventDefault();
+
+                    finishRouteConstruction();
+                    return;
+                }
+
+                /*
                  * The Distributed Load is also finished explicitly,
                  * and with Enter rather than a double-click, because a
                  * double-click is two more points along the body. The
@@ -340,6 +365,33 @@ export function installCanvasEvents() {
                         event
                     )
                 ) {
+                    /*
+                     * PIPE / DUCT CAPTURES THE POINTER FOR ITS DRAG.
+                     *
+                     * A run is defined by press, drag and release - and the
+                     * release must commit even when the pointer has travelled
+                     * off the canvas element while dragging. Pointer capture
+                     * is how every other drag in the application keeps its
+                     * release: the element that captured the pointer keeps
+                     * receiving its move and up events wherever the cursor
+                     * goes.
+                     *
+                     * ONLY PIPE / DUCT, and only here. The geometry and
+                     * Statics tools deliberately defer their press, so that a
+                     * press that never travels stays an ordinary click - and
+                     * capturing on their press would redirect the click that
+                     * IS their first point. A run has no click workflow: its
+                     * whole gesture is the drag, so capture belongs on its
+                     * press.
+                     */
+                    if (drawingState.activeTool === "pipe-duct") {
+                        try {
+                            drawingCanvas.setPointerCapture(
+                                event.pointerId
+                            );
+                        } catch {}
+                    }
+
                     return;
                 }
 
@@ -403,6 +455,28 @@ export function installCanvasEvents() {
             "pointerup",
             event => {
                 /*
+                 * GIVE THE POINTER BACK FIRST, WHATEVER THE RELEASE DOES.
+                 *
+                 * A pipe-duct press captures the pointer so its drag survives
+                 * leaving the canvas. The capture is released HERE, before the
+                 * gesture is classified, so it is dropped whether the release
+                 * commits a run or turns out to be an ordinary click - neither
+                 * path may leave the canvas holding a capture the gesture has
+                 * finished with.
+                 */
+                if (
+                    drawingCanvas.hasPointerCapture(
+                        event.pointerId
+                    )
+                ) {
+                    try {
+                        drawingCanvas.releasePointerCapture(
+                            event.pointerId
+                        );
+                    } catch {}
+                }
+
+                /*
                  * A DRAG-TO-CREATE ENDS AT THE RELEASE.
                  *
                  * The final cursor position is the second point, so the
@@ -458,8 +532,63 @@ export function installCanvasEvents() {
          */
         drawingCanvas.addEventListener(
             "pointercancel",
-            () => {
+            event => {
                 editorState.creationDrag = null;
+
+                /*
+                 * A CANCELLED DRAG MUST NOT KEEP THE CAPTURE.
+                 *
+                 * A pipe-duct press captures the pointer; if the gesture is
+                 * cancelled before the release the capture has to be dropped
+                 * here, or the canvas would keep swallowing that pointer's
+                 * events and the next gesture would never begin.
+                 */
+                if (
+                    event &&
+                    drawingCanvas.hasPointerCapture(
+                        event.pointerId
+                    )
+                ) {
+                    try {
+                        drawingCanvas.releasePointerCapture(
+                            event.pointerId
+                        );
+                    } catch {}
+                }
+            }
+        );
+
+        /*
+         * POINTER RELEASE OUTSIDE CANVAS.
+         *
+         * If pointer capture was interrupted or the release arrived on window,
+         * finish the creation drag reliably so the gesture is never discarded.
+         */
+        window.addEventListener(
+            "pointerup",
+            event => {
+                if (editorState.creationDrag && event.target !== drawingCanvas) {
+                    if (
+                        drawingCanvas.hasPointerCapture(
+                            event.pointerId
+                        )
+                    ) {
+                        try {
+                            drawingCanvas.releasePointerCapture(
+                                event.pointerId
+                            );
+                        } catch {}
+                    }
+
+                    if (
+                        finishCreationDrag(
+                            event
+                        )
+                    ) {
+                        editorState.creationDragConsumedClick =
+                            true;
+                    }
+                }
             }
         );
 

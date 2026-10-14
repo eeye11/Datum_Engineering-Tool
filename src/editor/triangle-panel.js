@@ -2,28 +2,27 @@
  * The triangle's panel: sides and angles.
  */
 
+import enggDocumentUnits from "../core/units/document-units.js";
 import enggQuantities from "../core/units/quantities.js";
 import { appearanceMarkup } from "./appearance-panel.js";
 import { distance } from "./construction-geometry.js";
 import { featureHeaderMarkup, finaliseRows } from "./feature-panel-markup.js";
+import { drawingState } from "./editor-state.js";
 import { mmOf } from "./handles.js";
 
 /*
  * THE LENGTH UNIT THE TRIANGLE'S FIELDS ARE READ IN.
  *
- * Every length field on a Features panel reads in the feature's own selected
- * unit, and the triangle's are no exception: its vertices, its sides and the
- * setter that receives them all resolve the same `lengthUnit`, so a triangle
- * read in metres is typed in metres like every other feature. The selector is
- * the same shared control the other length rows use, writing the same
- * `lengthUnit` property, so the unit is stated once and changed in one place.
+ * Every length field on a Features panel reads in the DRAWING'S active unit,
+ * and the triangle's are no exception: its vertices, its sides and the setter
+ * that receives them all resolve the same document setting, so a triangle read
+ * in metres is typed in metres like every other feature - and changing the unit
+ * on the triangle changes it on the run beside it too. The selector is the same
+ * shared control the other length rows use, writing the same `lengthUnit`
+ * property, so the unit is stated once and changed in one place.
  */
-function triangleLengthUnit(object) {
-    const stored = object?.lengthUnit;
-
-    return enggQuantities.isUnitFor("length", stored)
-        ? stored
-        : "mm";
+function triangleLengthUnit(_object) {
+    return enggDocumentUnits.documentLengthUnit(drawingState);
 }
 
 function lengthUnitSelect(object, label) {
@@ -34,8 +33,8 @@ function lengthUnitSelect(object, label) {
             data-property="lengthUnit"
             aria-label="${label} unit"
             title="${label} unit">
-            ${enggQuantities
-                .unitsFor("length")
+            ${enggDocumentUnits
+                .documentLengthUnits()
                 .map(
                     unit =>
                         `<option value="${unit}"${

@@ -25,15 +25,21 @@ const quantities = require(path.join(root, "src/core/units/quantities.js")).defa
 test("property-update resolves the display unit once, through one helper", () => {
     const update = read("src/editor/property-update.js");
 
+    /*
+     * THE ONE HELPER RESOLVES THE DRAWING'S UNIT. The unit is a document
+     * setting, so the helper reads it from the document through the shared
+     * accessor rather than from the feature - which is what makes the setter
+     * and every panel dropdown agree on one value.
+     */
     assert.match(
         update,
-        /function displayLengthUnitOf\(object\)/,
+        /function displayLengthUnitOf\(\w+\)[\s\S]{0,300}enggDocumentUnits\.documentLengthUnit\(drawingState\)/,
         "one helper resolves the display unit"
     );
 
     assert.match(
         update,
-        /function worldLengthInDisplayUnits\(object, value\)/,
+        /function worldLengthInDisplayUnits\(object, value, typedUnit\)/,
         "one helper converts a typed length in that unit"
     );
 
@@ -160,7 +166,7 @@ test("length rows render exactly one unit statement", () => {
     /* The coordinate helper keeps the same rule: one unit statement per row. */
     const coordinateBody = markup.slice(
         markup.indexOf("const coordinate = ("),
-        markup.indexOf("const coordinate = (") + 5000
+        markup.indexOf("const coordinate = (") + 9000
     );
 
     assert.match(

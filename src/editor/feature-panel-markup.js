@@ -2,6 +2,7 @@
  * A feature's panel markup.
  */
 
+import enggDocumentUnits from "../core/units/document-units.js";
 import enggFeatureGeometry from "../core/geometry/feature-geometry.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggAnalysisDependencies from "../features/analysis/analysis-dependencies.js";
@@ -9,6 +10,7 @@ import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggPropertyPanel from "../ui/feature-panel/property-panel.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import enggDimensionModel from "../features/dimensions/dimension-model.js";
+import enggPipeDuct from "../features/fluids/pipe-duct.js";
 import { appearanceMarkup } from "./appearance-panel.js";
 import { COORDINATE_SYSTEM_TYPE } from "./constants.js";
 import { drawingState } from "./editor-state.js";
@@ -556,14 +558,19 @@ export function featurePropertyMarkup(object) {
          * sheet's scale gives them a size, so a length field must be given
          * a physical number - not the raw world value.
          *
-         * IT IS READ IN THE FEATURE'S OWN SELECTED UNIT, exactly as the
-         * coordinate fields are: `object.lengthUnit` is the one reading
-         * preference, and every length row on the panel - a coordinate, a
-         * radius, a width, a span - shows its number in it and offers the
-         * same selector to change it. A panel whose coordinates read in
-         * metres while its radius still read in millimetres was two units
-         * for one feature, and the student had no way to tell which number
-         * was in which.
+         * IT IS READ IN THE DRAWING'S ACTIVE LENGTH UNIT, exactly as the
+         * coordinate fields are: the unit is ONE document setting, and every
+         * length row on every panel - a coordinate, a radius, a width, a
+         * span - shows its number in it and offers the same selector to
+         * change it. A panel whose coordinates read in metres while the run
+         * beside it read in millimetres would be two units for one drawing,
+         * and the student would have no way to tell which number was in
+         * which.
+         *
+         * THE UNIT IS SHARED, NOT PER FEATURE. It is read from the document
+         * through ONE accessor, so a change made in ANY length dropdown
+         * propagates to every other one - the property the specification
+         * requires, and the reason the value is not stored on the feature.
          *
          * THE VALUE ARRIVES ALREADY IN MILLIMETRES - every caller resolves
          * the world length through `mmOf` first - so the display conversion
@@ -574,9 +581,7 @@ export function featurePropertyMarkup(object) {
          * show "5 m [m v]" - the duplication the specification calls out.
          */
         const chosenUnit = isLength
-            ? (enggQuantities.isUnitFor("length", object.lengthUnit)
-                ? object.lengthUnit
-                : "mm")
+            ? enggDocumentUnits.documentLengthUnit(drawingState)
             : unit;
 
         const shown = isLength
@@ -592,7 +597,7 @@ export function featurePropertyMarkup(object) {
             isLength && panels.unitSelect
                 ? panels.unitSelect({
                       property: "lengthUnit",
-                      units: enggQuantities.unitsFor("length"),
+                      units: enggDocumentUnits.documentLengthUnits(),
                       current: chosenUnit,
                       label: `${label} unit`,
                       disabled: fixed(key),
@@ -826,18 +831,20 @@ export function featurePropertyMarkup(object) {
          * for. A position of 25.4 mm reads "25.4" in mm and "1" in inches, and
          * the drawing is in the same place either way.
          *
-         * THE CHOSEN UNIT IS PER FEATURE, stored on the geometry beside the
-         * values it displays - the same shape a dimension's `displayUnit` already
-         * uses. It is a READING preference, so it travels in the document with
-         * the drawing rather than being a global setting that would move when the
-         * student opened a second sheet.
+         * THE CHOSEN UNIT IS THE DRAWING'S, not the feature's. It is read from
+         * the document through ONE accessor, so every length row on every
+         * panel is read in the same unit and changing it in ANY of them
+         * propagates to all the others - the shared-unit property the
+         * specification requires. It travels in the document with the drawing,
+         * so switching features or sheets cannot change the unit underneath
+         * the student.
          */
-        const displayUnits = enggQuantities
-            ? enggQuantities.unitsFor("length")
+        const displayUnits = enggDocumentUnits
+            ? enggDocumentUnits.documentLengthUnits()
             : [];
 
         const chosenUnit = converts
-            ? (object.lengthUnit || mm.unit)
+            ? enggDocumentUnits.documentLengthUnit(drawingState)
             : unit;
 
         const shown = converts
@@ -1210,6 +1217,178 @@ export function featurePropertyMarkup(object) {
         );
 
     /*
+     * ====================================================
+     * THE FLUIDS FLOW-PATH PANEL HELPERS
+     * ====================================================
+     *
+     * These are built from the SAME primitives every other feature's fields
+     * use - `panels.row`, `coordinate`, `scalar`, `derived` - so a run's or an
+     * elbow's panel is not a competing design. They exist because a flow path
+     * has a shape the generic helpers do not cover: a Shape select, and a
+     * dimensional field set that depends on that shape.
+     */
+
+    /*
+     * A SELECT FOR A FLOW-PATH CHOICE (Shape).
+     *
+     * Written through the shared row so it sits on the panel's grid exactly
+     * as every other field does, and carries `data-property` so it reaches the
+     * one setter.
+     */
+    const pipeSelect = (label, key, options, value) => {
+        if (!panels || !panels.row) {
+            return "";
+        }
+
+        const choices = (options || [])
+            .map(
+                (option) =>
+                    `<option value="${panels.text(option.value) ?? ""}"${
+                        String(option.value) === String(value)
+                            ? " selected"
+                            : ""
+                    }>${panels.text(option.label) ?? ""}</option>`
+            )
+            .join("");
+
+        return panels.row({
+            label,
+            control: `<select class="drawing-property-select"
+                data-property="${panels.text(key) ?? ""}"
+                aria-label="${panels.text(label) ?? ""}">${choices}</select>`,
+        });
+    };
+
+    /*
+     * THE DIMENSIONAL FIELDS THAT APPLY TO A SHAPE.
+     *
+     * `dimensionalKeysFor` is the ONE place that answers "what does this
+     * cross-section measure in" - circular: Diameter; rectangular: Width and
+     * Height - so the fields shown here and the drawn boundary separation
+     * cannot disagree about which dimensions exist.
+     *
+     * ONLY THE FIELDS THAT APPLY ARE SHOWN, which is the panel side of "only
+     * display the fields relevant to the selected Shape".
+     */
+    const pipeDimensionRows = (engineering) => {
+        const keys = enggPipeDuct.dimensionalKeysFor(engineering);
+
+        const captions = {
+            diameter: "Diameter",
+            width: "Width",
+            height: "Height"
+        };
+
+        return keys.map((key) =>
+            scalar(
+                captions[key] || key,
+                key,
+                mmOf(Number(engineering[key]) || 0).value,
+                mmOf(Number(engineering[key]) || 0).unit,
+                true,
+                true
+            )
+        );
+    };
+
+    /*
+     * THE ENGINEERING FIELDS SHARED BY A RUN AND AN ELBOW.
+     *
+     * Material is free text, because DAETUM has no material catalogue and
+     * inventing one would be inventing an engineering standard. Surface
+     * Roughness is a LENGTH, so it follows the shared length units and
+     * converts with them.
+     */
+    const pipeEngineeringRows = (engineering) => [
+        textField("Material", "material", engineering.material ?? ""),
+        scalar(
+            "Surface Roughness",
+            "roughness",
+            engineering.roughness === undefined
+                ? ""
+                : mmOf(Number(engineering.roughness) || 0).value,
+            engineering.roughness === undefined
+                ? ""
+                : mmOf(Number(engineering.roughness) || 0).unit,
+            true,
+            true
+        )
+    ];
+
+    /*
+     * WHAT ONE OF A FEATURE's PORTS IS CONNECTED TO.
+     *
+     * A connection is a REAL relationship recorded on the feature: the port
+     * names the feature and port it is joined to. This reports what the model
+     * holds - the connected feature's name - and an honest "Open" otherwise,
+     * because a connection must never be inferred from coordinates.
+     */
+    const pipePortLabel = (feature, portId) => {
+        const connections = Array.isArray(feature.engineering?.connections)
+            ? feature.engineering.connections
+            : [];
+
+        const reference = connections.find((entry) => entry.port === portId);
+
+        if (!reference) {
+            return "Open";
+        }
+
+        const target = (drawingState.objects || []).find(
+            (candidate) => candidate.id === reference.featureId
+        );
+
+        return target
+            ? `${target.name || "Feature"} - ${reference.targetPort || "port"}`
+            : "Open";
+    };
+
+    /*
+     * THE OTHER FEATURES A RUN OR AN ELBOW IS CONNECTED TO, from the sheet.
+     *
+     * Read from the explicit connection references, so a compatibility warning
+     * is about features the student actually joined - never about two runs
+     * that merely happen to touch.
+     */
+    const connectedFeaturesOf = (feature) => {
+        const connections = Array.isArray(feature.engineering?.connections)
+            ? feature.engineering.connections
+            : [];
+
+        return connections
+            .map((entry) =>
+                (drawingState.objects || []).find(
+                    (candidate) => candidate.id === entry.featureId
+                )
+            )
+            .filter(Boolean);
+    };
+
+    /*
+     * A CONCISE CONNECTION STATUS for a flow-path feature.
+     *
+     * It counts the ports that carry a REAL connection reference, so a run or
+     * an elbow reports how much of it is joined to something. This is read from
+     * the model, never inferred from geometry, so two runs that merely cross
+     * are honestly reported as unconnected.
+     */
+    const pinConnectionStatus = (feature) => {
+        const connections = Array.isArray(feature.engineering?.connections)
+            ? feature.engineering.connections
+            : [];
+
+        if (!connections.length) {
+            return "Open - not connected";
+        }
+
+        const names = connectedFeaturesOf(feature).map(
+            (other) => other.name || "Feature"
+        );
+
+        return `Connected to ${names.join(", ")}`;
+    };
+
+    /*
      * THE STUDENT-FACING NAME, NEVER THE INTERNAL TYPE.
      *
      * Everything above maps a feature type to the words a student would use
@@ -1271,6 +1450,16 @@ export function featurePropertyMarkup(object) {
             annotate:
                 enggAnnotate?.ANNOTATE_KINDS?.[object.annotateKind]?.label ||
                 "Annotation",
+
+            /*
+             * THE FLUIDS FLOW PATHS.
+             *
+             * ONE feature type named by what it is: a straight run of pipework
+             * is a "Pipe / Duct", and the fitting at a supported corner is an
+             * "Elbow". There is no route parent to name.
+             */
+            "pipe-duct": "Pipe / Duct",
+            elbow: "Elbow",
         }[object.type];
 
     const typeLabel = displayLabel || object.type;
@@ -2187,6 +2376,193 @@ export function featurePropertyMarkup(object) {
             rows.push(coordinate(`Point ${index + 1} X`, `points.${index}.x`, p.x, "mm", true));
             rows.push(coordinate(`Point ${index + 1} Y`, `points.${index}.y`, p.y, "mm", true));
         });
+    } else if (object.type === "pipe-duct") {
+        /*
+         * ====================================================
+         * A PIPE / DUCT RUN
+         * ====================================================
+         *
+         * One straight run, its own cross-section, its own endpoints. The
+         * sections are the ones the task names: CROSS SECTION, GEOMETRY /
+         * POSITION, ENGINEERING, CONNECTIONS; GENERAL and APPEARANCE come from
+         * the shared header and the shared appearance block.
+         *
+         * THERE IS NO TYPE FIELD AND NO PARENT. The requirement is explicit:
+         * Pipe / Duct is ONE feature type, so the drawing is told apart by its
+         * Shape, and there is no route above it to name.
+         */
+        const engineering = object.engineering || {};
+
+        /*
+         * CROSS SECTION - the Shape, and then ONLY the fields that apply to
+         * it. Changing the Shape updates the drawing geometry (the boundary
+         * separation is read from these values) and the field set; values for
+         * a shape that no longer applies are kept, not reinterpreted.
+         */
+        rows.push(section("CROSS SECTION"));
+        rows.push(
+            pipeSelect(
+                "Shape",
+                "shape",
+                [
+                    { value: "circular", label: "Circular" },
+                    { value: "rectangular", label: "Rectangular" }
+                ],
+                engineering.shape || "circular"
+            )
+        );
+        rows.push(...pipeDimensionRows(engineering));
+
+        /*
+         * GEOMETRY / POSITION - the endpoints the run actually has.
+         *
+         * The coordinates ARE the feature's geometry (`geometry.start` /.
+         * `geometry.end`), so the values here and the drawn boundary lines are
+         * two views of ONE piece of data: there is no second copy to drift.
+         */
+        rows.push(section("GEOMETRY / POSITION"));
+        rows.push(coordinate("Start Position X", "start.x", geometry.start.x, "mm", true));
+        rows.push(coordinate("Start Position Y", "start.y", geometry.start.y, "mm", true));
+        rows.push(coordinate("End Position X", "end.x", geometry.end.x, "mm", true));
+        rows.push(coordinate("End Position Y", "end.y", geometry.end.y, "mm", true));
+
+        const length = enggPipeDuct.runLength(object);
+
+        rows.push(
+            scalar(
+                "Length",
+                "length",
+                mmOf(length).value,
+                mmOf(length).unit,
+                false,
+                true
+            )
+        );
+
+        rows.push(section("ENGINEERING"));
+        rows.push(...pipeEngineeringRows(engineering));
+
+        rows.push(section("CONNECTIONS"));
+        rows.push(panels.readOnly("Start Endpoint", pipePortLabel(object, "start")));
+        rows.push(panels.readOnly("End Endpoint", pipePortLabel(object, "end")));
+        rows.push(
+            panels.readOnly(
+                "Connection Status",
+                pinConnectionStatus(object)
+            )
+        );
+    } else if (object.type === "elbow") {
+        /*
+         * ====================================================
+         * AN AUTOMATIC ELBOW
+         * ====================================================
+         *
+         * A fitting generated at a supported corner. Its angle is DERIVED from
+         * the runs it joins and is shown read-only, so it cannot drift from the
+         * geometry; its bend radius is its own editable length, which is what
+         * decides the actual curved geometry.
+         *
+         * NO PARENT, NO GENERATION-STATUS FIELD, NO ADJACENT-COUNT. The task
+         * names these as things the flat model must not carry, so they are not
+         * here.
+         */
+        const engineering = object.engineering || {};
+
+        const curves = enggPipeDuct.elbowGeometry(
+            geometry.previous,
+            geometry.position,
+            geometry.next,
+            engineering.bendRadius
+        );
+
+        rows.push(section("ELBOW / CORNER"));
+        rows.push(
+            derived(
+                "Angle",
+                enggPipeDuct.cornerAngleDegrees(
+                    geometry.previous,
+                    geometry.position,
+                    geometry.next
+                ) ?? 0,
+                "°"
+            )
+        );
+
+        /*
+         * THE BEND RADIUS IS EDITABLE, and it is a LENGTH, so it reads in the
+         * same unit as every other length on the panel. It is empty until one
+         * is set, because DAETUM has no default - see pipe-duct.js.
+         */
+        const radius = Number(engineering.bendRadius);
+
+        rows.push(
+            scalar(
+                "Bend Radius",
+                Number.isFinite(radius) && radius > 0
+                    ? mmOf(radius).value
+                    : "",
+                Number.isFinite(radius) && radius > 0
+                    ? mmOf(radius).unit
+                    : "",
+                true,
+                true
+            )
+        );
+
+        /*
+         * A RADIUS THAT DOES NOT FIT IS REPORTED, not silently ignored - the
+         * field keeps the last valid value and the panel says why.
+         */
+        if (Number.isFinite(radius) && radius > 0 && !curves) {
+            rows.push(
+                panels.readOnly(
+                    "Bend Radius Status",
+                    "Too large for the adjoining runs - reduce it"
+                )
+            );
+        }
+
+        rows.push(section("CROSS SECTION"));
+        rows.push(
+            pipeSelect(
+                "Shape",
+                "shape",
+                [
+                    { value: "circular", label: "Circular" },
+                    { value: "rectangular", label: "Rectangular" }
+                ],
+                engineering.shape || "circular"
+            )
+        );
+        rows.push(...pipeDimensionRows(engineering));
+
+        rows.push(section("ENGINEERING"));
+        rows.push(...pipeEngineeringRows(engineering));
+
+        /*
+         * A COMPATIBILITY WARNING, when a connected run's profile disagrees
+         * with this fitting. Nothing is changed to resolve it - a reducer is
+         * never invented - so the student is told and decides.
+         */
+        const mismatch = connectedFeaturesOf(object)
+            .map((other) => enggPipeDuct.compatibilityIssue(object, other))
+            .find(Boolean);
+
+        if (mismatch) {
+            rows.push(
+                panels.readOnly("Compatibility", `Warning: ${mismatch}`)
+            );
+        }
+
+        rows.push(section("CONNECTIONS"));
+        rows.push(panels.readOnly("End A", pipePortLabel(object, "a")));
+        rows.push(panels.readOnly("End B", pipePortLabel(object, "b")));
+        rows.push(
+            panels.readOnly(
+                "Connection Status",
+                pinConnectionStatus(object)
+            )
+        );
     } else if (object.type === "triangle") {
         /*
          * The triangle has its own editor so the
@@ -2563,7 +2939,16 @@ export function featurePropertyMarkup(object) {
         }
     }
 
-    rows.push(appearanceMarkup(object));
+    /*
+     * THE APPEARANCE SECTION.
+     *
+     * A run and an elbow are ordinary features with their OWN style, so they
+     * are passed no resolved-inheritance override: the shared appearance block
+     * reads Line Type and Line Width straight off the feature, exactly as it
+     * does for a Line or a Beam. Both boundary lines of a run are drawn in that
+     * one style, so the two walls always move together.
+     */
+    rows.push(appearanceMarkup(object, null));
 
     /*
      * NO SECOND TITLE.
@@ -2863,11 +3248,20 @@ function dimensionUnitRow(object) {
         return "";
     }
 
+    /*
+     * THE DRAWING'S UNIT, read through the one shared accessor. A dimension's
+     * unit dropdown is one of the length dropdowns, so it shows and writes
+     * the same document setting the panels beside it do - changing it here
+     * moves every other dropdown, and a change made elsewhere moves this one.
+     * A dimension saved with its own per-dimension override keeps reading in
+     * it (the model still honours it) until the student changes the unit,
+     * which clears the override in favour of the shared value.
+     */
     const units =
-        enggQuantities?.unitsFor?.("length") || ["mm", "cm", "m"];
+        enggDocumentUnits?.documentLengthUnits() || ["mm", "cm", "m"];
 
     const current =
-        object.displayUnit || "mm";
+        enggDocumentUnits?.documentLengthUnit(drawingState) || "mm";
 
     const options = units
         .map(

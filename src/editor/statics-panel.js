@@ -8,6 +8,7 @@ import enggAnalysisDependencies from "../features/analysis/analysis-dependencies
 import enggDiagramEquations from "../features/analysis/diagram-equations.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../features/analysis/rotational-arrow.js";
+import enggDocumentUnits from "../core/units/document-units.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import enggSketchEditor from "../ui/editors/sketch-editor.js";
@@ -1268,10 +1269,12 @@ export function supportPanelRows(
      * fraction is the translation made once, here, rather than by every
      * other part of the application guessing which one it is holding.
      *
-     * THE DISTANCE IS READ IN THE FEATURE'S OWN UNIT, the same one the
-     * rest of its panel would use - converted from the sheet's
+     * THE DISTANCE IS READ IN THE DRAWING'S ACTIVE LENGTH UNIT, the same
+     * one every other length row uses - converted from the sheet's
      * millimetres through the shared table, and selectable beside the
-     * number like every other length row.
+     * number like every other length row. It is ONE document setting, so
+     * the selector here writes and reads the same value as every other
+     * length dropdown in the application.
      */
     const parentFrame = parent
         ? enggBodyFrames.frameOf(parent)
@@ -1289,9 +1292,7 @@ export function supportPanelRows(
         : 0;
 
     const lengthUnit =
-        enggQuantities.isUnitFor("length", object.lengthUnit)
-            ? object.lengthUnit
-            : "mm";
+        enggDocumentUnits.documentLengthUnit(drawingState);
 
     const alongBody = enggQuantities.convertValue(
         mmOf(alongBodyWorld).value,
@@ -1312,8 +1313,8 @@ export function supportPanelRows(
                     data-property="lengthUnit"
                     aria-label="Position unit"
                     title="Position unit">
-                    ${enggQuantities
-                        .unitsFor("length")
+                    ${enggDocumentUnits
+                        .documentLengthUnits()
                         .map(
                             unit =>
                                 `<option value="${unit}"${

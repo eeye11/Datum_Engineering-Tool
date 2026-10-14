@@ -876,6 +876,25 @@ function applyManipulation(
         return true;
     }
 
+    /*
+     * ========================================================
+     * THE FLUIDS FLOW PATHS MOVE THROUGH THE SHARED MACHINERY
+     * ========================================================
+     *
+     * A Pipe / Duct run and an Elbow are ordinary top-level features, so they
+     * are moved by the ORDINARY body/endpoint drag below - no Fluids-specific
+     * case is needed. Their defining points (see feature-geometry.js) are the
+     * run's two ends and the elbow's corner plus its two adjoining directions,
+     * so dragging an endpoint writes the real geometry and dragging the body
+     * translates the whole feature.
+     *
+     * THERE IS NO PARENT ROUTE TO REGENERATE. When a run moves, the elbow at a
+     * corner it formed is no longer where the corner is; the panel reports the
+     * resulting mismatch rather than silently dragging a fitting around, and a
+     * student can move both together with the ordinary multiple selection. That
+     * is the deliberate reading of "do not add a hidden route group simply to
+     * make all connected parts move together".
+     */
     if (drag.kind === "body") {
         const deltaX =
             point.x -

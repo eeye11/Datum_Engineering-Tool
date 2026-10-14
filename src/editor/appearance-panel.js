@@ -50,8 +50,25 @@ const FEATURES_WITHOUT_A_LINE_TYPE = new Set([
  * entry and the spinner arrows work.
  */
 export function appearanceMarkup(
-    object
+    object,
+    styleOverride = null
 ) {
+    /*
+     * A PART OF A ROUTE INHERITS ITS APPEARANCE.
+     *
+     * A segment or an elbow takes the route's Line Type and Line Width unless
+     * it has overridden them, so the panel is handed the RESOLVED style and
+     * shows the value the component is actually drawn with - not the child's
+     * own possibly-empty style, which would read as "Solid, 0.50" while the
+     * component was drawn dashed.
+     *
+     * The control still writes to the CHILD (through the pipe branch in
+     * property-binding), so choosing a style on a component overrides it
+     * without touching the route or its siblings.
+     */
+    const effective =
+        styleOverride || object.style || {};
+
     /*
      * A Particle is a point body: it is drawn as a filled
      * marker, so a line type or a line width would describe
@@ -64,7 +81,7 @@ export function appearanceMarkup(
     }
 
     const style =
-        object.style || {};
+        effective;
 
     const option = (
         value,

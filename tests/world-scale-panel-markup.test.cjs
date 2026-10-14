@@ -259,8 +259,25 @@ check(
 
 check(
   "and with no unit chosen the millimetres go straight through",
-  Math.abs(typedInUnit("", 2) - 2) < 1e-6,
-  `got ${typedInUnit("", 2)} mm, expected 2 mm`,
+  (() => {
+    /*
+     * The unit is a DOCUMENT setting now, shared by every field, so the
+     * checks above left it at metres for the drawing as a whole. Resetting
+     * it to the default here is exactly what "no unit chosen" means: a
+     * document that has not picked a unit is read in millimetres.
+     */
+    const documentUnits = require(modulePath("document-units.js")).default;
+
+    documentUnits.setDocumentLengthUnit(
+      drawingState,
+      documentUnits.DEFAULT_UNIT,
+    );
+
+    const result = typedInUnit("", 2);
+
+    return Math.abs(result - 2) < 1e-6;
+  })(),
+  "with no unit chosen the millimetres must go straight through",
 );
 
 /*

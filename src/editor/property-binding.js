@@ -4,6 +4,7 @@
 
 import enggBodyFrames from "../core/geometry/body-frames.js";
 import enggDrawingState from "../core/model/drawing-state.js";
+import enggDocumentUnits from "../core/units/document-units.js";
 import enggQuantities from "../core/units/quantities.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../features/analysis/rotational-arrow.js";
@@ -119,11 +120,13 @@ function currentUnitFor(property, object) {
     const quantityType = quantityTypeFor(property, object);
 
     if (quantityType === 'length') {
-        const stored = object && object.lengthUnit;
-
-        return stored && enggQuantities.isUnitFor('length', stored)
-            ? stored
-            : 'mm';
+        /*
+         * THE DRAWING'S UNIT, read through the one accessor the panel and the
+         * setter both use. The feature is no longer consulted: a per-feature
+         * unit was a second source of truth for one document setting, and the
+         * two could disagree.
+         */
+        return enggDocumentUnits.documentLengthUnit(drawingState);
     }
 
     if (quantityType === 'angle') {
@@ -550,19 +553,24 @@ export function bindFeaturePropertyControls(object) {
                  * Typed as a distance along the body, STORED as the
                  * fraction that distance represents.
                  *
-                 * The panel speaks the length unit the student has
-                 * selected, and `pointAt` projects in WORLD units, so the
-                 * typed distance is converted through the document scale
-                 * IN THE FIELD'S OWN UNIT first - the same conversion every
-                 * other length write runs. The model stores the fraction
-                 * because that is what survives the body being resized.
+                 * The panel speaks the DRAWING'S active length unit, and
+                 * `pointAt` projects in WORLD units, so the typed distance is
+                 * converted through the document scale IN THAT UNIT first -
+                 * the same conversion every other length write runs. The unit
+                 * is read from the document, so this row cannot be read in a
+                 * different unit from the fields around it. The model stores
+                 * the fraction because that is what survives the body being
+                 * resized.
                  */
+                const documentUnit =
+                    enggDocumentUnits.documentLengthUnit(drawingState);
+
                 const worldDistance =
-                    enggQuantities.isUnitFor('length', parent?.lengthUnit)
+                    enggQuantities.isUnitFor('length', documentUnit)
                         ? enggQuantities.convertValue(
                             distance,
                             'length',
-                            parent.lengthUnit,
+                            documentUnit,
                             'mm'
                         )
                         : distance;
@@ -1263,6 +1271,63 @@ export function bindFeaturePropertyControls(object) {
      * statement, and the annotation model formats the unit into every
      * magnitude whether or not anything asked it to.
      */
+
+    /*
+     * ========================================================
+     * A ROUTE CHILD'S INHERIT / OVERRIDE CONTROL
+     * ========================================================
+     *
+     * The Pipe / Duct panel's inheritance toggle is ONE control with two
+     * jobs: while a child inherits a property it activates an override, and
+     * while it overrides one it resets the property back to the route's
+     * value. Both are ordinary property writes - they go through the same
+     * setter the value fields use - so the change is one undoable edit and
+     * the panel repaints from the model.
+     *
+     * `data-route-reset` says which of the two the current state means, so
+     * the button's appearance and its action cannot disagree.
+     */
+    drawingProperties
+        .querySelectorAll('[data-route-override]')
+        .forEach(button => {
+            button.addEventListener('click', () => {
+                const property = button.dataset.routeOverride;
+
+                if (!property) {
+                    return;
+                }
+
+                const previous =
+                    enggDrawingState.snapshotDrawing(drawingState);
+
+                const reset = button.dataset.routeReset === '1';
+
+                const changed = updateFeatureProperty(
+                    object,
+                    reset ? 'routeReset' : 'routeOverride',
+                    property
+                );
+
+                if (!changed) {
+                    renderProperties();
+                    return;
+                }
+
+                enggDrawingState.commitDrawingChange(
+                    drawingState,
+                    previous
+                );
+
+                setToolMessage(
+                    reset
+                        ? `Inherited from the route`
+                        : `Overridden for this component`
+                );
+
+                renderProperties();
+                renderCurrentDrawing();
+            });
+        });
 
     drawingProperties.querySelectorAll('[data-property]').forEach(input => {
         /*

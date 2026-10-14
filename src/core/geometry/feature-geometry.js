@@ -256,12 +256,35 @@ function definingPoints(
         type === "connection" ||
         type === "pin-connection" ||
         type === "fixed-connection" ||
-        type === "slider-connection"
+        type === "slider-connection" ||
+
+        /*
+         * A PIPE / DUCT RUN IS A STRAIGHT SPAN BETWEEN TWO ENDS, exactly as a
+         * Beam is, so it moves and rotates through the same two points. Its
+         * two visible boundary lines are derived from that centreline and are
+         * NOT defining points of their own - moving the run carries both walls
+         * because both walls come from these two ends.
+         */
+        type === "pipe-duct"
     ) {
         return valid([
             g.start,
             g.end
         ]);
+    }
+
+    /*
+     * AN ELBOW IS A FITTING BETWEEN TWO RUNS. It is anchored at its corner and
+     * carries the two adjoining directions with it, so a move translates the
+     * corner AND both directions - the fitting keeps its shape wherever it is
+     * put, and its endpoints stay where the adjoining runs meet it.
+     */
+    if (type === "elbow") {
+        if (g.previous && g.next && g.position) {
+            return valid([g.previous, g.position, g.next]);
+        }
+
+        return valid([g.position]);
     }
 
     /*

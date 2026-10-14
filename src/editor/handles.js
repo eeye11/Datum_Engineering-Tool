@@ -1061,6 +1061,19 @@ const CONSTRUCTION_ACTIVE_PHASES = [
     "distributed-load-build",
     "distributed-load-span",
     "truss-construct",
+
+    /*
+     * A PIPE / DUCT LEG BEING DRAGGED.
+     *
+     * Listed here because it IS a running construction: the press has set the
+     * start, so the pointer belongs to the run rather than to a direct drag on
+     * whatever happens to be under it - and Enter finishes the path while
+     * Escape drops the leg, without either key being told about the run
+     * separately, which is the whole reason this set exists. The string matches
+     * `ROUTE_PHASE` in pipe-duct-tool.js.
+     */
+    "pipe-duct-construct",
+
     "polygon-centre",
     "polygon-first",
     "polygon-sides",

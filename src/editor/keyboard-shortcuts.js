@@ -22,6 +22,7 @@ import { activateTool, performRedo, performUndo } from "./tool-activation.js";
 import { activeCategory, closeCoordinateSystemMenu } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { cancelTrussConstruction } from "./truss-tool.js";
+import { ROUTE_PHASE, cancelRouteConstruction } from "./pipe-duct-tool.js";
 import { fitDrawingToView } from "./viewport.js";
 
 /*
@@ -362,6 +363,25 @@ export function installKeyboardShortcuts() {
                         "truss-construct"
                 ) {
                     cancelTrussConstruction();
+                    return;
+                }
+
+                /*
+                 * A PIPE / DUCT LEG IN PROGRESS IS THROWN AWAY THE SAME WAY.
+                 *
+                 * The leg being dragged is temporary state, so Escape leaves
+                 * no ghost geometry, no orphaned elbow and no half-built path -
+                 * nothing has been written to the document until the release.
+                 * That is the same guarantee the Truss makes, reached through
+                 * the same key.
+                 */
+                if (
+                    drawingState.interaction.phase === ROUTE_PHASE ||
+                    drawingState.interaction.fluidsTool === "pipe-duct"
+                ) {
+                    editorState.creationDrag = null;
+
+                    cancelRouteConstruction();
                     return;
                 }
 

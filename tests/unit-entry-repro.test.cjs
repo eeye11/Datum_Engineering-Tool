@@ -112,17 +112,14 @@ test("REPRO: the setter and the reader must resolve the unit the same way", () =
   const update = read("src/editor/property-update.js");
 
   /*
-   * The setter resolves the display unit from `object.lengthUnit` through the
-   * ONE shared helper, so the panel and the setter cannot disagree about what
-   * the field is denominated in. Both the inline resolution this test used to
-   * assert and the helper version satisfy the property; the helper is what the
-   * rest of the length branches share.
+   * The setter resolves the display unit through the ONE shared helper, so the
+   * panel and the setter cannot disagree about what the field is denominated
+   * in. The unit is now the DRAWING'S - read from the document through the
+   * shared accessor - so there is one value in force for every length field,
+   * which is what makes the dropdowns repeated controls for a single setting.
    */
   const setter =
-    /const displayUnit =\s*[\s\S]{0,200}?\?\s*object\.lengthUnit\s*:\s*'mm'/.test(
-      update
-    ) ||
-    /function displayLengthUnitOf\(object\)[\s\S]{0,300}isUnitFor\("length", stored\)/.test(
+    /function displayLengthUnitOf\(\w+\)[\s\S]{0,300}enggDocumentUnits\.documentLengthUnit\(drawingState\)/.test(
       update
     );
 

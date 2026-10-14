@@ -539,7 +539,25 @@ function createGeometryObject(type, geometry, options = {}) {
          * `addObject` numbers duplicates within a kind through the same
          * naming pass every other feature uses.
          */
-        annotate: "Annotation"
+        annotate: "Annotation",
+
+        /*
+         * THE FLUIDS FLOW-PATH FEATURES.
+         *
+         * These are named by TYPE, and the type is now ONE thing: there is no
+         * Pipe Route parent and no Pipe Segment child. A student scanning the
+         * Features list reads the actual flat list -
+         * "Pipe / Duct 1", "Elbow 1", "Pipe / Duct 2" -
+         * rather than a hierarchy where three rows share one route name.
+         *
+         * The run name does not say pipe or duct, because the feature does not
+         * have that distinction: Pipe / Duct is one feature type whose
+         * cross-section SHAPE (circular or rectangular) is a property. The name
+         * cannot disagree with what was drawn, because there is nothing to
+         * disagree about.
+         */
+        "pipe-duct": "Pipe / Duct",
+        elbow: "Elbow"
     }[type] || type;
 
     return {
@@ -2666,6 +2684,37 @@ function clearInteraction(state) {
      * snap to members that no longer exist.
      */
     state.interaction.snapGeometry = [];
+
+    /*
+     * ========================================================
+     * THE FLUIDS / PIPE ROUTE STATE GOES WITH THE INTERACTION
+     * ========================================================
+     *
+     * `fluidsTool` records WHICH Fluids button armed the running
+     * tool, and the toolbar highlight is decided from it (see
+     * `isFluidsToolActive`). It is therefore interaction state, not
+     * a preference: leaving it behind meant that choosing Select
+     * after Pipe / Duct left the Fluids id on the interaction, so
+     * the Pipe / Duct button STAYED LIT while Select ran - the
+     * highlight was a leftover rather than a statement of what is
+     * active.
+     *
+     * The route continuation fields are the operation's own state
+     * for the same reason: the previous run a new leg would join,
+     * the cross-section being drawn with, the count of legs placed
+     * and the resolved start of the leg being dragged all die with
+     * the operation. A tool activated later must not inherit them.
+     *
+     * Callers that re-arm a Fluids tool write `fluidsTool` again
+     * AFTER clearing (see tool-activation.js), so this cannot drop
+     * a legitimately-armed tool's own id.
+     */
+    state.interaction.fluidsTool = null;
+    state.interaction.previousRun = null;
+    state.interaction.routeEngineering = null;
+    state.interaction.routeCommittedCount = 0;
+    state.interaction.routeSegmentStart = null;
+    state.interaction.routeResolvedStart = null;
 
     /*
      * The distributed load's construction state: the body it

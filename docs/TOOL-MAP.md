@@ -30,6 +30,12 @@ To find every place a tool is handled, search `src/` for its id in quotes,
 for example `"pin-support"`. `editor/index.js` lists every editor module
 with a one-line description.
 
+**Two toolsets keep their entries in their own module** rather than in
+`editor/tools.js`: Annotate (`annotateToolGroups`) and Fluids
+(`features/fluids/fluids-tools.js`). Both are registered in
+`disciplineToolGroups`, so the toolbar reads them the same way it reads every
+other discipline.
+
 ---
 
 ## General tools
@@ -175,6 +181,54 @@ A magnitude annotation is a drawing-space object linked to its source: it
 stores `sourceFeatureId`, position and visibility, never a copy of the
 magnitude. It shows magnitude and unit only — never an angle; the arrow
 communicates direction.
+
+---
+
+## Fluids tools
+
+The Fluids section is a **registry of entries, each bound to an existing
+DAETUM system**. The section itself owns no engineering behaviour yet; what it
+owes is the six subcategories, the seventeen entries, and the binding from each
+entry to the shared system it travels.
+
+| Concern                                  | File                                          |
+| ---------------------------------------- | --------------------------------------------- |
+| The six subcategories and 17 entries     | `features/fluids/fluids-tools.js`             |
+| The `capability` that binds an entry     | `features/fluids/fluids-tools.js`             |
+| Activation: what pressing one arms       | `editor/fluids-tool.js` (`fluidsArmedTool`)   |
+| The opening instruction for a tool       | `editor/fluids-tool.js` (`fluidsInstruction`) |
+| The active-tool highlight for a shape    | `editor/fluids-tool.js` (`isFluidsToolActive`)|
+
+**The subcategories and their tools** (from `fluidsToolGroups`):
+
+| Subcategory           | Tools                                                              |
+| --------------------- | ------------------------------------------------------------------ |
+| Selection             | Select                                                             |
+| Flow Paths            | Pipe / Duct, Elbow, Junction, Reducer / Expander, Reservoir / Tank |
+| Equipment             | Pump, Valve, Flow Meter                                            |
+| Flow Representation   | Flow Arrow, Fluid Level                                            |
+| Measurements          | Pressure Tap, Pipe Diameter, Section Plane                         |
+| Fluid Annotations     | Fluid Property Label, Flow Rate Label, Elevation Marker            |
+
+**What each entry reuses, by `capability`:**
+
+| Capability  | The shared system it travels                                     |
+| ----------- | ---------------------------------------------------------------- |
+| `select`    | the ordinary selection system                                    |
+| `shape`     | the geometry creation pipeline, via the `geometryTool` it names  |
+| `dimension` | the Smart Dimension engine (`editor/dimension-tool.js`)          |
+| `annotate`  | the Annotate model, via the `annotateKind` it names              |
+| `planned`   | nothing yet — listed, and honest about it                        |
+
+A `shape` entry activates its **primitive** (`line`, `rectangle`, `point`), so
+the drawing, snapping, preview, commit, selection, movement, undo and save are
+the primitive's own — there is no second creation pipeline. The toolbar still
+highlights the Fluids button, because `editor/fluids-tool.js` answers the same
+question the activation did.
+
+**Adding a real Fluid tool later** means giving its entry a capability of its
+own and implementing that capability — not restructuring the section, and not
+editing the toolbar, the icons or the categories.
 
 ---
 

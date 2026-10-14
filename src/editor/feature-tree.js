@@ -261,6 +261,27 @@ function componentGroups() {
             ) {
                 group =
                     "Reference";
+            } else if (
+                group === "Geometry" &&
+                (object.type === "pipe-duct" || object.type === "elbow")
+            ) {
+                /*
+                 * ====================================================
+                 * A FLUIDS FEATURE FILES UNDER ITS OWN HEADING
+                 * ====================================================
+                 *
+                 * A Pipe / Duct and an Elbow are fluids features, not plain
+                 * geometry, so they group under "Fluids" - the same way an
+                 * annotation groups under "Annotate" and construction
+                 * geometry under "Construction".
+                 *
+                 * THEY FILE AS ROOT ROWS, EVERY ONE OF THEM. There is no
+                 * route above them and no `parentId` linking them, so the
+                 * Features list is exactly as flat as the model is: a run and
+                 * the fitting at its corner are two entries side by side, not
+                 * a branch and its child.
+                 */
+                group = "Fluids";
             }
 
             if (

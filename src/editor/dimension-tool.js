@@ -9,6 +9,7 @@ import enggQuantities from "../core/units/quantities.js";
 import enggDimensionEdit from "../features/dimensions/dimension-edit.js";
 import enggScaleCalibration from "../core/scale/scale-calibration.js";
 import enggDimensionModel from "../features/dimensions/dimension-model.js";
+import enggFluidsTools from "../features/fluids/fluids-tools.js";
 import enggSmartDimension from "../features/dimensions/smart-dimension.js";
 import { openLoadValuePopup, readStaticsValue } from "../ui/editors/load-value-popup.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
@@ -25,6 +26,20 @@ import { setToolMessage } from "./toolbar-render.js";
  * in what they CREATE - a chosen measurement, an inferred one, or a symbol - and
  * in nothing else, which is why they are routed together and the difference is
  * decided at the moment the feature is built.
+ *
+ * ========================================================
+ * THE FLUIDS MEASUREMENTS REUSE THE SAME ENGINE
+ * ========================================================
+ *
+ * A Pressure Tap, a Pipe Diameter and a Section Plane are MEASUREMENTS of
+ * something already drawn, which is exactly what this engine does: it picks
+ * references, infers or chooses the measurement and places it. So they are
+ * routed here rather than through a second measuring system - the shared
+ * reference selection, snapping, inference, placement, panel and value editor
+ * all apply, and the section gains no duplicate tooling.
+ *
+ * The capability is read FROM the Fluids registry, so the entry that says
+ * "this is a measurement" and the layer that measures cannot disagree.
  */
 export function isDimensionTool(
     toolId
@@ -32,7 +47,9 @@ export function isDimensionTool(
     return (
         toolId === "dimension" ||
         toolId === "smart-dimension" ||
-        toolId === "variable-dimension"
+        toolId === "variable-dimension" ||
+        enggFluidsTools.fluidsCapability(toolId) ===
+            enggFluidsTools.FLUIDS_CAPABILITIES.DIMENSION
     );
 }
 

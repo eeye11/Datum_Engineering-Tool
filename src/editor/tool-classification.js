@@ -163,6 +163,26 @@ export function clickKeepsTool(toolId) {
 /*
  * The tools with steps AFTER their first gesture, so a bare click is a step of
  * their workflow rather than a request to stop.
+ *
+ * ========================================================
+ * PIPE / DUCT IS ONE OF THEM, AND IT IS NOT A ONE-GESTURE TOOL
+ * ========================================================
+ *
+ * A Pipe / Duct run IS drawn by one press-drag-release - but the TOOL is not
+ * finished when that run is, which is the distinction this list is about. A
+ * continuous path is drawn as a SEQUENCE of drags, and the student ends it
+ * explicitly with a double-click or Enter (see pipe-duct-tool.js). So a bare
+ * click means nothing for this tool: it is the trailing click of a gesture that
+ * has already committed a run, or the first half of the double-click that
+ * finishes the path.
+ *
+ * Without this entry `shouldExitToSelectOnClick` answered YES for
+ * `pipe-duct` - it is a drag creation tool and appeared in neither this list
+ * nor `clickKeepsTool` - so the FIRST click after arming the tool dropped the
+ * student straight into Select. The drag then never reached the creation
+ * pipeline: the press was read as a selection, and the tool appeared to "go to
+ * select" the moment it was used. Naming it here keeps the tool armed for the
+ * next leg, exactly as a polyline or a truss is kept.
  */
 export const MULTI_STEP_TOOLS = [
     "triangle",
@@ -172,7 +192,8 @@ export const MULTI_STEP_TOOLS = [
     "polyline",
     "truss",
     "distributed-load",
-    "varying-distributed-load"
+    "varying-distributed-load",
+    "pipe-duct"
 ];
 
 export function isMultiStepTool(toolId) {

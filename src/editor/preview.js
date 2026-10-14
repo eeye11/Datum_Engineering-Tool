@@ -22,6 +22,7 @@ import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBody
 import { isArcTool } from "./tool-menus.js";
 import { setToolMessage } from "./toolbar-render.js";
 import { trussSnapGeometry, trussStageMessage } from "./truss-tool.js";
+import { ROUTE_PHASE, routeInstruction, routeSegmentPreview } from "./pipe-duct-tool.js";
 import { isSupportType } from "../core/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../ui/editors/load-value-popup.js";
 
@@ -456,12 +457,15 @@ export function updatePreview(
     const progressive =
         interaction.phase ===
             "truss-construct" ||
+        interaction.phase ===
+            ROUTE_PHASE ||
         isLoadBuildPhase(interaction) ||
         isLoadSpanPhase(interaction);
 
     if (
         !progressive &&
-        !interaction.startPoint
+        !interaction.startPoint &&
+        !interaction.routeSegmentStart
     ) {
         /*
          * No start point yet, so this tool has nothing to preview - but the
@@ -852,6 +856,65 @@ export function updatePreview(
                 setToolMessage(
                     trussStageMessage(
                         interaction
+                    )
+                );
+            } else if (
+                drawingState.interaction.phase ===
+                    ROUTE_PHASE
+            ) {
+                /*
+                 * THE SEGMENT BEING DRAGGED IS PREVIEWED AS THE PIPE / DUCT
+                 * IT WILL BECOME - BOTH BOUNDARY LINES, at the fixed
+                 * schematic spacing.
+                 *
+                 * This is the same geometric generation the committed feature
+                 * uses (see fluids/pipe-duct.js -> `boundaryLines`), so the two
+                 * boundary lines cannot jump when the button is released: the
+                 * preview is
+                 * not a drawing OF the feature, it IS the feature's geometry,
+                 * painted in the preview stroke until it is committed.
+                 *
+                 * A `pipe-duct` preview is therefore not a plain `line`: a
+                 * centreline preview would show the student one stroke and then
+                 * hand them two, which is exactly the jump the acceptance
+                 * criteria call out.
+                 */
+                const preview = routeSegmentPreview(
+                    drawingState.interaction,
+                    point
+                );
+
+                interaction.preview = preview
+                    ? createPreview(
+                          "pipe-duct",
+                          preview
+                      )
+                    : null;
+
+                /*
+                 * THE RUN'S OWN ENDPOINTS ARE HANDED TO THE SNAP SYSTEM, so the
+                 * end of the drag snaps to the start of the run, to a bend, or
+                 * to a run already placed. It is the SEGMENT's centreline that
+                 * snaps - not its two walls - because the walls are derived from
+                 * it and would otherwise offer the student three places to aim
+                 * at for one endpoint.
+                 */
+                interaction.snapGeometry =
+                    preview
+                        ? [
+                              {
+                                  start:
+                                      preview.start,
+                                  end: preview.end
+                              }
+                          ]
+                        : [];
+
+                interaction.snapToolId = "pipe-duct";
+
+                setToolMessage(
+                    routeInstruction(
+                        drawingState.interaction
                     )
                 );
             } else if (

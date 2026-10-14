@@ -14,6 +14,7 @@ import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import enggDimensionModel from "../features/dimensions/dimension-model.js";
 import enggVariableDimension from "../features/dimensions/variable-dimension.js";
+import enggPipeDuct from "../features/fluids/pipe-duct.js";
 import enggTheme from "../editor/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
 
@@ -3248,6 +3249,188 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             }
 
             appendAnnotationEntity(svg, entity, state, toScreen, style);
+            parentSvg.appendChild(svg);
+            return;
+        }
+
+        /*
+         * ========================================================
+         * THE FLUIDS PIPE / DUCT RUN - TWO BOUNDARY LINES
+         * ========================================================
+         *
+         * A run is drawn as its TWO BOUNDARY LINES, generated from the same
+         * centreline and the same SCHEMATIC separation for every run (see
+         * fluids/pipe-duct.js -> `boundaryLines`). It is emphatically
+         * NOT a thicker single stroke: a student reads a pipe as the two walls
+         * of it, and the pair sits at the fixed narrow schematic spacing -
+         * never spread by a larger Diameter, Width or Height.
+         *
+         * Both lines belong to ONE feature and are drawn in that feature's own
+         * stroke, width and line type, so clicking either selects the whole
+         * run and the Appearance controls move both together.
+         */
+        if (entity.type === "pipe-duct") {
+            const start = geometry.start;
+            const end = geometry.end;
+
+            if (
+                !start ||
+                !end ||
+                !Number.isFinite(start.x) ||
+                !Number.isFinite(end.x)
+            ) {
+                return;
+            }
+
+            const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+
+            const boundaries = enggPipeDuct.boundaryLines(
+                start,
+                end,
+                entity.engineering || {}
+            );
+
+            boundaries.forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(
+                    createSvgElement("line", {
+                        x1: from.x,
+                        y1: from.y,
+                        x2: to.x,
+                        y2: to.y,
+                        stroke,
+                        "stroke-width": scaledStrokeWidth(style.lineWidth),
+                        "stroke-linecap": "round"
+                    })
+                );
+            });
+
+            parentSvg.appendChild(svg);
+            return;
+        }
+
+        /*
+         * ========================================================
+         * THE FLUIDS ELBOW - CURVED DOUBLE-LINE GEOMETRY
+         * ========================================================
+         *
+         * An elbow is a fitting between two runs. Its curved geometry is
+         * derived from the corner the two runs make and its own bend radius
+         * (see fluids/pipe-duct.js -> `elbowGeometry`), and it is drawn as a
+         * CURVED PAIR of boundary lines - the inner and outer walls of the
+         * bend - at the SAME narrow schematic spacing as the adjoining runs,
+         * so the walls connect cleanly with no gap, spike or change of
+         *
+         * A RADIUS THAT CANNOT BE DRAWN DRAWS NOTHING HERE. When there is no
+         * bend radius yet, or the radius does not fit the adjoining runs,
+         * `elbowGeometry` returns null and the edges are left to the two runs
+         * meeting - the corner stays visible, no malformed arc is invented, and
+         * the fitting simply has no curve until a valid radius is set.
+         *
+         * JOINT MARKS. Two restrained short strokes across the walls at each
+         * tangent point distinguish a fitting from an ordinary corner IN
+         * MONOCHROME - they are geometry, not colour, so they survive a black
+         * and white print. They are drawn only for a real curved fit, so an
+         * ordinary bend never shows them.
+         */
+        if (entity.type === "elbow") {
+            const curves = enggPipeDuct.elbowGeometry(
+                geometry.previous,
+                geometry.position,
+                geometry.next,
+                (entity.engineering || {}).bendRadius
+            );
+
+            if (!curves) {
+                return;
+            }
+
+            const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+            const separation = enggPipeDuct.boundarySeparation(
+                entity.engineering || {}
+            );
+
+            const radii =
+                separation === null
+                    ? [curves.radius, curves.radius]
+                    : [
+                          curves.radius - separation / 2,
+                          curves.radius + separation / 2
+                      ];
+
+            const sweep =
+                ((curves.endAngle - curves.startAngle + Math.PI * 3) %
+                    (Math.PI * 2)) -
+                Math.PI;
+
+            radii.forEach((radius) => {
+                if (!Number.isFinite(radius) || radius <= 0) {
+                    return;
+                }
+
+                const path = createSvgElement("path", {
+                    d: arcPathData(
+                        curves.centre,
+                        radius,
+                        curves.startAngle,
+                        curves.startAngle + sweep
+                    ),
+                    fill: "none",
+                    stroke,
+                    "stroke-width": scaledStrokeWidth(style.lineWidth),
+                    "stroke-linecap": "round"
+                });
+
+                svg.appendChild(path);
+            });
+
+            /*
+             * THE JOINT MARKS, at each tangent point. Each is a short stroke
+             * across the two walls, perpendicular to the run it meets, so the
+             * fitting is visibly bolted to the straight pieces either side of
+             * it.
+             */
+            const markLength = separation === null ? 0 : separation / 2;
+
+            [curves.inDirection, curves.outDirection].forEach((direction) => {
+                if (!direction || markLength <= 0) {
+                    return;
+                }
+
+                const normal = { x: -direction.y, y: direction.x };
+
+                const point =
+                    direction === curves.inDirection
+                        ? curves.start
+                        : curves.end;
+
+                const a = toScreen({
+                    x: point.x - normal.x * markLength,
+                    y: point.y - normal.y * markLength
+                });
+
+                const b = toScreen({
+                    x: point.x + normal.x * markLength,
+                    y: point.y + normal.y * markLength
+                });
+
+                svg.appendChild(
+                    createSvgElement("line", {
+                        x1: a.x,
+                        y1: a.y,
+                        x2: b.x,
+                        y2: b.y,
+                        stroke,
+                        "stroke-width": Math.max(
+                            0.5,
+                            scaledStrokeWidth(style.lineWidth)
+                        )
+                    })
+                );
+            });
+
             parentSvg.appendChild(svg);
             return;
         }
@@ -8630,6 +8813,51 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         }
 
         /*
+         * ========================================================
+         * PIPE / DUCT PREVIEW - BOTH BOUNDARY LINES, DASHED
+         * ========================================================
+         *
+         * The live preview of the run being dragged. It draws the SAME two
+         * boundary lines the committed feature will draw, generated by the
+         * same function (fluids/pipe-duct.js -> `boundaryLines`), so the
+         * geometry does not change shape when the button is released - the
+         * preview is the feature, painted in the preview stroke until it is
+         * committed. A single centreline preview would show the student one
+         * stroke and then hand them two.
+         *
+         * The preview stroke and a dash pattern mark it as uncommitted; the
+         * SEPARATION of the two lines is the same fixed schematic spacing the
+         * committed feature will draw.
+         */
+        if (preview.type === "pipe-duct") {
+            const boundaries = enggPipeDuct.boundaryLines(
+                geometry.start,
+                geometry.end,
+                geometry.engineering || {}
+            );
+
+            boundaries.forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(
+                    createSvgElement("line", {
+                        x1: from.x,
+                        y1: from.y,
+                        x2: to.x,
+                        y2: to.y,
+                        stroke: style.stroke,
+                        "stroke-width": 1.5,
+                        "stroke-dasharray": "6 4",
+                        opacity: style.opacity
+                    })
+                );
+            });
+
+            return;
+        }
+
+        /*
          * CIRCLE
          */
         if (
@@ -8789,7 +9017,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          */
         if (
             preview.type ===
-            "polyline"
+                "polyline"
         ) {
             const points =
                 (

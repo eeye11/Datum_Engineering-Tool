@@ -1,5 +1,6 @@
 /* Engineering drawing object snapping and geometric inference. */
 import enggLoadProfile from "../../features/analysis/load-profile.js";
+import enggPipeDuct from "../../features/fluids/pipe-duct.js";
 import enggBodyFrames from "../geometry/body-frames.js";
 import enggFeatureGeometry from "../geometry/feature-geometry.js";
 import enggDrawingState from "../model/drawing-state.js";
@@ -1188,13 +1189,88 @@ function addObjectCandidates(
         return;
     }
 
+    /*
+     * ========================================================
+     * A PIPE / DUCT RUN PUBLISHES ITS TWO LOGICAL PORTS AND ITS RUN
+     * ========================================================
+     *
+     * THE PORTS ARE ENDPOINTS, published first so they keep the stronger
+     * priority: a run's start and end are where another run connects, and
+     * publishing them as `endpoint` is what makes them ELIGIBLE FOR ENDPOINT
+     * SNAPPING through the shared system - the same candidate kind a Line's
+     * ends publish.
+     *
+     * THE TWO BOUNDARY LINES ARE NOT PUBLISHED. They are drawn FROM the
+     * centreline, so publishing them as spans would offer the student three
+     * places to aim at for one logical endpoint - the "snap on the two
+     * boundary lines must not create conflicting feature endpoints" rule.
+     * The one span published is the centreline itself, which is what gives a
+     * run its midpoint and quarter points.
+     */
+    if (object.type === "pipe-duct") {
+        if (geometry.start && geometry.end) {
+            addCandidate(
+                candidates,
+                "endpoint",
+                object.id,
+                geometry.start
+            );
+
+            addCandidate(
+                candidates,
+                "endpoint",
+                object.id,
+                geometry.end
+            );
+
+            segmentCandidates(
+                candidates,
+                object.id,
+                geometry.start,
+                geometry.end,
+                quarterSnap
+            );
+        }
+
+        return;
+    }
+
+    /*
+     * AN ELBOW SNAP-LIKE THE FITTING IT IS: it runs between the two tangent
+     * points where it meets the adjoining runs, so both are endpoints and the
+     * curve between them is a span.
+     */
+    if (object.type === "elbow") {
+        const ends = enggPipeDuct.elbowEnds(object);
+
+        ends.forEach((end) => {
+            addCandidate(
+                candidates,
+                "endpoint",
+                object.id,
+                end.point
+            );
+        });
+
+        if (ends.length === 2) {
+            segmentCandidates(
+                candidates,
+                object.id,
+                ends[0].point,
+                ends[1].point,
+                quarterSnap
+            );
+        }
+
+        return;
+    }
+
     if (
         object.type === "truss" &&
         Array.isArray(geometry.members) &&
         geometry.members.length
     ) {
         const seen = [];
-
         geometry.members.forEach((member) => {
             [member.start, member.end].forEach((point) => {
                 const known = seen.find(

@@ -2,7 +2,9 @@
  * Applying an edited property to a feature.
  */
 
+import enggDocumentUnits from "../core/units/document-units.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
+import enggPipeDuct from "../features/fluids/pipe-duct.js";
 import enggQuantities from "../core/units/quantities.js";
 import { COORDINATE_SYSTEM_TYPE } from "./constants.js";
 import { drawingState } from "./editor-state.js";
@@ -15,27 +17,29 @@ import { worldLengthOf } from "./handles.js";
  * THE DISPLAY UNIT A LENGTH FIELD IS READ IN, RESOLVED ONCE
  * ========================================================
  *
- * Every length field on a Features panel is captioned by the unit the
- * student has SELECTED for that feature (`object.lengthUnit`) - mm, cm, m,
- * in or ft - and the panel converts the stored world length into that unit
- * for display. The setter must therefore read the same unit back when a
- * value is typed, or the number crosses the boundary a second time.
+ * Every length field on a Features panel is captioned by the DRAWING'S active
+ * length unit - mm, cm, m, in or ft - and the panel converts the stored world
+ * length into that unit for display. The setter must therefore read the same
+ * unit back when a value is typed, or the number crosses the boundary a
+ * second time.
  *
  * That is the metre/millimetre defect: the panel showed 5 m and the setter
  * converted the typed number as though it were millimetres, so the value
  * landed at a thousandth of what the student entered and read back as 0.005.
  *
  * So the resolution lives HERE, once, as a helper every length branch below
- * shares. The fallback is the sheet's own base unit (mm), which is what a
- * feature that predates the unit field was always read in - the same
- * convention the coordinate reader in feature-panel-markup follows.
+ * shares. It reads the ONE document setting through the shared accessor - the
+ * same source the panel's dropdowns write - so the panel and the setter cannot
+ * disagree about what the field is denominated in. The fallback is the
+ * document's base unit (mm), the same convention the coordinate reader in
+ * feature-panel-markup follows.
+ *
+ * `object` is accepted so every existing call site keeps its signature, and so
+ * a branch can still be read beside the feature it belongs to; the unit itself
+ * is the drawing's, not the feature's.
  */
-function displayLengthUnitOf(object) {
-    const stored = object?.lengthUnit;
-
-    return enggQuantities.isUnitFor("length", stored)
-        ? stored
-        : "mm";
+function displayLengthUnitOf(_object) {
+    return enggDocumentUnits.documentLengthUnit(drawingState);
 }
 
 /*
@@ -47,11 +51,150 @@ function displayLengthUnitOf(object) {
  * hardcoded unit of its own, so a coordinate, a radius, a width and a side
  * length cannot resolve the typed unit differently - which is exactly how the
  * metre field came to be read in millimetres.
+ *
+ * `typedUnit` is an explicitly named unit, when the caller has one - a
+ * suffix the student typed beside the number. It outranks the document's
+ * unit for THIS entry, exactly as the selector's unit does for a bare
+ * number, and is absent for the ordinary case.
  */
-function worldLengthInDisplayUnits(object, value) {
-    return worldLengthOf(value, displayLengthUnitOf(object));
+function worldLengthInDisplayUnits(object, value, typedUnit) {
+    const unit =
+        typedUnit && enggQuantities.isUnitFor('length', typedUnit)
+            ? typedUnit
+            : displayLengthUnitOf(object);
+
+    return worldLengthOf(value, unit);
 }
 import { applyTriangleSidesAndAngles } from "./triangle-editing.js";
+
+/*
+ * ========================================================
+ * THE FLUIDS FLOW-PATH HELPERS
+ * ========================================================
+ *
+ * A Pipe / Duct run and an Elbow are ORDINARY FEATURES with no parent and no
+ * inheritance. The properties they carry are their own:
+ *
+ *   cross-section  shape, and then diameter OR width/height
+ *   engineering    material, roughness
+ *   elbow          bendRadius
+ *
+ * There is no override/inherit state here, because there is no route to
+ * inherit from: a flat model stores every value on the feature that owns it.
+ */
+const PIPE_ENGINEERING_KEYS = new Set([
+    'diameter',
+    'width',
+    'height',
+    'material',
+    'roughness',
+    'bendRadius'
+]);
+
+/*
+ * Write one engineering value onto a flow-path feature.
+ *
+ * A length (a diameter, a width, a height, a bend radius, a roughness) is
+ * converted from the typed unit into world units through the SAME shared
+ * helper every other length field uses, so a run's size and a beam's length
+ * cannot disagree about what a millimetre is. Material is free text.
+ *
+ * A NON-POSITIVE LENGTH IS REFUSED, so the geometry cannot be left degenerate:
+ * a zero diameter has no drawable separation and a zero bend radius has no
+ * drawable curve.
+ */
+function pipeEngineeringValue(object, key, value, worldValue) {
+    const engineering = object.engineering || (object.engineering = {});
+
+    if (key === 'material') {
+        engineering.material = String(value ?? '');
+
+        return true;
+    }
+
+    if (
+        key === 'roughness' ||
+        key === 'diameter' ||
+        key === 'width' ||
+        key === 'height' ||
+        key === 'bendRadius'
+    ) {
+        const numeric = Number(value);
+
+        if (!Number.isFinite(numeric)) {
+            return false;
+        }
+
+        /*
+         * Roughness is a descriptive surface length and may legitimately be
+         * zero (a smooth bore); the SIZES and the radius must be positive,
+         * because each of them decides geometry that cannot exist at zero.
+         */
+        if (key !== 'roughness' && numeric <= 0) {
+            return false;
+        }
+
+        engineering[key] = worldValue;
+
+        return true;
+    }
+
+    return false;
+}
+
+/*
+ * ========================================================
+ * DELETE AN ELBOW THAT IS NO LONGER AT A SUPPORTED CORNER
+ * ========================================================
+ *
+ * When a run is edited so a corner it formed with its neighbour is no longer a
+ * supported 45 or 90, the Elbow generated there is no longer valid and must go.
+ * This removes exactly the elbows whose stored corner no longer matches the
+ * runs they were built between, so no orphaned fitting geometry is left behind.
+ *
+ * It is the ONE place a fitting is removed by an edit, so an elbow cannot be
+ * taken away twice or left behind by an edit path that forgot to call it.
+ */
+export function pruneInvalidElbows() {
+    const objects = drawingState.objects || [];
+
+    const keep = objects.filter((object) => {
+        if (object.type !== 'elbow') {
+            return true;
+        }
+
+        const position = object.geometry?.position;
+
+        if (!position) {
+            return true;
+        }
+
+        /*
+         * An elbow is valid while some pair of runs still meets at its corner
+         * at the angle it was generated for. This is asked of the geometry, so
+         * a corner that has been edited away is found here rather than by a
+         * stale reference.
+         */
+        return objects.some(
+            (candidate) =>
+                candidate.type === 'pipe-duct' &&
+                (samePoint(candidate.geometry?.end, position) ||
+                    samePoint(candidate.geometry?.start, position))
+        );
+    });
+
+    drawingState.objects = keep;
+
+    return objects.length - keep.length;
+}
+
+function samePoint(a, b) {
+    return (
+        Boolean(a && b) &&
+        Math.abs(a.x - b.x) < 1e-6 &&
+        Math.abs(a.y - b.y) < 1e-6
+    );
+}
 
 export function updateFeatureProperty(object, key, value, typedUnit) {
     const g = object.geometry;
@@ -161,9 +304,10 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
      * ========================================================
      *
      * A coordinate can be READ in mm, cm, m, inches or feet. That choice is
-     * stored on the feature (`object.lengthUnit`), and the panel shows the
-     * number in it - so an entry typed while the field reads "in" is INCHES,
-     * and has to become millimetres before the scale turns it into world units:
+     * the DRAWING'S, not the feature's: every length dropdown writes the one
+     * document setting, and the panel shows the number in it - so an entry typed
+     * while the field reads "in" is INCHES, and has to become millimetres
+     * before the scale turns it into world units:
      *
      *     typed -> [ display unit -> mm ] -> worldLengthOf -> world
      *
@@ -173,9 +317,18 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
      * a factor of 25.4. That is the defect this closes, and it is why the
      * conversion is here rather than in the panel.
      *
-     * IT WRITES THE UNIT TOO. `lengthUnit` is itself a property, so changing the
-     * selector is one undoable edit like any other, and it persists in the
-     * document with the drawing.
+     * IT WRITES THE DOCUMENT'S UNIT. `lengthUnit` is a document setting shown
+     * through repeated dropdowns, so changing it from ANY of them is ONE
+     * undoable edit that updates all of them - and it persists with the drawing
+     * because the document's unit is already captured onto the sheet and into
+     * the saved file.
+     *
+     * IT CONVERTS FOR DISPLAY AND TOUCHES NO GEOMETRY. The unit is a way of
+     * writing a length, not a length, so switching mm to m cannot move a
+     * feature - the same millimetres are simply written with a different
+     * number. Every panel value is recomputed from the unchanged geometry on
+     * the next repaint, so the propagation to the other dropdowns falls out of
+     * there being one value to read.
      *
      * THE RESOLUTION IS THE SHARED HELPER ABOVE, not an inline fallback - the
      * same one function every length branch below reads, so the setter and the
@@ -194,14 +347,27 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
         }
 
         /*
-         * MILLIMETRES ARE STORED AS ABSENT. mm is the sheet's own unit and the
-         * state every geometry feature was in before this field existed, so
-         * leaving it off keeps the saved shape of an untouched drawing identical
-         * - the same convention a dimension's `displayUnit` already follows.
+         * THE DOCUMENT OWNS THE UNIT. Writing it here means the change is ONE
+         * document edit, so every other length dropdown reads the same new
+         * value on the next repaint - which is what makes the dropdowns
+         * repeated controls for a single setting rather than separate ones.
          */
-        object.lengthUnit = unit && unit !== 'mm' ? unit : undefined;
+        const accepted = enggDocumentUnits.setDocumentLengthUnit(
+            drawingState,
+            unit
+        );
 
-        return true;
+        /*
+         * A FEATURE THAT STILL CARRIES ITS OWN OLD PER-FEATURE UNIT IS MIGRATED
+         * OFF IT, so a drawing made before the unit became shared does not keep
+         * a hidden second source of truth. Clearing it is what makes the
+         * document's unit the only one in force from here on.
+         */
+        if (object && object.lengthUnit !== undefined) {
+            object.lengthUnit = undefined;
+        }
+
+        return Boolean(accepted);
     }
 
     /*
@@ -216,11 +382,18 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
      * direction the student guarded against.
      *
      * So `typedUnit`, when the panel has one, is used here instead of the
-     * feature's stored unit. It arrives already canonicalised by the shared
-     * table, so this trusts it as far as the length quantity goes and falls
-     * back to the stored unit when it is absent.
+     * document's stored unit - which is what a bare number is read in. It
+     * arrives already canonicalised by the shared table, so this trusts it as
+     * far as the length quantity goes and falls back to the document's unit
+     * when it is absent. In the live panel the two agree anyway: an explicit
+     * suffix moves the document's unit through the shared selector before the
+     * value is applied, but a caller that names the unit directly is honoured
+     * without depending on that ordering.
      */
-    const displayUnit = displayLengthUnitOf(object);
+    const displayUnit =
+        typedUnit && enggQuantities.isUnitFor('length', typedUnit)
+            ? typedUnit
+            : displayLengthUnitOf(object);
 
     /*
      * ========================================================
@@ -354,7 +527,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
          * millimetres - a student reading in metres types 5 and means 5 m,
          * which is 5000 world units on a 1 mm-per-unit sheet, not 5.
          */
-        const world = worldLengthInDisplayUnits(object, value);
+        const world = worldLengthInDisplayUnits(object, value, typedUnit);
 
         g.end = {
             x: g.start.x + (dx / current) * world,
@@ -420,7 +593,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
          * the panel prints is exactly what the panel accepts, in whatever
          * unit the field is read in.
          */
-        const worldValue = worldLengthInDisplayUnits(object, value);
+        const worldValue = worldLengthInDisplayUnits(object, value, typedUnit);
 
         /*
          * The same places the panel reads as this feature's
@@ -557,7 +730,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              * triangle-inequality test and stretch the edge by the scale
              * factor.
              */
-            const world = worldLengthInDisplayUnits(object, value);
+            const world = worldLengthInDisplayUnits(object, value, typedUnit);
 
             if (!Number.isFinite(world)) {
                 return false;
@@ -585,7 +758,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
          * was typed.
          */
         if (key.startsWith('side')) {
-            const world = worldLengthInDisplayUnits(object, value);
+            const world = worldLengthInDisplayUnits(object, value, typedUnit);
 
             if (!Number.isFinite(world)) {
                 return false;
@@ -683,7 +856,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              * resolves the display unit rather than this branch assuming
              * millimetres.
              */
-            const world = worldLengthInDisplayUnits(object, value);
+            const world = worldLengthInDisplayUnits(object, value, typedUnit);
 
             const target = fixed('end') ? start : end;
             const anchor = fixed('end') ? end : start;
@@ -1183,7 +1356,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                     const placed =
                         pointAtStation(
                             parent,
-                            worldLengthInDisplayUnits(object, value)
+                            worldLengthInDisplayUnits(object, value, typedUnit)
                         );
 
                     if (!placed) {
@@ -1202,7 +1375,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              * length typed in the field's own unit, and it crosses the
              * scale the same way every other coordinate does.
              */
-            g[pointKey][axis] = worldLengthInDisplayUnits(object, value);
+            g[pointKey][axis] = worldLengthInDisplayUnits(object, value, typedUnit);
 
             return true;
         }
@@ -1266,7 +1439,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                          * assuming millimetres.
                          */
                         const station =
-                            worldLengthInDisplayUnits(object, value);
+                            worldLengthInDisplayUnits(object, value, typedUnit);
 
                         const placed = parent
                             ? pointAtStation(parent, station)
@@ -1293,7 +1466,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                  * typed in the field's own unit, crossing the scale like
                  * every other coordinate.
                  */
-                target.x = worldLengthInDisplayUnits(object, value);
+                target.x = worldLengthInDisplayUnits(object, value, typedUnit);
             }
 
             /*
@@ -1401,7 +1574,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                * resolves the display unit - the same rule every length
                * branch follows.
                */
-             const millimetres = worldLengthInDisplayUnits(object, value);
+             const millimetres = worldLengthInDisplayUnits(object, value, typedUnit);
 
              resizeRigidBody(object, key === 'rigidWidth' ? 'width' : 'height', millimetres);
             return true;
@@ -1416,7 +1589,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              *
              * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            const millimetres = worldLengthInDisplayUnits(object, value);
+            const millimetres = worldLengthInDisplayUnits(object, value, typedUnit);
 
             setRigidBodyRadius(object, millimetres);
             return true;
@@ -1513,7 +1686,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
         if (key === 'height') {
             if (fixed(key)) return false;
 
-            const worldHeight = worldLengthInDisplayUnits(object, value);
+            const worldHeight = worldLengthInDisplayUnits(object, value, typedUnit);
 
             if (!Number.isFinite(worldHeight)) return false;
 
@@ -1564,7 +1737,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                * the same rule every other length branch follows, so a
                * radius read in metres is typed in metres too.
                */
-             const millimetres = worldLengthInDisplayUnits(object, value);
+             const millimetres = worldLengthInDisplayUnits(object, value, typedUnit);
 
             g.radius =
                 key === 'radius'
@@ -1646,7 +1819,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
                *
                * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
                */
-             g[key] = worldLengthInDisplayUnits(object, value);
+             g[key] = worldLengthInDisplayUnits(object, value, typedUnit);
             return true;
         }
         if (key === 'rotation' && !fixed(key)) {
@@ -1684,7 +1857,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              *
              * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g.radius = worldLengthInDisplayUnits(object, value);
+            g.radius = worldLengthInDisplayUnits(object, value, typedUnit);
 
             return true;
         }
@@ -1736,7 +1909,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              *
              * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g.axisLength = worldLengthInDisplayUnits(object, value);
+            g.axisLength = worldLengthInDisplayUnits(object, value, typedUnit);
 
             return true;
         }
@@ -1774,7 +1947,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              *
              * TYPED IN THE FIELD'S OWN UNIT, through the shared helper.
              */
-            g[key] = worldLengthInDisplayUnits(object, value);
+            g[key] = worldLengthInDisplayUnits(object, value, typedUnit);
 
             return true;
         }
@@ -1821,11 +1994,18 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
             }
 
             /*
-             * THE SHEET'S OWN UNIT IS STORED AS NULL. A dimension read in mm -
-             * the unit the sheet already works in - keeps no override, which is
-             * the state every dimension had before this field existed.
+             * THE DIMENSION'S UNIT IS THE DRAWING'S. Writing the document
+             * setting here means the dimension's dropdown is one of the
+             * shared length dropdowns: a change from any of them lands here
+             * as well, and one from here propagates to all the others on the
+             * next repaint. A stale per-dimension override is cleared, so the
+             * shared value is the only one in force.
              */
-            object.displayUnit = unit && unit !== 'mm' ? unit : null;
+            enggDocumentUnits.setDocumentLengthUnit(drawingState, unit);
+
+            if (object && object.displayUnit) {
+                object.displayUnit = null;
+            }
 
             return true;
         }
@@ -1924,7 +2104,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
              * calibrated sheet.
              */
             g.placement = g.placement || { x: 0, y: 0 };
-            g.placement[axis] = worldLengthInDisplayUnits(object, value);
+            g.placement[axis] = worldLengthInDisplayUnits(object, value, typedUnit);
 
             return true;
         }
@@ -2059,5 +2239,178 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
             return true;
         }
     }
+
+    /*
+     * ========================================================
+     * THE FLUIDS PIPE / DUCT RUN
+     * ========================================================
+     *
+     * A run is a top-level feature with its own geometry (`start`, `end`) and
+     * its own cross-section. There is no route above it and no child below it,
+     * so every value is written straight onto the feature the student is
+     * editing - the flat model, stated as a setter.
+     */
+    if (object.type === 'pipe-duct') {
+        const engineering = object.engineering || (object.engineering = {});
+
+        /*
+         * ====================================================
+         * THE SHAPE - AND WHY THE OTHER DIMENSIONS ARE KEPT
+         * ====================================================
+         *
+         * Switching Circular <-> Rectangular changes which dimensions apply,
+         * and `dimensionalKeysFor` is the ONE place that is decided. Values
+         * for a field that no longer applies are LEFT ON THE FEATURE rather
+         * than deleted, so switching back does not silently lose what the
+         * student entered; the panel simply does not show them while they do
+         * not apply.
+         *
+         * THE VALUES ARE NOT REINTERPRETED. A Diameter is never copied into a
+         * Width, because a round pipe's diameter and a rectangular duct's
+         * width are different measurements of different things - silently
+         * treating one as the other would be inventing an equivalence the
+         * engineering does not have.
+         */
+        if (key === 'shape') {
+            engineering.shape =
+                value === enggPipeDuct.PIPE_SHAPES.rectangular
+                    ? enggPipeDuct.PIPE_SHAPES.rectangular
+                    : enggPipeDuct.PIPE_SHAPES.circular;
+
+            /*
+             * A shape needs a size to draw with. If the new shape's dimension
+             * has never been set on this feature, it is seeded from the shared
+             * drawing default so the run stays drawable rather than collapsing
+             * to nothing the moment the shape changes.
+             */
+            enggPipeDuct.dimensionalKeysFor(engineering).forEach((dimension) => {
+                if (!Number.isFinite(Number(engineering[dimension]))) {
+                    const fallback = {
+                        diameter: enggPipeDuct.DEFAULT_DIAMETER,
+                        width: enggPipeDuct.DEFAULT_WIDTH,
+                        height: enggPipeDuct.DEFAULT_HEIGHT
+                    }[dimension];
+
+                    engineering[dimension] = fallback;
+                }
+            });
+
+            return true;
+        }
+
+        /*
+         * THE RUN'S DIMENSIONS AND ENGINEERING VALUES go straight onto the
+         * feature, converted through the shared length helper so a run's size
+         * and a beam's length cannot disagree about what a millimetre is.
+         *
+         * THE TYPED NUMBER IS IN THE DISPLAY UNIT, so a length crosses the
+         * scale once before it is stored: the panel shows the stored value
+         * through `mmOf` in the document's unit, and this is the inverse of
+         * exactly that conversion. Without it, retyping the number the panel
+         * just showed would shrink the run by the unit factor - the same
+         * metre/millimetre defect the coordinate fields were fixed for.
+         */
+        if (PIPE_ENGINEERING_KEYS.has(key)) {
+            const storedValue =
+                key === 'material'
+                    ? value
+                    : worldLengthInDisplayUnits(object, value, typedUnit);
+
+            return pipeEngineeringValue(object, key, value, storedValue);
+        }
+
+        return false;
+    }
+
+    /*
+     * ========================================================
+     * THE FLUIDS ELBOW
+     * ========================================================
+     *
+     * An elbow stores its own angle, cross-section and bend radius. Its angle
+     * is DERIVED from the runs it joins and is not editable, so there is no
+     * `angle` key here: changing it means moving the geometry (see the panel).
+     *
+     * THE BEND RADIUS IS VALIDATED AGAINST THE ACTUAL CORNER before it is
+     * accepted. A radius whose tangent points would fall beyond either
+     * adjoining run cannot be drawn, so it is REFUSED here and the last valid
+     * geometry stays on screen - the "an invalid radius is rejected without
+     * replacing the last valid geometry" rule, enforced where the value is
+     * written rather than left to the renderer to cope with.
+     */
+    if (object.type === 'elbow') {
+        const engineering = object.engineering || (object.engineering = {});
+
+        if (key === 'shape') {
+            engineering.shape =
+                value === enggPipeDuct.PIPE_SHAPES.rectangular
+                    ? enggPipeDuct.PIPE_SHAPES.rectangular
+                    : enggPipeDuct.PIPE_SHAPES.circular;
+
+            enggPipeDuct.dimensionalKeysFor(engineering).forEach((dimension) => {
+                if (!Number.isFinite(Number(engineering[dimension]))) {
+                    const fallback = {
+                        diameter: enggPipeDuct.DEFAULT_DIAMETER,
+                        width: enggPipeDuct.DEFAULT_WIDTH,
+                        height: enggPipeDuct.DEFAULT_HEIGHT
+                    }[dimension];
+
+                    engineering[dimension] = fallback;
+                }
+            });
+
+            return true;
+        }
+
+        if (key === 'bendRadius') {
+            const numeric = Number(value);
+
+            if (!Number.isFinite(numeric) || numeric <= 0) {
+                return false;
+            }
+
+            /*
+             * THE RADIUS IS TYPED IN THE DISPLAY UNIT, like every other
+             * length on the panel - converted through the one shared helper
+             * before it is stored or checked against the runs, so a radius
+             * retyped from the panel's own reading does not shrink by the
+             * unit factor.
+             */
+            const radiusWorld = worldLengthInDisplayUnits(object, value, typedUnit);
+
+            if (!Number.isFinite(radiusWorld)) {
+                return false;
+            }
+
+            const geometry = object.geometry || {};
+
+            const curves = enggPipeDuct.elbowGeometry(
+                geometry.previous,
+                geometry.position,
+                geometry.next,
+                radiusWorld
+            );
+
+            /*
+             * A radius that does not fit the two runs is refused, and the
+             * reason is written to the message bar so the student is told WHY
+             * rather than watching the field silently refuse them.
+             */
+            if (!curves) {
+                return false;
+            }
+
+            engineering.bendRadius = radiusWorld;
+
+            return true;
+        }
+
+        if (PIPE_ENGINEERING_KEYS.has(key)) {
+            return pipeEngineeringValue(object, key, value, worldValue);
+        }
+
+        return false;
+    }
+
     return false;
 }
