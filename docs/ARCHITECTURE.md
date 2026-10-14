@@ -60,6 +60,25 @@ The editor was one 39,000-line file; it is now one module per concern.
 **`editor/index.js` opens with a table of contents of every module**, in
 reading order — start there.
 
+The modules are grouped by what they do. The three engineering folders
+(`geometry/`, `annotate/`, `statics/`) match the `category/*` branches, so
+a category's tool work mostly stays inside its own folder:
+
+```
+editor/
+├── index.js, editor-state.js, dom.js, constants.js   start-up and shared state
+├── interaction/   pointer and keyboard: events, clicks, snapping feedback,
+│                  hit-testing, selection, drags, handles, context menu
+├── toolbar/       the tool registry (tools.js), toolbar, menus, tool activation,
+│                  the menu bar's commands, command search
+├── workspace/     the canvas render loop, viewport, sheets, layout, theme
+├── panels/        the Features panel: markup, tree, property binding and update
+├── commands/      document (new/open/save/export), clipboard, delete, modify, draw order
+├── geometry/      GEOMETRY tools: creation, sizing, preview, transforms, triangle
+├── annotate/      ANNOTATE tools: annotate creation, dimensions and their placement
+└── statics/       STATICS tools: bodies, loads, supports, attachment, analysis, truss
+```
+
 ### Shared state
 
 | Module                  | Holds                                                         |
@@ -198,15 +217,15 @@ base, editor, shell — and later files win where they overlap.
 2. **Measurement** — register what it can be measured as in
    `core/geometry/measurement-core.js`.
 3. **Rendering** — `rendering/renderer.js`.
-4. **Tool** — register it in `editor/tools.js`; creation in
-   `editor/geometry-creation.js` or `editor/statics-creation.js` (Statics
-   placement rules in `editor/statics-tools.js`); preview in
-   `editor/preview.js`.
-5. **Interaction** — hit-testing (`editor/hit-testing.js`,
-   `editor/box-selection.js`), handles (`editor/handles.js`), transforms
-   (`editor/transforms.js`).
-6. **Panel** — `editor/feature-panel-markup.js` (Statics sections in
-   `editor/statics-panel.js`), edits in `editor/property-update.js`.
+4. **Tool** — register it in `editor/toolbar/tools.js`; creation in
+   `editor/geometry/geometry-creation.js` or `editor/statics/statics-creation.js` (Statics
+   placement rules in `editor/statics/statics-tools.js`); preview in
+   `editor/geometry/preview.js`.
+5. **Interaction** — hit-testing (`editor/interaction/hit-testing.js`,
+   `editor/interaction/box-selection.js`), handles (`editor/interaction/handles.js`), transforms
+   (`editor/geometry/transforms.js`).
+6. **Panel** — `editor/panels/feature-panel-markup.js` (Statics sections in
+   `editor/statics/statics-panel.js`), edits in `editor/panels/property-update.js`.
 7. **File format** — if the stored shape changes, see
    [FILE-FORMAT.md](FILE-FORMAT.md#changing-the-format).
 8. **Tests** — `tests/`, loading modules with `loadModule()`.

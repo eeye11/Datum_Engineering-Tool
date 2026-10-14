@@ -245,7 +245,7 @@ console.log("\n  the prompt is asked AFTER geometry selection, via the SHARED po
   check(
     "and the prompt is the EXISTING shared value popup",
     /openLoadValuePopup\(\{/.test(tool) &&
-      /from "\.\.\/ui\/editors\/load-value-popup\.js"/.test(tool),
+      /from "(?:\.\.\/)+ui\/editors\/load-value-popup\.js"/.test(tool),
     "a bespoke dialog would be a second thing to learn for the same act",
   );
 

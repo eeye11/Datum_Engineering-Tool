@@ -14,7 +14,7 @@ import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
 import enggDimensionModel from "../features/dimensions/dimension-model.js";
 import enggVariableDimension from "../features/dimensions/variable-dimension.js";
-import enggTheme from "../editor/theme.js";
+import enggTheme from "../editor/workspace/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
 
     const SVG_NAMESPACE = "http://www.w3.org/2000/svg";

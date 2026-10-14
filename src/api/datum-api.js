@@ -36,7 +36,7 @@
 import enggDocumentFile from "../file/document-file.js";
 import enggDrawingReference from "../references/drawing-reference.js";
 import { enggDrawingSheets } from "../editor/index.js";
-import { loadDrawing } from "../editor/document-commands.js";
+import { loadDrawing } from "../editor/commands/document-commands.js";
 import { render as renderSolution } from "../solution/written-references.js";
 import { onDatumEvent } from "./events.js";
 

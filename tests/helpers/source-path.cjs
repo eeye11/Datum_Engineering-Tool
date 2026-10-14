@@ -188,7 +188,7 @@ function controllerSource() {
    */
   const indexFile = path.join(editorDir, "index.js");
   const toc = [
-    ...fs.readFileSync(indexFile, "utf8").matchAll(/^ \*\s{3}([a-z-]+\.js)\s/gm),
+    ...fs.readFileSync(indexFile, "utf8").matchAll(/^ \*\s{3}((?:[a-z-]+\/)*[a-z-]+\.js)\s/gm),
   ].map((m) => path.join(editorDir, m[1]));
   const rank = (file) => {
     const at = toc.indexOf(file);
@@ -196,10 +196,12 @@ function controllerSource() {
   };
 
   return files
-    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .sort((a, b) => rank(a) - rank(b) || path.basename(a).localeCompare(path.basename(b)))
     .map((file) =>
       fs
         .readFileSync(file, "utf8")
+        /* A Windows checkout may have CRLF; the patterns below expect LF. */
+        .replace(/\r\n/g, "\n")
         .replace(/^import[^;]*;\n/gm, "")
         .replace(/^export (?=(?:async )?function |const |let |class )/gm, "")
         .replace(/^export \{[^}]*\}(?: from "[^"]*")?;\n/gm, ""),

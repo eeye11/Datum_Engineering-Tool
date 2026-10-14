@@ -53,7 +53,7 @@ export function showTab(tabName, button) {
          * built and tested with. A dynamic import inside the one function
          * that needs it leaves the load order exactly as it was.
          */
-        import("../editor/canvas-render.js").then(
+        import("../editor/workspace/canvas-render.js").then(
             ({ renderCurrentDrawing }) => {
                 renderCurrentDrawing();
             }

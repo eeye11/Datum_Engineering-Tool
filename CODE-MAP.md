@@ -34,27 +34,27 @@ core/util/clone.js        deepClone, deepCloneAll
 | I want to change… | Go to |
 |---|---|
 | How a feature is stored (geometry fields) | `src/core/model/drawing-state.js` |
-| What a tool is called in the panel | `src/editor/feature-panel-markup.js` (`displayLabel` map) |
-| The Features tab structure/content | `src/editor/feature-panel-markup.js` + `src/editor/statics-panel.js` |
+| What a tool is called in the panel | `src/editor/panels/feature-panel-markup.js` (`displayLabel` map) |
+| The Features tab structure/content | `src/editor/panels/feature-panel-markup.js` + `src/editor/statics/statics-panel.js` |
 | The shared panel row/section primitives | `src/ui/feature-panel/property-panel.js` |
-| What a click on the canvas does | `src/editor/canvas-click.js` (routed from `canvas-events.js`) |
-| Pointer down/move/up wiring | `src/editor/canvas-events.js` |
-| Dragging a feature/handle | `src/editor/drag.js` |
-| Marquee selection, annotation drag start | `src/editor/selection.js` |
-| Snapping and inference | `src/core/snapping/object-snap.js` (+ `src/editor/pointer.js`) |
-| Hit testing (what is under the cursor) | `src/editor/hit-testing.js` |
-| Creating geometry from clicks | `src/editor/geometry-creation.js` |
-| The creation-size popup (Beam length, etc.) | `src/editor/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
+| What a click on the canvas does | `src/editor/interaction/canvas-click.js` (routed from `canvas-events.js`) |
+| Pointer down/move/up wiring | `src/editor/interaction/canvas-events.js` |
+| Dragging a feature/handle | `src/editor/interaction/drag.js` |
+| Marquee selection, annotation drag start | `src/editor/interaction/selection.js` |
+| Snapping and inference | `src/core/snapping/object-snap.js` (+ `src/editor/interaction/pointer.js`) |
+| Hit testing (what is under the cursor) | `src/editor/interaction/hit-testing.js` |
+| Creating geometry from clicks | `src/editor/geometry/geometry-creation.js` |
+| The creation-size popup (Beam length, etc.) | `src/editor/geometry/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
 | Undo/redo and document changes | `src/core/model/drawing-state.js` (`commitDrawingChange`) |
 | How something is drawn on the canvas | `src/rendering/renderer.js` |
-| What fits on screen / Fit | `src/editor/viewport.js` |
-| The bottom-bar tool message | `src/editor/toolbar-render.js` (`setToolMessage`) |
-| **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate-creation.js` (interaction) |
-| Which tools the **Annotate** section shows, and their categories | `src/editor/tools.js` (`annotateToolGroups`) |
+| What fits on screen / Fit | `src/editor/workspace/viewport.js` |
+| The bottom-bar tool message | `src/editor/toolbar/toolbar-render.js` (`setToolMessage`) |
+| **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate/annotate-creation.js` (interaction) |
+| Which tools the **Annotate** section shows, and their categories | `src/editor/toolbar/tools.js` (`annotateToolGroups`) |
 | **Angular dimensioning** — which of the four sectors is dimensioned | `src/features/dimensions/dimension-model.js` (`angleSectorLegs`) |
 | Point/segment maths (distance, nearest point on a segment) | `src/core/geometry/points.js` |
 | Deep-copying any value | `src/core/util/clone.js` (`deepClone`) |
-| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor.css` |
+| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor.css` |
 | The responsive breakpoints and icon-only modes | `src/styles/editor.css` (the `@media` blocks near the end) |
 
 ---
@@ -189,14 +189,14 @@ keyboard-shortcuts.js  Enter/Escape/Delete → finishActiveConstruction, cancelI
 |---|---|
 | `rendering/renderer.js` | Draws every feature to SVG. Forces: `appendForceArrow` + `drawnForceEnd`. Loads: the arrow field. Annotations: `appendDerivedMagnitude` and the **annotation selection box** (`renderSelectionHandles`). |
 | `styles/editor.css` | The Features panel grid (`.drawing-property-grid`), the sketch editor (`.sketch-editor*`), the popups (`.drawing-creation-dimension`), and the workspace columns (`grid-template-columns: 202px … 236px`). |
-| `editor/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
+| `editor/workspace/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
 
 ---
 
 ## 7. The Sketch editor (BMD / SFD / AFD)
 
 `src/ui/editors/sketch-editor.js`, opened from
-`src/editor/feature-tree.js → openSketchEditorFor`.
+`src/editor/panels/feature-tree.js → openSketchEditorFor`.
 
 **Element kinds**
 | Kind | Shape | Fields |
@@ -304,7 +304,7 @@ is. See the `const highlighted = false` in `renderer.js`.
 
 - **Change snapping behaviour**
   `core/snapping/object-snap.js` (candidates and tolerance) and the
-  `inferenceReferences` assembled in `editor/pointer.js`.
+  `inferenceReferences` assembled in `editor/interaction/pointer.js`.
 
 - **Open a value popup**
   `openLoadValuePopup({ title, label, value, unit, units, onConfirm })` for a
@@ -312,7 +312,7 @@ is. See the `const highlighted = false` in `renderer.js`.
   creation size.
 
 - **Where an annotation/dimension's grab point sits**
-  `editor/handles.js → manipulationHandles` (dimension → `graphics.textAnchor`;
+  `editor/interaction/handles.js → manipulationHandles` (dimension → `graphics.textAnchor`;
   derived label → `pickDerivedMagnitude` in `hit-testing.js`).
 
 - **Add an Annotate kind (note, label, leader, …)**

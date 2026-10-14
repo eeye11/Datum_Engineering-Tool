@@ -127,12 +127,12 @@ like the others.
 | --- | --- |
 | Universal units and value parsing | `core/units/quantities.js`, `core/scale/` |
 | Shared geometry model | `core/geometry/`, `core/model/drawing-state.js` |
-| Snapping and direct manipulation | `core/snapping/object-snap.js`, `editor/drag.js`, `editor/handles.js` |
-| Feature registration and tool list | `editor/tools.js`, `editor/toolbar-render.js` |
-| Selection and canvas interaction | `editor/selection.js`, `editor/canvas-click.js`, `editor/canvas-events.js`, `editor/pointer.js` |
+| Snapping and direct manipulation | `core/snapping/object-snap.js`, `editor/interaction/drag.js`, `editor/interaction/handles.js` |
+| Feature registration and tool list | `editor/toolbar/tools.js`, `editor/toolbar/toolbar-render.js` |
+| Selection and canvas interaction | `editor/interaction/selection.js`, `editor/interaction/canvas-click.js`, `editor/interaction/canvas-events.js`, `editor/interaction/pointer.js` |
 | Rendering and annotation primitives | `rendering/renderer.js`, `rendering/canvas-palette.js` |
 | Undo/redo and persistence | `core/model/drawing-state.js`, `file/` |
-| Common property inputs and Features panel | `editor/feature-panel*.js`, `editor/property-binding.js`, `editor/property-update.js` |
+| Common property inputs and Features panel | `editor/panels/feature-panel*.js`, `editor/panels/property-binding.js`, `editor/panels/property-update.js` |
 | Analysis data types and interfaces | `features/analysis/` |
 
 **When a change touches one of these:**
@@ -199,24 +199,24 @@ tests are green — check the actual DOM, not just the selector you expect.
 ## 8. Source-code ownership per category
 
 Category names do **not** map to directories. Each category's tools are
-registered in `editor/tools.js` and travel the shared pipeline in
+registered in `editor/toolbar/tools.js` and travel the shared pipeline in
 `docs/TOOL-MAP.md`. Ownership below means *the files a category's work
 will most often change*, not exclusive ownership.
 
-| Category | Branch | Registered tools (from `editor/tools.js`) | Primary files |
+| Category | Branch | Registered tools (from `editor/toolbar/tools.js`) | Primary files |
 | --- | --- | --- | --- |
-| GEOMETRY | `category/geometry` | Select, Point, Line, Triangle, Rectangle, Circle, Arc, Polygon, Coordinate System | `editor/geometry-creation.js`, `editor/construction-geometry.js`, `editor/creation-sizing.js`, `core/geometry/` |
-| ANNOTATE | `category/annotate` | Variable Dimension, Smart Dimension, Note / Text, Label, Leader, Callout, Arrow, Symbol, Tolerance, Table | `editor/annotate-creation.js`, `editor/annotation-tool.js`, `features/annotations/annotate-model.js`, `features/dimensions/`, `ui/editors/symbol-picker.js`, `ui/editors/table-picker.js` |
-| STATICS | `category/statics` | Bodies, Point Force, Loads, Moment, Supports, Connections; Resultant, Force Components, SFD, BMD, AFD; Coordinate System, Reference Point/Line/Arc | `editor/statics-creation.js`, `editor/statics-attachment.js`, `editor/statics-tools.js`, `editor/statics-panel.js`, `editor/analysis-tools.js`, `features/analysis/` |
-| DYNAMICS | `category/dynamics` | Particle, Rigid Body, Velocity, Acceleration, Rotation, Motion Path | `editor/tools.js` (registration), shared creation path |
-| FLUIDS | `category/fluids` | Pipe, Reservoir, Valve, Pump, Flow Arrow, Pressure | `editor/tools.js` (registration), shared creation path |
-| THERMODYNAMICS | `category/thermodynamics` | Control Volume, System Boundary, State Point, Process Path, Heat Transfer, Work | `editor/tools.js` (registration), shared creation path |
-| HEAT TRANSFER | `category/heat-transfer` | Wall, Layer, Heat Flux, Temperature, Convection, Radiation | `editor/tools.js` (registration), shared creation path |
-| SOLID MECHANICS | `category/solid-mechanics` | Beam, Shaft, Load, Stress, Strain, Boundary Condition | `editor/tools.js` (registration), shared creation path |
-| MECHANICAL DESIGN | `category/mechanical-design` | Part, Hole, Shaft, Gear, Fastener, Section View | `editor/tools.js` (registration), shared creation path |
-| CONTROLS | `category/controls` | Block, Input, Output, Sensor, Controller, Signal Arrow | `editor/tools.js` (registration), shared creation path |
-| MATH / ANALYSIS | `category/math-analysis` | Point, Function, Vector, Graph, Equation | `editor/tools.js` (registration), shared creation path |
-| SHARED INFRA | `category/shared-infra` | *(none — cross-cutting)* | `core/units/`, `core/geometry/`, `core/snapping/`, `rendering/`, `editor/tools.js`, `editor/toolbar-render.js`, `editor/selection.js`, `editor/canvas-click.js`, `editor/feature-panel*.js` |
+| GEOMETRY | `category/geometry` | Select, Point, Line, Triangle, Rectangle, Circle, Arc, Polygon, Coordinate System | `editor/geometry/geometry-creation.js`, `editor/geometry/construction-geometry.js`, `editor/geometry/creation-sizing.js`, `core/geometry/` |
+| ANNOTATE | `category/annotate` | Variable Dimension, Smart Dimension, Note / Text, Label, Leader, Callout, Arrow, Symbol, Tolerance, Table | `editor/annotate/annotate-creation.js`, `editor/annotate/annotation-tool.js`, `features/annotations/annotate-model.js`, `features/dimensions/`, `ui/editors/symbol-picker.js`, `ui/editors/table-picker.js` |
+| STATICS | `category/statics` | Bodies, Point Force, Loads, Moment, Supports, Connections; Resultant, Force Components, SFD, BMD, AFD; Coordinate System, Reference Point/Line/Arc | `editor/statics/statics-creation.js`, `editor/statics/statics-attachment.js`, `editor/statics/statics-tools.js`, `editor/statics/statics-panel.js`, `editor/statics/analysis-tools.js`, `features/analysis/` |
+| DYNAMICS | `category/dynamics` | Particle, Rigid Body, Velocity, Acceleration, Rotation, Motion Path | `editor/toolbar/tools.js` (registration), shared creation path |
+| FLUIDS | `category/fluids` | Pipe, Reservoir, Valve, Pump, Flow Arrow, Pressure | `editor/toolbar/tools.js` (registration), shared creation path |
+| THERMODYNAMICS | `category/thermodynamics` | Control Volume, System Boundary, State Point, Process Path, Heat Transfer, Work | `editor/toolbar/tools.js` (registration), shared creation path |
+| HEAT TRANSFER | `category/heat-transfer` | Wall, Layer, Heat Flux, Temperature, Convection, Radiation | `editor/toolbar/tools.js` (registration), shared creation path |
+| SOLID MECHANICS | `category/solid-mechanics` | Beam, Shaft, Load, Stress, Strain, Boundary Condition | `editor/toolbar/tools.js` (registration), shared creation path |
+| MECHANICAL DESIGN | `category/mechanical-design` | Part, Hole, Shaft, Gear, Fastener, Section View | `editor/toolbar/tools.js` (registration), shared creation path |
+| CONTROLS | `category/controls` | Block, Input, Output, Sensor, Controller, Signal Arrow | `editor/toolbar/tools.js` (registration), shared creation path |
+| MATH / ANALYSIS | `category/math-analysis` | Point, Function, Vector, Graph, Equation | `editor/toolbar/tools.js` (registration), shared creation path |
+| SHARED INFRA | `category/shared-infra` | *(none — cross-cutting)* | `core/units/`, `core/geometry/`, `core/snapping/`, `rendering/`, `editor/toolbar/tools.js`, `editor/toolbar/toolbar-render.js`, `editor/interaction/selection.js`, `editor/interaction/canvas-click.js`, `editor/panels/feature-panel*.js` |
 
 **Important:** the six categories from DYNAMICS to MATH / ANALYSIS are
 listed in the `engineeringTools` registry but do not yet have their own

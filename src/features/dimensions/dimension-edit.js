@@ -42,7 +42,7 @@
  */
 
 import enggDimensionModel from "./dimension-model.js";
-import { updateFeatureProperty } from "../../editor/property-update.js";
+import { updateFeatureProperty } from "../../editor/panels/property-update.js";
 
 /* The reference kinds, from the model that defines them. */
 const REFERENCE_KINDS = enggDimensionModel.REFERENCE_KINDS;

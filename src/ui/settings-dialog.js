@@ -25,12 +25,12 @@
  * the measurement readouts - are read-only and say so.
  */
 
-import enggTheme from "../editor/theme.js";
-import { applyThemePreference } from "../editor/theme-preference.js";
+import enggTheme from "../editor/workspace/theme.js";
+import { applyThemePreference } from "../editor/workspace/theme-preference.js";
 import { drawingState } from "../editor/editor-state.js";
 import enggDrawingState from "../core/model/drawing-state.js";
 import enggScale from "../core/scale/dimensions.js";
-import { setToggleLabel } from "../editor/sheet-controller.js";
+import { setToggleLabel } from "../editor/workspace/sheet-controller.js";
 
 let openDialog = null;
 

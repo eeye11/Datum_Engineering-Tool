@@ -14,10 +14,12 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const path = require("path");
-const { bootApp, projectRoot } = require("./helpers/boot-app.cjs");
+const { bootApp } = require("./helpers/boot-app.cjs");
 
 const { error: bootError } = bootApp();
-const src = (file) => require(path.join(projectRoot, "src", file));
+/* By file name, so a module can move between folders without breaking this. */
+const { locate } = require("./helpers/source-path.cjs");
+const src = (file) => require(locate(path.basename(file)));
 
 const model = src("core/model/drawing-state.js").default;
 const { drawingState } = src("editor/editor-state.js");

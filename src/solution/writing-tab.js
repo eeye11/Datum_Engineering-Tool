@@ -19,7 +19,7 @@ import enggSolutionWorkspace from "./solution-workspace.js";
 import { enggDrawingSheets } from "../editor/index.js";
 import enggDrawingReference from "../references/drawing-reference.js";
 import { attachSolutionSourceLoader } from "../api/datum-api.js";
-import { attachSolutionLoader, markDocumentDirty } from "../editor/document-commands.js";
+import { attachSolutionLoader, markDocumentDirty } from "../editor/commands/document-commands.js";
 import { emitDatumEvent } from "../api/events.js";
 
 /* ---------------------------------------------------------- */
