@@ -60,7 +60,7 @@ const check = (name, ok, detail) => {
  * check covering the whole application rather than quietly covering
  * only whatever happens to sit at one level.
  */
-const { modules } = require("./helpers/source-path.cjs");
+const { modules, rendererSource } = require("./helpers/source-path.cjs");
 
 const read = (name) =>
   fs.readFileSync(locate(name), "utf8");
@@ -143,7 +143,8 @@ check(
 
 console.log("\nAnd that renderer is where dimensions and annotations are drawn");
 
-const renderer = read("renderer.js");
+/* The renderer is split by concern across src/rendering/; read all of it. */
+const renderer = rendererSource();
 
 check("it draws dimensions", /entity\.type === "dimension"/.test(renderer));
 check("and annotations", /entity\.type === "annotation"/.test(renderer));
@@ -170,8 +171,11 @@ const SANCTIONED = new Set([
 /* The drawing editor (src/editor/) is the controller, and builds its own canvas overlay. */
 const inEditor = (name) => /[\\/]editor[\\/]/.test(modules.get(name));
 
+/* Every module in src/rendering/ IS the renderer, split by concern. */
+const inRenderer = (name) => /[\\/]rendering[\\/]/.test(modules.get(name));
+
 const offenders = [...modules.keys()]
-  .filter((name) => !SANCTIONED.has(name) && !inEditor(name))
+  .filter((name) => !SANCTIONED.has(name) && !inEditor(name) && !inRenderer(name))
   .filter((name) => DRAWS_OWN_SVG.some((pattern) => pattern.test(read(name))));
 
 check(

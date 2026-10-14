@@ -46,7 +46,7 @@ core/util/clone.js        deepClone, deepCloneAll
 | Creating geometry from clicks | `src/editor/geometry/geometry-creation.js` |
 | The creation-size popup (Beam length, etc.) | `src/editor/geometry/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
 | Undo/redo and document changes | `src/core/model/drawing-state.js` (`commitDrawingChange`) |
-| How something is drawn on the canvas | `src/rendering/renderer.js` |
+| How something is drawn on the canvas | `src/rendering/entity-render.js` (`appendEntity`) and its siblings in `src/rendering/` |
 | What fits on screen / Fit | `src/editor/workspace/viewport.js` |
 | The bottom-bar tool message | `src/editor/toolbar/toolbar-render.js` (`setToolMessage`) |
 | **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate/annotate-creation.js` (interaction) |
@@ -187,7 +187,7 @@ keyboard-shortcuts.js  Enter/Escape/Delete → finishActiveConstruction, cancelI
 
 | File | Owns |
 |---|---|
-| `rendering/renderer.js` | Draws every feature to SVG. Forces: `appendForceArrow` + `drawnForceEnd`. Loads: the arrow field. Annotations: `appendDerivedMagnitude` and the **annotation selection box** (`renderSelectionHandles`). |
+| `rendering/renderer.js` | `renderDrawing` and the public renderer object. The drawing is split by concern beside it: `entity-render.js` (per-type dispatch), `vector-render.js` (forces: `appendForceArrow`; loads: the arrow field), `symbol-render.js`, `dimension-render.js`, `annotation-render.js` (`appendDerivedMagnitude`), `analysis-render.js`, `overlay-render.js` (the **annotation selection box**, `renderSelectionHandles`), `preview-render.js`, `svg-primitives.js`. |
 | `styles/editor.css` | The Features panel grid (`.drawing-property-grid`), the sketch editor (`.sketch-editor*`), the popups (`.drawing-creation-dimension`), and the workspace columns (`grid-template-columns: 202px … 236px`). |
 | `editor/workspace/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
 
@@ -281,7 +281,7 @@ tools lower-left, elements/properties lower-right (`.sketch-editor-lower`).
 
 **No plot-area highlight.** The tinted rectangle over the plot area is gone
 for every diagram (plot and sketch); the axes and the curve say where the plot
-is. See the `const highlighted = false` in `renderer.js`.
+is. See the `const highlighted = false` in `rendering/entity-render.js`.
 
 ---
 
@@ -290,7 +290,7 @@ is. See the `const highlighted = false` in `renderer.js`.
 - **Add a new feature type**
   1. Factory in `core/model/drawing-state.js`.
   2. Panel body in `feature-panel-markup.js` (+ a `displayLabel` entry).
-  3. Renderer branch in `rendering/renderer.js`.
+  3. Renderer branch in `rendering/entity-render.js` (`appendEntity`).
   4. A tool in `tools.js` / `tool-menus.js`, and a creation path in
      `geometry-creation.js` or `statics-creation.js`.
 
@@ -322,7 +322,7 @@ is. See the `const highlighted = false` in `renderer.js`.
   2. Add a tool to a category in `tools.js → annotateToolGroups`. The tool id
      IS the kind id, and `ANNOTATE_TOOL_KINDS` is derived from the model, so
      the two cannot drift.
-  3. Draw it in `rendering/renderer.js → appendAnnotateEntity`, and give it
+  3. Draw it in `rendering/annotation-render.js → appendAnnotateEntity`, and give it
      panel rows in `feature-panel-markup.js` (the `object.type === "annotate"`
      branch).
   Interaction, selection, moving, undo and save are already handled.
@@ -430,7 +430,7 @@ Arrowheads stay configurable through Leader and Callout.
 Tool id === kind id, and `ANNOTATE_TOOL_KINDS` is derived from the model's own
 `ANNOTATE_KINDS`, so a kind cannot end up with no tool.
 
-**Rendering** is `renderer.js → appendAnnotateEntity`, one function for all
+**Rendering** is `rendering/annotation-render.js → appendAnnotateEntity`, one function for all
 eight kinds. **Hit testing** is `hit-testing.js → annotateContainsPoint` (text
 box, plus the line for a leader/arrow and the grid for a table). **Moving** is
 `drag.js` (`annotation-offset`, world-space delta from the ORIGINAL geometry,
@@ -777,7 +777,7 @@ the unit-control widths, and the fixed support's placement and hatching.
 
 ### Zoom scales TEXT, and nothing else
 
-`renderer.js → zoomedFont(base, state)` is the ONE place a font's painted size
+`rendering/svg-primitives.js → zoomedFont(base, state)` is the ONE place a font's painted size
 is decided, and **every** `font-size` the renderer emits goes through it. It
 follows `camera.zoom` by a **square root** - so text responds across the whole
 range instead of hitting a ceiling in two steps - clamped to **0.55–1.6**

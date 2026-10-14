@@ -19,7 +19,7 @@
 
 const { JSDOM } = require("jsdom");
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -363,10 +363,7 @@ console.log("\n  a fixed support is a wall at the END of the member\n");
 console.log("\n  and the RENDERER draws the hatch behind the wall\n");
 
 {
-  const source = require("fs").readFileSync(
-    modulePath("renderer.js"),
-    "utf8",
-  );
+  const source = rendererSource();
 
   check(
     "the wall line is drawn ACROSS the member, at the anchor",

@@ -19,7 +19,7 @@
 
 const fs = require("fs");
 
-const { locate } = require("./helpers/source-path.cjs");
+const { locate, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -35,7 +35,7 @@ const check = (name, ok, detail) => {
 };
 
 const rotational = fs.readFileSync(locate("rotational-arrow.js"), "utf8");
-const renderer = fs.readFileSync(locate("renderer.js"), "utf8");
+const renderer = rendererSource();
 const attachment = fs.readFileSync(locate("statics-attachment.js"), "utf8");
 
 console.log("\n  the default size was raised, modestly\n");

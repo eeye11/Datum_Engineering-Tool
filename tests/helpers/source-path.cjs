@@ -209,9 +209,36 @@ function controllerSource() {
     .join("\n");
 }
 
+/*
+ * The renderer's source, as one text.
+ *
+ * The renderer is split by concern across src/rendering/ (primitives,
+ * dimensions, annotations, analysis, vectors, symbols, the per-feature
+ * dispatch, overlays, preview, and renderer.js itself). A test that reads
+ * "the renderer" to check how something is drawn gets all of it, in the order
+ * the code was originally written, so a function is found wherever it lives.
+ */
+const RENDERER_PARTS = [
+  "svg-primitives.js",
+  "analysis-render.js",
+  "dimension-render.js",
+  "annotation-render.js",
+  "entity-render.js",
+  "vector-render.js",
+  "symbol-render.js",
+  "overlay-render.js",
+  "preview-render.js",
+  "renderer.js",
+];
+
+function rendererSource() {
+  return RENDERER_PARTS.map((name) => fs.readFileSync(modulePath(name), "utf8")).join("\n");
+}
+
 module.exports = {
   SOURCE_ROOT,
   controllerSource,
+  rendererSource,
   duplicates,
   loadModule,
   locate,

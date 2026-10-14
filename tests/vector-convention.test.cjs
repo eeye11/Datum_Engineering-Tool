@@ -638,10 +638,8 @@ console.log("\n  and so do both loads\n");
   );
 });
 
-const rendererSource = fs.readFileSync(
-  locate("renderer.js"),
-  "utf8",
-);
+/* The whole renderer, which is split by concern across src/rendering/. */
+const rendererSource = require("./helpers/source-path.cjs").rendererSource();
 
 /*
  * THE COMMENTS ARE NOT CODE, AND MUST NOT BE READ AS CODE.

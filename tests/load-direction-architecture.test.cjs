@@ -49,7 +49,7 @@ const { createHarness } = require("./harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 const loadTool = require(modulePath("load-tool.js"));
 const profile = require(modulePath("load-profile.js")).default;
@@ -531,10 +531,7 @@ console.log("\n  an unknown direction draws no arrows\n");
     `got ${profile.loadDirection({})}`,
   );
 
-  const renderer = require("fs").readFileSync(
-    modulePath("renderer.js"),
-    "utf8",
-  );
+  const renderer = rendererSource();
 
   check(
     "the renderer draws no arrows without a direction",
@@ -564,10 +561,7 @@ console.log("\n  the direction is one shared angle for every arrow\n");
     "the profile interpolates direction, which cannot be right",
   );
 
-  const renderer = require("fs").readFileSync(
-    modulePath("renderer.js"),
-    "utf8",
-  );
+  const renderer = rendererSource();
 
   check(
     "the renderer takes the direction from the feature once",

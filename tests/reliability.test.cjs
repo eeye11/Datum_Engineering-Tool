@@ -23,7 +23,7 @@
 const { JSDOM } = require("jsdom");
 const fs = require("fs");
 
-const { modulePath, locate } = require("./helpers/source-path.cjs");
+const { modulePath, locate, rendererSource } = require("./helpers/source-path.cjs");
 
 const projectRoot = require("path").join(__dirname, "..");
 
@@ -302,7 +302,7 @@ console.log("\n  caught failures are recorded\n");
 console.log("\n  one unrenderable feature does not take the drawing down\n");
 
 {
-  const source = fs.readFileSync(locate("renderer.js"), "utf8");
+  const source = rendererSource();
 
   check(
     "each feature is drawn inside its own try",

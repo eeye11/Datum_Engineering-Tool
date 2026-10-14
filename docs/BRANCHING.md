@@ -130,7 +130,7 @@ like the others.
 | Snapping and direct manipulation | `core/snapping/object-snap.js`, `editor/interaction/drag.js`, `editor/interaction/handles.js` |
 | Feature registration and tool list | `editor/toolbar/tools.js`, `editor/toolbar/toolbar-render.js` |
 | Selection and canvas interaction | `editor/interaction/selection.js`, `editor/interaction/canvas-click.js`, `editor/interaction/canvas-events.js`, `editor/interaction/pointer.js` |
-| Rendering and annotation primitives | `rendering/renderer.js`, `rendering/canvas-palette.js` |
+| Rendering and annotation primitives | `rendering/` (all of it) |
 | Undo/redo and persistence | `core/model/drawing-state.js`, `file/` |
 | Common property inputs and Features panel | `editor/panels/feature-panel*.js`, `editor/panels/property-binding.js`, `editor/panels/property-update.js` |
 | Analysis data types and interfaces | `features/analysis/` |

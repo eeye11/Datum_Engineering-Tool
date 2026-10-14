@@ -24,7 +24,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -41,7 +41,7 @@ const check = (name, ok, detail) => {
 
 const viewport = fs.readFileSync(modulePath("viewport.js"), "utf8");
 const frame = fs.readFileSync(modulePath("analysis-frame.js"), "utf8");
-const renderer = fs.readFileSync(modulePath("renderer.js"), "utf8");
+const renderer = rendererSource();
 
 console.log("\n  a point and a particle have a real size\n");
 

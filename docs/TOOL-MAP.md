@@ -19,7 +19,7 @@ editor, and each stage has one home:
 | **Creation — Statics**   | `editor/statics/statics-creation.js`, `editor/statics/statics-attachment.js`  | `createStaticsFeature`          |
 | **Creation-time sizing** | `editor/geometry/creation-sizing.js` + `features/dimensions/creation-dimensioning.js` | `beginCreationDimensioning` |
 | **Model**                | `core/model/drawing-state.js`                                 | `geometryFactories.<type>`      |
-| **Rendering**            | `rendering/renderer.js`                                       | `renderDrawing`                 |
+| **Rendering**            | `rendering/renderer.js` → `entity-render.js`                  | `renderDrawing`, `appendEntity` |
 | **Hit-testing**          | `editor/interaction/hit-testing.js`, `editor/interaction/box-selection.js`            | `objectAtPoint`, `objectIntersectsSelection` |
 | **Handles and dragging** | `editor/interaction/handles.js`, `editor/interaction/drag.js`                         | `manipulationHandles`, `beginManipulationDrag` |
 | **Features panel**       | `editor/panels/feature-panel.js` → `editor/panels/feature-panel-markup.js`, `editor/statics/statics-panel.js` | `renderProperties`, `featurePropertyMarkup` |
@@ -167,7 +167,7 @@ from their sources and cannot be edited into disagreeing with them.
 | ---------------------------------------------- | -------------------------------------------- |
 | Annotation model (text, placement, visibility) | `features/annotations/annotation-model.js`   |
 | The annotation tools                           | `editor/annotate/annotation-tool.js`                  |
-| Magnitude boxes drawn on the canvas            | `rendering/renderer.js` (`appendDerivedMagnitude`) |
+| Magnitude boxes drawn on the canvas            | `rendering/annotation-render.js` (`appendDerivedMagnitude`) |
 | Magnitude box hit-testing                      | `editor/interaction/hit-testing.js` (`pickDerivedMagnitude`) |
 | Magnitude box dragging                         | `editor/interaction/selection.js` (`beginSelectionDrag`) |
 

@@ -20,7 +20,7 @@
 
 const { JSDOM } = require("jsdom");
 
-const { modulePath } = require("./helpers/source-path.cjs");
+const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -232,10 +232,7 @@ console.log("\n  the hover preview shows the piece that will go\n");
     "utf8",
   );
 
-  const renderer = require("fs").readFileSync(
-    modulePath("renderer.js"),
-    "utf8",
-  );
+  const renderer = rendererSource();
 
   check(
     "Trim is ONE click, not boundary-then-target",

@@ -177,8 +177,26 @@ the parent (`core/geometry/body-frames.js`), so they survive a resize.
 `rendering/renderer.js` draws every feature, for every output: the canvas,
 image and SVG export (`file/document-export.js`), drawing references and
 the API's `renderSheetSvg`. There is one shared vector-arrow implementation
-for forces, loads and analysis. No other module may build SVG geometry of
-its own (`tests/render-pipeline.test.cjs` enforces this).
+for forces, loads and analysis. No module outside `rendering/` may build SVG
+geometry of its own (`tests/render-pipeline.test.cjs` enforces this).
+
+`renderer.js` keeps `renderDrawing` and the public `enggDrawingRenderer`
+object; the drawing itself is split by concern, and depends only downward:
+
+| Module                 | Draws                                                          |
+| ---------------------- | -------------------------------------------------------------- |
+| `svg-primitives.js`    | shared primitives: SVG elements, zoom-aware text and stroke, line styles |
+| `entity-render.js`     | one feature: the per-type dispatch (`appendEntity`)            |
+| `vector-render.js`     | force and load arrows, arrowheads, the moment's rotational arrow |
+| `symbol-render.js`     | supports, connections, coordinate systems, the rigid body      |
+| `dimension-render.js`  | dimensions and variable dimensions                             |
+| `annotation-render.js` | magnitude labels, the Annotate features, feature labels        |
+| `analysis-render.js`   | SFD / BMD / AFD frames, axes, ticks, plots and sketches        |
+| `overlay-render.js`    | snap markers, inference lines, selection box and handles, grid |
+| `preview-render.js`    | the live preview of the tool in use                            |
+
+A test that reads the renderer's code uses `rendererSource()` from
+`tests/helpers/source-path.cjs`, which returns all of it.
 
 ---
 
@@ -216,7 +234,7 @@ base, editor, shell — and later files win where they overlap.
    (body, support, attachable, span-shaped, …).
 2. **Measurement** — register what it can be measured as in
    `core/geometry/measurement-core.js`.
-3. **Rendering** — `rendering/renderer.js`.
+3. **Rendering** — `rendering/entity-render.js` (`appendEntity`), plus a symbol in `rendering/symbol-render.js` if it has one.
 4. **Tool** — register it in `editor/toolbar/tools.js`; creation in
    `editor/geometry/geometry-creation.js` or `editor/statics/statics-creation.js` (Statics
    placement rules in `editor/statics/statics-tools.js`); preview in
