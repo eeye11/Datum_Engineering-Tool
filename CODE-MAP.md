@@ -46,7 +46,7 @@ core/util/clone.js        deepClone, deepCloneAll
 | Creating geometry from clicks | `src/editor/geometry/geometry-creation.js` |
 | The creation-size popup (Beam length, etc.) | `src/editor/geometry/creation-sizing.js` → `src/features/dimensions/creation-dimension.js` |
 | Undo/redo and document changes | `src/core/model/drawing-state.js` (`commitDrawingChange`) |
-| How something is drawn on the canvas | `src/rendering/entity-render.js` (`appendEntity`) and its siblings in `src/rendering/` |
+| How something is drawn on the canvas | `src/rendering/entity-render.js` (`ENTITY_RENDERERS`: which function draws which type) → `src/rendering/entities/draw-*.js` |
 | What fits on screen / Fit | `src/editor/workspace/viewport.js` |
 | The bottom-bar tool message | `src/editor/toolbar/toolbar-render.js` (`setToolMessage`) |
 | **Annotate** — notes, labels, leaders, arrows, symbols, tolerances, tables | `src/features/annotations/annotate-model.js` (data) + `src/editor/annotate/annotate-creation.js` (interaction) |
@@ -187,7 +187,7 @@ keyboard-shortcuts.js  Enter/Escape/Delete → finishActiveConstruction, cancelI
 
 | File | Owns |
 |---|---|
-| `rendering/renderer.js` | `renderDrawing` and the public renderer object. The drawing is split by concern beside it: `entity-render.js` (per-type dispatch), `vector-render.js` (forces: `appendForceArrow`; loads: the arrow field), `symbol-render.js`, `dimension-render.js`, `annotation-render.js` (`appendDerivedMagnitude`), `analysis-render.js`, `overlay-render.js` (the **annotation selection box**, `renderSelectionHandles`), `preview-render.js`, `svg-primitives.js`. |
+| `rendering/renderer.js` | `renderDrawing` and the public renderer object. The drawing is split by concern beside it: `entity-render.js` (the `ENTITY_RENDERERS` table) and `entities/draw-*.js` (one draw function per feature kind), `vector-render.js` (forces: `appendForceArrow`; loads: the arrow field), `symbol-render.js`, `dimension-render.js`, `annotation-render.js` (`appendDerivedMagnitude`), `analysis-render.js`, `overlay-render.js` (the **annotation selection box**, `renderSelectionHandles`), `preview-render.js`, `svg-primitives.js`. |
 | `styles/editor.css` | Imports `styles/editor/*.css` in cascade order: the Features panel grid (`.drawing-property-grid`, `features-panel.css`), the sketch editor (`.sketch-editor*`, `analysis-editors.css`), the popups (`.drawing-creation-dimension`, `value-popups.css`), and the workspace columns (`grid-template-columns: 202px … 236px`, `side-panels.css`). |
 | `editor/workspace/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
 
@@ -281,7 +281,7 @@ tools lower-left, elements/properties lower-right (`.sketch-editor-lower`).
 
 **No plot-area highlight.** The tinted rectangle over the plot area is gone
 for every diagram (plot and sketch); the axes and the curve say where the plot
-is. See the `const highlighted = false` in `rendering/entity-render.js`.
+is. See the `const highlighted = false` in `rendering/entities/draw-members.js`.
 
 ---
 
@@ -290,7 +290,7 @@ is. See the `const highlighted = false` in `rendering/entity-render.js`.
 - **Add a new feature type**
   1. Factory in `core/model/drawing-state.js`.
   2. Panel body in `feature-panel-markup.js` (+ a `displayLabel` entry).
-  3. Renderer branch in `rendering/entity-render.js` (`appendEntity`).
+  3. A draw function in `rendering/entities/` and its entry in `ENTITY_RENDERERS` (`rendering/entity-render.js`).
   4. A tool in `tools.js` / `tool-menus.js`, and a creation path in
      `geometry-creation.js` or `statics-creation.js`.
 

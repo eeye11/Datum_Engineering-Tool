@@ -186,7 +186,8 @@ object; the drawing itself is split by concern, and depends only downward:
 | Module                 | Draws                                                          |
 | ---------------------- | -------------------------------------------------------------- |
 | `svg-primitives.js`    | shared primitives: SVG elements, zoom-aware text and stroke, line styles |
-| `entity-render.js`     | one feature: the per-type dispatch (`appendEntity`)            |
+| `entity-render.js`     | one feature: `appendEntity` walks the `ENTITY_RENDERERS` table  |
+| `entities/draw-*.js`   | the per-type draw functions that table names                   |
 | `vector-render.js`     | force and load arrows, arrowheads, the moment's rotational arrow |
 | `symbol-render.js`     | supports, connections, coordinate systems, the rigid body      |
 | `dimension-render.js`  | dimensions and variable dimensions                             |
@@ -241,7 +242,9 @@ the expanded text with `stylesheetSource("editor.css")`.
    (body, support, attachable, span-shaped, …).
 2. **Measurement** — register what it can be measured as in
    `core/geometry/measurement-core.js`.
-3. **Rendering** — `rendering/entity-render.js` (`appendEntity`), plus a symbol in `rendering/symbol-render.js` if it has one.
+3. **Rendering** — a `draw…(context)` function in `rendering/entities/`, and
+   an entry `{ matches, draw }` in `ENTITY_RENDERERS` (`rendering/entity-render.js`);
+   a symbol goes in `rendering/symbol-render.js` if it has one.
 4. **Tool** — register it in `editor/toolbar/tools.js`; creation in
    `editor/geometry/geometry-creation.js` or `editor/statics/statics-creation.js` (Statics
    placement rules in `editor/statics/statics-tools.js`); preview in
