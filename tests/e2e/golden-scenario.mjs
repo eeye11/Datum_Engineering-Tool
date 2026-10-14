@@ -22,20 +22,19 @@ const only = process.argv[4] ? new RegExp(process.argv[4]) : null;
 
 /* Every tool, by category, with the submenu item to pick (if any). */
 const TOOLS = [
-    ["GEOMETRY", "point"], ["GEOMETRY", "line"], ["GEOMETRY", "triangle"],
-    ["GEOMETRY", "rectangle"], ["GEOMETRY", "circle"],
+    ["GEOMETRY", "point"], ["GEOMETRY", "line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["GEOMETRY", "triangle"],
+    ["GEOMETRY", "rectangle", null, null, ["d:0.3,0.55,0.6,0.35"]], ["GEOMETRY", "circle", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["GEOMETRY", "arc", "3-Point Arc"], ["GEOMETRY", "arc", "Centrepoint Arc"],
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
-    ["ANNOTATE", "dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
+    ["ANNOTATE", "variable-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
     ["ANNOTATE", "smart-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
-    ["ANNOTATE", "annotation", null, "line"], ["ANNOTATE", "note-text"],
-    ["ANNOTATE", "leader"], ["ANNOTATE", "arrow"], ["ANNOTATE", "callout"],
-    ["ANNOTATE", "symbol"], ["ANNOTATE", "tolerance"], ["ANNOTATE", "table"],
-    ["ANNOTATE", "reference"],
-    ["STATICS", "body", "particle"], ["STATICS", "body", "rigid-body"],
-    ["STATICS", "body", "beam"], ["STATICS", "body", "truss"],
-    ["STATICS", "body", "cable"], ["STATICS", "body", "shaft"],
+    ["ANNOTATE", "note"], ["ANNOTATE", "label", null, "line"],
+    ["ANNOTATE", "leader"], ["ANNOTATE", "callout"],
+    ["ANNOTATE", "symbol"], ["ANNOTATE", "table"],
+    ["STATICS", "body", "particle"], ["STATICS", "body", "rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
+    ["STATICS", "body", "beam", null, ["d:0.25,0.6,0.7,0.6"]], ["STATICS", "body", "truss"],
+    ["STATICS", "body", "cable", null, ["d:0.25,0.6,0.7,0.6"]], ["STATICS", "body", "shaft", null, ["d:0.25,0.6,0.7,0.6"]],
     ["STATICS", "point-force", null, "beam"],
     /* body -> start -> end -> magnitude (typed into the panel) -> direction */
     ["STATICS", "load", "distributed-load", "beam", ["c:0.45,0.6", "c:0.3,0.6", "c:0.6,0.6", "type:25", "Enter", "c:0.45,0.4"]],
@@ -57,7 +56,7 @@ const TOOLS = [
     ["STATICS", "bending-moment-diagram", "sketch", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
-    ["STATICS", "reference-line"], ["STATICS", "reference-arc", "3-Point Arc"],
+    ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc", "3-Point Arc"],
     ["DYNAMICS", "velocity"], ["FLUIDS", "pipe"], ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
@@ -122,12 +121,30 @@ async function main() {
         await page.mouse.click(pt.x, pt.y);
         await sleep(settle);
     };
+    /* Press-drag-release: how Line, Beam and the other path tools create. */
+    const drag = async (a, b) => {
+        await page.mouse.move(a.x, a.y);
+        await page.mouse.down();
+        await page.mouse.move(b.x, b.y, { steps: 10 });
+        await sleep(80);
+        await page.mouse.up();
+        await sleep(200);
+    };
     /* Accept a creation popup (length/radius) or any modal by pressing Enter. */
     const VALUES = { width: "60", height: "40", length: "80", radius: "30", angle: "30", magnitude: "100", sides: "5" };
     const acceptPopups = async () => {
         for (let round = 0; round < 6; round++) {
             const popup = await page.evaluate(() => {
                 const shown = el => el && getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
+                /* The Annotate pickers: answer them deterministically. */
+                const symbol = [...document.querySelectorAll(".datum-symbol-picker")].find(shown);
+                if (symbol) { symbol.querySelector("[data-symbol-id]")?.click(); return { kind: "picked" }; }
+                const table = [...document.querySelectorAll(".datum-table-picker")].find(shown);
+                if (table) {
+                    const cell = table.querySelector('[data-row="1"][data-col="1"]') || table.querySelector("[data-row]");
+                    cell?.click();
+                    return { kind: "picked" };
+                }
                 const sizing = [...document.querySelectorAll(".drawing-creation-dimension")].find(shown);
                 if (sizing) {
                     const input = sizing.querySelector("[data-creation-input]");
@@ -138,6 +155,7 @@ async function main() {
             });
             if (!popup) return;
             debug("popup", JSON.stringify(popup));
+            if (popup.kind === "picked") { await sleep(150); continue; }
             if (popup.kind === "sizing" && popup.empty) {
                 const key = Object.keys(VALUES).find(k => popup.label.includes(k));
                 await page.keyboard.type(VALUES[key] || "50");
@@ -150,6 +168,20 @@ async function main() {
         debug("tool", category, toolId, sub || "");
         await page.click(`.drawing-category[data-category="${category}"]`);
         await sleep(80);
+        /*
+         * Statics groups (Bodies, Loads, Supports…) toggle an inline section of
+         * ordinary tool buttons; open it only if it is closed, then pick the child.
+         */
+        const section = page.locator(`#statics-${toolId}-tools`);
+        if (sub && await section.count() && await section.locator(`[data-tool-id="${sub}"]`).count()) {
+            if (await section.evaluate(el => el.hidden)) {
+                await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
+                await sleep(120);
+            }
+            await section.locator(`.drawing-tool[data-tool-id="${sub}"]`).first().click();
+            await sleep(150);
+            return;
+        }
         await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
         await sleep(120);
         if (sub) {
@@ -175,8 +207,7 @@ async function main() {
     };
     const seedBeam = async () => {
         await chooseTool("STATICS", "body", "beam");
-        await click(BEAM[0]); await acceptPopups();
-        await click(BEAM[1]); await acceptPopups();
+        await drag(BEAM[0], BEAM[1]); await acceptPopups();
         await escape();
     };
     const seedForces = async () => {
@@ -188,8 +219,7 @@ async function main() {
     };
     const seedLine = async () => {
         await chooseTool("GEOMETRY", "line");
-        await click(BEAM[0]); await acceptPopups();
-        await click(BEAM[1]); await acceptPopups();
+        await drag(BEAM[0], BEAM[1]); await acceptPopups();
         await escape();
     };
 
@@ -197,7 +227,17 @@ async function main() {
         const svg = document.querySelector(".drawing-canvas");
         const state = window.enggDrawing.state;
         return {
-            objects: JSON.parse(JSON.stringify(state.objects)),
+            objects: (() => {
+                try { return JSON.parse(JSON.stringify(state.objects)); }
+                catch (e) {
+                    /* Record a circular model rather than abort the whole run. */
+                    const seen = new WeakSet();
+                    return JSON.parse(JSON.stringify(state.objects, (k, v) => {
+                        if (v && typeof v === "object") { if (seen.has(v)) return "[circular]"; seen.add(v); }
+                        return v;
+                    }));
+                }
+            })(),
             selection: [...state.selection.selectedObjectIds],
             svg: svg ? svg.innerHTML : "",
             message: document.getElementById("drawingToolMessage")?.textContent.trim() || "",
@@ -231,6 +271,9 @@ async function main() {
         for (const action of actions || SPOTS) {
             if (typeof action === "string" && action.startsWith("type:")) {
                 await page.keyboard.type(action.slice(5)); await sleep(100);
+            } else if (typeof action === "string" && action.startsWith("d:")) {
+                const [x1, y1, x2, y2] = action.slice(2).split(",").map(Number);
+                await drag(P(x1, y1), P(x2, y2));
             } else if (typeof action === "string" && !action.startsWith("c:")) {
                 await page.keyboard.press(action); await sleep(150);
             } else {
@@ -259,8 +302,12 @@ async function main() {
      * tools, delete-with-dependents, clipboard, fit and zoom. Each flow
      * records the document after it ran.
      */
+    /* The Modify tools and Fit live in the menu bar (Tools / View). */
+    const MENU_OF = { move: "tools", rotate: "tools", mirror: "tools", fit: "view" };
     const globalTool = async id => {
-        await page.click(`[data-global-tool="${id}"]`);
+        await page.click(`.datum-menu-label[data-menu-id="${MENU_OF[id]}"]`);
+        await sleep(120);
+        await page.click(`.datum-menu-item[data-menu-item="${id}"]`);
         await sleep(150);
     };
     const selectFirst = type => page.evaluate(t => {
@@ -350,12 +397,16 @@ async function main() {
     await page.click("text=Written Solution");
     await sleep(200);
     results["solution/render"] = await page.evaluate(async () => {
-        const code = document.getElementById("writingCode");
         const sheets = window.enggDrawingSheets.all();
-        code.value = `Equilibrium of the beam\n\n[DRAWING_REFERENCE:${sheets[1].id}]\n\nThen $F = ma$.`;
-        try { window.enggWrittenReferences.render(); } catch (e) { return { thrown: String(e.message) }; }
+        try {
+            window.datum.setSolution(`Equilibrium of the beam
+
+[DRAWING_REFERENCE:${sheets[1].id}]
+
+Then $F = ma$.`);
+        } catch (e) { return { thrown: String(e.message) }; }
         await new Promise(r => setTimeout(r, 400));
-        const out = document.getElementById("writingOutput");
+        const out = document.getElementById("solutionPreview");
         return { html: out ? out.innerHTML.replace(/\s+/g, " ").slice(0, 20000) : null };
     });
     results["solution/render"].errors = [...errors];
