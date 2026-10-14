@@ -13,6 +13,9 @@ import { drawDimension, drawVariableDimension, drawAnnotate, drawAnnotation } fr
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
+import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
+import { isSaturationCurve } from "../features/thermodynamics/saturation-curve.js";
+import { isPistonCylinder } from "../features/thermodynamics/piston-cylinder.js";
 
 
     /*
@@ -45,7 +48,15 @@ import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
         { matches: entity => entity.type === "line", draw: drawLine },
         { matches: entity => entity.type === "circle", draw: drawCircle },
         { matches: entity => entity.type === "particle", draw: drawParticle },
-        { matches: entity => entity.type === "rectangle" || entity.type === "rigid-body", draw: drawRectangleOutline },
+        /*
+         * THERMODYNAMICS. A process path's states are an overlay, appended last;
+         * a saturation curve and a piston-cylinder are rectangles in storage, so
+         * they are drawn here and the plain rectangle outline below skips them.
+         */
+        { matches: entity => entity.metadata?.thermodynamicsKind === "process-path", draw: drawProcessOverlay },
+        { matches: entity => isSaturationCurve(entity), draw: drawSaturationCurve },
+        { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
+        { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isSaturationCurve(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },
@@ -125,6 +136,7 @@ import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
          * clicking it selects the force, which is what clicking a force
          * should do.
          */
+        if (context.overlay) svg.appendChild(context.overlay);
         if (svg.childNodes.length) {
             parentSvg.appendChild(svg);
         }

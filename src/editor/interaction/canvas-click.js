@@ -17,6 +17,7 @@ import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
 import { resolvePointerEvent } from "./pointer.js";
@@ -106,6 +107,11 @@ export function handleCanvasClick(
         resolvePointerEvent(
             event
         );
+
+    if (isProcessPlotTool(drawingState.activeTool)) {
+        addProcessPoint(resolution.rawPointerPoint);
+        return;
+    }
 
     if (
         drawingState.activeTool ===
@@ -407,6 +413,9 @@ export function handleCanvasClick(
             event
         )
     ) {
+        if (drawingState.activeTool !== "select") {
+            activateTool("select");
+        }
         selectFromCanvasClick(
             event
         );

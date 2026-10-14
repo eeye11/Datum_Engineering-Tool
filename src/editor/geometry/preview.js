@@ -10,6 +10,7 @@ import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
@@ -555,8 +556,10 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        drawingState.activeTool ===
-        "rectangle"
+        drawingState.activeTool === "rectangle" ||
+        drawingState.activeTool === "control-volume" ||
+        drawingState.activeTool === "saturation-curve" ||
+        ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         interaction.preview =
             createPreview(
@@ -567,12 +570,16 @@ export function updatePreview(
                 )
             );
 
+        if (drawingState.activeTool === "saturation-curve") {
+            interaction.preview.metadata = { thermodynamicsKind: "saturation-curve" };
+        }
+
         setToolMessage(
             "Specify opposite corner"
         );
     } else if (
-        drawingState.activeTool ===
-        "polyline"
+        drawingState.activeTool === "polyline" ||
+        isProcessPlotTool(drawingState.activeTool)
     ) {
         interaction.preview =
             createPreview(
@@ -584,6 +591,16 @@ export function updatePreview(
                     ]
                 }
             );
+
+        if (drawingState.activeTool === "process-path") {
+            interaction.preview.metadata = { thermodynamicsKind: "process-path", stateCount: interaction.points.length };
+            interaction.preview.style.stroke = "#dc2626";
+        }
+        if (drawingState.activeTool === "constant-temp-pressure-lines") {
+            interaction.preview.style.stroke = "#808080";
+            interaction.preview.style.lineType = "dashed";
+            interaction.preview.metadata = { thermodynamicsKind: "constant-temp-pressure-lines" };
+        }
 
         setToolMessage(
             "Click next point or double-click to finish"

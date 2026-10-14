@@ -2,6 +2,11 @@ const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-
 const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
 
 export const toolIcons = {
+    "Const Temp/Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17L7 11H12C14 11 16 7 18 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "Process Diagrams": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 14C7 8 8 5 10 5S14 11 17 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Const. Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15L8 10h5l4-7M3 18l5-5h5l4-6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Const. Temp Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
 	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
@@ -216,7 +221,8 @@ export const toolIcons = {
 	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/>`),
 	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
 	"Control Volume": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10" stroke-dasharray="2 2"/><path ${iconStroke} d="M2 10h2M16 10h2"/>`),
-	"System Boundary": drawingIcon(`<rect ${iconStroke} x="4" y="4" width="12" height="12" stroke-dasharray="3 2"/>`),
+	"Piston Cylinder": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 10h12M4 12h12M10 10V3"/>`),
+	"Piston Cylinder With Stoppers": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 11h12M4 13h12M10 11V3"/><path ${iconStroke} d="M4 6h3v2H4M16 6h-3v2h3"/>`),
 	"State Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Process Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-7 5 4 8-2s4-3 6-6"/><path ${iconStroke} d="M14 6h3v3"/>`),
 	"Heat Transfer": drawingIcon(`<path ${iconStroke} d="M4 5c5 2 7 8 12 10M4 10c5 2 7 3 12 5"/>`),
@@ -594,7 +600,7 @@ export const engineeringTools = {
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	FLUIDS: ["Pipe", "Reservoir", "Valve", "Pump", "Flow Arrow", "Pressure"],
-	THERMODYNAMICS: ["Control Volume", "System Boundary", "State Point", "Process Path", "Heat Transfer", "Work"],
+	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],

@@ -12,6 +12,8 @@ import enggAnnotationModel from "../../features/annotations/annotation-model.js"
 import enggAnnotate from "../../features/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../core/geometry/points.js";
+import { isSaturationCurve, saturationPaths } from "../../features/thermodynamics/saturation-curve.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
 
 /*
  * THE POINT PRIMITIVES ARE RE-EXPORTED, NOT RE-DEFINED.
@@ -854,6 +856,30 @@ export function objectAtPoint(
                         ) <=
                         tolerance
                     );
+                }
+
+                if (isPistonCylinder(object)) {
+                    const level = pistonFraction(geometry);
+                    const local = (x, y) => cylinderPoint(geometry, x, y);
+                    const segments = [
+                        [local(0, 1), local(0, 0)],
+                        [local(0, 0), local(1, 0)],
+                        [local(1, 0), local(1, 1)],
+                        [local(0, level), local(1, level)],
+                        [local(0, level - 0.04), local(1, level - 0.04)],
+                        [local(0.5, level), local(0.5, 1)]
+                    ];
+                    for (const path of stopperPaths(geometry)) {
+                        for (let index = 1; index < path.length; index++) {
+                            segments.push([local(...path[index - 1]), local(...path[index])]);
+                        }
+                    }
+                    return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
+                }
+
+                if (isSaturationCurve(object)) {
+                    return saturationPaths(geometry).some(path => path.some((start, index) =>
+                        index > 0 && distanceToSegment(point, path[index - 1], start) <= tolerance));
                 }
 
                 if (

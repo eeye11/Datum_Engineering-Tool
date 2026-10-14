@@ -11,6 +11,8 @@ import { axisLabelPositions } from "../core/geometry/axis-labels.js";
 import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import { createSvgElement, paintColour } from "./svg-primitives.js";
+import { selectionBounds, selectionCorners } from "../core/selection/selection-transform.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
 
 
     /*
@@ -635,6 +637,32 @@ import { createSvgElement, paintColour } from "./svg-primitives.js";
             }));
         };
 
+        const frame = selectionBounds(state.objects, [...selected]);
+        if (frame) {
+            const first = toScreen({ x: frame.minX, y: frame.maxY });
+            const last = toScreen({ x: frame.maxX, y: frame.minY });
+            svg.appendChild(createSvgElement("rect", {
+                x: first.x - 8, y: first.y - 8,
+                width: Math.max(16, last.x - first.x + 16), height: Math.max(16, last.y - first.y + 16),
+                fill: "none", stroke: "#3b82f6", "stroke-width": 1,
+                "stroke-dasharray": "4 3", "pointer-events": "none"
+            }));
+            if (selected.size > 1) {
+                selectionCorners(frame).forEach(point => add(point, "group-resize"));
+                // Keep the cylinder's internal controls available even when
+                // its surrounding control volume is selected with it.
+                state.objects.filter(object => selected.has(object.id) && isPistonCylinder(object))
+                    .forEach(object => {
+                        const g = object.geometry;
+                        add(cylinderPoint(g, 0.5, pistonFraction(g)), "piston-height");
+                        if (g.hasStoppers) {
+                            [0.09, 0.91].forEach(x => add(cylinderPoint(g, x, stopperFraction(g)), "stopper-height"));
+                        }
+                    });
+                return;
+            }
+        }
+
         /*
          * THE SELECTED ANNOTATION'S BOX.
          *
@@ -824,6 +852,12 @@ import { createSvgElement, paintColour } from "./svg-primitives.js";
                 enggFeatureGeometry
                     .rectangleCorners(geometry)
                     .forEach((point) => add(point));
+                if (isPistonCylinder(object)) {
+                    add(cylinderPoint(geometry, 0.5, pistonFraction(geometry)), "piston-height");
+                    if (geometry.hasStoppers) {
+                        [0.09, 0.91].forEach(x => add(cylinderPoint(geometry, x, stopperFraction(geometry)), "stopper-height"));
+                    }
+                }
             } else if (object.type === "rigid-body") {
                 /*
                  * A rigid body's handles follow its current shape,

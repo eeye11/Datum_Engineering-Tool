@@ -103,6 +103,10 @@ import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-
 const DRAG_GEOMETRY_TOOLS = [
     "line",
     "rectangle",
+    "control-volume",
+    "saturation-curve",
+    "piston-cylinder",
+    "piston-cylinder-stoppers",
     "circle",
     "triangle",
     "polygon",

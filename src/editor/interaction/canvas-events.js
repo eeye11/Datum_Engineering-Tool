@@ -5,6 +5,8 @@
 import enggDrawingState from "../../core/model/drawing-state.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
 import { isIdleForEditing } from "../annotate/annotation-tool.js";
+import { finishProcessPath, isProcessPlotTool } from "../thermodynamics/process-path.js";
+import { installAxisLabelEditor } from "../thermodynamics/axis-label-editor.js";
 import { beginCreationDrag, finishCreationDrag, moveCreationDrag } from "./creation-drag.js";
 import { handleCanvasClick, openNoteEditorFor, openTableCellEditorFor, syncSelectionInteraction } from "./canvas-click.js";
 import { isEditableAnnotate } from "../annotate/annotate-creation.js";
@@ -32,6 +34,7 @@ export function installCanvasEvents() {
     if (
         drawingCanvas
     ) {
+        installAxisLabelEditor();
         drawingCanvas.addEventListener(
             "mousemove",
             updateDrawingCoordinates
@@ -237,6 +240,11 @@ export function installCanvasEvents() {
                     event.preventDefault();
 
                     finishPolyline();
+                    return;
+                }
+                if (isProcessPlotTool(drawingState.activeTool)) {
+                    event.preventDefault();
+                    finishProcessPath();
                     return;
                 }
 

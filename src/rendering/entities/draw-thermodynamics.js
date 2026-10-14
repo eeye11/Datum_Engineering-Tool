@@ -1,0 +1,101 @@
+/*
+ * Drawing one feature: the thermodynamics features - a process path's
+ * numbered states and direction arrows, the saturation curve (dome) with its
+ * axis labels, and the piston-cylinder with its piston, rod and stoppers.
+ *
+ * Each function draws one kind of feature into its group, from the context
+ * appendEntity (entity-render.js) builds. It returns true when the feature
+ * is finished, so no later renderer in the table runs for it.
+ */
+import enggTheme from "../../editor/workspace/theme.js";
+import { applyStyle, createSvgElement, paintColour } from "../svg-primitives.js";
+import { processLabelPoint } from "../../features/thermodynamics/process-labels.js";
+import { saturationPaths } from "../../features/thermodynamics/saturation-curve.js";
+import { cylinderPoint, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
+
+    /*
+     * A PROCESS PATH'S STATES AND DIRECTION.
+     *
+     * The numbered state markers and the arrow on each segment are an OVERLAY:
+     * built here, but appended last (appendEntity adds `context.overlay` after
+     * every other renderer), so they sit on top of the path itself.
+     */
+    export function drawProcessOverlay(context) {
+        const { entity, geometry, style, toScreen, scale } = context;
+        const processOverlay = createSvgElement("g");
+        const points = (geometry.points || []).map(toScreen);
+        const colour = paintColour(style.stroke || "#dc2626");
+        points.forEach((point, index) => {
+            if (index >= (entity.metadata.stateCount ?? points.length)) return;
+            const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
+            processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
+            processOverlay.appendChild(createSvgElement("circle", {
+                cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
+            }));
+            const label = createSvgElement("text", {
+                x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
+                "text-anchor": "middle", "dominant-baseline": "central"
+            });
+            label.textContent = String(index + 1);
+            processOverlay.appendChild(label);
+            if (!index) return;
+            const previous = points[index - 1];
+            const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+            if (length < 12) return;
+            const ux = (point.x - previous.x) / length;
+            const uy = (point.y - previous.y) / length;
+            const mx = (point.x + previous.x) / 2;
+            const my = (point.y + previous.y) / 2;
+            processOverlay.appendChild(createSvgElement("polygon", {
+                points: `${mx + ux * 4},${my + uy * 4} ${mx - ux * 4 - uy * 3},${my - uy * 4 + ux * 3} ${mx - ux * 4 + uy * 3},${my - uy * 4 - ux * 3}`,
+                fill: colour, stroke: "none"
+            }));
+        });
+        context.overlay = processOverlay;
+    }
+
+    export function drawSaturationCurve({ svg, entity, geometry, style, toScreen }) {
+        for (const [index, points] of saturationPaths(geometry).entries()) {
+            const screen = points.map(toScreen);
+            const path = createSvgElement("path", {
+                d: screen.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+            });
+            applyStyle(path, { ...style, fill: "none" });
+            if (index === 1 || index === 2) {
+                path.setAttribute("fill", paintColour(style.stroke || enggTheme.defaultLineColour()));
+                path.setAttribute("stroke", "none");
+            }
+            svg.appendChild(path);
+        }
+        for (const [key, x, y] of [["yLabel", 0.04, 0.94], ["xLabel", 0.98, 0.02]]) {
+            const label = geometry[key] || "insert axis label";
+            const point = toScreen(cylinderPoint(geometry, x, y));
+            const text = createSvgElement("text", {
+                x: point.x, y: point.y, fill: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                "font-size": 12, "text-anchor": "end", "font-family": "sans-serif",
+                "data-saturation-axis": key, "data-axis-feature-id": entity.id,
+                cursor: "text"
+            });
+            text.textContent = label;
+            svg.appendChild(text);
+        }
+    }
+
+    export function drawPistonCylinder({ svg, geometry, style, toScreen }) {
+        const level = pistonFraction(geometry);
+        const thickness = Math.min(0.04, level / 2);
+        const paths = [
+            [[0, 1], [0, 0], [1, 0], [1, 1]],
+            [[0, level], [1, level], [1, level - thickness], [0, level - thickness], [0, level]],
+            [[0.5, level], [0.5, 1]],
+            ...stopperPaths(geometry)
+        ];
+        for (const points of paths) {
+            const screenPoints = points.map(([x, y]) => toScreen(cylinderPoint(geometry, x, y)));
+            const path = createSvgElement("path", {
+                d: screenPoints.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+            });
+            applyStyle(path, { ...style, fill: "none" });
+            svg.appendChild(path);
+        }
+    }

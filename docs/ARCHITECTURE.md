@@ -60,8 +60,8 @@ The editor was one 39,000-line file; it is now one module per concern.
 **`editor/index.js` opens with a table of contents of every module**, in
 reading order — start there.
 
-The modules are grouped by what they do. The three engineering folders
-(`geometry/`, `annotate/`, `statics/`) match the `category/*` branches, so
+The modules are grouped by what they do. The engineering folders
+(`geometry/`, `annotate/`, `statics/`, `thermodynamics/`) match the `category/*` branches, so
 a category's tool work mostly stays inside its own folder:
 
 ```
@@ -76,7 +76,8 @@ editor/
 ├── commands/      document (new/open/save/export), clipboard, delete, modify, draw order
 ├── geometry/      GEOMETRY tools: creation, sizing, preview, transforms, triangle
 ├── annotate/      ANNOTATE tools: annotate creation, dimensions and their placement
-└── statics/       STATICS tools: bodies, loads, supports, attachment, analysis, truss
+├── statics/       STATICS tools: bodies, loads, supports, attachment, analysis, truss
+└── thermodynamics/ THERMODYNAMICS tools: process paths, the saturation-axis label editor
 ```
 
 ### Shared state

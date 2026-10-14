@@ -200,7 +200,8 @@ tests are green — check the actual DOM, not just the selector you expect.
 ## 8. Source-code ownership per category
 
 The categories that have real tools have a folder of their own in the
-editor - `editor/geometry/`, `editor/annotate/`, `editor/statics/` - so most
+editor - `editor/geometry/`, `editor/annotate/`, `editor/statics/`,
+`editor/thermodynamics/` - so most
 of a category's work stays inside it. Every category's tools are still
 registered in `editor/toolbar/tools.js` and travel the shared pipeline in
 `docs/TOOL-MAP.md`. A new category (Dynamics, Fluids, …) should follow the
@@ -217,7 +218,7 @@ not exclusive ownership.
 | STATICS | `category/statics` | Bodies, Point Force, Loads, Moment, Supports, Connections; Resultant, Force Components, SFD, BMD, AFD; Coordinate System, Reference Point/Line/Arc | `editor/statics/statics-creation.js`, `editor/statics/statics-attachment.js`, `editor/statics/statics-tools.js`, `editor/statics/statics-panel.js`, `editor/statics/analysis-tools.js`, `features/analysis/` |
 | DYNAMICS | `category/dynamics` | Particle, Rigid Body, Velocity, Acceleration, Rotation, Motion Path | `editor/toolbar/tools.js` (registration), shared creation path |
 | FLUIDS | `category/fluids` | Pipe, Reservoir, Valve, Pump, Flow Arrow, Pressure | `editor/toolbar/tools.js` (registration), shared creation path |
-| THERMODYNAMICS | `category/thermodynamics` | Control Volume, System Boundary, State Point, Process Path, Heat Transfer, Work | `editor/toolbar/tools.js` (registration), shared creation path |
+| THERMODYNAMICS | `category/thermodynamics` | Control Volume, Piston Cylinder (with/without stoppers), Process Diagrams (Saturation Curve, Process Path, Const Temp/Pressure Lines), State Point, Heat Transfer, Work | `editor/thermodynamics/`, `features/thermodynamics/`, `rendering/entities/draw-thermodynamics.js`, `core/selection/selection-transform.js` (group move/resize) |
 | HEAT TRANSFER | `category/heat-transfer` | Wall, Layer, Heat Flux, Temperature, Convection, Radiation | `editor/toolbar/tools.js` (registration), shared creation path |
 | SOLID MECHANICS | `category/solid-mechanics` | Beam, Shaft, Load, Stress, Strain, Boundary Condition | `editor/toolbar/tools.js` (registration), shared creation path |
 | MECHANICAL DESIGN | `category/mechanical-design` | Part, Hole, Shaft, Gear, Fastener, Section View | `editor/toolbar/tools.js` (registration), shared creation path |
