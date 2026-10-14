@@ -1,0 +1,728 @@
+/*
+ * The Plot editor and the Sketch editor for SFD, BMD and AFD diagrams.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/* ==========================================================================
+   THE PLOT EDITOR
+
+   A LARGE two-pane surface, because the mathematics does not fit in a
+   properties panel: the left pane is a scrolling list of expression cards
+   and the right pane is the live graph they produce.
+
+   The two are the same width of attention for a reason - the curve is the
+   feedback for the equation beside it, and a student checking a jump needs
+   both at once. Stacking them would mean scrolling past the equation to
+   see what it did.
+   ========================================================================== */
+
+.drawing-plot-editor {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(255, 255, 255, 0.9);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: var(--datum-ink);
+}
+
+.plot-editor {
+    display: flex;
+    flex-direction: column;
+
+    width: 960px;
+    max-width: calc(100vw - 48px);
+    height: 620px;
+    max-height: calc(100vh - 48px);
+
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.plot-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--datum-border);
+}
+
+.plot-editor-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--datum-green);
+}
+
+.plot-editor-close {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--datum-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.plot-editor-close:hover {
+    color: var(--datum-ink);
+}
+
+.plot-editor-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+.plot-editor-left,
+.plot-editor-right {
+    display: flex;
+    flex-direction: column;
+
+    padding: 12px 14px;
+    min-height: 0;
+}
+
+.plot-editor-left {
+    width: 380px;
+    flex: 0 0 380px;
+    border-right: 1px solid var(--datum-border);
+}
+
+.plot-editor-right {
+    flex: 1;
+}
+
+.plot-editor-section {
+    margin-bottom: 10px;
+
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--datum-ink);
+}
+
+/* ==========================================================================
+   THE EXPRESSION CARDS
+
+   A card is one mathematical expression. The NUMBER is its position and is
+   generated when the list is rendered - it is not an identity - and the
+   TYPE is a word, so nothing about relationType or an enum ever reaches the
+   student.
+   ========================================================================== */
+
+.plot-editor-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+
+    margin-bottom: 10px;
+}
+
+.plot-editor-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+
+    padding: 10px;
+    margin-bottom: 8px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-rail);
+}
+
+.plot-editor-card-number {
+    min-width: 20px;
+
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--datum-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.plot-editor-card-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.plot-editor-card-type {
+    margin-bottom: 6px;
+
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--datum-subtle);
+}
+
+.plot-editor-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    margin-bottom: 6px;
+}
+
+.plot-editor-row:last-child {
+    margin-bottom: 0;
+}
+
+.plot-editor-label {
+    min-width: 46px;
+
+    font-size: 12px;
+    color: var(--datum-ink);
+    white-space: nowrap;
+}
+
+.plot-editor-arrow {
+    color: var(--datum-muted);
+    font-size: 12px;
+}
+
+.plot-editor-input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+
+    padding: 5px 7px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-input);
+    color: var(--datum-ink);
+
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+}
+
+.plot-editor-input-short {
+    flex: 0 0 90px;
+}
+
+.plot-editor-input:focus {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -1px;
+}
+
+/*
+   THE PROBLEM IS ON THE CARD THAT HAS IT.
+
+   Not a list at the foot of the dialog the student has to match up by hand
+   against the thing they are editing. It appears only when there is one,
+   and it is removed the moment the expression is right again.
+ */
+.plot-editor-card-problem {
+    margin-top: 6px;
+
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--datum-error);
+}
+
+.plot-editor-delete {
+    padding: 0 6px;
+    border: 1px solid var(--datum-error-tint);
+    border-radius: 3px;
+    background: var(--datum-surface);
+    color: var(--datum-error);
+
+    font-size: 14px;
+    line-height: 1.4;
+    cursor: pointer;
+}
+
+.plot-editor-delete:hover {
+    background: var(--datum-error-tint);
+}
+
+.plot-editor-add {
+    padding: 7px 10px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+    color: var(--datum-green);
+
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.plot-editor-add:hover {
+    background: var(--datum-green-wash);
+}
+
+/*
+   THE CHOICE OF WHAT KIND OF EXPRESSION.
+
+   Asked once, in words, at the moment the expression is added - rather than
+   creating an empty From/To/f(x) row and waiting for a validation message
+   to say what was built. A vertical line is not a function of x and asking
+   for it as one is what forced the old blank-fields-then-check approach.
+ */
+.plot-editor-choose {
+    margin-top: 10px;
+    padding: 10px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+}
+
+.plot-editor-choose[hidden] {
+    display: none;
+}
+
+.plot-editor-choose-title {
+    margin-bottom: 8px;
+
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--datum-ink);
+}
+
+.plot-editor-choose-option {
+    display: block;
+    width: 100%;
+
+    padding: 7px 10px;
+    margin-bottom: 6px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.plot-editor-choose-option:last-child {
+    margin-bottom: 0;
+}
+
+.plot-editor-choose-option:hover {
+    border-color: var(--datum-green);
+    background: var(--datum-green-wash);
+    color: var(--datum-green);
+}
+
+/* ==========================================================================
+   THE LIVE GRAPH
+
+   Drawn from the same marks the sheet uses, so it is a view of the
+   diagram rather than a picture of one. The axis runs the body's own span,
+   which is why the two ends are labelled rather than the ordinate: the
+   horizontal scale is the one the student chose the expressions against.
+   ========================================================================== */
+
+.plot-editor-graph {
+    flex: 1;
+    min-height: 0;
+
+    width: 100%;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+}
+
+.plot-editor-graph-axis {
+    stroke: var(--datum-muted);
+    stroke-width: 1;
+}
+
+.plot-editor-graph-curve {
+    fill: none;
+    stroke: var(--datum-green);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.plot-editor-graph-label {
+    fill: var(--datum-subtle);
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+}
+
+.plot-editor-graph-empty {
+    fill: var(--datum-subtle);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+}
+
+/* ==========================================================================
+   THE SKETCH EDITOR
+   The twin of the plot editor, and deliberately the same shape and the same
+   size: a student switching between the two modes of one diagram should find
+   everything where they left it. The only real difference is the left panel,
+   which offers four tools instead of a list of equations.
+   ========================================================================== */
+.sketch-editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.sketch-editor-tool {
+    padding: 6px 10px;
+    font-size: 12px;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.sketch-editor-tool:hover {
+    border-color: var(--datum-muted);
+}
+
+.sketch-editor-tool-active {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+    font-weight: 600;
+}
+
+.sketch-editor-hint {
+    margin-bottom: 12px;
+    font-size: 11px;
+    color: var(--datum-subtle);
+    font-style: italic;
+    min-height: 1.4em;
+}
+
+.sketch-editor-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.sketch-editor-empty {
+    padding: 12px;
+    font-size: 12px;
+    color: var(--datum-subtle);
+    text-align: center;
+}
+
+.sketch-editor-element {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-rail);
+}
+
+.sketch-editor-element-selected {
+    border-color: var(--datum-green);
+    background: var(--datum-green-wash);
+}
+
+.sketch-editor-element-label {
+    flex: 1;
+    text-align: left;
+    font-size: 12px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.sketch-editor-element-delete {
+    background: none;
+    border: none;
+    font-size: 16px;
+    line-height: 1;
+    color: var(--datum-muted);
+    cursor: pointer;
+    padding: 0 4px;
+}
+
+.sketch-editor-element-delete:hover {
+    color: var(--datum-error);
+}
+
+.sketch-editor-detail {
+    padding: 8px;
+    border-top: 1px solid var(--datum-border);
+    font-size: 11px;
+    color: var(--datum-subtle);
+}
+
+.sketch-editor-detail-title {
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: var(--datum-ink);
+}
+
+.sketch-editor-point {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+}
+
+.sketch-editor-point span {
+    min-width: 18px;
+    font-size: 10px;
+    color: var(--datum-muted);
+}
+
+.sketch-editor-point input {
+    flex: 1;
+    min-width: 0;
+    padding: 3px 4px;
+    font-size: 11px;
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+}
+
+.sketch-editor .plot-editor-body {
+    flex-direction: column;
+}
+
+/*
+ * THE SKETCH WORKSPACE IS WIDER THAN THE PLOT EDITOR.
+ *
+ * A plot is read as a list of equations, so its dialog can be narrower. A
+ * sketch is read as a SHAPE, and the graph needs the room: the sketch gets a
+ * wider dialog and a taller one, so the graph area above the controls is
+ * genuinely larger rather than the same box with the parts rearranged.
+ */
+.sketch-editor .plot-editor {
+    width: 1200px;
+    height: 780px;
+}
+
+/*
+ * THE GRAPH TAKES THE WHOLE WIDTH, AND MOST OF THE HEIGHT.
+ *
+ * It is the part of the workspace the student actually reads, so it is given
+ * a large, wide area rather than a column beside the controls. The lower row
+ * holds the tools and the selected element's properties.
+ */
+.sketch-editor-graph-area {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 14px 6px;
+    display: flex;
+}
+
+.sketch-editor-graph-area .sketch-editor-graph {
+    flex: 1;
+    height: 100%;
+    min-height: 0;
+}
+
+/*
+ * THE LOWER ROW: tools on one side, the selected element on the other.
+ */
+.sketch-editor-lower {
+    display: flex;
+    flex: 0 0 auto;
+    max-height: 42%;
+    min-height: 0;
+    border-top: 1px solid var(--datum-border);
+    overflow: hidden;
+}
+
+.sketch-editor-lower .plot-editor-left {
+    width: 260px;
+    flex: 0 0 260px;
+    border-right: 1px solid var(--datum-border);
+    overflow-y: auto;
+}
+
+.sketch-editor-lower .plot-editor-right {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sketch-editor-graph {
+    width: 100%;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+}
+
+.sketch-editor-axis {
+    stroke: var(--datum-muted);
+    stroke-width: 1.2;
+}
+
+/*
+ * A TICK MARK ACROSS THE AXIS, and the value beneath it.
+ *
+ * The mark is short and crosses the axis, which is what makes a tick read as a
+ * graduation rather than as part of the diagram. The label sits in the reserved
+ * band below the plot, so it is always outside the drawing.
+ */
+.sketch-editor-axis-mark {
+    stroke: var(--datum-muted);
+    stroke-width: 1;
+}
+
+.sketch-editor-tick-label,
+.sketch-editor-axis-label {
+    fill: var(--datum-muted);
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+}
+
+/*
+ * A BODY-ELEMENT TICK.
+ *
+ * A faint full-height vertical line at a station where something happens on
+ * the parent body - a force, a support, a load boundary. Quiet enough to sit
+ * behind the diagram, present enough to aim a new element at.
+ */
+.sketch-editor-tick {
+    stroke: var(--datum-border);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+/*
+ * A CONTROL POINT OF THE SELECTED ELEMENT: an endpoint, or a curve's Bend.
+ *
+ * Drawn with a white fill and a coloured rim so it reads on top of the stroke
+ * it belongs to, and large enough to grab - it is the thing the student drags
+ * to change the shape, so it has to be findable.
+ */
+.sketch-editor-handle {
+    fill: var(--datum-surface);
+    stroke: var(--datum-green);
+    stroke-width: 2;
+    cursor: grab;
+    pointer-events: all;
+}
+
+.sketch-editor-handle:hover {
+    fill: var(--datum-green-tint);
+}
+
+/*
+ * THE SNAP INDICATION.
+ *
+ * A hollow ring on the point the placement will use, in the same colour the
+ * main canvas uses for a snap - so a student learns ONE indication and it
+ * means the same thing in both places. Hollow rather than filled, because it
+ * marks a point rather than hiding it.
+ */
+.sketch-editor-snap {
+    fill: none;
+    stroke: var(--datum-focus);
+    stroke-width: 2;
+    pointer-events: none;
+}
+
+.sketch-editor-snap-label {
+    fill: var(--datum-focus);
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    paint-order: stroke;
+    pointer-events: none;
+    stroke: var(--datum-surface);
+    stroke-width: 3px;
+}
+
+.sketch-editor-stroke {
+    fill: none;
+    stroke: var(--datum-green);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/*
+ * THE SELECTION IS A HEAVIER STROKE, NOT A DIFFERENT COLOUR. A selected
+ * element must still be the colour it is on the sheet; recolouring it here
+ * would make the dialog disagree with the drawing it is a preview of.
+ */
+.sketch-editor-stroke-selected {
+    stroke-width: 3.5;
+}
+
+.sketch-editor-pending {
+    fill: none;
+    stroke: var(--datum-green);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+    opacity: 0.7;
+}
+
+.sketch-editor-cursor-point {
+    fill: var(--datum-green);
+}
+
+/*
+ * THE BEND HANDLE of a three-point curve. Shown only while the curve is
+ * selected, because the Bend is a control point rather than part of the
+ * finished diagram.
+ */
+.sketch-editor-bend-handle {
+    fill: var(--datum-surface);
+    stroke: var(--datum-green);
+    stroke-width: 1.5;
+}
+
+.sketch-editor-label {
+    fill: var(--datum-subtle);
+    font-family: Arial, sans-serif;
+    font-size: 10px;
+}
+
+.plot-editor-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+
+    padding: 12px 14px;
+    border-top: 1px solid var(--datum-border);
+}
+
+.plot-editor-actions button {
+    min-width: 96px;
+    padding: 7px 14px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+    color: var(--datum-ink);
+
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.plot-editor-actions button.primary {
+    border-color: var(--datum-green);
+    background: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.plot-editor-actions button:hover {
+    background: var(--datum-panel);
+}
+
+.plot-editor-actions button.primary:hover {
+    background: var(--datum-green-hover);
+}

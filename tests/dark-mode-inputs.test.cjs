@@ -26,6 +26,7 @@
  */
 
 const fs = require("fs");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 const path = require("path");
 
 const { SOURCE_ROOT } = require("./helpers/source-path.cjs");
@@ -48,7 +49,7 @@ const styles = path.join(SOURCE_ROOT, "styles");
 const read = (name) => fs.readFileSync(path.join(styles, name), "utf8");
 
 const tokens = read("tokens.css");
-const editor = read("editor.css");
+const editor = stylesheetSource("editor.css");
 const shell = read("shell.css");
 const base = read("base.css");
 

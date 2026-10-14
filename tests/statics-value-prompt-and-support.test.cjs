@@ -18,6 +18,7 @@
  */
 
 const { JSDOM } = require("jsdom");
+const { stylesheetSource } = require("./helpers/source-path.cjs");
 
 const { modulePath, rendererSource } = require("./helpers/source-path.cjs");
 
@@ -263,10 +264,7 @@ console.log("\n  a Moment is placed, and THEN asked about\n");
 console.log("\n  a unit control is never narrower than its own symbol\n");
 
 {
-  const css = require("fs").readFileSync(
-    require("path").join(__dirname, "..", "src", "styles", "editor.css"),
-    "utf8",
-  );
+  const css = stylesheetSource("editor.css");
 
   const popupUnit = css.match(/\.drawing-creation-dimension-unit \{[^}]*\}/);
 

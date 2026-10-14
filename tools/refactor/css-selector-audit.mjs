@@ -5,7 +5,8 @@ import fs from "fs";
 import path from "path";
 
 const stylesDir = "src/styles";
-const css = fs.readdirSync(stylesDir)
+/* Every stylesheet, including the editor's parts in styles/editor/. */
+const css = fs.readdirSync(stylesDir, { recursive: true })
     .filter(f => f.endsWith(".css"))
     .map(f => fs.readFileSync(path.join(stylesDir, f), "utf8").replace(/\/\*[\s\S]*?\*\//g, ""))
     .join("\n");

@@ -26,7 +26,7 @@ src/
 ├── references/    drawing references: a sheet placed in the written solution
 ├── solution/      the Written Solution tab
 ├── ui/            shared panel vocabulary, dialogs, the analysis editors
-├── styles/        tokens.css, base.css, editor.css, shell.css
+├── styles/        tokens.css, base.css, editor.css (+ editor/*.css), shell.css
 └── assets/        the icon
 ```
 
@@ -223,6 +223,13 @@ only, and may change with any refactor.
 University of Alberta palette (UAlberta green as the accent). The other
 stylesheets refer to the tokens. They load in a fixed order — tokens,
 base, editor, shell — and later files win where they overlap.
+
+`editor.css` is a list of `@import`s, one file per part of the editor in
+`styles/editor/` (workspace chrome, settings and pickers, toolbar, side
+panels, Features panel, responsive, canvas, sheets and references, dialogs
+and the Open launcher, value popups, analysis editors). The import order is
+the cascade order; the build inlines them into one stylesheet. Tests read
+the expanded text with `stylesheetSource("editor.css")`.
 
 ---
 

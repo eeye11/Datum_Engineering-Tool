@@ -1,0 +1,1907 @@
+/*
+ * The Features panel: the component tree, its header, toggle and action buttons, property rows and inputs, the context menu and the unit selector.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * The Features panel body.
+ *
+ * It is the scroll container for a feature's properties, so a
+ * body with many of them (a triangle, a truss) stays reachable
+ * instead of being clipped by the panel. The flex sizing lets
+ * the block take the height that is left under the heading.
+ */
+#drawingProperties {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.drawing-inspector-message {
+    color: var(--datum-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.drawing-components-back {
+    align-self: flex-start;
+    background: transparent;
+    border: 0;
+    color: var(--datum-green);
+    cursor: pointer;
+    display: none;
+    font-size: 10px;
+    margin: -3px 0 8px;
+    padding: 0;
+}
+
+.drawing-components-back:hover {
+    text-decoration: underline;
+}
+
+.drawing-component-tree {
+    display: grid;
+    gap: 1px;
+    overflow-y: auto;
+}
+
+.drawing-component-group {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+.drawing-component-row {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font-size: 10px;
+    gap: 5px;
+    min-height: 24px;
+    padding: 2px 3px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-component-row:hover,
+.drawing-component-row.selected {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-soft);
+}
+
+.drawing-component-row svg {
+    color: var(--datum-green);
+    height: 15px;
+    width: 15px;
+}
+
+/*
+ * A feature that belongs to another one is indented under
+ * its parent, so the relationship reads at a glance while it
+ * stays a fully independent, selectable feature.
+ *
+ * The indent alone carries the hierarchy. There is deliberately
+ * no repeated vertical rule, which would stack into a ladder of
+ * lines next to every child and crowd the panel.
+ */
+.drawing-component-node {
+    align-items: center;
+    display: flex;
+    gap: 2px;
+}
+
+.drawing-component-twisty,
+.drawing-component-twisty-spacer {
+    background: transparent;
+    border: 0;
+    color: var(--cad-muted);
+    flex: 0 0 13px;
+    font: inherit;
+    font-size: 9px;
+    line-height: 1;
+    padding: 0;
+    text-align: center;
+}
+
+.drawing-component-twisty {
+    cursor: pointer;
+}
+
+.drawing-component-twisty:hover {
+    color: var(--datum-green);
+}
+
+.drawing-component-row-child {
+    color: var(--datum-ink);
+    font-size: 10px;
+    padding-left: 8px;
+}
+
+.drawing-component-row-child svg {
+    color: var(--datum-muted);
+    height: 13px;
+    width: 13px;
+}
+
+.drawing-selection-summary {
+    color: var(--cad-muted);
+    font-size: 9px;
+    margin-bottom: 4px;
+}
+
+.drawing-properties-block {
+    color: var(--cad-ink);
+    display: grid;
+    font-size: 10px;
+    gap: 5px;
+    line-height: 1.3;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/*
+ * ========================================================
+ * THE FEATURES PANEL'S HEADER
+ * ========================================================
+ *
+ * THE FEATURE'S TYPE, as the panel's title. It is the thing a student looks for
+ * first - "what am I editing" - so it is the one line at full strength, in the
+ * application's own green and in caps, with a rule beneath it that separates
+ * the identity of the feature from everything editable about it.
+ *
+ * The rule is what makes the header read as a HEADER rather than as one more
+ * label: without it the title sat in the same rhythm as the property rows and
+ * a long feature name could be mistaken for a field caption.
+ */
+.drawing-properties-title {
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-green);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin-bottom: 4px;
+    padding-bottom: 5px;
+    text-transform: uppercase;
+}
+
+.drawing-property-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.drawing-property-row span:first-child {
+    color: var(--cad-muted);
+
+    /*
+     * The pair is laid out so the value takes what the label does not
+     * need. Without the label being able to shrink, a long property
+     * name would win the space and squeeze a value out of the panel.
+     */
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.drawing-status-bar {
+    background: var(--datum-panel);
+    border-top: 1px solid var(--cad-border);
+    color: var(--datum-muted);
+    display: flex;
+    font-size: 10px;
+    height: 22px;
+    justify-content: space-between;
+    grid-column: 1 / -1;
+    grid-row: 6;
+    line-height: 1;
+    padding: 0 7px;
+}
+
+.drawing-status-meta,
+.drawing-zoom-controls {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    min-width: 0;
+}
+
+.drawing-status-meta span {
+    white-space: nowrap;
+}
+
+#drawingToolMessage {
+    color: var(--cad-muted);
+    font-style: italic;
+    min-width: 90px;
+}
+
+.drawing-status-toggle {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--cad-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 10.5px;
+    gap: 5px;
+    line-height: 1;
+    padding: 0 6px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+
+/*
+ * =========================================================
+ * THE TOOLBAR'S TOGGLE ICONS
+ * =========================================================
+ *
+ * Each toggle is an ICON-ONLY button now, so the icon IS the control rather
+ * than a companion to a word. Its accessible name comes from the button's
+ * `aria-label` and its explanation from the `title` tooltip, so the meaning is
+ * not lost with the text - which is the requirement that a student must not
+ * have to guess what an icon does.
+ *
+ * The icon takes `currentColor`, so it follows the button through off, on,
+ * hover and disabled without a rule of its own.
+ */
+.drawing-toolbar-icon {
+    flex: 0 0 auto;
+}
+
+/*
+ * THE OFF STATE. Neutral ink on a neutral surface, with the icon fully legible:
+ * an unavailable-looking control that is in fact available is the fault this
+ * avoids. `opacity: .75` keeps it recessed against the "on" state without
+ * making it hard to see.
+ */
+.drawing-status-toggle:not(.active) {
+    background: var(--datum-input);
+    border-color: var(--datum-border);
+    color: var(--cad-muted);
+}
+
+.drawing-status-toggle:not(.active) .drawing-toolbar-icon {
+    opacity: .75;
+}
+
+/*
+ * =========================================================
+ * THE ON STATE - AND IT IS NOT MERELY A COLOUR CHANGE
+ * =========================================================
+ *
+ * FOUR SIGNALS, so the state survives a monochrome screenshot and a student who
+ * cannot distinguish the green:
+ *
+ *   a filled GREEN-TINTED SURFACE (not the plain input surface)
+ *   a GREEN BORDER
+ *   the GREEN ink on the icon
+ *   an INSET RING, which is a shape rather than a colour
+ *
+ * AND THE WHOLE TREATMENT PERSISTS after the pointer moves away: a toggle that
+ * was on and then looked off as soon as the mouse left it would be the worst of
+ * both states.
+ */
+.drawing-status-toggle.active {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+    box-shadow: inset 0 0 0 1px var(--datum-green);
+    color: var(--datum-green-ink);
+}
+
+.drawing-status-toggle.active .drawing-toolbar-icon {
+    opacity: 1;
+}
+
+/*
+ * HOVER ON AN OFF TOGGLE: a lift of the surface and the ink, so it reads as
+ * pressable without claiming to be on.
+ */
+.drawing-status-toggle:not(.active):hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border-strong);
+    color: var(--cad-ink);
+}
+
+/*
+ * HOVER ON AN ON TOGGLE PRESERVES ITS STATE. It brightens the icon and keeps
+ * the tinted surface and the ring - the pointer over an "on" control must never
+ * make it look like an "off" one.
+ */
+.drawing-status-toggle.active:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+    box-shadow: inset 0 0 0 1px var(--datum-green);
+    color: var(--datum-green);
+}
+
+/*
+ * KEYBOARD FOCUS IS ITS OWN TREATMENT - the gold ring in both themes - so it is
+ * distinct from hover and from the on/off appearance.
+ */
+.drawing-status-toggle:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * A GENUINELY UNAVAILABLE TOGGLE. Subdued, and the pointer says so too; the
+ * wiring that disables it decides when that is, so this rule only styles the
+ * real state rather than inventing one.
+ */
+.drawing-status-toggle:disabled {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--datum-muted);
+    cursor: default;
+    opacity: .45;
+}
+
+/*
+ * =========================================================
+ * A PLAIN ACTION BUTTON - A COMMAND, NOT A SWITCH
+ * =========================================================
+ *
+ * Fit belongs to this class. Unlike the four toggles before it, Fit has no
+ * on/off state: it performs an action once and there is nothing to turn back
+ * off. Giving it the toggle treatment would tell the student it was a mode.
+ *
+ * IT THEREFORE HAS NO `.active` RULE AND NO GREEN STATE. It gets the same
+ * neutral surface as an off toggle and the same hover and focus as the zoom
+ * buttons beside it, so it reads as pressable without claiming a mode.
+ */
+.drawing-action-button {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--cad-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font: inherit;
+    font-size: 10.5px;
+    gap: 5px;
+    line-height: 1;
+    padding: 0 6px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+
+.drawing-action-button .drawing-toolbar-icon {
+    flex: 0 0 auto;
+}
+
+.drawing-action-button:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border-strong);
+    color: var(--cad-ink);
+}
+
+.drawing-action-button:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.drawing-zoom-controls {
+    gap: 4px;
+}
+
+.drawing-zoom-controls button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    height: 19px;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    width: 20px;
+}
+
+.drawing-zoom-controls button:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green-line);
+}
+
+#drawingZoomValue {
+    background: var(--datum-rail);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-muted);
+    font-variant-numeric: tabular-nums;
+    font: inherit;
+    height: 19px;
+    min-width: 48px;
+    text-align: center;
+    width: 52px;
+}
+
+#drawingZoomValue:focus {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-green-tint);
+}
+
+.drawing-properties-block input,
+.drawing-properties-block select {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    font: inherit;
+    min-width: 0;
+    padding: 2px 3px;
+}
+
+/*
+ * A UNIT SELECT IS NEVER SQUEEZED BELOW ITS OWN SYMBOL.
+ *
+ * The `min-width: 0` above is right for a NUMBER field, which may be narrowed
+ * by its track and still readable because a number can be clipped and retyped.
+ * It is wrong for a UNIT: `kN·m` and `lb·ft` are symbols, and a clipped one
+ * reads as a DIFFERENT unit - `kN` is not `kN·m`, and a student cannot tell that
+ * the tail is missing rather than absent.
+ *
+ * So a unit select is given a floor wide enough for the units the application
+ * understands, and it is allowed to keep its own natural width when the track
+ * affords it. The value's own column shrinks instead, which is the right
+ * trade - a number that is narrow is still editable, a unit that is clipped is
+ * wrong.
+ */
+.drawing-properties-block select[data-property="loadUnit"],
+.drawing-properties-block select[data-property="forceUnit"],
+.drawing-properties-block select[data-property="momentUnit"],
+.drawing-properties-block select[data-property="lengthUnit"] {
+    flex: 0 0 auto;
+    min-width: 58px;
+    padding-right: 2px;
+}
+
+/*
+ * One numeric-input treatment for every Features
+ * panel.
+ *
+ * The native spinner occupies a fixed strip on the
+ * right of the field. Reserving padding wider than
+ * that strip keeps the value clear of the arrows,
+ * so decimals stay fully readable while the
+ * up/down controls remain clickable.
+ */
+.drawing-properties-block input[type="number"] {
+    font-variant-numeric: tabular-nums;
+    padding-right: 18px;
+    text-align: right;
+}
+
+/*
+ * Firefox and WebKit size the spinner differently,
+ * so widen the reserved space to cover both.
+ */
+.drawing-properties-block input[type="number"]::-webkit-inner-spin-button,
+.drawing-properties-block input[type="number"]::-webkit-outer-spin-button {
+    margin-left: 4px;
+    opacity: 1;
+}
+
+.drawing-property-number-control {
+    align-items: center;
+    display: flex;
+    gap: 3px;
+    min-width: 0;
+}
+
+.drawing-property-number-control input {
+    flex: 1 1 auto;
+    width: 1px;
+}
+
+.drawing-property-fix {
+    align-items: center;
+    color: var(--cad-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 8px;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.drawing-property-fix input {
+    height: 12px;
+    margin: 0;
+    width: 12px;
+}
+
+.drawing-property-edit-row {
+    align-items: center;
+    display: grid;
+    gap: 4px;
+    grid-template-columns: minmax(48px, 0.75fr) minmax(0, 1fr);
+}
+
+.drawing-property-edit-row input,
+.drawing-property-edit-row select {
+    width: 100%;
+}
+
+.drawing-property-pair {
+    display: grid;
+    gap: 4px;
+    grid-template-columns: 1fr 1fr;
+}
+
+.drawing-property-pair > div {
+    align-items: center;
+    display: flex;
+    gap: 2px;
+    min-width: 0;
+}
+
+.drawing-property-pair > div > span {
+    color: var(--cad-muted);
+    font-size: 9px;
+}
+
+.drawing-property-pair > div > input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 1px;
+}
+
+.drawing-property-fix input[type="checkbox"] {
+    flex: 0 0 12px;
+    height: 12px;
+    margin: 0;
+    width: 12px;
+}
+
+.drawing-properties-block input[type="number"]:disabled {
+    background: var(--datum-panel);
+    color: var(--datum-muted);
+    opacity: 0.65;
+}
+
+.drawing-property-mode {
+    align-items: center;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 8px;
+    justify-content: flex-start;
+    min-width: 0;
+}
+
+/*
+ * CAD-style colour control.
+ *
+ * A swatch button opens a popup holding a hue-by-shade
+ * grid, a custom colour picker, recent colours and an
+ * eyedropper. The native colour input stays in the DOM
+ * as the value source so the existing style pipeline is
+ * unchanged.
+ */
+.drawing-colour-control {
+    align-items: center;
+    display: inline-flex;
+    gap: 4px;
+    min-width: 0;
+}
+
+.drawing-colour-swatch {
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    cursor: pointer;
+    height: 18px;
+    min-width: 34px;
+    padding: 0;
+}
+
+.drawing-colour-swatch:hover {
+    border-color: var(--datum-green);
+}
+
+/*
+ * =========================================================
+ * THE SWATCH ON BAND 4'S COLOUR BUTTON
+ * =========================================================
+ *
+ * THE SWATCH IS THE CLICK TARGET THAT OPENS THE PICKER.
+ *
+ * `editor/colour-picker.js` builds this element as a real `<button>` and wires
+ * its click to `openColourPopup`, so it is what opens the picker. It also
+ * carries the live colour, republished as `--datum-colour-value` for the drop.
+ *
+ * IT IS TRANSPARENT, NOT PAINTED. The colour is shown INSIDE the paint drop -
+ * see `.drawing-strip-icon-fill` - so a painted face would cover the icon and
+ * hide the shape that tells the student what this control is.
+ *
+ * IT IS INSET, NOT FULL-BLEED. `inset: 0` made it cover the button's own border
+ * and corner radius, so its hover state painted a hard-edged square over a
+ * rounded button and swallowed the outline. The inset below leaves the button's
+ * border and radius visible and gives the swatch the SAME radius, so the two
+ * read as one control at rest and the hover state is a tint INSIDE the button
+ * rather than a block over it.
+ *
+ * THESE RULES COME AFTER `.drawing-colour-swatch` ABOVE ON PURPOSE. That rule
+ * sizes the swatch at 18x34 for a labelled property row, and it is LATER IN THE
+ * FILE than the strip's own block - so without a rule down here, at the same or
+ * greater specificity, the component's row sizing won and the control came out
+ * the wrong height.
+ */
+.drawing-style-strip .drawing-strip-icon-control .drawing-colour-swatch {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    height: auto;
+    inset: 2px;
+    min-width: 0;
+    padding: 0;
+    position: absolute;
+    width: auto;
+    z-index: 1;
+}
+/*
+ * THE SWATCH'S HOVER IS THE BUTTON'S HOVER.
+ *
+ * The component gives this element its own hover border, which drew a second
+ * outline INSIDE the button and looked like a stray box. The button already
+ * answers the pointer - see `.drawing-strip-colour:hover` - so the swatch is a
+ * plain, invisible hit area and adds nothing of its own.
+ */
+.drawing-style-strip .drawing-strip-icon-control .drawing-colour-swatch:hover,
+.drawing-style-strip .drawing-strip-icon-control .drawing-colour-swatch:focus {
+    background: transparent;
+    border: 0;
+    outline: none;
+}
+
+/*
+ * THE COLOUR FILL INSIDE THE DROP.
+ *
+ * The drop is drawn as two paths: this one is the FILL, painted with the current
+ * colour, and the path after it in the markup is the OUTLINE in the interface
+ * ink. Splitting them is what keeps the shape visible on a white fill (the dark
+ * outline is the edge) and on a black one (the button's surface shows round the
+ * outside).
+ *
+ * `--datum-colour-value` is set on the CONTROL by `updateColourSwatch`, so it
+ * inherits down into this path. Before the first update there is no value, and
+ * the fallback is the surface - an unfilled drop rather than a guessed colour.
+ */
+.drawing-strip-icon-fill {
+    fill: var(--datum-colour-value, var(--datum-input));
+}
+
+.drawing-colour-native {
+    display: none;
+}
+
+.drawing-colour-popup {
+    background: var(--datum-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: 4px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+    display: grid;
+    gap: 7px;
+    padding: 8px;
+    position: fixed;
+    width: 208px;
+    z-index: 50;
+}
+
+.drawing-colour-section {
+    color: var(--datum-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+
+.drawing-colour-grid {
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(12, 1fr);
+}
+
+.drawing-colour-cell {
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 2px;
+    cursor: pointer;
+    height: 13px;
+    padding: 0;
+    width: 100%;
+}
+
+.drawing-colour-cell:hover {
+    border-color: var(--datum-green);
+    transform: scale(1.15);
+}
+
+.drawing-colour-row {
+    align-items: center;
+    display: flex;
+    gap: 5px;
+}
+
+.drawing-colour-custom {
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    cursor: pointer;
+    flex: 0 0 auto;
+    height: 20px;
+    padding: 0;
+    width: 34px;
+}
+
+.drawing-colour-action {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    cursor: pointer;
+    flex: 1 1 auto;
+    font: inherit;
+    font-size: 9px;
+    padding: 3px 6px;
+}
+
+.drawing-colour-action:hover {
+    background: var(--datum-panel);
+    border-color: var(--datum-green);
+}
+
+.drawing-colour-action.active {
+    background: var(--datum-green);
+    border-color: var(--datum-green-hover);
+    color: var(--datum-surface);
+    font-weight: 700;
+}
+
+.drawing-colour-recent {
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(12, 1fr);
+    min-height: 13px;
+}
+
+.drawing-colour-recent .drawing-colour-cell {
+    height: 13px;
+}
+
+.drawing-colour-empty {
+    color: var(--datum-muted);
+    font-size: 8px;
+}
+
+/*
+ * Compact segmented control for switching the
+ * triangle between its two representations.
+ */
+.drawing-segmented {
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    display: grid;
+    gap: 2px;
+    grid-template-columns: 1fr 1fr;
+    padding: 2px;
+}
+
+.drawing-segmented-option {
+    background: transparent;
+    border: 0;
+    border-radius: 2px;
+    color: var(--datum-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    line-height: 1;
+    padding: 4px 2px;
+    text-align: center;
+}
+
+.drawing-segmented-option:hover {
+    color: var(--datum-green);
+}
+
+.drawing-segmented-option.active {
+    background: var(--datum-surface);
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    color: var(--datum-green);
+    font-weight: 700;
+}
+
+/*
+ * ========================================================
+ * A SECTION HEADING
+ * ========================================================
+ *
+ * The shared skeleton every feature panel is read in -
+ * GENERAL, then what it measures, what it acts on, where it is, how it is drawn
+ * - so a student who has just edited a Beam can read a Distributed Load panel
+ * without re-learning it.
+ *
+ * THE RULE IS A SEPARATOR, NOT A BORDER ON A LABEL.
+ *
+ * It spans the panel's full width and sits ABOVE the heading with air on both
+ * sides, which is what makes the groups read as groups rather than as a column
+ * of captions. The heading is quiet - small, muted, spaced - because it names a
+ * group and must never compete with the property values underneath it, which
+ * are the thing being read.
+ */
+.drawing-properties-section {
+    border-top: 1px solid var(--datum-panel);
+    color: var(--datum-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .09em;
+    margin-top: 9px;
+    padding-top: 6px;
+    text-transform: uppercase;
+}
+
+/*
+ * THE FIRST SECTION HAS NO RULE ABOVE IT.
+ *
+ * The header already draws one, and a second within a few pixels of it reads as
+ * a double line under the title rather than as the start of a group.
+ */
+.drawing-properties-title + .drawing-properties-section {
+    border-top: 0;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+/*
+ * ========================================================
+ * ONE PROPERTY ROW
+ * ========================================================
+ *
+ * Four tracks - LABEL, VALUE, UNIT, STATE - and every row in every panel uses
+ * them in that order, so a student reads one shape wherever they are:
+ *
+ *     Magnitude   [   50   ]  N    [x]
+ *     Length      [  25.4  ]  mm   [x]
+ *     Value       [   L    ]       [ ]
+ *
+ * THE ROW HEIGHT IS SET HERE, once, rather than by whatever each control
+ * happens to be. Before this a numeric input, a select and a derived reading
+ * could each be a different height, so a panel of ten properties came out
+ * visibly ragged - the rows did not line up, and the raggedness read as
+ * sloppiness rather than as anything about the drawing.
+ *
+ * THE ROW GAP IS SMALL AND THE SECTION GAP IS LARGE. That ratio is what makes
+ * the grouping legible: properties inside one group sit close together, and the
+ * air between groups does the separating, so the headings have less work to do.
+ */
+.drawing-property-grid {
+    align-items: center;
+    display: grid;
+    gap: 4px;
+
+    /*
+     * The grid is a flex child of the panel column, and a flex item
+     * is floored at the width of its widest content unless it is
+     * allowed to shrink below that. Flexible TRACKS are therefore not
+     * enough on their own: the grid would still refuse to come back
+     * under the panel's width, and the row would hang off the edge
+     * even though every track inside it could have fitted.
+     */
+    min-width: 0;
+
+    /*
+     * THE GRID'S TRACKS MUST BE ABLE TO SHRINK.
+     *
+     * A grid item's default `min-width: auto` refuses to go below its
+     * own content, so `minmax(0, 1fr)` on the right hand track did not
+     * make it flexible - the INPUTS inside it still forced the track
+     * wider than the panel, and a numeric field or a select then
+     * rendered half outside the Features panel with its content
+     * clipped rather than wrapped.
+     *
+     * `minmax(0, 1fr)` on EVERY track is what actually allows them to
+     * compress, and the children are given `min-width: 0` and a full
+     * width below so they fill the track instead of overflowing it.
+     *
+     * This is the same fix already applied to the tool list and the
+     * tool groups for exactly the same reason; it was missing here.
+     */
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1.25fr)
+        minmax(0, 18px)
+        minmax(0, 14px);
+}
+
+.drawing-property-grid-value {
+    /*
+     * The unit track is sized to its CONTENT, not to a fixed 18px.
+     *
+     * On a statics quantity this track holds the unit AND the `?` unknown
+     * toggle beside it - "mm" plus a 12px control and a 3px gap needs 31px.
+     * At 18px the toggle could not fit, and because the track was allowed
+     * to compress the button overflowed into the Fix checkbox's column and
+     * sat on top of it, taking its clicks.
+     *
+     * `min-content` asks the track to be as wide as it must be to avoid
+     * that, and leaves the difference to the label and value tracks, which
+     * are `minmax(0, 1fr)` and compress on their own if they need to.
+     */
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1.25fr)
+        min-content
+        minmax(0, 14px);
+
+    /*
+     * ONE HEIGHT FOR EVERY ROW, whatever control is in it.
+     *
+     * A numeric input, a select, a derived reading and a checkbox each want a
+     * different height of their own, and left to themselves they produce a
+     * panel whose rows do not line up - which reads as sloppiness rather than as
+     * anything about the drawing. Setting the floor here gives every row the
+     * same rhythm, and every CONTROL inside it the same box.
+     */
+    min-height: 22px;
+}
+
+/*
+ * EVERY CONTROL IN A ROW IS THE SAME HEIGHT AND SITS ON THE SAME BASELINE.
+ *
+ * The three that actually appear - a text/number input, a select, and a
+ * read-only derived span - are given one height and one line-height, so they
+ * align with each other and with the label beside them. A control that was a
+ * pixel taller than its neighbour used to nudge the whole row.
+ */
+.drawing-property-grid input[type="text"],
+.drawing-property-grid input[type="number"],
+.drawing-property-grid .drawing-property-input,
+.drawing-property-grid select,
+.drawing-property-grid .drawing-property-select {
+    height: 20px;
+    line-height: 18px;
+}
+
+.drawing-property-grid .drawing-property-derived,
+.drawing-property-grid .drawing-property-readonly {
+    line-height: 20px;
+    min-height: 20px;
+}
+
+/*
+ * THE LABEL COLUMN, ALIGNED AND NEVER CLIPPED.
+ *
+ * Labels are the left edge every row is read from, so they share a size, a
+ * colour and a line-height. They wrap rather than truncate - a half-printed
+ * "Position Al..." tells a student less than a wrapped one does - which is what
+ * keeps a long property name from being silently cut.
+ */
+.drawing-property-grid-label {
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+/*
+ * A ROW WITH TWO VALUES IN IT.
+ *
+ * The varying distributed load lists one point per row, and each point
+ * carries a magnitude AND a position - so the row is: label, magnitude,
+ * position, unit. Four children, and the unit is the last of them.
+ *
+ * It must not use `drawing-property-grid`. That grid's fourth track is a
+ * fixed 14px column reserved for the Fix checkbox, and a row built here has
+ * no checkbox - so with four children the position input fell into the
+ * 18px unit track and the unit text into the 14px one. The number field
+ * was then squeezed to about 9px, and its stepper - which is a fixed 15px
+ * and does not shrink - sat on top of the input and took its clicks.
+ *
+ * So the tracks are declared for the children this row actually has: three
+ * flexible ones and the unit sized to its content.
+ */
+.drawing-property-grid-pair {
+    grid-template-columns:
+        minmax(0, 1fr)
+        minmax(0, 1fr)
+        minmax(0, 1fr)
+        min-content;
+}
+
+.drawing-property-grid-head {
+    color: var(--cad-muted);
+    font-size: 8px;
+    padding-bottom: 1px;
+}
+
+.drawing-property-grid-label {
+    color: var(--cad-muted);
+    font-size: 9px;
+    line-height: 1.15;
+
+    /*
+     * A LABEL THAT WRAPS, RATHER THAN ONE THAT PUSHES.
+     *
+     * A long property name - "Position Along Body" on a support, or a
+     * diagram's "Source Positions" - used to hold its track open by its
+     * full length, which is what drove the whole row past the edge of
+     * the panel. It can break at its spaces and it can shrink, so a
+     * long name takes more lines instead of taking more width.
+     */
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+/*
+ * A value the analysis system DERIVED from its sources.
+ *
+ * Rendered as text rather than an input, and styled to say so: a
+ * resultant's magnitude is a sum of forces the student typed, so
+ * there is nothing here for them to type, and an input box would
+ * invite them to. It is inset and quiet so the panel's editable
+ * numbers - the ones that really do take a value - stay visually
+ * distinct from the ones that are simply reported.
+ */
+.drawing-property-derived {
+    color: var(--cad-ink);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    justify-self: start;
+    line-height: 1.15;
+    padding: 3px 5px;
+
+    /*
+     * A derived value can be a whole unit, a name, or a long
+     * association, and none of them may push the row wider than the
+     * panel. It wraps for the same reason the label does.
+     */
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+.drawing-properties-block input[type="number"],
+.drawing-properties-block input[type="text"],
+.drawing-properties-block input[type="search"],
+.drawing-properties-block textarea,
+.drawing-properties-block select,
+.drawing-property-grid input[type="number"],
+.drawing-property-grid input[type="text"],
+.drawing-property-grid input[type="search"],
+.drawing-property-grid textarea,
+.drawing-property-grid select,
+.datum-settings-control select,
+.datum-settings-control input[type="number"],
+.datum-settings-control input[type="text"],
+.datum-open-select input,
+.drawing-style-strip select,
+.drawing-style-strip input[type="number"],
+.drawing-style-strip input[type="color"],
+.drawing-scale-dialog-input,
+.drawing-scale-dialog-select,
+.drawing-dimension-dialog input,
+.drawing-dimension-dialog select,
+.drawing-plot-editor input,
+.drawing-plot-editor select,
+.drawing-plot-editor textarea,
+.drawing-command-search input {
+    /*
+     * =========================================================
+     * THE ONE INPUT TREATMENT
+     * =========================================================
+     *
+     * EVERY editable field in the application gets its colours from these five
+     * declarations. It is written once, above the individual rules, so a field
+     * cannot be half-themed in one panel and correct in another.
+     *
+     * DARK MODE WAS THE PROBLEM. A form control is drawn by the BROWSER, and
+     * several of these fields were inheriting the browser's own white input
+     * background - which is the single most visible way a dark theme is left
+     * unfinished. They now all read `--datum-input`, which is a designed dark
+     * surface in Dark Mode and near-white in Light Mode.
+     *
+     * A FIELD SITS IN A WELL, NOT ON A CHIP. The input colour is slightly DEEPER
+     * than the panel behind it, so an editable area reads as somewhere to type
+     * rather than as another raised surface.
+     *
+     * `color: var(--datum-ink)` IS LOAD-BEARING. Changing a background without
+     * the foreground leaves black text on a dark field - which is worse than
+     * leaving it white, because the field LOOKS themed and the text cannot be
+     * read.
+     *
+     * `caret-color` and `::selection` are set because they belong to the same
+     * decision: the caret is the field's cursor and the selection is what the
+     * student is about to act on, so neither should be the browser's default
+     * blue on a green-and-gold interface.
+     */
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    caret-color: var(--datum-green);
+}
+
+/*
+ * =========================================================
+ * THE ICON-FIRST CONTROLS OPT OUT OF THE INPUT TREATMENT
+ * =========================================================
+ *
+ * THIS RULE MUST COME AFTER THE SHARED ONE ABOVE, and that placement is the
+ * whole reason it is here rather than beside the rest of the strip's styling:
+ * the selector `.drawing-style-strip select` matches the three overlays, and a
+ * later rule of equal specificity wins. Declared earlier, the input treatment's
+ * background and border landed ON TOP of the transparent overlay - so the
+ * select painted its own box over the icon, stretched across its neighbours,
+ * and swallowed their clicks.
+ *
+ * WHAT AN OVERLAY IS: an invisible copy of the real control, filling the button
+ * exactly, so the platform's own dropdown is opened where the icon is. It must
+ * therefore have NO box of its own - no background, no border, no appearance -
+ * and be positioned against its own wrapper rather than the row.
+ */
+.drawing-style-strip .drawing-strip-icon-select,
+.drawing-style-strip .drawing-strip-colour input[type="color"],
+.drawing-style-strip .drawing-vector-scale select {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+
+    /*
+     * THE OVERLAY MATCHES THE BUTTON EXACTLY - ITS FOOTPRINT, THAT IS.
+     *
+     * The strip's normal select rule sizes a VISIBLE dropdown to 24px with
+     * padding, and this opt-out replaces that box. The overlay is invisible, but
+     * the platform sizes the OPEN list from the control, so the two concerns are
+     * separated here:
+     *
+     *   HEIGHT is 100%, so the closed control is exactly the 26px button - the
+     *   overlay can never be a pixel taller than the icon behind it.
+     *
+     *   FONT and LINE-HEIGHT are set for the POPUP, not the button. The option
+     *   rows the platform draws take their height from the control's computed
+     *   line box, so a 12px/1.5 control produced rows a few pixels tall with the
+     *   options crowded against one another. A larger line-height gives each
+     *   option room to breathe; because the control itself is transparent and
+     *   fixed at the button's height, none of this is visible until the list is
+     *   opened - which is the point.
+     *
+     * HORIZONTAL PADDING STAYS ZERO. The overlay is only as wide as the 28px
+     * BUTTON, and the platform sizes the popup from the control - so any left or
+     * right padding is taken OUT of the room the option text has, and the words
+     * end up crammed against the right edge of the list.
+     *
+     * AND THE POPUP IS GIVEN A FLOOR FOR ITS WIDTH. The button is 28px square,
+     * and with `appearance: none` the platform sizes the OPEN list from that same
+     * narrow control - so the options were squeezed into 28px and pressed against
+     * the right edge. `min-width` does NOT widen the visible button (the overlay
+     * is transparent and pinned to the button by `inset`), it only stops the
+     * platform treating 28px as the list's maximum. The value is the longest
+     * option ("Construction") plus comfortable side padding.
+     */
+    box-sizing: border-box;
+    font-size: 13px;
+    height: 100%;
+    inset: 0;
+    line-height: 2.4;
+    margin: 0;
+    min-width: 0;
+    opacity: 0;
+    padding: 0;
+    position: absolute;
+    width: 100%;
+}
+
+/*
+ * THE POPUP NEEDS A REAL WIDTH, AND ITS OPTIONS NEED SIDE ROOM.
+ *
+ * The button is 28px square, and with `appearance: none` the platform sizes the
+ * OPEN list from that same narrow control - so the option text was squeezed and
+ * pressed against the right edge. Two things fix that, and neither touches the
+ * closed button:
+ *
+ *   `:open`   matches ONLY while the list is down, so the wider floor applies to
+ *             the POPUP alone. The control is still 28px at rest. Where a browser
+ *             does not support `:open` the rule simply does not match and the
+ *             list is no worse than before.
+ *
+ *   `option`  padding keeps the text off BOTH edges of the list. Some platforms
+ *             ignore it, which is why it is a companion to the width floor rather
+ *             than the only fix.
+ */
+.drawing-style-strip .drawing-strip-icon-select:open {
+    min-width: 148px;
+}
+
+.drawing-style-strip .drawing-strip-icon-select option {
+    padding: 2px 14px;
+}
+
+/*
+ * =========================================================
+ * THE COLOUR COMPONENT'S OWN WRAPPER IS DISSOLVED
+ * =========================================================
+ *
+ * `editor/colour-picker.js` moves the native input and builds a swatch button
+ * inside a `span.drawing-colour-control` of its own, and it inserts that span
+ * NEXT TO our label rather than inside it. `display: contents` removes the
+ * span's box, so the input and the swatch are laid out against OUR control
+ * wrapper and can be positioned to fill it.
+ *
+ * IT IS STILL A DESCENDANT OF THE CONTROL, which is what matters: the wrapper
+ * `.drawing-strip-icon-control` remains their positioning context, so `inset: 0`
+ * on the swatch still means "the whole button".
+ */
+.drawing-style-strip .drawing-strip-icon-control .drawing-colour-control {
+    display: contents;
+}
+
+/*
+ * AND THE SWATCH IS NOT SIZED OR DISABLED BY THAT OPT-OUT RULE.
+ *
+ * The opt-out above neutralises the SELECTS' boxes. The colour swatch is not a
+ * select: it is the BUTTON that opens the picker, so it must keep its own
+ * geometry and stay clickable. This rule re-asserts both, after the opt-out, so
+ * the swatch cannot be caught by a rule intended for the overlays.
+ */
+.drawing-style-strip .drawing-strip-icon-control .drawing-colour-swatch {
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+/*
+ * PLACEHOLDERS MUST BE READABLE, NOT DECORATIVE.
+ *
+ * `--datum-placeholder` is chosen to clear the 4.5:1 contrast floor against the
+ * input surface in BOTH themes. A placeholder that is too faint to read is a
+ * field whose purpose the student has to guess.
+ */
+.drawing-properties-block input::placeholder,
+.drawing-property-grid input::placeholder,
+.datum-settings-control input::placeholder,
+.drawing-scale-dialog-input::placeholder,
+.drawing-command-search input::placeholder,
+.drawing-plot-editor input::placeholder,
+.drawing-plot-editor textarea::placeholder {
+    color: var(--datum-placeholder);
+    opacity: 1;
+}
+
+/*
+ * SELECTED TEXT.
+ *
+ * The browser's default is a blue that belongs to no other part of the
+ * interface, so it is replaced with the accent. The foreground is the raised
+ * surface, because the accent behind it is dark in both themes.
+ */
+.drawing-properties-block ::selection,
+.drawing-property-grid ::selection,
+.datum-settings-dialog ::selection,
+.datum-help-dialog ::selection,
+.datum-search-results ::selection,
+.drawing-command-search ::selection,
+.drawing-plot-editor ::selection {
+    background: var(--datum-green);
+    color: var(--datum-raised);
+}
+
+/*
+ * A HOVERED FIELD LIFTS SLIGHTLY, so a field the pointer is over reads as the
+ * one about to be typed into. It is a background change and not an outline,
+ * because an outline here would compete with the FOCUS ring.
+ */
+.drawing-properties-block input:hover:not(:disabled),
+.drawing-property-grid input:hover:not(:disabled),
+.datum-settings-control input:hover:not(:disabled),
+.drawing-command-search:hover {
+    background: var(--datum-input-hover);
+}
+
+/*
+ * AND A FOCUSED FIELD TAKES THE GOLD RING.
+ *
+ * Focus is the one state a student must never have to hunt for, so it is the
+ * loudest thing on the row - `--datum-focus`, which is gold in both themes and
+ * shares a hue with nothing behind it.
+ */
+.drawing-properties-block input:focus-visible,
+.drawing-property-grid input:focus-visible,
+.datum-settings-control input:focus-visible,
+.drawing-scale-dialog-input:focus-visible,
+.drawing-scale-dialog-select:focus-visible,
+.drawing-dimension-dialog input:focus-visible,
+.drawing-dimension-dialog select:focus-visible,
+.drawing-plot-editor input:focus-visible,
+.drawing-plot-editor select:focus-visible,
+.drawing-plot-editor textarea:focus-visible {
+    border-color: var(--datum-focus);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.drawing-property-grid input[type="number"],
+.drawing-property-grid input[type="text"],
+.drawing-property-grid select {
+    border-radius: 3px;
+    color: var(--cad-ink);
+
+    /*
+     * THE FIELD FILLS ITS TRACK AND NEVER EXCEEDS IT.
+     *
+     * Without these an input is as wide as its default size demands and
+     * will not shrink below it, which is what let a numeric field hang
+     * out past the right edge of the panel on a narrow one.
+     */
+    min-width: 0;
+    width: 100%;
+    font: inherit;
+    font-size: 9px;
+    padding: 2px 3px;
+}
+
+/*
+ * A TEXT FIELD IS A PROPERTY VALUE, LIKE A NUMBER.
+ *
+ * This rule exists because it did not, and the consequence was visible: the
+ * numeric inputs and the dropdowns were given the panel's 9px value type, while
+ * a `type="text"` input fell through to the BROWSER's default and came out at
+ * roughly 13-16px. Feature Name and Label - the two text fields at the top of
+ * every panel - therefore read like headings sitting above their own values,
+ * which is exactly what they are not.
+ *
+ * Text is aligned to the LEFT where a number is aligned to the right: a
+ * magnitude reads best under its unit, but a name is read from its first
+ * letter, and right-aligning "Beam 1" would leave a ragged left edge down the
+ * column of properties.
+ */
+.drawing-property-grid input[type="text"] {
+    text-align: left;
+}
+
+/*
+ * Shared numeric-input treatment for every
+ * Features panel.
+ *
+ * The native spinner sits immediately after the text
+ * box, so with right-aligned values the arrows end up
+ * in the middle of the field. Instead the native
+ * control is hidden and a custom pair of arrows is
+ * pinned to the far right of a wrapper, which keeps
+ * the arrows in a fixed column and the value clear of
+ * them at any width.
+ */
+.drawing-property-grid input[type="number"] {
+    font-variant-numeric: tabular-nums;
+    padding-right: 4px;
+    text-align: right;
+}
+
+.drawing-property-grid input[type="number"]::-webkit-inner-spin-button,
+.drawing-property-grid input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+.drawing-property-grid input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/*
+ * The wrapper holds the field plus the pinned arrow
+ * column, so the arrows are always at the far right.
+ */
+.drawing-number-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 15px;
+    min-width: 0;
+    position: relative;
+    width: 100%;
+}
+
+.drawing-number-field input[type="number"] {
+    border-bottom-right-radius: 0;
+    border-top-right-radius: 0;
+    width: 100%;
+}
+
+.drawing-number-stepper {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.drawing-number-stepper button {
+    align-items: center;
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border);
+    border-left: 0;
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: flex;
+    font-size: 7px;
+    justify-content: center;
+    line-height: 1;
+    margin: 0;
+    min-width: 0;
+    padding: 0;
+}
+
+.drawing-number-stepper button::before {
+    content: "\25B2";
+    transform: scale(1.15);
+}
+
+.drawing-number-stepper button:last-child::before {
+    content: "\25BC";
+    transform: scale(1.15);
+}
+
+.drawing-number-stepper button:first-child {
+    border-bottom: 0;
+    border-top-right-radius: 3px;
+}
+
+.drawing-number-stepper button:last-child {
+    border-bottom-right-radius: 3px;
+}
+
+.drawing-number-stepper button:hover {
+    background: var(--datum-border);
+    color: var(--datum-green);
+}
+
+.drawing-number-stepper button:active {
+    background: var(--datum-border);
+}
+
+.drawing-number-field input[type="number"]:disabled + .drawing-number-stepper button {
+    background: var(--datum-panel);
+    color: var(--datum-border);
+    cursor: default;
+}
+
+/*
+ * The stepper's up arrow is declared once, above, together with the down
+ * arrow. It used to be repeated here with the same `content` but WITHOUT
+ * the `transform: scale(1.15)` - so the up arrow drew smaller than the
+ * down one, and the copy read as live code while doing nothing but
+ * undoing the scale.
+ */
+
+.drawing-property-grid input[type="number"]:disabled {
+    background: var(--datum-panel);
+    color: var(--datum-muted);
+    opacity: 0.65;
+}
+
+/*
+ * `.drawing-property-unit` is declared once, below, as the flex row that
+ * holds the unit AND the `?` unknown toggle together.
+ *
+ * It used to be declared here first as a bare colour and font-size, then
+ * re-declared there with the layout. Two blocks for one element means the
+ * earlier one reads as the definition while the later one is what actually
+ * applies - so a reader changing the unit's colour here would change
+ * nothing.
+ */
+
+.drawing-property-readonly {
+    color: var(--cad-ink);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+    padding-left: 3px;
+
+    /*
+     * WRAPPED, NOT CLIPPED.
+     *
+     * This was a single line with an ellipsis, which meant any value
+     * wider than the panel showed as "Beam 0…f3a" or simply vanished
+     * behind the edge. A Features panel that hides the value it is
+     * reporting is worse than one that wraps it onto a second line:
+     * the number a student is checking is the whole point of the row,
+     * and an ellipsis on it leaves them unable to read what the
+     * application is telling them.
+     *
+     * A long unit or a wrapped association now takes more height,
+     * which the panel scrolls vertically.
+     */
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+}
+
+/*
+ * AN INTERNAL ID, SHOWN SECONDARY AND WRAPPED.
+ *
+ * A feature id is not something a student needs to read - it is
+ * something a report needs to quote - so it is never the main label
+ * of a property. Where an id genuinely has to be visible it goes here:
+ * small, muted, and allowed to break anywhere so a UUID cannot widen
+ * the panel.
+ */
+.drawing-property-id {
+    color: var(--cad-muted);
+    font-size: 8px;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    padding-left: 3px;
+}
+
+/*
+ * An action on the geometry rather than a value to be typed,
+ * such as a truss's Optimize. It is styled to sit in the value
+ * column of a property row so the panel reads the same way as
+ * every other Features panel.
+ */
+.drawing-property-action {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-green);
+    cursor: pointer;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    min-width: 0;
+    padding: 2px 6px;
+    width: 100%;
+}
+
+.drawing-property-action:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+}
+
+.drawing-property-action:active {
+    background: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+/*
+ * The icon inside a panel action, kept as its own inline span so
+ * it can be set in step with the button's own type scale rather
+ * than inheriting the caption's.
+ */
+.drawing-property-action-icon {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+    vertical-align: -1px;
+}
+
+/*
+ * An action that is shown as its icon alone.
+ *
+ * The label lives in the title and the accessible name, so the
+ * control is still named for a screen reader and still explains
+ * itself on hover, while the button itself stays a compact square
+ * in the same column as every other property row.
+ */
+.drawing-property-action-icon-only {
+    align-items: center;
+    display: inline-flex;
+    justify-content: center;
+    min-height: 18px;
+    padding: 2px 4px;
+}
+
+.drawing-property-action-icon-only .drawing-property-action-icon {
+    margin-right: 0;
+}
+
+/*
+ * The header of a child feature's relative coordinates, naming the
+ * parent the offsets are measured from.
+ *
+ * Without it the numbers below are just numbers: the panel would
+ * be showing an X and a Y that mean nothing without saying what
+ * they are an offset FROM, which is the whole difference between
+ * a local and an absolute coordinate.
+ */
+.drawing-property-relative-to {
+    color: var(--datum-muted);
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 3px 0 1px;
+    text-transform: uppercase;
+}
+
+.drawing-properties-block input[type="text"] {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    font: inherit;
+    font-size: 9px;
+    min-width: 0;
+    padding: 2px 3px;
+    width: 100%;
+}
+
+.drawing-coordinate-submenu-title {
+    color: var(--datum-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 3px 8px 4px;
+}
+
+.drawing-coordinate-submenu-item.active {
+    background: var(--datum-green-wash);
+    color: var(--datum-green);
+    font-weight: 700;
+}
+
+/*
+ * Transient prompt for the polygon side count. It is
+ * part of the creation workflow, not the Features
+ * panel, so it floats near the canvas.
+ */
+.drawing-polygon-prompt {
+    background: var(--datum-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+    display: grid;
+    gap: 5px;
+    left: 50%;
+    padding: 8px 10px;
+    position: fixed;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 40;
+}
+
+.drawing-polygon-prompt-label {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.drawing-polygon-prompt-row {
+    align-items: center;
+    display: flex;
+    gap: 6px;
+}
+
+/*
+ * THE FEATURE CONTEXT MENU
+ *
+ * Styled from the same tokens as the toolbar flyouts, so a menu
+ * over the drawing looks like the rest of the application rather
+ * than a browser menu dropped into a CAD canvas.
+ */
+.drawing-context-menu {
+    background: var(--datum-surface);
+    border: 1px solid var(--cad-border);
+    border-radius: 4px;
+    box-shadow: 0 6px 18px rgba(38, 52, 59, .18);
+    min-width: 172px;
+    padding: 4px 0;
+    position: fixed;
+    z-index: 10000;
+}
+
+.drawing-context-item {
+    align-items: center;
+    background: none;
+    border: 0;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    font-size: 11px;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 6px 14px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-context-item:hover:not(:disabled) {
+    background: var(--datum-green-tint);
+}
+
+.drawing-context-item:disabled {
+    color: var(--datum-border);
+    cursor: default;
+}
+
+/*
+ * The shortcut shown on the right of an entry, so the menu and
+ * the keyboard advertise the same thing.
+ */
+.drawing-context-hint {
+    color: var(--cad-muted);
+    font-size: 9px;
+    margin-left: auto;
+}
+
+.drawing-polygon-prompt-row input {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    font: inherit;
+    font-size: 10px;
+    padding: 3px 4px;
+    text-align: right;
+    width: 68px;
+}
+
+.drawing-polygon-prompt-row button {
+    background: var(--datum-green);
+    border: 1px solid var(--datum-green);
+    border-radius: 3px;
+    color: var(--datum-surface);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    padding: 3px 10px;
+}
+
+.drawing-polygon-prompt-row button:hover {
+    background: var(--datum-green);
+}
+
+.drawing-properties-block .drawing-property-fix {
+    justify-content: center;
+}
+
+/*
+ * Unknown control for statics values.
+ *
+ * A compact `?` toggle that sits after the unit. It is
+ * separate from Fix: Fix pins a value against editing,
+ * while `?` says the quantity is not specified, so the
+ * field beside it is emptied and greyed out.
+ */
+.drawing-property-known {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-muted);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+    margin-left: 3px;
+    min-width: 12px;
+    padding: 2px 2px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/*
+ * The unit and the `?` toggle sit on one line after the
+ * field, so the row never grows a second line for the unit.
+ */
+.drawing-property-unit {
+    align-items: center;
+    color: var(--cad-muted);
+    display: flex;
+    flex-wrap: nowrap;
+    font-size: 8px;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+/*
+ * =========================================================
+ * THE ONE UNIT SELECTOR
+ * =========================================================
+ *
+ * Every unit-bearing feature states its unit in this control - a force in
+ * "N", a moment in "N\u00b7m", a load in "kN/m" - and this is the ONE
+ * place its size is decided, so it looks the same on every panel.
+ *
+ * A MINIMUM WIDTH, NOT A FIT.
+ *
+ * A select sizes itself to its widest option by default, but it is also the
+ * first thing to collapse when the track it sits in is squeezed: at the panel's
+ * narrowest the unit was clipped to "k..." or to a bare arrow, and a unit a
+ * student cannot read is a unit they cannot check. So a floor is declared here,
+ * wide enough for the longest unit the tables contain - `kg\u00b7m/s\u00b2`,
+ * `kN\u00b7m`, `lbf\u00b7ft` - and the track that holds it is `min-content`, which
+ * means the row takes that width from the label and value tracks rather than
+ * clipping the unit.
+ *
+ * THE FONT IS THE PANEL'S OWN. Shrinking the type is the other way a control
+ * can be made to "fit" and it is refused here: a readable width is the fix, not
+ * a smaller unit.
+ *
+ * `flex: 0 0 auto` keeps it from being flexed narrower than its options, and
+ * `text-overflow: clip` with a nowrap is deliberate - an ellipsis in a unit is
+ * worse than a wide control, because "N\u2026" is not a unit.
+ */
+.drawing-property-unit .drawing-property-unit-select,
+.drawing-property-grid .drawing-property-unit-select {
+    flex: 0 0 auto;
+    font-size: 9px;
+    min-width: 62px;
+    padding: 0 2px;
+    white-space: nowrap;
+    width: auto;
+}
+
+.drawing-property-unit .drawing-property-unit-select:disabled {
+    opacity: 0.65;
+}
+
+.drawing-property-known:hover {
+    border-color: var(--datum-green);
+}
+
+/*
+ * Pressed means the quantity is Unknown. The amber fill
+ * keeps the state readable next to the greyed field.
+ */
+.drawing-property-known.unknown {
+    background: var(--datum-unknown-tint);
+    border-color: var(--datum-unknown-line);
+    color: var(--datum-unknown-ink);
+}
+
+/*
+ * An Unknown quantity has no authoritative value, so its
+ * field is emptied and dimmed. Only this one field is
+ * affected; the rest of the feature stays editable.
+ */
+.drawing-property-input-unknown,
+.drawing-property-input-unknown:disabled {
+    background: var(--datum-panel);
+    border-color: var(--datum-border);
+    color: var(--datum-muted);
+    cursor: not-allowed;
+    opacity: 1;
+}
+
+.drawing-property-unknown .drawing-property-grid-label {
+    color: var(--datum-unknown-ink);
+}
+
+.drawing-property-mode label {
+    align-items: center;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: inline-flex;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.drawing-property-mode input[type="radio"] {
+    flex: 0 0 12px;
+    height: 12px;
+    margin: 0;
+    width: 12px;
+}
+
+.drawing-property-number-control > input[type="number"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 1px;
+}

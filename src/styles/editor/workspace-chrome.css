@@ -1,0 +1,1022 @@
+/*
+ * The workspace tabs, the drawing's top bar and its hide/show controls, the main menu bar, and the command search.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/* Engineering Drawing workspace */
+#drawing {
+    margin-top: 0;
+}
+
+/*
+ * THE TWO WORKSPACE TABS ARE THE SAME SIZE, AND THAT SIZE IS 12px.
+ *
+ * "Written Solution" and "Engineering Drawing" are the two halves of the same
+ * application, side by side in the same group at the right of the application
+ * bar, so neither may be set larger than the other. The size is stated with the
+ * rest of the tab styling in `shell.css`; this rule only records that the two
+ * are locked together, so a later change cannot size one and forget the other.
+ */
+.tab[data-tab="drawing"],
+.tab[data-tab="writing"],
+.tab[data-tab="solution"] {
+    font-size: 12px;
+    line-height: 1;
+    padding: 0 14px;
+}
+
+.drawing-workspace {
+    --cad-ink: var(--datum-ink);
+    --cad-muted: var(--datum-muted);
+    --cad-border: var(--datum-border);
+    --cad-panel: var(--datum-panel);
+    --cad-accent: var(--datum-green);
+
+    /*
+     * One shared active-tool highlight, used by every
+     * tool button in every section so an active tool
+     * always looks the same wherever it lives.
+     */
+    --cad-active-bg: var(--datum-green-tint);
+    --cad-active-border: var(--datum-green-line);
+    --cad-active-ink: var(--datum-green-ink);
+    --cad-active-strong: var(--datum-green);
+    background: var(--datum-panel);
+    border: 1px solid var(--cad-border);
+    color: var(--cad-ink);
+    display: grid;
+    flex: 1 1 auto;
+
+    /*
+     * THE PAGE DOES NOT SCROLL SIDEWAYS BECAUSE A PANEL IS OPEN.
+     *
+     * Only the toolbar and the section bar scroll horizontally, and they
+     * do it INSIDE their own row. The workspace itself is clamped to its
+     * container: `overflow: hidden` keeps the scrollable rows from
+     * pushing the document wider, and `max-width: 100%` keeps the grid
+     * from ever exceeding the viewport it was laid out into. The canvas
+     * column is the flexible one, so it absorbs whatever the rails give
+     * up rather than the page growing.
+     */
+    max-width: 100%;
+    /*
+     * The Features rail is 236px, not 168px.
+     *
+     * A property row is four tracks - label, value, unit, fix - and on a
+     * statics quantity the unit track also carries the `?` unknown toggle.
+     * At 168px the panel body was 131px, which is not enough for four
+     * columns of readable content: the label and value tracks compressed
+     * to nothing while the unit track stayed at its minimum, so the toggle
+     * overflowed onto the Fix checkbox.
+     *
+     * The canvas takes the difference. It is the one column that can give
+     * up width without losing anything, and the same widening is applied
+     * to the collapsed-state and responsive variants so the rail never
+     * goes back to being too narrow in another layout.
+     */
+    grid-template-columns: 202px minmax(0, 1fr) 236px;
+    /*
+     * Rows: the main menu bar, the toolset nav, the style strip, the
+     * canvas row, the sheet bar, the status bar.
+     *
+     * THE FIRST THREE ARE THE DRAWING BANDS BELOW THE APPLICATION AND
+     * DOCUMENT BAR: Band 2 (the main menu), Band 3 (the toolset selector)
+     * and Band 4 (command search and the quick-access toolbar). They used to
+     * be TWO children - the menu shared a row with a global tool bar that has
+     * since been removed - and now each is its own row, which is what makes
+     * "four bands, in that order" true of the layout as well as the markup.
+     *
+     * THE STYLE STRIP'S ROW IS `auto`, NOT A FIXED 28px.
+     *
+     * A fixed height clips: the row of style controls (Thickness, Color,
+     * Line Type and the display toggles) is the one row that must be able
+     * to REFLOW onto a second line when the panel is narrow, and a fixed
+     * track would cut that second line off rather than accommodate it. Left
+     * at 28px, the controls also had no option but to shrink into one
+     * another, which is the overlap this row is being fixed for. `auto`
+     * lets the row be exactly as tall as its contents need, whether that is
+     * one line or two.
+     *
+     * The sheet bar gets its own row beneath the canvas rather than
+     * sharing the status bar's, so that the two never have to
+     * negotiate the width: tabs scroll horizontally within the canvas
+     * column while the coordinates and the zoom stay where they are.
+     */
+    grid-template-rows: auto auto 0 minmax(0, 1fr) 24px 22px;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+}
+
+/*
+ * =========================================================
+ * THE DRAWING'S TOP BAR, FOLDED AWAY
+ * =========================================================
+ *
+ * `body.datum-topbar-hidden` is the ONE place this is defined. It is set by the
+ * Hide control on the toolset bar and cleared by the Show control at the top of
+ * the canvas.
+ *
+ * WHAT GOES, AND WHAT DOES NOT.
+ *
+ * The bars hidden are the DRAWING's chrome AND the main menu bar:
+ *
+ *   .datum-menubar          the main menu (File, Edit, Insert, View, Tools,
+ *                           Help) - folded away too, so "hide the top bar"
+ *                           means the whole strip of application chrome above
+ *                           the drawing, not just part of it
+ *   .drawing-toolbar        the toolset bar (Geometry/Statics/Annotate/...) -
+ *                           and the Hide button lives ON it, so the button
+ *                           folds away with the bar it folds, and the Show
+ *                           control takes its place
+ *   .drawing-style-strip    the quick-access strip (search, undo/redo, the
+ *                           drawing properties and the display toggles)
+ *
+ * Everything above the canvas and below the application and document bar goes,
+ * so the drawing rises to just under the header and gets all three rows back.
+ *
+ * WHAT STAYS: the application and document bar, the sheet bar, the status bar
+ * and the two side panels. The application and document bar identifies where
+ * the student is and switches workspace - it is not the drawing's chrome, and
+ * hiding it would take away the things used to know which file and which half of
+ * the submission is open. The side panels are independent controls and keep
+ * whatever state they were in.
+ *
+ * THE MENU BAR IS HIDDEN TOO, but it gets a SLIM STRIP OF ITS OWN rather than
+ * simply vanishing - see the rule below. "Hide the top bar" still means the
+ * whole strip of chrome above the drawing disappears; what remains is a single
+ * full-width line carrying the way back.
+ *
+ * The bars are removed with `display: none` rather than collapsed to zero
+ * height: a zero-height row still occupies its track and still contributes
+ * its borders and padding, so the drawing would not actually gain the room.
+ *
+ * THE WORKSPACE'S ROW TRACKS ARE KEPT, AND THREE OF THEM ARE ZEROED.
+ *
+ * This is the part that has to be exactly right. The workspace is a grid with
+ * SIX rows - the menu bar, the toolset bar, the style strip, the panels, the
+ * sheet bar and the status bar - and the rows are matched to their children by
+ * POSITION. Re-stating a SHORTER list while three children are hidden does not
+ * remove those rows: it re-assigns every remaining row to the wrong child, and
+ * the canvas ends up in a 24px track. That is the defect this replaces - the
+ * drawing did not grow, it shrank.
+ *
+ * So the list keeps its SIX entries and the TOOLSET BAR and the STYLE STRIP
+ * become `0`. The menu bar's track stays `auto` - it has not gone away, it has
+ * become the sliver of the way back. The tracks are still there, still matched
+ * to the same children, and contribute no height. The canvas row is untouched
+ * as `minmax(0, 1fr)`, so it absorbs exactly what the two empty rows gave up.
+ */
+body.datum-topbar-hidden .drawing-toolbar,
+body.datum-topbar-hidden .drawing-menu-controls-bar,
+body.datum-topbar-hidden .drawing-topbar-hide,
+body.datum-topbar-hidden .drawing-style-strip {
+    display: none;
+}
+
+/*
+ * THE SLIVER: THE MENU BAR SHRINKS TO A THIN LINE ACROSS THE TOP.
+ *
+ * The six menu labels and the Hide button go; the bar itself stays, 6px tall
+ * and full width, as a METALINE at the very top of the workspace.
+ *
+ * WHY A LINE AND NOT A BUTTON IN THE CORNER. A strip this thin cannot hold a
+ * legible label, and it does not need to: it is the seam the bar was folded
+ * along, and the whole line is the target. It also means the way back sits
+ * exactly where the bar was, across the entire width - so wherever the pointer
+ * happened to be when Hide was pressed, the way back is under it.
+ *
+ * IT IS INTERACTIVE, so it takes hover and focus, and it gets an accessible name
+ * of its own since it has no visible text.
+ */
+body.datum-topbar-hidden .datum-menubar {
+    align-items: center;
+    cursor: pointer;
+    min-height: 6px;
+    padding: 0;
+}
+
+body.datum-topbar-hidden .datum-menubar > * {
+    display: none;
+}
+
+body.datum-topbar-hidden .drawing-workspace {
+    /*
+     * SIX TRACKS, as above: the menu bar shrinks to its sliver, the toolset bar
+     * and the style strip are empty, then the flexible panel row, the sheet bar
+     * and the status bar - the same children, in the same order.
+     */
+    grid-template-rows: 0 auto 0 minmax(0, 1fr) 24px 22px;
+}
+
+/*
+ * THE HIDE CONTROL, ON THE TOOLSET BAR.
+ *
+ * IT SITS ON A BAR IT HIDES, AND THAT IS THE POINT. Pressing it folds the
+ * whole top bar away - including this button - and the Show control appears at
+ * the very top of the drawing area, in the same place. So the control stays
+ * under the pointer: Hide here, Show there, press again and the bar is back.
+ *
+ * `margin-left: auto` pushes it to the trailing edge of the row however many
+ * toolsets precede it, and `flex: 0 0 auto` stops it being squeezed into a
+ * neighbour.
+ *
+ * IT MUST NOT BE SCROLLED AWAY WITH THE TOOLSETS. The toolset row scrolls
+ * horizontally at narrow widths, so this button is placed in the row's own flex
+ * box OUTSIDE the scroller - see `.drawing-toolbar-scroll` - rather than inside
+ * it, where eleven toolsets would push it off the edge.
+ *
+ * Touch target: the button carries padding and a `min-height` rather than
+ * relying on the size of its arrow, so it stays comfortably tappable on
+ * touch screens at the same time as it stays visually small.
+ */
+.drawing-topbar-hide {
+    position: relative;
+    grid-row: 2;
+    grid-column: 1 / -1;
+    justify-self: end;
+    align-self: end;
+    margin-right: 32px;
+    transform: translateY(100%);
+    z-index: 61;
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--cad-border);
+    border-top: 0;
+    border-radius: 0 0 5px 5px;
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 11px;
+    gap: 5px;
+    margin-left: 8px;
+    min-height: 24px;
+    padding: 3px 12px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+    white-space: nowrap;
+}
+
+.drawing-topbar-hide:hover {
+    background: var(--datum-menu-hover);
+    color: var(--datum-ink);
+}
+
+.drawing-topbar-hide:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.drawing-topbar-hide svg {
+    flex: 0 0 auto;
+    height: 13px;
+    width: 13px;
+}
+
+/*
+ * THE SHOW CONTROL, ON THE RIGHT OF THE SLIVER.
+ *
+ * IT SITS WHERE THE HIDE BUTTON WAS. The Hide button is the last control on the
+ * toolset bar, hard against the right edge; Show takes that same corner, so the
+ * pointer that pressed Hide is already over the way back and the bar returns
+ * under it.
+ *
+ * The white tab uses a downward arrow to show that it expands the toolbar.
+ *
+ * IT SITS BESIDE THE MENU BAR, NOT INSIDE IT. The bar is hidden while this is
+ * shown, so nothing is obstructed; the two are simply on the same line, with the
+ * Show control right-aligned and the empty bar's sliver filling the rest.
+ *
+ * Present only while the top bar is hidden, so it costs nothing until it is
+ * needed and the drawing keeps every pixel it reclaimed. It is NOT an overlay
+ * that covers the drawing: it takes its own row above the canvas.
+ */
+.drawing-topbar-show {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px solid var(--cad-border);
+    border-top: 0;
+    border-radius: 0 0 5px 5px;
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 11px;
+    gap: 5px;
+    justify-content: center;
+    letter-spacing: .02em;
+    min-height: 24px;
+    padding: 3px 12px;
+    text-align: center;
+    transition: background-color 120ms ease;
+    width: auto;
+}
+
+body.datum-topbar-hidden .drawing-topbar-show {
+    /*
+     * RIGHT-ALIGNED, at the same corner the Hide button held. The row is still
+     * full width - the clickable strip is the whole line, as it was for the
+     * sliver above - but the LABEL sits at the right, where the student last
+     * pressed.
+     */
+    justify-content: flex-end;
+    margin-left: auto;
+    width: auto;
+    position: absolute;
+    top: 100%;
+    right: 32px;
+}
+
+.drawing-topbar-show:hover {
+    background: var(--datum-menu-hover);
+    color: var(--datum-ink);
+}
+
+.drawing-topbar-show:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.drawing-topbar-show svg {
+    height: 12px;
+    width: 12px;
+}
+
+.drawing-topbar-show[hidden] {
+    display: none;
+}
+
+/*
+ * The canvas area holds the optional Show row ABOVE the canvas.
+ *
+ * IT IS A GRID, NOT A FLEX COLUMN, and that is a deliberate choice. Both
+ * layouts put the strip above the canvas with the canvas taking the rest,
+ * but a grid does it without the child being able to grow its own track: a
+ * `flex: 1` canvas inside a flex column will push its container taller when
+ * the container's height is `auto`, which is what made the whole workspace
+ * grow past the window once the top bar was hidden. Two grid rows - `auto`
+ * for the strip, `minmax(0, 1fr)` for the canvas - are bounded by the track
+ * they sit in, so the canvas is exactly the height the row gives it.
+ */
+.drawing-canvas-area {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+}
+
+/*
+ * THE ROW THE SHOW CONTROL SITS ON - A THIN LINE ACROSS THE WHOLE TOP.
+ *
+ * The row is the full width of the drawing area and only as tall as the
+ * control in it, so when the top bar is hidden the drawing begins almost
+ * immediately and this reads as the seam the bar was folded along.
+ */
+.drawing-topbar-show-row {
+    align-items: center;
+    background: transparent;
+    border-bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    min-height: 6px;
+    padding: 0 8px;
+}
+
+.drawing-topbar-show-row:has(.drawing-topbar-show[hidden]) {
+    /*
+     * NOTHING TO SHOW - the top bar is up, so there is no seam to draw. The row
+     * collapses to nothing rather than leaving a pale line above the canvas.
+     */
+    background: transparent;
+    border-bottom: 0;
+    min-height: 0;
+    padding: 0;
+}
+
+/*
+ * THE ROWS ARE PINNED BY NAME, NOT BY ORDER.
+ *
+ * A hidden grid item is REMOVED, so whatever came next would slide up into its
+ * track. Left to order, the canvas would fall into the `auto` row the Show row
+ * had given up and collapse to nothing.
+ *
+ * Placing each on the row it belongs to means the canvas is always in the
+ * flexible row and the Show row is always in the row above it, whether the
+ * control inside it is showing or not.
+ */
+.drawing-topbar-show-row {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    position: relative;
+    z-index: 61;
+}
+
+.drawing-topbar-show-row:has(.drawing-topbar-show[hidden]) {
+    display: none;
+}
+
+.drawing-canvas-area .drawing-canvas {
+    grid-row: 1;
+    min-height: 0;
+}
+
+/*
+ * =========================================================
+ * BAND 2: THE MAIN MENU BAR
+ * =========================================================
+ *
+ * File, Edit, Insert, View, Tools, Help - one compact row directly beneath the
+ * application and document bar, above the toolset selector.
+ *
+ * IT IS ITS OWN GRID CHILD, AND IT SPANS THE WHOLE WIDTH.
+ *
+ * The workspace is a THREE-COLUMN grid - `202px | 1fr | 236px` for the Tools
+ * rail, the canvas and the Features rail - and a child with no `grid-column`
+ * lands in COLUMN ONE, the 202px rail. Six short labels would then be cropped
+ * to the width of the rail. Every full-width row in this grid states the same
+ * span for that reason: the menu bar, the toolset nav and the style strip all
+ * carry `grid-column: 1 / -1`.
+ *
+ * IT DOES NOT WRAP AND IT DOES NOT GROW. Six short labels fit any desktop
+ * width, and the row's height comes from its own content - so opening a menu
+ * cannot change the toolset row's height and cannot push the canvas down. That
+ * is what "must not cause the document layout to shift" means in CSS: the panel
+ * is positioned OUT of the flow, drawn over the chrome rather than occupying
+ * space in it.
+ */
+.datum-menubar {
+    grid-row: 2;
+    align-items: stretch;
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 0 6px;
+    position: relative;
+
+    /*
+     * ABOVE THE CANVAS BELOW IT. The bar is a positioned element, so without a
+     * level of its own a dropdown would be painted under later siblings - the
+     * canvas and the panels - and a menu opened near one would appear behind it.
+     * This is the whole of "must display above the drawing canvas".
+     */
+    z-index: 60;
+}
+
+/*
+ * ONE LABEL AND ITS SLOT.
+ *
+ * The slot holds the panel and is `position: static`, so the absolutely
+ * positioned panel inside it is measured from the MENU - which is what puts a
+ * dropdown directly beneath its own label rather than beneath the bar.
+ */
+.datum-menu {
+    display: flex;
+    position: relative;
+}
+
+.datum-menu-label {
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    font-family: var(--datum-font);
+    font-size: 12px;
+    line-height: 1;
+    padding: 7px 11px;
+    transition: background-color 120ms ease;
+    white-space: nowrap;
+}
+
+/*
+ * THE OPEN LABEL KEEPS ITS HIGHLIGHT while its menu is down, so the student can
+ * see which menu they are in even after the pointer has moved into the panel.
+ *
+ * IT IS THE SAME TREATMENT AS HOVER, deliberately: the open label IS the hovered
+ * one in every practical case, and a separate "open" colour would make a menu
+ * appear to rest in two states at once. The panel beneath it is what says the
+ * menu is open.
+ */
+.datum-menu-label:hover,
+.datum-menu-open .datum-menu-label {
+    background: var(--datum-menu-open);
+    color: var(--datum-green-ink);
+}
+
+/*
+ * AND THE PANEL MEETS THE OPEN LABEL.
+ *
+ * The panel drops from `top: 100%` of the menu, which is the label's own bottom
+ * edge, so it already starts flush under the item that opened it. The 1px the bar's
+ * border occupies would otherwise show as a seam of chrome between them, which
+ * breaks the panel off from its own label; this closes it by pulling the panel up
+ * over that line. It is a relationship between the menu and its bar item, not a
+ * decoration - nothing else is moved.
+ */
+.datum-menu-open .datum-menu-panel {
+    margin-top: -1px;
+}
+
+.datum-menu-label:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+/*
+ * THE DROPDOWN PANEL.
+ *
+ * Positioned out of the flow, directly under its label, and drawn at a level
+ * above everything else in the workspace. It is sized by its content - compact
+ * rather than a fixed width - so a menu with two short items is not a vast
+ * empty rectangle.
+ *
+ * IT IS ALSO CAPPED, AND THAT CAP IS WHAT STOPS IT BEING A SLAB.
+ *
+ * Sized by its content alone, a menu with as many items as Tools grew to nearly
+ * 500px tall - taller than half the canvas - so it read as a large, near-uniform
+ * sheet laid over the drawing rather than as a menu that belongs to the bar.
+ * That is the "white block" regardless of which surface colour the panel is
+ * given: no palette can rescue a rectangle that big and that empty. A dropdown
+ * must stay a dropdown.
+ *
+ * The cap and the internal scroll are the SAME treatment `.datum-search-results`
+ * already uses for its own result list, so a long menu and a long result list
+ * behave alike: the panel stops growing, the list scrolls inside it, and the
+ * border, radius and shadow - all of which stay fixed - keep reading as one
+ * panel however far the list is scrolled. `overscroll-behavior` keeps a scroll
+ * that reaches the end of the menu from scrolling the drawing underneath it.
+ */
+.datum-menu-slot {
+    position: static;
+}
+
+.datum-menu-panel {
+    background: var(--datum-menu);
+    border: 1px solid var(--datum-menu-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--datum-shadow);
+    left: 0;
+    max-height: min(60vh, 340px);
+    min-width: 208px;
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    padding: 5px;
+    position: absolute;
+    top: 100%;
+    z-index: 70;
+}
+
+/*
+ * AN ITEM.
+ *
+ * One height, one left alignment, one type size - the menu's rhythm. The label
+ * takes the room and the shortcut sits at the far right, which is where every
+ * menu bar puts it and therefore where the eye already looks for it.
+ */
+.datum-menu-item {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    gap: 10px;
+    justify-content: flex-start;
+    padding: 7px 10px;
+    text-align: left;
+    transition: background-color 100ms ease;
+    width: 100%;
+}
+
+/*
+ * THE ICON COLUMN IS A FIXED WIDTH, ALWAYS RENDERED.
+ *
+ * Every command label starts at the same x because the column beside it is the
+ * same width whether or not that particular command has an icon. A column that
+ * collapsed for a missing icon would leave one command indented and its
+ * neighbours out - which reads as a mistake rather than as a hierarchy.
+ *
+ * `currentColor` on the icon means it follows the label's colour through hover,
+ * disabled and the theme, so the two can never disagree.
+ */
+.datum-menu-item-icon {
+    align-items: center;
+    color: var(--datum-muted);
+    display: inline-flex;
+    flex: 0 0 16px;
+    height: 16px;
+    justify-content: center;
+    width: 16px;
+}
+
+.datum-menu-item:hover .datum-menu-item-icon {
+    color: var(--datum-green);
+}
+
+/*
+ * A CHECKED ITEM'S ICON TAKES THE ACCENT.
+ *
+ * A visibility switch that is ON should read as on from the icon as well as the
+ * tick, so the state is visible at a glance without reading the label.
+ */
+.datum-menu-item-checked .datum-menu-item-icon {
+    color: var(--datum-green);
+}
+
+.datum-menu-item[aria-disabled="true"] .datum-menu-item-icon {
+    color: var(--datum-muted);
+    opacity: .55;
+}
+
+.datum-menu-item:hover {
+    background: var(--datum-menu-hover);
+}
+
+.datum-menu-item:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+/*
+ * A DISABLED COMMAND.
+ *
+ * Dimmed and not clickable, but still PRESENT: a menu whose items disappear when
+ * they cannot run teaches nothing about what exists. `aria-disabled` is the
+ * semantic flag; this is how it looks.
+ */
+.datum-menu-item[aria-disabled="true"] {
+    color: var(--datum-muted);
+    cursor: default;
+}
+
+.datum-menu-item[aria-disabled="true"]:hover {
+    background: transparent;
+}
+
+.datum-menu-item-label {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.datum-menu-item-shortcut {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-family: var(--datum-font-mono);
+    font-size: 11px;
+    /* Right-aligned, one column, whichever command it belongs to. */
+    margin-left: auto;
+    padding-left: 16px;
+}
+
+/*
+ * =========================================================
+ * A SUBMENU: A MENU INSIDE A MENU ROW
+ * =========================================================
+ *
+ * Download is a row with children. The row opens a nested panel beside itself,
+ * and every surface, border, radius, shadow and row height is the SAME as the
+ * top-level panel's - a submenu that looked different would read as a different
+ * kind of object rather than as more of the same menu.
+ *
+ * THE ROW IS THE POSITIONING CONTEXT, and the panel is a CHILD of it. That is
+ * what makes the hover work with no JavaScript timers: moving the pointer from
+ * the row down into the panel never leaves the element the open state is on, so
+ * the submenu cannot close under the hand that just opened it.
+ */
+.datum-menu-item-submenu {
+    position: relative;
+}
+
+/*
+ * THE INDICATOR SITS IN ITS OWN COLUMN AT THE RIGHT, after the shortcut, so a
+ * nested row lines up with a plain one instead of shifting its label.
+ */
+.datum-menu-item-chevron {
+    align-items: center;
+    color: var(--datum-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 16px;
+    justify-content: center;
+    margin-left: 4px;
+    width: 16px;
+}
+
+.datum-menu-item-submenu:hover .datum-menu-item-chevron {
+    color: var(--datum-green);
+}
+
+/*
+ * THE NESTED PANEL.
+ *
+ * Hidden until the row is open, then placed just past its right edge so it
+ * reads as growing out of the row rather than floating somewhere near it.
+ *
+ * IT CARRIES ITS OWN SURFACE, the same one `.datum-menu-panel` uses. It used to
+ * borrow nothing but geometry - only `position` and `min-width` - and inherit no
+ * background, so the child rows were drawn straight onto the page behind them.
+ * On a dark page that went unnoticed; on a light one the Tools and Help
+ * subpanels had menu labels sitting on the same pale background as the drawing,
+ * with no panel behind them at all, which is exactly the low-contrast read the
+ * report describes. Repeating the panel's surface, border, shadow and padding
+ * here fixes it in both themes from the same tokens, so there is no second set of
+ * colours to keep in step.
+ */
+.datum-menu-subpanel {
+    background: var(--datum-menu);
+    border: 1px solid var(--datum-menu-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--datum-shadow);
+    display: none;
+    left: calc(100% + 4px);
+    /*
+     * THE SAME CAP AND SCROLL AS THE TOP-LEVEL PANEL, for the same reason: a
+     * nested list long enough to run off the window is a slab that happens to
+     * be attached to a row. The submenu shares the panel's border, radius,
+     * shadow and padding already; it shares its height behaviour too, so the
+     * two read as the one menu at every length.
+     */
+    max-height: min(60vh, 340px);
+    min-width: 172px;
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    padding: 5px;
+    position: absolute;
+    top: -6px;
+    z-index: 71;
+}
+
+.datum-menu-item-submenu-open .datum-menu-subpanel,
+.datum-menu-item-submenu:hover .datum-menu-subpanel,
+.datum-menu-item-submenu:focus-within .datum-menu-subpanel {
+    display: block;
+}
+
+/*
+ * AN OPEN ROW KEEPS THE HOVER TREATMENT, so the pointer leaving the row for the
+ * panel does not make the row look closed while the panel is still open.
+ */
+.datum-menu-item-submenu-open,
+.datum-menu-item-submenu:hover {
+    background: var(--datum-menu-hover);
+}
+
+/*
+ * THE CHILD ROWS ARE INDENTED past the parent's own icon, so the nesting is
+ * visible as a hierarchy rather than as a second flat list.
+ */
+.datum-menu-subpanel .datum-menu-item {
+    padding-left: 14px;
+}
+
+.datum-icon {
+    flex: 0 0 auto;
+    display: block;
+}
+
+/*
+ * =========================================================
+ * ROW 4: COMMAND SEARCH, AND THE ICON BUTTONS BESIDE IT
+ * =========================================================
+ *
+ * The search field leads the row. It is sized to fit a real query rather than
+ * to look tidy at its narrowest - a search box too small to read what you typed
+ * is a search box you stop using.
+ */
+.drawing-command-search {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: 0 1 220px;
+    gap: 6px;
+    height: 26px;
+    min-width: 150px;
+    padding: 0 8px;
+}
+
+.drawing-command-search:hover {
+    border-color: var(--datum-green);
+}
+
+/*
+ * FOCUS IS TWO SIGNALS: the accent border AND a tinted ring. A single hairline
+ * changing colour is easy to miss on a busy strip, and the ring is what makes
+ * the field obviously the one the keyboard is in.
+ */
+.drawing-command-search:focus-within {
+    border-color: var(--datum-green);
+    box-shadow: 0 0 0 2px var(--datum-green-tint);
+}
+
+.drawing-command-search-icon {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    opacity: .9;
+}
+
+.drawing-command-search input {
+    background: transparent;
+    border: 0;
+    color: var(--cad-ink);
+    font-family: var(--datum-font);
+    font-size: 11px;
+    flex: 1 1 auto;
+    height: 22px;
+    min-width: 0;
+    outline: none;
+    padding: 0;
+}
+
+.drawing-command-search input::placeholder {
+    color: var(--datum-placeholder);
+}
+
+/*
+ * The Ctrl+K hint. It is shown because the shortcut IS implemented, and it is
+ * muted because it is a reminder rather than a control.
+ */
+.drawing-command-search-key {
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 2px;
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-family: var(--datum-font-mono);
+    font-size: 10px;
+    padding: 1px 4px;
+}
+
+/*
+ * AN ICON BUTTON ON THE STYLE STRIP - Undo and Redo.
+ *
+ * Small and square, with the same height as every other control on the row so
+ * the strip keeps one rhythm. It is an ACTION, not a toggle: it gives hover,
+ * focus and a brief pressed feedback, and it must NOT stay highlighted after it
+ * is clicked - that is what a pressed-only `:active` rule makes true.
+ */
+.drawing-toolbar-icon-button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 26px;
+    justify-content: center;
+    padding: 0 5px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.drawing-toolbar-icon-button:hover:not(:disabled) {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border);
+}
+
+.drawing-toolbar-icon-button:active:not(:disabled) {
+    background: var(--datum-border);
+}
+
+.drawing-toolbar-icon-button:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.drawing-toolbar-icon-button:disabled {
+    color: var(--datum-muted);
+    cursor: default;
+    opacity: .45;
+}
+
+/*
+ * A SEPARATOR BETWEEN CONTROL FAMILIES on the strip.
+ *
+ * A rule rather than a labelled group: the row is a strip of controls, and the
+ * separator says "these belong together" without spending width on a heading.
+ * It separates HISTORY from DRAWING PROPERTIES, and DRAWING PROPERTIES from the
+ * DISPLAY controls - and nothing else. It is not interactive: no hover, no
+ * focus, no selected state.
+ *
+ * IT ADDS NO MARGIN OF ITS OWN. The strip's `column-gap` already spaces every
+ * child evenly, so a margin here would make the gaps on either side of a
+ * separator WIDER than the gaps between the controls - which is exactly what it
+ * did: a run of 7px gaps punctuated by 9px ones around each divider. The rule is
+ * 1px wide and the flex gap does the rest, so the row is spaced uniformly from
+ * end to end.
+ *
+ * IT IS CENTRED BY `align-self: center` ON A FIXED HEIGHT, not by stretching.
+ * The strip is a flex row whose items are all 22px tall, so a divider of a fixed
+ * 16px height centred in that row sits 3px down from the top - which is correct,
+ * and is why it is not aligned to `top` with the buttons.
+ */
+.drawing-style-strip-divider {
+    align-self: center;
+    background: var(--datum-border-strong);
+    flex: 0 0 auto;
+    height: 16px;
+    margin: 0;
+    width: 1px;
+}
+
+/*
+ * THE SEARCH RESULTS.
+ *
+ * Positioned in the DOCUMENT rather than inside the toolbar, so the list can
+ * extend past the strip's own edge without being clipped by it - a dropdown
+ * that a parent's `overflow` cuts off is a dropdown that cannot show its own
+ * last result.
+ */
+.datum-search-results {
+    background: var(--datum-menu);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--datum-shadow);
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 5px;
+    position: fixed;
+    z-index: 210;
+}
+
+.datum-search-result {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    gap: 10px;
+    justify-content: space-between;
+    padding: 7px 10px;
+    text-align: left;
+    width: 100%;
+}
+
+.datum-search-result:hover,
+.datum-search-result.datum-search-active {
+    background: var(--datum-green-tint);
+    color: var(--datum-green-ink);
+}
+
+/*
+ * WHERE THE COMMAND LIVES. Shown because the point of the search is often to
+ * learn which menu a command is in - the second time, the student goes straight
+ * there.
+ */
+.datum-search-result-menu {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 11px;
+}
+
+.datum-search-result:hover .datum-search-result-menu,
+.datum-search-result.datum-search-active .datum-search-result-menu {
+    color: var(--datum-green-ink);
+    opacity: .75;
+}
+
+/*
+ * A TICKED ITEM - a visibility toggle that is currently ON.
+ */
+.datum-menu-item-checked .datum-menu-item-label::before {
+    color: var(--datum-green);
+    content: "\2713";
+    display: inline-block;
+    font-weight: 700;
+    margin-right: 6px;
+    width: 10px;
+}
+
+/*
+ * A SEPARATOR, AND ONLY WHERE IT MEANS SOMETHING.
+ *
+ * It marks a GROUP boundary - the break between file actions and saving, or
+ * between editing and selecting. A rule between every item would be a picket
+ * fence: it adds height, adds ink, and says nothing. `menu-commands.js` decides
+ * where the groups break.
+ */
+.datum-menu-separator {
+    background: var(--datum-border);
+    height: 1px;
+    margin: 4px 6px;
+}

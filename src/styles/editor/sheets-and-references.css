@@ -1,0 +1,426 @@
+/*
+ * The sheet tab bar, and drawing references in the written solution.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+/*
+ * =========================================================
+   SHEET TABS
+   ========================================================= */
+
+/*
+ * The bar sits in its own row UNDER the canvas.
+ *
+ * That is a layout decision with a meaning behind it: the tab bar
+ * belongs to the workspace, not to the drawing. A worksheet tab in
+ * Excel belongs to the workbook rather than to the cell you are
+ * looking at, and a drawing sheet tab belongs to the document rather
+ * than to the drawing on it - which is why it never scales with the
+ * zoom, never moves with the pan, and never appears in an export or in
+ * a figure. It is styled from the same panel palette as the rest of
+ * the workspace so it reads as part of the application rather than as
+ * something drawn on the canvas.
+ */
+.drawing-sheet-bar-row {
+    background: var(--datum-panel);
+    border-top: 1px solid var(--datum-border);
+    grid-column: 2;
+    grid-row: 5;
+    min-height: 0;
+    min-width: 0;
+}
+
+.drawing-sheet-bar {
+    align-items: stretch;
+    display: flex;
+    gap: 1px;
+    height: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 3px 4px;
+    scrollbar-width: none;
+}
+
+.drawing-sheet-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.drawing-sheet-tab {
+    align-items: center;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    font-family: inherit;
+    font-size: 11px;
+    gap: 4px;
+    max-width: 190px;
+    padding: 4px 6px 4px 12px;
+}
+
+/*
+ * The name, and the selected tab's name, sits slightly high in the
+ * tab.
+ *
+ * The active tab carries a two-pixel indicator along its bottom edge.
+ * Centring the text in the whole tab box therefore puts its lower
+ * half underneath that indicator, and the descenders and the bottom
+ * of the letters are cut into the bar - the name looks struck through
+ * rather than selected.
+ *
+ * The fix is the TEXT's position rather than a thinner indicator: the
+ * bar is the clear signal that this is the current sheet, and making
+ * it thinner to accommodate the type would weaken it. Nudging the
+ * name up by a fixed amount keeps the whole of it clear of the bar
+ * and keeps the bar itself legible. The same nudge applies to
+ * unselected tabs so the row does not shimmer as the selection
+ * moves.
+ */
+.drawing-sheet-tab-name {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    /*
+     * Inset from the bottom of the tab, which is where the indicator
+     * is. Equal to the indicator's thickness plus its border, so the
+     * baseline of the type clears it at every font size.
+     */
+    transform: translateY(-2px);
+}
+
+/*
+ * The hover delete control.
+ *
+ * Present at all times and simply not drawn, rather than added on
+ * hover: a control that appeared by changing the DOM would rebuild the
+ * tab, and the rebuild can land between the pointer going down and the
+ * click arriving - which is the one moment this control is used.
+ *
+ * Its WIDTH is reserved even while it is invisible. Reserving it is
+ * not cosmetic - a tab that grew when hovered would resize under the
+ * pointer as the pointer arrived, which moves the name sideways, makes
+ * the tab a moving target for the click aimed at it, and is enough to
+ * make an automated click time out waiting for the element to settle.
+ * Every tab therefore has the same box whether hovered or not, and the
+ * only thing that changes on hover is whether the X can be seen.
+ */
+.drawing-sheet-close {
+    align-items: center;
+    border-radius: 3px;
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 13px;
+    height: 14px;
+    justify-content: center;
+    line-height: 1;
+    opacity: 0;
+
+    /*
+     * Always present, always the same size. The tab does not change
+     * shape when the pointer arrives.
+     */
+    width: 14px;
+}
+
+/*
+ * Shown only while the pointer is over the tab.
+ *
+ * Deliberately NOT also on :focus-within. The control is a span and is
+ * not focusable, so revealing it on focus showed a delete button to
+ * someone who had merely tabbed onto the tab and could not have
+ * activated it - visible but not usable, which is worse than not
+ * showing it. It also broke the sheet list's cleanliness, since a tab
+ * left focused by an earlier click kept its X on screen indefinitely.
+ *
+ * Deleting without a mouse remains possible through the tab's context
+ * menu, which is the accessible route to the same workflow.
+ */
+.drawing-sheet-tab:hover .drawing-sheet-close {
+    opacity: 1;
+}
+
+.drawing-sheet-close:hover {
+    background: var(--datum-border);
+    color: var(--datum-error);
+}
+
+.drawing-sheet-close.is-disabled {
+    cursor: default;
+}
+
+.drawing-sheet-close.is-disabled:hover {
+    background: transparent;
+    color: var(--datum-muted);
+}
+
+.drawing-sheet-tab:hover {
+    background: var(--datum-panel);
+    color: var(--datum-green);
+}
+
+.drawing-sheet-tab.active {
+    background: var(--datum-surface);
+    color: var(--datum-green-ink);
+    font-weight: 600;
+
+    /*
+     * The active indicator, as a separate element rather than a
+     * border on the tab. A border participates in the tab's box, so
+     * the content inside is laid out above it and the text ends up
+     * crowded against it; a pseudo-element is drawn over the tab's
+     * own bottom edge without changing the box at all, so the name's
+     * position is unaffected by whether the tab is selected.
+     */
+    position: relative;
+}
+
+.drawing-sheet-tab.active::after {
+    background: var(--datum-green);
+    bottom: -1px;
+    content: "";
+    height: 2px;
+    left: -1px;
+    position: absolute;
+    right: -1px;
+}
+
+/*
+ * A tab being dragged out of its place. Dimmed rather than hidden, so
+ * the bar's layout does not shift under the pointer while a reorder is
+ * in progress.
+ */
+.drawing-sheet-tab.dragging {
+    opacity: 0.45;
+}
+
+.drawing-sheet-add {
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2px 11px 4px;
+}
+
+.drawing-sheet-add:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green-line);
+    color: var(--datum-green-ink);
+}
+
+/*
+ * The tab menu. Positioned against the page rather than the workspace
+ * so it is not clipped by the canvas area's overflow, which is what a
+ * menu dropping out of a scrolled canvas would otherwise do.
+ */
+.drawing-sheet-menu {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
+    display: flex;
+    flex-direction: column;
+    min-width: 140px;
+    position: fixed;
+    z-index: 60;
+}
+
+.drawing-sheet-menu button {
+    background: transparent;
+    border: none;
+    color: var(--datum-ink);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 7px 14px;
+    text-align: left;
+}
+
+.drawing-sheet-menu button:hover:not(:disabled) {
+    background: var(--datum-panel);
+}
+
+.drawing-sheet-menu button:disabled {
+    color: var(--datum-muted);
+    cursor: default;
+}
+
+/*
+ * =========================================================
+   DRAWING REFERENCE (written side)
+   ========================================================= */
+
+.reference-panel {
+    background: var(--datum-rail);
+    border: 1px solid var(--datum-border);
+    border-radius: 6px;
+    margin-top: 14px;
+    padding: 12px;
+}
+
+.reference-panel-heading {
+    color: var(--datum-ink);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0 0 10px;
+}
+
+.reference-field {
+    align-items: center;
+    color: var(--datum-ink);
+    display: flex;
+    font-size: 12px;
+    gap: 8px;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.reference-field select,
+.reference-field input {
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 5px 7px;
+    width: 62%;
+}
+
+.reference-insert {
+    margin-top: 4px;
+    width: 100%;
+}
+
+.drawing-reference-preview,
+.reference-preview {
+    margin-top: 12px;
+}
+
+/*
+ * A figure inside the rendered solution.
+ *
+ * IT BELONGS IN THE PANE, AT THE PANE'S WIDTH.
+ *
+ * The Rendered Solution box (`.output`) is a 395px-tall scroll pane - that is
+ * its whole design. A figure wider than the pane is scaled down to the pane's
+ * width and the PANE SCROLLS if the figure is then taller than the box. That is
+ * why the pane has `overflow: auto`, and it is the behaviour a figure in a
+ * piece of written work should have: the reader scrolls the document.
+ *
+ * So the figure is sized by WIDTH and its height follows the drawing's aspect
+ * ratio. It is NOT given a viewport-relative height ceiling: a figure capped at
+ * 60vh is a figure shrunk to something the pane is not asking for, and a
+ * percentage height on an auto-height frame collapses it to nothing.
+ */
+#writingOutput .drawing-reference-figure {
+    margin: 18px auto;
+    max-width: 100%;
+}
+
+#writingOutput .drawing-reference-figure svg {
+    display: block;
+    height: auto;
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.drawing-reference-figure {
+    margin: 0 0 22px;
+}
+
+/*
+ * ========================================================
+ * THE FRAME WRAPS THE DRAWING, AND BOUNDS IT IN BOTH DIRECTIONS
+ * ========================================================
+ *
+ * THE DEFECT THIS FIXES. The frame was sized by WIDTH ALONE (`width: 100%`),
+ * so the figure's height followed the drawing's aspect ratio with no ceiling.
+ * A wide drawing inserted into the 395px-tall Rendered Solution pane came out
+ * taller than the pane and covered the whole workspace, with no way to dismiss
+ * it - the drawing reference appeared to take over the page.
+ *
+ * It was NOT a modal and nothing escaped into the document: the figure had
+ * simply OVERFLOWED its container. That is the same failure as a replaced
+ * element sized by one axis inside a container that cannot bound the other, so
+ * the fix is to bound it in BOTH directions.
+ *
+ *   max-height   a ceiling, so no aspect ratio can make the figure taller
+ *                than a share of the viewport
+ *   min-height0  lets the frame SHRINK rather than forcing its pane to grow
+ *   overflow     clips, so nothing can be drawn outside the frame whatever
+ *                the drawing contains
+ *
+ * The figure is therefore SCALED DOWN to fit when it is too large, which is
+ * what a reader expects of a figure in a document - the alternative, letting
+ * it run over the page, is the bug being fixed.
+ */
+.drawing-reference-frame {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 6px;
+    display: block;
+    max-height: 70vh;
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+}
+
+/*
+ * The SVG IS BOUNDED BOTH WAYS, and never stretched.
+ *
+ * `max-width: 100%` and `max-height` together mean the drawing shrinks to fit
+ * whichever way it is too big; `object-fit: contain` preserves its proportions
+ * while it does. The pair is what stops the one-axis sizing that let a wide
+ * drawing escape its pane.
+ *
+ * THE EDITOR'S OWN POSITIONING IS UNDONE HERE, AND THAT IS THE OTHER HALF OF
+ * THE FIX.
+ *
+ * The renderer draws into the editor's canvas, so its SVG carries the class
+ * `.drawing-renderer`, whose rule is `position: absolute; inset: 0; width: 100%;
+ * height: 100%` - correct for a canvas, because the drawing should fill it.
+ *
+ * A figure is made by CLONING that SVG, class and all. So the clone arrived
+ * absolutely positioned with `inset: 0`, which took it OUT OF THE FRAME'S LAYOUT
+ * entirely: it positioned against the nearest positioned ancestor, landed at the
+ * top-left of the page, and sized itself against that instead of the figure. A
+ * drawing asked for at 760x460 came out at the window's size, over the whole
+ * page, with nothing to dismiss.
+ *
+ * A stylesheet rule cannot beat an inline style, but `position` and `inset` here
+ * are NOT inline - they come from the class - so they are undone by restating
+ * them for this context. The clone becomes an ordinary block in the figure's
+ * flow, which is what a figure in a document should be.
+ */
+.drawing-reference-frame svg {
+    display: block;
+    max-height: 70vh;
+    max-width: 100%;
+    object-fit: contain;
+    inset: auto;
+    position: static;
+}
+
+.drawing-reference-figure figcaption {
+    color: var(--datum-ink);
+    font-size: 12px;
+    padding-top: 6px;
+    text-align: center;
+}
+
+.drawing-reference-empty,
+.drawing-reference-missing {
+    color: var(--datum-muted);
+    font-size: 12px;
+    margin: 0;
+    padding: 14px 4px;
+}

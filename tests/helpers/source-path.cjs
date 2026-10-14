@@ -235,10 +235,27 @@ function rendererSource() {
   return RENDERER_PARTS.map((name) => fs.readFileSync(modulePath(name), "utf8")).join("\n");
 }
 
+/*
+ * A stylesheet's text, with its local @imports expanded in place.
+ *
+ * editor.css is a list of @imports - one file per part of the editor, in
+ * cascade order - so a test that reads "the editor's CSS" needs the files it
+ * imports, in that order. `name` is relative to src/styles/.
+ */
+const IMPORT = /^@import url\("([^"]+)"\);\s*$/gm;
+
+function stylesheetSource(name, from = path.join(SOURCE_ROOT, "styles")) {
+  const file = path.resolve(from, name);
+  return fs
+    .readFileSync(file, "utf8")
+    .replace(IMPORT, (_, target) => stylesheetSource(target, path.dirname(file)));
+}
+
 module.exports = {
   SOURCE_ROOT,
   controllerSource,
   rendererSource,
+  stylesheetSource,
   duplicates,
   loadModule,
   locate,

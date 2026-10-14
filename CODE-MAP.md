@@ -54,8 +54,8 @@ core/util/clone.js        deepClone, deepCloneAll
 | **Angular dimensioning** — which of the four sectors is dimensioned | `src/features/dimensions/dimension-model.js` (`angleSectorLegs`) |
 | Point/segment maths (distance, nearest point on a segment) | `src/core/geometry/points.js` |
 | Deep-copying any value | `src/core/util/clone.js` (`deepClone`) |
-| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor.css` |
-| The responsive breakpoints and icon-only modes | `src/styles/editor.css` (the `@media` blocks near the end) |
+| The top-bar / Tools / Features **Hide** controls | `src/editor/workspace/workspace-layout.js` + `.drawing-*` rules in `src/styles/editor/workspace-chrome.css` and `side-panels.css` |
+| The responsive breakpoints and icon-only modes | `src/styles/editor/responsive.css` |
 
 ---
 
@@ -188,7 +188,7 @@ keyboard-shortcuts.js  Enter/Escape/Delete → finishActiveConstruction, cancelI
 | File | Owns |
 |---|---|
 | `rendering/renderer.js` | `renderDrawing` and the public renderer object. The drawing is split by concern beside it: `entity-render.js` (per-type dispatch), `vector-render.js` (forces: `appendForceArrow`; loads: the arrow field), `symbol-render.js`, `dimension-render.js`, `annotation-render.js` (`appendDerivedMagnitude`), `analysis-render.js`, `overlay-render.js` (the **annotation selection box**, `renderSelectionHandles`), `preview-render.js`, `svg-primitives.js`. |
-| `styles/editor.css` | The Features panel grid (`.drawing-property-grid`), the sketch editor (`.sketch-editor*`), the popups (`.drawing-creation-dimension`), and the workspace columns (`grid-template-columns: 202px … 236px`). |
+| `styles/editor.css` | Imports `styles/editor/*.css` in cascade order: the Features panel grid (`.drawing-property-grid`, `features-panel.css`), the sketch editor (`.sketch-editor*`, `analysis-editors.css`), the popups (`.drawing-creation-dimension`, `value-popups.css`), and the workspace columns (`grid-template-columns: 202px … 236px`, `side-panels.css`). |
 | `editor/workspace/viewport.js` | Fit/zoom, and `annotationBoundsPoints` (fit bounds read derived annotations, not the editor box). |
 
 ---
@@ -651,9 +651,9 @@ one place "hidden" is defined.
 by POSITION. Hiding a row means setting its track to `0` and leaving the list
 SIX long — re-stating a shorter list re-assigns every remaining row to the
 wrong child and collapses the canvas. See the note above
-`body.datum-topbar-hidden .drawing-workspace` in `styles/editor.css`.
+`body.datum-topbar-hidden .drawing-workspace` in `styles/editor/workspace-chrome.css`.
 
-**Responsive rules** (all in `styles/editor.css`):
+**Responsive rules** (all in `styles/editor/responsive.css`):
 
 - the top toolbar and the tool-type bar are `nowrap` + `overflow-x: auto` —
   ONE row that scrolls, never a wrapped second line;
