@@ -6,13 +6,15 @@ import enggDrawingState from "../../core/model/drawing-state.js";
 import { isDerivedFeature } from "../../core/model/feature-types.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
 import { renderCurrentDrawing, requestRender } from "../workspace/canvas-render.js";
-import { objectsByIds } from "../commands/clipboard-commands.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { handleAtPoint, isConstructionInProgress, moveObjectAndChildren, rectangleCorners } from "./handles.js";
+import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
+import { processLabelPoint } from "../../features/thermodynamics/process-labels.js";
+import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../core/selection/selection-transform.js";
+import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../../features/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
@@ -22,13 +24,6 @@ import { setToolMessage } from "../toolbar/toolbar-render.js";
 export function beginManipulationDrag(
     event
 ) {
-    if (
-        event.button !== 0 ||
-        event.shiftKey
-    ) {
-        return false;
-    }
-
     /*
      * ONLY SELECT MAY DRAG WHAT IS ALREADY DRAWN.
      *
@@ -36,13 +31,26 @@ export function beginManipulationDrag(
      * whole direct-manipulation path is closed to everything but Select. See
      * `direct-manipulation.js` for the rule and why it is asked in one place.
      *
-     * It is checked FIRST, ahead of the Modify-session and in-progress guards
-     * below, so that no branch of this function can be reached by a press that
-     * the active tool should have received. A press that lands here with a
-     * creation tool armed must not move a handle, a body, a magnitude label or
-     * a dimension - the tool gets the interaction instead.
+     * It is checked FIRST, ahead of placing a moved selection and of the
+     * Modify-session and in-progress guards below, so that no branch of this
+     * function can be reached by a press that the active tool should have
+     * received. A press that lands here with a creation tool armed must not
+     * move a handle, a body, a magnitude label or a dimension - the tool gets
+     * the interaction instead.
      */
     if (!allowsDirectManipulation()) {
+        return false;
+    }
+
+    /* A moved selection waiting for its placing click takes this press. */
+    if (placeAwaitingSelection(event)) {
+        return true;
+    }
+
+    if (
+        event.button !== 0 ||
+        event.shiftKey
+    ) {
         return false;
     }
 
@@ -74,6 +82,34 @@ export function beginManipulationDrag(
             false
         );
 
+    const selectedIds = drawingState.selection.selectedObjectIds;
+    const box = selectionBounds(drawingState.objects, selectedIds);
+    const hit = handleAtPoint(point);
+    const pistonHandle = hit && isPistonCylinder(hit.object) &&
+        ["piston-height", "stopper-height"].includes(hit.handle.kind);
+    const processLabelHandle = hit?.handle.kind.startsWith("process-label-");
+    if (selectedIds.length > 1 && box && !pistonHandle && !processLabelHandle) {
+        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+        const corners = selectionCorners(box);
+        const corner = corners.findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
+        const inside = point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
+        if (corner >= 0 || inside) {
+            const members = selectionMembers(drawingState.objects, selectedIds);
+            if (members.some(item => item.locked || isDerivedFeature(item))) {
+                setToolMessage("Unlock the selection and remove derived features before moving or resizing it");
+                return true;
+            }
+            editorState.manipulationDrag = {
+                pointerId: event.pointerId, object: members[0],
+                kind: corner >= 0 ? "group-resize" : "body", group: true,
+                corner, bounds: box, start: { ...point }, anchor: { ...point }, moved: false,
+                originals: Object.fromEntries(members.map(item => [item.id, structuredClone(item)]))
+            };
+            drawingCanvas.setPointerCapture(event.pointerId);
+            return true;
+        }
+    }
+
     /*
      * A DERIVED CHILD IS NEVER DRAGGED.
      *
@@ -97,11 +133,6 @@ export function beginManipulationDrag(
 
         return false;
     }
-
-    const hit =
-        handleAtPoint(
-            point
-        );
 
     /*
      * A LOCKED FEATURE DOES NOT MOVE.
@@ -318,7 +349,7 @@ export function beginManipulationDrag(
              */
             anchor: { ...point },
             originals: Object.fromEntries(
-                objectsByIds(
+                selectionMembers(drawingState.objects,
                     drawingState.selection
                         .selectedObjectIds
                 ).map(
@@ -326,7 +357,7 @@ export function beginManipulationDrag(
                         item.id,
                         JSON.parse(
                             JSON.stringify(
-                                item.geometry
+                                item
                             )
                         )
                     ]
@@ -404,7 +435,9 @@ export function updateManipulationDrag(
      * two comments above.
      */
     const resolution =
-        draggingDimension || draggingAnnotate
+        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
+            ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
+            : draggingDimension || draggingAnnotate
             ? resolvePointerEvent(event)
             : resolveManipulationPoint(
                   event,
@@ -493,6 +526,47 @@ export function updateManipulationDrag(
     requestRender();
 }
 
+/*
+ * ================================================================
+ * MOVE, THEN CLICK TO PLACE
+ * ================================================================
+ *
+ * A body drag does not end on release: the selection keeps following the
+ * pointer, and the NEXT click places it (Esc cancels). Releasing marks the
+ * drag as awaiting placement; the placing press replays the pointer once and
+ * then finishes the drag normally, which is where it is committed and its
+ * snap state cleared.
+ */
+
+/* On release of a moved body drag: keep it live and wait for the click. */
+function holdForPlacement(drag, event) {
+    if (!(drag.kind === "body" && drag.moved && !drag.placing)) {
+        return false;
+    }
+
+    drag.awaitingPlacement = true;
+    if (drawingCanvas.hasPointerCapture(event.pointerId)) drawingCanvas.releasePointerCapture(event.pointerId);
+    editorState.selectionClickSuppressed = true;
+    setToolMessage("Move the selection, then click to place it. Esc cancels");
+    renderCurrentDrawing();
+    return true;
+}
+
+/* The placing click: move to it, then finish the drag. */
+function placeAwaitingSelection(event) {
+    if (!(editorState.manipulationDrag?.awaitingPlacement && event.button === 0)) {
+        return false;
+    }
+
+    editorState.manipulationDrag.pointerId = event.pointerId;
+    updateManipulationDrag(event);
+    editorState.manipulationDrag.awaitingPlacement = false;
+    editorState.manipulationDrag.placing = true;
+    finishManipulationDrag(event);
+    editorState.selectionClickSuppressed = true;
+    return true;
+}
+
 export function finishManipulationDrag(
     event
 ) {
@@ -506,6 +580,10 @@ export function finishManipulationDrag(
 
     const drag =
         editorState.manipulationDrag;
+
+    if (holdForPlacement(drag, event)) {
+        return;
+    }
 
     editorState.manipulationDrag =
         null;
@@ -643,6 +721,53 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    if (drag.kind.startsWith("process-label-")) {
+        const index = Number(drag.kind.slice("process-label-".length));
+        const original = drag.originals[object.id].geometry;
+        const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+        const initial = processLabelPoint(original, index, scale);
+        g.stateLabelOffsets ??= {};
+        g.stateLabelOffsets[index] = {
+            dx: initial.x + point.x - drag.start.x - g.points[index].x,
+            dy: initial.y + point.y - drag.start.y - g.points[index].y
+        };
+        return;
+    }
+
+    if (drag.kind === "body" || drag.kind === "group-resize") {
+        let scale = 1;
+        let anchor = drag.start;
+        let dx = point.x - drag.start.x;
+        let dy = point.y - drag.start.y;
+        if (drag.kind === "group-resize") {
+            const corners = selectionCorners(drag.bounds);
+            anchor = corners[(drag.corner + 2) % 4];
+            const initial = corners[drag.corner];
+            const vx = initial.x - anchor.x;
+            const vy = initial.y - anchor.y;
+            scale = Math.max(0.01, ((point.x - anchor.x) * vx + (point.y - anchor.y) * vy) / Math.max(1e-18, vx * vx + vy * vy));
+            dx = 0;
+            dy = 0;
+        }
+        for (const [id, original] of Object.entries(drag.originals)) {
+            const live = drawingState.objects.find(item => item.id === id);
+            if (!live) continue;
+            const changed = transformSelectionObject(original, anchor, scale, dx, dy);
+            live.geometry = changed.geometry;
+            if (changed.placement) live.placement = changed.placement;
+        }
+        return;
+    }
+
+    if (isPistonCylinder(object) && drag.kind === "piston-height") {
+        setPistonFromPoint(g, point);
+        return;
+    }
+    if (isPistonCylinder(object) && drag.kind === "stopper-height" && g.hasStoppers) {
+        setStoppersFromPoint(g, point);
+        return;
+    }
 
     /*
      * AN ANNOTATION MOVES BY ITS PLACEMENT, and nothing else.
@@ -876,38 +1001,8 @@ function applyManipulation(
         return true;
     }
 
-    if (drag.kind === "body") {
-        const deltaX =
-            point.x -
-            drag.start.x;
-
-        const deltaY =
-            point.y -
-            drag.start.y;
-
-        /*
-         * A body carries its attached Statics features with
-         * it. They are restored to their pre-drag geometry
-         * and then translated by the same delta as the body,
-         * so a load or a support cannot be left behind at
-         * stale world coordinates while the body it acts on
-         * moves away.
-         */
-        const originals =
-            drag.originals;
-
-        moveObjectAndChildren(
-            object,
-            deltaX,
-            deltaY,
-            originals
-        );
-
-        return;
-    }
-
     const original =
-        drag.originals;
+        drag.originals?.[object.id]?.geometry;
 
     if (object.type === "point") {
         const target =

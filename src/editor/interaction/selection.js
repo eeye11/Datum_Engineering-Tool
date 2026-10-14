@@ -8,8 +8,8 @@ import enggCreationDimension from "../../features/dimensions/creation-dimension.
 import enggDimensionEditor from "../../features/dimensions/dimension-editor.js";
 import enggAnnotationModel from "../../features/annotations/annotation-model.js";
 import enggPlotEditor from "../../ui/editors/plot-editor.js";
-import { commitAnalysisAxis } from "../statics/analysis-tools.js";
-import { commitAnalysisInput } from "../statics/analysis-tools.js";
+import { commitAnalysisAxis, commitAnalysisInput } from "../statics/analysis-tools.js";
+import { finishProcessPath, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectIntersectsSelection } from "./box-selection.js";
 import { syncSelectionInteraction } from "./canvas-click.js";
 import { renderCurrentDrawing, requestRender } from "../workspace/canvas-render.js";
@@ -1035,6 +1035,7 @@ export function resetActiveToolForCategory() {
  * left running and Enter is a no-op for them.
  */
 export function finishActiveConstruction() {
+    if (isProcessPlotTool(drawingState.activeTool)) return finishProcessPath();
     const interaction =
         drawingState.interaction;
 

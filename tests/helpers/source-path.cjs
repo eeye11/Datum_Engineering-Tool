@@ -230,6 +230,7 @@ const RENDERER_PARTS = [
   "draw-members.js",
   "draw-geometry.js",
   "draw-bodies.js",
+  "draw-thermodynamics.js",
   "vector-render.js",
   "symbol-render.js",
   "overlay-render.js",

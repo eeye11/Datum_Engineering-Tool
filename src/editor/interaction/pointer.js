@@ -83,6 +83,17 @@ function selectedForceAnchorPoints() {
 function resolvePointerPoint(
     rawPoint
 ) {
+    // Control volumes outline a region with clearance from nearby equipment.
+    // Keep both corners at the pointer, without snapping or held guides.
+    if (drawingState.activeTool === "control-volume") {
+        return {
+            rawPointerPoint: { ...rawPoint },
+            effectiveConstructionPoint: { ...rawPoint },
+            snappedPoint: null, inferredPoint: null,
+            snapCandidate: null, hoveredEntity: null,
+            inference: null, guideline: null
+        };
+    }
     /*
      * THE ANALYSIS AXIS PLACEMENT IS NOT A CONSTRUCTION TOOL, BUT IT
      * STILL NEEDS THE POINTER.
@@ -611,6 +622,37 @@ export function resolvePointerEvent(
 }
 
 /*
+ * THERMODYNAMICS SYMBOLS MOVE FREELY, with the grab offset preserved: a
+ * control volume, a piston-cylinder moved as a body, the piston and its
+ * stoppers sliding within the cylinder, and a process path's state labels.
+ * Corner resizing still uses the normal snap and inference pipeline. Returns
+ * the unsnapped resolution for those drags, and null for every other.
+ */
+function freeThermodynamicsMove(drag, rawPoint) {
+    if (
+        drag?.kind?.startsWith("process-label-") ||
+        drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
+        (drag?.kind === "body" &&
+            ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||
+        (["piston-height", "stopper-height"].includes(drag?.kind) &&
+            drag.object?.metadata?.thermodynamicsKind === "piston-cylinder")
+    ) {
+        return {
+            rawPointerPoint: { ...rawPoint },
+            snappedPoint: { ...rawPoint },
+            inferredPoint: { ...rawPoint },
+            effectiveConstructionPoint: { ...rawPoint },
+            snapCandidate: null,
+            hoveredEntity: null,
+            inference: null,
+            guideline: null
+        };
+    }
+
+    return null;
+}
+
+/*
  * ========================================================
  * THE POINTER WHILE AN EXISTING FEATURE IS BEING DRAGGED
  * ========================================================
@@ -663,6 +705,12 @@ export function resolveManipulationPoint(
             event,
             false
         );
+
+    const free = freeThermodynamicsMove(drag, rawPoint);
+
+    if (free) {
+        return free;
+    }
 
     const bounds =
         drawingCanvas.getBoundingClientRect();

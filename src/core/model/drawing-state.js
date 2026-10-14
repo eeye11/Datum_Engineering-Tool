@@ -1657,6 +1657,10 @@ function newFeatureId(
  * existing `const id = addObject(...)` still works.
  */
 function addObject(state, object) {
+    // Every insertion needs an identity, including a clipboard copy whose
+    // requested name is still available and takes the early return below.
+    if (!object.id) object.id = newFeatureId(object.type);
+
     const baseName =
         object.name.match(/\d+$/)
             ? object.name.replace(

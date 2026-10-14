@@ -405,6 +405,16 @@ export function bindFeaturePropertyControls(object) {
         });
     });
 
+    drawingProperties.querySelectorAll('[data-saturation-axis-label]').forEach(input => {
+        input.addEventListener('change', () => {
+            const previous = enggDrawingState.snapshotDrawing(drawingState);
+            if (updateFeatureProperty(object, input.dataset.saturationAxisLabel, input.value.trim())) {
+                enggDrawingState.commitDrawingChange(drawingState, previous);
+                renderCurrentDrawing();
+            }
+        });
+    });
+
     drawingProperties.querySelectorAll('[data-feature-name]').forEach(input => {
         input.addEventListener('change', () => {
             const name =

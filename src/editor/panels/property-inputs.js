@@ -4,6 +4,7 @@
 
 import enggFeatureGeometry from "../../core/geometry/feature-geometry.js";
 import { triangleMeasurements } from "../geometry/triangle-panel.js";
+import { pistonFraction, stopperFraction } from "../../features/thermodynamics/piston-cylinder.js";
 
 /*
  * Wrap every numeric input in the panel with the
@@ -133,6 +134,11 @@ export function currentPropertyValue(
 ) {
     const g =
         object.geometry || {};
+
+    if (key === "pistonHeight") {
+        return g.height * pistonFraction(g);
+    }
+    if (key === "stopperHeight") return g.height * stopperFraction(g);
 
     const measurements =
         object.type === "triangle"

@@ -53,10 +53,29 @@ function worldLengthInDisplayUnits(object, value) {
 }
 import { applyTriangleSidesAndAngles } from "../geometry/triangle-editing.js";
 
+import { pistonFraction, setStopperFraction } from "../../features/thermodynamics/piston-cylinder.js";
+
 export function updateFeatureProperty(object, key, value, typedUnit) {
     const g = object.geometry;
+    if (object.metadata?.thermodynamicsKind === "saturation-curve" && ["xLabel", "yLabel"].includes(key)) {
+        g[key] = String(value ?? "");
+        return true;
+    }
     const fixed = name => Boolean(object.constraints?.[name]);
     const positive = value > 0;
+
+    if (key === "pistonHeight" && object.metadata?.thermodynamicsKind === "piston-cylinder") {
+        const height = worldLengthInDisplayUnits(object, value);
+        if (!Number.isFinite(height) || !(g.height > 0)) return false;
+        g.pistonFraction = pistonFraction({ ...g, pistonFraction: height / g.height });
+        return true;
+    }
+    if (key === "stopperHeight" && object.metadata?.thermodynamicsKind === "piston-cylinder" && g.hasStoppers) {
+        const height = worldLengthInDisplayUnits(object, value);
+        if (!Number.isFinite(height) || !(g.height > 0)) return false;
+        setStopperFraction(g, height / g.height);
+        return true;
+    }
 
     /*
      * ========================================================

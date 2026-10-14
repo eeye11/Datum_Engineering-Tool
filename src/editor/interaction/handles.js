@@ -11,6 +11,8 @@ import enggLoadProfile from "../../features/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
+import { processLabelPoint } from "../../features/thermodynamics/process-labels.js";
+import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../../features/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
 import { translateObject } from "../geometry/transforms.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../core/model/feature-types.js";
@@ -484,6 +486,14 @@ function manipulationHandles(
     const g =
         object.geometry || {};
 
+    if (object.metadata?.thermodynamicsKind === "process-path") {
+        const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+        return (g.points || []).flatMap((point, index) => [
+            { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
+            { kind: `vertex${index}`, point }
+        ]);
+    }
+
     /*
      * AN ANNOTATION IS MOVED FROM ITS OWN POSITION.
      *
@@ -840,12 +850,22 @@ function manipulationHandles(
     }
 
     if (isRectangleLike(object)) {
-        return rectangleCorners(g).map(
+        const corners = rectangleCorners(g).map(
             (point, index) => ({
                 kind: `corner${index}`,
                 point
             })
         );
+        if (isPistonCylinder(object)) {
+            const handles = [{ kind: "piston-height", point: cylinderPoint(g, 0.5, pistonFraction(g)) }, ...corners];
+            if (g.hasStoppers) {
+                handles.unshift(...[0.09, 0.91].map(x => ({
+                    kind: "stopper-height", point: cylinderPoint(g, x, stopperFraction(g))
+                })));
+            }
+            return handles;
+        }
+        return corners;
     }
 
     if (object.type === "triangle") {
@@ -980,7 +1000,7 @@ export function handleAtPoint(
 
             if (
                 !selected &&
-                object.type !== "dimension"
+                object.type !== "dimension" && object.metadata?.thermodynamicsKind !== "process-path"
             ) {
                 return;
             }
@@ -989,6 +1009,7 @@ export function handleAtPoint(
                 object
             ).forEach(
                 handle => {
+                    if (!selected && object.metadata?.thermodynamicsKind === "process-path" && !handle.kind.startsWith("process-label-")) return;
                     const distance =
                         Math.hypot(
                             handle.point.x - point.x,

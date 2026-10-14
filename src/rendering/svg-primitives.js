@@ -271,6 +271,7 @@ import enggCanvasPalette from "./canvas-palette.js";
     function dashPatternFor(
         lineType
     ) {
+        if (lineType === "dotted") return "1 4";
         if (lineType === "dashed") {
             return "8 5";
         }
@@ -423,6 +424,11 @@ import enggCanvasPalette from "./canvas-palette.js";
                 "opacity",
                 style.opacity
             );
+        }
+
+        if (style.lineType === "dotted") {
+            element.setAttribute("stroke-dasharray", "1 4");
+            element.setAttribute("stroke-linecap", "round");
         }
 
         if (
