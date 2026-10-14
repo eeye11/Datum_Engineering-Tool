@@ -5,7 +5,7 @@
 import enggDrawingState from "../core/model/drawing-state.js";
 import { isDerivedFeature } from "../core/model/feature-types.js";
 import enggAnnotate from "../features/annotations/annotate-model.js";
-import { renderCurrentDrawing } from "./canvas-render.js";
+import { renderCurrentDrawing, requestRender } from "./canvas-render.js";
 import { objectsByIds } from "./clipboard-commands.js";
 import { COORDINATE_SYSTEM_TYPE } from "./constants.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
@@ -490,7 +490,7 @@ export function updateManipulationDrag(
         resolution
     );
 
-    renderCurrentDrawing();
+    requestRender();
 }
 
 export function finishManipulationDrag(

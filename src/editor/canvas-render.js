@@ -344,7 +344,46 @@ export function appendCoordinateSystemVisual(
     );
 }
 
+/*
+ * ================================================================
+ * ONE DRAW PER FRAME WHILE THE POINTER MOVES
+ * ================================================================
+ *
+ * A pointer reports far more often than the screen repaints, and a drag
+ * fires BOTH `mousemove` and `pointermove` for every movement - each of
+ * which redrew the whole sheet. `requestRender` is what the per-move paths
+ * call instead: however many times it is asked within a frame, the sheet is
+ * drawn once, just before the browser paints.
+ *
+ * `renderCurrentDrawing` itself is unchanged and still draws at once, so a
+ * click, a commit or a key press shows its result immediately - and it
+ * cancels any frame still pending, since what it just drew is already
+ * current. Without `requestAnimationFrame` (a test harness) it draws at once.
+ */
+let pendingFrame = 0;
+
+export function requestRender() {
+    if (typeof requestAnimationFrame !== "function") {
+        renderCurrentDrawing();
+        return;
+    }
+
+    if (pendingFrame) {
+        return;
+    }
+
+    pendingFrame = requestAnimationFrame(() => {
+        pendingFrame = 0;
+        renderCurrentDrawing();
+    });
+}
+
 export function renderCurrentDrawing() {
+    if (pendingFrame) {
+        cancelAnimationFrame(pendingFrame);
+        pendingFrame = 0;
+    }
+
     drawingCanvas.classList.toggle(
         "drawing-tool-active",
         Boolean(

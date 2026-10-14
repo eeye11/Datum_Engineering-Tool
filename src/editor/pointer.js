@@ -8,7 +8,7 @@ import enggLoadProfile from "../features/analysis/load-profile.js";
 import enggDrawingRenderer from "../rendering/renderer.js";
 import { analysisAxisForPlacement } from "./analysis-tools.js";
 import { syncSelectionInteraction } from "./canvas-click.js";
-import { renderCurrentDrawing } from "./canvas-render.js";
+import { renderCurrentDrawing, requestRender } from "./canvas-render.js";
 import { isConstructionTool } from "./construction-tools.js";
 import { drawingCanvas, drawingCoordinates } from "./dom.js";
 import { drawingSnap, drawingState, editorState } from "./editor-state.js";
@@ -1268,7 +1268,7 @@ export function updateDrawingCoordinates(
         );
     }
 
-    renderCurrentDrawing();
+    requestRender();
 }
 
 /*

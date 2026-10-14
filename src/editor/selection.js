@@ -12,7 +12,7 @@ import { commitAnalysisAxis } from "./analysis-tools.js";
 import { commitAnalysisInput } from "./analysis-tools.js";
 import { objectIntersectsSelection } from "./box-selection.js";
 import { syncSelectionInteraction } from "./canvas-click.js";
-import { renderCurrentDrawing } from "./canvas-render.js";
+import { renderCurrentDrawing, requestRender } from "./canvas-render.js";
 import { objectsByIds } from "./clipboard-commands.js";
 import { distance } from "./construction-geometry.js";
 import { commitDimensionSelection } from "./dimension-placement.js";
@@ -482,7 +482,7 @@ export function updateSelectionDrag(
             }
         }
 
-        renderCurrentDrawing();
+        requestRender();
 
         return;
     }
@@ -540,7 +540,7 @@ export function updateSelectionDrag(
                 }
             );
 
-            renderCurrentDrawing();
+            requestRender();
         }
 
         return;
@@ -604,7 +604,7 @@ export function updateSelectionDrag(
                 );
 
         renderProperties();
-        renderCurrentDrawing();
+        requestRender();
     }
 }
 
