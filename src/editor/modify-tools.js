@@ -886,15 +886,18 @@ function commitMirror() {
             /*
              * addObject assigns the final unique id and a
              * sequential name, so the mirror gets its own
-             * feature identity in the tree.
+             * feature identity in the tree. It returns the
+             * STORED object, not an id - assigning it to
+             * `copy.id` made the feature contain itself, and
+             * the sheet could no longer be saved.
              */
-            const newId =
+            const stored =
                 enggDrawingState.addObject(
                     drawingState,
                     copy
                 );
 
-            copy.id = newId;
+            copy.id = stored.id;
         }
     );
 

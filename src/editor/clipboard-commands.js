@@ -84,9 +84,10 @@ export function pasteFromClipboard() {
             /*
              * addObject assigns the identity and the name, so
              * the copy becomes its own feature in the tree rather
-             * than a second row carrying the original's name.
+             * than a second row carrying the original's name. It
+             * returns the STORED object, not an id.
              */
-            const id =
+            const { id } =
                 enggDrawingState.addObject(
                     drawingState,
                     feature
