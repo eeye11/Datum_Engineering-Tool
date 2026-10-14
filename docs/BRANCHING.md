@@ -199,10 +199,16 @@ tests are green — check the actual DOM, not just the selector you expect.
 
 ## 8. Source-code ownership per category
 
-Category names do **not** map to directories. Each category's tools are
+The categories that have real tools have a folder of their own in the
+editor - `editor/geometry/`, `editor/annotate/`, `editor/statics/` - so most
+of a category's work stays inside it. Every category's tools are still
 registered in `editor/toolbar/tools.js` and travel the shared pipeline in
-`docs/TOOL-MAP.md`. Ownership below means *the files a category's work
-will most often change*, not exclusive ownership.
+`docs/TOOL-MAP.md`. A new category (Dynamics, Fluids, …) should follow the
+same shape: `editor/<category>/` for its tools, a draw function in
+`rendering/entities/` plus an entry in `ENTITY_RENDERERS` for each new
+feature type, and its type declared once in `core/model/feature-types.js`.
+Ownership below means *the files a category's work will most often change*,
+not exclusive ownership.
 
 | Category | Branch | Registered tools (from `editor/toolbar/tools.js`) | Primary files |
 | --- | --- | --- | --- |

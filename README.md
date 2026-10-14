@@ -58,20 +58,22 @@ shows exactly what the change did. See [docs/TESTING.md](docs/TESTING.md).
 index.html            the page
 src/main.js           the application entry point
 src/editor/           the drawing editor — editor/index.js lists every part
+  interaction/ toolbar/ workspace/ panels/ commands/     shared editor machinery
+  geometry/ annotate/ statics/                         the tools of each category
 src/core/             geometry, units, scale, the document model, snapping
 src/features/         dimensions, annotations, analysis
-src/rendering/        drawing the document as SVG
+src/rendering/        drawing the document as SVG; entities/ draws each feature type
 src/sheets/           sheets and the sheet tab bar
 src/file/             save, open, export, crash recovery
 src/solution/         the Written Solution tab
 src/references/       drawing references (a sheet placed in the solution)
 src/ui/               shared panel and dialog components
 src/api/              the integration API — the only supported entry for other tools
-src/styles/           tokens.css (colours, type), base, editor, shell
+src/styles/           tokens.css (colours, type), base, editor (+ editor/), shell
 server/               optional Node server (TikZ → SVG)
 tests/                node:test suites; tests/e2e/ browser scenarios
 docs/                 architecture, integration, file format, testing
-tools/                developer scripts (refactoring codemods, audits, QA)
+tools/                developer scripts (audits, codemods, diagnostics); archive/
 ```
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing the code,

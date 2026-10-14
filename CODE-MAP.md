@@ -342,10 +342,10 @@ is. See the `const highlighted = false` in `rendering/entities/draw-members.js`.
   (`node --test tests/*.test.cjs`). Load modules with the harness helpers in
   `tests/helpers/source-path.cjs`; render with `tests/harness-renderer.cjs`.
 - **Lint:** `npm run lint`.
-- **Browser QA:** `tools/qa/*.mjs` run through the `browser-automation` skill:
-  `node <skill>/browser.mjs http://localhost:5173/ --script ./tools/qa/<file>.mjs`.
-  `tools/qa/qa-helpers.mjs` gives `category()`, `tool()`, `sub()`, `press()`,
-  `move()`, `at()`, `msg()`, `panel()`, `allObjects()`.
+- **Browser:** `tests/e2e/golden-scenario.mjs` drives every tool in Chrome;
+  record before and after a change and compare with `golden-compare.mjs`
+  (see `docs/TESTING.md`). The older per-feature QA scripts are in
+  `tools/archive/qa/`, unmaintained.
 
 Useful test files to copy from: `tests/sketch-editor.test.cjs` (rendering +
 DOM), `tests/load-value-popup.test.cjs` (popup keys), `tests/dimension-drag-edit.test.cjs`

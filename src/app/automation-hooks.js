@@ -1,7 +1,7 @@
 /*
  * BROWSER-AUTOMATION HANDLES.
  *
- * Browser tests (tests/e2e) and the QA scripts (tools/qa) drive the
+ * Browser tests (tests/e2e) and developer scripts (tools/) drive the
  * running page and need to read its state: the document model, the sheets,
  * the export pipeline. Before the move to ES modules every module was a
  * window global, so they simply read window.enggDrawing and friends. These
