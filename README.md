@@ -59,7 +59,7 @@ index.html            the page
 src/main.js           the application entry point
 src/editor/           the drawing editor — editor/index.js lists every part
   interaction/ toolbar/ workspace/ panels/ commands/     shared editor machinery
-  geometry/ annotate/ statics/                         the tools of each category
+  geometry/ annotate/ statics/ thermodynamics/         the tools of each category
 src/core/             geometry, units, scale, the document model, snapping
 src/features/         dimensions, annotations, analysis
 src/rendering/        drawing the document as SVG; entities/ draws each feature type
