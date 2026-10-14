@@ -40,7 +40,7 @@ const TOOLS = [
     ["STATICS", "load", "distributed-load", "beam", ["c:0.45,0.6", "c:0.3,0.6", "c:0.6,0.6", "type:25", "Enter", "c:0.45,0.4"]],
     /* body -> one magnitude-defining point per click, off the beam -> Enter */
     ["STATICS", "load", "varying-distributed-load", "beam", ["c:0.3,0.6", "c:0.3,0.45", "c:0.5,0.4", "c:0.65,0.5", "Enter"]],
-    ["STATICS", "moment", "beam"],
+    ["STATICS", "moment", null, "beam"],
     ["STATICS", "support", "pin-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "support", "roller-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "support", "fixed-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
@@ -56,7 +56,7 @@ const TOOLS = [
     ["STATICS", "bending-moment-diagram", "sketch", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
-    ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc", "3-Point Arc"],
+    ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc"],
     ["DYNAMICS", "velocity"], ["FLUIDS", "pipe"], ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
@@ -185,7 +185,23 @@ async function main() {
         await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
         await sleep(120);
         if (sub) {
-            let item = page.locator(`.drawing-coordinate-submenu-item[data-submenu-id="${sub}"]`).first();
+            /*
+             * WAIT for the submenu rather than look once: it can open after a
+             * fixed pause, and a missed item silently left the tool in its
+             * default mode, so the step's result depended on timing.
+             */
+            const byId = `.drawing-coordinate-submenu-item[data-submenu-id="${sub}"]`;
+            const byText = page.locator(".drawing-coordinate-submenu-item", { hasText: sub });
+            const appeared = () => page.locator(byId).first().or(byText.first()).first()
+                .waitFor({ state: "visible", timeout: 1500 }).then(() => true, () => false);
+            if (!(await appeared())) {
+                /* Retry once: a submenu left toggled by an earlier step can swallow the first click. */
+                debug("submenu retry", sub);
+                await page.keyboard.press("Escape"); await sleep(80);
+                await page.click(`.drawing-tool[data-tool-id="${toolId}"]`); await sleep(120);
+                await appeared();
+            }
+            let item = page.locator(byId).first();
             if (!(await item.count())) {
                 item = page.locator(".drawing-coordinate-submenu-item", { hasText: sub }).first();
             }
