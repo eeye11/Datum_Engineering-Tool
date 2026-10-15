@@ -8,6 +8,7 @@ import enggDrawingExport from "../../file/document-export.js";
 import enggDocumentFile from "../../file/document-file.js";
 import enggDocumentManagement from "../../file/document-management.js";
 import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument } from "../../file/latex/latex-document.js";
+import { openLatexCodeEditor } from "./latex-commands.js";
 import enggRecovery from "../../file/document-recovery.js";
 import enggFileSave from "../../file/file-save.js";
 import enggRecentFiles from "../../file/recent-files.js";
@@ -2062,11 +2063,16 @@ function applyOpenedLatex(text, name, file) {
  * The LaTeX reader turns the drawing commands it understands into features.
  */
 function openLatexCode(text, base) {
-    return reportFileProblem(
-        `"${base}.tex" has no DAETUM drawing data, so it cannot be reopened as a ` +
-            "DAETUM document. Your current drawing has not been changed.",
-        { fileName: `${base}.tex`, failure: "no-daetum-data" }
-    );
+    openLatexCodeEditor({
+        text,
+        notice:
+            `"${base}.tex" was not written by DAETUM, so it is shown here as code. ` +
+            "The preview shows what DAETUM can draw from it; Insert into drawing adds it to the current sheet."
+    });
+
+    setToolMessage(`Opened ${base}.tex in the LaTeX code editor`);
+
+    return true;
 }
 
 function applyOpenedText(text, name, file) {

@@ -37,6 +37,7 @@ import {
 } from "../commands/clipboard-commands.js";
 import { deleteSelectedObjects } from "../commands/delete-command.js";
 import { FILE_ACTIONS } from "../commands/document-commands.js";
+import { openLatexCodeEditor } from "../commands/latex-commands.js";
 import { fitDrawingToView } from "../workspace/viewport.js";
 import { drawingState } from "../editor-state.js";
 import { activateTool } from "./tool-activation.js";
@@ -441,6 +442,13 @@ const insertMenu = () => ({
             label: "Drawing / Diagram",
             icon: "shapes",
             run: () => openCategoryAndArmTool("STATICS", "body")
+        },
+        { separator: true },
+        {
+            id: "latex-code",
+            label: "LaTeX Code…",
+            icon: "file-text",
+            run: () => openLatexCodeEditor()
         }
     ]
 });

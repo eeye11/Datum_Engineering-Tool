@@ -318,9 +318,30 @@ export function writeLatexDocument(documentBody, { title = "Drawing", exportedAt
     ].join("\n");
 }
 
+/*
+ * One sheet as editable code: its picture, preceded by the colours it uses -
+ * what the LaTeX editor shows for "From drawing". No document wrapper and no
+ * embedded data: this is code to read and change, not a file to reopen.
+ */
+export function writeLatexPicture(documentBody, sheetId) {
+    const sheets = documentBody?.sheets || [];
+    const index = Math.max(0, sheets.findIndex(sheet => sheet.id === sheetId));
+    const sheet = sheets[index];
+
+    if (!sheet) {
+        return "";
+    }
+
+    const palette = createPalette();
+    const picture = sheetPicture(documentBody, sheet, index, sheets.length, palette);
+
+    return [...palette.definitions(), picture].join("\n");
+}
+
 export default {
     LATEX_EXTENSION,
     LATEX_MEDIA_TYPE,
     readEmbeddedDocument,
-    writeLatexDocument
+    writeLatexDocument,
+    writeLatexPicture
 };

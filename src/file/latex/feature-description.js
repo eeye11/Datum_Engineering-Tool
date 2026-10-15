@@ -16,6 +16,7 @@
  * A type this module does not know is still described - by its name, its type
  * and its stored parameters - so a feature added later is never left out.
  */
+import { ANNOTATE_KINDS } from "../../features/annotations/annotate-model.js";
 import { isPistonCylinder } from "../../features/thermodynamics/piston-cylinder.js";
 import { isSaturationCurve } from "../../features/thermodynamics/saturation-curve.js";
 
@@ -117,6 +118,11 @@ export function typeLabel(object) {
 
     if (object?.type === "analysis-diagram") {
         return DIAGRAM_LABELS[object.geometry?.diagramType] || "Analysis diagram";
+    }
+
+    /* An Annotate feature says which kind it is: Note, Arrow, Leader, Table… */
+    if (object?.type === "annotate" && ANNOTATE_KINDS[object.annotateKind]) {
+        return ANNOTATE_KINDS[object.annotateKind].label;
     }
 
     return TYPE_LABELS[object?.type] || String(object?.type || "feature")
