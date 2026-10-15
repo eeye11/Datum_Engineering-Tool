@@ -536,6 +536,12 @@ function renderImage(state, points, options = {}) {
   if (!svg) {
     return null;
   }
+
+  /* A caller that only needs the drawing (the LaTeX writer) skips the raster. */
+  if (options.svgOnly) {
+    return { svg, bounds };
+  }
+
   const canvas = document.createElement("canvas");
 
   canvas.width = Math.round(bounds.width);
@@ -669,7 +675,8 @@ function renderFittedDocument(documentBody, options = {}) {
   return renderImage(state, points, {
     width,
     height: options.height || height,
-    background: options.background || null
+    background: options.background || null,
+    svgOnly: Boolean(options.svgOnly)
   });
 }
 

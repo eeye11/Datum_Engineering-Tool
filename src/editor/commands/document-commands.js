@@ -7,6 +7,7 @@ import enggErrorLog from "../../app/error-log.js";
 import enggDrawingExport from "../../file/document-export.js";
 import enggDocumentFile from "../../file/document-file.js";
 import enggDocumentManagement from "../../file/document-management.js";
+import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, writeLatexDocument } from "../../file/latex/latex-document.js";
 import enggRecovery from "../../file/document-recovery.js";
 import enggFileSave from "../../file/file-save.js";
 import enggRecentFiles from "../../file/recent-files.js";
@@ -582,7 +583,8 @@ const DOWNLOAD_FORMATS = {
     },
     pdf: { extension: "pdf", type: "application/pdf" },
     jpg: { extension: "jpg", type: "image/jpeg" },
-    png: { extension: "png", type: "image/png" }
+    png: { extension: "png", type: "image/png" },
+    latex: { extension: LATEX_EXTENSION, type: LATEX_MEDIA_TYPE }
 };
 
 /*
@@ -687,6 +689,27 @@ export async function downloadDrawing(format) {
      * document for the print pass only, exactly as Print does, so the user stays
      * in the editor they were working in.
      */
+    /*
+     * LaTeX: every sheet as a drawing in standard LaTeX picture code, with the
+     * document embedded so DAETUM can reopen it (file/latex/latex-document.js).
+     */
+    if (format === "latex") {
+        try {
+            const text = writeLatexDocument(serializeDocumentBody(), { title: baseDocumentName() });
+            const name = downloadBlob(new Blob([text], { type: chosen.type }), exportFileName(chosen.extension));
+
+            setToolMessage(`Downloaded ${name}`);
+
+            return name;
+        } catch (error) {
+            enggErrorLog.reportError("download latex", error, {});
+
+            setToolMessage("The LaTeX file could not be downloaded");
+
+            return null;
+        }
+    }
+
     if (format === "pdf") {
         const name = exportPdfPage();
 

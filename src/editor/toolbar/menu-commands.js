@@ -192,6 +192,12 @@ const fileMenu = () => ({
                     label: "ENGGDraw",
                     icon: "file-pen",
                     run: () => FILE_ACTIONS.download("enggdraw")
+                },
+                {
+                    id: "download-latex",
+                    label: "LaTeX (.tex)",
+                    icon: "file-pen",
+                    run: () => FILE_ACTIONS.download("latex")
                 }
             ]
         },
