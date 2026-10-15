@@ -342,11 +342,7 @@ function displayNameFor(fileName) {
 }
 
 /*
- * Show the current document's name in the window title and the header.
- *
- * Two places, one answer: the window's title and the header's centre both name
- * the drawing, and they are written together here so they cannot disagree about
- * what it is called or whether it has unsaved changes.
+ * Keep the browser tab named DAETUM and show the document's name in the header.
  *
  * The header carries the UNSAVED MARK as its own element, hidden and shown
  * rather than added and removed, so the name does not shift sideways when the
@@ -355,7 +351,7 @@ function displayNameFor(fileName) {
  */
 function refreshDocumentTitle() {
     const shown = displayNameFor(documentFileName);
-    document.title = `${shown} - DAETUM`;
+    document.title = "DAETUM";
 
     const base = document.getElementById("headerDocumentBaseName");
     const host = document.getElementById("headerDocumentName");

@@ -155,8 +155,8 @@ check(
 );
 
 check(
-    "the window title is suffixed with DAETUM",
-    /- DAETUM`/.test(fs.readFileSync(locate("document-commands.js"), "utf8")),
+    "the window title stays DAETUM",
+    /document\.title = "DAETUM"/.test(fs.readFileSync(locate("document-commands.js"), "utf8")),
 );
 
 console.log("\n  while the TECHNICAL identifiers still say datum\n");
