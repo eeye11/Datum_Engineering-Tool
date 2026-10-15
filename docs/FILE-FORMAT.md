@@ -7,6 +7,8 @@ again. It is JSON, UTF-8, with the media type
 `application/vnd.enggdraw+json`.
 
 The format is owned by [`src/file/document-file.js`](../src/file/document-file.js).
+A `.tex` saved by DAETUM carries the same envelope, base64-encoded in a
+comment block after `\end{document}` — see [LATEX.md](LATEX.md).
 That module is the only place that reads or writes the envelope, and the only
 place a migration from an older version may live.
 

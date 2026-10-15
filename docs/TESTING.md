@@ -7,6 +7,7 @@
 | Golden-master scenario    | `npm run test:golden -- <url> <out.json>`            | Chrome          |
 | No page errors in it      | `node tests/e2e/golden-errors.mjs <out.json>`        | Node 22         |
 | Lint + tests + build      | `npm run check`                                      | Node 22         |
+| A .tex compiles with TeX  | `node tools/dev/compile-latex.mjs <file.tex>`        | Node 22         |
 | Integration API in Chrome | `node tests/e2e/api-check.mjs <url>`                 | Chrome          |
 | Visual comparison         | `node tests/e2e/visual-compare.mjs <before> <after> <dir>` | Chrome    |
 | Engineering audits        | `node tools/audit/<audit>.cjs`                       | Node 22         |
