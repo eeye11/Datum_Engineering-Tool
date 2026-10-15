@@ -108,6 +108,12 @@ async function openWithPicker() {
         accept: {
           [enggDocumentFile.MEDIA_TYPE]: [`.${enggDocumentFile.EXTENSION}`]
         }
+      },
+      {
+        description: "LaTeX drawing (*.tex)",
+        accept: {
+          "application/x-tex": [".tex"]
+        }
       }
     ],
 

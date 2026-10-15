@@ -7,6 +7,8 @@ import enggErrorLog from "../../app/error-log.js";
 import enggDrawingExport from "../../file/document-export.js";
 import enggDocumentFile from "../../file/document-file.js";
 import enggDocumentManagement from "../../file/document-management.js";
+import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument } from "../../file/latex/latex-document.js";
+import { openLatexCodeEditor } from "./latex-commands.js";
 import enggRecovery from "../../file/document-recovery.js";
 import enggFileSave from "../../file/file-save.js";
 import enggRecentFiles from "../../file/recent-files.js";
@@ -582,7 +584,8 @@ const DOWNLOAD_FORMATS = {
     },
     pdf: { extension: "pdf", type: "application/pdf" },
     jpg: { extension: "jpg", type: "image/jpeg" },
-    png: { extension: "png", type: "image/png" }
+    png: { extension: "png", type: "image/png" },
+    latex: { extension: LATEX_EXTENSION, type: LATEX_MEDIA_TYPE }
 };
 
 /*
@@ -687,6 +690,27 @@ export async function downloadDrawing(format) {
      * document for the print pass only, exactly as Print does, so the user stays
      * in the editor they were working in.
      */
+    /*
+     * LaTeX: every sheet as a drawing in standard LaTeX picture code, with the
+     * document embedded so DAETUM can reopen it (file/latex/latex-document.js).
+     */
+    if (format === "latex") {
+        try {
+            const text = writeLatexDocument(serializeDocumentBody(), { title: baseDocumentName() });
+            const name = downloadBlob(new Blob([text], { type: chosen.type }), exportFileName(chosen.extension));
+
+            setToolMessage(`Downloaded ${name}`);
+
+            return name;
+        } catch (error) {
+            enggErrorLog.reportError("download latex", error, {});
+
+            setToolMessage("The LaTeX file could not be downloaded");
+
+            return null;
+        }
+    }
+
     if (format === "pdf") {
         const name = exportPdfPage();
 
@@ -1873,7 +1897,7 @@ export function importDrawingFile() {
             document.createElement("input");
 
         input.type = "file";
-        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json`;
+        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json,.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex`;
 
         /*
          * Cancelling raises `cancel` in every browser that fires it, and no
@@ -1984,7 +2008,78 @@ function openChosenFile(file) {
  * the file in the recents list. Recovery passes text without one, and the
  * entry is keyed on the name alone in that case.
  */
+/*
+ * ================================================================
+ * OPENING A .tex
+ * ================================================================
+ *
+ * A .tex DAETUM wrote carries the whole document in a comment block
+ * (file/latex/latex-document.js), so it opens exactly as the .enggdraw it
+ * came from: every feature editable, every sheet and setting restored.
+ *
+ * IT NEVER BECOMES THE SAVE TARGET. Save writes .enggdraw JSON, and writing
+ * that over the student's .tex would destroy the LaTeX they chose to open. So
+ * the file handle is forgotten and the document takes the .tex's name with
+ * the drawing extension: Save then writes "beam.enggdraw" beside "beam.tex".
+ */
+function isLatexFile(name, text) {
+    return /\.tex$/i.test(String(name || "")) || hasEmbeddedDocument(text);
+}
+
+function applyOpenedLatex(text, name, file) {
+    const base = String(name || "drawing").replace(/\.tex$/i, "") || "drawing";
+    const embedded = readEmbeddedEnvelope(text);
+
+    if (embedded.found && !embedded.ok) {
+        return reportFileProblem(`${embedded.detail} Your current drawing has not been changed.`, {
+            fileName: name,
+            failure: embedded.failure
+        });
+    }
+
+    if (!embedded.found) {
+        return openLatexCode(text, base);
+    }
+
+    enggFileSave.setFileHandle(null);
+
+    const opened = loadDrawing(embedded.envelope, base);
+
+    if (opened) {
+        enggRecentFiles.remember({
+            name: enggDocumentFile.withExtension(base),
+            file,
+            handle: null,
+            document: opened,
+            preview: renderDocumentPreview(opened)
+        });
+    }
+
+    return Boolean(opened);
+}
+
+/*
+ * A .tex without DAETUM's data - LaTeX written by hand or by another program.
+ * The LaTeX reader turns the drawing commands it understands into features.
+ */
+function openLatexCode(text, base) {
+    openLatexCodeEditor({
+        text,
+        notice:
+            `"${base}.tex" was not written by DAETUM, so it is shown here as code. ` +
+            "The preview shows what DAETUM can draw from it; Insert into drawing adds it to the current sheet."
+    });
+
+    setToolMessage(`Opened ${base}.tex in the LaTeX code editor`);
+
+    return true;
+}
+
 function applyOpenedText(text, name, file) {
+    if (isLatexFile(name, text)) {
+        return applyOpenedLatex(text, name, file);
+    }
+
     let parsed;
 
     try {

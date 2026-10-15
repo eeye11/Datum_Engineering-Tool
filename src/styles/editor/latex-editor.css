@@ -1,0 +1,253 @@
+/*
+ * The LaTeX code editor: a floating, non-modal window (code | live preview,
+ * then the lines that could not be drawn) that minimises to a small bar.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ */
+
+.datum-latex-editor {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-lg);
+    bottom: 48px;
+    box-shadow: var(--datum-shadow);
+    box-sizing: border-box;
+    color: var(--datum-ink);
+    display: grid;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    height: min(580px, calc(100vh - 120px));
+    max-width: calc(100vw - 32px);
+    position: fixed;
+    right: 16px;
+    width: 940px;
+    z-index: var(--z-dialog);
+}
+
+.datum-latex-editor[hidden],
+.datum-latex-editor-dock[hidden],
+.datum-latex-editor-notice[hidden],
+.datum-latex-editor-problems[hidden] {
+    display: none;
+}
+
+/* ---- header ---- */
+
+.datum-latex-editor-header {
+    align-items: center;
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+}
+
+.datum-latex-editor-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.datum-latex-editor-header-actions {
+    align-items: center;
+    display: flex;
+    gap: var(--space-1);
+}
+
+.datum-latex-editor-icon {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    cursor: pointer;
+    font-size: 18px;
+    height: 28px;
+    line-height: 1;
+    width: 28px;
+}
+
+.datum-latex-editor-icon:hover {
+    background: var(--datum-menu-hover);
+    color: var(--datum-ink);
+}
+
+.datum-latex-editor-icon:focus-visible,
+.datum-latex-editor-line:focus-visible,
+.datum-latex-editor-dock:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+.datum-latex-editor-notice {
+    background: var(--datum-gold-tint);
+    border-bottom: 1px solid var(--datum-border);
+    color: var(--datum-gold-ink);
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+}
+
+/* ---- code | preview ---- */
+
+/*
+ * Side by side where there is room; stacked (code above preview) where there
+ * is not - by the window's own width, so no breakpoint is needed.
+ */
+.datum-latex-editor-body {
+    display: grid;
+    gap: 1px;
+    grid-auto-rows: minmax(0, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    min-height: 0;
+    background: var(--datum-border);
+}
+
+.datum-latex-editor-code {
+    background: var(--editor-background);
+    border: 0;
+    box-sizing: border-box;
+    color: var(--editor-foreground);
+    font-family: var(--datum-font-mono);
+    font-size: 12.5px;
+    height: 100%;
+    line-height: 1.5;
+    margin: 0;
+    min-height: 0;
+    outline: none;
+    padding: var(--space-3);
+    resize: none;
+    tab-size: 2;
+    white-space: pre;
+    width: 100%;
+}
+
+.datum-latex-editor-code:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--datum-focus);
+}
+
+.datum-latex-editor-preview {
+    align-items: center;
+    background: var(--datum-paper);
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--space-3);
+}
+
+.datum-latex-editor-image {
+    display: block;
+    height: 100%;
+    max-height: 100%;
+    max-width: 100%;
+    object-fit: contain;
+    width: 100%;
+}
+
+.datum-latex-editor-empty {
+    color: var(--datum-muted);
+    margin: 0;
+}
+
+/* ---- the lines not drawn, and the actions ---- */
+
+.datum-latex-editor-footer {
+    border-top: 1px solid var(--datum-border);
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+}
+
+.datum-latex-editor-problems {
+    display: grid;
+    gap: 2px;
+    list-style: none;
+    margin: 0;
+    max-height: 96px;
+    overflow-y: auto;
+    padding: 0;
+}
+
+.datum-latex-editor-problem {
+    align-items: baseline;
+    border-left: 3px solid var(--datum-border-strong);
+    display: flex;
+    gap: var(--space-2);
+    padding: 2px var(--space-2);
+}
+
+.datum-latex-editor-problem-error {
+    background: var(--datum-error-tint);
+    border-left-color: var(--datum-error);
+}
+
+.datum-latex-editor-problem-warning {
+    background: var(--datum-warning-tint);
+    border-left-color: var(--datum-warning-line);
+}
+
+.datum-latex-editor-problem-info {
+    color: var(--datum-muted);
+}
+
+.datum-latex-editor-line {
+    background: transparent;
+    border: 0;
+    color: var(--datum-green-ink);
+    cursor: pointer;
+    flex: none;
+    font: inherit;
+    font-weight: 600;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.datum-latex-editor-bar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.datum-latex-editor-summary {
+    color: var(--datum-muted);
+    flex: 1;
+    min-width: 160px;
+}
+
+/* ---- minimised ---- */
+
+.datum-latex-editor-dock {
+    background: var(--datum-chrome);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-md);
+    bottom: 48px;
+    box-shadow: var(--datum-shadow-soft);
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: var(--space-2) var(--space-3);
+    position: fixed;
+    right: 16px;
+    z-index: var(--z-dialog);
+}
+
+.datum-latex-editor-dock:hover {
+    background: var(--datum-menu-hover);
+}
+
+/* ---- phone width: the window fills the screen ---- */
+
+@media (max-width: 460px) {
+    .datum-latex-editor {
+        bottom: 16px;
+        height: calc(100vh - 32px);
+        left: 16px;
+        right: 16px;
+        width: auto;
+    }
+}

@@ -740,7 +740,11 @@ body.datum-topbar-hidden .drawing-topbar-show {
     border-radius: var(--radius-md);
     box-shadow: var(--datum-shadow);
     display: none;
-    left: calc(100% + 4px);
+    /*
+     * PLACED AGAINST THE WINDOW, beside its row (see `placeSubmenu` in
+     * ui/menubar/menu-bar.js), so the parent panel's scrolling cannot clip it.
+     */
+    left: 0;
     /*
      * THE SAME CAP AND SCROLL AS THE TOP-LEVEL PANEL, for the same reason: a
      * nested list long enough to run off the window is a slab that happens to
@@ -753,8 +757,8 @@ body.datum-topbar-hidden .drawing-topbar-show {
     overscroll-behavior: contain;
     overflow-y: auto;
     padding: 5px;
-    position: absolute;
-    top: -6px;
+    position: fixed;
+    top: 0;
     z-index: 71;
 }
 

@@ -1,0 +1,99 @@
+/*
+ * The LaTeX code editor, connected to the drawing.
+ *
+ * The editor window (ui/editors/latex-editor.js) knows nothing about the
+ * document; this module gives it its behaviour:
+ *
+ *   read        DAETUM's own reader (file/latex/latex-reader.js)
+ *   preview     the features drawn by the export renderer - the same drawing
+ *               the canvas makes, fitted to the preview
+ *   insert      the features added to the current sheet as ONE undo step,
+ *               then selected so they can be moved or edited straight away
+ *   fromDrawing the current sheet written as LaTeX code
+ */
+import enggDrawingState from "../../core/model/drawing-state.js";
+import enggDrawingExport from "../../file/document-export.js";
+import { writeLatexPicture } from "../../file/latex/latex-document.js";
+import { readLatexDrawing } from "../../file/latex/latex-reader.js";
+import { openLatexEditor } from "../../ui/editors/latex-editor.js";
+import { drawingState } from "../editor-state.js";
+import { renderProperties } from "../panels/feature-panel.js";
+import { setToolMessage } from "../toolbar/toolbar-render.js";
+import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { activeSheet } from "../workspace/sheet-controller.js";
+import { fitDrawingToView } from "../workspace/viewport.js";
+import { serializeDocumentBody } from "./document-commands.js";
+
+const PREVIEW_WIDTH_PX = 640;
+
+function previewFeatures(features) {
+    const sheet = {
+        id: "latex-preview",
+        name: "Preview",
+        objects: features,
+        scale: drawingState.scale || null,
+        units: drawingState.units || "mm"
+    };
+    const rendered = enggDrawingExport.renderFittedDocument(
+        { version: 2, units: sheet.units, scale: sheet.scale, objects: [], sheets: [sheet], activeSheetId: sheet.id },
+        { width: PREVIEW_WIDTH_PX, svgOnly: true }
+    );
+
+    if (!rendered?.svg) {
+        return null;
+    }
+
+    /*
+     * Shown as an IMAGE of the drawing: an image keeps its aspect ratio and
+     * fits its pane, and the page's own rules for live drawing SVG (sizes,
+     * cursors, hover styles) cannot reach inside it.
+     */
+    const svg = rendered.svg;
+    svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    svg.style.background = "transparent";
+    const image = document.createElement("img");
+    image.className = "datum-latex-editor-image";
+    image.alt = "Preview of the drawing";
+    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`;
+    return image;
+}
+
+function insertFeatures(features) {
+    if (!features.length) {
+        return "Nothing to insert";
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(drawingState);
+    const wasEmpty = drawingState.objects.length === 0;
+    const ids = features.map(feature => enggDrawingState.addObject(drawingState, feature).id);
+
+    enggDrawingState.commitDrawingChange(drawingState, previous);
+    enggDrawingState.selectObjects(drawingState, ids);
+
+    if (wasEmpty) {
+        fitDrawingToView();
+    }
+
+    renderProperties();
+    renderCurrentDrawing();
+
+    const message = `Inserted ${ids.length} feature${ids.length === 1 ? "" : "s"} from LaTeX`;
+    setToolMessage(message);
+    return message;
+}
+
+function currentSheetAsLatex() {
+    return writeLatexPicture(serializeDocumentBody(), activeSheet()?.id);
+}
+
+/* Insert > LaTeX code…, and a .tex opened without DAETUM's data. */
+export function openLatexCodeEditor({ text, notice } = {}) {
+    return openLatexEditor({
+        text,
+        notice,
+        read: readLatexDrawing,
+        preview: previewFeatures,
+        insert: insertFeatures,
+        fromDrawing: currentSheetAsLatex
+    });
+}

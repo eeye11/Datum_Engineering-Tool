@@ -21,6 +21,9 @@ Open DAETUM in a web browser. Nothing to install.
   always says what the current tool expects next. `Esc` cancels, `Ctrl+Z`
   undoes.
 - **Save** keeps your work as a `.enggdraw` file you can open again later.
+  **File → Download → LaTeX** saves it as a `.tex` that compiles anywhere
+  and that DAETUM can reopen; **Insert → LaTeX Code…** draws LaTeX you write
+  (see [docs/LATEX.md](docs/LATEX.md)).
   DAETUM also keeps a recovery copy in your browser in case the tab closes.
 
 ## For developers
@@ -72,7 +75,7 @@ src/api/              the integration API — the only supported entry for other
 src/styles/           tokens.css (colours, type), base, editor (+ editor/), shell
 server/               optional Node server (TikZ → SVG)
 tests/                node:test suites; tests/e2e/ browser scenarios
-docs/                 architecture, integration, file format, testing
+docs/                 architecture, integration, file format, LaTeX, testing, CHANGES
 tools/                developer scripts (audits, codemods, diagnostics); archive/
 ```
 

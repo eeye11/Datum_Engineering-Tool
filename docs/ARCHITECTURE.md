@@ -22,7 +22,7 @@ src/
 ├── features/      persistent feature models: dimensions, annotations, analysis
 ├── rendering/     the document drawn as SVG
 ├── sheets/        sheets and the sheet tab bar
-├── file/          the .enggdraw format, save, export, crash recovery
+├── file/          the .enggdraw format, save, export, crash recovery; latex/ (LATEX.md)
 ├── references/    drawing references: a sheet placed in the written solution
 ├── solution/      the Written Solution tab
 ├── ui/            shared panel vocabulary, dialogs, the analysis editors
