@@ -75,7 +75,7 @@ src/api/              the integration API — the only supported entry for other
 src/styles/           tokens.css (colours, type), base, editor (+ editor/), shell
 server/               optional Node server (TikZ → SVG)
 tests/                node:test suites; tests/e2e/ browser scenarios
-docs/                 architecture, integration, file format, LaTeX, testing
+docs/                 architecture, integration, file format, LaTeX, testing, CHANGES
 tools/                developer scripts (audits, codemods, diagnostics); archive/
 ```
 
