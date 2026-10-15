@@ -86,14 +86,20 @@ function embeddedBlock(documentBody) {
     ].join("\n");
 }
 
+/* Whether a text carries DAETUM's embedded document. */
+export function hasEmbeddedDocument(text) {
+    return String(text || "").includes(DATA_BEGIN);
+}
+
 /*
- * The document a .tex written by DAETUM carries.
+ * The .enggdraw envelope a .tex written by DAETUM carries, exactly as an
+ * .enggdraw file would hold it - for the open path, which reads envelopes.
  *
- * Returns { found: false } for a .tex without the block (written by hand or by
- * another program), otherwise the result of reading it as an .enggdraw:
- * { found: true, ok: true, document } or { found: true, ok: false, failure, detail }.
+ * { found: false }                          no block (written by hand or elsewhere)
+ * { found: true, ok: true, envelope }       the block, decoded
+ * { found: true, ok: false, failure, detail } the block is damaged
  */
-export function readEmbeddedDocument(text) {
+export function readEmbeddedEnvelope(text) {
     const source = String(text || "");
     const begin = source.indexOf(DATA_BEGIN);
 
@@ -108,20 +114,31 @@ export function readEmbeddedDocument(text) {
         .map(line => line.replace(/^%+\s?/, "").trim())
         .join("");
 
-    let parsed;
-
     try {
-        parsed = JSON.parse(fromBase64(body));
+        return { found: true, ok: true, envelope: JSON.parse(fromBase64(body)) };
     } catch {
         return {
             found: true,
             ok: false,
             failure: enggDocumentFile.Failure.NOT_JSON,
-            detail: "The drawing data in this .tex file is damaged."
+            detail: "The drawing data in this .tex file is damaged, so it cannot be reopened as a DAETUM drawing."
         };
     }
+}
 
-    return { found: true, ...enggDocumentFile.readDocument(parsed) };
+/*
+ * The document a .tex written by DAETUM carries, read and migrated as an
+ * .enggdraw would be: { found: false }, or { found: true, ok, document } /
+ * { found: true, ok: false, failure, detail }.
+ */
+export function readEmbeddedDocument(text) {
+    const embedded = readEmbeddedEnvelope(text);
+
+    if (!embedded.found || !embedded.ok) {
+        return embedded;
+    }
+
+    return { found: true, ...enggDocumentFile.readDocument(embedded.envelope) };
 }
 
 /* ---------- one sheet ---------- */

@@ -7,7 +7,7 @@ import enggErrorLog from "../../app/error-log.js";
 import enggDrawingExport from "../../file/document-export.js";
 import enggDocumentFile from "../../file/document-file.js";
 import enggDocumentManagement from "../../file/document-management.js";
-import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, writeLatexDocument } from "../../file/latex/latex-document.js";
+import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument } from "../../file/latex/latex-document.js";
 import enggRecovery from "../../file/document-recovery.js";
 import enggFileSave from "../../file/file-save.js";
 import enggRecentFiles from "../../file/recent-files.js";
@@ -1896,7 +1896,7 @@ export function importDrawingFile() {
             document.createElement("input");
 
         input.type = "file";
-        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json`;
+        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json,.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex`;
 
         /*
          * Cancelling raises `cancel` in every browser that fires it, and no
@@ -2007,7 +2007,73 @@ function openChosenFile(file) {
  * the file in the recents list. Recovery passes text without one, and the
  * entry is keyed on the name alone in that case.
  */
+/*
+ * ================================================================
+ * OPENING A .tex
+ * ================================================================
+ *
+ * A .tex DAETUM wrote carries the whole document in a comment block
+ * (file/latex/latex-document.js), so it opens exactly as the .enggdraw it
+ * came from: every feature editable, every sheet and setting restored.
+ *
+ * IT NEVER BECOMES THE SAVE TARGET. Save writes .enggdraw JSON, and writing
+ * that over the student's .tex would destroy the LaTeX they chose to open. So
+ * the file handle is forgotten and the document takes the .tex's name with
+ * the drawing extension: Save then writes "beam.enggdraw" beside "beam.tex".
+ */
+function isLatexFile(name, text) {
+    return /\.tex$/i.test(String(name || "")) || hasEmbeddedDocument(text);
+}
+
+function applyOpenedLatex(text, name, file) {
+    const base = String(name || "drawing").replace(/\.tex$/i, "") || "drawing";
+    const embedded = readEmbeddedEnvelope(text);
+
+    if (embedded.found && !embedded.ok) {
+        return reportFileProblem(`${embedded.detail} Your current drawing has not been changed.`, {
+            fileName: name,
+            failure: embedded.failure
+        });
+    }
+
+    if (!embedded.found) {
+        return openLatexCode(text, base);
+    }
+
+    enggFileSave.setFileHandle(null);
+
+    const opened = loadDrawing(embedded.envelope, base);
+
+    if (opened) {
+        enggRecentFiles.remember({
+            name: enggDocumentFile.withExtension(base),
+            file,
+            handle: null,
+            document: opened,
+            preview: renderDocumentPreview(opened)
+        });
+    }
+
+    return Boolean(opened);
+}
+
+/*
+ * A .tex without DAETUM's data - LaTeX written by hand or by another program.
+ * The LaTeX reader turns the drawing commands it understands into features.
+ */
+function openLatexCode(text, base) {
+    return reportFileProblem(
+        `"${base}.tex" has no DAETUM drawing data, so it cannot be reopened as a ` +
+            "DAETUM document. Your current drawing has not been changed.",
+        { fileName: `${base}.tex`, failure: "no-daetum-data" }
+    );
+}
+
 function applyOpenedText(text, name, file) {
+    if (isLatexFile(name, text)) {
+        return applyOpenedLatex(text, name, file);
+    }
+
     let parsed;
 
     try {

@@ -137,6 +137,17 @@ test("the file reopens as exactly the document that was saved", () => {
   assert.deepStrictEqual(back.document.sheets.map(s => s.objects), body.sheets.map(s => s.objects).map(o => JSON.parse(JSON.stringify(o))));
 });
 
+test("the open path gets the .enggdraw envelope itself, as a saved file holds it", () => {
+  const text = latex.writeLatexDocument(documentBody());
+  const embedded = latex.readEmbeddedEnvelope(text);
+
+  assert.strictEqual(latex.hasEmbeddedDocument(text), true);
+  assert.strictEqual(latex.hasEmbeddedDocument("\documentclass{article}"), false);
+  assert.strictEqual(embedded.ok, true);
+  assert.strictEqual(embedded.envelope.format, "enggdraw");
+  assert.strictEqual(embedded.envelope.document.sheets.length, 3);
+});
+
 test("a .tex without DAETUM data is recognised as such, and damaged data is refused", () => {
   assert.deepStrictEqual(latex.readEmbeddedDocument("\\begin{tikzpicture}\\draw (0,0) -- (1,1);\\end{tikzpicture}"), { found: false });
 
