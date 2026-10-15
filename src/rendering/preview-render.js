@@ -14,6 +14,7 @@ import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-rende
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../features/thermodynamics/saturation-curve.js";
+import { heatTransferTool } from "../features/thermodynamics/heat-transfer.js";
 
 
     /*
@@ -458,6 +459,7 @@ import { isProcessDiagram } from "../features/thermodynamics/saturation-curve.js
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
+                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
@@ -466,7 +468,7 @@ import { isProcessDiagram } from "../features/thermodynamics/saturation-curve.js
                     end: state.interaction.annotateEnd
                 },
                 style: {
-                    stroke: "#1f5c38",
+                    stroke: heatTransferTool(state.activeTool)?.colour || "#1f5c38",
                     fontSize: 12,
                     arrowhead: "closed"
                 }

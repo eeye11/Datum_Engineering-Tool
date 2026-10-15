@@ -10,6 +10,7 @@ import enggLoadProfile from "../../features/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../../features/analysis/rotational-arrow.js";
 import enggAnnotationModel from "../../features/annotations/annotation-model.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
+import { resistorPoints } from "../../features/thermodynamics/resistor.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../core/geometry/points.js";
 import { isProcessDiagram, processDiagramPaths } from "../../features/thermodynamics/saturation-curve.js";
@@ -209,6 +210,10 @@ function annotateContainsPoint(object, point) {
     const tolerance =
         ANNOTATE_PICK_TOLERANCE_PIXELS /
         Math.max(drawingState.camera.zoom, 0.25);
+    if (object.metadata?.thermodynamicsKind === "electric-work") {
+        const points = resistorPoints(geometry);
+        return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
 
     /*
      * THE WORDS. Every kind has a text box at a placement - the note's

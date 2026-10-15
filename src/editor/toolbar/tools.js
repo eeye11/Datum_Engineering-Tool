@@ -2,6 +2,12 @@ const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-
 const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
 
 export const toolIcons = {
+    "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
+    "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
+    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
+    "Heat Transfer": drawingIcon(`<path ${iconStroke} d="M3 7h13m-4-4 4 4-4 4M17 14H4m4-4-4 4 4 4"/>`),
+    "Heat Entering": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
+    "Heat Leaving": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
     "Const Temp/Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17L7 11H12C14 11 16 7 18 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     "Process Diagrams": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 14C7 8 8 5 10 5S14 11 17 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
     "Const. Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15L8 10h5l4-7M3 18l5-5h5l4-6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',

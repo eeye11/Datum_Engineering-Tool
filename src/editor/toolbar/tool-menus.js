@@ -42,7 +42,7 @@ export function toolDefinitionForLabel(label) {
                     "-"
                 ),
         label,
-        ...(["Piston Cylinder", "Process Diagrams"].includes(label) ? { submenu: true } : {})
+        ...(["Piston Cylinder", "Process Diagrams", "Heat Transfer", "Work"].includes(label) ? { submenu: true } : {})
     };
 }
 
@@ -53,6 +53,8 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
+        (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
+        (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
         STATICS_TOOL_MENUS[tool.id]?.some(

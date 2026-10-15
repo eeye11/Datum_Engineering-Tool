@@ -1,10 +1,12 @@
 import geometry from "../geometry/feature-geometry.js";
+import { resistorPoints } from "../../features/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/thermodynamics/process-curves.js";
 
 export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];

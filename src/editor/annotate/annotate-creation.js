@@ -42,6 +42,7 @@
  */
 import enggDrawingState from "../../core/model/drawing-state.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
+import { HEAT_TRANSFER_TOOLS, heatTransferTool } from "../../features/thermodynamics/heat-transfer.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
@@ -64,8 +65,15 @@ import { setToolMessage } from "../toolbar/toolbar-render.js";
  * needed; this file cannot fall behind.
  */
 export const ANNOTATE_TOOL_KINDS = Object.fromEntries(
-  Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind])
+  [...Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind]),
+    ...Object.keys(HEAT_TRANSFER_TOOLS).map(toolId => [toolId, "arrow"]),
+    ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
 );
+
+const workToolLabels = {
+  "electric-work": "Electric Work",
+  "mechanical-work": "Mechanical Work"
+};
 
 /*
  * Is this one of the Annotate tools?
@@ -117,6 +125,14 @@ export function isGeometricAnnotateTool(toolId) {
  * to do next rather than leaving the previous tool's wording in place.
  */
 export function annotateInstruction(toolId) {
+  if (toolId === "electric-work") return "Drag from the upper lead to the lower lead; the resistor extends to the right";
+  if (workToolLabels[toolId]) {
+    return `${workToolLabels[toolId]}: drag from the arrow tail to where the work flows`;
+  }
+  const heat = heatTransferTool(toolId);
+  if (heat) {
+    return `${heat.label}: drag from the arrow tail to where the heat flows`;
+  }
   const kind = annotateKindFor(toolId);
 
   if (!kind) {
@@ -259,6 +275,18 @@ export function commitAnnotate(options) {
     object.text = labelName;
   }
 
+  const heat = kind === "arrow" && heatTransferTool(drawingState.activeTool);
+  const workLabel = kind === "arrow" && workToolLabels[drawingState.activeTool];
+  if (workLabel) {
+    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : workLabel;
+    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
+  }
+  if (heat) {
+    object.name = heat.label;
+    object.style.stroke = heat.colour;
+    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
+  }
+
   enggDrawingState.addObject(drawingState, object);
 
   enggDrawingState.commitDrawingChange(
@@ -270,7 +298,7 @@ export function commitAnnotate(options) {
 
   enggDrawingState.selectObject(drawingState, object.id);
 
-  setToolMessage(annotatePlacedMessage(kind));
+  setToolMessage(heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();
   renderCurrentDrawing();
@@ -574,7 +602,9 @@ export function beginAnnotateAnchor({ kind, point, targetFeatureId }) {
   });
 
   setToolMessage(
-    kind === "arrow"
+    drawingState.activeTool === "electric-work"
+      ? "Place the lower lead to size the resistor; Esc cancels"
+      : kind === "arrow"
       ? "Specify arrow endpoint"
       : "Move to place the text, click to confirm, Esc to cancel"
   );

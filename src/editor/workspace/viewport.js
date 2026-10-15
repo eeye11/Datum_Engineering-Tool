@@ -8,6 +8,7 @@ import enggDrawingState from "../../core/model/drawing-state.js";
 import enggLoadProfile from "../../features/analysis/load-profile.js";
 import enggAnnotationModel from "../../features/annotations/annotation-model.js";
 import enggAnnotate from "../../features/annotations/annotate-model.js";
+import { resistorPoints } from "../../features/thermodynamics/resistor.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../features/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../features/analysis/analysis-frame.js";
@@ -537,6 +538,9 @@ function dimensionBoundsPoints(object) {
  * Fit and the renderer cannot disagree about how much room a mark takes.
  */
 function annotateBoundsPoints(object) {
+    if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
+        return resistorPoints(object.geometry);
+    }
     if (!object || object.type !== "annotate") {
         return [];
     }

@@ -20,7 +20,9 @@ const expandedToolbarSections = {
     connection: false,
     "reference-arc": false,
     "piston-cylinder": false,
-    "process-diagrams": false
+    "process-diagrams": false,
+    "heat-transfer": false,
+    work: false
 };
 
 function renderToolbarTool(tool) {
@@ -34,7 +36,17 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "process-diagrams"
+    const children = tool.id === "work"
+        ? [
+            { id: "electric-work", label: "Electric Work" },
+            { id: "mechanical-work", label: "Mechanical Work" }
+        ].map(renderToolButton).join("")
+        : tool.id === "heat-transfer"
+        ? [
+            { id: "heat-entering", label: "Heat Entering" },
+            { id: "heat-leaving", label: "Heat Leaving" }
+        ].map(renderToolButton).join("")
+        : tool.id === "process-diagrams"
         ? [
             { id: "process-plot", label: "Process Plot" },
             { id: "saturation-curve", label: "Saturation Curve" },
