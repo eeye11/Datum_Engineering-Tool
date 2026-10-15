@@ -9,6 +9,7 @@
 import { appendCoordinateSystem } from "../symbol-render.js";
 import { applyStyle, arcPathData, createSvgElement, paintColour } from "../svg-primitives.js";
 import enggDrawingState from "../../core/model/drawing-state.js";
+import { processPathPoints } from "../../features/thermodynamics/process-curves.js";
 import enggTheme from "../../editor/workspace/theme.js";
 
 
@@ -215,11 +216,11 @@ import enggTheme from "../../editor/workspace/theme.js";
         /*
          * POLYLINE
          */
-    export function drawPolyline({ svg, geometry, style, toScreen }) {
+    export function drawPolyline({ svg, entity, geometry, style, toScreen }) {
             const points =
                 (
-                    geometry.points ||
-                    []
+                    entity.metadata?.thermodynamicsKind === "process-path"
+                        ? processPathPoints(geometry) : (geometry.points || [])
                 )
                     .filter(Boolean)
                     .map(toScreen)

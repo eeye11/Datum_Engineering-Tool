@@ -13,6 +13,7 @@ import enggAnnotate from "../../features/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../core/geometry/points.js";
 import { isProcessDiagram, processDiagramPaths } from "../../features/thermodynamics/saturation-curve.js";
+import { processPathPoints } from "../../features/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
 
 /*
@@ -1109,7 +1110,8 @@ export function objectAtPoint(
                     object.type ===
                     "polyline"
                 ) {
-                    return geometry.points.some(
+                    const pathPoints = object.metadata?.thermodynamicsKind === "process-path" ? processPathPoints(geometry) : geometry.points;
+                    return pathPoints.some(
                         (
                             current,
                             index
@@ -1117,7 +1119,7 @@ export function objectAtPoint(
                             index > 0 &&
                             distanceToSegment(
                                 point,
-                                geometry.points[
+                                pathPoints[
                                     index - 1
                                 ],
                                 current

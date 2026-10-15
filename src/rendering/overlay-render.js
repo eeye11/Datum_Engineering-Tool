@@ -13,6 +13,7 @@ import enggAnnotationModel from "../features/annotations/annotation-model.js";
 import { createSvgElement, paintColour } from "./svg-primitives.js";
 import { selectionBounds, selectionCorners } from "../core/selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../features/thermodynamics/piston-cylinder.js";
+import { processBendPoint } from "../features/thermodynamics/process-curves.js";
 
 
     /*
@@ -914,6 +915,20 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
                 add(geometry.position);
             } else if (object.type === "polyline") {
                 const points = geometry.points || [];
+                if (object.metadata?.thermodynamicsKind === "process-path") {
+                    points.slice(1).forEach((_, index) => {
+                        const point = toScreen(processBendPoint(geometry, index));
+                        const handle = createSvgElement("circle", {
+                            cx: point.x, cy: point.y, r: 5,
+                            fill: "white", stroke: "#3b82f6", "stroke-width": 2,
+                            cursor: "grab", class: "drawing-manipulation-handle process-bend"
+                        });
+                        const title = createSvgElement("title");
+                        title.textContent = `Drag to bend segment ${index + 1} → ${index + 2}`;
+                        handle.appendChild(title);
+                        svg.appendChild(handle);
+                    });
+                }
                 const lastPoint = points[points.length - 1];
                 const closed = points.length > 2 && Math.hypot(points[0].x - lastPoint.x, points[0].y - lastPoint.y) < 1e-8;
                 points.slice(0, closed ? -1 : undefined).forEach(point => add(point));

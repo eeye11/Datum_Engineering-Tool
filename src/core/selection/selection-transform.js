@@ -1,4 +1,5 @@
 import geometry from "../geometry/feature-geometry.js";
+import { processPathPoints } from "../../features/thermodynamics/process-curves.js";
 
 export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
@@ -8,6 +9,7 @@ export function selectionBounds(objects, selectedIds) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];
         }
+        if (object.metadata?.thermodynamicsKind === "process-path") return processPathPoints(g);
         return [...geometry.definingPoints(g, object.type), ...(object.placement ? [object.placement] : [])];
     }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
     if (!points.length) return null;

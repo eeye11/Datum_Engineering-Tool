@@ -10,6 +10,7 @@
 import enggTheme from "../../editor/workspace/theme.js";
 import { applyStyle, createSvgElement, paintColour } from "../svg-primitives.js";
 import { processLabelPoint } from "../../features/thermodynamics/process-labels.js";
+import { processSegmentPoints } from "../../features/thermodynamics/process-curves.js";
 import { processDiagramPaths } from "../../features/thermodynamics/saturation-curve.js";
 import { cylinderPoint, pistonFraction, stopperPaths } from "../../features/thermodynamics/piston-cylinder.js";
 
@@ -39,13 +40,16 @@ import { cylinderPoint, pistonFraction, stopperPaths } from "../../features/ther
             label.textContent = String(index + 1);
             processOverlay.appendChild(label);
             if (!index) return;
-            const previous = points[index - 1];
-            const length = Math.hypot(point.x - previous.x, point.y - previous.y);
-            if (length < 12) return;
-            const ux = (point.x - previous.x) / length;
-            const uy = (point.y - previous.y) / length;
-            const mx = (point.x + previous.x) / 2;
-            const my = (point.y + previous.y) / 2;
+            const segment = processSegmentPoints(geometry, index - 1).map(toScreen);
+            const middle = Math.floor(segment.length / 2);
+            const previous = segment.length > 2 ? segment[middle - 1] : segment[0];
+            const next = segment.length > 2 ? segment[middle + 1] : point;
+            const length = Math.hypot(next.x - previous.x, next.y - previous.y);
+            if (Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y) < 12 || length < 1e-8) return;
+            const ux = (next.x - previous.x) / length;
+            const uy = (next.y - previous.y) / length;
+            const mx = segment.length > 2 ? segment[middle].x : (point.x + previous.x) / 2;
+            const my = segment.length > 2 ? segment[middle].y : (point.y + previous.y) / 2;
             processOverlay.appendChild(createSvgElement("polygon", {
                 points: `${mx + ux * 4},${my + uy * 4} ${mx - ux * 4 - uy * 3},${my - uy * 4 + ux * 3} ${mx - ux * 4 + uy * 3},${my - uy * 4 - ux * 3}`,
                 fill: colour, stroke: "none"

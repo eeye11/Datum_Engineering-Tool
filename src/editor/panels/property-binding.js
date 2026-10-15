@@ -405,6 +405,33 @@ export function bindFeaturePropertyControls(object) {
         });
     });
 
+    drawingProperties.querySelectorAll('[data-process-bend]').forEach(input => {
+        let previous = null;
+        const apply = () => {
+            previous ??= enggDrawingState.snapshotDrawing(drawingState);
+            object.geometry.segmentBends ??= [];
+            object.geometry.segmentBends[Number(input.dataset.processBend)] = Number(input.value);
+            renderCurrentDrawing();
+        };
+        input.addEventListener('input', apply);
+        input.addEventListener('change', () => {
+            if (!previous) return;
+            enggDrawingState.commitDrawingChange(drawingState, previous);
+            previous = null;
+        });
+    });
+    drawingProperties.querySelectorAll('[data-process-straight]').forEach(button => {
+        button.addEventListener('click', () => {
+            const index = Number(button.dataset.processStraight);
+            if (!object.geometry.segmentBends?.[index]) return;
+            const previous = enggDrawingState.snapshotDrawing(drawingState);
+            object.geometry.segmentBends[index] = 0;
+            enggDrawingState.commitDrawingChange(drawingState, previous);
+            renderCurrentDrawing();
+            renderProperties();
+        });
+    });
+
     drawingProperties.querySelectorAll('[data-saturation-axis-label]').forEach(input => {
         input.addEventListener('change', () => {
             const previous = enggDrawingState.snapshotDrawing(drawingState);

@@ -3,6 +3,7 @@
  */
 
 import enggFeatureGeometry from "../../core/geometry/feature-geometry.js";
+import { processPathPoints } from "../../features/thermodynamics/process-curves.js";
 import enggDrawingState from "../../core/model/drawing-state.js";
 import enggLoadProfile from "../../features/analysis/load-profile.js";
 import enggAnnotationModel from "../../features/annotations/annotation-model.js";
@@ -629,6 +630,9 @@ function geometryRenderedBounds(
 
     if (!geometry) {
         return [];
+    }
+    if (object.metadata?.thermodynamicsKind === "process-path") {
+        return processPathPoints(geometry);
     }
 
     /*

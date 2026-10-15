@@ -2198,6 +2198,17 @@ export function featurePropertyMarkup(object) {
             )
         );
     } else if (object.type === "polyline") {
+        if (object.metadata?.thermodynamicsKind === "process-path") {
+            rows.push(section("PROCESS CURVES"));
+            rows.push(`<p class="drawing-property-help">Drag a middle dot to curve a segment; it snaps straight near the original line. You can also adjust its Bend slider below; the centre is straight.</p>`);
+            (geometry.points || []).slice(1).forEach((_, index) => {
+                const bend = Number(geometry.segmentBends?.[index]) || 0;
+                rows.push(panels.row({
+                    label: `State ${index + 1} → ${index + 2}`,
+                    control: `<input type="range" min="-1" max="1" step="0.01" value="${bend}" data-process-bend="${index}" aria-label="Bend from state ${index + 1} to state ${index + 2}" title="Bend either way; centre is straight" style="width:100%;min-width:0"><button type="button" data-process-straight="${index}" aria-label="Straighten segment from state ${index + 1} to state ${index + 2}">Straight</button>`
+                }));
+            });
+        }
         rows.push(section("GEOMETRY"));
         (geometry.points || []).forEach((p, index) => {
             rows.push(coordinate(`Point ${index + 1} X`, `points.${index}.x`, p.x, "mm", true));

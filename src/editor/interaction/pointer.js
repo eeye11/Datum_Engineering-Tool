@@ -631,6 +631,7 @@ export function resolvePointerEvent(
 function freeThermodynamicsMove(drag, rawPoint) {
     if (
         drag?.kind?.startsWith("process-label-") ||
+        drag?.kind?.startsWith("process-bend-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
         (drag?.kind === "body" &&
             ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||

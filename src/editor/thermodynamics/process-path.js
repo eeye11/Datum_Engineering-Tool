@@ -62,7 +62,9 @@ export function finishProcessPath() {
     object.parentId = interaction.sourceId;
     commitCreatedFeature(object);
     activateTool("select");
-    setToolMessage(`${plotName(tool)} created - drag its dots to adjust`);
+    setToolMessage(tool === "process-path"
+        ? "Process path created - drag a middle dot to curve a segment, or a state dot to move a state"
+        : `${plotName(tool)} created - drag its dots to adjust`);
     renderProperties();
     renderCurrentDrawing();
     return true;
