@@ -189,8 +189,20 @@ function buildDropdown(menu, onRun) {
         const openSubmenu = () => {
             if (!disabled) {
                 button.classList.add("datum-menu-item-submenu-open");
+                placeSubmenu(button, sub);
             }
         };
+
+        /* A scrolled menu takes its open flyout with the row it belongs to. */
+        panel.addEventListener(
+            "scroll",
+            () => {
+                if (button.classList.contains("datum-menu-item-submenu-open")) {
+                    placeSubmenu(button, sub);
+                }
+            },
+            { passive: true },
+        );
 
         button.addEventListener("mouseenter", openSubmenu);
         button.addEventListener("focus", openSubmenu);
@@ -211,7 +223,9 @@ function buildDropdown(menu, onRun) {
              * A CLICK TOGGLES IT, so a keyboard user who cannot hover still has
              * a way in; a pointer user gets the submenu from the hover alone.
              */
-            button.classList.toggle("datum-menu-item-submenu-open");
+            if (button.classList.toggle("datum-menu-item-submenu-open")) {
+                placeSubmenu(button, sub);
+            }
         });
 
         panel.appendChild(button);
@@ -241,6 +255,45 @@ function buildDropdown(menu, onRun) {
 /*
  * Close whatever is open, restoring the bar to its resting state.
  */
+/*
+ * A SUBMENU FLIES OUT BESIDE ITS ROW, as desktop menus do.
+ *
+ * It used to be positioned inside its parent panel - and that panel scrolls
+ * vertically (`overflow-y: auto`), which makes it clip horizontally too, so a
+ * flyout opening to the right was trapped inside the menu behind a sideways
+ * scrollbar. It is now placed against the WINDOW (`position: fixed`), next to
+ * its row: to the right when there is room, otherwise to the left, and moved up
+ * rather than running off the bottom. It stays a DOM child of the row, so
+ * hovering it still counts as hovering the row and it does not close under the
+ * pointer.
+ */
+const FLYOUT_GAP_PX = 2;
+const WINDOW_MARGIN_PX = 8;
+
+function placeSubmenu(row, sub) {
+  const rect = row.getBoundingClientRect();
+  const width = sub.offsetWidth;
+  const height = sub.offsetHeight;
+  const viewWidth = window.innerWidth;
+  const viewHeight = window.innerHeight;
+
+  let left = rect.right + FLYOUT_GAP_PX;
+
+  if (left + width > viewWidth - WINDOW_MARGIN_PX) {
+    left = Math.max(WINDOW_MARGIN_PX, rect.left - FLYOUT_GAP_PX - width);
+  }
+
+  /* Its first item level with the row that opened it. */
+  let top = rect.top - 6;
+
+  if (top + height > viewHeight - WINDOW_MARGIN_PX) {
+    top = Math.max(WINDOW_MARGIN_PX, viewHeight - WINDOW_MARGIN_PX - height);
+  }
+
+  sub.style.left = `${Math.round(left)}px`;
+  sub.style.top = `${Math.round(top)}px`;
+}
+
 export function closeMenu() {
   if (closeOpenMenu) {
     closeOpenMenu();
