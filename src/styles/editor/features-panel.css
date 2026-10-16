@@ -29,6 +29,116 @@
     margin: 0;
 }
 
+.drawing-inspector-tabs {
+    border-bottom: 1px solid var(--cad-border);
+    display: flex;
+    flex: 0 0 auto;
+    gap: 2px;
+    margin: -2px -2px 7px;
+}
+
+.drawing-inspector-tabs button {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--cad-muted);
+    cursor: pointer;
+    flex: 1 1 0;
+    font: inherit;
+    font-size: 10px;
+    min-width: 0;
+    padding: 5px 2px;
+}
+
+.drawing-inspector-tabs button[aria-selected="true"] {
+    border-bottom-color: var(--datum-green);
+    color: var(--cad-active-ink);
+    font-weight: 700;
+}
+
+.drawing-inspector-tab-panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.drawing-inspector-tab-panel[hidden] {
+    display: none;
+}
+
+.drawing-object-list {
+    display: grid;
+    gap: 2px;
+    min-height: 0;
+    overflow: auto;
+}
+
+.drawing-object-row {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    min-height: 24px;
+    overflow: hidden;
+    padding: 3px 5px;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drawing-object-row:hover,
+.drawing-object-row.selected {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-soft);
+}
+
+.drawing-source-panel {
+    gap: 6px;
+}
+
+#drawingSourceEditor {
+    background: var(--datum-panel);
+    border: 1px solid var(--cad-border);
+    color: var(--cad-ink);
+    flex: 1 1 auto;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 10px;
+    line-height: 1.5;
+    min-height: 0;
+    min-width: 0;
+    overflow: auto;
+    padding: 6px;
+    resize: none;
+    tab-size: 2;
+    white-space: pre;
+}
+
+.drawing-source-diagnostics {
+    color: var(--cad-muted);
+    flex: 0 1 auto;
+    font-size: 9px;
+    max-height: 90px;
+    overflow: auto;
+}
+
+.drawing-source-diagnostics p {
+    color: var(--datum-warning);
+    margin: 0 0 3px;
+}
+
+#drawingSourceApply {
+    align-self: flex-start;
+    flex: 0 0 auto;
+}
+
+#drawingFeaturesPanel {
+    padding-top: 34px;
+}
+
 .drawing-components-back {
     align-self: flex-start;
     background: transparent;

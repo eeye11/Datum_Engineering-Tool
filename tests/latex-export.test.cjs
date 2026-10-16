@@ -34,6 +34,7 @@ const model = require(locate("drawing-state.js")).default;
 const documentFile = require(locate("document-file.js")).default;
 const annotate = require(locate("annotate-model.js"));
 const latex = require(locate("latex-document.js"));
+const { readLatexDrawing } = require(locate("latex-reader.js"));
 const { describeFeature } = require(locate("feature-description.js"));
 const { latexText, svgToTikz, createPalette } = require(locate("svg-to-tikz.js"));
 
@@ -114,6 +115,37 @@ test("the drawing is in drawing units, y up, with real commands", () => {
   assert.match(first, /circle\[radius=/);
   /* The beam spans x = 0 to 200 in drawing units, whatever the screen size was. */
   assert.match(first, /\(0,-?[\d.]+\) -- \(200,-?[\d.]+\)/);
+});
+
+test("canonical source is a complete, comment-free TikZ picture of the active sheet", () => {
+  const body = documentBody();
+  const source = latex.writeCanonicalTikzPicture(body, "sheet_a");
+
+  assert.match(source, /^\\begin\{tikzpicture\}\[x=1mm,y=1mm\]\n/);
+  assert.match(source, /\\end\{tikzpicture\}$/);
+  assert.doesNotMatch(source, /DAETUM|^\s*%|scale=/m);
+  assert.match(source, /\\draw/);
+  assert.match(source, /circle\[radius=/);
+
+  const parsed = readLatexDrawing(source);
+  assert.ok(parsed.features.length > 0, "generated TikZ should remain editable");
+  assert.deepStrictEqual(
+    parsed.diagnostics.filter(diagnostic => diagnostic.severity === "error"),
+    []
+  );
+  const sourceLine = body.sheets[0].objects.find(object => object.type === "line");
+  const parsedLine = parsed.features.find(feature => feature.type === "line");
+  assert.ok(parsedLine);
+  assert.ok(Math.abs(parsedLine.geometry.start.x - sourceLine.geometry.start.x) < 1e-6);
+  assert.ok(Math.abs(parsedLine.geometry.start.y - sourceLine.geometry.start.y) < 1e-6);
+  assert.ok(Math.abs(parsedLine.geometry.end.x - sourceLine.geometry.end.x) < 1e-6);
+  assert.ok(Math.abs(parsedLine.geometry.end.y - sourceLine.geometry.end.y) < 1e-6);
+});
+
+test("an empty sheet has an empty TikZ picture without placeholder geometry", () => {
+  const source = latex.writeCanonicalTikzPicture(documentBody(), "sheet_c");
+
+  assert.strictEqual(source, "\\begin{tikzpicture}[x=1mm,y=1mm]\n\\end{tikzpicture}");
 });
 
 test("text is escaped, so the file compiles", () => {

@@ -1924,6 +1924,13 @@ function objectSegments(
             ]);
         }
 
+        if (object.geometry.closed === true) {
+            segments.push([
+                points[points.length - 1],
+                points[0]
+            ]);
+        }
+
         return segments;
     }
 
@@ -4064,13 +4071,13 @@ function resolveConstructionPoint(
                 state.snap.enabled
                     ? {
                         x:
-                            enggDrawingState.snapCoordinate(
+                            enggDrawingState.snapGridCoordinate(
                                 rawPoint.x,
                                 state
                             ),
 
                         y:
-                            enggDrawingState.snapCoordinate(
+                            enggDrawingState.snapGridCoordinate(
                                 rawPoint.y,
                                 state
                             )

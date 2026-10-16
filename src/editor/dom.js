@@ -76,6 +76,14 @@ export const drawingVectorScaleCustom = document.getElementById(
 
 export const drawingProperties = document.getElementById("drawingProperties");
 
+export const drawingObjectsList = document.getElementById("drawingObjectsList");
+
+export const drawingSourceEditor = document.getElementById("drawingSourceEditor");
+
+export const drawingSourceDiagnostics = document.getElementById("drawingSourceDiagnostics");
+
+export const drawingSourceApply = document.getElementById("drawingSourceApply");
+
 export const drawingToolMessage = document.getElementById("drawingToolMessage");
 
 export const drawingComponentsBack = document.getElementById("drawingFeaturesBack");

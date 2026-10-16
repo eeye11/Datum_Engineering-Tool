@@ -17,10 +17,10 @@
 
 import enggSolutionWorkspace from "./solution-workspace.js";
 import { enggDrawingSheets } from "../editor/index.js";
-import enggDrawingReference from "../references/drawing-reference.js";
 import { attachSolutionSourceLoader } from "../api/datum-api.js";
-import { attachSolutionLoader, markDocumentDirty } from "../editor/commands/document-commands.js";
+import { attachSolutionLoader, markDocumentDirty, serializeDocumentBody } from "../editor/commands/document-commands.js";
 import { emitDatumEvent } from "../api/events.js";
+import { writeCanonicalTikzPicture } from "../file/latex/latex-document.js";
 
 /* ---------------------------------------------------------- */
 /* UNDO AND REDO, FOR THE TEXT                                 */
@@ -130,24 +130,19 @@ function refreshUndoButtons() {
 /*
  * PUTTING A DRAWING INTO THE WRITTEN SOLUTION.
  *
- * The solution does NOT embed the drawing editor - a drawing is made in the
- * Drawing workspace. What happens here is the LINK: the student picks a sheet and
- * a `\datumfigure{sheetId}` reference is inserted at the caret. The figure is
- * rendered from that sheet's CURRENT contents every time the solution renders, so
- * editing the drawing updates the figure with nothing to re-insert.
- *
- * The SHEET ID is what is stored, never the name: a sheet is the thing most
- * likely to be renamed or reordered next, and a reference that survived neither
- * would quietly stop meaning anything.
+ * The selected sheet's canonical TikZ picture is inserted as editable source,
+ * rather than as a DAETUM-specific figure reference.
  */
 function sheetChoices() {
     try {
         const sheets = enggDrawingSheets.all() || [];
 
-        return sheets.map((sheet) => ({
+        return sheets
+            .filter(sheet => Array.isArray(sheet.objects) && sheet.objects.length > 0)
+            .map((sheet) => ({
             id: sheet.id,
             label: sheet.name || "Sheet"
-        }));
+            }));
     } catch (error) {
         return [];
     }
@@ -171,52 +166,49 @@ function insertDrawingFigure() {
      * can react as well.
      */
     if (!choices.length) {
-        emitDatumEvent("solution-insert-figure-empty");
+        emitDatumEvent("solution-insert-tikz-empty");
 
         setSolutionStatus(
-            "No drawings in this document yet - make one in the Engineering Drawing workspace, then insert it here."
+            "No non-empty drawings to insert. Create a drawing in the Engineering Drawing workspace first."
         );
 
         return;
     }
 
-    /*
-     * A CHOICE DIALOG, because which drawing is the whole question - the same
-     * reason the Greek insert opens a menu rather than inserting a guessed letter.
-     */
     enggUiChoice(
-        "Which drawing should be placed at the caret? The figure follows the sheet, so editing the drawing updates it here.",
-        "Insert Drawing",
+        "Choose a non-empty sheet. Its actual TikZ source will be inserted at the caret.",
+        "Insert TikZ Source",
         choices
     ).then((sheetId) => {
         if (!sheetId) {
             return;
         }
 
-        const sheet = (enggDrawingSheets.all() || []).find(
-            (candidate) => candidate.id === sheetId
+        const source = writeCanonicalTikzPicture(
+            serializeDocumentBody(),
+            sheetId
         );
-
-        const reference = enggDrawingReference.createReference({
-            sheetId,
-            displayMode: "fit",
-            caption: sheet?.name || null
-        });
-
-        const token = enggDrawingReference.serializeReference(reference);
+        if (
+            !source ||
+            source === "\\begin{tikzpicture}\n\\end{tikzpicture}"
+        ) {
+            setSolutionStatus("That sheet is empty; no source was inserted.");
+            return;
+        }
 
         const start = field.selectionStart ?? field.value.length;
         const end = field.selectionEnd ?? start;
 
         field.value =
-            field.value.slice(0, start) + token + field.value.slice(end);
+            field.value.slice(0, start) + source + field.value.slice(end);
 
-        const caret = start + token.length;
+        const caret = start + source.length;
 
         field.focus();
         field.setSelectionRange(caret, caret);
 
         field.dispatchEvent(new Event("input", { bubbles: true }));
+        emitDatumEvent("solution-insert-tikz-source", { sheetId });
     });
 }
 

@@ -123,6 +123,7 @@ const DRAG_GEOMETRY_TOOLS = [
  */
 const PROGRESSIVE_TOOLS = [
     "polyline",
+    "freeform-polygon",
     "truss"
 ];
 

@@ -21,7 +21,7 @@ import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { currentEngineeringMetadata } from "../geometry/geometry-creation.js";
+import { commitFreeformPolygon, currentEngineeringMetadata } from "../geometry/geometry-creation.js";
 import { cancelManipulationDrag, isConstructionInProgress } from "./handles.js";
 import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
 import { finishDistributedLoadConstruction, isLoadBuildPhase } from "../statics/load-tool.js";
@@ -1245,10 +1245,15 @@ export function finishPolyline() {
         drawingState.interaction.points;
 
     if (
-        drawingState.activeTool !==
-            "polyline" ||
-        points.length < 2
+        !["polyline", "freeform-polygon"].includes(drawingState.activeTool) ||
+        points.length <
+            (drawingState.activeTool === "freeform-polygon" ? 3 : 2)
     ) {
+        return;
+    }
+
+    if (drawingState.activeTool === "freeform-polygon") {
+        commitFreeformPolygon(points);
         return;
     }
 
@@ -1275,7 +1280,6 @@ export function finishPolyline() {
             }
         )
     );
-
     enggDrawingState.commitDrawingChange(
         drawingState,
         previousObjects
