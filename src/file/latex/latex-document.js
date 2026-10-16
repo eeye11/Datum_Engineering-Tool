@@ -338,10 +338,60 @@ export function writeLatexPicture(documentBody, sheetId) {
     return [...palette.definitions(), picture].join("\n");
 }
 
+/*
+ * The canonical source shown by the drawing editor: the rendered sheet's
+ * TikZ commands, without export commentary, paper-fit scaling or placeholders.
+ */
+export function writeCanonicalTikzPicture(documentBody, sheetId) {
+    const sheets = documentBody?.sheets || [];
+    const sheet = sheets.find(candidate => candidate.id === sheetId);
+
+    if (!sheet) {
+        return "";
+    }
+
+    const objects = sheet.objects || [];
+
+    if (!objects.length) {
+        return "\\begin{tikzpicture}\n\\end{tikzpicture}";
+    }
+
+    const rendered = enggDrawingExport.renderFittedDocument(
+        sheetBody(documentBody, sheet),
+        { width: RENDER_WIDTH_PX, svgOnly: true }
+    );
+
+    if (!rendered?.svg) {
+        return "\\begin{tikzpicture}\n\\end{tikzpicture}";
+    }
+
+    const { svg, bounds } = rendered;
+    const camera = enggDrawingExport.cameraFor(bounds);
+    const k = enggDrawingState.BASE_PIXELS_PER_UNIT * camera.zoom;
+    const palette = createPalette();
+    const commands = svgToTikz(svg, {
+        toWorld: (px, py) => ({
+            x: (px - bounds.width / 2) / k + camera.panX,
+            y: (bounds.height / 2 - py) / k + camera.panY
+        }),
+        unitsPerPx: 1 / k,
+        ptPerPx: PT_PER_MM / k,
+        palette
+    }).flatMap(group => group.commands);
+
+    return [
+        "\\begin{tikzpicture}",
+        ...palette.definitions(),
+        ...commands,
+        "\\end{tikzpicture}"
+    ].join("\n");
+}
+
 export default {
     LATEX_EXTENSION,
     LATEX_MEDIA_TYPE,
     readEmbeddedDocument,
     writeLatexDocument,
-    writeLatexPicture
+    writeLatexPicture,
+    writeCanonicalTikzPicture
 };
