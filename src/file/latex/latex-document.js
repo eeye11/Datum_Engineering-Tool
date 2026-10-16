@@ -353,7 +353,7 @@ export function writeCanonicalTikzPicture(documentBody, sheetId) {
     const objects = sheet.objects || [];
 
     if (!objects.length) {
-        return "\\begin{tikzpicture}\n\\end{tikzpicture}";
+        return "\\begin{tikzpicture}[x=1mm,y=1mm]\n\\end{tikzpicture}";
     }
 
     const rendered = enggDrawingExport.renderFittedDocument(
@@ -362,7 +362,7 @@ export function writeCanonicalTikzPicture(documentBody, sheetId) {
     );
 
     if (!rendered?.svg) {
-        return "\\begin{tikzpicture}\n\\end{tikzpicture}";
+        return "\\begin{tikzpicture}[x=1mm,y=1mm]\n\\end{tikzpicture}";
     }
 
     const { svg, bounds } = rendered;
@@ -380,7 +380,7 @@ export function writeCanonicalTikzPicture(documentBody, sheetId) {
     }).flatMap(group => group.commands);
 
     return [
-        "\\begin{tikzpicture}",
+        "\\begin{tikzpicture}[x=1mm,y=1mm]",
         ...palette.definitions(),
         ...commands,
         "\\end{tikzpicture}"

@@ -10,6 +10,7 @@ export const toolIcons = {
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
 	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
+	"Freeform Polygon": drawingIcon(`<path ${iconStroke} d="M3 14l4-8 7 2 3 7-8 2z"/>`),
 	Triangle: drawingIcon(`<path ${iconStroke} d="M10 3l7 13H3z"/><circle ${iconStroke} cx="10" cy="3" r="1"/>`),
 	Polygon: drawingIcon(`<path ${iconStroke} d="M10 3l6 4v7l-6 3-6-3V7z"/>`),
 	Arc: drawingIcon(`<path ${iconStroke} d="M4 14a7 7 0 0 1 10-9"/><path ${iconStroke} d="M13 5h2v2"/>`),
@@ -309,7 +310,8 @@ export const drawingToolGroups = [
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
 			{ id: "arc", label: "Arc", shortcut: "A" },
-			{ id: "polygon", label: "Polygon", shortcut: "G" }
+			{ id: "polygon", label: "Polygon", shortcut: "G" },
+			{ id: "freeform-polygon", label: "Freeform Polygon" }
 		]
 	},
 	{

@@ -240,6 +240,34 @@ export function currentEngineeringMetadata() {
     };
 }
 
+export function commitFreeformPolygon(points) {
+    if (!Array.isArray(points) || points.length < 3) {
+        return false;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(drawingState);
+    const object = enggDrawingState.geometryFactories.polyline(
+        points.map(point => ({ ...point })),
+        {
+            style: { ...drawingState.styleDefaults },
+            engineering: currentEngineeringMetadata()
+        }
+    );
+    object.geometry.closed = true;
+    object.name = `Freeform Polygon ${drawingState.objects.filter(
+        candidate => candidate.type === "polyline" &&
+            candidate.geometry?.closed === true
+    ).length + 1}`;
+
+    enggDrawingState.addObject(drawingState, object);
+    enggDrawingState.commitDrawingChange(drawingState, previous);
+    enggDrawingState.clearInteraction(drawingState);
+    setToolMessage("Ready");
+    renderProperties();
+    renderCurrentDrawing();
+    return true;
+}
+
 /*
  * The point a truss's next point aligns against.
  *
@@ -648,7 +676,8 @@ export function beginOrCompleteGeometry(
 
                     points: [
                         point
-                    ]
+                    ],
+                    snapGeometry: []
                 }
             );
 
@@ -764,8 +793,9 @@ export function beginOrCompleteGeometry(
             );
 
             setToolMessage(
-                drawingState.activeTool ===
-                    "polyline"
+                ["polyline", "freeform-polygon"].includes(
+                    drawingState.activeTool
+                )
                     ? "Specify next point"
 
                     : drawingState.activeTool ===
@@ -795,12 +825,25 @@ export function beginOrCompleteGeometry(
     }
 
     if (
-        drawingState.activeTool ===
-        "polyline"
+        ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
     ) {
+        if (
+            drawingState.activeTool === "freeform-polygon" &&
+            interaction.points.length >= 3 &&
+            distance(point, interaction.points[0]) < 1e-9
+        ) {
+            commitFreeformPolygon(interaction.points);
+            return;
+        }
+
         interaction.points.push(
             point
         );
+        interaction.snapGeometry =
+            interaction.points.slice(1).map((end, index) => ({
+                start: interaction.points[index],
+                end
+            }));
 
         interaction.startPoint =
             point;
@@ -809,7 +852,9 @@ export function beginOrCompleteGeometry(
             point;
 
         setToolMessage(
-            "Click next point or double-click to finish"
+            drawingState.activeTool === "freeform-polygon"
+                ? "Click next vertex or snap to the first point to close"
+                : "Click next point or double-click to finish"
         );
 
         renderCurrentDrawing();
@@ -1694,9 +1739,13 @@ export function beginOrCompleteGeometry(
             object.metadata = { thermodynamicsKind: "saturation-curve" };
         }
     } else if (
-        drawingState.activeTool ===
-        "polyline"
+        ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
     ) {
+        if (drawingState.activeTool === "freeform-polygon") {
+            commitFreeformPolygon(interaction.points);
+            return;
+        }
+
         object =
             enggDrawingState.geometryFactories.polyline(
                 [
@@ -1712,6 +1761,13 @@ export function beginOrCompleteGeometry(
                         currentEngineeringMetadata()
                 }
             );
+        if (drawingState.activeTool === "freeform-polygon") {
+            object.geometry.closed = true;
+            object.name = `Freeform Polygon ${drawingState.objects.filter(
+                candidate => candidate.type === "polyline" &&
+                    candidate.geometry?.closed === true
+            ).length + 1}`;
+        }
     } else if (
         drawingState.activeTool ===
             "triangle" &&

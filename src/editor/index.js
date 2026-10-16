@@ -71,8 +71,9 @@
  */
 
 import { renderCurrentDrawing } from "./workspace/canvas-render.js";
-import { offerRecoveryIfAvailable } from "./commands/document-commands.js";
+import { offerRecoveryIfAvailable, serializeDocumentBody } from "./commands/document-commands.js";
 import { renderProperties } from "./panels/feature-panel.js";
+import { installRightInspector } from "./panels/right-inspector.js";
 import { activeSheet, loadSheetIntoEditor, refreshSheetTabs, syncWorkspaceSettingToggles } from "./workspace/sheet-controller.js";
 import { renderEngineeringTools } from "./toolbar/toolbar-render.js";
 
@@ -101,6 +102,12 @@ installToolbarWiring();
 installWorkspaceLayout();
 installCanvasEvents();
 installKeyboardShortcuts();
+installRightInspector({
+    renderProperties,
+    renderCurrentDrawing,
+    serializeDocumentBody,
+    activeSheet
+});
 
 renderEngineeringTools(
     "GEOMETRY"

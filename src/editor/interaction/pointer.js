@@ -175,7 +175,8 @@ function resolvePointerPoint(
 
     const isPolyline =
         drawingState.activeTool ===
-            "polyline";
+            "polyline" ||
+        drawingState.activeTool === "freeform-polygon";
 
     /*
      * The line tool needs its first point as the inference

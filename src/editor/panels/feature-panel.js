@@ -10,9 +10,11 @@ import { LOAD_BUILD_PHASES } from "../statics/load-tool.js";
 import { bindFeaturePropertyControls } from "./property-binding.js";
 import { enhanceNumericInputs } from "./property-inputs.js";
 import { syncStyleControls } from "./style-controls.js";
+import { refreshRightInspector } from "./right-inspector.js";
 
 export function renderProperties() {
     syncStyleControls();
+    refreshRightInspector();
 
     /*
      * ========================================================

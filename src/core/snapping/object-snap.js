@@ -1924,6 +1924,13 @@ function objectSegments(
             ]);
         }
 
+        if (object.geometry.closed === true) {
+            segments.push([
+                points[points.length - 1],
+                points[0]
+            ]);
+        }
+
         return segments;
     }
 

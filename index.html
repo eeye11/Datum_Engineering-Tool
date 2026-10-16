@@ -991,9 +991,23 @@
                 -->
                 <div class="drawing-panel-rail drawing-panel-rail-right">
                     <aside class="drawing-inspector" id="drawingFeaturesPanel" aria-label="Features inspector">
-                        <h2 class="drawing-panel-heading">FEATURES</h2>
-                        <button class="drawing-components-back" id="drawingFeaturesBack" type="button">&lt;- Features</button>
-                        <div class="drawing-inspector-message" id="drawingProperties">No feature selected</div>
+                        <div class="drawing-inspector-tabs" role="tablist" aria-label="Drawing inspector">
+                            <button id="drawingObjectsTabButton" role="tab" aria-selected="true" aria-controls="drawingObjectsTab" type="button">Objects</button>
+                            <button id="drawingFeaturesTabButton" role="tab" aria-selected="false" aria-controls="drawingFeaturesTab" type="button">Features</button>
+                            <button id="drawingSourceTabButton" role="tab" aria-selected="false" aria-controls="drawingSourceTab" type="button">Source</button>
+                        </div>
+                        <section class="drawing-inspector-tab-panel" id="drawingObjectsTab" role="tabpanel" aria-labelledby="drawingObjectsTabButton">
+                            <div class="drawing-object-list" id="drawingObjectsList"></div>
+                        </section>
+                        <section class="drawing-inspector-tab-panel" id="drawingFeaturesTab" role="tabpanel" aria-labelledby="drawingFeaturesTabButton" hidden>
+                            <button class="drawing-components-back" id="drawingFeaturesBack" type="button">&lt;- Features</button>
+                            <div class="drawing-inspector-message" id="drawingProperties">No feature selected</div>
+                        </section>
+                        <section class="drawing-inspector-tab-panel drawing-source-panel" id="drawingSourceTab" role="tabpanel" aria-labelledby="drawingSourceTabButton" hidden>
+                            <textarea id="drawingSourceEditor" aria-label="TikZ source" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+                            <div id="drawingSourceDiagnostics" class="drawing-source-diagnostics" aria-live="polite"></div>
+                            <button id="drawingSourceApply" class="engg-dialog-button engg-dialog-button-primary" type="button" disabled>Apply source</button>
+                        </section>
                     </aside>
 
                     <button

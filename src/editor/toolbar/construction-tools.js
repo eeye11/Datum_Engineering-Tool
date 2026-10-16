@@ -43,6 +43,7 @@ export function isConstructionTool(
                 "point",
                 "line",
                 "polyline",
+                "freeform-polygon",
                 "triangle",
                 "polygon",
                 "circle",

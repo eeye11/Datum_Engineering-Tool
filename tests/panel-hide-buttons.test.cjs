@@ -74,7 +74,7 @@ check(
 
 check(
   "the RIGHT rail puts the button AFTER the panel",
-  /drawing-panel-rail-right[\s\S]{0,400}drawing-inspector[\s\S]{0,600}drawing-panel-toggle/.test(
+  /drawing-panel-rail-right[\s\S]*?drawing-inspector[\s\S]*?drawing-panel-toggle/.test(
     html,
   ),
   "the right panel's outer edge is the window's right",

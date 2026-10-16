@@ -230,9 +230,10 @@ import enggTheme from "../../editor/workspace/theme.js";
                     .join(" ");
 
             if (points) {
+                const closed = geometry.closed === true;
                 const polyline =
                     createSvgElement(
-                        "polyline",
+                        closed ? "polygon" : "polyline",
                         {
                             points
                         }
