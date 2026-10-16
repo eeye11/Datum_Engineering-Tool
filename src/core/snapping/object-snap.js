@@ -4064,13 +4064,13 @@ function resolveConstructionPoint(
                 state.snap.enabled
                     ? {
                         x:
-                            enggDrawingState.snapCoordinate(
+                            enggDrawingState.snapGridCoordinate(
                                 rawPoint.x,
                                 state
                             ),
 
                         y:
-                            enggDrawingState.snapCoordinate(
+                            enggDrawingState.snapGridCoordinate(
                                 rawPoint.y,
                                 state
                             )

@@ -225,9 +225,9 @@ function snappingPage() {
             "Snapping to the grid is independent of whether the grid is shown: a hidden grid can still be snapped to.",
         )}
         ${row(
-            "Snap sensitivity",
-            `<span class="datum-settings-value">${snap.spacing ?? 1} unit spacing</span>`,
-            "The grid spacing a drawn point is snapped to.",
+            "Grid spacing",
+            `<span class="datum-settings-value">${drawingState.grid?.spacing ?? 5} units</span>`,
+            "Construction points snap to this grid spacing when Grid Snap is enabled.",
         )}
 
         <h4>Snap targets</h4>

@@ -109,7 +109,8 @@ function createDrawingState() {
         },
         grid: {
             visible: true,
-            spacing: 5
+            spacing: 5,
+            snapToGrid: true
         },
         snap: {
             enabled: true,
@@ -2881,6 +2882,21 @@ function snapCoordinate(value, state) {
     );
 }
 
+function snapGridCoordinate(value, state) {
+    const spacing = Number(state?.grid?.spacing);
+
+    if (
+        state?.snap?.enabled === false ||
+        state?.grid?.snapToGrid === false ||
+        !Number.isFinite(spacing) ||
+        spacing <= 0
+    ) {
+        return value;
+    }
+
+    return Math.round(value / spacing) * spacing;
+}
+
 function engineeringToScreen(point, bounds, state) {
     const scale =
         BASE_PIXELS_PER_UNIT *
@@ -3060,6 +3076,7 @@ const enggDrawingState = {
     setCameraZoom,
     panCamera,
     snapCoordinate,
+    snapGridCoordinate,
     engineeringToScreen,
     screenToEngineering,
     polygonVertices,
