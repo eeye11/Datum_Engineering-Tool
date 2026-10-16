@@ -99,11 +99,21 @@ for (const tool of [
 
 console.log("\n  a one-gesture path tool exits on a bare click\n");
 
-for (const tool of ["line", "rectangle", "circle", "beam", "point-force", "arrow"]) {
+for (const tool of ["beam", "point-force", "arrow"]) {
   check(
     `${tool} exits to Select on a click`,
     shouldExitToSelectOnClick(tool) === true,
     "the tool must not trap the student",
+  );
+}
+
+console.log("\n  Geometry's Line, Rectangle and Circle take click-move-click too\n");
+
+for (const tool of ["line", "rectangle", "circle"]) {
+  check(
+    `${tool}: a bare click is the first point, not an exit`,
+    shouldExitToSelectOnClick(tool) === false,
+    "click-move-click must draw the shape",
   );
 }
 

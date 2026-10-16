@@ -231,8 +231,8 @@ export function handleCanvasClick(
      * A BARE CLICK WITH A ONE-GESTURE PATH TOOL LEAVES THE TOOL
      * ========================================================
      *
-     * A Line, a Beam, a Rectangle, an Arrow and a Note are all made by ONE
-     * press-drag-release - their gesture arrives through the drag path, which
+     * A Beam and an Arrow are made by ONE press-drag-release - their gesture
+     * arrives through the drag path, which
      * has already armed the press and will have committed on release. So a
      * plain `click` reaching here is NOT the first point of a shape: it is the
      * student finishing with the tool. It exits to Select and selects whatever
