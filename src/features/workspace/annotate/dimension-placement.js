@@ -278,8 +278,8 @@ function armSingleMeasurement(
  * Called by the click that resolved to no reference - the student clicked
  * away from every feature, which is the placement gesture - and by the Enter
  * key. The armed choice and refs are committed at the clicked point, through
- * the same `commitDimension` every other path uses, so the value, the
- * calibration question and the single undo entry are identical.
+ * the same `commitDimension` every other path uses, so the value and the
+ * single undo entry are identical.
  */
 function commitArmedMeasurement(
     point

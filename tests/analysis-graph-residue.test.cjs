@@ -109,7 +109,6 @@ const diagram = {
 const scene = (objects, extra = {}) => ({
   objects,
   display: { showMagnitudes: true, showUnits: true, showDimensions: true },
-  scale: { mmPerUnit: 1, unit: "mm" },
   selection: { selectedObjectIds: [], boxSelectionIds: [], hoveredObjectId: null },
   interaction: { phase: "idle", preview: null, previewObjects: [] },
   camera: { zoom: 1, panX: 0, panY: 0 },

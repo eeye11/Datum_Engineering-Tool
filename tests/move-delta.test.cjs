@@ -14,12 +14,12 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
  * translation. A move is a DELTA: current cursor minus where the cursor
  * was pressed. If that delta is computed in world units, no display scale
  * can touch it. If any part of it is derived from the feature's own drawn
- * extent - the arrow length, the vector scale - then a force drawn short
+ * extent - the arrow length - then a force drawn short
  * moves short, and the feature leaves the hand.
  *
  * So the test does not check that a feature "moves correctly", which a
  * single drag would satisfy whatever the mechanism. It moves the SAME
- * feature by the SAME world delta at four different vector scales, and
+ * feature by the SAME world delta at four different drawn lengths, and
  * requires all four to land in the same place.
  *
  * A drag by handle is checked as well, and separately, because the
@@ -55,36 +55,34 @@ const near = (a, b) =>
 console.log("\n  a move is a delta, not a proportion of the arrow\n");
 
 /* ============================================================
-   THE SAME DELTA, AT EVERY VECTOR SCALE
+   THE SAME DELTA, AT EVERY DRAWN LENGTH
    ============================================================ */
 
 /*
- * A force whose drawn arrow length is scaled by the shared Statics Vector
- * Scale, which is exactly the case reported as broken. The SCALE is not
- * passed to translateObject - it could not be, because translateObject
- * takes a delta and knows nothing about the drawing - so this is really a
- * check that the drawn extent cannot leak into the translation, which is
- * what a world-space delta guarantees.
+ * The same force drawn as arrows of different lengths (an arrow is as long
+ * as it was drawn). The length is not passed to translateObject - it takes a
+ * delta and knows nothing about the drawing - so this is a check that the
+ * drawn extent cannot leak into the translation, which is what a world-space
+ * delta guarantees.
  *
- * The arrow is drawn from a scaled magnitude, so at 0.25x this force is a
- * quarter of the length it is at 1x. All four must still land in the same
+ * At 0.25x this force is a quarter of the length it is at 1x. All four must still land in the same
  * place.
  */
-const VECTOR_SCALES = [0.25, 1, 4, 10];
+const LENGTH_FACTORS = [0.25, 1, 4, 10];
 
 const DELTA = { x: 37, y: -19 };
 
-const landings = VECTOR_SCALES.map(vectorScale => {
+const landings = LENGTH_FACTORS.map(lengthFactor => {
   /*
    * A POINT FORCE, drawn at this scale. `end` is the arrow's own drawn
    * length, so it differs between the cases - which is the whole point.
    */
   const force = {
-    id: `force-${vectorScale}`,
+    id: `force-${lengthFactor}`,
     type: "force",
     geometry: {
       start: { x: 100, y: 100 },
-      end: { x: 100 + 50 * vectorScale, y: 100 },
+      end: { x: 100 + 50 * lengthFactor, y: 100 },
       position: { x: 100, y: 100 },
       magnitude: 100,
       angle: 0
@@ -94,8 +92,8 @@ const landings = VECTOR_SCALES.map(vectorScale => {
   geometry.translateObject(force, DELTA.x, DELTA.y);
 
   return {
-    vectorScale,
-    drawnLength: 50 * vectorScale,
+    lengthFactor,
+    drawnLength: 50 * lengthFactor,
     start: { ...force.geometry.start },
     end: { ...force.geometry.end }
   };
@@ -122,14 +120,13 @@ check(
 );
 
 /*
- * THE CENTRAL CLAIM. Every scale lands in the same place. A translation
+ * THE CENTRAL CLAIM. Every length lands in the same place. A translation
  * that was proportional to the drawn length would separate these by the
- * scale factor - the 0.25x force would travel a quarter as far and drift
+ * length factor - the 0.25x force would travel a quarter as far and drift
  * out from under the cursor, which is precisely the reported symptom.
  *
- * The claim is about the ORIGIN. The arrow itself is longer at a bigger
- * scale by design, so requiring the whole drawing to be identical would be
- * requiring the Vector Scale to do nothing at all.
+ * The claim is about the ORIGIN. The arrows themselves differ in length by
+ * design, so the whole drawing is not required to be identical.
  */
 const originsIdentical = landings.every(
   landing =>
@@ -138,11 +135,11 @@ const originsIdentical = landings.every(
 );
 
 check(
-  "a force's application point moves to the same place at every Vector Scale",
+  "a force's application point moves to the same place at every drawn length",
   originsIdentical,
   JSON.stringify(
     landings.map(l => ({
-      scale: l.vectorScale,
+      factor: l.lengthFactor,
       at: l.start
     }))
   )
@@ -159,7 +156,7 @@ check(
   ),
   JSON.stringify(
     landings.map(l => ({
-      scale: l.vectorScale,
+      factor: l.lengthFactor,
       drawnNow: l.end.x - l.start.x,
       wasDrawnAt: l.drawnLength
     }))
@@ -167,12 +164,12 @@ check(
 );
 
 /*
- * ...AND THE SCALES REALLY DID DIFFER, so the check is not passing
+ * ...AND THE LENGTHS REALLY DID DIFFER, so the check is not passing
  * because the test drew them all the same.
  */
 const lengthsDiffer = new Set(
   landings.map(l => l.drawnLength)
-).size === VECTOR_SCALES.length;
+).size === LENGTH_FACTORS.length;
 
 check(
   "the drawn arrows really were different lengths",

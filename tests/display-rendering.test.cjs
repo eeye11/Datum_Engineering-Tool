@@ -301,24 +301,6 @@ check(
   `read: ${JSON.stringify(unitsText(true))}`,
 );
 
-console.log("\n  VECTOR SCALE does not touch the value\n");
-
-/*
- * THE VECTOR SCALE IS A DRAWING SETTING. It changes how big the arrows
- * are and nothing else - the stored force is the same force, and a student
- * who turns the arrows up to make a small load visible has not changed it.
- */
-const scaled = render({
-  showMagnitudes: true,
-  statics: { vectorScale: 4 },
-});
-
-check(
-  "the value is still 100 N at 4x",
-  unitsText(true).includes("100") && unitsText(true).includes("N"),
-  `read: ${JSON.stringify(unitsText(true))}`,
-);
-
 console.log(
   `\n${pass} passed, ${fail} failed\n`,
 );

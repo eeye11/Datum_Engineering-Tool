@@ -232,7 +232,6 @@ console.log("\n  the recovery copy is separate from the file\n");
       {
         id: "s1",
         name: "Structure",
-        scale: { mmPerUnit: 2.5, unit: "mm" },
         objects: [{ id: "beam_1", type: "beam" }]
       }
     ],
@@ -253,13 +252,6 @@ console.log("\n  the recovery copy is separate from the file\n");
   check(
     "the copy holds the DOCUMENT, not a picture of it",
     read && read.document && Array.isArray(read.document.sheets),
-  );
-
-  check(
-    "the copy keeps the sheet's World Scale",
-    read &&
-      read.document.sheets[0].scale &&
-      read.document.sheets[0].scale.mmPerUnit === 2.5,
   );
 
   const described = recovery.describe();

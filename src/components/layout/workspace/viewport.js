@@ -420,13 +420,12 @@ export function renderedBounds(
     /*
      * A DIMENSION CONTRIBUTES ITS OWN EXTENT.
      *
-     * A measured dimension and a Variable Dimension are drawing content: the
+     * A dimension is drawing content: the
      * student places them wherever there is room, and a dimension sitting above
      * a beam is often the outermost thing on the sheet. Fit and Print therefore
      * have to reserve room for them.
      *
-     * THEY WERE MISSING, and a Variable Dimension could be cropped by a Fit
-     * that measured everything around it. Both go through the SAME graphics the
+     * They go through the SAME graphics the
      * renderer draws with, so the room reserved is the room the ink takes - not
      * a bounding box invented here.
      */

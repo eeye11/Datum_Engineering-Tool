@@ -83,7 +83,6 @@ const line = {
 };
 
 const document_ = (objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 

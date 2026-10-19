@@ -819,8 +819,8 @@ export function extendObjectToBoundary(
  * could not have a middle piece removed at all. Here every other feature is
  * tested, so the segments are the ones the drawing actually has.
  *
- * All of it is world-space arithmetic on the stored geometry: zoom, pan and
- * World Scale cannot change where an intersection is, so a trim lands exactly
+ * All of it is world-space arithmetic on the stored geometry: zoom and pan
+ * cannot change where an intersection is, so a trim lands exactly
  * on the crossing at any magnification.
  */
 function intersectionsAlongLine(lineObject, objects) {

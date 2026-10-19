@@ -88,8 +88,7 @@ function createDrawingState() {
          * THE GRID IS A DRAWING AID, NOT AN ENGINEERING SCALE.
          *
          * `spacing` is measured in the SAME internal coordinates the geometry
-         * is stored in, and it never depends on whether `scale` above has been
-         * calibrated. Zooming and panning change neither the interval nor the
+         * is stored in. Zooming and panning change neither the interval nor the
          * snapping: both the drawn lines and the snap arithmetic are derived
          * from this one number.
          *
@@ -1908,16 +1907,6 @@ function removeObjectsAndDescendants(
 }
 
 /*
- * Automatic scale reset removed.
- *
- * DAETUM geometry is schematic: deleting or editing annotations must not
- * implicitly establish, reset, or erase a drawing scale.
- */
-function resetScaleIfSheetIsEmpty(state) {
-    return false;
-}
-
-/*
  * ========================================================
  * THE SHARED SELECTION AND TOOL EVENTS
  * ========================================================
@@ -1998,7 +1987,7 @@ function clearSelection(state) {
  *
  * WHAT THIS IS HANDED IS NOT ALWAYS AN ARRAY. It began as the feature list,
  * and it is now the DOCUMENT snapshot - an object carrying the objects, the
- * sheets, the scale and the camera - so a helper that assumed a list returned
+ * sheets and the camera - so a helper that assumed a list returned
  * an empty array and Undo restored an empty drawing.
  *
  * `deepClone` copies either shape, which is why it is the one used here. The
@@ -2274,7 +2263,7 @@ function restoreDocument(state, document) {
  *
  *   - a sheet being added, removed, renamed or reordered,
  *   - a change to ANOTHER sheet's features,
- *   - a change to the document's units or scale.
+ *   - a change to the document's units.
  *
  * So the collection goes into the snapshot too. `sheets` is whatever
  * the caller supplies through `state.historySinks` - the editor is the
@@ -2906,9 +2895,8 @@ function snapCoordinate(value, state) {
  *    move the lattice. The same pointer position converts to the same
  *    coordinate at every zoom, and lands on the same line.
  *
- *  - the engineering scale. The interval is a drawing aid: five units apart is
- *    five units apart whether or not the document has been calibrated, and the
- *    snapping never reads `state.scale`.
+ *  - the document's units. The interval is a drawing aid: five units apart is
+ *    five drawing units apart.
  *
  * `gridSnapPoint` is the two-dimensional form, so a caller cannot snap one axis
  * and forget the other. An intersection is the normal result for a free point;
@@ -3082,7 +3070,6 @@ const enggDrawingState = {
     addObject,
     removeObject,
     removeObjectsAndDescendants,
-    resetScaleIfSheetIsEmpty,
     selectObjects,
     selectObject,
     clearSelection,

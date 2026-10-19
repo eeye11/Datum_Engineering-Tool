@@ -59,7 +59,6 @@ const check = (name, actual, expected) => {
 };
 
 const scene = (...objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 

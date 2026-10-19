@@ -83,7 +83,6 @@ const sweptAngle = (graphics) => {
  * is exactly the configuration that produced a zero-length leg.
  */
 const corner = {
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects: [
     {
       id: "a",

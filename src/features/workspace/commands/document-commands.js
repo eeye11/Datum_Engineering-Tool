@@ -435,7 +435,7 @@ function refreshDocumentTitle() {
 /*
  * The serialised document body, exactly as the state model holds it.
  *
- * This is the whole document: units, calibration, camera, every
+ * This is the whole document: units, camera, every
  * object's real type, geometry, style, parent and parameters. The
  * format module wraps it; nothing here decides what the file is
  * called or how it is versioned.
@@ -1784,9 +1784,9 @@ function restoreSolutionSource(source) {
  */
 function applyLoadedDocument(data, fileName, previous, result) {
     /*
-     * The document's own settings, not just its features. Units and
-     * calibration travel with the drawing because a length in a file
-     * means nothing without them.
+     * The document's own settings, not just its features. Units travel
+     * with the drawing because a length in a file means nothing without
+     * them.
      *
      * Applied to the state, not to the collection: these are settings
      * of the whole document - the unit every length on every sheet is
@@ -2550,7 +2550,7 @@ function readFileAsText() {
  * A small SVG picture of a stored globalThis.document.
  *
  * A THIN WRAPPER over the shared fitted render, which is where the drawing
- * bounds, the sheet's World Scale and the neutral camera are decided. Keeping
+ * bounds and the neutral camera are decided. Keeping
  * the decision there - and not here - is what makes a Recent thumbnail, a
  * template card and a written-solution figure the same picture of the same
  * drawing.

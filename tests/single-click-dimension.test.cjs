@@ -194,7 +194,6 @@ const descriptorFor = (picked) =>
 const stateFor = () => {
   const state = stateMod.createDrawingState();
   state.objects = OBJECTS;
-  state.scale = { mmPerUnit: 1, unit: "mm" };
   return state;
 };
 
@@ -471,7 +470,6 @@ console.log("\n  AN ANGLE DOES NOT DEPEND ON WHICH WAY A LINE WAS DRAWN\n");
   const angleOf = (a, b) => {
     const state = stateMod.createDrawingState();
     state.objects = [a, b];
-    state.scale = { mmPerUnit: 1, unit: "mm" };
 
     const dim = dimModel.createDimension({
       dimensionType: "angular",

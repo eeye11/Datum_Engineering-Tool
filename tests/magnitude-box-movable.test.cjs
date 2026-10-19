@@ -104,7 +104,6 @@ const force = (extra = {}, id = "force-1") => ({
 const scene = (objects, display = {}) => ({
   objects,
   display: { showMagnitudes: true, showUnits: true, ...display },
-  scale: { mmPerUnit: 1, unit: "mm" },
   selection: {
     selectedObjectIds: [],
     boxSelectionIds: [],

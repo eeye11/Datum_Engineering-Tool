@@ -162,7 +162,6 @@ const drawingState = {
   grid: { visible: false, spacing: 5 },
   snap: { enabled: true, spacing: 1 },
   objectSnap: { enabled: false, tolerancePx: 10 },
-  statics: { vectorScale: 1 },
   styleDefaults: {
     stroke: "#000000",
     lineWidth: 0.5,

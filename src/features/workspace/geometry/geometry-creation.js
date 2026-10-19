@@ -1547,10 +1547,7 @@ export function beginOrCompleteGeometry(
          * has been written, so "before" means the document the student
          * was looking at when they answered the popup.
          *
-         * That matters because answering it can CALIBRATE the drawing.
-         * A snapshot taken afterwards would already carry the new scale,
-         * and Undo would remove the member while leaving its calibration
-         * behind.
+         * Undo then returns to exactly that document in one step.
          */
         const previousObjects =
             enggDrawingState.snapshotDrawing(

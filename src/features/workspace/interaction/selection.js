@@ -1030,7 +1030,7 @@ export function finishActiveConstruction() {
         drawingState.interaction;
 
     /*
-     * SMART DIMENSION REFERENCE SELECTION. Enter is the commit point:
+     * DIMENSION REFERENCE SELECTION. Enter is the commit point:
      * it means "use what I picked" rather than "pick one more".
      *
      * It is checked BEFORE the phase test because the dimension tool

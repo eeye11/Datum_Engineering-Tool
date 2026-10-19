@@ -175,11 +175,8 @@ function adoptSheetViewportIntoEditor() {
  * holds. It is the only place the two are kept in step, which is what
  * makes it safe for the editor to be the live copy.
  *
- * The sheet's SCALE goes back the same way it arrived. That symmetry
- * matters: `adoptSheetViewportIntoEditor` takes the scale from the
- * sheet, so if it were not written back the editor would be carrying a
- * scale the sheet does not have, and the next calibration on this
- * sheet would be discarded when the student switched away.
+ * The sheet's UNITS go back the same way they arrived, so the editor never
+ * carries a setting the sheet does not have.
  */
 export function syncActiveSheet() {
     const sheet = activeSheet();

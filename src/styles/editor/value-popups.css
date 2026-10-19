@@ -1,5 +1,5 @@
 /*
- * Live line measurement, the drawing-scale prompt, the creation-time dimension popup and the dimension editor.
+ * The value popup (a load's or force's number and unit) and the note editor's dialog shell.
  *
  * Part of editor.css, which imports these files in order. The order is the
  * cascade: a later file wins where two rules are equally specific.
@@ -17,96 +17,11 @@
  */
 
 /* ==========================================================================
-   SET DRAWING SCALE
+   DIALOG BUTTON ROW
 
-   The first dimension asks how big the drawing really is. It is a modal,
-   not a menu, because it is a question with two answers that has to be
-   answered before anything else can happen - a popup that could be
-   dismissed by clicking elsewhere would let a dimension be created with
-   no scale at all, which is the thing this exists to prevent.
-
-   Styled to match the existing drawing chrome rather than the browser's
-   own dialog, so it reads as part of DAETUM.
+   The Cancel / OK row of a modal dialog (the note editor). The class name is
+   left from the retired Set Drawing Scale dialog that first used it.
    ========================================================================== */
-
-.drawing-scale-dialog {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-
-    gap: 6px;
-
-    background: rgba(255, 255, 255, 0.86);
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-    color: var(--datum-ink);
-}
-
-.drawing-scale-dialog-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 2px;
-}
-
-.drawing-scale-dialog-text {
-    margin: 0 0 8px;
-    max-width: 340px;
-    text-align: center;
-    line-height: 1.5;
-    color: var(--datum-ink);
-}
-
-.drawing-scale-dialog-note {
-    margin: 10px 0 0;
-    max-width: 340px;
-    text-align: center;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--datum-muted);
-}
-
-.drawing-scale-dialog-error {
-    margin: 8px 0 0;
-    max-width: 340px;
-    text-align: center;
-    font-size: 11px;
-    color: var(--datum-error);
-}
-
-.drawing-scale-dialog-label {
-    display: block;
-    width: 260px;
-    margin-bottom: 3px;
-    font-size: 11px;
-    text-align: left;
-    color: var(--datum-ink);
-}
-
-.drawing-scale-dialog-input,
-.drawing-scale-dialog-select {
-    width: 260px;
-    box-sizing: border-box;
-    padding: 6px 8px;
-    margin-bottom: 8px;
-
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    background: var(--datum-input);
-    color: var(--datum-ink);
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-}
-
-.drawing-scale-dialog-input:focus,
-.drawing-scale-dialog-select:focus {
-    outline: 2px solid var(--datum-green);
-    outline-offset: -1px;
-}
 
 .drawing-scale-dialog-actions {
     display: flex;
@@ -141,12 +56,12 @@
 }
 
 /* ==========================================================================
-   CREATION-TIME DIMENSION POPUP
+   VALUE POPUP
 
-   The one compact input a freshly drawn feature uses to say how big it is.
-   It is deliberately NOT the scale dialog's full-screen modal: the student is
-   still looking at the object they just made, and covering the drawing to ask
-   one question would hide the very thing the answer is about.
+   The one compact input a load or force uses to state its number and unit.
+   It is deliberately NOT a full-screen modal: the student is still looking at
+   the object they just made, and covering the drawing to ask one question
+   would hide the very thing the answer is about.
 
    So it is a small floating card near the top of the canvas, styled from the
    same chrome as the rest of the drawing (Arial, the same border greys, the
@@ -311,27 +226,17 @@
     background: var(--datum-surface);
 }
 
-.drawing-creation-dimension-step {
-    font-size: 10px;
-    color: var(--datum-muted);
-}
-
 .drawing-creation-dimension-error {
     font-size: 11px;
     color: var(--datum-error);
 }
 
 /* ==========================================================================
-   EDIT DIMENSION
+   MODAL DIALOG SHELL
 
-   Same shell as the scale-calibration dialog - both are short forms that
-   must be answered before anything else can happen - with the dialog's
-   own rhythm and the editor's two-part layout.
-
-   The two FIELDSETS are not decoration. "Display" and "Set real-world
-   size" are different kinds of act, one cosmetic and one a change to
-   the document, and putting them in one undifferentiated list would
-   invite exactly the confusion this editor exists to prevent.
+   The full-screen shell, title and field label of the note editor. The class
+   names are left from the retired Edit Dimension dialog (a dimension now edits
+   through the value popup).
    ========================================================================== */
 
 .drawing-dimension-dialog {
@@ -356,88 +261,9 @@
     margin-bottom: 10px;
 }
 
-.drawing-dimension-dialog-readout {
-    min-width: 300px;
-    padding: 10px 12px;
-    margin-bottom: 12px;
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    background: var(--datum-rail);
-    text-align: center;
-}
-
-.drawing-dimension-dialog-value {
-    font-size: 17px;
-    font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-
-.drawing-dimension-dialog-meta {
-    margin-top: 3px;
-    font-size: 11px;
-    color: var(--datum-muted);
-}
-
-.drawing-dimension-dialog-group {
-    min-width: 300px;
-    margin: 0 0 12px;
-    padding: 10px 12px 12px;
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-}
-
-.drawing-dimension-dialog-group legend {
-    padding: 0 6px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--datum-ink);
-}
-
-.drawing-dimension-dialog-check {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 10px;
-    font-size: 12px;
-}
-
-.drawing-dimension-dialog-check input {
-    margin: 0;
-}
-
 .drawing-dimension-dialog-label {
     display: block;
     margin-bottom: 3px;
     font-size: 11px;
     color: var(--datum-ink);
-}
-
-.drawing-dimension-dialog-input,
-.drawing-dimension-dialog-select {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 6px 8px;
-    margin-bottom: 10px;
-
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    background: var(--datum-input);
-    color: var(--datum-ink);
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-}
-
-.drawing-dimension-dialog-input:focus,
-.drawing-dimension-dialog-select:focus {
-    outline: 2px solid var(--datum-green);
-    outline-offset: -1px;
-}
-
-.drawing-dimension-dialog-note {
-    margin: 0 0 10px;
-    font-size: 11px;
-    line-height: 1.5;
-    color: var(--datum-muted);
 }
