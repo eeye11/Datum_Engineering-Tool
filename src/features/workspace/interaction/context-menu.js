@@ -10,6 +10,7 @@ import { deleteSelectedObjects } from "../commands/delete-command.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
+import { showFeaturesPanel } from "../../../components/layout/panels/panel-tabs.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { beginModifySession } from "../commands/modify-tools.js";
 import { modifyInstruction } from "./pointer.js";
@@ -80,7 +81,7 @@ function closeFeatureContextMenu() {
 
     featureContextMenu = null;
 
-    document.removeEventListener(
+    globalThis.document.removeEventListener(
         "pointerdown",
         closeFeatureContextMenuOnOutside,
         true
@@ -137,7 +138,7 @@ function openFeatureContextMenu(
     closeFeatureContextMenu();
 
     const menu =
-        document.createElement("div");
+        globalThis.document.createElement("div");
 
     menu.className =
         "drawing-context-menu";
@@ -186,10 +187,6 @@ function openFeatureContextMenu(
 
     const onSelection = hasSelection
         ? `
-            ${contextMenuItem("Open Features", () => {
-                editorState.featurePanelView = "edit";
-                renderProperties();
-            })}
             ${tableRows}
             ${contextMenuItem("Cut", () => {
                 cutSelectionToClipboard();
@@ -256,7 +253,7 @@ function openFeatureContextMenu(
 
     menu.innerHTML = onSelection;
 
-    document.body.appendChild(menu);
+    globalThis.document.body.appendChild(menu);
 
     /*
      * Keep the menu on screen: it is placed at the pointer but
@@ -312,7 +309,17 @@ function openFeatureContextMenu(
                         )
                     );
                 } else if (action === "open-features") {
-                    editorState.featurePanelView = "edit";
+                    /*
+                     * "OPEN FEATURES" MEANS "SHOW ME THIS IN THE PANEL".
+                     *
+                     * It used to set a view flag that switched the old panel from
+                     * its component list to a property page. The Features tab now
+                     * follows the SELECTION, so the flag has no meaning - but the
+                     * intent does: open the tab and show the selected object. That
+                     * is one call to the tab controller, and it is the only part
+                     * of the old action that described something real.
+                     */
+                    showFeaturesPanel();
                     renderProperties();
                 }
             }
@@ -321,7 +328,7 @@ function openFeatureContextMenu(
 
     featureContextMenu = menu;
 
-    document.addEventListener(
+    globalThis.document.addEventListener(
         "pointerdown",
         closeFeatureContextMenuOnOutside,
         true
@@ -333,7 +340,7 @@ function openFeatureContextMenu(
  * by editor/index.js.
  */
 export function installContextMenu() {
-    document.addEventListener(
+    globalThis.document.addEventListener(
         "contextmenu",
         event => {
             if (
@@ -381,8 +388,6 @@ export function installContextMenu() {
                     drawingState,
                     object.id
                 );
-
-                editorState.featureTreePickedId = object.id;
 
                 renderProperties();
                 renderCurrentDrawing();

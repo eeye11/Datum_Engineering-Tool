@@ -92,7 +92,7 @@ check(
   "the fitted renderer sizes the output to the drawing's own aspect",
   /const aspect = spanX \/ spanY;/.test(
     fs.readFileSync(
-      path.join(__dirname, "..", "src", "file", "document-export.js"),
+      path.join(__dirname, "..", "src", "shared", "file", "document-export.js"),
       "utf8",
     ),
   ),
@@ -103,7 +103,7 @@ console.log("\n  the view switcher cannot render an enormous icon\n");
 
 {
   const popup = fs.readFileSync(
-    path.join(__dirname, "..", "src", "ui", "open-popup.js"),
+    path.join(__dirname, "..", "src", "components", "layout", "toolbar", "open-popup.js"),
     "utf8",
   );
 

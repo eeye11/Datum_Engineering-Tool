@@ -111,8 +111,25 @@ const DRAG_GEOMETRY_TOOLS = [
     "circle",
     "triangle",
     "polygon",
+
+    /*
+     * The Freeform Polygon is NOT here, although it reads like a drag tool.
+     * It is listed in PROGRESSIVE_TOOLS above, where the reason is written
+     * out; keeping it here as well would leave two lists disagreeing about
+     * the same tool, and the disagreement is exactly what broke it.
+     */
     "arc",
-    "reference-arc"
+    "reference-arc",
+
+    /*
+     * THE COORDINATE SYSTEM IS A DRAG, NOT A CLICK.
+     *
+     * Its press is the origin and its release is the positive X direction,
+     * which is exactly the two points one gesture supplies. It used to be a
+     * single-click placement with a fixed axis length, so the student could
+     * put an origin down and had no way to say which way the axes ran.
+     */
+    "coordinate-system-2d"
 ];
 
 /*
@@ -124,8 +141,33 @@ const DRAG_GEOMETRY_TOOLS = [
  */
 const PROGRESSIVE_TOOLS = [
     "polyline",
-    "truss"
+    "truss",
+
+    /*
+     * THE FREEFORM POLYGON IS A FLOW TOOL TOO.
+     *
+     * It reads as a drag tool - it is a shape, and the gesture that finishes
+     * it is a drag back onto the first vertex - but every vertex is a
+     * separate decision and the student may sit on a vertex for as long as
+     * they like before choosing the next one. Treating the press as the start
+     * of a drag session took the click workflow away from it: the press armed
+     * a session whose release tried to finish a span, so vertices stopped
+     * being placed and the polygon could not be built at all.
+     *
+     * The closing gesture is a press ON the first vertex, which the geometry
+     * creation layer recognises as a close - see `freeform-polygon` in
+     * geometry-creation.js. That decision needs the press, not a release.
+     */
+    "freeform-polygon"
 ];
+/*
+ * Tools whose input is a single point, but where holding and dragging should
+ * place the feature at the RELEASED point.
+ */
+const SINGLE_POINT_DRAG_TOOLS = [
+    "point"
+];
+
 
 /*
  * The distributed-load tools, whose SPAN is a start and an end like a Line's.
@@ -260,6 +302,10 @@ export function isDragCreationTool(
         return true;
     }
 
+    if (SINGLE_POINT_DRAG_TOOLS.includes(toolId)) {
+        return true;
+    }
+
     /*
      * A single-click placement tool has no second point to take from a
      * release: a support, a particle or a reference point is placed where
@@ -268,9 +314,7 @@ export function isDragCreationTool(
      */
     if (
         STATICS_PLACEMENT_TOOLS[toolId] ||
-        toolId === "moment" ||
-        toolId === "point" ||
-        toolId === "coordinate-system-2d"
+        toolId === "moment"
     ) {
         return false;
     }
@@ -427,6 +471,24 @@ export function beginCreationDrag(
     ) {
         return false;
     }
+    if (SINGLE_POINT_DRAG_TOOLS.includes(drawingState.activeTool)) {
+        const onExisting =
+            idle && pressSelectsExistingObject(event);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false,
+            onExisting,
+            singlePointTool: drawingState.activeTool,
+            pressResolution: null
+        };
+
+        return true;
+    }
 
     /*
      * ========================================================
@@ -577,6 +639,10 @@ export function moveCreationDrag(event) {
 
         session.moved = true;
 
+        if (session.singlePointTool) {
+            return;
+        }
+
         /*
          * A GEOMETRIC ANNOTATE TOOL BEGINS ITS ANCHOR HERE.
          *
@@ -709,6 +775,14 @@ export function finishCreationDrag(
         if (point) {
             completeAnnotateAt(point);
         }
+
+        return true;
+    }
+
+    if (session.singlePointTool) {
+        beginOrCompleteGeometry(
+            resolvePointerEvent(event)
+        );
 
         return true;
     }

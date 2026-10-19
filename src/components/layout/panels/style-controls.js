@@ -128,7 +128,7 @@ export function syncStyleLabels({ lineWidth, lineType, stroke }) {
      * keyed on the real value, and an unknown value falls back to solid rather
      * than showing a pattern the engine would not draw.
      */
-    const lineTypeStroke = document.getElementById("drawingLineTypeStroke");
+    const lineTypeStroke = globalThis.document.getElementById("drawingLineTypeStroke");
 
     if (lineTypeStroke) {
         const dashes = LINE_TYPE_DASHES[drawingLineType.value] ?? null;
@@ -181,7 +181,7 @@ function ensureThicknessOption(
     }
 
     const option =
-        document.createElement("option");
+        globalThis.document.createElement("option");
 
     option.value = value;
     option.textContent =

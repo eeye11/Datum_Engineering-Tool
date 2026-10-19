@@ -1,0 +1,9 @@
+{
+  "id": "dynamics.dynamics-create.rigid-body",
+  "label": "Rigid Body",
+  "category": "dynamics",
+  "group": "dynamics-create",
+  "libraryPath": "src/tool-library/dynamics/dynamics-create/rigid-body",
+  "template": "template.tex",
+  "implemented": false
+}

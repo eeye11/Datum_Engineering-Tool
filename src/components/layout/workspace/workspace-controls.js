@@ -3,9 +3,8 @@
  */
 
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { drawingComponentsBack, drawingDisplayToggles, drawingGridToggle, drawingRedo, drawingSnapToggle, drawingUndo, drawingVectorScale, drawingVectorScaleCustom, drawingVectorScaleValue } from "../../../features/workspace/dom.js";
+import { drawingDisplayToggles, drawingGridToggle, drawingRedo, drawingSnapToggle, drawingUndo, drawingVectorScale, drawingVectorScaleCustom, drawingVectorScaleValue } from "../../../features/workspace/dom.js";
 import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
-import { renderComponentTree } from "../panels/feature-tree.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
 import { activateGlobalTool } from "../../../features/workspace/commands/modify-tools.js";
 import { syncWorkspaceSettingToggles } from "./sheet-controller.js";
@@ -17,9 +16,10 @@ import { toggleFitDrawing, toggleWorkspaceSetting } from "./viewport.js";
  * Exactly one button can be active at a time.
  */
 function refreshGlobalToolHighlight() {
-    document
-        .querySelectorAll("[data-global-tool]")
-        .forEach(button => {
+    const buttons =
+        globalThis.document?.querySelectorAll("[data-global-tool]") ?? [];
+
+    buttons.forEach(button => {
             const isActive =
                 button.dataset.globalTool ===
                 editorState.activeGlobalTool;
@@ -54,34 +54,8 @@ export function clearGlobalToolHighlight() {
  * by editor/index.js.
  */
 export function installWorkspaceControls() {
-    const fitButton = document.getElementById("drawingFitView");
+    const fitButton = globalThis.document?.getElementById("drawingFitView");
     fitButton?.addEventListener("click", toggleFitDrawing);
-    if (
-        drawingComponentsBack
-    ) {
-        drawingComponentsBack.addEventListener(
-            "click",
-            () => {
-                /*
-                 * Features always returns to the component list,
-                 * even when a feature is still selected.
-                 *
-                 * It is an explicit instruction to go back, so it
-                 * must not be overridden by the fact that something
-                 * happens to be selected: the selection stays, and
-                 * the list still shows it as selected. Clicking that
-                 * feature again is what reopens the editing page.
-                 */
-                editorState.featurePanelView = "tree";
-                editorState.featureTreePickedId = null;
-
-                drawingComponentsBack.style.display =
-                    "none";
-
-                renderComponentTree();
-            }
-        );
-    }
 
     if (
         drawingGridToggle
@@ -190,7 +164,7 @@ export function installWorkspaceControls() {
 
         drawingVectorScale.innerHTML =
             options +
-            `<option value="${enggLoadProfile.CUSTOM_VECTOR_SCALE}">Custom…</option>`;
+            `<option value="${enggLoadProfile.CUSTOM_VECTOR_SCALE}">Custom\u2026</option>`;
 
         /*
          * SHOW THE CONTROL IN FORCE. The dropdown reflects the stored scale
@@ -215,7 +189,7 @@ export function installWorkspaceControls() {
              * The select is overlaid and transparent, so this readout is what
              * the student actually sees. It shows the REAL scale - the same
              * number every arrow is drawn from - with the shared table's own
-             * `×` suffix, so a custom 3 reads "3×" because 3 IS the scale.
+             * `Ã—` suffix, so a custom 3 reads "3Ã—" because 3 IS the scale.
              */
             if (drawingVectorScaleValue) {
                 drawingVectorScaleValue.textContent = `${current}\u00d7`;
@@ -328,7 +302,7 @@ export function installWorkspaceControls() {
         );
     }
 
-    document.querySelectorAll("[data-global-tool]").forEach(button => {
+    (globalThis.document?.querySelectorAll("[data-global-tool]") ?? []).forEach(button => {
         button.addEventListener("click", () => {
             const toolId =
                 button.dataset.globalTool;

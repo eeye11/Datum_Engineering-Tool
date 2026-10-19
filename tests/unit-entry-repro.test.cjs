@@ -40,13 +40,13 @@ test("the coordinate helper renders exactly one unit selector, not a static labe
 });
 
 test("the shared conversion takes both units and is the one implementation", () => {
-  const quantities = read("src/core/units/quantities.js");
+  const quantities = read("src/shared/units/quantities.js");
   assert.match(quantities, /function convertValue\(value, quantityType, fromUnit, toUnit\)/);
   assert.match(quantities, /base: "mm"/);
 });
 
 test("quantity table: metre and millimetre are distinct, both-way conversion", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
   const q = quantities.default || quantities;
 
   assert.equal(q.convertValue(5, "length", "m", "mm"), 5000);
@@ -56,7 +56,7 @@ test("quantity table: metre and millimetre are distinct, both-way conversion", (
 });
 
 test("unitsFor returns no duplicates", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
   const q = quantities.default || quantities;
 
   for (const type of ["length", "force", "moment", "distributedLoad", "angle", "area"]) {
@@ -132,7 +132,7 @@ test("REPRO: the setter and the reader must resolve the unit the same way", () =
 });
 
 test("quantity table round-trips: 5 m in, 5000 mm out, and back", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
   const q = quantities.default || quantities;
 
   const world = 5000; // mm on an uncalibrated 1 mm-per-unit sheet
@@ -151,8 +151,8 @@ test("quantity table round-trips: 5 m in, 5000 mm out, and back", () => {
  * shows 0.005. Reproduce it as arithmetic through the REAL shared functions.
  */
 test("E2E: a bare 5 in a metre field, on a calibrated sheet", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
-  const dimensions = require(path.join(root, "src/core/scale/dimensions.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
+  const dimensions = require(path.join(root, "src/shared/scale/dimensions.js"));
   const q = quantities.default || quantities;
   const d = dimensions.default || dimensions;
 
@@ -182,8 +182,8 @@ test("E2E: a bare 5 in a metre field, on a calibrated sheet", () => {
 });
 
 test("E2E: the SAME flow when the sheet's own unit is not mm", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
-  const dimensions = require(path.join(root, "src/core/scale/dimensions.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
+  const dimensions = require(path.join(root, "src/shared/scale/dimensions.js"));
   const q = quantities.default || quantities;
   const d = dimensions.default || dimensions;
 
@@ -207,8 +207,8 @@ test("E2E: the SAME flow when the sheet's own unit is not mm", () => {
 });
 
 test("E2E: an INCH field on a MILLIMETRE sheet", () => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
-  const dimensions = require(path.join(root, "src/core/scale/dimensions.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
+  const dimensions = require(path.join(root, "src/shared/scale/dimensions.js"));
   const q = quantities.default || quantities;
   const d = dimensions.default || dimensions;
 
@@ -234,7 +234,7 @@ test("E2E: an INCH field on a MILLIMETRE sheet", () => {
  *   3. A MALFORMED ENTRY is refused, never read as zero.
  */
 const q = (() => {
-  const quantities = require(path.join(root, "src/core/units/quantities.js"));
+  const quantities = require(path.join(root, "src/shared/units/quantities.js"));
   return quantities.default || quantities;
 })();
 const readQuantity = q.readQuantity;

@@ -105,7 +105,19 @@ check(
 check(
   "and so does the grid",
   old.document.sheets[0].grid,
-  { visible: false, spacing: 10 }
+  {
+    visible: false,
+    spacing: 10,
+    /*
+     * THE MIGRATED SHEET GETS AN ANSWER FOR GRID SNAP.
+     *
+     * The old document recorded only visibility and spacing, so the sheet is
+     * given a grid-snap state from its visibility - the same rule the Grid
+     * switch applies. Without it, a drawing saved with the grid OFF came back
+     * with grid snapping ON, which is the contradiction this pins shut.
+     */
+    snapToGrid: false
+  }
 );
 
 console.log("\nSeveral sheets survive a round trip");

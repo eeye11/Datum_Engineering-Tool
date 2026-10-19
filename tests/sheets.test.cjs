@@ -48,7 +48,18 @@ check(
   /^sheet_[0-9a-f]+$/.test(doc.sheets[0].id),
   true
 );
-check("and a grid", doc.sheets[0].grid, { visible: true, spacing: 5 });
+check("and a grid", doc.sheets[0].grid, {
+  visible: true,
+  spacing: 7.5,
+  /*
+   * GRID SNAP TRAVELS WITH THE SHEET.
+   *
+   * It is its own setting rather than a reading of `visible`, so it is part of
+   * the sheet's shape and is asserted here - a drawing reopened must show the
+   * grid-snap state it was saved with.
+   */
+  snapToGrid: true,
+});
 check("and a viewport", doc.sheets[0].viewport, { zoom: 1, panX: 0, panY: 0 });
 
 console.log("\nCreating sheets");

@@ -32,9 +32,8 @@ import {
     readThemePreference,
     setThemePreference
 } from "./theme.js";
-import { drawingComponentsBack } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
-import { renderProperties } from "../panels/feature-panel.js";
+import { syncStyleControls } from "../panels/style-controls.js";
 
 /*
  * Apply a theme preference and bring the model's default line colour with it.
@@ -60,14 +59,14 @@ export function applyThemePreference(preference) {
          * value moved - otherwise it would keep showing the previous theme's
          * colour.
          *
-         * ONLY WHEN THE PANEL EXISTS. `installThemePreference` runs at start-up,
-         * before the workspace is drawn, and the panel render is not safe with no
-         * DOM - but there is also nothing to update yet, and the first sheet load
-         * re-reads the default anyway.
+         * THE STRIP IS SYNCHRONISED, NOT THE PANEL. This used to be guarded on
+         * `#drawingFeaturesBack` - an element the old Features panel created -
+         * which meant the sync ran or did not run depending on whether a panel
+         * had been rendered yet. The thing that actually needs the value is the
+         * TOOLBAR, and `syncStyleControls` is what repaints it; it is safe with
+         * no DOM, so the guard is gone with the element it was testing.
          */
-        if (drawingComponentsBack) {
-            renderProperties();
-        }
+        syncStyleControls();
     }
 
     return chosen;

@@ -1,0 +1,9 @@
+{
+  "id": "controls.controls-create.signal-arrow",
+  "label": "Signal Arrow",
+  "category": "controls",
+  "group": "controls-create",
+  "libraryPath": "src/tool-library/controls/controls-create/signal-arrow",
+  "template": "template.tex",
+  "implemented": false
+}

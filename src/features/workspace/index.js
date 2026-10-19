@@ -20,7 +20,7 @@
  *   geometry/creation-sizing.js          Creation-time sizing: the popup that asks for a new feature's length, radius or size.
  *   toolbar/tool-activation.js           Activating a tool, undo/redo, and turning pointer events into drawing coordinates.
  *   annotate/annotation-tool.js          The annotation and note tools.
- *   annotate/dimension-tool.js           The Dimension and Smart Dimension tools: choosing and committing a measurement.
+ *   annotate/dimension-tool.js           The Dimension tool: choosing and committing a measurement.
  *   annotate/dimension-inference.js      Working out what a dimension click refers to, and which measurement it implies.
  *   annotate/dimension-placement.js      Placing a dimension: reference selection and the placement click.
  *   toolbar/construction-tools.js        Which tools construct geometry, and when a click selects an existing feature instead.
@@ -87,6 +87,19 @@ import { installWorkspaceLayout } from "../../components/layout/workspace/worksp
 import { installDrawingPanel } from "../../components/layout/panels/drawing-panel.js";
 import { installCanvasEvents } from "./interaction/canvas-events.js";
 import { installKeyboardShortcuts } from "./interaction/keyboard-shortcuts.js";
+import { editableHandlesFor } from "./interaction/handles.js";
+import { setHandleResolver } from "../../shared/rendering/overlay-render.js";
+
+/*
+ * TELL THE RENDERER WHICH HANDLES TO DRAW.
+ *
+ * The overlay renderer must not import the interaction layer - the interaction
+ * layer reaches the renderer, so the import would be a cycle, and a cycle here
+ * breaks start-up rather than failing politely. Instead the EDITOR supplies the
+ * one resolver, which is the same function the hit test uses, so a handle that
+ * is drawn and a handle that can be grabbed are the same handle.
+ */
+setHandleResolver(editableHandlesFor);
 
 export { enggDrawingSheets } from "../../components/layout/workspace/sheet-controller.js";
 export { enggDrawing } from "../../components/layout/workspace/sheet-controller.js";

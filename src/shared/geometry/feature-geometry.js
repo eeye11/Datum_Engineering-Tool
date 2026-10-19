@@ -510,9 +510,18 @@ function rotateObjectAbout(
     if (type === "polygon") {
         turn(g.center);
 
+        /*
+         * A POLYGON STORES ITS ANGLE IN DEGREES.
+         *
+         * Every other stored angle on the sheet - a rectangle's rotation, a
+         * force's direction - is in degrees, and the Features panel reads and
+         * writes this one as degrees too. Adding the raw radian value here
+         * turned a polygon by about a fifty-seventh of the angle asked for,
+         * so a "Rotate 90" on a hexagon barely moved it.
+         */
         g.rotation =
             (Number(g.rotation) || 0) +
-            radians;
+            (radians * 180) / Math.PI;
 
         return;
     }
@@ -558,6 +567,55 @@ function rotateObjectAbout(
         g,
         type
     ).forEach(turn);
+
+    /*
+     * ========================================================
+     * AND THE STORED DIRECTIONS TURN WITH THE SHAPE
+     * ========================================================
+     *
+     * A force, a distributed load, a moment and a support each carry an
+     * ANGLE as well as points: the direction the arrow points, the way the
+     * load pushes, which way the moment turns and which way the support
+     * faces. Translating their points moves them but leaves those angles
+     * behind - so a rotated force would still point the way it did before,
+     * and a support would still face the old direction.
+     *
+     * Advancing each stored angle by the same turn is what keeps the
+     * engineering direction consistent with the drawn geometry when the
+     * object is rotated by its handle. The angles are stored in DEGREES and
+     * in the same anticlockwise sense the rotation is, so the arithmetic is
+     * a plain addition.
+     */
+    const degrees = (radians * 180) / Math.PI;
+
+    const advanceAngle = (key) => {
+        if (
+            Number.isFinite(
+                Number(g[key])
+            )
+        ) {
+            g[key] =
+                Number(g[key]) + degrees;
+        }
+    };
+
+    if (type === "force") {
+        advanceAngle("angle");
+    } else if (
+        type === "load" ||
+        type === "varying-load"
+    ) {
+        advanceAngle("direction");
+    } else if (isSupportType(type)) {
+        advanceAngle("orientation");
+    } else if (type === "moment") {
+        /*
+         * A moment does not point: it turns. Rotating its symbol about the
+         * application point is the identity, so nothing here changes its
+         * clockwise/counterclockwise sense - only the drawn sweep, which is
+         * derived from the geometry.
+         */
+    }
 }
 
 /*

@@ -1,0 +1,9 @@
+{
+  "id": "fluids.fluids-create.reservoir",
+  "label": "Reservoir",
+  "category": "fluids",
+  "group": "fluids-create",
+  "libraryPath": "src/tool-library/fluids/fluids-create/reservoir",
+  "template": "template.tex",
+  "implemented": false
+}

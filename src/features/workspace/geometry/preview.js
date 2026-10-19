@@ -16,7 +16,7 @@ import { dimensionSelectionInstruction } from "../annotate/dimension-placement.j
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { polygonFromCursor } from "./geometry-creation.js";
+import { polygonFromCursor, closingFreeformPolygon } from "./geometry-creation.js";
 import { LOAD_BUILD_PHASES, constantLoadDraft, distributedLoadDirectionCursor, distributedLoadDraft, isLoadBuildPhase, isLoadSpanPhase, loadBuildInstruction } from "../statics/load-tool.js";
 import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInteractionFeedback } from "../interaction/pointer.js";
 import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
@@ -535,6 +535,57 @@ export function updatePreview(
         }
     } else if (
         drawingState.activeTool ===
+        "coordinate-system-2d"
+    ) {
+        /*
+         * THE AXIS PREVIEWS AS THE CROSS IT WILL BECOME.
+         *
+         * The press placed the origin; the pointer says which way the X arm
+         * runs and how long it is. The Y arm is drawn square to it, from the
+         * same two points the commit uses, so the preview and the placed axis
+         * are the same cross - and the perpendicularity the student sees is
+         * the perpendicularity the code will write. A drag too short to give
+         * the axis a direction shows nothing rather than a degenerate cross.
+         */
+        const arm = Math.hypot(
+            point.x - interaction.startPoint.x,
+            point.y - interaction.startPoint.y
+        );
+
+        if (arm > 1e-9) {
+            interaction.preview =
+                createPreview(
+                    "coordinate-system-2d",
+                    {
+                        origin: {
+                            ...interaction.startPoint
+                        },
+
+                        rotation: Math.atan2(
+                            point.y - interaction.startPoint.y,
+                            point.x - interaction.startPoint.x
+                        ),
+
+                        xPositiveLength: arm,
+                        xNegativeLength: arm,
+                        yPositiveLength: arm,
+                        yNegativeLength: arm
+                    }
+                );
+
+            if (
+                !resolution.inference &&
+                !resolution.snapCandidate
+            ) {
+                setToolMessage(
+                    "Release to place the X axis"
+                );
+            }
+        } else {
+            interaction.preview = null;
+        }
+    } else if (
+        drawingState.activeTool ===
         "circle"
     ) {
         interaction.preview =
@@ -561,12 +612,29 @@ export function updatePreview(
         drawingState.activeTool === "saturation-curve" ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
+        /*
+         * SHIFT MAKES THE RECTANGLE A SQUARE.
+         *
+         * The modifier is recorded on the interaction for this frame, so the
+         * committed shape uses the SAME constraint the preview showed - a
+         * preview that squared up while the commit did not would hand back a
+         * different rectangle from the one the student was looking at.
+         *
+         * The constraint is applied to the second corner, not the first: the
+         * press decided where the shape begins, and Shift only says the two
+         * extents are equal.
+         */
+        const square = Boolean(resolution.modifiers?.shift);
+
+        interaction.squareConstrained = square;
+
         interaction.preview =
             createPreview(
                 "rectangle",
                 rectangleGeometry(
                     interaction.startPoint,
-                    point
+                    point,
+                    { square }
                 )
             );
 
@@ -575,7 +643,9 @@ export function updatePreview(
         }
 
         setToolMessage(
-            "Specify opposite corner"
+            square
+                ? "Specify opposite corner (square)"
+                : "Specify opposite corner"
         );
     } else if (
         drawingState.activeTool === "polyline" ||
@@ -604,6 +674,33 @@ export function updatePreview(
 
         setToolMessage(
             "Click next point or double-click to finish"
+        );
+    } else if (
+        drawingState.activeTool === "freeform-polygon"
+    ) {
+        /*
+         * A Freeform Polygon previews as the CLOSED shape it will become:
+         * the vertices placed so far, the point under the cursor, and the
+         * first vertex repeated so the closing edge is visible while the
+         * student decides where to put the next one. It is drawn as a
+         * polygon rather than a polyline so the preview reads as a region
+         * rather than an open chain.
+         */
+        interaction.preview =
+            createPreview(
+                "polygon",
+                {
+                    points: [
+                        ...interaction.points,
+                        point
+                    ]
+                }
+            );
+
+        setToolMessage(
+            closingFreeformPolygon(point)
+                ? "Release to close the polygon"
+                : "Click next vertex, or drag to the first vertex to close"
         );
     } else if (
         isArcTool() &&

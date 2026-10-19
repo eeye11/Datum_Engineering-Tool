@@ -1,197 +1,35 @@
 /*
- * The Features panel: the component tree, its header, toggle and action buttons, property rows and inputs, the context menu and the unit selector.
+ * The Features panel: property rows and inputs, the context menu and the unit
+ * selector.
  *
  * Part of editor.css, which imports these files in order. The order is the
  * cascade: a later file wins where two rules are equally specific.
  */
 
 /*
- * The Features panel body.
+ * ============================================================
+ * WHAT WAS HERE, AND WHY IT IS NOT
+ * ============================================================
  *
- * It is the scroll container for a feature's properties, so a
- * body with many of them (a triangle, a truss) stays reachable
- * instead of being clipped by the panel. The flex sizing lets
- * the block take the height that is left under the heading.
+ * This file used to open with the LEGACY Features panel: `#drawingProperties`,
+ * the component tree, the selection summary and the load-build form. None of it
+ * exists any more - the panel those rules described was replaced by the
+ * inspector's Features tab - and every rule about it has gone with it, because
+ * a stylesheet that still reserves space for a removed element is a second,
+ * invisible copy of the layout waiting to reappear.
+ *
+ * WHAT REMAINS IS SHARED. The property-grid vocabulary below is used by the
+ * written solution, the settings dialogs and the analysis editors - not by the
+ * Features tab, which has its own compact rows in `panel-tabs.css`. Deleting
+ * these would break those, so they stay and are documented as what they are.
  */
-#drawingProperties {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
 
+/* The one message style the inspector still uses, for the empty Objects list. */
 .drawing-inspector-message {
     color: var(--datum-muted);
     font-size: 11px;
     line-height: 1.5;
     margin: 0;
-}
-
-.drawing-components-back {
-    align-self: flex-start;
-    background: transparent;
-    border: 0;
-    color: var(--datum-green);
-    cursor: pointer;
-    display: none;
-    font-size: 10px;
-    margin: -3px 0 8px;
-    padding: 0;
-}
-
-.drawing-components-back:hover {
-    text-decoration: underline;
-}
-
-.drawing-component-tree {
-    display: grid;
-    gap: 1px;
-    overflow-y: auto;
-}
-
-.drawing-component-group {
-    color: var(--cad-muted);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: .06em;
-    margin-top: 5px;
-    text-transform: uppercase;
-}
-
-.drawing-component-row {
-    align-items: center;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--cad-ink);
-    cursor: pointer;
-    display: flex;
-    font-size: 10px;
-    gap: 5px;
-    min-height: 24px;
-    padding: 2px 3px;
-    text-align: left;
-    width: 100%;
-}
-
-.drawing-component-row:hover,
-.drawing-component-row.selected {
-    background: var(--datum-green-wash);
-    border-color: var(--datum-green-soft);
-}
-
-.drawing-component-row svg {
-    color: var(--datum-green);
-    height: 15px;
-    width: 15px;
-}
-
-/*
- * A feature that belongs to another one is indented under
- * its parent, so the relationship reads at a glance while it
- * stays a fully independent, selectable feature.
- *
- * The indent alone carries the hierarchy. There is deliberately
- * no repeated vertical rule, which would stack into a ladder of
- * lines next to every child and crowd the panel.
- */
-.drawing-component-node {
-    align-items: center;
-    display: flex;
-    gap: 2px;
-}
-
-.drawing-component-twisty,
-.drawing-component-twisty-spacer {
-    background: transparent;
-    border: 0;
-    color: var(--cad-muted);
-    flex: 0 0 13px;
-    font: inherit;
-    font-size: 9px;
-    line-height: 1;
-    padding: 0;
-    text-align: center;
-}
-
-.drawing-component-twisty {
-    cursor: pointer;
-}
-
-.drawing-component-twisty:hover {
-    color: var(--datum-green);
-}
-
-.drawing-component-row-child {
-    color: var(--datum-ink);
-    font-size: 10px;
-    padding-left: 8px;
-}
-
-.drawing-component-row-child svg {
-    color: var(--datum-muted);
-    height: 13px;
-    width: 13px;
-}
-
-.drawing-selection-summary {
-    color: var(--cad-muted);
-    font-size: 9px;
-    margin-bottom: 4px;
-}
-
-.drawing-properties-block {
-    color: var(--cad-ink);
-    display: grid;
-    font-size: 10px;
-    gap: 5px;
-    line-height: 1.3;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-/*
- * ========================================================
- * THE FEATURES PANEL'S HEADER
- * ========================================================
- *
- * THE FEATURE'S TYPE, as the panel's title. It is the thing a student looks for
- * first - "what am I editing" - so it is the one line at full strength, in the
- * application's own green and in caps, with a rule beneath it that separates
- * the identity of the feature from everything editable about it.
- *
- * The rule is what makes the header read as a HEADER rather than as one more
- * label: without it the title sat in the same rhythm as the property rows and
- * a long feature name could be mistaken for a field caption.
- */
-.drawing-properties-title {
-    border-bottom: 1px solid var(--datum-border);
-    color: var(--datum-green);
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: .06em;
-    margin-bottom: 4px;
-    padding-bottom: 5px;
-    text-transform: uppercase;
-}
-
-.drawing-property-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 6px;
-}
-
-.drawing-property-row span:first-child {
-    color: var(--cad-muted);
-
-    /*
-     * The pair is laid out so the value takes what the label does not
-     * need. Without the label being able to shrink, a long property
-     * name would win the space and squeeze a value out of the panel.
-     */
-    min-width: 0;
-    overflow-wrap: anywhere;
 }
 
 .drawing-status-bar {

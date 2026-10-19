@@ -5,8 +5,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 test("paste creates serializable identities and selects movable copies on repeated paste", async () => {
-    const { default: stateModel } = await import("../src/core/model/drawing-state.js");
-    const { default: clipboardModel } = await import("../src/core/selection/clipboard.js");
+    const { default: stateModel } = await import("../src/shared/model/drawing-state.js");
+    const { default: clipboardModel } = await import("../src/shared/selection/clipboard.js");
     const drawingState = stateModel.createDrawingState();
     const parent = stateModel.addObject(drawingState,
         stateModel.geometryFactories.rectangle({ x: 0, y: 100 }, 80, 100));
@@ -44,7 +44,7 @@ test("paste creates serializable identities and selects movable copies on repeat
 });
 
 test("pasting into a document with an available name still gets a fresh ID", async () => {
-    const { default: stateModel } = await import("../src/core/model/drawing-state.js");
+    const { default: stateModel } = await import("../src/shared/model/drawing-state.js");
     const state = stateModel.createDrawingState();
     const feature = stateModel.geometryFactories.rectangle({ x: 0, y: 0 }, 10, 10);
     delete feature.id;

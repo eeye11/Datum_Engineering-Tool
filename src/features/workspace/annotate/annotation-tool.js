@@ -13,20 +13,18 @@ import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-ac
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
 /*
- * THE DIMENSION TOOLS
+ * THE DIMENSION TOOL
  *
- * Dimension and Smart Dimension are ONE tool with two different
- * answers to a single question: what is being measured?
+ * One tool. It reads the selection and proposes the measurement the
+ * selected geometry most usefully states - a circle becomes a diameter
+ * because that is what a circle's size is normally quoted as - and
+ * pressing D cycles through the measurements that geometry actually
+ * supports, so a student who wants a beam quoted vertically rather than
+ * horizontally gets that without the program having to guess what they
+ * meant.
  *
- * Smart Dimension reads the selection and decides - a circle becomes a
- * diameter because that is what a circle's size is normally quoted as.
- * Dimension asks instead, cycling through the measurements the selected
- * geometry actually supports, so a student who wants a beam quoted
- * vertically rather than horizontally gets that without the program
- * having to guess what they meant.
- *
- * Neither tool decides the MEASUREMENT TYPE in a way that bypasses the
- * feature's own registration. Both ask measurement-core what the
+ * It never decides the MEASUREMENT TYPE in a way that bypasses the
+ * feature's own registration. It asks measurement-core what the
  * selection can be measured as, which is why a Beam offers a span and
  * a Circle offers a diameter, and why adding a new feature type later
  * needs no change here at all.

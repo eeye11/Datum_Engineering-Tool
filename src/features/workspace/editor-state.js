@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The editor's state: the document model, and the UI state shared between editor modules.
  */
 
@@ -27,9 +27,9 @@ export const editorState = {
     /*
      * Which of the inspector's tabs is open. Held here rather than in the
      * panel-tabs module so the selection sync can read it without importing
-     * that module and forming a cycle. "properties" | "features" | "source".
+     * that module and forming a cycle. "objects" | "features" | "source".
      */
-    drawingPanelTab: "properties",
+    drawingPanelTab: "objects",
 
     /*
      * The active tool's settings, keyed by tool id. Tool DEFAULTS - what the
@@ -127,29 +127,6 @@ export const editorState = {
     topBarHidden: false,
 
     /*
-     * THE STATICS DISPLAY SECTION.
-     *
-     * A single Vector Scale control, drawn above whichever Statics feature
-     * is being edited. It appears once - never inside an individual force or
-     * load - because it is a property of the Statics environment and not of
-     * any feature on the sheet.
-     *
-     * Only features that are actually drawn as arrows have one: a Point
-     * Force, a Resultant, and the two distributed loads. A beam has no arrow
-     * to size, so nothing is offered for it and the panel is unchanged.
-     */
-    /*
-     * Vector Scale is NOT view state any more.
-     *
-     * The panel's dropdown could show a "Custom..." entry, which needed a flag
-     * here so a re-render did not snap the control back to the listed value it
-     * was reading. The control now lives on the top toolbar as a plain number
-     * field, and `state.statics.vectorScale` is the one value it reads and
-     * writes - so there is no second piece of state to keep in step, and the
-     * flag that existed only to hold it open is gone with it.
-     */
-
-    /*
      * Active direct-manipulation drag.
      *
      * Holds which handle (or body) of which object is being
@@ -157,24 +134,6 @@ export const editorState = {
      * applied as a delta from a stable starting point.
      */
     manipulationDrag: null,
-
-    featurePanelView: "tree",
-
-    /*
-     * Whether the feature currently shown by the tree has already
-     * been picked in this same view.
-     *
-     * A feature is selected the moment it is created, so "is it
-     * selected?" is true from the start and cannot by itself mean the
-     * user has picked it on purpose. This flag records that a click
-     * actually landed on the selected row, so the NEXT one is the
-     * deliberate repeat that opens the editor.
-     *
-     * It is cleared whenever the selection changes to something
-     * different, or when the view leaves the tree, so it can never
-     * carry over into an unrelated feature.
-     */
-    featureTreePickedId: null,
 
     /*
      * Global toolbar tools.

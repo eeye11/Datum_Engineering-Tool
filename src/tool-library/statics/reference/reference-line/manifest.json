@@ -1,0 +1,9 @@
+{
+  "id": "statics.reference.reference-line",
+  "label": "Reference Line",
+  "category": "statics",
+  "group": "reference",
+  "libraryPath": "src/tool-library/statics/reference/reference-line",
+  "template": "template.tex",
+  "implemented": false
+}

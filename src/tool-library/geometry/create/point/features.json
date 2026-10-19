@@ -1,0 +1,35 @@
+{
+  "tool": "geometry.create.point",
+  "construction": [
+    {
+      "key": "markerStyle",
+      "label": "Style",
+      "kind": "choice",
+      "default": "dot",
+      "options": [
+        { "value": "dot", "label": "Dot" },
+        { "value": "cross", "label": "Cross" }
+      ]
+    },
+    {
+      "key": "markerSize",
+      "label": "Size",
+      "kind": "choice",
+      "default": "medium",
+      "options": [
+        { "value": "small", "label": "Small" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "large", "label": "Large" }
+      ]
+    }
+  ],
+  "appearance": [
+    {
+      "key": "stroke",
+      "label": "Colour",
+      "kind": "colour",
+      "default": "#000000"
+    }
+  ],
+  "defaultFixed": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.load.distributed-load",
+  "label": "Distributed Load",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/load/distributed-load",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -98,6 +98,75 @@ export function coordinateSystemArms(
  * for it, and every case writes the same defining values the
  * Features panel writes, so the two can never disagree.
  */
+/*
+ * ========================================================
+ * THE ROTATION HANDLE
+ * ========================================================
+ *
+ * One compact handle, outside the object's own visual bounds, with a short
+ * stem back to it. It is the same handle for every transformable object, so
+ * the student learns it once - and it is deliberately NOT one of the shape
+ * handles, because it means a different thing.
+ *
+ * WHY THE POSITION IS COMPUTED HERE RATHER THAN IN THE RENDERER.
+ *
+ * The renderer draws it and the drag layer hit-tests it, and the two must
+ * agree exactly. Deriving it once, from the same bounds both of them use,
+ * is what makes "the dot you can see" and "the dot you can grab" the same
+ * dot at every zoom.
+ *
+ * WHERE IT SITS. Above the top edge, clear of it by a fixed number of SCREEN
+ * pixels converted back to world units, so it is the same reach away at any
+ * zoom. For a tall or broad object that is still outside the shape; for a
+ * long thin one (a beam) the top edge is its own line, so the handle floats
+ * clear of the member rather than sitting on it. For a point-like object the
+ * bounds are its point, so the handle sits just above it.
+ *
+ * The stem starts at the top edge of the bounds and ends at the handle, so it
+ * can never pass through the object's geometry.
+ */
+export function rotationHandleFor(
+    object,
+    bounds,
+    scale,
+    reachPx = 30
+) {
+    if (!bounds) {
+        return null;
+    }
+
+    const reach =
+        reachPx /
+        Math.max(
+            Number(scale) || 1,
+            1e-6
+        );
+
+    /*
+     * The projection of the object's centre on `y` is the TOP of the bounds,
+     * so the handle is always above everything the feature draws. Its `x` is
+     * the centre of the bounds, which is the shortest sensible stem for a
+     * mixed-width shape.
+     */
+    const anchor = {
+        x: (bounds.minX + bounds.maxX) / 2,
+        y: bounds.maxY
+    };
+
+    return {
+        kind: "rotate",
+        pivot: {
+            x: (bounds.minX + bounds.maxX) / 2,
+            y: (bounds.minY + bounds.maxY) / 2
+        },
+        anchor,
+        point: {
+            x: anchor.x,
+            y: anchor.y + reach
+        }
+    };
+}
+
 export function rigidBodyHandles(
     object
 ) {

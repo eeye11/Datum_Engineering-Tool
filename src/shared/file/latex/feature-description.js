@@ -50,7 +50,6 @@ const TYPE_LABELS = {
     "slider-connection": "Slider connection",
     connection: "Connection",
     dimension: "Dimension",
-    "variable-dimension": "Variable dimension",
     annotation: "Value label",
     annotate: "Annotation",
     "coordinate-system-2d": "2D coordinate system",

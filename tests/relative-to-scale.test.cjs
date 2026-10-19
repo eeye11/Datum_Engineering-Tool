@@ -27,7 +27,13 @@ const { controllerSource, locate, modulePath, sourceDir } = require("./helpers/s
 const fs = require("fs");
 const path = require("path");
 
-const code = controllerSource();
+const code = controllerSource() +
+  [
+    "property-update.js",
+    "relative-coordinates.js",
+  ]
+    .map((name) => fs.readFileSync(modulePath(name), "utf8").replace(/\r\n/g, "\n"))
+    .join("\n");
 
 let pass = 0;
 let fail = 0;

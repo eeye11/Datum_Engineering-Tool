@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 test("saturation dome remains inside its frame and joins at a single peak", async () => {
-    const { saturationPaths } = await import("../src/features/thermodynamics/saturation-curve.js");
+    const { saturationPaths } = await import("../src/features/workspace/model/thermodynamics/saturation-curve.js");
     const g = { position: { x: 0, y: 100 }, width: 100, height: 100, rotation: 0 };
     const paths = saturationPaths(g);
     const dome = paths[3];

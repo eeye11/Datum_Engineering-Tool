@@ -1,0 +1,9 @@
+{
+  "id": "solid-mechanics.solid-mechanics-create.boundary-condition",
+  "label": "Boundary Condition",
+  "category": "solid-mechanics",
+  "group": "solid-mechanics-create",
+  "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/boundary-condition",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -7,7 +7,7 @@ import enggErrorLog from "../../../app/error-log.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import enggDocumentFile from "../../../shared/file/document-file.js";
 import enggDocumentManagement from "../../../shared/file/document-management.js";
-import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument } from "../../../shared/file/latex/latex-document.js";
+import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument, writeStandaloneFromSource } from "../../../shared/file/latex/latex-document.js";
 import { openLatexCodeEditor } from "./latex-commands.js";
 import enggRecovery from "../../../shared/file/document-recovery.js";
 import enggFileSave from "../../../shared/file/file-save.js";
@@ -59,13 +59,13 @@ import { emitDatumEvent } from "../../../shared/integration/events.js";
  * the existing serialisation and history systems.
  */
 export const drawingFileNew =
-    document.getElementById("drawingFileNew");
+    globalThis.document?.getElementById("drawingFileNew");
 
 export const drawingFileOpen =
-    document.getElementById("drawingFileOpen");
+    globalThis.document?.getElementById("drawingFileOpen");
 
 export const drawingFileSave =
-    document.getElementById("drawingFileSave");
+    globalThis.document?.getElementById("drawingFileSave");
 
 export function newDrawing() {
     const previous =
@@ -208,7 +208,7 @@ export function markDocumentDirty() {
      *
      * While a file is being reconstructed, the state-update code that
      * normally means "the user changed something" runs as a side effect of
-     * building the document. Marking the document dirty here would mean an
+     * building the globalThis.document. Marking the document dirty here would mean an
      * opened file arrived already unsaved, which is precisely the false
      * prompt this state exists to prevent. A load clears the flag at the
      * end, so nothing is lost by ignoring these notifications.
@@ -362,14 +362,14 @@ function displayNameFor(fileName) {
  */
 function refreshDocumentTitle() {
     const shown = displayNameFor(documentFileName);
-    document.title = "DAETUM";
+    globalThis.document.title = "DAETUM";
 
-    const base = document.getElementById("headerDocumentBaseName");
-    const host = document.getElementById("headerDocumentName");
-    const mark = document.getElementById("headerDocumentDirty");
+    const base = globalThis.document.getElementById("headerDocumentBaseName");
+    const host = globalThis.document.getElementById("headerDocumentName");
+    const mark = globalThis.document.getElementById("headerDocumentDirty");
 
     if (base) {
-        if (document.activeElement !== base) base.textContent = shown;
+        if (globalThis.document.activeElement !== base) base.textContent = shown;
         if (!base.dataset.renameReady) {
             base.dataset.renameReady = "true";
             base.contentEditable = "true";
@@ -378,7 +378,7 @@ function refreshDocumentTitle() {
             base.setAttribute("spellcheck", "false");
             base.addEventListener("focus", () => {
                 base.dataset.originalName = displayNameFor(documentFileName);
-                const range = document.createRange();
+                const range = globalThis.document.createRange();
                 range.selectNodeContents(base);
                 const selection = window.getSelection();
                 selection.removeAllRanges();
@@ -492,12 +492,12 @@ function downloadBlob(blob, fileName) {
         URL.createObjectURL(blob);
 
     const link =
-        document.createElement("a");
+        globalThis.document.createElement("a");
 
     link.href = url;
     link.download = fileName;
 
-    document.body.appendChild(link);
+    globalThis.document.body.appendChild(link);
     link.click();
     link.remove();
 
@@ -700,12 +700,23 @@ export async function downloadDrawing(format) {
      * in the editor they were working in.
      */
     /*
-     * LaTeX: every sheet as a drawing in standard LaTeX picture code, with the
-     * document embedded so DAETUM can reopen it (file/latex/latex-document.js).
+     * LaTeX: the sheets as TikZ pictures, with the document embedded so DAETUM
+     * can reopen it (file/latex/latex-document.js).
+     *
+     * EACH SHEET'S PICTURE IS ITS OWN SOURCE. The drawing is no longer converted
+     * from a canvas rendering, so the exported pages are literally the code that
+     * drew them. A one-sheet document whose source is present is wrapped as the
+     * standalone document for that picture.
      */
     if (format === "latex") {
         try {
-            const text = writeLatexDocument(serializeDocumentBody(), { title: baseDocumentName() });
+            const body = serializeDocumentBody();
+            const single = body.sheets && body.sheets.length === 1 ? body.sheets[0] : null;
+
+            const text =
+                single && single.source && typeof single.source.source === "string"
+                    ? writeStandaloneFromSource(single.source.source, { title: baseDocumentName() })
+                    : writeLatexDocument(body, { title: baseDocumentName() });
             const name = downloadBlob(new Blob([text], { type: chosen.type }), exportFileName(chosen.extension));
 
             setToolMessage(`Downloaded ${name}`);
@@ -721,7 +732,7 @@ export async function downloadDrawing(format) {
     }
 
     /*
-     * THE WRITTEN SOLUTION, as a complete LaTeX document.
+     * THE WRITTEN SOLUTION, as a complete LaTeX globalThis.document.
      *
      * The source the editor holds is what is written out: every embedded
      * drawing's full TikZ code in its position (the markers are stripped -
@@ -1252,13 +1263,13 @@ function runPrintPass(svg) {
     const PRINT_HOST_ID = "drawing-print-host";
 
     const previousHost =
-        document.getElementById(PRINT_HOST_ID);
+        globalThis.document.getElementById(PRINT_HOST_ID);
 
     if (previousHost) {
         previousHost.remove();
     }
 
-    const host = document.createElement("div");
+    const host = globalThis.document.createElement("div");
 
     host.id = PRINT_HOST_ID;
     host.setAttribute("aria-hidden", "true");
@@ -1282,9 +1293,9 @@ function runPrintPass(svg) {
 
     host.appendChild(svg);
 
-    document.body.appendChild(host);
+    globalThis.document.body.appendChild(host);
 
-    const style = document.createElement("style");
+    const style = globalThis.document.createElement("style");
 
     style.id = "drawing-print-style";
 
@@ -1311,7 +1322,7 @@ function runPrintPass(svg) {
         }
     `;
 
-    document.head.appendChild(style);
+    globalThis.document.head.appendChild(style);
 
     /*
      * The print pass is transient. Whether the user prints or cancels,
@@ -1335,7 +1346,7 @@ function runPrintPass(svg) {
         style.remove();
 
         window.removeEventListener("focus", cleanup);
-        document.removeEventListener("visibilitychange", onVisibility);
+        globalThis.document.removeEventListener("visibilitychange", onVisibility);
     };
 
     /*
@@ -1347,14 +1358,14 @@ function runPrintPass(svg) {
      * dialog closes in every browser that has one.
      */
     function onVisibility() {
-        if (!document.hidden) {
+        if (!globalThis.document.hidden) {
             cleanup();
         }
     }
 
     window.addEventListener("afterprint", cleanup, { once: true });
     window.addEventListener("focus", cleanup, { once: true });
-    document.addEventListener("visibilitychange", onVisibility);
+    globalThis.document.addEventListener("visibilitychange", onVisibility);
 
     /*
      * A safety timeout, now SHORT. It used to be a minute, which is a long time
@@ -1584,7 +1595,7 @@ function suggestedFileName() {
  * Reading is separated from applying on purpose. The format module
  * decides whether a file can be opened and, if so, what it should
  * become; only once it has answered both does anything here touch
- * the live document. That is what makes a bad file harmless: a
+ * the live globalThis.document. That is what makes a bad file harmless: a
  * file that is not a drawing, or is from a newer build, or is
  * corrupt, is refused BEFORE the open document has been touched, so
  * the drawing the user already has is still there afterwards.
@@ -1684,7 +1695,7 @@ export function loadDrawing(
      * It is restored BEFORE the sheets, so the figure references the source
      * carries can be resolved against the collection that is about to be
      * installed - and so the workspace's first render already has both halves of
-     * the document. A file saved before the solution existed has no such key, and
+     * the globalThis.document. A file saved before the solution existed has no such key, and
      * is answered with an empty source rather than an error: an old drawing is
      * still a perfectly good drawing.
      */
@@ -1707,7 +1718,7 @@ export function loadDrawing(
      * unsaved changes the moment it arrives.
      */
     /*
-     * Apply the validated document. The reconstruction is wrapped so the
+     * Apply the validated globalThis.document. The reconstruction is wrapped so the
      * "loading" state is always closed, however it ends.
      */
     try {
@@ -1746,9 +1757,9 @@ function restoreSolutionSource(source) {
      * The editor is updated only if it is on the page. The source is written to
      * the field AND through the workspace's loader where that exists, so the
      * outline and line numbers are rebuilt rather than left describing the
-     * previous document.
+     * previous globalThis.document.
      */
-    const editor = document.getElementById("solutionEditor");
+    const editor = globalThis.document.getElementById("solutionEditor");
 
     if (editor) {
         editor.value = text;
@@ -1930,7 +1941,7 @@ export function importDrawingFile() {
 
     return new Promise((resolve) => {
         const input =
-            document.createElement("input");
+            globalThis.document.createElement("input");
 
         input.type = "file";
         input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json,.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex`;
@@ -2172,7 +2183,7 @@ function applyOpenedText(text, name, file) {
  *   1. A stored file handle. Where the browser gave one - File System Access
  *      on Chrome and Edge - the CURRENT file is read from disk, so the recent
  *      reflects the user's latest saved version rather than a stale copy.
- *   2. The stored document. Without a handle there is no way to reopen a file
+ *   2. The stored globalThis.document. Without a handle there is no way to reopen a file
  *      by path, so the copy kept with the entry is opened through the same
  *      loader. This is what makes Recents work in every browser.
  *
@@ -2457,7 +2468,7 @@ async function renameTemplate(id) {
  */
 function readFileAsText() {
     return new Promise((resolve) => {
-        const input = document.createElement("input");
+        const input = globalThis.document.createElement("input");
 
         input.type = "file";
 
@@ -2508,7 +2519,7 @@ function readFileAsText() {
 }
 
 /*
- * A small SVG picture of a stored document.
+ * A small SVG picture of a stored globalThis.document.
  *
  * A THIN WRAPPER over the shared fitted render, which is where the drawing
  * bounds, the sheet's World Scale and the neutral camera are decided. Keeping

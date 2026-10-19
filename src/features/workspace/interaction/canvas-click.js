@@ -16,6 +16,7 @@ import { handleDimensionClick } from "../annotate/dimension-placement.js";
 import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
+import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
 import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
@@ -512,65 +513,17 @@ function selectFromCanvasClick(
         }
     } else if (object) {
         /*
-         * Clicking a feature that is already the one the
-         * list has picked opens its editing page. It is the
-         * same deliberate second step as clicking a tree row
-         * twice, and it uses the same flag so the two cannot
-         * disagree about what counts as a repeat.
+         * SELECTING IS ENOUGH TO EDIT.
+         *
+         * The Features tab describes whatever is selected the moment it is
+         * selected - there is no "examine, then ask to edit" step. A dimension
+         * is opened by the canvas's double-click gesture, which is the
+         * application's "open this thing" action; a single click only selects.
          */
-        const pickedAlready =
-            editorState.featurePanelView === "tree" &&
-            editorState.featureTreePickedId === object.id;
-
         enggDrawingState.selectObject(
             drawingState,
             object.id
         );
-
-        if (pickedAlready) {
-            editorState.featurePanelView = "edit";
-            editorState.featureTreePickedId = null;
-        } else {
-            editorState.featureTreePickedId = object.id;
-        }
-
-        /*
-         * CLICKING A SELECTED DIMENSION AGAIN OPENS ITS EDITOR.
-         *
-         * A second click on the object already picked is the
-         * application's existing "open this thing" gesture -
-         * clicking a tree row twice does the same - so a dimension
-         * uses it too. That puts the editor one click from the
-         * dimension itself rather than in a panel the student has
-         * to go and find, which is the point: the thing being
-         * edited and the thing being clicked are the same thing.
-         *
-         * Only for a dimension, and only once it is already the
-         * selection: the first click still selects, so a dimension
-         * can still be picked among several overlapping features.
-         */
-        if (
-            !pickedAlready &&
-            (object.type === "dimension" ||
-                object.type === "variable-dimension") &&
-            editorState.featureTreePickedId === object.id
-        ) {
-            editorState.featureTreePickedId = null;
-
-            /*
-             * THE SAME VALUE POPUP THE CANVAS DOUBLE-CLICK OPENS.
-             *
-             * There are TWO ways to ask to edit a dimension - double-clicking
-             * it on the sheet, and clicking its already-picked row here - and
-             * both are the same request, so both must reach the same box. This
-             * one used to open the dimension editor, whose first question was
-             * the sheet's World Scale; a value edit must never be routed
-             * through a question about the drawing's scale.
-             */
-            openDimensionValuePrompt(object);
-
-            return true;
-        }
     } else {
         enggDrawingState.clearSelection(
             drawingState
@@ -578,6 +531,15 @@ function selectFromCanvasClick(
     }
 
     renderProperties();
+
+    /*
+     * A CLICKED SELECTION IS SHOWN. `selectObjects` only announces a change, so
+     * re-selecting the one object that is already selected would leave the
+     * editor open but would not repaint it - and a clear-to-nothing click must
+     * empty it, which the announcement does. Calling the render unconditionally
+     * makes both cases true: whatever is selected is what Features shows.
+     */
+    renderFeatures();
     renderCurrentDrawing();
 
     return true;

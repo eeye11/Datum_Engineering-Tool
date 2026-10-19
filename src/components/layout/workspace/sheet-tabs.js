@@ -94,7 +94,7 @@ function render() {
 
   sheets.forEach((sheet, index) => {
     const tab =
-      document.createElement("button");
+      globalThis.document.createElement("button");
 
     tab.type = "button";
     tab.className = "drawing-sheet-tab";
@@ -105,7 +105,7 @@ function render() {
     tab.setAttribute("aria-label", sheet.name);
 
     const name =
-      document.createElement("span");
+      globalThis.document.createElement("span");
 
     name.className =
       "drawing-sheet-tab-name";
@@ -141,12 +141,12 @@ function render() {
      * clicking delete would also switch sheets.
      */
     const close =
-      document.createElement("span");
+      globalThis.document.createElement("span");
 
     close.className =
       "drawing-sheet-close";
     close.dataset.sheetId = sheet.id;
-    close.textContent = "×";
+    close.textContent = "\u00D7";
     close.setAttribute("aria-hidden", "true");
 
     /*
@@ -234,7 +234,7 @@ function render() {
   });
 
   const add =
-    document.createElement("button");
+    globalThis.document.createElement("button");
 
   add.type = "button";
   add.className = "drawing-sheet-add";
@@ -269,7 +269,7 @@ function openMenu(anchor, sheet, index, total) {
   menuAnchor = anchor;
 
   menu =
-    document.createElement("div");
+    globalThis.document.createElement("div");
 
   menu.className = "drawing-sheet-menu";
 
@@ -370,7 +370,7 @@ function onKeyDown(event) {
 
 function addItem(label, action) {
   const item =
-    document.createElement("button");
+    globalThis.document.createElement("button");
 
   item.type = "button";
   item.textContent = label;

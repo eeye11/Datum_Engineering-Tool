@@ -1118,6 +1118,83 @@ body.solution-resizing {
 }
 
 /* -------------------------------------------------------------------------
+   EMBEDDED DRAWING BLOCKS: the collapse layer over the editor
+
+   The editor's host is made relative so the chip layer can be positioned
+   over the text. The chips are a separate element ABOVE the textarea - not
+   text inside it - which is what makes collapsing purely a display: the
+   code stays in the document whether a block is collapsed or expanded.
+   ------------------------------------------------------------------------- */
+
+.solution-editor-host {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.solution-drawing-chips {
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    z-index: 2;
+}
+
+.solution-drawing-chip {
+    align-items: center;
+    background: var(--datum-surface);
+    border: 1px dashed var(--datum-border);
+    border-left: 3px solid var(--datum-green);
+    color: var(--datum-ink);
+    column-gap: 8px;
+    cursor: pointer;
+    display: flex;
+    font-family: var(--datum-font);
+    font-size: 12px;
+    left: 0;
+    padding: 0 10px;
+    pointer-events: auto;
+    position: absolute;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.solution-drawing-chip:hover {
+    background: var(--datum-surface-raised, var(--datum-surface));
+    border-left-color: var(--datum-accent, var(--datum-green));
+}
+
+.solution-drawing-chip-arrow {
+    color: var(--datum-subtle);
+    flex: 0 0 auto;
+    font-size: 10px;
+}
+
+.solution-drawing-chip-name {
+    flex: 0 1 auto;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.solution-drawing-chip-count {
+    color: var(--datum-subtle);
+    flex: 0 0 auto;
+}
+
+/*
+   SPACING AROUND A BLOCK, in the source itself, comes from the block's own
+   blank lines on insert. What CSS adds here is the visual separation in the
+   PREVIEW: a figure drawn from embedded code must not run into the
+   paragraphs either side of it.
+ */
+.solution-preview .drawing-reference-figure,
+.solution-preview .embedded-drawing-figure {
+    margin: 22px auto;
+}
+
+/* -------------------------------------------------------------------------
    RIGHT: THE TYPESET DOCUMENT
    ------------------------------------------------------------------------- */
 

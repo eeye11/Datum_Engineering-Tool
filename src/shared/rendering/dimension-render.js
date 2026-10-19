@@ -4,7 +4,6 @@
  * Part of the renderer (see renderer.js), split out by concern.
  */
 import enggDimensionModel from "../../features/workspace/model/dimensions/dimension-model.js";
-import enggVariableDimension from "../../features/workspace/model/dimensions/variable-dimension.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
 import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
@@ -176,18 +175,14 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
         }
 
         /*
-         * A DRIVEN DIMENSION IS DRAWN IN THE DRIVEN COLOUR.
+         * A DIMENSION IS AN ANNOTATION WITH ONE APPEARANCE.
          *
-         * The requirement asks for a distinct colour as the visual indicator of
-         * the Driving/Driven state, and NOT parentheses. The colour is read from
-         * the model so the canvas, the preview and the panel agree, and it falls
-         * back to the normal dimension colour for a Driving dimension - which is
-         * what every dimension created before this state existed is.
+         * There is no Driving/Driven state any more, so the dimension is drawn
+         * in its own stroke colour - the same treatment as every other
+         * annotation on the sheet.
          */
         const stroke = paintColour(
-            entity.driven === true && model.DRIVEN_COLOUR
-                ? model.DRIVEN_COLOUR
-                : style.stroke || enggTheme.defaultLineColour()
+            style.stroke || enggTheme.defaultLineColour()
         );
         const lineWidth = Number(style.lineWidth) || 0.5;
         const head = arrowHeadSize(lineWidth);
@@ -447,118 +442,9 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
         appendDimensionText(svg, graphics.text, graphics.textFrame, stroke, toScreen);
     }
 
-    /*
-     * A VARIABLE DIMENSION IS DRAWN LIKE A DIMENSION, WITH A SYMBOL.
-     *
-     * The witness lines, the arrowheads and the text frame all come from the
-     * SAME model call a measured dimension uses, against a descriptor the
-     * dimension model accepts - so `x` sits in exactly the place a `500 mm`
-     * would, in the same style, and the two cannot drift apart in appearance.
-     *
-     * The one difference is the value: the text frame is filled with the
-     * SYMBOL rather than a measurement. Building the frame from the symbol's own
-     * length also keeps the box the right size for what it contains - a box
-     * sized for "500 mm" around an "x" would look like a value had failed to
-     * load.
-     */
-    function appendVariableDimensionEntity(svg, entity, state, toScreen, style) {
-        const model = enggDimensionModel;
-
-        if (!model) {
-            return;
-        }
-
-        const symbol = enggVariableDimension.variableText(entity);
-
-        if (!symbol.trim()) {
-            return;
-        }
-
-        /*
-         * The geometry, from the shared model. A variable has no measurement
-         * type, so it is described as a plain linear span - which is what the
-         * placement, the witness lines and the arrows are computed from, and
-         * has nothing to do with what the text says.
-         */
-        const graphics = model.graphicsFor(
-            {
-                ...entity,
-                dimensionType: entity.dimensionType || "linear"
-            },
-            state
-        );
-
-        if (!graphics) {
-            return;
-        }
-
-        const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
-        const lineWidth = Number(style.lineWidth) || 0.5;
-
-        graphics.lines?.forEach((segment) => {
-            const a = toScreen(segment.from);
-            const b = toScreen(segment.to);
-
-            svg.appendChild(
-                createSvgElement("line", {
-                    x1: a.x,
-                    y1: a.y,
-                    x2: b.x,
-                    y2: b.y,
-                    stroke,
-                    "stroke-width": Math.max(0.6, lineWidth * 1.4)
-                })
-            );
-        });
-
-        /*
-         * The text is the SYMBOL, in a frame measured from the symbol itself.
-         * `textFrame` is recomputed here rather than reused, because the model
-         * sized it for a number this feature does not have.
-         */
-        const anchor = graphics.text?.position || graphics.textFrame?.centre;
-
-        if (!anchor) {
-            return;
-        }
-
-        const screen = toScreen(anchor);
-
-        const fontSize = Number(entity.style?.fontSize) || 12;
-
-        const width = Math.max(18, symbol.length * fontSize * 0.72);
-        const height = fontSize * 1.5;
-
-        svg.appendChild(
-            createSvgElement("rect", {
-                x: screen.x - width / 2,
-                y: screen.y - height / 2,
-                width,
-                height,
-                fill: "#ffffff",
-                stroke: "none"
-            })
-        );
-
-        const label = createSvgElement("text", {
-            x: screen.x,
-            y: screen.y + fontSize * 0.36,
-            fill: stroke,
-            "font-size": zoomedFontHere(fontSize),
-            "font-family": "Arial, sans-serif",
-            "font-weight": "600",
-            "text-anchor": "middle"
-        });
-
-        label.textContent = symbol;
-
-        svg.appendChild(label);
-    }
-
 export {
     arrowHeadSize,
     appendDimensionArrowHead,
     appendDimensionText,
-    appendDimensionEntity,
-    appendVariableDimensionEntity
+    appendDimensionEntity
 };

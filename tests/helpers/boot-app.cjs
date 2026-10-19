@@ -2,7 +2,7 @@
  * Boot the whole application in jsdom, from the real page.
  *
  * Loads index.html's own markup, installs the browser globals a module
- * expects, then loads the entry module (src/main.js) exactly as the
+ * expects, then loads the entry module (src/app/entry/main.js) exactly as the
  * browser does. jsdom does not execute <script type="module">, so the
  * entry is loaded with require(), which Node supports for ES modules.
  *
@@ -52,7 +52,7 @@ function bootApp() {
   let error = null;
 
   try {
-    require(path.join(projectRoot, "src", "main.js"));
+    require(path.join(projectRoot, "src", "app/entry/main.js"));
   } catch (caught) {
     error = caught;
   }

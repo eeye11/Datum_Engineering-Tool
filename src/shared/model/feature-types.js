@@ -121,13 +121,8 @@ export const FEATURE_TYPES = Object.freeze({
      * movable, deletable and they contribute to Fit. They are NOT bodies,
      * vectors or spans - a dimension's ink is its own - so they carry no trait
      * beyond being recognised at all, which is what the entry itself records.
-     *
-     * A `variable-dimension` is listed separately because it is a separate
-     * TYPE, and a type the registry has not heard of is a type the shared
-     * systems can only half-see.
      */
     dimension: { annotation: true },
-    "variable-dimension": { annotation: true },
     annotation: { annotation: true },
     annotate: { annotation: true },
 

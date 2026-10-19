@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.body.shaft",
+  "label": "Shaft",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/body/shaft",
+  "template": "template.tex",
+  "implemented": false
+}

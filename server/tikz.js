@@ -32,24 +32,91 @@ export async function loadTikz() {
 }
 
 /*
- * The student's code may be a complete LaTeX document or just the picture;
- * the preamble and document environment are supplied here, so they are
- * removed from the input.
+ * The student's code may be a complete LaTeX document or just the picture.
+ *
+ * The TikZJax core dump is a bare LaTeX format with NO document class, so the
+ * preamble is always supplied by this module and the input's preamble-shaped
+ * lines (\documentclass, \usepackage, \usetikzlibrary, \begin{document},
+ * \end{document}) are stripped from it, whatever its origin - DAETUM's own
+ * generated source or a complete document pasted into the Source tab. Only
+ * the drawing (the body) is compiled, wrapped in DAETUM's preamble, which
+ * loads tikz, arrows.meta and amsmath (for \tfrac, \mathrm and friends) and
+ * xcolor (for colour names). Comments inside the body are preserved; they are
+ * part of the student's code.
+ *
+ * TikZ libraries that the pasted document loaded but DAETUM's preamble does
+ * not are carried over, so a document using e.g. the `calc` library still
+ * works.
+ *
+ * THE BASE LIST IS WHAT DAETUM'S OWN SOURCE USES, not a minimal guess.
+ *
+ * The source writers emit `-{Latex}` heads (arrows.meta) inside
+ * `dash pattern=...` paths and truss/moment constructions that use `calc`, and
+ * they emit arcs with an `arc[...]` operation. Every one of those needs its
+ * library at COMPILE time; a missing library is not a warning, it is
+ * `! Package pgfkeys Error`, which fails the whole document - so ONE such
+ * object blanked the entire sheet even though its own code was correct. The
+ * standalone export already declared this exact list
+ * (`STATIC_STANDALONE_LIBRARIES` in statics.js); the renderer's wrapper did
+ * not, so the exported document compiled in TeX Live while the Drawing Space
+ * did not.
+ *
+ * `amsmath` is loaded for `\cdot`, `\mathrm` and `\tfrac`, all of which the
+ * value labels use.
+ */
+const BASE_LIBRARIES = "arrows.meta,calc,decorations.pathmorphing";
+
+/*
+ * Strip preamble-shaped lines from the input, whatever its origin. Only the
+ * drawing body remains; the preamble is always supplied by this module.
  */
 export function cleanTikZ(input) {
-    return input
+    return String(input)
         .replace(/\\documentclass(?:\[[^\]]*\])?\{[^}]*\}/g, "")
-        .replace(/\\usepackage(?:\[[^\]]*\])?\{tikz\}/g, "")
-        .replace(/\\usetikzlibrary\{arrows\.meta\}/g, "")
-        .replace(/\\begin\{document\}/g, "")
-        .replace(/\\end\{document\}/g, "")
+        .replace(/\\usepackage(?:\[[^\]]*\])?\{[^}]*\}/g, "")
+        .replace(/\\usetikzlibrary\{[^}]*\}/g, "")
+        .replace(/\\begin\s*\{document\}/g, "")
+        .replace(/\\end\s*\{document\}/g, "")
         .trim();
 }
 
-function documentFor(tikz) {
-    return String.raw`
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta}
+/*
+ * The TikZ libraries a pasted document asked for, beyond the ones DAETUM's
+ * own preamble always loads.
+ */
+export function extraTikzLibraries(input) {
+    const known = new Set(BASE_LIBRARIES.split(",").map((name) => name.trim()));
+    const asked = [];
+
+    for (const match of String(input).matchAll(/\\usetikzlibrary(?:\[[^\]]*\])?\{([^}]*)\}/g)) {
+        for (const name of match[1].split(",")) {
+            const trimmed = name.trim();
+
+            if (trimmed && !known.has(trimmed) && !asked.includes(trimmed)) {
+                asked.push(trimmed);
+            }
+        }
+    }
+
+    return asked;
+}
+
+/*
+ * THE WRAPPER DOCUMENT.
+ *
+ * Exported so the boundary between "the drawing" (the text in the Source tab)
+ * and "the infrastructure that compiles it" is testable in one place: a test
+ * can assert that the picture is sent unchanged and that every library the
+ * writers use is declared here rather than inside the editable source.
+ */
+export function documentFor(tikz) {
+    const libraries = [...new Set([...BASE_LIBRARIES.split(","), ...extraTikzLibraries(tikz)])].join(",");
+
+    return String.raw`\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usetikzlibrary{${libraries}}
 
 \begin{document}
 

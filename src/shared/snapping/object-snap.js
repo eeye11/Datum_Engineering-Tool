@@ -4052,12 +4052,65 @@ function resolveConstructionPoint(
         }
 
         if (inference) {
-            inferredPoint = {
+            /*
+             * ====================================================
+             * AN ALIGNMENT CONSTRAINS ONE AXIS; THE OTHER IS STILL FREE
+             * ====================================================
+             *
+             * A horizontal guide fixes y and leaves x as whatever the
+             * pointer said; a vertical guide fixes x and leaves y. The
+             * constrained axis is a DECISION - the point really is level
+             * with its reference - so it is taken exactly as the alignment
+             * gives it.
+             *
+             * The free axis was the raw pointer, and that is the gap this
+             * closes. Snapping has to apply to every construction stage,
+             * not only to the stage where nothing else was found, so the
+             * free axis is offered to the grid exactly as it would have
+             * been had no guide appeared. A corner being placed against a
+             * horizontal guide lands on the guide AND on the nearest grid
+             * column, which is what a student dragging on a ruled sheet
+             * expects - and without it the point sat on the guide at some
+             * arbitrary fraction of a grid interval.
+             *
+             * ONLY THE FREE AXIS IS TOUCHED. Re-snapping the constrained
+             * one would move the point off the very reference it was
+             * aligned to, which is how a snap appears to "slip".
+             */
+            /*
+             * The types are the lowercase ones the candidate search builds:
+             * `horizontal`, `vertical`, and `horizontal-vertical`. The last
+             * one constrains BOTH axes against real reference points, so it
+             * has no free axis and nothing here touches it - a corner aligned
+             * to two references must land on their crossing exactly.
+             */
+            const constrained = inference.type;
+
+            const freeAxis =
+                constrained === "horizontal"
+                    ? "x"
+                    : constrained === "vertical"
+                      ? "y"
+                      : null;
+
+            const alignedPoint = {
                 ...inference.point
             };
 
+            if (freeAxis) {
+                alignedPoint[freeAxis] =
+                    enggDrawingState.gridSnapValue(
+                        alignedPoint[freeAxis],
+                        state
+                    );
+            }
+
+            inferredPoint = {
+                ...alignedPoint
+            };
+
             effectivePoint = {
-                ...inference.point
+                ...alignedPoint
             };
         } else {
             /*
@@ -4075,46 +4128,31 @@ function resolveConstructionPoint(
              * A grid snap is the fallback for empty space - which is where
              * a construction point usually starts - and not a competitor.
              *
-             * `snapCoordinate` is kept as the second fallback rather than
-             * being deleted. It is the older, finer snap spacing that the
-             * load and statics tools are placed with, and dropping it here
-             * would move every point those tools have already put down.
-             * `gridSnapPoint` returns the input untouched when the grid's
-             * snapping is switched off, so the fall-through below reads in
-             * the intended order without a second flag to keep in step.
+             * ====================================================
+             * WITH GRID SNAP OFF THE POINTER IS FREE
+             * ====================================================
+             *
+             * There used to be a second fallback here - `snapCoordinate`, the
+             * older one-unit spacing - which meant "grid snap off" was not the
+             * free positioning the requirement asks for: a point still jumped to
+             * the nearest whole unit, invisibly, with nothing on screen to
+             * explain it. An off-grid drawing could not be made at all.
+             *
+             * So the order is now exactly three steps and no fourth:
+             *
+             *   1. an eligible object snap, if one is in range;
+             *   2. otherwise the nearest grid location, if grid snap is on;
+             *   3. otherwise the raw pointer, untouched.
+             *
+             * `gridSnapPoint` returns its input unchanged when snapping is off,
+             * so step 2 collapses into step 3 on its own - which is why there is
+             * no second flag here to fall out of step with the first.
              */
-            const gridSnapped =
+            effectivePoint =
                 enggDrawingState.gridSnapPoint(
                     rawPoint,
                     state
                 );
-
-            const onGrid =
-                state.grid?.snapToGrid !== false &&
-                Number(state.grid?.spacing) > 0;
-
-            effectivePoint =
-                onGrid
-                    ? gridSnapped
-
-                    : state.snap.enabled
-                      ? {
-                            x:
-                                enggDrawingState.snapCoordinate(
-                                    rawPoint.x,
-                                    state
-                                ),
-
-                            y:
-                                enggDrawingState.snapCoordinate(
-                                    rawPoint.y,
-                                    state
-                                )
-                        }
-
-                      : {
-                            ...rawPoint
-                        };
         }
     }
 
@@ -4155,6 +4193,46 @@ function resolveConstructionPoint(
     };
 }
 
+/*
+ * ============================================================
+ * SNAP A POINT THAT DID NOT COME FROM A CANVAS EVENT
+ * ============================================================
+ *
+ * `resolveConstructionPoint` is the resolver for the pointer, and it needs the
+ * canvas' pixel size to measure its tolerance in. A tool template - a Point's
+ * default position, a Coordinate System's placeholder axes - is a point in the
+ * DRAWING, not in the canvas, and it must still land on the same lattice and
+ * the same object features as a point the student dragged. Without that, a
+ * template's preview would show a point six units from a grid line while the
+ * committed point, resolved at the release, was on it.
+ *
+ * So this is the same order, applied to a drawing point:
+ *
+ *   1. an object snap is NOT searched - there is no cursor to measure a
+ *      tolerance against, and inventing one would snap to whatever happened to
+ *      be nearest;
+ *   2. otherwise the nearest grid location, when grid snap is on;
+ *   3. otherwise the point itself.
+ *
+ * That is the same grid function every construction already falls through to
+ * (`gridSnapValue`), which is why zoom and pan cannot move the lattice: the
+ * spacing is in internal coordinates and the camera is never read.
+ */
+function snapPointToGrid(point, state) {
+    const source = point || { x: 0, y: 0 };
+
+    return {
+        x: enggDrawingState.gridSnapValue(
+            Number(source.x) || 0,
+            state
+        ),
+        y: enggDrawingState.gridSnapValue(
+            Number(source.y) || 0,
+            state
+        )
+    };
+}
+
 const enggDrawingSnap = {
     SNAP_TOLERANCE_PX,
     INFERENCE_TOLERANCE_DEGREES,
@@ -4165,6 +4243,7 @@ const enggDrawingSnap = {
     findSnapCandidate,
     inferLinePoint,
     resolveConstructionPoint,
+    snapPointToGrid,
     closestPointOnObject,
     screenDistance
 };

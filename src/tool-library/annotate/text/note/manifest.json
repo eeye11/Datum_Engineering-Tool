@@ -1,0 +1,9 @@
+{
+  "id": "annotate.text.note",
+  "label": "Note / Text",
+  "category": "annotate",
+  "group": "text",
+  "libraryPath": "src/tool-library/annotate/text/note",
+  "template": "template.tex",
+  "implemented": false
+}

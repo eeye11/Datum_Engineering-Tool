@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.connection.pin-connection",
+  "label": "Pin Connection",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/connection/pin-connection",
+  "template": "template.tex",
+  "implemented": false
+}

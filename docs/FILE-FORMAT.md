@@ -6,7 +6,7 @@ file gives back a drawing that can be selected, dragged, edited and saved
 again. It is JSON, UTF-8, with the media type
 `application/vnd.enggdraw+json`.
 
-The format is owned by [`src/file/document-file.js`](../src/file/document-file.js).
+The format is owned by [`src/shared/file/document-file.js`](../src/shared/file/document-file.js).
 A `.tex` saved by DAETUM carries the same envelope, base64-encoded in a
 comment block after `\end{document}` — see [LATEX.md](LATEX.md).
 That module is the only place that reads or writes the envelope, and the only
@@ -69,7 +69,7 @@ kept so that such a file still opens.
   "units": "mm",
   "objects": [ …features… ],
   "viewport": { "zoom": 1, "panX": 0, "panY": 0 },
-  "grid": { "visible": true, "spacing": 5 },
+  "grid": { "visible": true, "spacing": 7.5 },
   "snap": { "enabled": true, "spacing": 1 },
   "objectSnap": { "enabled": true, "tolerancePx": 10, "inferenceTolerancePx": 24 },
   "styleDefaults": { "stroke": "#000000", "fill": "none", "lineWidth": 0.5, "lineType": "solid", "opacity": 1 },
@@ -127,10 +127,10 @@ geometry moves.
 | Annotation  | `dimension`, `annotation` |
 
 The geometry each type stores is defined by its factory in
-[`src/core/model/drawing-state.js`](../src/core/model/drawing-state.js)
+[`src/shared/model/drawing-state.js`](../src/shared/model/drawing-state.js)
 (`geometryFactories`). Analysis features are *readings* of other features and
 are recomputed from their sources on load
-([`src/features/analysis/analysis-dependencies.js`](../src/features/analysis/analysis-dependencies.js)).
+([`src/features/workspace/model/analysis/analysis-dependencies.js`](../src/features/workspace/model/analysis/analysis-dependencies.js)).
 
 ---
 

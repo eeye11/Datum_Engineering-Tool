@@ -1,0 +1,9 @@
+{
+  "id": "fluids.fluids-create.pressure",
+  "label": "Pressure",
+  "category": "fluids",
+  "group": "fluids-create",
+  "libraryPath": "src/tool-library/fluids/fluids-create/pressure",
+  "template": "template.tex",
+  "implemented": false
+}

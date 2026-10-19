@@ -238,7 +238,7 @@ export function applyDrawOrder(commandId) {
  * Pan and Move armed. Selecting a feature first is the whole interaction.
  */
 export function installDrawOrderControls() {
-  document.querySelectorAll("[data-draw-order]").forEach((button) => {
+  (globalThis.document?.querySelectorAll("[data-draw-order]") ?? []).forEach((button) => {
     button.addEventListener("click", () => {
       applyDrawOrder(button.dataset.drawOrder);
     });

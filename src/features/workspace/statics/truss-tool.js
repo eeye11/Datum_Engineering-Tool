@@ -5,7 +5,7 @@
 import { trussJoints } from "../../../shared/geometry/feature-handles.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { beginCreationDimensioning, commitCreatedFeature } from "../geometry/creation-sizing.js";
+import { commitCreatedFeature } from "../geometry/creation-sizing.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
@@ -632,24 +632,18 @@ export function finishTrussConstruction() {
             drawingState
         );
 
-    beginCreationDimensioning(
+    commitCreatedFeature(
         object,
-        previousObjects,
-        () => {
-            commitCreatedFeature(
-                object,
-                true,
-                previousObjects
-            );
-
-            setToolMessage(
-                "Truss created"
-            );
-
-            renderProperties();
-            renderCurrentDrawing();
-        }
+        false,
+        previousObjects
     );
+
+    setToolMessage(
+        "Truss created"
+    );
+
+    renderProperties();
+    renderCurrentDrawing();
 }
 
 /*

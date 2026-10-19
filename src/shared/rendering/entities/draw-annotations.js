@@ -1,12 +1,12 @@
 /*
- * Drawing one feature: Dimensions, variable dimensions, Annotate features and annotations.
+ * Drawing one feature: Dimensions, Annotate features and annotations.
  *
  * Each function draws one kind of feature into its group, from the context
  * appendEntity (entity-render.js) builds. It returns true when the feature
  * is finished, so no later renderer in the table runs for it.
  */
 import { appendAnnotateEntity, appendAnnotationEntity } from "../annotation-render.js";
-import { appendDimensionEntity, appendVariableDimensionEntity } from "../dimension-render.js";
+import { appendDimensionEntity } from "../dimension-render.js";
 import enggAnnotationModel from "../../../features/workspace/model/annotations/annotation-model.js";
 
 
@@ -47,34 +47,6 @@ import enggAnnotationModel from "../../../features/workspace/model/annotations/a
             }
 
             appendDimensionEntity(svg, entity, state, toScreen, style);
-            parentSvg.appendChild(svg);
-            return true;
-        }
-
-
-        /*
-         * A VARIABLE DIMENSION.
-         *
-         * Drawn with the SAME machinery a dimension is: the same witness
-         * lines, the same arrowheads, the same text frame and the same font -
-         * so `x` sits on the drawing exactly where a measured length would, and
-         * the two read as members of one family.
-         *
-         * What differs is only the TEXT: a variable states its SYMBOL, and no
-         * measurement is taken. An empty symbol draws NOTHING - the student has
-         * named it but not written it, and inventing `0` or `?` would turn
-         * their deliberate unknown into a failure.
-         *
-         * It follows the same SHOW DIMENSIONS toggle, because a variable is a
-         * dimension in everything but its value - a student hiding their
-         * dimensions does not want the symbolic ones left floating.
-         */
-    export function drawVariableDimension({ svg, parentSvg, entity, state, style, toScreen }) {
-            if (state.display?.showDimensions === false) {
-                return true;
-            }
-
-            appendVariableDimensionEntity(svg, entity, state, toScreen, style);
             parentSvg.appendChild(svg);
             return true;
         }

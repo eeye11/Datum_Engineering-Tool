@@ -76,7 +76,7 @@ function catalogue() {
 /*
  * THE SETTINGS PAGES ARE COMMANDS TOO, AND THEY ARE SEARCHABLE BY NAME.
  *
- * A menu item only carries the words on its face - "Drawing Settings…" - so
+ * A menu item only carries the words on its face - "Drawing Settingsâ€¦" - so
  * searching for what is INSIDE that dialog found nothing. "Dark Mode" is the
  * case that matters: the theme lives at Drawing Settings > Appearance >
  * Application Theme, and a student looking for it types those words, not the
@@ -108,7 +108,7 @@ const SEARCH_ALIASES = [
  * A searchable entry for a term, resolved to the command that opens it.
  *
  * The ENTRY is the command - its label, its icon and its `run`. What the alias
- * adds is the words that find it, so a result still reads "Drawing Settings…"
+ * adds is the words that find it, so a result still reads "Drawing Settingsâ€¦"
  * and still runs exactly what the menu runs.
  */
 function aliasEntries(entries) {
@@ -152,7 +152,7 @@ function aliasEntries(entries) {
  *
  * AN ALIAS RANKS AFTER A REAL NAME. An alias is a way IN, not a second name: a
  * student who types "dark mode" should find the theme, and the result should
- * still read "Drawing Settings…” - so a match on the command's own label always
+ * still read "Drawing Settingsâ€¦â€ - so a match on the command's own label always
  * comes first, and a match on a term it answers to follows.
  */
 function score(entry, query) {
@@ -240,7 +240,7 @@ function closeResults() {
     }
 
     if (onDocumentPointerDown) {
-        document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+        globalThis.document.removeEventListener("pointerdown", onDocumentPointerDown, true);
         onDocumentPointerDown = null;
     }
 }
@@ -252,7 +252,7 @@ export function isSearchOpen() {
 export function closeSearch() {
     closeResults();
 
-    const field = document.querySelector("[data-command-search]");
+    const field = globalThis.document.querySelector("[data-command-search]");
 
     if (field) {
         field.value = "";
@@ -346,13 +346,13 @@ function renderResults(input, results) {
         return;
     }
 
-    const panel = document.createElement("div");
+    const panel = globalThis.document.createElement("div");
 
     panel.className = "datum-search-results";
     panel.setAttribute("role", "listbox");
 
     results.forEach((entry, index) => {
-        const button = document.createElement("button");
+        const button = globalThis.document.createElement("button");
 
         button.type = "button";
         button.className = "datum-search-result";
@@ -395,7 +395,7 @@ function renderResults(input, results) {
      * the toolbar, so it can extend past the toolbar's own edge without the
      * toolbar clipping it.
      */
-    document.body.appendChild(panel);
+    globalThis.document.body.appendChild(panel);
 
     const rect = input.getBoundingClientRect();
 
@@ -415,7 +415,7 @@ function renderResults(input, results) {
         }
     };
 
-    document.addEventListener("pointerdown", onDocumentPointerDown, true);
+    globalThis.document.addEventListener("pointerdown", onDocumentPointerDown, true);
 }
 
 /*
@@ -430,12 +430,12 @@ export function installCommandSearchShortcut(input) {
         return;
     }
 
-    document.addEventListener("keydown", (event) => {
+    globalThis.document.addEventListener("keydown", (event) => {
         if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "k") {
             return;
         }
 
-        const active = document.activeElement;
+        const active = globalThis.document.activeElement;
 
         const editing =
             active &&

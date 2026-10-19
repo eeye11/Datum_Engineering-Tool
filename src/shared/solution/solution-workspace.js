@@ -34,6 +34,8 @@ import { renderDrawingBlocks } from "./drawing-blocks-editor.js";
  */
 import { enggDrawingSheets } from "../../features/workspace/index.js";
 
+const document = globalThis.document;
+
 /* ---------------------------------------------------------- */
 /* ELEMENTS                                                    */
 /* ---------------------------------------------------------- */

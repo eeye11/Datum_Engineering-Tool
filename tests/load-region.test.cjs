@@ -304,8 +304,15 @@ check(
 
 check(
   "a load is positioned by its two stations and nothing else",
-  /isLoadGeometry/.test(code) &&
-    /pointAtStation/.test(code),
+  /* Both helpers live in the relative-coordinates module since the
+   * Phase 2 reorganisation, so they are read from there rather than
+   * from the controller text. */
+  /function isLoadGeometry/.test(
+    fs.readFileSync(modulePath("relative-coordinates.js"), "utf8"),
+  ) &&
+    /function pointAtStation/.test(
+      fs.readFileSync(modulePath("relative-coordinates.js"), "utf8"),
+    ),
 );
 
 console.log(

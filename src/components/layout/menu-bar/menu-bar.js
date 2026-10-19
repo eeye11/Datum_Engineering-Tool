@@ -62,7 +62,7 @@ let closeOpenMenu = null;
  * start-up would stay greyed out forever.
  */
 function buildDropdown(menu, onRun) {
-  const panel = document.createElement("div");
+  const panel = globalThis.document.createElement("div");
 
   panel.className = `datum-menu-panel datum-menu-panel-${menu.id}`;
 
@@ -76,7 +76,7 @@ function buildDropdown(menu, onRun) {
      * guess which commands belong together.
      */
     if (item.separator) {
-      const rule = document.createElement("div");
+      const rule = globalThis.document.createElement("div");
 
       rule.className = "datum-menu-separator";
       rule.setAttribute("role", "separator");
@@ -98,7 +98,7 @@ function buildDropdown(menu, onRun) {
      */
     const hasSubmenu = Array.isArray(item.submenu) && item.submenu.length > 0;
 
-    const button = document.createElement("button");
+    const button = globalThis.document.createElement("button");
 
     button.type = "button";
     button.className = "datum-menu-item";
@@ -344,11 +344,11 @@ export function installMenuBar(host, menus) {
     const currentMenu = () =>
       typeof menuDefinition === "function" ? menuDefinition() : menuDefinition;
 
-    const wrap = document.createElement("div");
+    const wrap = globalThis.document.createElement("div");
 
     wrap.className = "datum-menu";
 
-    const label = document.createElement("button");
+    const label = globalThis.document.createElement("button");
 
     label.type = "button";
     label.className = "datum-menu-label";
@@ -369,7 +369,7 @@ export function installMenuBar(host, menus) {
     wrap.appendChild(label);
 
     /* The panel is a child of the label's own wrapper, so it sits under it. */
-    const slot = document.createElement("div");
+    const slot = globalThis.document.createElement("div");
 
     slot.className = "datum-menu-slot";
     wrap.appendChild(slot);
@@ -528,7 +528,7 @@ export function installMenuBar(host, menus) {
    * decision to leave. The listener is added on the CAPTURE phase so it runs
    * before a command's own handler can reopen a menu.
    */
-  document.addEventListener("pointerdown", (event) => {
+  globalThis.document.addEventListener("pointerdown", (event) => {
     if (!openMenu) {
       return;
     }
@@ -540,7 +540,7 @@ export function installMenuBar(host, menus) {
     closeMenu();
   });
 
-  document.addEventListener("keydown", (event) => {
+  globalThis.document.addEventListener("keydown", (event) => {
     if (!openMenu) {
       return;
     }

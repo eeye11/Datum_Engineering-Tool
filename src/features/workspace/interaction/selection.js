@@ -1,11 +1,9 @@
-/*
+﻿/*
  * Selection, cancelling, and finishing a construction.
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggScaleCalibration from "../../../shared/scale/scale-calibration.js";
 import enggCreationDimension from "../model/dimensions/creation-dimension.js";
-import enggDimensionEditor from "../model/dimensions/dimension-editor.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import { commitAnalysisAxis, commitAnalysisInput } from "../statics/analysis-tools.js";
@@ -844,16 +842,8 @@ export function cancelInteraction() {
     drawingState.interaction.guideline = null;
 
     /*
-     * So does the scale calibration dialog.
-     *
-     * Closing it here rather than only from its own fields means it
-     * cannot be stranded: a modal that survived a tool switch or an
-     * Escape aimed at the canvas would look like the application had
-     * stopped responding. Nothing is created and no scale is set,
-     * which is exactly what abandoning the question should mean.
+     * So does any modal an unfinished operation opened.
      */
-    enggScaleCalibration?.close();
-    enggDimensionEditor?.close();
 
     /*
      * So does the Plot Editor. It previews onto the sheet, so leaving it
@@ -891,8 +881,9 @@ export function cancelInteraction() {
     drawingState.selection
         .hoveredObjectId = null;
 
-    drawingState.selection
-        .selectedObjectIds = [];
+    enggDrawingState.clearSelection(
+        drawingState
+    );
 
     /*
      * Cancelling always returns to Select, so the user
@@ -1213,8 +1204,6 @@ export function deselectIfJustCreated() {
      * belongs to the dialog's own confirm and cancel.
      */
     if (
-        enggScaleCalibration?.isOpen?.() ||
-        enggDimensionEditor?.isOpen?.() ||
         enggPlotEditor?.isOpen?.() ||
         enggCreationDimension?.isOpen?.()
     ) {
@@ -1231,8 +1220,6 @@ export function deselectIfJustCreated() {
     enggDrawingState.clearSelection(
         drawingState
     );
-
-    editorState.featureTreePickedId = null;
 
     renderProperties();
     renderCurrentDrawing();

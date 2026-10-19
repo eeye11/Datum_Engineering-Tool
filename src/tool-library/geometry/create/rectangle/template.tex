@@ -1,0 +1,9 @@
+% Rectangle - two opposite corners, drawn with TikZ's own rectangle operation so
+% the corners are exact and the shape closes without a seam.
+%
+%   \draw[<appearance>, fill=<colour>] (x1,y1) rectangle (x2,y2);
+%
+% The fill option appears only for a Solid fill. A rotated rectangle is written
+% as a closed path through its four corners instead, because `rectangle` cannot
+% carry a rotation.
+\draw[black] (0,0) rectangle (40,20);

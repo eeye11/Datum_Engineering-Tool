@@ -1,5 +1,22 @@
-/*
- * The colour picker.
+﻿/*
+ * ========================================================
+ * CAD COLOUR CONTROL - THE TOOLBAR'S OWN SWATCH
+ * ========================================================
+ *
+ * A swatch button beside the toolbar's colour control opens THE shared picker
+ * (`shared/ui/colour-picker.js`) - the same popup, palette, custom input,
+ * eyedropper and recent colours that every colour field in the Features tab
+ * uses. There is one picker in the application, so there is one idea of what
+ * choosing a colour means.
+ *
+ * WHAT IS THE TOOLBAR'S OWN is only what a colour MEANS here: the value is the
+ * DRAWING DEFAULT (or the selected features' stroke, when something is
+ * selected), it is written through the existing style pipeline, and it is
+ * published for the paint drop to show.
+ *
+ * The native colour input stays in the DOM as the single value source, so the
+ * existing style pipeline that reads `drawingColor.value` keeps working
+ * unchanged.
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
@@ -11,246 +28,30 @@ import { objectAtPoint } from "../../../features/workspace/interaction/hit-testi
 import { canvasPointFromEvent } from "../toolbar/tool-activation.js";
 import { setToolMessage } from "../toolbar/toolbar-render.js";
 import { syncStyleControls } from "./style-controls.js";
-
-/*
- * ========================================================
- * CAD COLOUR CONTROL
- * ========================================================
- *
- * A swatch button opens a popup with a hue-by-shade
- * grid, a custom colour picker, recent colours and an
- * eyedropper.
- *
- * The native colour input stays in the DOM as the single
- * value source, so the existing style pipeline that
- * reads drawingColor.value keeps working unchanged.
- */
-
-const COLOUR_RECENT_LIMIT = 24;
-
-const COLOUR_STORAGE_KEY =
-    "enggDrawing.recentColours";
-
-let recentColours = [];
-
-let colourPopup = null;
-
-function normalizeColour(
-    value
-) {
-    const text =
-        String(value || "")
-            .trim()
-            .toLowerCase();
-
-    if (!/^#[0-9a-f]{6}$/.test(text)) {
-        return null;
-    }
-
-    return text;
-}
-
-/*
- * Recent colours persist for the session, and in local
- * storage when the browser allows it.
- */
-function loadRecentColours() {
-    try {
-        const stored =
-            window.localStorage.getItem(
-                COLOUR_STORAGE_KEY
-            );
-
-        if (stored) {
-            const parsed =
-                JSON.parse(stored);
-
-            if (Array.isArray(parsed)) {
-                recentColours =
-                    parsed
-                        .map(normalizeColour)
-                        .filter(Boolean)
-                        .slice(
-                            0,
-                            COLOUR_RECENT_LIMIT
-                        );
-            }
-        }
-    } catch (error) {
-        recentColours = [];
-    }
-}
-
-function saveRecentColours() {
-    try {
-        window.localStorage.setItem(
-            COLOUR_STORAGE_KEY,
-            JSON.stringify(
-                recentColours
-            )
-        );
-    } catch (error) {
-        /*
-         * Storage can be unavailable; the list still
-         * works for the current session.
-         */
-    }
-}
-
-/*
- * Remember a colour, most recent first, without
- * duplicates, capped at the limit.
- */
-function rememberColour(
-    value
-) {
-    const colour =
-        normalizeColour(value);
-
-    if (!colour) {
-        return;
-    }
-
-    recentColours = [
-        colour,
-        ...recentColours.filter(
-            existing =>
-                existing !== colour
-        )
-    ].slice(
-        0,
-        COLOUR_RECENT_LIMIT
-    );
-
-    saveRecentColours();
-}
-
-/*
- * Hue across the columns, lightness so
- * moving across changes colour family and moving down
- * changes the shade. The last two rows are neutrals.
- */
-function buildColourGrid() {
-    const cells = [];
-
-    const hues = 12;
-    const shadeRows = [
-        92, 78, 64, 50, 38, 28
-    ];
-
-    shadeRows.forEach(
-        (lightness, row) => {
-            for (
-                let column = 0;
-                column < hues;
-                column += 1
-            ) {
-                const hue =
-                    (column * 360) / hues;
-
-                cells.push(
-                    hslToHex(
-                        hue,
-                        72,
-                        lightness
-                    )
-                );
-            }
-
-            void row;
-        }
-    );
-
-    /*
-     * Neutrals: white through grey to black.
-     */
-    [
-        100, 88, 76, 64, 52, 40, 28, 16, 0
-    ].forEach(
-        lightness =>
-            cells.push(
-                hslToHex(
-                    0,
-                    0,
-                    lightness
-                )
-            )
-    );
-
-    return cells;
-}
-
-/*
- * HSL to hex, used only to generate the palette.
- */
-function hslToHex(
-    hue,
-    saturation,
-    lightness
-) {
-    const s =
-        saturation / 100;
-
-    const l =
-        lightness / 100;
-
-    const c =
-        (1 - Math.abs(2 * l - 1)) * s;
-
-    const x =
-        c *
-        (1 - Math.abs(((hue / 60) % 2) - 1));
-
-    const m =
-        l - c / 2;
-
-    let r = 0;
-    let g = 0;
-    let b = 0;
-
-    if (hue < 60) {
-        r = c; g = x;
-    } else if (hue < 120) {
-        r = x; g = c;
-    } else if (hue < 180) {
-        g = c; b = x;
-    } else if (hue < 240) {
-        g = x; b = c;
-    } else if (hue < 300) {
-        r = x; b = c;
-    } else {
-        r = c; b = x;
-    }
-
-    const toHex = value =>
-        Math.round(
-            (value + m) * 255
-        )
-            .toString(16)
-            .padStart(2, "0");
-
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
-}
+import {
+    closeColourPopup,
+    normalizeColour,
+    openColourPicker,
+    rememberColour
+} from "../../../shared/ui/colour-picker.js";
 
 /*
  * Apply a colour through the existing style pipeline.
+ *
+ * This is the toolbar's MEANING for a colour: it becomes the drawing colour the
+ * style pipeline reads, it is remembered, and the swatch and the strip are
+ * brought up to date.
  */
-function applyColour(
-    value
-) {
-    const colour =
-        normalizeColour(value);
+function applyColour(value) {
+    const colour = normalizeColour(value);
 
     if (!colour) {
         return;
     }
 
-    drawingColor.value =
-        colour;
+    drawingColor.value = colour;
 
-    rememberColour(
-        colour
-    );
+    rememberColour(colour);
 
     applyStyleControls();
 
@@ -259,7 +60,7 @@ function applyColour(
 
 function updateColourSwatch() {
     const swatch =
-        document.getElementById(
+        globalThis.document.getElementById(
             "drawingColourSwatch"
         );
 
@@ -301,28 +102,6 @@ function updateColourSwatch() {
             "aria-label",
             `Drawing colour: ${drawingColor.value.toUpperCase()}`
         );
-    }
-}
-
-/*
- * Close the popup.
- *
- * The eyedropper stays armed when the popup closes,
- * because arming it is meant to be followed by a click
- * on the drawing. Cancelling the eyedropper is done
- * explicitly instead.
- */
-function closeColourPopup(
-    keepEyedropper = true
-) {
-    if (colourPopup) {
-        colourPopup.remove();
-        colourPopup = null;
-    }
-
-    if (!keepEyedropper) {
-        editorState.eyedropperActive =
-            false;
     }
 }
 
@@ -371,249 +150,31 @@ export function pickColourFromFeature(
 
     closeColourPopup();
 }
-
-function openColourPopup(
-    anchor
-) {
-    if (colourPopup) {
-        closeColourPopup();
-        return;
-    }
-
-    const popup =
-        document.createElement("div");
-
-    popup.className =
-        "drawing-colour-popup";
-
-    popup.setAttribute(
-        "role",
-        "dialog"
-    );
-
-    popup.innerHTML = `
-        <div class="drawing-colour-section">COLOUR GRID</div>
-        <div class="drawing-colour-grid" data-colour-grid></div>
-
-        <div class="drawing-colour-section">CUSTOM COLOUR</div>
-        <div class="drawing-colour-row">
-            <input type="color" class="drawing-colour-custom"
-                data-colour-custom aria-label="Custom colour">
-            <button type="button" class="drawing-colour-action"
-                data-colour-eyedropper>Pick from drawing</button>
-        </div>
-
-        <div class="drawing-colour-section">PREVIOUS COLOURS</div>
-        <div class="drawing-colour-recent" data-colour-recent></div>
-    `;
-
-    document.body.appendChild(
-        popup
-    );
-
-    const rect =
-        anchor.getBoundingClientRect();
-
-    const popupRect =
-        popup.getBoundingClientRect();
-
-    const gap = 6;
-    const margin = 8;
-
-    let left =
-        rect.right - popupRect.width;
-
-    let top =
-        rect.bottom + gap;
-
-    if (left < margin) {
-        left = margin;
-    }
-
-    if (
-        top + popupRect.height >
-        window.innerHeight - margin
-    ) {
-        top = Math.max(
-            margin,
-            rect.top - popupRect.height - gap
-        );
-    }
-
-    popup.style.left =
-        `${left}px`;
-
-    popup.style.top =
-        `${top}px`;
-
-    /*
-     * Colour grid.
-     */
-    const grid =
-        popup.querySelector(
-            "[data-colour-grid]"
-        );
-
-    buildColourGrid().forEach(
-        colour => {
-            const cell =
-                document.createElement("button");
-
-            cell.type = "button";
-            cell.className =
-                "drawing-colour-cell";
-
-            cell.style.background =
-                colour;
-
-            cell.title = colour;
-            cell.setAttribute(
-                "aria-label",
-                colour
-            );
-
-            cell.addEventListener(
-                "click",
-                () => {
-                    applyColour(
-                        colour
-                    );
-
-                    closeColourPopup();
-                }
-            );
-
-            grid.appendChild(
-                cell
-            );
-        }
-    );
-
-    /*
-     * Custom colour picker.
-     */
-    const custom =
-        popup.querySelector(
-            "[data-colour-custom]"
-        );
-
-    custom.value =
-        drawingColor.value;
-
-    custom.addEventListener(
-        "input",
-        () =>
-            applyColour(
-                custom.value
-            )
-    );
-
-    /*
-     * Eyedropper.
-     */
-    const eyedropper =
-        popup.querySelector(
-            "[data-colour-eyedropper]"
-        );
-
-    eyedropper.classList.toggle(
-        "active",
-        editorState.eyedropperActive
-    );
-
-    eyedropper.addEventListener(
-        "click",
-        () => {
-            editorState.eyedropperActive =
-                !editorState.eyedropperActive;
-
-            eyedropper.classList.toggle(
-                "active",
-                editorState.eyedropperActive
-            );
-
+/*
+ * Open the shared picker against the toolbar's swatch.
+ *
+ * The eyedropper is offered here because there IS a drawing to sample from, and
+ * it is armed on the shared editor state so the canvas' press handler can act on
+ * it - the same flag the popup has always toggled.
+ */
+function openColourPopup(anchor) {
+    openColourPicker({
+        anchor,
+        value: drawingColor.value,
+        onChoose: (colour) => applyColour(colour),
+        eyedropperActive: editorState.eyedropperActive,
+        onEyedropper: (armed) => {
+            editorState.eyedropperActive = armed;
             setToolMessage(
-                editorState.eyedropperActive
+                armed
                     ? "Click a feature to pick its colour"
                     : "Select geometry"
             );
+            return armed;
         }
-    );
-
-    renderRecentColours(
-        popup
-    );
-
-    colourPopup =
-        popup;
+    });
 }
 
-function renderRecentColours(
-    popup
-) {
-    const host =
-        popup.querySelector(
-            "[data-colour-recent]"
-        );
-
-    if (!host) {
-        return;
-    }
-
-    host.innerHTML = "";
-
-    if (!recentColours.length) {
-        const empty =
-            document.createElement("div");
-
-        empty.className =
-            "drawing-colour-empty";
-
-        empty.textContent =
-            "No colours used yet";
-
-        host.appendChild(
-            empty
-        );
-
-        return;
-    }
-
-    recentColours.forEach(
-        colour => {
-            const cell =
-                document.createElement("button");
-
-            cell.type = "button";
-            cell.className =
-                "drawing-colour-cell";
-
-            cell.style.background =
-                colour;
-
-            cell.title = colour;
-            cell.setAttribute(
-                "aria-label",
-                colour
-            );
-
-            cell.addEventListener(
-                "click",
-                () => {
-                    applyColour(
-                        colour
-                    );
-
-                    closeColourPopup();
-                }
-            );
-
-            host.appendChild(
-                cell
-            );
-        }
-    );
-}
 
 /*
  * Replace the plain native colour input with the swatch
@@ -639,20 +200,18 @@ export function setupColourControl() {
         return;
     }
 
-    loadRecentColours();
-
     drawingColor.classList.add(
         "drawing-colour-native"
     );
 
     const control =
-        document.createElement("span");
+        globalThis.document.createElement("span");
 
     control.className =
         "drawing-colour-control";
 
     const swatch =
-        document.createElement("button");
+        globalThis.document.createElement("button");
 
     swatch.type = "button";
     swatch.id =
@@ -732,29 +291,14 @@ export function setupColourControl() {
     );
 
     updateColourSwatch();
-
-    /*
-     * Clicking away closes the popup.
-     */
-    document.addEventListener(
-        "pointerdown",
-        event => {
-            if (
-                !colourPopup ||
-                colourPopup.contains(
-                    event.target
-                ) ||
-                event.target.closest?.(
-                    ".drawing-colour-control"
-                )
-            ) {
-                return;
-            }
-
-            closeColourPopup();
-        }
-    );
 }
+
+/*
+ * The popup closes itself on an outside press. That is the shared picker's own
+ * behaviour now - the listener this used to attach here was a SECOND copy of it,
+ * scoped to the toolbar's control, and it could only ever have disagreed with
+ * the shared one about what counted as outside.
+ */
 
 export function applyStyleControls() {
     const nextStyle = {

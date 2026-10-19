@@ -395,12 +395,20 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
          * only on the positive directions.
          */
     export function drawCoordinateSystem2d({ svg, entity, state, bounds, geometry, style }) {
+            /*
+             * The whole axis group is rotated about its origin when the
+             * entity carries a rotation. The committed axes carry a rotation
+             * of 0, so this changes nothing for them; a drag preview carries
+             * the angle its X arm points in, which is what lets the preview
+             * follow the pointer instead of only reporting a length.
+             */
             appendCoordinateSystem(
                 svg,
                 geometry,
                 style,
                 state,
                 bounds,
-                entity.isPreview
+                entity.isPreview,
+                Number(entity.rotation) || 0
             );
         }

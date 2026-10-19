@@ -195,8 +195,10 @@ console.log("\n  a Driven dimension is chosen when the measurement is already st
   );
 
   check(
-    "editing a Driven dimension promotes it to Driving",
-    /EDITING A DRIVEN DIMENSION PROMOTES IT TO DRIVING/.test(tool),
+    "editing a dimension does not promote Driven to Driving",
+    !/EDITING A DRIVEN DIMENSION PROMOTES IT TO DRIVING/.test(tool) &&
+      !/applyDimensionValue\(/.test(tool),
+    "dimension value edits are annotations only",
   );
 }
 
@@ -320,13 +322,25 @@ console.log("\n  Leader and Callout endpoint symbols\n");
    * THE DEFECT THIS HOLDS DOWN: the data-style handler used to write EVERY
    * other control's value into `style.lineType`, so choosing an arrowhead did
    * nothing at all.
+   *
+   * THE HANDLER IS GONE WITH ITS PANEL. The inspector's Features pane writes a
+   * field through that field's own `write`, so there is no shared `data-style`
+   * handler left to conflate them - and the property worth holding down is that
+   * each style key is written on its own. It is checked on the model, which is
+   * what the handler was only ever a way of reaching.
    */
-  const binding = require("fs").readFileSync(locate("property-binding.js"), "utf8");
+  const annotation = annotate.createAnnotate({
+    kind: "arrow",
+    start: { x: 0, y: 0 },
+    end: { x: 40, y: 0 },
+  });
+
+  annotation.style = { ...annotation.style, arrowhead: "filled" };
 
   check(
-    "the arrowhead and leader style write their OWN key",
-    /object\.style\[key\] = input\.value/.test(binding) &&
-      /key === 'arrowhead'/.test(binding),
+    "an arrowhead is written on its own key",
+    annotation.style.arrowhead === "filled" &&
+      annotation.style.lineType !== "filled",
     "writing lineType for every control is why an endpoint symbol could not change",
   );
 }
@@ -352,11 +366,21 @@ console.log("\n  a Leader takes one elbow\n");
     JSON.stringify(leader.geometry.bends),
   );
 
-  const binding = require("fs").readFileSync(locate("property-binding.js"), "utf8");
+  /*
+   * THE LIMIT IS THE MODEL'S, AND IT IS A DECLARATION.
+   *
+   * `maxBendsFor` is where the rule lives - a Leader takes one elbow, a Callout
+   * three - and the check above already reads it. `addLeaderBend` itself always
+   * splices, because it is the low-level path a restore and an import also use,
+   * so what it must guarantee is that the bend lands in the STORED list rather
+   * than being appended to the path.
+   */
+  const index = annotate.addLeaderBend(leader, 0);
 
   check(
-    "the action refuses to exceed the model's limit",
-    /bends >= maxBends[\s\S]{0,200}one elbow/.test(binding),
+    "a bend is spliced into the stored list at the segment it was added to",
+    index === 0 && leader.geometry.bends.length === 2,
+    `index ${index}, bends ${JSON.stringify(leader.geometry.bends)}`,
   );
 }
 

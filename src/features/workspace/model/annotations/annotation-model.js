@@ -2016,7 +2016,7 @@ function formatNumber(value) {
   const number = Number(value);
 
   if (!Number.isFinite(number)) {
-    return "â€”";
+    return "\\u2014";
   }
 
   const magnitude = Math.abs(number);

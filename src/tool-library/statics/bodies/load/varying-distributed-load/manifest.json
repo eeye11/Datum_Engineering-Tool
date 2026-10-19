@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.load.varying-distributed-load",
+  "label": "Varying Distributed Load",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/load/varying-distributed-load",
+  "template": "template.tex",
+  "implemented": false
+}

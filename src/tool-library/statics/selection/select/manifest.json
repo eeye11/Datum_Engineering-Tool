@@ -1,0 +1,9 @@
+{
+  "id": "statics.selection.select",
+  "label": "Select",
+  "category": "statics",
+  "group": "selection",
+  "libraryPath": "src/tool-library/statics/selection/select",
+  "template": "template.tex",
+  "implemented": false
+}

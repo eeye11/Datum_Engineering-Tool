@@ -1,0 +1,9 @@
+{
+  "id": "annotate.tables.table",
+  "label": "Table",
+  "category": "annotate",
+  "group": "tables",
+  "libraryPath": "src/tool-library/annotate/tables/table",
+  "template": "template.tex",
+  "implemented": false
+}

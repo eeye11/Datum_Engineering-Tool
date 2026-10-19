@@ -5,10 +5,68 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDrawingRenderer from "../../../shared/rendering/renderer.js";
 import { SVG_NAMESPACE } from "../../../features/workspace/constants.js";
-import { drawingCanvas, drawingProperties, drawingZoomValue } from "../../../features/workspace/dom.js";
+import { drawingCanvas, drawingZoomValue } from "../../../features/workspace/dom.js";
 import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { updateHistoryControls } from "../toolbar/tool-activation.js";
+import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
+import { createSourceMap, visibleDrawingSource } from "../../../shared/rendering/latex/drawing-source.js";
+import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
+import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
+
+/*
+ * ============================================================
+ * THE DRAWING SPACE IS DRAWN FROM THE SOURCE
+ * ============================================================
+ *
+ * THE MODEL DRAWS THE OVERLAY, THE SOURCE DRAWS THE PICTURE.
+ *
+ * The object model is the model of what the student drew, and it is what hit
+ * testing, selection, snapping and Features act on. It is NOT the picture: the
+ * picture in the Drawing Space is the compiled output of the document's TikZ
+ * source - the SAME text the Source tab shows and edits. So:
+ *
+ *   - every committed model change generates source (drawing-panel.js) and
+ *     asks the manager for a revision bump;
+ *   - a revision bump schedules a compile of the CURRENT source;
+ *   - the compiled SVG replaces the previous picture in the canvas;
+ *   - the canvas then draws only the interaction overlay on top - grid,
+ *     selection outlines and handles, snap markers, previews - which are aids,
+ *     not the drawing.
+ *
+ * WHY A SEPARATE OVERLAY SVG RATHER THAN DRAWING THE OVERLAY INTO THE PICTURE.
+ * The compiled picture must be untouched by the editor: a selection outline is
+ * not part of the drawing and must never reach an export. Two stacked layers
+ * give exactly that, and the lower one is literally the renderer's output.
+ *
+ * WHEN COMPILATION IS NOT AVAILABLE. The source is still authoritative. The
+ * cache keeps the last successfully compiled picture, and a source that fails
+ * to compile keeps the previous picture visible while the error is reported -
+ * it is never silently replaced by a model-drawn sheet pretending to be the
+ * source's output.
+ */
+
+const PICTURE_LAYER_CLASS = "drawing-source-layer";
+const OVERLAY_CLASS = "drawing-overlay";
+
+/*
+ * A sheet changed by a drag reports the pointer many times a second, and every
+ * report would otherwise be a separate compile. The compile waits this long
+ * after the last change; the overlay moves immediately, so dragging stays
+ * responsive while the committed picture follows a moment later.
+ */
+const SOURCE_RENDER_DELAY_MS = 180;
+
+/* revision -> svg. A small LRU: Undo and Redo revisit versions constantly. */
+const CACHE_LIMIT = 24;
+
+let compiledCache = new Map();
+let compileTimer = null;
+let compileToken = 0;
+let compiledRevision = null;
+let lastCompiledSvg = null;
+let lastCompileError = null;
+let inFlight = null;
 
 function createSvgElement(
     name,
@@ -378,6 +436,354 @@ export function requestRender() {
     });
 }
 
+/*
+ * ============================================================
+ * THE LAYERS
+ * ============================================================
+ *
+ * `ensureLayer` makes (or finds) one element of a given class inside the
+ * canvas. The picture layer is the compiled source; the overlay is everything
+ * the model draws for interaction. Both are routinely cleared and refilled.
+ */
+function ensureLayer(canvas, className) {
+    let layer = canvas.querySelector(`:scope > svg.${className}`);
+
+    /*
+     * THE OLD MODEL-DRAWN PICTURE IS REMOVED IF ONE IS STILL THERE.
+     *
+     * Earlier versions left an `svg.drawing-renderer` in the canvas and
+     * repainted every feature into it. Nothing writes to it any more, but a
+     * canvas that still HAD one - a page kept alive across a deployment, a
+     * harness that built its own - would go on showing a second, stale drawing
+     * under the compiled one. Creating either layer is the moment the canvas is
+     * recognised as the new one, so that is where the old picture is dropped.
+     */
+    canvas.querySelectorAll(":scope > svg.drawing-renderer").forEach((stale) => stale.remove());
+
+    if (!layer) {
+        layer = globalThis.document.createElementNS(SVG_NAMESPACE, "svg");
+        layer.classList.add(className);
+        layer.setAttribute("aria-hidden", "true");
+        canvas.appendChild(layer);
+    }
+
+    return layer;
+}
+
+function sizeLayer(layer, bounds) {
+    const width = Math.max(1, Math.round(bounds.width));
+    const height = Math.max(1, Math.round(bounds.height));
+
+    layer.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    layer.setAttribute("width", String(width));
+    layer.setAttribute("height", String(height));
+}
+
+/* The canvas bounds the picture is fitted into. */
+function canvasBounds() {
+    const bounds = drawingCanvas.getBoundingClientRect();
+
+    if (!bounds.width || !bounds.height) {
+        return {
+            width: drawingCanvas.clientWidth || 900,
+            height: drawingCanvas.clientHeight || 600
+        };
+    }
+
+    return bounds;
+}
+
+/*
+ * WHERE THE WORLD APPEARS IN THE PICTURE.
+ *
+ * The picture is drawn in drawing units (millimetres on paper), from (0,0) up
+ * and to the right. The canvas shows world points through the camera:
+ *
+ *     screen.x = width / 2 + (x - panX) * k
+ *     screen.y = height / 2 - (y - panY) * k
+ *
+ * so a world point (panX, panY) belongs at the canvas centre, and one drawing
+ * unit is `k` screen pixels. The picture is positioned with exactly that
+ * transform, which keeps the compiled drawing on the same world coordinates
+ * as the snapping, the handles and every other piece of interaction code.
+ *
+ * It is written as viewBox + width/height rather than an SVG transform so the
+ * renderer's own coordinates are never rewritten: the source's numbers are the
+ * drawing's numbers.
+ */
+function positionPictureLayer(layer, bounds, state) {
+    const zoom = Number(state?.camera?.zoom) || 1;
+    const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
+    const panX = Number(state?.camera?.panX) || 0;
+    const panY = Number(state?.camera?.panY) || 0;
+
+    const viewWidth = Math.max(1, bounds.width / k);
+    const viewHeight = Math.max(1, bounds.height / k);
+
+    layer.setAttribute(
+        "viewBox",
+        `${panX - viewWidth / 2} ${-panY - viewHeight / 2} ${viewWidth} ${viewHeight}`
+    );
+    layer.setAttribute("x", "0");
+    layer.setAttribute("y", "0");
+    layer.setAttribute("width", String(bounds.width));
+    layer.setAttribute("height", String(bounds.height));
+    layer.setAttribute("preserveAspectRatio", "xMidYMid meet");
+}
+
+/*
+ * Put a compiled picture into the canvas.
+ *
+ * The compiled SVG is cloned in as-is: it is the renderer's output, and nothing
+ * here edits its geometry. Its own width/height are dropped so the layer's
+ * size decides, and every element is made non-interactive - the overlay and
+ * the model own the pointer.
+ */
+function showPicture(svg) {
+    const layer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
+
+    layer.replaceChildren();
+
+    if (!svg) {
+        return false;
+    }
+
+    const root = svg.tagName && svg.tagName.toLowerCase() === "svg" ? svg : null;
+    const nodes = root ? [...root.childNodes] : [svg];
+
+    nodes.forEach((node) => layer.appendChild(node.cloneNode(true)));
+
+    layer.dataset.rendered = "source";
+
+    return true;
+}
+
+/*
+ * ============================================================
+ * COMPILING THE SOURCE
+ * ============================================================
+ */
+
+/*
+ * THE FAILURE IS CHECKED BEFORE THE DEBOUNCE.
+ *
+ * `reportCompileError` runs when the invalid draft is noticed - the moment the
+ * editor or the panel changes the source - so the reason is on screen while the
+ * student is still looking at the character they just broke. Waiting for a
+ * scheduled compile to report it would be a delay with nothing behind it: the
+ * answer is already known and the compile is never going to be sent.
+ */
+if (typeof globalThis.document !== "undefined" && globalThis.document) {
+    globalThis.document.addEventListener("datum:source-changed", () => {
+        const manager = activeSourceManager();
+        const validation = validateDrawingSource(manager.getSource());
+
+        if (!validation.ok) {
+            reportCompileError(
+                validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
+                    "Invalid TikZ source"
+            );
+
+            return;
+        }
+
+        lastCompileError = null;
+    });
+}
+
+function cachedPicture(revision) {
+    return compiledCache.has(revision) ? compiledCache.get(revision) : null;
+}
+
+function rememberPicture(revision, svg) {
+    compiledCache.set(revision, svg);
+
+    while (compiledCache.size > CACHE_LIMIT) {
+        compiledCache.delete(compiledCache.keys().next().value);
+    }
+}
+
+function reportCompileError(message) {
+    const text = message instanceof Error ? message.message : String(message ?? "");
+
+    if (text === lastCompileError) {
+        return;
+    }
+
+    lastCompileError = text;
+
+    /*
+     * The error is VISIBLE, through the same document event the Source tab
+     * uses to report a failed render. The Source keeps its text, and the
+     * Drawing Space keeps the last picture that compiled - it does not fall
+     * back to a model-drawn sheet.
+     */
+    try {
+        const view = globalThis.document?.defaultView || globalThis;
+        const Custom = view.CustomEvent || globalThis.CustomEvent;
+
+        /*
+         * AN EVENT ONLY WHERE THERE IS AN EVENT TO MAKE. A test harness without
+         * `CustomEvent` gets the reported status (`lastCompiledError`) instead
+         * of half-constructed event that throws on dispatch.
+         */
+        if (typeof Custom === "function" && globalThis.document) {
+            globalThis.document.dispatchEvent(
+                new Custom("datum:source-render-error", { detail: { message: text } })
+            );
+        }
+    } catch {
+        /* Reporting must never be the thing that breaks the render. */
+    }
+}
+
+/*
+ * ASK FOR A COMPILE OF THE CURRENT SOURCE.
+ *
+ * `immediately` is used on load, on Undo/Redo and on a committed gesture, where
+ * there is nothing to coalesce. The ordinary path is debounced.
+ */
+export function requestSourceRender({ immediately = false } = {}) {
+    const manager = activeSourceManager();
+    const revision = manager.revision();
+
+    if (cachedPicture(revision)) {
+        compiledRevision = revision;
+        lastCompiledSvg = cachedPicture(revision);
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    if (compileTimer) {
+        clearTimeout(compileTimer);
+        compileTimer = null;
+    }
+
+    if (immediately) {
+        compileCurrentSource();
+
+        return;
+    }
+
+    compileTimer = setTimeout(() => {
+        compileTimer = null;
+        compileCurrentSource();
+    }, SOURCE_RENDER_DELAY_MS);
+}
+
+async function compileCurrentSource() {
+    const manager = activeSourceManager();
+    const source = manager.getSource();
+    const revision = manager.revision();
+
+    const validation = validateDrawingSource(source);
+
+    if (!validation.ok) {
+        /*
+         * A source that cannot even be parsed is not sent. The previous
+         * picture stays, and the reason is reported.
+         */
+        reportCompileError(
+            validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
+                "Invalid TikZ source"
+        );
+
+        return false;
+    }
+
+    if (cachedPicture(revision)) {
+        compiledRevision = revision;
+        lastCompiledSvg = cachedPicture(revision);
+        lastCompileError = null;
+        renderCurrentDrawing();
+
+        return true;
+    }
+
+    const token = (compileToken += 1);
+
+    try {
+        inFlight = renderDrawingSource(visibleDrawingSource(source));
+
+        const svg = await inFlight;
+
+        /*
+         * A NEWER COMPILE STARTED WHILE THIS ONE WAS RUNNING. Its result
+         * describes an older draft, so it is DISCARDED rather than drawn -
+         * which is what keeps a stale picture from appearing after a newer
+         * edit.
+         */
+        if (token !== compileToken) {
+            return false;
+        }
+
+        rememberPicture(revision, svg);
+
+        compiledRevision = revision;
+        lastCompiledSvg = svg;
+        lastCompileError = null;
+
+        manager.markRendered(source, revision);
+        renderCurrentDrawing();
+
+        return true;
+    } catch (error) {
+        if (token !== compileToken) {
+            return false;
+        }
+
+        manager.markFailed(error);
+        reportCompileError(error);
+
+        /*
+         * The last picture that worked stays on screen. Nothing is drawn in
+         * its place, because pretending a broken source rendered would be a
+         * lie about the drawing.
+         */
+        renderCurrentDrawing();
+
+        return false;
+    } finally {
+        inFlight = null;
+    }
+}
+
+/*
+ * The revision of the source the Drawing Space is currently showing, or null
+ * when it is showing nothing that was compiled. Used by diagnostics and tests.
+ */
+export function renderedSourceRevision() {
+    return compiledRevision;
+}
+
+export function lastCompiledError() {
+    return lastCompileError;
+}
+
+/* Drop the cache - a document reset, a sheet load with a different source. */
+/* Published under the name `sheets.js` calls, without a direct import. */
+globalThis.enggDrawingPictureCache = {
+    reset: () => resetSourcePictureCache()
+};
+
+export function resetSourcePictureCache() {
+    compiledCache = new Map();
+    compiledRevision = null;
+    lastCompiledSvg = null;
+    lastCompileError = null;
+}
+
+/* Export the current compiled picture, for an embed that must not recompile. */
+export function currentCompiledPicture() {
+    return lastCompiledSvg;
+}
+
+/* The object id whose source region holds a given source line. */
+export function objectIdAtSourceLine(line) {
+    return createSourceMap(activeSourceManager().getSource()).idAtLine(line);
+}
+
 export function renderCurrentDrawing() {
     if (pendingFrame) {
         cancelAnimationFrame(pendingFrame);
@@ -428,28 +834,78 @@ export function renderCurrentDrawing() {
      */
     enggDrawingState.refreshDerivedFeatures(drawingState);
 
+    /*
+     * ================================================================
+     * THE PICTURE IS THE SOURCE'S; THE MODEL DRAWS THE OVERLAY ON TOP
+     * ================================================================
+     *
+     * The compiled source is kept in its own layer and moved with the camera.
+     * The model then draws only what the student is DOING - selection outlines,
+     * handles, the live construction preview, snap feedback - into a second,
+     * transparent layer above it.
+     *
+     * If the current source has not compiled yet (the very first paint, or a
+     * revision still waiting on the debounce) a compile is scheduled and the
+     * LAST PICTURE THAT COMPILED is drawn. That is deliberately not the same
+     * as drawing the model: the model is never presented as an output of the
+     * source it did not come from.
+     */
+    const bounds = canvasBounds();
+    const manager = activeSourceManager();
+    const revision = manager.revision();
+
+    /*
+     * THE PICTURE MUST DESCRIBE A SOURCE THE STUDENT CAN SEE. While the current
+     * draft is invalid or fails to compile, the last good picture is shown - but
+     * never a picture compiled from a DIFFERENT source left there by an earlier
+     * sheet or document.
+     */
+    const currentValid = validateDrawingSource(manager.getSource()).ok;
+
+    const picture = cachedPicture(revision) || (currentValid ? lastCompiledSvg : null);
+
+    const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
+
+    if (picture) {
+        showPicture(picture);
+        positionPictureLayer(pictureLayer, bounds, drawingState);
+    }
+
+    if (!cachedPicture(revision)) {
+        requestSourceRender();
+    }
+
+    const overlay = ensureLayer(drawingCanvas, OVERLAY_CLASS);
+
+    sizeLayer(overlay, bounds);
+
+    while (overlay.firstChild) {
+        overlay.removeChild(overlay.firstChild);
+    }
+
     enggDrawingRenderer.renderDrawing(
         drawingState,
-        drawingCanvas
+        overlay,
+        { overlayOnly: true }
     );
 
-    // Keep the inspector in sync with geometry changed by any drawing path.
-    // Do not replace a field while the user is editing it.
-    if (!drawingProperties.contains(document.activeElement)) {
-        const selectedId = drawingState.selection.selectedObjectIds[0];
-        const displayedId = drawingProperties.dataset.selectedObjectId || null;
-        const current = selectedId && drawingState.objects.find(item => item.id === selectedId);
-        const signature = current ? JSON.stringify({
-            geometry: current.geometry,
-            constraints: current.constraints,
-            style: current.style
-        }) : '';
-
-        if (displayedId !== (current?.id || null) ||
-            drawingProperties.dataset.geometrySignature !== signature) {
-            renderProperties();
-        }
-    }
+    /*
+     * THE FEATURES TAB FOLLOWS GEOMETRY CHANGED BY ANY DRAWING PATH.
+     *
+     * A handle drag, a live resize and a preview all mutate geometry and then
+     * draw - so this, the one function every draw passes through, is where the
+     * panel is told. Without it a value typed into a field and a value dragged
+     * on the sheet would disagree until something else happened to re-render.
+     *
+     * IT USED TO BE CONDITIONAL, on a signature of the selected object, because
+     * the panel it kept in step was a form of number fields that a rebuild would
+     * have yanked the caret out of. The Features pane is not that: its fields are
+     * appearance and identity, they are rebuilt only when the SELECTION changes,
+     * and a redraw does not change the selection. So there is nothing here to
+     * protect against, and the guard - and the two dataset attributes it read -
+     * has gone with the panel that needed it.
+     */
+    renderProperties();
 
     updateHistoryControls();
 

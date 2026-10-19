@@ -12,7 +12,6 @@ import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { openAnalysisEditorFor } from "../../../components/layout/panels/feature-tree.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { legacyPlaceholderMessage } from "../../../components/layout/toolbar/phase-reset.js";
 
 /*
  * Statics analysis tools.
@@ -902,12 +901,47 @@ export function runStaticsAnalysis(
     toolId
 ) {
     /*
-     * PHASE 1 RESET: the analysis tools are placeholders. Nothing
-     * is armed, no input state is entered and nothing is computed.
-     * The original arming, input-selection and diagram placement
-     * implementations have been removed with the legacy tools.
+     * ========================================================
+     * THE ANALYSIS TOOLS ARM THEMSELVES
+     * ========================================================
+     *
+     * Resultant and Force Components are CHILD analysis features: they
+     * read explicit Force feature(s) and derive everything from those. So
+     * the tool enters the shared INPUT-SELECTION state - "Select force" /
+     * "Select force(s)" - in which the student clicks the forces they
+     * mean and commits with Enter.
+     *
+     * The three diagram tools are placed against a body, and their arming
+     * path is `beginAnalysisDiagram` (reached through openAnalysisModeMenu,
+     * which first asks Sketch or Plot). They are handled here too so a
+     * programmatic call to runStaticsAnalysis always does something
+     * truthful rather than reporting a placeholder.
      */
-    setToolMessage(legacyPlaceholderMessage());
+    if (isAnalysisInputTool(toolId)) {
+        beginAnalysisInput(toolId);
+
+        return;
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            ANALYSIS_DIAGRAM_TOOLS,
+            toolId
+        )
+    ) {
+        enggDrawingState.setActiveTool(
+            drawingState,
+            toolId
+        );
+
+        beginAnalysisDiagram(toolId);
+
+        return;
+    }
+
+    setToolMessage(
+        "Unknown analysis tool"
+    );
 }
 
 /*

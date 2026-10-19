@@ -13,9 +13,10 @@ import { updateDrawingZoom } from "../workspace/viewport.js";
  * by editor/index.js.
  */
 export function installToolbarWiring() {
-    document
-      .querySelectorAll("[data-file-action]")
-      .forEach((button) => {
+    const fileActionButtons =
+      globalThis.document?.querySelectorAll("[data-file-action]") ?? [];
+
+    fileActionButtons.forEach((button) => {
         button.addEventListener("click", () => {
           const action =
             FILE_ACTIONS[button.dataset.fileAction];

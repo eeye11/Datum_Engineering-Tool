@@ -42,7 +42,7 @@ require(locate("drawing-state.js"));
  * a fresh drawing state is created from it once both are ready.
  */
 const drawingStateReady = import(
-  "../src/core/model/drawing-state.js"
+  "../src/shared/model/drawing-state.js"
 ).then((loaded) => loaded.default.createDrawingState());
 
 /*
@@ -51,7 +51,7 @@ const drawingStateReady = import(
  * test runs once that import resolves.
  */
 const dimensionsReady = import(
-  "../src/core/scale/dimensions.js"
+  "../src/shared/scale/dimensions.js"
 ).then((loaded) => loaded.default);
 
 const source = fs.readFileSync(locate("property-update.js"), "utf8");
@@ -197,9 +197,21 @@ const panelSource = fs.readFileSync(
   "utf8",
 );
 
-const bindingSource = fs.readFileSync(
-  locate("property-binding.js"),
-  "utf8",
+/*
+ * THE PANEL'S INPUT PATH IS GONE WITH ITS PANEL.
+ *
+ * `property-binding.js` connected the old Features panel's fields to the setter,
+ * and it was deleted when the inspector's Features pane replaced that panel. The
+ * check below therefore has nothing to read - and the property it guarded is
+ * still guarded where it now lives: the FEATURES PANE must not convert a typed
+ * number, because the setter owns that.
+ */
+const paneSource = fs.readFileSync(locate("features-editor.js"), "utf8");
+
+check(
+  "the pane hands a typed value to the field writer untouched",
+  !/fromEngineering|worldLengthOf/.test(paneSource),
+  "converting in the pane would convert twice, since the setter already does",
 );
 
 check(
@@ -230,7 +242,7 @@ check(
  */
 check(
   "the input path hands the typed value to the setter untouched",
-  !/fromEngineering|worldLengthOf/.test(bindingSource),
+  !/fromEngineering|worldLengthOf/.test(paneSource),
 );
 
 check(

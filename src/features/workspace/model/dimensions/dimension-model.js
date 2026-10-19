@@ -1,4 +1,4 @@
-/*
+﻿/*
  * The Dimension object.
  *
  * A dimension is a MEASUREMENT OF GEOMETRY, and this module is the
@@ -40,9 +40,8 @@
  * that is deliberate. A dimension states what the geometry is. If a
  * student typed "50 mm" onto a 100 mm line, the drawing would then
  * contain a claim that is false and nothing to show it is false.
- * Establishing the real relationship between drawing units and
- * millimetres is the scale module's job, and it is a separate,
- * explicit act.
+ * A dimension is an annotation: it reports the drawing's own size and
+ * never resizes what it measures.
  *
  * UNRESOLVED, NOT STALE
  * ---------------------
@@ -52,7 +51,6 @@
  * drawing is worse than an obvious gap: it looks like an answer.
  */
 import enggMeasurement from "../../../../shared/geometry/measurement-core.js";
-import enggDimensions from "../../../../shared/scale/dimensions.js";
 import enggQuantities from "../../../../shared/units/quantities.js";
 
 /*
@@ -134,7 +132,6 @@ function createDimension({
   label = null,
   name,
   displayUnit = null,
-  driven = false,
 } = {}) {
   const normalisedRefs = normaliseReferences(refs);
 
@@ -194,12 +191,9 @@ function createDimension({
     /*
      * WHICH LENGTH UNIT THE VALUE IS READ IN.
      *
-     * The measurement itself is always taken in the sheet's own unit, so the
-     * geometric association - and therefore the dimension staying DRIVING -
-     * is unaffected by this. It says only how the number is WRITTEN: a 100 mm
-     * span read in cm shows "10 cm" while still measuring 100 mm. Null means
-     * the sheet's own unit, which is what a dimension created before this
-     * existed keeps.
+     * The measurement itself is always taken in millimetres, so this says
+     * only how the number is WRITTEN: a 100 mm span read in cm shows "10 cm"
+     * while still measuring 100 mm. Null means millimetres, the default.
      */
     displayUnit: displayUnit || null,
 
@@ -210,32 +204,6 @@ function createDimension({
      * the drawing.
      */
     resolved: true,
-
-    /*
-     * ========================================================
-     * DRIVING OR DRIVEN - ONE FEATURE, TWO STATES
-     * ========================================================
-     *
-     * A Driving dimension CONTROLS its measurement: typing a value makes the
-     * geometry satisfy it (that is `dimension-edit.applyDimensionValue`). A
-     * Driven dimension only REPORTS the measurement of geometry that is
-     * already fixed by other geometry or constraints.
-     *
-     * They are STATES OF THE SAME FEATURE, not two tools: a dimension carries
-     * the same references, the same type, the same formatting and the same
-     * rendering either way, and the two differ only in whether a typed value
-     * is allowed to move the geometry. `driven` is the one stored bit that
-     * says which.
-     *
-     * WHY IT IS STORED, when `resolved` is deliberately computed: unlike
-     * `resolved`, which is a fact about the geometry, Driving/Driven is a
-     * choice about how the dimension participates in the drawing - so it is the
-     * user's statement and it is remembered. It defaults to DRIVING, because a
-     * new dimension on geometry that can support it should control that
-     * geometry; a caller creating one that cannot (a measurement already
-     * stated, or geometry that is otherwise fixed) passes `driven: true`.
-     */
-    driven: driven === true,
   };
 }
 
@@ -637,13 +605,14 @@ function findObject(state, objectId) {
 }
 
 /*
- * A dimension's value, in the document's units.
+ * A dimension's value, in drawing units.
  *
- * The measurement is computed here, in drawing units, and converted
- * ONCE at the end by the scale module. That conversion is the only
- * place drawing units become real ones, and it is why zooming the
- * canvas cannot change a 100 mm line into a 200 mm one: the zoom is
- * a viewport transform and this function never sees it.
+ * The measurement is computed here, in drawing units, and NOWHERE ELSE.
+ * There is no world scale to convert it through any more: the drawing is
+ * schematic, one drawing unit is one millimetre, and the value a dimension
+ * reports is the geometry's own size. That is also why zooming the canvas
+ * cannot change a 100 mm line into a 200 mm one - the zoom is a viewport
+ * transform and this function never sees it.
  *
  * Returns null when the dimension cannot be resolved, so a caller
  * can tell "no measurement" from "a measurement of zero".
@@ -652,9 +621,6 @@ function measurementFor(
   dimension,
   state
 ) {
-  const scale =
-    enggDimensions;
-
   const propertyRef = (
     dimension?.sourceRefs || []
   ).find(
@@ -666,8 +632,7 @@ function measurementFor(
     return measureProperty(
       dimension,
       propertyRef,
-      state,
-      scale
+      state
     );
   }
 
@@ -683,8 +648,7 @@ function measurementFor(
     return measureAngle(
       dimension,
       points,
-      state,
-      scale
+      state
     );
   }
 
@@ -699,13 +663,12 @@ function measurementFor(
     return measureRadius(
       dimension,
       state,
-      scale,
       type === "diameter"
     );
   }
 
   if (type === "arc-length") {
-    return measureArcLength(dimension, state, scale);
+    return measureArcLength(dimension, state);
   }
 
   const [first, second] = points;
@@ -720,7 +683,10 @@ function measurementFor(
               second.y - first.y
             );
 
-  return toEngineering(scale, state, drawingUnits, type);
+  return toEngineering(
+    state,
+    drawingUnits
+  );
 }
 
 /*
@@ -733,7 +699,6 @@ function measurementFor(
 function measureRadius(
   dimension,
   state,
-  scale,
   doubled
 ) {
   const reference = dimension.sourceRefs[0];
@@ -758,10 +723,8 @@ function measureRadius(
   }
 
   return toEngineering(
-    scale,
     state,
-    doubled ? radius * 2 : radius,
-    dimension.dimensionType
+    doubled ? radius * 2 : radius
   );
 }
 
@@ -803,8 +766,7 @@ function featureRadius(object) {
 function measureProperty(
   dimension,
   reference,
-  state,
-  scale
+  state
 ) {
   const object = findObject(
     state,
@@ -823,19 +785,14 @@ function measureProperty(
     return null;
   }
 
-  return toEngineering(
-    scale,
-    state,
-    Number(value),
-    dimension.dimensionType
-  );
+  return toEngineering(state, Number(value));
 }
 
 /*
  * The included angle between two spans.
  *
  * Reported in degrees and dimensionless - a 30 degree dimension
- * reads "30°", never "30 mm°", because an angle is not a length and
+ * reads "30Â°", never "30 mmÂ°", because an angle is not a length and
  * giving it a unit would be asserting that it is one.
  *
  * Only spans that actually have two ends can produce an angle. A
@@ -846,8 +803,7 @@ function measureProperty(
 function measureAngle(
   dimension,
   points,
-  state,
-  scale
+  state
 ) {
   const [first, second] = points;
 
@@ -977,12 +933,11 @@ function measureAngle(
     /*
      * Angles are dimensionless. This flag is what stops a unit being
      * appended and what makes the degree sign appear instead, so
-     * without it a right angle reads "90.00" rather than "90°".
+     * without it a right angle reads "90.00" rather than "90Â°".
      */
     unit: "deg",
     angular: true,
     degrees: true,
-    calibrated: true,
   };
 }
 
@@ -1133,8 +1088,7 @@ function spanDirection(span) {
  */
 function measureArcLength(
   dimension,
-  state,
-  scale
+  state
 ) {
   const reference = dimension.sourceRefs[0];
 
@@ -1167,53 +1121,30 @@ function measureArcLength(
     return null;
   }
 
-  return toEngineering(
-    scale,
-    state,
-    radius * sweep,
-    dimension.dimensionType
-  );
+  return toEngineering(state, radius * sweep);
 }
 
 /*
- * Convert a measurement in drawing units into the document's units.
+ * A measured length in drawing units, as the number a dimension reports.
  *
- * The one place the two coordinate systems meet. Handled through
- * whichever scale module is present, and defensive about it because
- * an uncalibrated drawing still has to be measurable - at the
- * provisional one-to-one assumption, flagged as such in the result.
+ * ONE DRAWING UNIT IS ONE MILLIMETRE.
+ *
+ * The retired world-scale system used to convert here - drawing units through
+ * a calibrated mm-per-unit figure, so a line drawn 40 long could read 4 m. That
+ * system is gone: DAETUM is schematic, the drawing's own units ARE the reported
+ * unit, and there is nothing left to convert through.
+ *
+ * The shape of the result is kept - `value`, `unit`, `angular` - because every
+ * caller already reads those fields, and `angular` is what tells the formatter
+ * to write a degree sign rather than a length unit.
  */
 function toEngineering(
-  scale,
-  state,
-  drawingUnits,
-  dimensionType
+  _state,
+  drawingUnits
 ) {
-  /*
-   * The conversion is the scale module's, called once, at the end.
-   *
-   * Nothing here decides what a unit is worth; that is the scale
-   * module's business, and a second lookup here is how two
-   * implementations of the same question end up disagreeing. The
-   * removed one would also have thrown, since it reached for a
-   * module that need not be present.
-   */
-  if (scale?.toEngineering) {
-    const converted = scale.toEngineering(
-      state,
-      drawingUnits
-    );
-
-    return {
-      ...converted,
-      angular: false,
-    };
-  }
-
   return {
     value: drawingUnits,
     unit: "mm",
-    calibrated: false,
     angular: false,
   };
 }
@@ -1228,7 +1159,7 @@ function toEngineering(
  * The text a dimension shows.
  *
  * Formatted from the measurement every time it is asked for, never
- * stored. The prefix is part of the measurement - R and Ø are what
+ * stored. The prefix is part of the measurement - R and Ã˜ are what
  * distinguish a radius from a diameter - and the unit is omitted for
  * an angle because an angle is not a length.
  */
@@ -1236,6 +1167,14 @@ function formatMeasurement(
   dimension,
   state
 ) {
+  const override =
+    typeof dimension?.label === "string"
+      ? dimension.label.trim()
+      : "";
+
+  if (override) {
+    return override;
+  }
   const measurement = measurementFor(
     dimension,
     state
@@ -1250,12 +1189,6 @@ function formatMeasurement(
       dimension.dimensionType
     ];
 
-  /*
-   * An uncalibrated drawing still measures, but says so. A number
-   * with no unit and no warning would be read as a real measurement,
-   * and the whole point of calibrating is that the difference
-   * matters.
-   */
   const precision = resolvePrecision(dimension, state);
 
   const rounded = round(
@@ -1283,35 +1216,18 @@ function formatMeasurement(
   /*
    * THE DISPLAY UNIT.
    *
-   * The measurement is always taken in millimetres, because that is the one
-   * canonical unit the World Scale reports. The student may READ it in another
-   * length unit - cm, m, in, ft - and that changes the NUMBER SHOWN, never the
-   * geometry or the measurement.
-   *
-   * THE FALLBACK IS THE SHEET'S OWN UNIT, NOT THE MEASUREMENT'S.
-   *
-   * This used to fall back to `measurement.unit`. While `toEngineering` returned
-   * the figure already divided by the sheet's unit, that happened to be the
-   * sheet's unit and a metre document formatted as "1.50 m". Now that the value
-   * is always millimetres - so that a panel can convert it into whatever the
-   * field is displaying - `measurement.unit` is always "mm", and falling back to
-   * it would print a metre document as "1500.00 mm".
-   *
-   * The unit a dimension reads in when nothing per-dimension is set is therefore
-   * asked of the SCALE, which is where that choice lives. A dimension with its
-   * own `displayUnit` still honours it; only the default moved.
+   * The measurement is taken in the drawing's own units, which ARE millimetres.
+   * The student may READ it in another length unit - cm, m, in, ft - and that
+   * changes the NUMBER SHOWN, never the geometry or the measurement. The unit a
+   * dimension reads in is the dimension's own `displayUnit`; with none set it
+   * reads in millimetres.
    *
    * An ANGLE is not a length and has no length unit, so it is left alone.
    */
-  const sheetUnit =
-    !measurement.angular && enggDimensions?.readScale
-      ? enggDimensions.readScale(state)?.unit
-      : null;
-
   const displayUnit =
     measurement.angular
       ? null
-      : dimension.displayUnit || sheetUnit || measurement.unit;
+      : dimension.displayUnit || measurement.unit;
 
   const shown =
     !measurement.angular &&
@@ -1340,14 +1256,8 @@ function formatMeasurement(
    * An angle carries the degree sign and no length unit, because it is not
    * a length.
    *
-   * NO TILDE, ever. The `~` this replaced marked an uncalibrated
-   * measurement as approximate. But the whole point of calibrating is that
-   * the doubt is removed, and a dimension that established the scale is the
-   * LEAST approximate thing on the sheet - marking it `~` argued against
-   * the feature that produced it. A drawing that genuinely has not been
-   * calibrated has no honest length to state, and that is said once in the
-   * calibration prompt where the student can act on it, rather than
-   * repeated on every dimension where they cannot.
+   * NO TILDE, ever: a dimension reports the geometry's own size, which is
+   * exact for that drawing, so there is nothing provisional to mark.
    */
   const formatter = enggQuantities;
 
@@ -1362,7 +1272,7 @@ function formatMeasurement(
    */
   if (!formatter) {
     return measurement.angular
-      ? `${prefix}${value}°`
+      ? `${prefix}${value}Â°`
       : `${prefix}${formatAtPrecision(shown, precision)} ${displayUnit || measurement.unit}`;
   }
 
@@ -2699,16 +2609,6 @@ const enggDimensionModel = {
   ORIENTATIONS,
   REFERENCE_KINDS,
 
-  /*
-   * THE DRIVEN COLOUR - the chosen visual indicator of a Driven dimension.
-   *
-   * A distinct colour is what the requirement asks for, and it is stated HERE,
-   * once, so the canvas, the preview and the panel cannot pick three different
-   * shades. It sits beside the model rather than in the theme because it marks
-   * a STATE OF THE FEATURE, like the blue construction colour marks an
-   * in-progress construction - not a themed surface.
-   */
-  DRIVEN_COLOUR: "#8A5CC7",
 
   alreadyStated,
   createDimension,

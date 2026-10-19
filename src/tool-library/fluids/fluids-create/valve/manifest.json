@@ -1,0 +1,9 @@
+{
+  "id": "fluids.fluids-create.valve",
+  "label": "Valve",
+  "category": "fluids",
+  "group": "fluids-create",
+  "libraryPath": "src/tool-library/fluids/fluids-create/valve",
+  "template": "template.tex",
+  "implemented": false
+}

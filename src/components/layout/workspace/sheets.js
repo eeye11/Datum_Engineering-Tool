@@ -159,10 +159,24 @@ function createSheetContent(overrides) {
       panX: 0,
       panY: 0
     },
-    grid: {
+    grid: resolveGridSnap({
       visible: true,
-      spacing: 5
-    },
+      spacing: 7.5,
+      /*
+       * GRID SNAP IS ITS OWN SETTING, NOT THE GRID'S VISIBILITY.
+       *
+       * Visibility says whether the ruled sheet is DRAWN; `snapToGrid` says
+       * whether an input coordinate is CONSTRAINED to that lattice. They move
+       * together by default - showing the grid turns snapping on - but they are
+       * two facts and the user can part them: the grid can stay visible with
+       * snapping off, which is the whole point of having both.
+       *
+       * Stored on the sheet so a drawing reopened shows the state it was saved
+       * with, rather than whichever sheet happened to be written last.
+       */
+      snapToGrid: true,
+      ...(overrides?.grid || {})
+    }),
 
     /*
      * THE SHEET'S UNIVERSAL LENGTH SCALE.
@@ -198,6 +212,41 @@ function createSheetContent(overrides) {
     source: null,
 
     ...overrides
+  };
+}
+
+/*
+ * ============================================================
+ * GRID SNAP IS RESOLVED ONCE, FOR EVERY SHEET THAT EVER EXISTS
+ * ============================================================
+ *
+ * A drawing saved before grid snap was its own setting carries a grid with a
+ * `visible` flag and a `spacing`, and nothing else. The merged result above
+ * would then keep this factory's default `snapToGrid: true` even when the saved
+ * grid was hidden - so an old file with the grid off would come back with grid
+ * snapping on, contradicting the very rule the switch applies.
+ *
+ * The resolution is written HERE, at the one funnel every sheet passes through
+ * - new, loaded, duplicated, migrated - rather than at each call site. A sheet
+ * cannot arrive without an answer, and there is no second place for the rule to
+ * disagree with itself.
+ *
+ * The fallback follows VISIBILITY, which is exactly what the Grid switch does:
+ * a sheet with no recorded grid-snap state is treated as the drawing it was,
+ * where showing the grid meant snapping to it.
+ */
+function resolveGridSnap(grid) {
+  if (!grid || typeof grid !== "object") {
+    return grid;
+  }
+
+  if (grid.snapToGrid !== undefined) {
+    return grid;
+  }
+
+  return {
+    ...grid,
+    snapToGrid: grid.visible !== false
   };
 }
 
@@ -878,7 +927,24 @@ function loadSheet(state, sheet) {
 
   manager.restore(content.source || null);
 
-  reconcileSourceWithObjects(manager, state.objects);
+  /*
+   * A SHEET IS A DIFFERENT PICTURE. The compiled results for the sheet the
+   * student came from say nothing about this one, so they are dropped before
+   * anything is asked to draw - a cached picture keyed on a revision number
+   * would otherwise be reused for a completely different drawing.
+   *
+   * REACHED BY NAME, NOT BY IMPORT. `canvas-render.js` imports the editor
+   * state, which imports this module, so a direct import would close a cycle
+   * and the module would read its own imports half-built. The border between
+   * modules is crossed through the published object instead.
+   */
+  globalThis.enggDrawingPictureCache?.reset?.();
+
+  /*
+   * AND THE NEW SHEET'S SOURCE IS MADE TO REPRESENT ITS OBJECTS, from the
+   * writers that know each one's type - never from an empty `object.source`.
+   */
+  reconcileSourceWithObjects(manager, state.objects, { state });
 
   state.camera.zoom =
     Number(content.viewport.zoom) || 1;
@@ -938,6 +1004,7 @@ const enggSheets = {
   newSheetId,
   renameSheet,
   reorderSheet,
+  resolveGridSnap,
   serializeCollection,
   sheetById,
   sheetIndex

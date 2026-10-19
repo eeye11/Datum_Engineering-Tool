@@ -1884,12 +1884,11 @@ function commitConstantLoadFromPopup({
     );
 
     /*
-     * The load is left in edit view so the magnitude just typed is visible
-     * in its own panel, exactly as a sized Beam is.
+     * THE LOAD IS LEFT SELECTED, so the magnitude just typed is visible in
+     * its own panel, exactly as a sized Beam is. The Features tab follows the
+     * selection, so selecting it IS opening its properties - there is no
+     * separate "view" to set.
      */
-    editorState.featurePanelView = "edit";
-    editorState.featureTreePickedId = null;
-
     renderProperties();
     renderCurrentDrawing();
 }

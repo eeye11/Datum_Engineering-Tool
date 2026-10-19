@@ -14,7 +14,7 @@ import { openDimensionValuePrompt } from "../annotate/dimension-tool.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { pickColourFromFeature } from "../../../components/layout/panels/colour-picker.js";
 import { isConstructionTool } from "../../../components/layout/toolbar/construction-tools.js";
-import { drawingCanvas, drawingCoordinates, drawingProperties } from "../dom.js";
+import { drawingCanvas, drawingCoordinates } from "../dom.js";
 import { beginManipulationDrag, finishManipulationDrag, updateManipulationDrag } from "./drag.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { objectAtPoint } from "./hit-testing.js";
@@ -109,21 +109,6 @@ export function installCanvasEvents() {
                          * and it was being asked every time somebody wanted to
                          * change a number.
                          */
-                        openDimensionValuePrompt(pointed);
-
-                        return;
-                    }
-
-                    /*
-                     * A VARIABLE DIMENSION EDITS THE SAME WAY, because it is
-                     * the same act - open the value, change it, keep the
-                     * references. Only the text it expects differs, and the
-                     * prompt reads that from the feature itself.
-                     */
-                    if (pointed?.type === "variable-dimension") {
-                        event.preventDefault();
-                        event.stopPropagation();
-
                         openDimensionValuePrompt(pointed);
 
                         return;
@@ -655,7 +640,7 @@ export function installCanvasEvents() {
         );
     }
 
-    document.addEventListener(
+    globalThis.document.addEventListener(
         "pointerdown",
         event => {
             if (
@@ -697,7 +682,7 @@ export function installCanvasEvents() {
      * activate normally; this only guarantees the previous
      * tool does not stay running behind it.
      */
-    document.addEventListener(
+    globalThis.document.addEventListener(
         "pointerdown",
         event => {
             /*
@@ -743,13 +728,17 @@ export function installCanvasEvents() {
             /*
              * Clicks inside the Features panel or a popup are
              * part of the operation, not a cancellation.
+             *
+             * THE PANEL IS MATCHED BY ITS CONTAINER, not by the element the
+             * old property page lived in: that element no longer exists, and
+             * `drawingProperties.contains(target)` would have thrown on every
+             * outside click. The inspector as a whole is the thing to test -
+             * clicking Objects, Features or Source is never a reason to cancel
+             * the tool the student is holding.
              */
             if (
-                drawingProperties.contains(
-                    target
-                ) ||
                 target.closest?.(
-                    ".drawing-polygon-prompt"
+                    ".drawing-inspector, .drawing-polygon-prompt"
                 )
             ) {
                 return;

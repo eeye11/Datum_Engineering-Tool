@@ -1,0 +1,9 @@
+{
+  "id": "geometry.modify.trim",
+  "label": "Trim",
+  "category": "geometry",
+  "group": "modify",
+  "libraryPath": "src/tool-library/geometry/modify/trim",
+  "template": "template.tex",
+  "implemented": false
+}

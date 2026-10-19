@@ -11,7 +11,6 @@ import { currentEngineeringMetadata, polygonFromCursor, polygonSideCount } from 
 import { createPreview } from "../../../features/workspace/geometry/preview.js";
 import { STATICS_TOOL_MENUS } from "../../../features/workspace/statics/statics-tools.js";
 import { setToolMessage } from "./toolbar-render.js";
-import { legacyPlaceholderMessage } from "./phase-reset.js";
 
 export function activeCategory() {
     return (
@@ -498,14 +497,9 @@ export function openPolygonMenu(button) {
                 () => {
                     closeCoordinateSystemMenu();
 
-                    /*
-                     * PHASE 1 RESET: choosing a polygon creation
-                     * method is a placeholder. The menu still
-                     * closes; no tool is armed and no mode is set.
-                     * The original arming implementation has been
-                     * removed with the legacy tools.
-                     */
-                    setToolMessage(legacyPlaceholderMessage());
+                    activatePolygonMode(
+                        item.dataset.polygonMode
+                    );
                 }
             );
         }
@@ -524,12 +518,58 @@ export const ARC_CREATION_MODES = [
 ];
 
 export function activateArcMode(toolId, mode) {
-    /*
-     * PHASE 1 RESET: choosing an arc creation mode is a placeholder.
-     * No tool is armed and no mode is recorded. The original arming
-     * implementation has been removed with the legacy tools.
-     */
-    setToolMessage(legacyPlaceholderMessage());
+    armCreationMode(toolId, "arcMode", mode);
+}
+
+/*
+ * CHOOSING A CONSTRUCTION METHOD ARMS THE TOOL IN THAT METHOD.
+ *
+ * The creation pipeline reads the method from the interaction
+ * (`interaction.arcMode`, `interaction.polygonMode`), and arming a tool
+ * clears the interaction first - so the method has to be written AFTER
+ * the tool is armed or the reset would wipe it. `activateTool` lives in
+ * `tool-activation.js`, which already imports this module; importing it
+ * back statically would close a cycle, so it is pulled in lazily.
+ *
+ * The interaction object is written directly as well, so the method is
+ * in place the instant the first press is handled rather than a
+ * microtask later.
+ */
+function armCreationMode(toolId, key, mode) {
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            [key]: mode
+        }
+    );
+
+    import("./tool-activation.js").then(
+        ({ activateTool }) => {
+            activateTool(toolId);
+
+            /*
+             * Re-apply after arming: `clearInteraction` resets the
+             * method, so the second write is what survives.
+             */
+            enggDrawingState.setInteraction(
+                drawingState,
+                {
+                    [key]: mode
+                }
+            );
+
+            renderCurrentDrawing();
+        }
+    );
+}
+
+/*
+ * The Polygon menu offers By Centre and By Sides; picking one both
+ * records the method and arms the Polygon tool, exactly as the Arc
+ * modes do.
+ */
+function activatePolygonMode(mode) {
+    armCreationMode("polygon", "polygonMode", mode);
 }
 
 export function openArcMenu(button) {

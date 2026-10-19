@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.heat-transfer",
+  "label": "Heat Transfer",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/heat-transfer",
+  "template": "template.tex",
+  "implemented": false
+}

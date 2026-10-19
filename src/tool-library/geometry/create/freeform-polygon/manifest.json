@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.freeform-polygon",
+  "label": "Freeform Polygon",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/freeform-polygon",
+  "template": "template.tex",
+  "implemented": true
+}

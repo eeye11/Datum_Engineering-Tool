@@ -222,6 +222,41 @@
 }
 
 /*
+ * THE ROTATION HANDLE.
+ *
+ * Deliberately different from the shape handles: a ring with a turn arrow on
+ * a short stem, in forest green with a restrained gold interior. It sits
+ * outside the object's bounds (the resolver positions it) so it never covers
+ * the geometry or the shape handles, and it is never emitted into a TikZ
+ * file because it is drawn by the overlay renderer only.
+ */
+.drawing-rotation-handle-stem {
+    pointer-events: none;
+    stroke: var(--datum-green);
+    stroke-width: 1px;
+}
+
+.drawing-rotation-handle {
+    fill: var(--datum-surface);
+    pointer-events: none;
+    stroke: var(--datum-green);
+    stroke-width: 1.5px;
+}
+
+.drawing-rotation-handle-arrow {
+    fill: none;
+    pointer-events: none;
+    stroke: var(--datum-gold, var(--datum-green));
+    stroke-width: 1.4px;
+    stroke-linecap: round;
+}
+
+.drawing-rotation-handle-arrowhead {
+    fill: var(--datum-gold, var(--datum-green));
+    pointer-events: none;
+}
+
+/*
  * THE ENGINEERING GRID.
  *
  * IT USED TO BE `--datum-panel`, WHICH IS WHY IT VANISHED IN DARK MODE. In the

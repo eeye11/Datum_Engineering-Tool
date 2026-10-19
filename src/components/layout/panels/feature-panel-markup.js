@@ -1,4 +1,4 @@
-/*
+﻿/*
  * A feature's panel markup.
  */
 
@@ -342,7 +342,7 @@ function rigidBodyShapeMarkup(
             "Rotation",
             "rigidRotation",
             Number(geometry.rotation) || 0,
-            "°"
+            "Â°"
         )
     );
 
@@ -631,12 +631,12 @@ export function featurePropertyMarkup(object) {
              * renders immediately beside the value, on the same line -
              * `[ Value ] [ ? ]`. The constraint tick belongs to the ROW: it
              * says "do not let me edit this", so it stays in the trailing
-             * state track - `[✓]`.
+             * state track - `[âœ“]`.
              *
              * The old code put both into the state track. Two controls in a
              * 14px column pushed each other sideways or wrapped the `?` onto
              * a second line, and the reading order could come out as
-             * `[ Value ] [✓] [ ? ]` - the Unknown marker stranded at the far
+             * `[ Value ] [âœ“] [ ? ]` - the Unknown marker stranded at the far
              * end of the row, no longer attached to the value it describes.
              *
              * AN UNKNOWN VALUE SHOWS ONLY THE QUESTION MARK: the tick would
@@ -862,7 +862,7 @@ export function featurePropertyMarkup(object) {
 
         /*
          * A UNIT ROW IS ONLY OFFERED FOR A PHYSICAL LENGTH. An angle is not a
-         * length, so an angle row keeps the plain"°" it has always had.
+         * length, so an angle row keeps the plain"Â°" it has always had.
          */
         const lengthUnitControl =
             converts && panels && panels.unitSelect
@@ -894,7 +894,7 @@ export function featurePropertyMarkup(object) {
              * `chosenUnit` here as well produced the duplication the
              * specification calls out:
              *
-             *     [ 5 ]  m  [ m ▼ ]      <- the reported arrangement
+             *     [ 5 ]  m  [ m â–¼ ]      <- the reported arrangement
              *
              * The selector IS the statement of the unit - it shows the
              * current choice and is the only control that changes it - so it
@@ -998,7 +998,7 @@ export function featurePropertyMarkup(object) {
      * THE SQUARED FORM OF A LENGTH UNIT.
      *
      * An Area is a squared length, so its unit is the length unit squared - "mm"
-     * becomes "mm²". The shared quantity table already spells its area units that
+     * becomes "mmÂ²". The shared quantity table already spells its area units that
      * way, so the two agree by construction rather than by a second list being
      * kept in step by hand.
      *
@@ -1014,12 +1014,12 @@ export function featurePropertyMarkup(object) {
         }
 
         /*
-         * A unit is written as a symbol and a power - "mm", "m²". Only the SYMBOL
-         * is squared, so "mm" becomes "mm²" rather than "mm²²".
+         * A unit is written as a symbol and a power - "mm", "mÂ²". Only the SYMBOL
+         * is squared, so "mm" becomes "mmÂ²" rather than "mmÂ²Â²".
          */
         const match = /^([^\u00b2\u00b3\^]+)/.exec(text);
 
-        return `${match ? match[1] : text}²`;
+        return `${match ? match[1] : text}Â²`;
     };
 
     /*
@@ -1104,7 +1104,7 @@ export function featurePropertyMarkup(object) {
      * THE SYMBOL A MAGNITUDE IS WRITTEN UNDER.
      *
      * A force's magnitude reads "F = 100 N", a load's "w = 5 kN/m", a
-     * moment's "M = 25 N·m" - and the letter in front is the student's to
+     * moment's "M = 25 NÂ·m" - and the letter in front is the student's to
      * choose, because on a real sheet a force is as often R_A or W as it
      * is F. This is the field that letter is typed into.
      *
@@ -1121,7 +1121,7 @@ export function featurePropertyMarkup(object) {
      * THE SYMBOL A MAGNITUDE IS WRITTEN UNDER.
      *
      * A force's magnitude reads "F = 100 N", a load's "w = 5 kN/m", a
-     * moment's "M = 25 N·m" - and the letter in front is the student's to
+     * moment's "M = 25 NÂ·m" - and the letter in front is the student's to
      * choose, because on a real sheet a force is as often R_A or W as it
      * is F. This is the field that letter is typed into.
      */
@@ -1260,12 +1260,6 @@ export function featurePropertyMarkup(object) {
             "analysis-diagram": "Analysis Diagram",
             "force-components": "Force Components",
             resultant: "Resultant",
-            /*
-             * NAMED IN FULL, because it is the heading the student reads. The
-             * raw type would print "variable-dimension", which names a storage
-             * shape rather than the thing they placed.
-             */
-            "variable-dimension": "Variable Dimension",
             dimension: "Dimension",
 
             /*
@@ -1341,7 +1335,7 @@ export function featurePropertyMarkup(object) {
                 true
             )
         );
-        rows.push(scalar("Angle", "angle", Math.atan2(dy, dx) * 180 / Math.PI, "°"));
+        rows.push(scalar("Angle", "angle", Math.atan2(dy, dx) * 180 / Math.PI, "Â°"));
     } else if (object.type === "point") {
         const position =
             geometry.position || geometry.point || geometry;
@@ -1365,11 +1359,11 @@ export function featurePropertyMarkup(object) {
         rows.push(section("GEOMETRY"));
         rows.push(scalar("Radius", "radius",
             mmOf(geometry.radius).value, mmOf(geometry.radius).unit));
-        rows.push(scalar("Start Angle", "startAngle", geometry.startAngle * 180 / Math.PI, "°"));
-        rows.push(scalar("End Angle", "endAngle", geometry.endAngle * 180 / Math.PI, "°"));
+        rows.push(scalar("Start Angle", "startAngle", geometry.startAngle * 180 / Math.PI, "Â°"));
+        rows.push(scalar("End Angle", "endAngle", geometry.endAngle * 180 / Math.PI, "Â°"));
         rows.push(scalar("Included", "includedAngle",
             ((geometry.sweep ?? (geometry.endAngle - geometry.startAngle)) * 180 / Math.PI),
-            "°", false));
+            "Â°", false));
     } else if (object.type === "particle") {
         /*
          * A Particle is defined by its position and its mass, and by
@@ -1503,7 +1497,7 @@ export function featurePropertyMarkup(object) {
              * "Length".
              *
              * "Length" is the word kept. It is the term the creation
-             * popup already asks for, the term the Smart Dimension
+             * popup already asks for, the term the Dimension tool
              * reports, and the term the geometry property is called.
              * A span is still a legitimate word in engineering, but it
              * is a DIFFERENT quantity - the horizontal reach of a
@@ -1592,7 +1586,7 @@ export function featurePropertyMarkup(object) {
              * fields were needed and why one of them was derived.
              *
              * Only one of them is stored. `length` is the reach, and it
-             * is the one the creation popup and the Smart Dimension
+             * is the one the creation popup and the Dimension tool
              * both edit. For a straight cable the cable-length equals
              * the reach, so it can be derived from the same geometry
              * rather than stored a second time - which is what stops
@@ -1663,7 +1657,7 @@ export function featurePropertyMarkup(object) {
             Math.atan2(
                 geometry.end.y - geometry.start.y,
                 geometry.end.x - geometry.start.x
-            ) * 180 / Math.PI, "°"));
+            ) * 180 / Math.PI, "Â°"));
 
         /* Whatever is particular to this type, after the shared three. */
         if (object.type === "cable") {
@@ -1673,7 +1667,7 @@ export function featurePropertyMarkup(object) {
         } else if (object.type === "shaft") {
             rows.push(section("SHAFT"));
             rows.push(scalar("Torque", "torque",
-                Number(geometry.torque) || 0, "N·m"));
+                Number(geometry.torque) || 0, "NÂ·m"));
         } else if (object.type === "beam") {
             rows.push(section("RELATIONSHIPS"));
             rows.push(derivedCount("Supports",
@@ -1776,7 +1770,7 @@ export function featurePropertyMarkup(object) {
                     "Direction",
                     "angle",
                     vector.angle,
-                    "°"
+                    "Â°"
                 )
             );
 
@@ -1947,7 +1941,7 @@ export function featurePropertyMarkup(object) {
          * RELATIVE TO THE FEATURE THE MOMENT IS ON.
          *
          * A moment attached to a body reports its position the same
-         * way a support does — the shared relative-coordinates rows,
+         * way a support does â€” the shared relative-coordinates rows,
          * which name the parent and give the position along it in the
          * sheet's units. When there is no parent the rows render
          * nothing and the absolute coordinates below are the only
@@ -2080,7 +2074,7 @@ export function featurePropertyMarkup(object) {
         rows.push(scalar("Radius", "radius",
             mmOf(geometry.radius).value, mmOf(geometry.radius).unit));
         rows.push(scalar("Rotation", "rotation",
-            (Number(geometry.rotation) || 0) * 180 / Math.PI, "°"));
+            (Number(geometry.rotation) || 0) * 180 / Math.PI, "Â°"));
     } else if (
         object.type ===
             "reference-axis-x-positive" ||
@@ -2161,7 +2155,7 @@ export function featurePropertyMarkup(object) {
                 }));
             }
         }
-        rows.push(scalar("Rotation", "rotation", geometry.rotation || 0, "°"));
+        rows.push(scalar("Rotation", "rotation", geometry.rotation || 0, "Â°"));
 
         /*
          * ========================================================
@@ -2236,7 +2230,7 @@ export function featurePropertyMarkup(object) {
          * uncalibrated sheet, and as something else entirely once a
          * scale existed. `mmOf` is the one conversion, which is what
          * keeps the number here, the number the setter writes, and
-         * the number a Smart Dimension reports as the same length.
+         * the number the Dimension tool reports as the same length.
          */
         const axisMm = value =>
             mmOf(Number(value) || 0);
@@ -2516,75 +2510,19 @@ export function featurePropertyMarkup(object) {
          * THE VALUE IS READ FROM THE GEOMETRY EVERY TIME THIS PANEL IS DRAWN -
          * `measurementFor` recomputes it from the referenced features, the same
          * call the canvas makes - so the panel and the sheet can never state
-         * different numbers. That is the whole of "a dimension stays driving":
-         * there is no stored number to fall out of step, because the number is
-         * not stored at all.
+         * different numbers. There is no stored number to fall out of step,
+         * because the number is not stored at all.
          *
-         * IT IS SHOWN AS A DERIVED READING, not an input. A measured dimension
-         * states what the GEOMETRY is; typing into it here would be a request
-         * to move the geometry, which is a different act and one the drawing
-         * edit already owns. Changing what it says is done by changing the
-         * thing it measures - or by naming it, which a Variable Dimension is
-         * for.
+         * IT IS SHOWN AS A DERIVED READING, not an input. A dimension is an
+         * ANNOTATION: it states what the GEOMETRY is and never moves it. An
+         * edited value is written as the dimension's text (the Edit Value
+         * action), and changing the geometry remains the student's own act.
          */
         rows.push(section("GENERAL"));
         rows.push(dimensionValueRow(object));
         rows.push(dimensionTypeRow(object));
-        rows.push(dimensionStatusRow(object));
         rows.push(dimensionEditRow(object));
         rows.push(dimensionUnitRow(object));
-    } else if (object.type === "variable-dimension") {
-        /*
-         * A VARIABLE DIMENSION.
-         *
-         *     VARIABLE
-         *     [ L/2 ]
-         *
-         * One editable field: the VARIABLE OR EXPRESSION. There is no measurement
-         * field and no unit, because an unknown quantity has neither - offering a
-         * number box here would invite the student to type a value into a feature
-         * whose whole purpose is to say the value is not known.
-         *
-         * READ FROM THE FEATURE, NOT FROM ITS GEOMETRY.
-         *
-         * The model stores the symbol ON the variable (`variable.symbol`), because
-         * that is where the renderer, the hit test and `variableText` all read it
-         * - and this field used to read `geometry.symbol`, which is a different
-         * object and always empty. So the student's own symbol was invisible in
-         * the panel the moment they placed it, and the edit box looked as though
-         * the dimension had lost what they typed.
-         *
-         * The field is left EMPTY only when the symbol really is empty, which is
-         * a real state - named but not yet written - and never filled with a
-         * default.
-         */
-        rows.push(section("VARIABLE"));
-        rows.push(textField("Variable", "symbol", object.symbol ?? ""));
-
-        /*
-         * THE UNKNOWN STATE, SHOWN AS ITS OWN ROW.
-         *
-         * A variable with no symbol is either "not written yet" or "asked and
-         * answered unknown", and the two are different statements. Saying which
-         * one this feature is making - and letting the student change it - is
-         * what keeps the third state from being an invisible one.
-         */
-        rows.push(unknownValueRow(object));
-
-        /*
-         * WHAT THE SELECTION INFERRED, when it was inferred. Shown so a student
-         * can see that their pair of lines was read as an ANGLE rather than a
-         * length - the same thing the prompt asked them about.
-         */
-        if (object.dimensionType) {
-            rows.push(
-                textField(
-                    "Measures",
-                    "dimensionType",
-                    variableMeasureLabel(object.dimensionType)
-                )
-            );
-        }
     }
 
     rows.push(appearanceMarkup(object));
@@ -2673,7 +2611,7 @@ function symbolPickerRow(object) {
  * A tolerance's mode and the values that mode makes meaningful.
  *
  * ONLY THE FIELDS THE MODE USES ARE SHOWN. A symmetric tolerance has one
- * ± value; a deviation or a limit tolerance has an upper and a lower; a
+ * Â± value; a deviation or a limit tolerance has an upper and a lower; a
  * basic tolerance has none, because its whole meaning is that it is
  * theoretical. Showing all three rows whatever the mode would invite a
  * student to type a lower limit into a symmetric tolerance and have it
@@ -2728,7 +2666,7 @@ function toleranceRows(object) {
 
     if (fields.includes("value")) {
         rows += numberRow(
-            "Value (±)",
+            "Value (Â±)",
             "toleranceValue",
             values.value ?? 0.1
         );
@@ -2819,12 +2757,11 @@ function leaderStyleRows(object) {
  * `measurementFor` recomputes it from the referenced features on every call -
  * the same call the renderer makes - so the panel and the sheet are showing the
  * same reading rather than two numbers that happen to agree. There is no stored
- * value to drift, which is what keeps a dimension DRIVING after its first
- * measurement: moving the geometry changes this row on the next redraw.
+ * value to drift: moving the geometry changes this row on the next redraw.
  *
  * Rendered as a DERIVED value (the inset, non-editable style) because it is a
- * reading, not a setting. The student changes it by changing what it measures,
- * or names it with a Variable Dimension.
+ * reading, not a setting. The student edits the annotation text through the
+ * Edit Value action; the geometry is changed by editing the geometry.
  */
 function dimensionValueRow(object) {
     let text;
@@ -2923,38 +2860,10 @@ function dimensionUnitRow(object) {
 }
 
 /*
- * A variable's UNKNOWN state, as a checkbox row.
+ * What a dimension's measurement type is called, for the panel row.
  *
- * The third state a variable can be in, made visible and editable. It shares
- * the shape of the feature Lock row - a label with a checkbox beside it - so
- * one boolean control looks the same wherever it appears.
- */
-function unknownValueRow(object) {
-    const isUnknown = object.unknown === true;
-
-    return `
-        <div class="drawing-property-grid drawing-property-grid-value">
-            <span class="drawing-property-grid-label">Value</span>
-            <span class="drawing-property-lock">
-                <label class="drawing-property-fix"
-                    title="Mark this variable as not yet known">
-                    <input type="checkbox" data-property="unknown"
-                        aria-label="Unknown"
-                        ${isUnknown ? "checked" : ""}>
-                    Unknown
-                </label>
-            </span>
-            <span class="drawing-property-unit"></span>
-            <span></span>
-        </div>
-    `;
-}
-
-/*
- * What a variable's dimension type is called, for the panel row.
- *
- * The same vocabulary the prompt uses, so the question the student answered and
- * the row they check afterwards read the same way.
+ * The student-facing word for each measurement type, shared by the panel row and
+ * the tool's status message so the two read the same way.
  */
 function variableMeasureLabel(dimensionType) {
     return (
@@ -2972,60 +2881,14 @@ function variableMeasureLabel(dimensionType) {
 }
 
 /*
- * THE DRIVING / DRIVEN STATE, AS A PANEL ROW.
+ * THE DIMENSION'S VALUE IS EDITABLE ANNOTATION TEXT.
  *
- * The requirement is explicit: the panel must display the dimension's ACTUAL
- * state, and must let the student switch modes. This row does both - it shows
- * Driving or Driven, and offers the one control that changes it.
- *
- * IT IS A SELECT, not a derived reading, because the state IS a setting the
- * student owns (see `driven` in dimension-model.js). The value is written
- * through the ordinary property setter, so the canvas, the Driven colour and
- * the editability rule all follow from the one stored bit.
- *
- * THE HINT EXPLAINS WHY A DIMENSION IS DRIVEN when the drawing already states
- * the same measurement - the one case DAETUM itself chooses Driven at creation
- * - so a student who finds a purple dimension does not have to guess.
+ * The Edit Value action opens the value popup, which writes the dimension's
+ * text - `label` - over the measured number. It never moves geometry: a
+ * dimension is an annotation, and the retired Driving/Driven mode (which let a
+ * typed value resize the feature it measured) is gone.
  */
-function dimensionStatusRow(object) {
-    const driven = object.driven === true;
-
-    return `
-        <div class="drawing-property-grid drawing-property-grid-value">
-            <span class="drawing-property-grid-label">Status</span>
-            <select data-property="driven" aria-label="Dimension status">
-                <option value="driving"${
-                    driven ? "" : " selected"
-                }>Driving</option>
-                <option value="driven"${
-                    driven ? " selected" : ""
-                }>Driven</option>
-            </select>
-            <span class="drawing-property-unit"></span>
-            <span></span>
-        </div>
-    `;
-}
-
-/*
- * A DRIVING DIMENSION IS EDITED, A DRIVEN ONE IS NOT.
- *
- * The Edit button opens the value popup, which moves geometry - so it is only
- * offered for a Driving dimension. A Driven dimension reports, and its row says
- * so rather than offering an edit that would be refused.
- */
-function dimensionEditRow(object) {
-    if (object.driven === true) {
-        return `
-            <div class="drawing-property-grid drawing-property-grid-value">
-                <span class="drawing-property-grid-label">Edit</span>
-                <span class="drawing-property-derived">Read-only while Driven</span>
-                <span class="drawing-property-unit"></span>
-                <span></span>
-            </div>
-        `;
-    }
-
+function dimensionEditRow() {
     return `
         <div class="drawing-property-grid drawing-property-grid-value">
             <span class="drawing-property-grid-label">Edit</span>

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const model = () => import("../src/core/selection/selection-transform.js");
+const model = () => import("../src/shared/selection/selection-transform.js");
 const cylinder = {
     id: "cylinder", type: "rectangle", metadata: { thermodynamicsKind: "piston-cylinder" },
     geometry: { position: { x: 10, y: 100 }, width: 80, height: 100, rotation: 0,

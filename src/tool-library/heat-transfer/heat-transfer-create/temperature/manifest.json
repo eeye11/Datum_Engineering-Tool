@@ -1,0 +1,9 @@
+{
+  "id": "heat-transfer.heat-transfer-create.temperature",
+  "label": "Temperature",
+  "category": "heat-transfer",
+  "group": "heat-transfer-create",
+  "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/temperature",
+  "template": "template.tex",
+  "implemented": false
+}

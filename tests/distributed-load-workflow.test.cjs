@@ -68,8 +68,14 @@ console.log("\n  the five steps exist as five states\n");
 const loadPhases = [
   "distributed-load-start",
   "distributed-load-end",
-  "distributed-load-magnitude",
-  "distributed-load-direction",
+
+  /*
+   * Since the magnitude-and-direction merge, one phase carries both
+   * decisions: the vector step asks for the magnitude and the direction
+   * together (a distributed-load-vector), so two states of the old list
+   * are one.
+   */
+  "distributed-load-vector",
 ];
 
 for (const phase of loadPhases) {
@@ -91,7 +97,7 @@ console.log("\n  and each one says what it wants\n");
 const instructions = [
   ["start", "start point"],
   ["end", "end point"],
-  ["magnitude", "magnitude"],
+  ["vector", "magnitude"],
   ["direction", "direction"],
 ];
 

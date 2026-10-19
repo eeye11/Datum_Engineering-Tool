@@ -5,10 +5,9 @@
  * Part of the renderer (see renderer.js), split out by concern.
  */
 import enggFeatureGeometry from "../geometry/feature-geometry.js";
-import { coordinateSystemArms, rigidBodyHandles } from "../geometry/feature-handles.js";
+import { rigidBodyHandles } from "../geometry/feature-handles.js";
 import enggDrawingState from "../model/drawing-state.js";
 import { axisLabelPositions } from "../geometry/axis-labels.js";
-import enggLoadProfile from "../../features/workspace/model/analysis/load-profile.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import { createSvgElement, paintColour } from "./svg-primitives.js";
 import { selectionBounds, selectionCorners } from "../selection/selection-transform.js";
@@ -623,9 +622,6 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
         const selected = new Set(state.selection?.selectedObjectIds || []);
         if (!selected.size) return;
         const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
-        const scale =
-            enggDrawingState.BASE_PIXELS_PER_UNIT *
-            state.camera.zoom;
         const add = (point, kind = "") => {
             if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
             const screen = toScreen(point);
@@ -833,106 +829,131 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             });
         });
 
+        /*
+         * ========================================================
+         * ONE RESOLVER FOR EVERY EDITING HANDLE
+         * ========================================================
+         *
+         * The list is produced by ONE function - the same one the hit test
+         * searches - so every handle drawn here can actually be grabbed, and
+         * every handle that can be grabbed is drawn here. It is supplied by
+         * the editor through `setHandleResolver` rather than imported, so the
+         * renderer keeps no dependency on the interaction layer (which would
+         * be a cycle: the interaction layer reaches the renderer).
+         *
+         * The rotation handle is drawn differently from the shape handles: a
+         * ring with a turn arrow, joined to the object by a short stem, so it
+         * is never mistaken for one of the shape's own control points.
+         *
+         * A FIXED OBJECT GETS NO HANDLES AT ALL - the resolver returns none
+         * for a locked feature - so the lock reads as absolute on the sheet
+         * rather than only being enforced when a drag starts.
+         */
         state.objects.forEach(object => {
             if (!selected.has(object.id)) return;
-            const geometry = object.geometry || {};
-            if (object.type === "point") {
-                add(geometry.position || geometry.point || geometry);
-            } else if (object.type === "line") {
-                add(geometry.start);
-                add(geometry.end);
-            } else if (object.type === "circle") {
-                add(geometry.center);
-                add({ x: geometry.center.x + geometry.radius, y: geometry.center.y });
-            } else if (object.type === "arc") {
-                add(geometry.center);
-                add({ x: geometry.center.x + geometry.radius * Math.cos(geometry.startAngle), y: geometry.center.y + geometry.radius * Math.sin(geometry.startAngle) });
-                add({ x: geometry.center.x + geometry.radius * Math.cos(geometry.endAngle), y: geometry.center.y + geometry.radius * Math.sin(geometry.endAngle) });
-            } else if (object.type === "rectangle") {
-                enggFeatureGeometry
-                    .rectangleCorners(geometry)
-                    .forEach((point) => add(point));
-                if (isPistonCylinder(object)) {
-                    add(cylinderPoint(geometry, 0.5, pistonFraction(geometry)), "piston-height");
-                    if (geometry.hasStoppers) {
-                        [0.09, 0.91].forEach(x => add(cylinderPoint(geometry, x, stopperFraction(geometry)), "stopper-height"));
-                    }
+
+            const handles = handleResolver
+                ? handleResolver(object)
+                : fallbackHandlesFor(object);
+
+            handles.forEach(handle => {
+                if (handle.kind === "rotate") {
+                    renderRotationHandle(svg, handle, toScreen);
+                    return;
                 }
-            } else if (object.type === "rigid-body") {
-                /*
-                 * A rigid body's handles follow its current shape,
-                 * resolved through the same helper the drag layer
-                 * uses, so a drawn handle and a grabbable handle can
-                 * never be in different places.
-                 */
-                rigidBodyHandlesForRender(object).forEach(
-                    (handle) => add(handle.point)
-                );
-            } else if (object.type === "polygon") {
-                enggDrawingState.polygonVertices(geometry).forEach((point) => add(point));
-            } else if (object.type === "particle") {
-                /*
-                 * A particle has one position handle.
-                 */
-                add(geometry.position);
-            } else if (object.type === "load" || object.type === "varying-load") {
-                add(geometry.start);
-                add(geometry.end);
-                add({
-                    x: geometry.start.x,
-                    y: geometry.start.y + 26 / Math.max(scale, 1e-6)
-                });
-            } else if (object.type === "force") {
-                /*
-                 * A force's arrowhead handle sits WHERE THE ARROW IS
-                 * DRAWN, not at the stored end.
-                 *
-                 * The stored end is the engineering vector - exactly
-                 * `magnitude` from the application point - while the
-                 * arrow is drawn at the shared Statics display scale. At
-                 * 4x the two are four times apart, so a handle at the
-                 * stored end would float in the middle of its own arrow.
-                 *
-                 * The generic `start`/`end` branch below reads
-                 * `geometry.end` directly, so a force needs its own case
-                 * here. It asks the same model function the drag layer
-                 * asks, so a drawn handle and a grabbable handle can never
-                 * be in different places.
-                 */
-                add(geometry.start || geometry.position);
 
-                add(
-                    enggLoadProfile.drawnForceEnd(
-                        state,
-                        geometry
-                    )
-                );
-            } else if (geometry.start && geometry.end) {
-                add(geometry.start);
-                add(geometry.end);
-            } else if (geometry.position) {
-                add(geometry.position);
-            } else if (object.type === "polyline") {
-                const points = geometry.points || [];
-                const lastPoint = points[points.length - 1];
-                const closed = points.length > 2 && Math.hypot(points[0].x - lastPoint.x, points[0].y - lastPoint.y) < 1e-8;
-                points.slice(0, closed ? -1 : undefined).forEach(point => add(point));
-            } else if (object.type === "coordinate-system-2d") {
-                /*
-                 * One handle per axis end, so each of the four
-                 * extensions can be dragged on its own while the
-                 * feature stays a single object.
-                 */
-                coordinateSystemArms(
-                    geometry
-                ).forEach(
-                    arm =>
-                        add(arm.end, arm.kind)
-                );
-
-                add(geometry.origin, "origin");
-            }
+                add(handle.point, handle.kind);
+            });
         });
+    }
+
+    /*
+     * The handle list supplied by the editor. Set once at start-up; absent in
+     * a render that has no editor behind it (a test or an export), where the
+     * small fallback below still draws the defining points.
+     */
+    let handleResolver = null;
+
+    function setHandleResolver(resolver) {
+        handleResolver = typeof resolver === "function" ? resolver : null;
+    }
+
+    /*
+     * The last-resort handle list, used only when no editor resolver has been
+     * supplied. It draws the feature's own defining points - never a guess -
+     * so a headless render still shows something truthful and grabbable.
+     */
+    function fallbackHandlesFor(object) {
+        const geometry = object?.geometry || {};
+
+        if (object?.locked === true) {
+            return [];
+        }
+
+        if (object?.type === "rigid-body") {
+            return rigidBodyHandlesForRender(object);
+        }
+
+        return enggFeatureGeometry
+            .definingPoints(geometry, object?.type)
+            .map(point => ({ kind: "handle", point }));
+    }
+
+    /*
+     * ========================================================
+     * THE ROTATION HANDLE
+     * ========================================================
+     *
+     * A stem from the top of the object's bounds out to a compact ring with a
+     * turn arrow. It is deliberately NOT a filled dot: shape handles are small
+     * centred markers, and this has to read as a different action at a glance.
+     *
+     * Everything is drawn in SCREEN space, so the ring is the same size at
+     * every zoom and the stem is always the same reach. It is editor-only
+     * overlay ink - it is emitted by the overlay renderer, which the clean
+     * print/export renders do not call, so it can never reach paper or a TikZ
+     * file.
+     */
+    function renderRotationHandle(svg, handle, toScreen) {
+        const anchor = toScreen(handle.anchor);
+        const centre = toScreen(handle.point);
+
+        const stem = createSvgElement("line", {
+            x1: anchor.x,
+            y1: anchor.y,
+            x2: centre.x,
+            y2: centre.y,
+            class: "drawing-rotation-handle-stem"
+        });
+
+        const ring = createSvgElement("circle", {
+            cx: centre.x,
+            cy: centre.y,
+            r: 7,
+            class: "drawing-rotation-handle"
+        });
+
+        /*
+         * The turn arrow: an arc with a gap at the bottom-right and a small
+         * head, drawn inside the ring. It says "this turns" without words.
+         */
+        const r = 3.6;
+
+        const arrow = createSvgElement("path", {
+            d:
+                `M ${centre.x + r} ${centre.y} ` +
+                `A ${r} ${r} 0 1 1 ${centre.x} ${centre.y - r}`,
+            class: "drawing-rotation-handle-arrow"
+        });
+
+        const head = createSvgElement("path", {
+            d:
+                `M ${centre.x} ${centre.y - r} ` +
+                `l 2.4 1.2 l -2.4 1.2 z`,
+            class: "drawing-rotation-handle-arrowhead"
+        });
+
+        svg.append(stem, ring, arrow, head);
     }
 
 export {
@@ -942,5 +963,72 @@ export {
     renderSelectionBox,
     renderEngineeringGrid,
     rigidBodyHandlesForRender,
-    renderSelectionHandles
+    renderSelectionHandles,
+    renderSelectionOutline,
+    setHandleResolver
 };
+
+    /*
+     * ========================================================
+     * THE SELECTION OUTLINE
+     * ========================================================
+     *
+     * The drawing itself is the compiled source's picture, so a selected
+     * feature cannot be highlighted by recolouring it - doing so would mean
+     * drawing the feature a second time, which is the one thing the Drawing
+     * Space no longer does.
+     *
+     * Instead the selection is an OUTLINE: the feature's own bounds, in the
+     * selection colour, drawn in the interaction layer above the picture. It
+     * says what is selected without pretending to be part of the drawing, and
+     * it cannot reach an export.
+     *
+     * A single selected feature gets its outline; a multiple selection is
+     * already framed by `renderSelectionHandles` as one dashed group box, so
+     * only the group box is drawn then.
+     */
+    function renderSelectionOutline(svg, state, bounds) {
+        const selected = new Set(state.selection?.selectedObjectIds || []);
+
+        if (!selected.size) {
+            return;
+        }
+
+        const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
+
+        state.objects
+            .filter(object => selected.has(object?.id))
+            .forEach(object => {
+                let frame = null;
+
+                try {
+                    frame = selectionBounds([object], [object.id]);
+                } catch {
+                    frame = null;
+                }
+
+                if (!frame) {
+                    return;
+                }
+
+                const first = toScreen({ x: frame.minX, y: frame.maxY });
+                const last = toScreen({ x: frame.maxX, y: frame.minY });
+
+                const width = Math.max(2, last.x - first.x);
+                const height = Math.max(2, last.y - first.y);
+
+                svg.appendChild(createSvgElement("rect", {
+                    x: first.x - 3,
+                    y: first.y - 3,
+                    width: width + 6,
+                    height: height + 6,
+                    fill: "none",
+                    stroke: "#17643b",
+                    "stroke-width": 1.2,
+                    "stroke-dasharray": "5 3",
+                    "pointer-events": "none",
+                    "data-selection-outline-for": object.id
+                }));
+            });
+    }
+

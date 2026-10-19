@@ -58,27 +58,18 @@ shows exactly what the change did. See [docs/TESTING.md](docs/TESTING.md).
 ### Where things are
 
 ```
-index.html            the page
-src/main.js           the application entry point
-src/editor/           the drawing editor — editor/index.js lists every part
-  interaction/ toolbar/ workspace/ panels/ commands/     shared editor machinery
-  geometry/ annotate/ statics/ thermodynamics/         the tools of each category
-src/core/             geometry, units, scale, the document model, snapping
-src/features/         dimensions, annotations, analysis
-src/rendering/        drawing the document as SVG; entities/ draws each feature type
-src/sheets/           sheets and the sheet tab bar
-src/file/             save, open, export, crash recovery
-src/solution/         the Written Solution tab
-src/references/       drawing references (a sheet placed in the solution)
-src/ui/               shared panel and dialog components
-src/api/              the integration API — the only supported entry for other tools
-src/styles/           tokens.css (colours, type), base, editor (+ editor/), shell
-server/               optional Node server (TikZ → SVG)
-tests/                node:test suites; tests/e2e/ browser scenarios
-docs/                 architecture, integration, file format, LaTeX, testing, CHANGES
-tools/                developer scripts (audits, codemods, diagnostics); archive/
+index.html               the page shell and app mount points
+src/app/entry/main.js    app entry (imports in startup order)
+src/app/                 app-level hooks (automation, error logging)
+src/components/          layout + DOM wiring (menu, toolbar, panels, workspace)
+src/features/workspace/  editor behaviours by domain (annotate, geometry, statics, ...)
+src/shared/              shared model, rendering, file/persistence, solution, integration, ui primitives
+src/tool-library/        tool manifests/templates and the registry loader
+server/                  optional Node server (TikZ -> SVG)
+tests/                   node:test suites; tests/e2e/ browser scenarios
+docs/                    architecture, integration, file format, LaTeX, testing
+scripts/                 developer diagnostics and one-off probes
 ```
-
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing the code,
 and [docs/TOOL-MAP.md](docs/TOOL-MAP.md) to find where a toolbar command lives.
 

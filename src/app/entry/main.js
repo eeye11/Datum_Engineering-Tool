@@ -1,4 +1,4 @@
-/*
+﻿/*
  * DAETUM - standalone application entry point.
  *
  * index.html loads this one module; everything else is reached through
@@ -16,9 +16,7 @@ import "../../shared/geometry/measurement-core.js";
 import "../../shared/units/quantities.js";
 import "../../components/layout/panels/property-panel.js";
 import "../../features/workspace/model/dimensions/dimension-model.js";
-import "../../features/workspace/model/dimensions/variable-dimension.js";
 import "../../features/workspace/model/annotations/annotation-model.js";
-import "../../features/workspace/model/dimensions/smart-dimension.js";
 import "../../shared/model/drawing-state.js";
 import "../../shared/file/document-file.js";
 import "../../shared/file/file-save.js";
@@ -27,11 +25,9 @@ import "../../shared/file/templates.js";
 import "../../shared/file/document-export.js";
 import "../../shared/file/document-recovery.js";
 import "../../shared/scale/dimensions.js";
-import "../../shared/scale/scale-calibration.js";
 import "../../shared/geometry/feature-geometry.js";
 import "../../features/workspace/model/dimensions/creation-dimension.js";
 import "../../features/workspace/model/dimensions/creation-dimensioning.js";
-import "../../features/workspace/model/dimensions/dimension-editor.js";
 import "../../features/workspace/model/analysis/load-profile.js";
 import "../../shared/selection/clipboard.js";
 import "../../features/workspace/model/analysis/rotational-arrow.js";
@@ -76,6 +72,8 @@ import {
 installSavedTheme();
 installThemePreference();
 
+globalThis.__enggMainRan = "body reached";
+
 /*
  * THE MAIN MENU BAR.
  *
@@ -91,7 +89,7 @@ installThemePreference();
  * every label and every disabled state at whatever the application looked like
  * on load.
  */
-installMenuBar(document.getElementById("datumMenuBar"), MENUS);
+installMenuBar(globalThis.document.getElementById("datumMenuBar"), MENUS);
 
 /*
  * THE COMMAND SEARCH, at the start of the quick-access toolbar.
@@ -99,7 +97,7 @@ installMenuBar(document.getElementById("datumMenuBar"), MENUS);
  * It reads the menu tree for its catalogue, so a command added to a menu is
  * findable the moment it is written.
  */
-const commandSearchField = document.getElementById("drawingCommandSearch");
+const commandSearchField = globalThis.document.getElementById("drawingCommandSearch");
 
 installCommandSearch(commandSearchField);
 installCommandSearchShortcut(commandSearchField);

@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.work",
+  "label": "Work",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/work",
+  "template": "template.tex",
+  "implemented": false
+}

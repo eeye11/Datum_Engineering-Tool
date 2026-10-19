@@ -16,20 +16,59 @@ import { normalizeAngle } from "../statics/truss-optimizer.js";
 export { distance } from "../../../shared/geometry/points.js";
 import { distance } from "../../../shared/geometry/points.js";
 
+/*
+ * ============================================================
+ * A RECTANGLE FROM TWO OPPOSITE CORNERS, WITH AN OPTIONAL SQUARE
+ * ============================================================
+ *
+ * `square` CONSTRAINS THE SECOND CORNER, it does not replace it. The corner the
+ * student dragged to still decides WHICH WAY the square goes - the sign of each
+ * offset is preserved - and only the shorter of the two extents is used for
+ * both. Without that, a square dragged up-and-right would come out down-and-left
+ * of the press, which is not the shape anybody drew.
+ *
+ * The right angles are preserved BY CONSTRUCTION rather than checked: the model
+ * stores an axis-aligned position plus a width and a height, so a corner cannot
+ * be moved without the other three following. That is why this function and not
+ * the renderer is where the constraint lives.
+ */
 export function rectangleGeometry(
     first,
-    second
+    second,
+    { square = false } = {}
 ) {
+    let opposite = {
+        x: Number(second.x),
+        y: Number(second.y)
+    };
+
+    if (square) {
+        const deltaX = opposite.x - first.x;
+        const deltaY = opposite.y - first.y;
+
+        /*
+         * THE SHORTER EXTENT IS USED FOR BOTH, measured as a magnitude and put
+         * back on the side the drag chose. A zero-length drag therefore stays a
+         * zero-length square rather than becoming a full-size one.
+         */
+        const extent = Math.min(Math.abs(deltaX), Math.abs(deltaY));
+
+        opposite = {
+            x: first.x + Math.sign(deltaX || 1) * extent,
+            y: first.y + Math.sign(deltaY || 1) * extent
+        };
+    }
+
     const left =
         Math.min(
             first.x,
-            second.x
+            opposite.x
         );
 
     const top =
         Math.max(
             first.y,
-            second.y
+            opposite.y
         );
 
     return {
@@ -40,17 +79,28 @@ export function rectangleGeometry(
 
         width:
             Math.abs(
-                second.x -
+                opposite.x -
                 first.x
             ),
 
         height:
             Math.abs(
-                second.y -
+                opposite.y -
                 first.y
             ),
 
-        rotation: 0
+        rotation: 0,
+
+        /*
+         * THE CORNER THE DRAG ENDED ON, AS THE STUDENT DREW IT. The model's
+         * `position` is normalised to the top-left for rendering, so it cannot
+         * say which corner was grabbed - and the square constraint and a future
+         * corner handle both need to know.
+         */
+        opposite: {
+            x: opposite.x,
+            y: opposite.y
+        }
     };
 }
 

@@ -1,5 +1,5 @@
 /*
- * THE FEATURE-TYPE REGISTRY (src/core/model/feature-types.js).
+ * THE FEATURE-TYPE REGISTRY (src/shared/model/feature-types.js).
  *
  * Each group below was once a list kept privately by an editor module.
  * They now come from one table; these are the exact memberships those lists

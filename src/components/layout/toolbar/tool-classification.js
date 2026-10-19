@@ -89,9 +89,7 @@ export function isPointTool(toolId) {
  * the input workflow the student is halfway through.
  */
 export const REQUIRED_INPUT_TOOLS = [
-    /* Dimensions collect references until Enter. */
-    "smart-dimension",
-    "variable-dimension",
+    /* The dimension tool collects references until Enter. */
     "dimension",
 
     /* The reference-based annotate kinds attach to a feature. */

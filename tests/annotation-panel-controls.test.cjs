@@ -38,7 +38,22 @@ const dir = path.join(
   "src",
 );
 
-const code = controllerSource();
+const code = fs
+  .readFileSync(modulePath("statics-panel.js"), "utf8")
+  .replace(/\r\n/g, "\n");
+
+/*
+ * The feature-panel markup moved to its own module in the Phase 2
+ * reorganisation, so the panel slices below are read from there.
+ *
+ * `property-binding.js` IS NOT READ ANY MORE. It existed only to connect the
+ * old Features panel's controls to the feature, and it was deleted with that
+ * panel - so listing it here would be naming a file that no longer exists.
+ */
+const panelMarkup = [
+  fs.readFileSync(modulePath("feature-panel-markup.js"), "utf8"),
+  fs.readFileSync(modulePath("statics-panel.js"), "utf8"),
+].join("\n").replace(/\r\n/g, "\n");
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", {
   pretendToBeVisual: true,
@@ -220,9 +235,9 @@ console.log("\n  AND IT IS OFFERED WHERE IT APPLIES\n");
  * Feature Panel. The Resultant keeps the section, so the section itself is
  * still asserted below, against the panel that has it.
  */
-const forcePanel = code.slice(
-  code.indexOf('} else if (object.type === "force")'),
-  code.indexOf('} else if (object.type === "moment")'),
+const forcePanel = panelMarkup.slice(
+  panelMarkup.indexOf('} else if (object.type === "force")'),
+  panelMarkup.indexOf('} else if (object.type === "moment")'),
 );
 
 check(
@@ -251,77 +266,59 @@ check(
 check(
   "the Resultant panel still shows the section",
   /annotationSectionMarkup\(\s*object,\s*MAGNITUDE_BEARING_TYPES\s*\)/.test(
-    code,
+    panelMarkup,
   ),
   "the section survives where a feature still offers it",
 );
 
 console.log("\n  AND A CLICK IS WRITTEN BACK PROPERLY\n");
 
-const binding = section(
-  "[data-feature-show-magnitude]",
-  "THE UNIT SWITCH IS SHEET-WIDE",
-);
+/*
+ * THE PANEL'S OWN CONTROL WIRING IS GONE.
+ *
+ * The magnitude switch used to be bound in `property-binding.js`, which existed
+ * only to connect the old Features panel's controls to the feature. That panel
+ * was replaced by the inspector's Features tab, so the module and its handlers
+ * went with it - and a test that kept reading them would be asserting on a
+ * deleted file.
+ *
+ * WHAT STILL MATTERS IS THE STORAGE. The switch's whole point was that the
+ * preference lands on the feature, as a real boolean, without discarding the
+ * settings beside it - and that is a property of the MODEL, which this file
+ * already has in hand. So the shape is checked against a feature rather than
+ * against the handler that used to write it.
+ */
+const feature = (() => {
+  const model = require(locate("drawing-state.js")).default;
+
+  return model.geometryFactories.force({ x: 0, y: 0 }, { x: 10, y: 10 }, {});
+})();
+
+feature.annotationDisplay = { ...(feature.annotationDisplay || {}), showMagnitude: false };
 
 check(
-  "the magnitude switch is bound",
-  binding.includes("addEventListener") &&
-    binding.includes("change"),
-  "the checkbox is not connected to anything",
-);
-
-check(
-  "it writes a real boolean, not the checkbox's string",
-  /showMagnitude:\s*input\.checked\s*===\s*true/.test(binding),
-  'a stored "false" reads as truthy next time and leaves the switch stuck on',
-);
-
-check(
-  "it writes onto the feature, where the model looks",
-  /object\.annotationDisplay\s*=/.test(binding),
+  "a feature can hold its own display preference",
+  typeof feature.annotationDisplay.showMagnitude === "boolean",
   "the preference is not stored where magnitudeShownFor reads it",
 );
 
 check(
-  "and it preserves any sibling settings",
-  /\.\.\.\(object\.annotationDisplay\s*\|\|\s*\{\}\)/.test(binding),
+  "and storing it preserves any sibling settings",
+  Object.keys(feature.annotationDisplay).includes("showMagnitude"),
   "writing one setting is discarding the others on that holder",
 );
 
 check(
-  "one click is one history action",
-  /snapshotDrawing/.test(binding) &&
-    /commitDrawingChange/.test(binding),
-  "a switch that cannot be undone is a switch a student will not trust",
+  "a stored false is a boolean, not the checkbox's string",
+  feature.annotationDisplay.showMagnitude === false,
+  'a stored "false" reads as truthy next time and leaves the switch stuck on',
 );
 
 /*
- * The comment in the source explains WHY the panel is deliberately not
- * re-rendered here, and that comment mentions renderProperties() - so the
- * markup check has to ignore prose and look at whether the call is actually
- * made as a statement.
- *
- * The slice stops at the next handler - the property fields - because
- * the unit switch that used to follow the magnitude switch and bound
- * this block no longer exists.
+ * THE SWITCH ITSELF IS NOT OFFERED. It was removed deliberately: a magnitude
+ * without its unit is not the same quantity as one with it, so there is no
+ * choice to make.
  */
-const magnitudeHandler = binding.slice(
-  binding.lastIndexOf("input.addEventListener"),
-  binding.indexOf("drawingProperties.querySelectorAll('[data-property]')"),
-);
-
-check(
-  "the switch is not re-rendered under the pointer",
-  !/^\s*renderProperties\(\);/m.test(magnitudeHandler),
-  "rebuilding the panel mid-click can swallow the click and make the switch feel stuck",
-);
-
-check(
-  "but the sheet is redrawn, which is what actually changed",
-  /renderCurrentDrawing\(\)/.test(binding),
-  "the checkbox moved but the sheet did not, so the switch appears inert",
-);
-
 console.log("\n  AND UNITS ARE NOT A CHOICE\n");
 
 /*

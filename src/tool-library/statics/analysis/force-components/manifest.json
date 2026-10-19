@@ -1,0 +1,9 @@
+{
+  "id": "statics.analysis.force-components",
+  "label": "Force Components",
+  "category": "statics",
+  "group": "analysis",
+  "libraryPath": "src/tool-library/statics/analysis/force-components",
+  "template": "template.tex",
+  "implemented": false
+}

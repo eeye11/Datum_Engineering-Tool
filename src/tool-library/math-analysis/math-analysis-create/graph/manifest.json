@@ -1,0 +1,9 @@
+{
+  "id": "math-analysis.math-analysis-create.graph",
+  "label": "Graph",
+  "category": "math-analysis",
+  "group": "math-analysis-create",
+  "libraryPath": "src/tool-library/math-analysis/math-analysis-create/graph",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -8,7 +8,6 @@ import enggQuantities from "../../../shared/units/quantities.js";
 import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggCreationDimensioning from "../model/dimensions/creation-dimensioning.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { drawingComponentsBack } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { updateFeatureProperty } from "../../../components/layout/panels/property-update.js";
@@ -432,17 +431,11 @@ export function commitCreatedFeature(
     );
 
     /*
-     * The feature is open for editing, and the tree is not the view
-     * being left behind - so the "picked in this view" flag is
-     * cleared too. Otherwise the next click on the row would be read
-     * as the deliberate second click that opens the editor, and the
-     * editor is already open.
+     * A SIZED FEATURE IS LEFT SELECTED, so its properties are on screen the
+     * moment it exists - the Features tab follows the selection, so selecting it
+     * IS opening it and there is no view to switch.
      */
-    if (sized) {
-        editorState.featurePanelView = "edit";
-        editorState.featureTreePickedId = null;
-        drawingComponentsBack.style.display = "block";
-    }
+    void sized;
 
     return object;
 }

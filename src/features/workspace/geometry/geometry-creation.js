@@ -7,12 +7,12 @@ import enggQuantities from "../../../shared/units/quantities.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
-import { defaultFixedFor, toolAppearance } from "../../../components/layout/panels/features-pane.js";
+import { defaultFixedFor, toolAppearance, toolSetting } from "../../../components/layout/panels/features-pane.js";
 import { analysisSourceBody, diagramPrerequisiteMessage } from "../statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
-import { beginCreationDimensioning, commitCreatedFeature } from "./creation-sizing.js";
+import { commitCreatedFeature } from "./creation-sizing.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -234,6 +234,139 @@ export function polygonSideCount(
             ? sides
             : 6
     );
+}
+
+/*
+ * ============================================================
+ * CLOSING A FREEFORM POLYGON
+ * ============================================================
+ *
+ * A Freeform Polygon is closed by dragging back to its first vertex. The
+ * question "is the pointer near enough to close?" is asked in DRAWING UNITS,
+ * not in screen pixels, so the answer does not depend on the zoom - a vertex
+ * the student can see they are over is a vertex they can close on at any
+ * magnification. The same reasoning the object-snap tolerance uses is not
+ * reused here because that tolerance is deliberately measured in screen space
+ * for aiming; closing is a property of the geometry.
+ *
+ * The tolerance is a fraction of the polygon's own size rather than a fixed
+ * distance, so a small polygon is not harder to close than a large one.
+ */
+const FREEFORM_CLOSING_FRACTION = 0.18;
+
+export function closingFreeformPolygon(
+    point,
+    interaction = drawingState.interaction
+) {
+    const first =
+        interaction?.points?.[0];
+
+    if (!first || !point) {
+        return false;
+    }
+
+    const span =
+        interaction.points.reduce(
+            (widest, vertex) => {
+                const reach = Math.max(
+                    Math.abs(vertex.x - first.x),
+                    Math.abs(vertex.y - first.y)
+                );
+
+                return Math.max(widest, reach);
+            },
+            0
+        );
+
+    /*
+     * With no extent yet - a single vertex placed - there is nothing to
+     * close, and a fraction of zero would make every point "near". The
+     * guard returns false so the first edge is never mistaken for a close.
+     */
+    if (span <= 1e-9) {
+        return false;
+    }
+
+    const tolerance = span * FREEFORM_CLOSING_FRACTION;
+
+    return distance(first, point) <= tolerance;
+}
+
+/*
+ * Commit a Freeform Polygon from the vertices the student placed.
+ *
+ * The vertices are the ACTUAL resolved points - snapped through the same
+ * pipeline every other construction uses - so the committed geometry, the
+ * canvas, the source and the Objects list all describe the same shape.
+ *
+ * Fewer than three distinct vertices is refused: two points are a segment,
+ * and a shape with two vertices would not be a polygon however it is drawn.
+ * "Distinct" is a real test, not a count, because a student can place three
+ * vertices on top of each other and would then have a zero-area shape.
+ */
+export function commitFreeformPolygon(
+    interaction = drawingState.interaction
+) {
+    const points =
+        (interaction?.points || [])
+            .filter(Boolean)
+            .map(vertex => ({
+                x: Number(vertex.x),
+                y: Number(vertex.y)
+            }));
+
+    const distinct = points.filter(
+        (vertex, index) =>
+            points.findIndex(
+                other =>
+                    Math.abs(other.x - vertex.x) < 1e-9 &&
+                    Math.abs(other.y - vertex.y) < 1e-9
+            ) === index
+    );
+
+    if (distinct.length < 3) {
+        setToolMessage(
+            "A polygon needs at least three distinct vertices"
+        );
+
+        renderCurrentDrawing();
+
+        return null;
+    }
+
+    const object =
+        enggDrawingState.geometryFactories[
+            "freeform-polygon"
+        ](
+            points,
+            {
+                style: {
+                    ...drawingState.styleDefaults,
+                    ...toolAppearance("freeform-polygon")
+                },
+
+                engineering:
+                    currentEngineeringMetadata()
+            }
+        );
+
+    const previousObjects =
+        enggDrawingState.snapshotDrawing(
+            drawingState
+        );
+
+    commitCreatedFeature(
+        object,
+        false,
+        previousObjects
+    );
+
+    setToolMessage("Ready");
+
+    renderProperties();
+    renderCurrentDrawing();
+
+    return object;
 }
 
 export function currentEngineeringMetadata() {
@@ -702,6 +835,19 @@ export function beginOrCompleteGeometry(
                     currentPoint:
                         point,
 
+                    /*
+                     * THE SIDE COUNT COMES FROM THE TOOL'S FEATURES SETTING.
+                     *
+                     * `polygonSides` on the interaction is what the polygon
+                     * maths reads, and the Features tab stores the student's
+                     * choice under the tool's `sides` setting. Seeding one
+                     * from the other here is what makes "six sides" in the
+                     * panel produce a six-sided preview rather than the
+                     * fallback.
+                     */
+                    polygonSides:
+                        toolSetting("polygon", "sides"),
+
                     points: [
                         point
                     ]
@@ -779,6 +925,10 @@ export function beginOrCompleteGeometry(
                     ? "Specify next point"
 
                     : drawingState.activeTool ===
+                        "freeform-polygon"
+                        ? "Drag to add vertices; return to the first vertex to close"
+
+                    : drawingState.activeTool ===
                         "circle"
                         ? "Specify radius"
 
@@ -820,6 +970,50 @@ export function beginOrCompleteGeometry(
 
         setToolMessage(
             "Click next point or double-click to finish"
+        );
+
+        renderCurrentDrawing();
+        return;
+    }
+
+    if (
+        drawingState.activeTool ===
+        "freeform-polygon"
+    ) {
+        /*
+         * A FREEFORM POLYGON IS CLOSED BY DRAGGING BACK TO ITS FIRST VERTEX.
+         *
+         * The first vertex stays at points[0] throughout - it is not removed
+         * and re-added, because the closing edge IS the segment back to it.
+         * A gesture that ends near the first vertex closes the polygon; one
+         * that does not adds another vertex and the student carries on.
+         *
+         * THREE DISTINCT VERTICES ARE REQUIRED. A polygon with two vertices
+         * is a line segment, and committing one would put a "polygon" in the
+         * Objects list that is not a polygon. So a close attempt on a
+         * two-vertex shape is refused and the student is told why, rather
+         * than a degenerate object being created.
+         */
+        if (
+            interaction.points.length >= 3 &&
+            closingFreeformPolygon(point)
+        ) {
+            interaction.currentPoint = point;
+
+            commitFreeformPolygon(interaction);
+
+            return;
+        }
+
+        interaction.points.push(point);
+
+        interaction.startPoint = point;
+        interaction.currentPoint = point;
+
+        setToolMessage(
+            interaction.points.length < 3
+                ? "Drag to add vertices; return to the first vertex to close"
+                : "Drag to add vertices, or back to the first vertex to close"
         );
 
         renderCurrentDrawing();
@@ -1530,26 +1724,20 @@ export function beginOrCompleteGeometry(
             return;
         }
 
-        beginCreationDimensioning(
+        commitCreatedFeature(
             object,
-            previousObjects,
-            () => {
-                commitCreatedFeature(
-                    object,
-                    true,
-                    previousObjects
-                );
-
-                setToolMessage(
-                    staticsInstruction(
-                        drawingState.activeTool
-                    )
-                );
-
-                renderProperties();
-                renderCurrentDrawing();
-            }
+            false,
+            previousObjects
         );
+
+        setToolMessage(
+            staticsInstruction(
+                drawingState.activeTool
+            )
+        );
+
+        renderProperties();
+        renderCurrentDrawing();
 
         return;
     }
@@ -1630,6 +1818,77 @@ export function beginOrCompleteGeometry(
             );
     } else if (
         drawingState.activeTool ===
+        "coordinate-system-2d"
+    ) {
+        /*
+         * ========================================================
+         * THE COORDINATE SYSTEM IS DRAWN BY ONE GESTURE
+         * ========================================================
+         *
+         * The press is the origin and the release is the positive X
+         * direction. The Y axis is derived from the X axis - it is drawn
+         * perpendicular to it - so the student gets square axes from a
+         * single drag and never has to place a third point or type an
+         * angle. The angle is taken from the two committed points, not
+         * from the pointer's snapped position on its own, so grid snapping
+         * cannot skew the axes out of square: whatever direction the
+         * release lands in, Y is exactly 90 degrees from X.
+         *
+         * The arm length is the distance the student dragged. Both the
+         * positive and negative arms use it, so the origin sits in the
+         * middle of the cross the way a coordinate system is drawn on
+         * paper. There are no ticks, units or scale factors here - this
+         * places the AXES, nothing else.
+         */
+        const arm = Math.hypot(
+            point.x - first.x,
+            point.y - first.y
+        );
+
+        if (arm <= 1e-9) {
+            setToolMessage(
+                "Drag from the origin to set the X axis"
+            );
+
+            return;
+        }
+
+        object =
+            enggDrawingState.geometryFactories.coordinateSystem2D(
+                {
+                    x: first.x,
+                    y: first.y
+                },
+                {
+                    rotation: Math.atan2(
+                        point.y - first.y,
+                        point.x - first.x
+                    ),
+
+                    xAxisLength: arm,
+                    yAxisLength: arm,
+                    xPositiveLength: arm,
+                    xNegativeLength: arm,
+                    yPositiveLength: arm,
+                    yNegativeLength: arm,
+
+                    name: "Coordinate System",
+
+                    style: {
+                        ...drawingState.styleDefaults
+                    },
+
+                    metadata: {
+                        reference: true,
+                        coordinateSystem: "2d"
+                    },
+
+                    engineering:
+                        currentEngineeringMetadata()
+                }
+            );
+    } else if (
+        drawingState.activeTool ===
         "circle"
     ) {
         object =
@@ -1656,10 +1915,24 @@ export function beginOrCompleteGeometry(
         drawingState.activeTool === "saturation-curve" ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
+        /*
+         * SHIFT SQUARES THE RECTANGLE - ON COMMIT, FROM THE SAME FLAG THE
+         * PREVIEW USED. The preview writes `squareConstrained` on the
+         * interaction for the frame it drew, so a student who held Shift and
+         * released gets exactly the shape they were looking at. Every other
+         * rectangle-like tool (a control volume, a piston, a saturation curve)
+         * ignores the flag, because their size is not the student's to
+         * constrain.
+         */
+        const square =
+            drawingState.activeTool === "rectangle" &&
+            interaction.squareConstrained === true;
+
         const rectangle =
             rectangleGeometry(
                 first,
-                point
+                point,
+                { square }
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
@@ -1880,38 +2153,27 @@ export function beginOrCompleteGeometry(
         }
 
         /*
-         * THE DOCUMENT AS IT STANDS BEFORE THE SIZE IS APPLIED.
+         * The document as it stands BEFORE committing the new feature.
          *
-         * Taken after the geometry is complete and before any value is
-         * written, so "before" means the document the student was
-         * looking at when they answered the popup.
-         *
-         * Answering it can CALIBRATE the drawing, so a snapshot taken
-         * afterwards would already carry the new scale - and Undo
-         * would remove the feature while leaving that scale behind,
-         * with nothing left for it to give meaning to.
+         * Geometry creation is schematic (not to scale), so there is no
+         * follow-up sizing prompt and no drawing-scale calibration step.
+         * We still snapshot here so the commit is one undoable action.
          */
         const previousObjects =
             enggDrawingState.snapshotDrawing(
                 drawingState
             );
 
-        beginCreationDimensioning(
+        commitCreatedFeature(
             object,
-            previousObjects,
-            () => {
-                commitCreatedFeature(
-                    object,
-                    true,
-                    previousObjects
-                );
-
-                setToolMessage("Ready");
-
-                renderProperties();
-                renderCurrentDrawing();
-            }
+            false,
+            previousObjects
         );
+
+        setToolMessage("Ready");
+
+        renderProperties();
+        renderCurrentDrawing();
 
         return;
     }
@@ -2001,6 +2263,7 @@ function createPointFeature(
         drawingState.activeTool &&
         [
             "line", "point", "polyline", "triangle", "polygon",
+            "freeform-polygon",
             "circle", "arc", "rectangle"
         ].includes(object.type) &&
         defaultFixedFor(drawingState.activeTool)

@@ -1,0 +1,9 @@
+{
+  "id": "controls.controls-create.block",
+  "label": "Block",
+  "category": "controls",
+  "group": "controls-create",
+  "libraryPath": "src/tool-library/controls/controls-create/block",
+  "template": "template.tex",
+  "implemented": false
+}

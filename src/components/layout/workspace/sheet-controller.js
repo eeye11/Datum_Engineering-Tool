@@ -17,7 +17,7 @@ import { defaultLineColour } from "./theme.js";
 import { setToolMessage } from "../toolbar/toolbar-render.js";
 
 const drawingSheetBar =
-    document.getElementById("drawingSheetTabs");
+    globalThis.document?.getElementById("drawingSheetTabs");
 
 /*
  * ========================================================
@@ -141,7 +141,16 @@ function adoptSheetViewportIntoEditor() {
     drawingState.objectSnap = { ...sheet.objectSnap };
 
     drawingState.styleDefaults = adoptDefaultStroke(sheet.styleDefaults);
-    drawingState.grid = { ...sheet.grid };
+
+    /*
+     * GRID SNAP ARRIVES WITH THE SHEET, RESOLVED IN ONE PLACE.
+     *
+     * `resolveGridSnap` is where a sheet with no recorded grid-snap state is
+     * given one, so this adopts the answer rather than repeating the rule. Two
+     * copies of the same fallback would be two chances for them to disagree.
+     */
+    drawingState.grid = enggSheets.resolveGridSnap({ ...sheet.grid });
+
     drawingState.units = sheet.units;
 
     /*

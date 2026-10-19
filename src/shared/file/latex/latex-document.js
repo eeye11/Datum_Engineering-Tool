@@ -8,16 +8,24 @@
  * compiles in any LaTeX installation or Overleaf, and any AI model given the
  * file can read it.
  *
- * Each sheet's picture is the renderer's own output converted to commands
- * (`svg-to-tikz.js`), so it looks exactly like the canvas, and each feature's
- * commands are preceded by a sentence saying what it is
- * (`feature-description.js`).
+ * Each sheet's picture is THE SHEET'S OWN SOURCE - the TikZ the Drawing Space
+ * compiles - with its object markers dropped. Exporting a conversion of a
+ * canvas rendering would put a picture in the file that is not the one on the
+ * screen; exporting the source puts the drawing's actual code there. The
+ * SVG-conversion path (`svg-to-tikz.js`) remains only for a sheet saved before
+ * sources were stored, which has no code to export.
  *
- * THE FILE REOPENS EXACTLY. The complete document, in the .enggdraw format,
- * rides along at the end as a comment block. LaTeX ignores comments; DAETUM
- * reads the block and restores every feature as it was - editable, with its
- * parents, parameters and sheet settings - rather than trying to infer a
- * beam from the lines that draw it.
+ * STANDARD LaTeX AND NOTHING ELSE that matters to LaTeX. The .tex is ordinary
+ * source: a preamble, a `standalone` document class and one `tikzpicture` per
+ * sheet. A user can paste it, edit it by hand, or open it in any LaTeX
+ * installation. After the document, DAETUM appends its own document data as a
+ * commented base64 block (`embeddedBlock`), which LaTeX ignores and DAETUM
+ * reads back to reopen the file with every feature editable.
+ *
+ * WHAT REOPENS EXACTLY is the document model, not the file. The geometry
+ * state is DAETUM's own; a drawing saved as .tex and reopened is read back
+ * as the picture's features. The source and the internal geometry state are
+ * kept apart on purpose: rendering never rewrites the source.
  *
  * DAETUM's own engine: nothing here runs TeX.
  */
@@ -294,7 +302,8 @@ export function writeLatexDocument(documentBody, { title = "Drawing", exportedAt
         "  Every feature's commands are preceded by a comment saying what it is",
         "  and where; each sheet starts with a list of its features.",
         "  Compile with pdflatex (or lualatex/xelatex): standalone class + TikZ.",
-        "  The block at the end lets DAETUM reopen this file exactly.",
+        "  This is ordinary LaTeX: paste it back into DAETUM's Source tab to",
+        "  render it again, or open it in any LaTeX installation.",
         "====================================================================="
     ].join("\n"));
 
@@ -358,13 +367,23 @@ function cleanSheetPicture(documentBody, sheet, index, count, palette) {
     const objects = sheet.objects || [];
 
     if (!objects.length) {
-        /*
-         * An empty sheet has no drawing, so it has no code: nothing is
-         * generated, and the caller explains rather than inserting a
-         * placeholder. A blank `\path (0,0) rectangle (10,10);` would be
-         * geometry the student never drew.
-         */
+        // Empty sheet: nothing to write; the caller explains it.
         return "";
+    }
+
+    /*
+     * THE SHEET'S SOURCE IS THE SHEET'S DRAWING.
+     *
+     * What goes into the written solution is the picture the Drawing Space
+     * shows, which is the sheet's TikZ source - markers removed, because they
+     * are bookkeeping and not drawing. The SVG this used to convert is the old
+     * object renderer's output, which is no longer what the student sees; using
+     * it put a different picture in the write-up from the one they approved.
+     */
+    const storedSource = sheet.source && typeof sheet.source.source === "string" ? sheet.source.source : "";
+
+    if (sourceHasCommands(storedSource)) {
+        return sheetSourcePicture(storedSource, palette);
     }
 
     const rendered = enggDrawingExport.renderFittedDocument(
@@ -406,6 +425,97 @@ function cleanSheetPicture(documentBody, sheet, index, count, palette) {
     ].join("\n");
 }
 
+/*
+ * Whether a stored source draws anything - commands between the picture and the
+ * marker comments. A sheet with an empty picture is empty, not "has a source".
+ */
+function sourceHasCommands(source) {
+    return String(source || "")
+        .split("\n")
+        .some((line) => {
+            const text = line.trim();
+
+            return (
+                text !== "" &&
+                !text.startsWith("%") &&
+                !/^\\begin\s*\{tikzpicture\}/.test(text) &&
+                !/^\\end\s*\{tikzpicture\}/.test(text)
+            );
+        });
+}
+
+/*
+ * THE SHEET'S OWN SOURCE, as the picture a written solution embeds.
+ *
+ * The text is used AS STORED - it is the code that drew the sheet - with the
+ * object markers dropped and any inline colour definitions lifted into the
+ * shared palette, so two sheets sharing a colour define it once. Nothing is
+ * re-scaled: the picture's coordinates are the drawing's coordinates, the same
+ * ones the Drawing Space compiles.
+ */
+function sheetSourcePicture(source, palette) {
+    const lines = String(source || "").split("\n");
+
+    const kept = [];
+    const definitions = [];
+
+    lines.forEach((line) => {
+        if (/^\s*%\s*DAETUM_OBJECT_(BEGIN|END)/.test(line)) {
+            return;
+        }
+
+        if (/^\s*\\definecolor\{/.test(line)) {
+            definitions.push(line.trim());
+            return;
+        }
+
+        /*
+         * A PICTURE THAT OPENS WITHOUT ITS UNITS GETS THEM.
+         *
+         * A drawing unit is a paper millimetre in DAETUM, and the drawing
+         * source states that once, on its opening environment. A source
+         * written by hand may leave it out; without it TikZ draws the picture
+         * at its default centimetre and every sheet comes out ten times too
+         * large. Adding the option is not rescaling - it states the unit the
+         * coordinates were always in.
+         */
+        if (/^\s*\\begin\s*\{tikzpicture\}\s*$/.test(line)) {
+            kept.push("\\begin{tikzpicture}[x=1mm, y=1mm]");
+            return;
+        }
+
+        kept.push(line);
+    });
+
+    const body = kept.join("\n").trim();
+
+    if (!body) {
+        return "";
+    }
+
+    /*
+     * THE PALETTE HOLDS THE COLOUR NAMES ACROSS DRAWINGS.
+     *
+     * Each object's code defines its own colour inline, which keeps the Source
+     * tab self-contained. In a WRITTEN DOCUMENT that would define the same
+     * colour once per object that uses it, so each distinct name is handed to
+     * the shared palette here and printed once in the preamble.
+     *
+     * The picture keeps its own inline definitions when the palette cannot
+     * take them - a `daetumC...` name declared inside the picture still
+     * resolves, because the name and the value are stated together.
+     */
+    definitions.forEach((definition) => {
+        const match = definition.match(/^\\definecolor\{([^}]+)\}\{([^}]+)\}\{([^}]+)\}/);
+
+        if (match && palette && typeof palette.define === "function") {
+            palette.define(match[1], match[2], match[3]);
+        }
+    });
+
+    return body;
+}
+
 export function writeLatexPictureParts(documentBody, sheetId, getPalette = () => createPalette()) {
     const sheets = documentBody?.sheets || [];
     const index = Math.max(0, sheets.findIndex(sheet => sheet.id === sheetId));
@@ -425,11 +535,101 @@ export function writeLatexPictureParts(documentBody, sheetId, getPalette = () =>
     };
 }
 
+/*
+ * ========================================================
+ * EXPORT THE LIVE SOURCE AS A COMPLETE .tex
+ * ========================================================
+ *
+ * The Source tab holds a drawing snippet - a `tikzpicture` and nothing else.
+ * This wraps THAT TEXT, unchanged, in a preamble that compiles it: the same
+ * picture the Drawing Space renders, in a document that opens in any LaTeX
+ * installation or on Overleaf.
+ *
+ * The preamble is not guessed. It loads what DAETUM's own generated code
+ * uses: tikz with arrows.meta (every head in a force, load or axis), calc,
+ * amsmath and amssymb (the `$...$` values in engineering labels), xcolor (the
+ * colour names), and the decoration library. Each colour the picture defines
+ * inline is lifted into the preamble once, so the document does not declare
+ * the same name twice.
+ *
+ * The coordinates are NOT touched. A drawing unit is a paper millimetre - the
+ * unit the picture already opens with - so exporting never rescales the
+ * drawing to fit a page.
+ */
+export const STANDALONE_LIBRARIES = Object.freeze([
+    "arrows.meta",
+    "calc",
+    "decorations.pathmorphing"
+]);
+
+export function writeStandaloneFromSource(source, { title = "DAETUM drawing" } = {}) {
+    const lines = String(source ?? "").replace(/\r\n/g, "\n").split("\n");
+
+    const colours = [];
+    const seenColours = new Set();
+
+    const picture = lines
+        .filter((line) => {
+            if (/^\s*%\s*DAETUM_OBJECT_(BEGIN|END)/.test(line)) {
+                return false;
+            }
+
+            const definition = line.match(/^\s*\\definecolor\{([^}]+)\}\{([^}]+)\}\{([^}]+)\}\s*$/);
+
+            if (definition) {
+                if (!seenColours.has(definition[1])) {
+                    seenColours.add(definition[1]);
+                    colours.push(`\\definecolor{${definition[1]}}{${definition[2]}}{${definition[3]}}`);
+                }
+
+                return false;
+            }
+
+            return true;
+        })
+        .join("\n")
+        .trim();
+
+    /*
+     * A BARE SET OF COMMANDS IS STILL EXPORTED AS A PICTURE. The Source tab
+     * accepts commands without the environment while a student is halfway
+     * through typing; the export wraps them the same way the renderer does, so
+     * what compiles here is what rendered there.
+     */
+    const body = /\\begin\s*\{tikzpicture\}/.test(picture)
+        ? picture
+        : `\\begin{tikzpicture}[x=1mm, y=1mm]\n${picture}\n\\end{tikzpicture}`;
+
+    return [
+        `% ${title} - exported from DAETUM`,
+        `% ${new Date().toISOString()}`,
+        "% Drawing units are millimetres on paper (x=1mm, y=1mm).",
+        "% Compile with pdflatex, lualatex or xelatex.",
+        "",
+        "\\documentclass[tikz, border=5mm]{standalone}",
+        "\\usepackage[T1]{fontenc}",
+        "\\usepackage{amsmath}",
+        "\\usepackage{amssymb}",
+        "\\usepackage{xcolor}",
+        `\\usetikzlibrary{${STANDALONE_LIBRARIES.join(",")}}`,
+        ...colours,
+        "",
+        "\\begin{document}",
+        "",
+        body,
+        "",
+        "\\end{document}",
+        ""
+    ].join("\n");
+}
+
 export default {
     LATEX_EXTENSION,
     LATEX_MEDIA_TYPE,
+    STANDALONE_LIBRARIES,
     readEmbeddedDocument,
     writeLatexDocument,
     writeLatexPicture,
-    writeLatexPictureParts
+    writeLatexPictureParts,
+    writeStandaloneFromSource
 };

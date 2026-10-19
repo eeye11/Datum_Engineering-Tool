@@ -1823,10 +1823,10 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
          * the number WRITTEN in, and `formatMeasurement` does the conversion
          * through the shared unit table.
          *
-         * That is what keeps a dimension DRIVING across a unit change: the
-         * reference, the placement and the world-scale relationship are all
-         * untouched, so a 100 mm span read in cm shows "10 cm" and still
-         * updates the moment the geometry it measures moves.
+         * That is what keeps a dimension attached across a unit change: the
+         * reference and the placement are untouched, so a 100 mm span read in
+         * cm shows "10 cm" and still updates the moment the geometry it
+         * measures moves.
          *
          * A unit the length quantity does not have is refused rather than
          * stored, so a dimension can never be left asking to be read in a
@@ -1849,104 +1849,7 @@ export function updateFeatureProperty(object, key, value, typedUnit) {
             return true;
         }
 
-        /*
-         * THE DRIVING / DRIVEN STATE.
-         *
-         * A Driven dimension reports the geometry instead of controlling it.
-         * The panel offers it as a word - "Driving" or "Driven" - so this is
-         * read as a statement rather than as a boolean, exactly as a moment's
-         * `direction` is.
-         *
-         * NOTHING ELSE IS TOUCHED. Switching to Driven RELEASES the constraint
-         * implicitly, because a Driven dimension simply refuses to move
-         * geometry (see `dimension-edit.applyDimensionValue`) - and the current
-         * geometry is preserved exactly, which is what the requirement asks
-         * for. Switching back to Driving re-enables the control without moving
-         * anything until the student next edits the value.
-         */
-        if (key === 'driven') {
-            object.driven = value === true || value === 'driven';
-
-            return true;
-        }
-
         return false;
-    }
-
-    if (object.type === 'variable-dimension') {
-        /*
-         * THE SYMBOL IS THE VALUE.
-         *
-         * Stored exactly as typed, INCLUDING an empty string: clearing the
-         * field is how a student says they have named the variable but not
-         * written it yet, so falling back to a default would overwrite their
-         * intent on every keystroke.
-         *
-         * WRITTEN TO THE FEATURE, NOT TO ITS GEOMETRY. The model keeps the
-         * symbol on the variable itself (`variable.symbol`), because that is
-         * where the renderer, the hit test and `variableText` read it - so this
-         * used to write to `geometry.symbol`, a place nothing reads, and an
-         * edit appeared to do nothing at all.
-         *
-         * ANYTHING IS ACCEPTED: a name, a number, or an expression such as
-         * `L/2`. This is the student's own algebra and it is never evaluated,
-         * rewritten or reduced to a number here.
-         *
-         * Nothing else about the feature changes: the references, the placement
-         * and every relationship stay exactly as they were, so editing the
-         * symbol cannot detach the variable from the geometry it names.
-         */
-        if (key === 'symbol') {
-            const text = String(value ?? '');
-
-            object.symbol = text;
-
-            /*
-             * WRITING A SYMBOL CLEARS THE UNKNOWN MARK, and clearing the symbol
-             * does not set it. They are two different statements - "here is my
-             * value" and "this is not known" - so one must not silently imply
-             * the other. The checkbox below is how the student makes the second
-             * one.
-             */
-            if (text) {
-                object.unknown = false;
-            }
-
-            return true;
-        }
-
-        if (key === 'unknown') {
-            const isUnknown = value === true || value === 'true';
-
-            object.unknown = isUnknown;
-
-            /*
-             * MARKING IT UNKNOWN CLEARS ANY SYMBOL, because a feature cannot
-             * both state a value and state that it has none. The same rule the
-             * Statics quantities follow: setting one state clears the others.
-             */
-            if (isUnknown) {
-                object.symbol = '';
-            }
-
-            return true;
-        }
-
-        if (key.startsWith('placement.')) {
-            const axis = key.split('.')[1];
-
-            /*
-             * A PLACEMENT IS A POSITION ON THE SHEET, so it is a length
-             * typed in the field's own display unit - the same conversion
-             * every other coordinate write runs. Writing the raw number
-             * would put a moved annotation four times too far on any
-             * calibrated sheet.
-             */
-            g.placement = g.placement || { x: 0, y: 0 };
-            g.placement[axis] = worldLengthInDisplayUnits(object, value);
-
-            return true;
-        }
     }
 
     if (object.type === 'annotate') {

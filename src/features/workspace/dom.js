@@ -2,23 +2,30 @@
  * The editor's DOM elements, looked up once.
  */
 
-export const toolHeading = document.getElementById("drawingToolHeading");
+const dom = globalThis.document;
 
-export const toolList = document.getElementById("drawingToolList");
+const document = dom || {
+    getElementById: () => null,
+    querySelector: () => null
+};
 
-export const drawingCanvas = document.querySelector(".drawing-canvas");
+export const toolHeading = dom?.getElementById("drawingToolHeading");
 
-export const drawingCoordinates = document.getElementById("drawingCoordinates");
+export const toolList = dom?.getElementById("drawingToolList");
 
-export const drawingZoomValue = document.getElementById("drawingZoomValue");
+export const drawingCanvas = dom?.querySelector(".drawing-canvas");
 
-export const drawingZoomOut = document.getElementById("drawingZoomOut");
+export const drawingCoordinates = dom?.getElementById("drawingCoordinates");
 
-export const drawingZoomIn = document.getElementById("drawingZoomIn");
+export const drawingZoomValue = dom?.getElementById("drawingZoomValue");
 
-export const drawingGridToggle = document.getElementById("drawingGridToggle");
+export const drawingZoomOut = dom?.getElementById("drawingZoomOut");
 
-export const drawingSnapToggle = document.getElementById("drawingSnapToggle");
+export const drawingZoomIn = dom?.getElementById("drawingZoomIn");
+
+export const drawingGridToggle = dom?.getElementById("drawingGridToggle");
+
+export const drawingSnapToggle = dom?.getElementById("drawingSnapToggle");
 
 /*
  * THE DISPLAY SETTINGS, beside Grid and Snap.
@@ -50,7 +57,7 @@ export const drawingDisplayToggles = [
     }
 ].map(entry => ({
     ...entry,
-    button: document.getElementById(entry.id)
+    button: dom?.getElementById(entry.id)
 }));
 
 /*
@@ -70,25 +77,21 @@ export const drawingDisplayToggles = [
  */
 export const drawingVectorScale = document.getElementById("drawingVectorScale");
 
-export const drawingVectorScaleCustom = document.getElementById(
+export const drawingVectorScaleCustom = dom?.getElementById(
     "drawingVectorScaleCustom"
 );
 
-export const drawingProperties = document.getElementById("drawingProperties");
+export const drawingToolMessage = dom?.getElementById("drawingToolMessage");
 
-export const drawingToolMessage = document.getElementById("drawingToolMessage");
+export const drawingUndo = dom?.getElementById("drawingUndo");
 
-export const drawingComponentsBack = document.getElementById("drawingFeaturesBack");
+export const drawingRedo = dom?.getElementById("drawingRedo");
 
-export const drawingUndo = document.getElementById("drawingUndo");
+export const drawingThickness = dom?.getElementById("drawingThickness");
 
-export const drawingRedo = document.getElementById("drawingRedo");
+export const drawingColor = dom?.getElementById("drawingColor");
 
-export const drawingThickness = document.getElementById("drawingThickness");
-
-export const drawingColor = document.getElementById("drawingColor");
-
-export const drawingLineType = document.getElementById("drawingLineType");
+export const drawingLineType = dom?.getElementById("drawingLineType");
 
 /*
  * THE VECTOR SCALE'S VISIBLE VALUE.
@@ -97,13 +100,13 @@ export const drawingLineType = document.getElementById("drawingLineType");
  * is a value selector and the current scale is information to read at a glance -
  * so this element is the readout, kept in step by the control's own sync.
  */
-export const drawingVectorScaleValue = document.getElementById(
+export const drawingVectorScaleValue = dom?.getElementById(
     "drawingVectorScaleValue"
 );
 
-export const drawingToolPanelToggle = document.getElementById("drawingToolPanelToggle");
+export const drawingToolPanelToggle = dom?.getElementById("drawingToolPanelToggle");
 
-export const drawingFeaturesPanelToggle = document.getElementById("drawingFeaturesPanelToggle");
+export const drawingFeaturesPanelToggle = dom?.getElementById("drawingFeaturesPanelToggle");
 
 /*
  * THE TOP BAR'S HIDE / SHOW PAIR.
@@ -114,6 +117,6 @@ export const drawingFeaturesPanelToggle = document.getElementById("drawingFeatur
  * bar is hidden it is the other way round. Keeping both refs here lets the
  * workspace layout flip them together.
  */
-export const headerHideButton = document.getElementById("headerHideButton");
+export const headerHideButton = dom?.getElementById("headerHideButton");
 
-export const drawingTopBarShow = document.getElementById("drawingTopBarShow");
+export const drawingTopBarShow = dom?.getElementById("drawingTopBarShow");

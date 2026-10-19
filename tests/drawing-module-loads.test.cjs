@@ -9,7 +9,7 @@
  * they are invisible to a test of the parts.
  *
  * So this loads the real page - index.html's own markup - into jsdom, then
- * loads the application's entry module, src/main.js, exactly as the browser
+ * loads the application's entry module, src/app/entry/main.js, exactly as the browser
  * does, and checks that the editor came up in a working state.
  */
 const { bootApp } = require("./helpers/boot-app.cjs");
@@ -38,7 +38,7 @@ if (error) {
 }
 
 check(
-  "src/main.js and everything it imports evaluate without throwing",
+  "src/app/entry/main.js and everything it imports evaluate without throwing",
   !error,
   error ? `${error.name}: ${error.message}` : "",
 );
@@ -50,18 +50,28 @@ if (error) {
 
 console.log("\n  and the editor came up in a working state\n");
 
-const properties = document.getElementById("drawingProperties");
+const inspector = document.getElementById("drawingFeaturesPanel");
 
 check(
-  "the features panel element was found",
-  Boolean(properties),
+  "the drawing inspector element was found",
+  Boolean(inspector),
   "the editor could not locate its own panel element",
 );
 
 check(
-  "the features panel rendered something",
-  Boolean(properties && properties.innerHTML.trim().length > 0),
-  "the panel is empty after the application loaded",
+  "the inspector exposes the Objects | Features | Source tabs in order",
+  (() => {
+    const tabs = document.querySelectorAll(".drawing-panel-tab[data-panel-tab]");
+    const order = Array.from(tabs).map((tab) => tab.dataset.panelTab);
+    return order.length === 3 && order[0] === "objects" && order[1] === "features" && order[2] === "source";
+  })(),
+  "the panel tabs were not found, or are not in the Objects | Features | Source order",
+);
+
+check(
+  "the inspector rendered its three panes",
+  document.querySelectorAll(".drawing-panel-pane[data-panel-pane]").length === 3,
+  "the panel panes are missing",
 );
 
 check(

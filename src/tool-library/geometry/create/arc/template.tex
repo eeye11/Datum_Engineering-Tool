@@ -1,0 +1,11 @@
+% Arc - a circular arc from its committed centre, radius and unwrapped angles.
+%
+%   \draw[<appearance>] (startx,starty) arc[start angle=<a>, end angle=<b>, radius=<r>];
+%
+% The start point is the point on the circle at the start angle. Angles are the
+% STORED unwrapped ones, so an arc that sweeps across 0 degrees (350 to 370) is
+% written as it was drawn rather than folded back to the shorter way round.
+%
+% Three Points and Centre-Start-End both resolve to this one form; the difference
+% is how centre and angles are derived from the gesture, never in the code.
+\draw[black] (10,0) arc[start angle=0, end angle=90, radius=10];

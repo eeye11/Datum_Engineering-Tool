@@ -167,7 +167,7 @@ const theme = fs.readFileSync(locate("theme.js"), "utf8");
 
 check(
     "the integration API object is still window.datum",
-    /window\.datum/.test(fs.readFileSync(locate("main.js"), "utf8")),
+    /window\.datum/.test(fs.readFileSync(locate("app/entry/main.js"), "utf8")),
     "a host page scripts this name; renaming it breaks every integration",
 );
 

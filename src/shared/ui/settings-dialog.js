@@ -209,40 +209,58 @@ function drawingPage() {
  */
 function snappingPage() {
     const snap = drawingState.snap || {};
+    const grid = drawingState.grid || {};
 
     return `
-        <h4>Snapping</h4>
+        <h4>General snap — references to existing geometry</h4>
+        <p class="datum-settings-note">
+            Finds meaningful places on what is already drawn: endpoints,
+            midpoints, intersections, centres, quadrant points and points on an
+            entity. It never forces geometry onto the background grid, and
+            switching it off leaves grid snapping untouched.
+        </p>
         ${row(
-            "Object snapping",
+            "General snapping",
             `<span class="datum-settings-value">${snap.enabled === false ? "Off" : "On"}</span>`,
-            "Snapping to endpoints, midpoints, centres, intersections and points on an entity. Toggled by the Snap control on the style strip.",
+            "Toggled by the Snap control on the style strip, which owns this setting and nothing else.",
         )}
+
+        <h4>Grid snap — regular coordinate intervals</h4>
+        <p class="datum-settings-note">
+            Snaps input coordinates to the nearest grid location, measured in
+            world coordinates rather than rounded screen pixels, so it stays
+            accurate under zoom, pan and any change of drawing scale. It
+            references the grid and never existing geometry, and it never moves
+            geometry that is already drawn.
+        </p>
         ${row(
             "Grid snapping",
             `<input type="checkbox" data-settings-grid="snapToGrid" ${
-                drawingState.grid?.snapToGrid === false ? "" : "checked"
+                grid.snapToGrid === false ? "" : "checked"
             }>`,
-            "Snaps construction and editing points to the nearest grid line, used only when no object snap is in range. Independent of whether the grid is drawn, so a hidden grid can still be snapped to.",
+            "Turned on automatically when the grid is shown and off when it is hidden. You can still switch it off here with the grid on screen, which is what lets you place a point between two grid lines while keeping the grid as a visual guide.",
         )}
         ${row(
             "Grid spacing",
-            `<span class="datum-settings-value">${drawingState.grid?.spacing ?? 5} units</span>`,
+            `<span class="datum-settings-value">${grid.spacing ?? 7.5} units</span>`,
             "The interval the grid is drawn at and the interval a grid snap lands on. It is a drawing aid in internal coordinates: it is the same at every zoom, and it never depends on whether the document has been calibrated.",
         )}
 
-        <h4>Snap targets</h4>
+        <h4>How the two work together</h4>
         <p class="datum-settings-note">
-            The snapping engine resolves endpoints, midpoints, centres,
-            intersections and points along an entity. The bottom bar names
-            whichever it has found under the cursor.
+            They are independent and may both be on. When they are, a real
+            geometric reference wins over a nearby grid point, so you can still
+            draw accurately to an endpoint that sits between two grid lines. If
+            neither finds anything, the pointer is used exactly where it is.
         </p>
 
         <h4>Geometric inference</h4>
         <p class="datum-settings-note">
             While a construction is running, the cursor infers a horizontal or
             vertical alignment from the points already placed, and the status bar
-            says which. Inference is a guide, not a lock - the cursor stays where
-            it is put.
+            says which. Inference is part of general snapping, not of grid snap:
+            it is a guide to existing geometry, and it constrains one axis while
+            the other remains free.
         </p>
     `;
 }

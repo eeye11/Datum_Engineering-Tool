@@ -40,7 +40,7 @@ const code = controllerSource();
 
 /* The application entry module, which lists the modules in load order. */
 const index = fs.readFileSync(
-  path.join(__dirname, "..", "src", "main.js"),
+  path.join(__dirname, "..", "src", "app/entry/main.js"),
   "utf8",
 );
 
@@ -70,16 +70,24 @@ const check = (name, ok, detail) => {
   }
 };
 
+/*
+ * The panel markup moved to components/layout/panels in the Phase 2
+ * reorganisation, so its text is read directly from there.
+ */
+const markupSource = fs
+  .readFileSync(modulePath("feature-panel-markup.js"), "utf8")
+  .replace(/\r\n/g, "\n");
+
 const section = (startMarker, endMarker) => {
-  const start = code.indexOf(startMarker);
+  const start = markupSource.indexOf(startMarker);
 
   if (start < 0) {
     return "";
   }
 
-  const end = code.indexOf(endMarker, start + startMarker.length);
+  const end = markupSource.indexOf(endMarker, start + startMarker.length);
 
-  return code.slice(start, end < 0 ? undefined : end);
+  return markupSource.slice(start, end < 0 ? undefined : end);
 };
 
 console.log("\n  the header is not an inspector\n");
@@ -225,7 +233,7 @@ const panelAt = index.indexOf(
 );
 
 const drawingAt = index.indexOf(
-  "editor/index.js",
+  "features/workspace/index.js",
 );
 
 check(

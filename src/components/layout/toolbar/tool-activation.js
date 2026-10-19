@@ -12,7 +12,7 @@ import { drawingCanvas, drawingRedo, drawingUndo, toolList } from "../../../feat
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
-import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -135,15 +135,53 @@ export function activateTool(
         return;
     }
 
+    /*
+     * Arc and Polygon carry a construction METHOD (three-point vs
+     * centre, centre vs side) chosen from their toolbar submenu. That
+     * submenu arms the tool through here every time a method is picked,
+     * so they must count as placement tools: otherwise choosing the
+     * second method while the tool was already active would toggle it
+     * back off to Select and the student would have to click the tool
+     * again to get the method they just asked for.
+     */
+    /*
+     * A STATICS SPAN TOOL IS A PLACEMENT TOOL TOO.
+     *
+     * `STATICS_PLACEMENT_TOOLS` lists the tools FINISHED by one click; the
+     * spans - Beam, Cable, Shaft, Point Force, the three Connections and a
+     * Reference Line - are not in it, because they take two clicks. They are
+     * still tools that PLACE a feature, and re-clicking one must keep it armed
+     * rather than cancel it.
+     *
+     * This list used to name `truss` by hand and omit every other span. The
+     * result was silent and total: the Statics submenu arms a child tool
+     * THROUGH `activateTool`, so the first call set `beam` and the second -
+     * the toolbar's own click for the same gesture - read `activeTool ===
+     * "beam"` and toggled it straight back to Select. The status line still
+     * showed "Specify beam start point", so the tool LOOKED armed, and the drag
+     * that followed drew nothing at all. That is the reported "statics tools no
+     * longer render": nothing was ever created to render.
+     *
+     * Asked of the span table rather than of a second hand-written list, so a
+     * span tool added there is covered here without another edit.
+     */
     const isPlacementTool =
         Boolean(
             STATICS_PLACEMENT_TOOLS[
                 toolId
             ]
         ) ||
+        Boolean(
+            STATICS_SPAN_TOOLS[
+                toolId
+            ]
+        ) ||
         isBodyAttachedTool(toolId) ||
         toolId === "truss" ||
-        toolId === "point";
+        toolId === "point" ||
+        toolId === "arc" ||
+        toolId === "reference-arc" ||
+        toolId === "polygon";
 
     const nextTool =
         drawingState.activeTool ===
@@ -250,15 +288,13 @@ export function initialToolMessage(
         isDimensionTool(toolId)
     ) {
         /*
-         * The dimension tools open by asking for a REFERENCE, not a
+         * The dimension tool opens by asking for a REFERENCE, not a
          * whole feature: a reference may be a point, a line, a circle or
          * an arc, and the tool works out the measurement from what it is
          * given. Saying "reference" rather than "feature" is what tells
          * the student they may click a midpoint as readily as a body.
          */
-        return toolId === "smart-dimension"
-            ? "Specify dimension reference"
-            : "Specify dimension reference - D changes what is measured";
+        return "Specify dimension reference - D changes what is measured";
     }
 
     /*
@@ -294,6 +330,10 @@ export function initialToolMessage(
             triangle: "Specify first point",
             circle: "Specify centre point",
             rectangle: "Specify first corner",
+            arc: "Specify arc start point",
+            polygon: "Specify polygon centre",
+            "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
+            "coordinate-system-2d": "Specify origin",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a saturation diagram to place the first process state",

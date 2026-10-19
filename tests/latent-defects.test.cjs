@@ -51,17 +51,26 @@ if (bootError) {
   process.exit(1);
 }
 
+/*
+ * THE LEGACY PANEL IS GONE, AND ITS STAND-INS ARE NOT MOUNTED.
+ *
+ * This file used to insert `#drawingProperties` and `#drawingFeaturesBack` so
+ * the old panel could be rendered into them. Both elements were created BY the
+ * old panel, and mounting them here would put back exactly the state the
+ * migration removed - so the checks below read the inspector's Features pane
+ * instead, which is where a feature's properties are shown now.
+ */
+
 /* By file name, so a module can move between folders without breaking this. */
 const { locate } = require("./helpers/source-path.cjs");
 const src = (file) => require(locate(path.basename(file)));
 
-const model = src("core/model/drawing-state.js").default;
-const { drawingState, editorState } = src("editor/editor-state.js");
-const { renderProperties } = src("editor/feature-panel.js");
-const { renderLoadBuildPanel } = src("editor/feature-tree.js");
+const model = src("src/shared/model/drawing-state.js").default;
+const { drawingState } = src("features/workspace/editor-state.js");
+const { renderProperties } = src("components/layout/panels/feature-panel.js");
 const { analysisSourceBody } = src("editor/analysis-tools.js");
 
-const panel = document.getElementById("drawingProperties");
+const panel = document.getElementById("drawingFeatures");
 
 console.log("\n  a Triangle's Features panel renders\n");
 
@@ -74,9 +83,6 @@ console.log("\n  a Triangle's Features panel renders\n");
   model.addObject(drawingState, triangle);
   model.selectObject(drawingState, triangle.id);
 
-  /* As clicking the feature in the tree does: open its properties. */
-  editorState.featurePanelView = "edit";
-
   const result = attempt(() => renderProperties());
 
   check(
@@ -86,36 +92,45 @@ console.log("\n  a Triangle's Features panel renders\n");
   );
 
   check(
-    "and the panel shows its sides",
-    /Side/i.test(panel.textContent),
-    "the triangle panel has no side rows",
+    "and the panel is the inspector's Features content",
+    panel !== null && panel.dataset.selectionCount === "1",
+    panel && panel.dataset.selectionCount,
+  );
+
+  check(
+    "showing the triangle's own Fill and Appearance",
+    Boolean(panel.querySelector('[data-feature-group="fill"]')) &&
+      Boolean(panel.querySelector('[data-feature-group="appearance"]')),
+    panel.innerHTML.slice(0, 200),
+  );
+
+  check(
+    "and it never invents a side-length row",
+    !/side length/i.test(panel.textContent),
+    "a triangle's sides are its gesture, not a typed dimension",
   );
 
   model.clearSelection(drawingState);
+  renderProperties();
 }
 
-console.log("\n  the Distributed Load build panel renders\n");
+console.log("\n  nothing is left of the legacy panel\n");
 
 {
-  const result = attempt(() => renderLoadBuildPanel({ loadSourceId: null }));
-
   check(
-    "rendering it does not throw",
-    !result.error,
-    result.error && result.error.message,
+    "no #drawingProperties element is created",
+    document.getElementById("drawingProperties") === null,
   );
 
   check(
-    "and it opens with its heading",
-    /DISTRIBUTED LOAD/.test(panel.innerHTML) &&
-      panel.querySelector(".drawing-properties-section") !== null,
-    "the DISTRIBUTED LOAD heading is missing",
+    "and no #drawingFeaturesBack element either",
+    document.getElementById("drawingFeaturesBack") === null,
   );
 
   check(
-    "and it states the source body",
-    /Source Body/.test(panel.textContent) && /Free span/.test(panel.textContent),
-    "the source body row is missing",
+    "and a render with nothing selected leaves Features empty",
+    document.getElementById("drawingFeatures").innerHTML === "",
+    document.getElementById("drawingFeatures").innerHTML.slice(0, 120),
   );
 }
 

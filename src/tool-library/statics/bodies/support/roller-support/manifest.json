@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.support.roller-support",
+  "label": "Roller Support",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/support/roller-support",
+  "template": "template.tex",
+  "implemented": false
+}

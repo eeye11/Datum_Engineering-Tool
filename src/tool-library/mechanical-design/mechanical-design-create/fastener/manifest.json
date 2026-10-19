@@ -1,0 +1,9 @@
+{
+  "id": "mechanical-design.mechanical-design-create.fastener",
+  "label": "Fastener",
+  "category": "mechanical-design",
+  "group": "mechanical-design-create",
+  "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/fastener",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -41,7 +41,6 @@ const dom = fs.readFileSync(locate("dom.js"), "utf8");
 const controls = fs.readFileSync(locate("workspace-controls.js"), "utf8");
 const panel = fs.readFileSync(locate("feature-panel.js"), "utf8");
 const staticsPanel = fs.readFileSync(locate("statics-panel.js"), "utf8");
-const binding = fs.readFileSync(locate("property-binding.js"), "utf8");
 
 console.log("\n  the control is on the TOP TOOLBAR\n");
 
@@ -136,16 +135,20 @@ check(
 );
 
 check(
-  "so the panel is built from the feature's own properties alone",
-  /drawingProperties\.innerHTML\s*=\s*\n?\s*featurePropertyMarkup\(object\)/.test(
-    panel,
+  "so the Features tab is the selection's own properties alone",
+  /host\.innerHTML = featuresMarkupForSelection\(objects\)/.test(
+    fs.readFileSync(locate("features-editor.js"), "utf8"),
   ),
 );
 
 check(
-  "and the old panel binding is gone",
-  !/data-statics-vector-scale/.test(binding) &&
-    !/data-statics-vector-custom/.test(binding),
+  "and no statics-display control is offered anywhere in the panel",
+  !/data-statics-vector-scale/.test(staticsPanel) &&
+    !/data-statics-vector-custom/.test(staticsPanel) &&
+    !/data-statics-vector-scale/.test(
+      fs.readFileSync(locate("feature-schema.js"), "utf8"),
+    ),
+  "the vector scale is a toolbar display setting, not a feature property",
 );
 
 console.log("\n  the physics is untouched by the scale\n");

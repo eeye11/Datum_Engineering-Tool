@@ -1,0 +1,9 @@
+{
+  "id": "dynamics.dynamics-create.acceleration",
+  "label": "Acceleration",
+  "category": "dynamics",
+  "group": "dynamics-create",
+  "libraryPath": "src/tool-library/dynamics/dynamics-create/acceleration",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -5,15 +5,15 @@
  */
 
 export function showTab(tabName, button) {
-    document.querySelectorAll(".review-content").forEach(section => {
+    globalThis.document.querySelectorAll(".review-content").forEach(section => {
         section.classList.remove("active");
     });
 
-    document.querySelectorAll(".tab").forEach(tab => {
+    globalThis.document.querySelectorAll(".tab").forEach(tab => {
         tab.classList.remove("active");
     });
 
-    document.getElementById(tabName).classList.add("active");
+    globalThis.document.getElementById(tabName).classList.add("active");
     button.classList.add("active");
 
     /*
@@ -61,6 +61,6 @@ export function showTab(tabName, button) {
     }
 }
 
-document.querySelectorAll(".tab[data-tab]").forEach(button => {
+globalThis.document.querySelectorAll(".tab[data-tab]").forEach(button => {
     button.addEventListener("click", () => showTab(button.dataset.tab, button));
 });

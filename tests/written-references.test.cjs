@@ -1,22 +1,16 @@
 /*
  * ========================================================
- * WRITTEN SOLUTION DRAWING REFERENCES
+ * WRITTEN SOLUTION EMBEDDED DRAWINGS (the insertion path)
  * ========================================================
  *
- * The LaTeX source is the source of truth. Insert Reference writes a real
- * command into it; the figure is GENERATED from that command, and is never
- * stored as an image.
+ * A drawing inserted into the written solution is EMBEDDED: its complete
+ * TikZ source is written into the document at the caret. The document is
+ * the only thing needed to reconstruct the drawing - no sheet id to
+ * resolve, no token to substitute, no second file to fetch.
  *
- * Two failure classes must stay distinct, because they mean different things to
- * the reader:
- *
- *   .drawing-reference-missing   the sheet is gone, or could not be drawn
- *   .drawing-reference-empty     the sheet really is blank
- *
- * Conflating them is what once produced "this sheet is empty" over a sheet full
- * of geometry - a confident, false claim inside a document meant as evidence.
- * The renderer asks the SHEET whether it has features before saying it is
- * empty, and these checks pin that apart.
+ * The old mechanism was a reference token (`[DRAWING_REFERENCE:<id>]`)
+ * resolved at render time; these checks pin the replacement: the code that
+ * lands in the source is the drawing itself.
  */
 
 const fs = require("fs");
@@ -37,84 +31,103 @@ const check = (name, ok, detail) => {
 };
 
 const written = fs.readFileSync(locate("written-references.js"), "utf8");
-const reference = fs.readFileSync(locate("drawing-reference.js"), "utf8");
+const writingTab = fs.readFileSync(locate("writing-tab.js"), "utf8");
+const embedded = fs.readFileSync(locate("embedded-drawings.js"), "utf8");
+const blocksEditor = fs.readFileSync(locate("drawing-blocks-editor.js"), "utf8");
+const latexDocument = fs.readFileSync(locate("latex-document.js"), "utf8");
 
-console.log("\n  the source is the source of truth\n");
+console.log("\n  the document is the source of truth\n");
 
 check(
-  "Insert Reference writes into the LaTeX source",
-  /code\.value\s*=\s*\n?\s*code\.value\.slice\(0, start\) \+/.test(written),
-  "the command must become real text in the editor",
+  "Insert Drawing writes the TikZ code into the LaTeX source",
+  /writeLatexPictureParts\(/.test(writingTab) &&
+    /serializeDrawingBlock\(/.test(writingTab) &&
+    /field\.value\s*=\s*\n?\s*field\.value\.slice\(0, start\) \+/.test(writingTab),
+  "the drawing's code must become real text in the editor",
 );
 
 check(
   "and inserts AT THE CURSOR, not at the end",
-  /code\.selectionStart/.test(written) &&
-    /code\.selectionEnd/.test(written) &&
-    !/code\.value\s*\+=\s*token/.test(written),
+  /field\.selectionStart/.test(writingTab) &&
+    /field\.selectionEnd/.test(writingTab) &&
+    !/field\.value\s*\+=/.test(writingTab),
   "appending would ignore where the student was typing",
 );
 
+const insertBody = writingTab.slice(writingTab.indexOf("function insertDrawingFigure"));
+
 check(
-  "the command carries the sheet's STABLE ID",
-  /serializeReference\(/.test(written) &&
-    /\[DRAWING_REFERENCE:/.test(reference),
-  "a reference must survive the sheet being renamed",
+  "the inserted code is the complete drawing, not a token",
+  !/\[DRAWING_REFERENCE:/.test(insertBody) && !/createReference/.test(insertBody),
+  "insertion must not depend on a reference token",
 );
 
 check(
-  "nothing is written when there is no sheet to refer to",
-  /const sheetId = sheetSelect\.value;[\s\S]{0,120}if \(!sheetId\) \{\s*return;/.test(
-    written,
+  "the insert pipeline is the export pipeline",
+  /writeLatexPictureParts\(\s*serializeDocumentBody\(\)/.test(writingTab),
+  "the same writer the .tex export uses",
+);
+
+console.log("\n  the embedded form is plain LaTeX\n");
+
+check(
+  "blocks are plain tikzpicture environments, no application markers",
+  !/DAETUM-DRAWING/.test(embedded) && !/DAETUM-DRAWING/.test(latexDocument.slice(
+    latexDocument.indexOf("function cleanSheetPicture"),
+  )),
+  "nothing may wrap the drawing in application metadata",
+);
+
+check(
+  "the picture writer generates no comments, labels or placeholder paths",
+  !/comment\(/.test(
+    latexDocument.slice(
+      latexDocument.indexOf("function cleanSheetPicture"),
+      latexDocument.indexOf("export function writeLatexPictureParts"),
+    ),
   ),
 );
 
-console.log("\n  the figure is generated, not stored\n");
+check(
+  "an empty sheet produces no code, and the dropdown explains it",
+  /if \(!objects\.length\) \{[\s\S]{0,300}return "";/.test(latexDocument) &&
+    /— Empty/.test(writingTab) &&
+    /no drawing to insert/.test(writingTab),
+);
+
+console.log("\n  collapse is a display, not a rewrite\n");
 
 check(
-  "a figure is rendered from the sheet's CURRENT contents",
-  /renderReference\(/.test(written) &&
-    /sheetResolver\(sheetId\)/.test(reference),
-  "a reference is re-resolved every time, so it cannot go stale",
+  "the collapse layer never writes to the editor's value",
+  /renderDrawingBlocks/.test(blocksEditor) && !/editor\.value\s*=/.test(blocksEditor),
+  "collapsing must not modify source",
+);
+
+console.log("\n  compile and export use the code, not the markers\n");
+
+check(
+  "the compiled document uses the code as it stands",
+  /writeStandaloneLatex\(/.test(written) || /writeStandaloneLatex\(/.test(
+    fs.readFileSync(locate("writing-tab.js"), "utf8"),
+  ),
 );
 
 check(
-  "no image is captured into the source",
-  !/base64|data:image|toDataURL|drawImage/.test(written),
-  "a screenshot in the LaTeX would be a copy, not a reference",
+  "the standalone document declares shared packages once, in the preamble",
+  /\\usepackage\{tikz\}/.test(embedded) &&
+    /\\usetikzlibrary\{arrows\.meta\}/.test(embedded),
+);
+
+console.log("\n  the legacy reference mechanism still renders, but nothing new depends on it\n");
+
+check(
+  "legacy tokens are still rendered for old documents",
+  /appendReferenceFigure/.test(written) && /renderReference\(/.test(written),
 );
 
 check(
-  "the figure is excluded from the application's own viewport",
-  /createRenderState\(sheet, bounds\)/.test(reference),
-  "the figure must be the drawing, not the workspace it happens to be viewed in",
-);
-
-console.log("\n  a missing sheet and an empty sheet are different things\n");
-
-check(
-  "a missing sheet is reported as missing",
-  /reason: "missing-sheet"/.test(reference) &&
-    /drawing-reference-missing/.test(written),
-);
-
-check(
-  "an empty sheet is reported as empty",
-  /drawing-reference-empty/.test(written),
-);
-
-check(
-  "emptiness is asked of the SHEET, not inferred from failed measurement",
-  /const hasContent = \(sheet\.objects \|\| \[\]\)\.length > 0;/.test(
-    reference,
-  ) && /if \(!points\.length && hasContent\)/.test(reference),
-  "a measurement failure must never be reported as a blank sheet",
-);
-
-check(
-  "a failed figure does not stop the rest of the solution rendering",
-  /try \{[\s\S]{0,200}appendFigure\(output, reference\)/.test(written) &&
-    /catch \(error\)/.test(written),
+  "embedded drawings are rendered from their own code, via the TikZ service",
+  /appendEmbeddedFigure/.test(written) && /renderTikzSvg/.test(written),
 );
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

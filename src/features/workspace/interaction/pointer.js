@@ -1280,6 +1280,22 @@ export function updateDrawingCoordinates(
             event
         );
 
+    /*
+     * THE MODIFIER KEYS ARE PART OF THIS FRAME'S RESOLUTION.
+     *
+     * They are not a property of the POINT - the snap arithmetic is the same
+     * whatever is held - but they are what a tool reads to constrain the SHAPE
+     * it is building (Shift makes a Rectangle square). Carrying them on the
+     * resolution means the preview and the commit read the same frame's state,
+     * rather than the preview looking at the event and the commit having
+     * nothing to look at.
+     */
+    resolution.modifiers = {
+        shift: Boolean(event?.shiftKey),
+        alt: Boolean(event?.altKey),
+        ctrl: Boolean(event?.ctrlKey || event?.metaKey)
+    };
+
     enggDrawingState.setInteraction(
         drawingState,
         resolution

@@ -12,6 +12,7 @@ export const toolIcons = {
 	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
 	Triangle: drawingIcon(`<path ${iconStroke} d="M10 3l7 13H3z"/><circle ${iconStroke} cx="10" cy="3" r="1"/>`),
 	Polygon: drawingIcon(`<path ${iconStroke} d="M10 3l6 4v7l-6 3-6-3V7z"/>`),
+	"Freeform Polygon": drawingIcon(`<path ${iconStroke} d="M4 6l5-3 7 4-2 8-6 2-4-4z"/><circle ${iconStroke} cx="4" cy="6" r="1"/><circle ${iconStroke} cx="9" cy="3" r="1"/><circle ${iconStroke} cx="16" cy="7" r="1"/><circle ${iconStroke} cx="14" cy="15" r="1"/><circle ${iconStroke} cx="8" cy="17" r="1"/>`),
 	Arc: drawingIcon(`<path ${iconStroke} d="M4 14a7 7 0 0 1 10-9"/><path ${iconStroke} d="M13 5h2v2"/>`),
 	Circle: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/>`),
 	Rectangle: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/>`),
@@ -41,32 +42,15 @@ export const toolIcons = {
 
 	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
 	/*
-	 * Dimension and Smart Dimension are two tools over ONE
-	 * implementation.
+	 * DIMENSION is the one dimension tool.
 	 *
-	 * Smart Dimension is the same tool with the decision left to the
-	 * program: it inspects the selection, picks the meaningful
-	 * measurement and places it for you. Dimension is the same tool
-	 * with the choice made explicit, which is what a student needs
-	 * when the automatic reading is not the one they want - a beam
-	 * quoted vertically rather than horizontally, say.
-	 *
-	 * They differ only in whether the measurement type is chosen for
-	 * the user or by them, so they share an icon's underlying shape
-	 * and are kept adjacent in the Annotate toolset.
+	 * The retired Smart Dimension and Variable Dimension tools are gone from
+	 * the catalogue: a dimension is a single annotation tool whose linear,
+	 * aligned, angular, radius, diameter and arc-length types are read from
+	 * the geometry the student picks, and whose displayed value is editable
+	 * text rather than a second tool.
 	 */
 	Dimension: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
-	"Smart Dimension": drawingIcon(`<path ${iconStroke} d="M4 6l2-2 2 2M6 4v12M4 14l2 2 2-2M11 5h5M11 10h4M11 15h5"/>`),
-
-	/*
-	 * VARIABLE DIMENSION - a symbol, not a measurement.
-	 *
-	 * The icon says so: the same dimension's witness lines and arrows, with an
-	 * `x` on the value instead of a ruled bar. A student glancing at the
-	 * Annotate toolset should be able to tell at once which of the two states a
-	 * MEASURED number and which states an UNKNOWN one.
-	 */
-	"Variable Dimension": drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/><path ${iconStroke} d="M8 9.5l4 5M12 9.5l-4 5"/>`),
 	"Annotation": drawingIcon(`<path ${iconStroke} d="M4 5h8M4 9h8M4 13h5"/><path ${iconStroke} d="M12 16l1.5-4L18 7l-4.5 1.5L12 13"/>`),
 	"Note / Text": drawingIcon(`<path ${iconStroke} d="M4 4h12v9H9l-4 3v-3H4zM7 7h6M7 10h4"/>`),
 
@@ -309,7 +293,8 @@ export const drawingToolGroups = [
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
 			{ id: "arc", label: "Arc", shortcut: "A" },
-			{ id: "polygon", label: "Polygon", shortcut: "G" }
+			{ id: "polygon", label: "Polygon", shortcut: "G" },
+			{ id: "freeform-polygon", label: "Freeform Polygon", shortcut: "F" }
 		]
 	},
 	{
@@ -339,26 +324,25 @@ export const drawingToolGroups = [
  * A tool is a COMMAND. A command that is behind another command is a
  * command the student has to go looking for, and the words for the kinds of
  * annotation - Dimensions, Text, Leader - are descriptions, not places. So
- * there is no "Dimensions -> Smart Dimension", no caret, no flyout and no
- * hover menu: "Variable Dimension" and "Smart Dimension" and the other
- * eight are VISIBLE AND CLICKABLE THE MOMENT Annotate is selected.
+ * there is no "Dimensions -> Dimension", no caret, no flyout and no
+ * hover menu: Dimension and the other annotate commands are VISIBLE AND
+ * CLICKABLE THE MOMENT Annotate is selected.
  *
  * This mirrors Statics exactly. Bodies, Loads and Supports open menus there
  * because each one is a FAMILY OF FEATURES with genuinely different
  * geometry - a pin support and a roller support are different drawings - so
  * choosing between them is a real step. Annotate's commands are not like
- * that: a Smart Dimension and a Variable Dimension are two separate tools
- * with two separate buttons, and grouping them behind a "Dimensions" parent
- * would add a click and hide a command without deciding anything.
+ * that: a Dimension and a Leader are two separate tools with two separate
+ * buttons, and grouping them behind a parent would add a click and hide a
+ * command without deciding anything.
  *
  * THE TOOL IDS ARE DELIBERATELY THE FEATURE KINDS.
  *
  * `note`, `label`, `leader`, `callout`, `arrow`, `symbol`, `tolerance`,
  * `table` are the ids the creation layer and the panel both key on, so a
  * tool and the feature it makes cannot drift apart: there is one word for
- * each thing. `variable-dimension` and `smart-dimension` keep the ids they
- * already had, because the dimension tools are shared with the existing
- * dimension system.
+ * each thing. `dimension` is the single dimension tool: the retired Smart
+ * Dimension and Variable Dimension tools are no longer part of it.
  */
 export const annotateToolGroups = [
 	{
@@ -401,10 +385,7 @@ export const annotateToolGroups = [
 	{
 		id: "annotate-dimensions",
 		label: "Dimensions",
-		tools: [
-			{ id: "variable-dimension", label: "Variable Dimension" },
-			{ id: "smart-dimension", label: "Smart Dimension" }
-		]
+		tools: [{ id: "dimension", label: "Dimension" }]
 	},
 	{
 		id: "annotate-text",
@@ -596,7 +577,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
-	ANNOTATE: ["Variable Dimension", "Smart Dimension", "Note / Text", "Label", "Leader", "Callout", "Arrow", "Symbol", "Tolerance", "Table"],
+	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	FLUIDS: ["Pipe", "Reservoir", "Valve", "Pump", "Flow Arrow", "Pressure"],

@@ -172,7 +172,11 @@ function loadModule(name) {
  * a sandbox cannot evaluate.
  */
 function controllerSource() {
-  const editorDir = path.join(SOURCE_ROOT, "editor");
+  /*
+   * Since the Phase 2 reorganisation the drawing controller's modules live
+   * under src/features/workspace/, so that directory is gathered here.
+   */
+  const editorDir = path.join(SOURCE_ROOT, "features", "workspace");
   const files = [];
   (function walk(dir) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

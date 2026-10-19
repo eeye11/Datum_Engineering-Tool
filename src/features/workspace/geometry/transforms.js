@@ -837,7 +837,6 @@ function intersectionsAlongLine(lineObject, objects) {
             !other ||
             other.id === lineObject.id ||
             other.type === "dimension" ||
-            other.type === "variable-dimension" ||
             other.type === "annotation"
         ) {
             return;

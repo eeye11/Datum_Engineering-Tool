@@ -1,0 +1,57 @@
+{
+  "tool": "geometry.construction.coordinate-system",
+  "construction": [],
+  "appearance": [
+    {
+      "key": "showXAxis",
+      "label": "Show X-axis",
+      "kind": "choice",
+      "default": "on",
+      "options": [
+        { "value": "on", "label": "On" },
+        { "value": "off", "label": "Off" }
+      ]
+    },
+    {
+      "key": "showYAxis",
+      "label": "Show Y-axis",
+      "kind": "choice",
+      "default": "on",
+      "options": [
+        { "value": "on", "label": "On" },
+        { "value": "off", "label": "Off" }
+      ]
+    },
+    {
+      "key": "showLabels",
+      "label": "Show Labels",
+      "kind": "choice",
+      "default": "on",
+      "options": [
+        { "value": "on", "label": "On" },
+        { "value": "off", "label": "Off" }
+      ]
+    },
+    {
+      "key": "stroke",
+      "label": "Colour",
+      "kind": "colour",
+      "default": "#000000"
+    },
+    {
+      "key": "lineWidth",
+      "label": "Thickness",
+      "kind": "choice",
+      "default": "normal",
+      "options": [
+        { "value": "very-thin", "label": "Very Thin" },
+        { "value": "thin", "label": "Thin" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "thick", "label": "Thick" },
+        { "value": "very-thick", "label": "Very Thick" }
+      ]
+    }
+  ],
+  "defaultFixed": false
+}

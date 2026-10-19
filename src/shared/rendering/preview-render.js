@@ -9,7 +9,7 @@ import enggMeasurement from "../geometry/measurement-core.js";
 import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import { arcPathData, createSvgElement, paintColour } from "./svg-primitives.js";
-import { appendDimensionEntity, appendVariableDimensionEntity } from "./dimension-render.js";
+import { appendDimensionEntity } from "./dimension-render.js";
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
@@ -256,34 +256,16 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
                         );
 
             /*
-             * A VARIABLE DIMENSION'S PREVIEW SHOWS THE DIMENSION GEOMETRY AND
-             * NOT AN ANSWER.
+             * THE PREVIEW IS THE DIMENSION THE PLACEMENT WILL COMMIT.
              *
-             * The preview was always built as a `dimension` probe, so an
-             * armed VARIABLE dimension drew the MEASURED value - "100 mm" on a
-             * line the student was about to name `L`. That number is not the
-             * feature's value and never becomes it, so showing it was telling
-             * the student something the drawing would then contradict.
-             *
-             * The extension lines, the arrows and the placement are the same
-             * either way - they come from the shared dimension model - so the
-             * variable case is drawn as a variable with an EMPTY symbol, and
-             * `appendVariableDimensionEntity` returns before drawing any text.
-             * The shape appears, the value does not.
+             * It is built as a `dimension` probe and drawn by the dimension
+             * renderer, so the extension lines, the arrows, the value and the
+             * placement the student sees are exactly what the finished feature
+             * will show.
              */
-            const previewingVariable =
-                state.activeTool === "variable-dimension";
-
             const previewDimension = {
                 id: "dimension-preview",
-                type: previewingVariable ? "variable-dimension" : "dimension",
-
-                /*
-                 * AN EMPTY SYMBOL IS THE "not written yet" STATE, and the
-                 * variable renderer draws nothing for it - which is exactly
-                 * the empty value the requirement asks the preview to show.
-                 */
-                symbol: previewingVariable ? "" : undefined,
+                type: "dimension",
 
                 dimensionType:
                     state.interaction
@@ -314,29 +296,13 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
                 "0.72"
             );
 
-            /*
-             * DRAWN BY THE RENDERER FOR ITS OWN KIND, so the preview and the
-             * committed feature cannot disagree: a variable previews through
-             * the variable renderer (which draws the shape and no text for an
-             * empty symbol), and a dimension through the dimension one.
-             */
-            if (previewingVariable) {
-                appendVariableDimensionEntity(
-                    previewGroup,
-                    previewDimension,
-                    state,
-                    toScreen,
-                    previewDimension.style
-                );
-            } else {
-                appendDimensionEntity(
-                    previewGroup,
-                    previewDimension,
-                    state,
-                    toScreen,
-                    previewDimension.style
-                );
-            }
+            appendDimensionEntity(
+                previewGroup,
+                previewDimension,
+                state,
+                toScreen,
+                previewDimension.style
+            );
 
             svg.appendChild(previewGroup);
         }

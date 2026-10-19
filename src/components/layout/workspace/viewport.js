@@ -442,15 +442,9 @@ export function renderedBounds(
  *
  * `graphicsFor` - the one place that says where a dimension draws - is asked
  * for its lines, arcs and text frame, and every point of them is contributed.
- * A variable's SYMBOL is not measured: an empty symbol draws no text, and the
- * extension lines are what the eye follows anyway.
  */
 function dimensionBoundsPoints(object) {
-    if (
-        !object ||
-        (object.type !== "dimension" &&
-            object.type !== "variable-dimension")
-    ) {
+    if (!object || object.type !== "dimension") {
         return [];
     }
 
@@ -1347,6 +1341,36 @@ export function toggleWorkspaceSetting(
             nextEnabled;
 
         /*
+         * ========================================================
+         * GRID VISIBILITY DRIVES GRID SNAP, AS A POLICY NOT A MERGE
+         * ========================================================
+         *
+         * Showing the grid turns grid snapping ON; hiding it turns grid snapping
+         * OFF. That is the required automatic relationship, and it is written here
+         * as a POLICY on the visibility switch rather than by making the two the
+         * same setting - which is what they used to be, and what made it
+         * impossible to keep the grid on screen while placing points freely.
+         *
+         * `visible` and `snapToGrid` stay separate fields, so:
+         *
+         *   - the user can switch grid snapping off with the grid still shown
+         *     (the Settings dialog owns that control), and
+         *
+         *   - hiding and re-showing the grid re-enables snapping, because the
+         *     policy runs again on the way back on.
+         *
+         * NOTHING ELSE IS TOUCHED. Object snapping is a different system with
+         * its own switch, and changing the grid must not disturb it - that is the
+         * independence the four-state table in the requirements describes.
+         *
+         * NO EXISTING GEOMETRY IS TOUCHED EITHER. Grid snapping constrains the
+         * NEXT input coordinate; it never realigns what is already drawn, so
+         * turning the grid on cannot move a single committed point.
+         */
+        drawingState.grid.snapToGrid =
+            nextEnabled;
+
+        /*
          * The grid belongs to the SHEET, so it is written back
          * to the sheet that is on screen as well as to the live
          * state. Without this the toggle would last until the
@@ -1365,8 +1389,15 @@ export function toggleWorkspaceSetting(
         drawingSnapToggle
     ) {
         /*
-         * Snap OFF means no automatic grid
-         * snapping AND no object snapping.
+         * SNAP IS THE OBJECT SNAP - the references to existing geometry:
+         * endpoints, midpoints, intersections, centres, quadrants and points on
+         * an entity, plus the horizontal and vertical alignment inference.
+         *
+         * IT IS NO LONGER ALSO THE GRID SNAP. It used to write `grid.snapToGrid`
+         * by way of `snap.enabled`, which made the two systems one switch: with
+         * object snapping off the student lost the grid as well, and could not
+         * have one without the other. Grid snapping belongs to the grid switch
+         * and to the Settings dialog; this switch owns only the object snaps.
          */
         drawingState.snap.enabled =
             nextEnabled;

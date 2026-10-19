@@ -21,10 +21,17 @@ import { serializeDocumentBody } from "../../features/workspace/commands/documen
 import { writeLatexPictureParts } from "../file/latex/latex-document.js";
 import { createPalette } from "../file/latex/svg-to-tikz.js";
 import { serializeDrawingBlock, writeStandaloneLatex } from "./embedded-drawings.js";
+import { sourceHasDrawableContent, visibleDrawingSource } from "../rendering/latex/drawing-source.js";
+
+/* Short names for the two source helpers this module reads a sheet with. */
+const drawableContent = sourceHasDrawableContent;
+const visibleSource = visibleDrawingSource;
 import { attachSolutionSourceLoader } from "../integration/datum-api.js";
 import { attachSolutionLoader, attachSolutionDocumentWriter, markDocumentDirty } from "../../features/workspace/commands/document-commands.js";
 import { emitDatumEvent } from "../integration/events.js";
 import enggSolutionState from "./solution-state.js";
+
+const document = globalThis.document;
 /* ---------------------------------------------------------- */
 /* UNDO AND REDO, FOR THE TEXT                                 */
 /* ---------------------------------------------------------- */
@@ -150,14 +157,30 @@ function refreshUndoButtons() {
 let drawingPalette = null;
 
 function isSheetEmpty(sheet) {
-    return !(sheet?.objects || []).some((object) => {
-        /*
-         * Hidden features are not drawable, so a sheet holding only
-         * hidden features is empty in the sense that matters: there is
-         * nothing its code would draw.
-         */
-        return !object.hidden;
-    });
+    /*
+     * EMPTINESS IS ABOUT DRAWABLE CONTENT, NOT ABOUT THE PICTURE EXISTING.
+     *
+     * A sheet may carry objects that are all hidden, and it may carry a source
+     * that has been initialised with an empty `tikzpicture` - neither draws
+     * anything. So the object list decides first, and the sheet's canonical
+     * source is asked as well when one is stored: a source with no command
+     * lines is an empty drawing however it was saved.
+     */
+    const drawableObjects = (sheet?.objects || []).some(
+        (object) => !object.hidden
+    );
+
+    if (drawableObjects) {
+        return false;
+    }
+
+    const storedSource = sheet?.source?.source;
+
+    if (typeof storedSource === "string" && sourceHasDrawableContent(storedSource)) {
+        return false;
+    }
+
+    return true;
 }
 
 function sheetChoices() {
@@ -249,21 +272,54 @@ function insertDrawingFigure() {
             drawingPalette = createPalette();
         }
 
+        /*
+         * THE CANONICAL SOURCE WINS.
+         *
+         * The Source tab shows one editable, canonical `tikzpicture` for a
+         * sheet, and that is what Written Solution must insert - otherwise the
+         * code a student can read in Source and the code pasted into their
+         * answer would be two different drawings, which is the exact split the
+         * source architecture exists to prevent.
+         *
+         * The sheet's stored source is the canonical one: it is captured with
+         * the sheet (see sheets.js) and carries the same text the Source tab
+         * edits. Only when a sheet has no stored source at all - a drawing that
+         * predates it - is the SVG-to-TikZ export used, which is the same code
+         * the .tex download produces.
+         *
+         * Either way the visible form is inserted: `visibleDrawingSource`
+         * strips the object markers, so the answer receives ordinary LaTeX with
+         * nothing in it that says "DAETUM".
+         */
+        const choiceSheet = choice.sheet;
+        const storedSource =
+            typeof choiceSheet?.source?.source === "string"
+                ? choiceSheet.source.source
+                : null;
+
         let parts;
 
-        try {
-            parts = writeLatexPictureParts(
-                serializeDocumentBody(),
-                sheetId,
-                () => drawingPalette
-            );
-        } catch (error) {
-            setSolutionStatus(
-                "This drawing could not be converted to TikZ code. " +
-                    "Check that the sheet is still in the document."
-            );
+        if (storedSource && drawableContent(storedSource)) {
+            parts = {
+                preamble: [],
+                picture: visibleSource(storedSource),
+                empty: false
+            };
+        } else {
+            try {
+                parts = writeLatexPictureParts(
+                    serializeDocumentBody(),
+                    sheetId,
+                    () => drawingPalette
+                );
+            } catch (error) {
+                setSolutionStatus(
+                    "This drawing could not be converted to TikZ code. " +
+                        "Check that the sheet is still in the document."
+                );
 
-            return;
+                return;
+            }
         }
 
         if (!parts.picture) {

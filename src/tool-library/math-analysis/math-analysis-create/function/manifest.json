@@ -1,0 +1,9 @@
+{
+  "id": "math-analysis.math-analysis-create.function",
+  "label": "Function",
+  "category": "math-analysis",
+  "group": "math-analysis-create",
+  "libraryPath": "src/tool-library/math-analysis/math-analysis-create/function",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.polygon",
+  "label": "Polygon",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/polygon",
+  "template": "template.tex",
+  "implemented": true
+}

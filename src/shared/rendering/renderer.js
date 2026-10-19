@@ -1,11 +1,11 @@
 /* SVG renderer for the engineering drawing workspace. */
 import enggErrorLog from "../../app/error-log.js";
 import enggCanvasPalette from "./canvas-palette.js";
-import { ensureSvg, setActiveTheme, setActiveZoom } from "./svg-primitives.js";
+import { ensureSvg, setActiveTheme, setActiveZoom, SVG_NAMESPACE } from "./svg-primitives.js";
 import { appendFeatureLabel } from "./annotation-render.js";
 import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysisFrameExtents, analysisPlotMarks, analysisSketchMarks, analysisValueAt, equationLabels } from "./analysis-render.js";
 import { appendEntity } from "./entity-render.js";
-import { renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSnapIndicator } from "./overlay-render.js";
+import { renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
 import { renderPreview } from "./preview-render.js";
 
 
@@ -56,7 +56,8 @@ import { renderPreview } from "./preview-render.js";
 
     function renderDrawing(
         state,
-        canvas
+        canvas,
+        { overlayOnly = false } = {}
     ) {
         if (!canvas) {
             return;
@@ -84,8 +85,30 @@ import { renderPreview } from "./preview-render.js";
          */
         setActiveTheme(enggCanvasPalette.activeCanvasTheme());
 
+        /*
+         * ========================================================
+         * THE OVERLAY PASS DRAWS INTO THE LAYER IT WAS GIVEN
+         * ========================================================
+         *
+         * The canvas now holds two stacked SVGs: the compiled picture below,
+         * and the interaction overlay above. The overlay pass is handed the
+         * overlay LAYER, which is already an `<svg>` - so it is used as the
+         * drawing surface directly.
+         *
+         * `ensureSvg` would otherwise create a NESTED `svg.drawing-renderer`
+         * INSIDE the overlay, because it looks for that class rather than for
+         * the element it was given. That nested renderer is dead weight - it
+         * draws nothing the overlay does not, and its name is the marker the
+         * rest of the application uses to mean "a second, model-drawn picture"
+         * is present. A canvas showing the compiled source must never contain
+         * one, so when the target already IS an SVG it is drawn into as-is.
+         */
         const svg =
-            ensureSvg(canvas);
+            canvas.namespaceURI === SVG_NAMESPACE &&
+            canvas.tagName &&
+            canvas.tagName.toLowerCase() === "svg"
+                ? canvas
+                : ensureSvg(canvas);
 
         while (
             svg.firstChild
@@ -121,27 +144,36 @@ import { renderPreview } from "./preview-render.js";
          */
         const renderFailures = [];
 
-        state.objects.forEach(
-            entity => {
-                try {
-                    appendEntity(
-                        svg,
-                        entity,
-                        state,
-                        bounds
-                    );
-                } catch (error) {
-                    renderFailures.push({
-                        id: entity && entity.id,
-                        type: entity && entity.type,
-                        error
-                    });
+        /*
+         * THE COMMITTED DRAWING IS THE COMPILED SOURCE'S, so an overlay pass
+         * omits feature geometry and feature labels entirely. What it keeps is
+         * everything that is about INTERACTION: the grid, the live preview, the
+         * inference line, the snap marker, the box and the handles. Those are
+         * aids drawn over the picture, not a second drawing of it.
+         */
+        if (!overlayOnly) {
+            state.objects.forEach(
+                entity => {
+                    try {
+                        appendEntity(
+                            svg,
+                            entity,
+                            state,
+                            bounds
+                        );
+                    } catch (error) {
+                        renderFailures.push({
+                            id: entity && entity.id,
+                            type: entity && entity.type,
+                            error
+                        });
+                    }
                 }
-            }
-        );
+            );
 
-        if (renderFailures.length) {
-            reportRenderFailures(renderFailures);
+            if (renderFailures.length) {
+                reportRenderFailures(renderFailures);
+            }
         }
 
         /*
@@ -156,17 +188,19 @@ import { renderPreview } from "./preview-render.js";
          * "every feature's label" one behaviour rather than a branch per type -
          * which is exactly the branch that was missing for Line and Point.
          */
-        state.objects.forEach((entity) => {
-            try {
-                appendFeatureLabel(svg, entity, state, bounds);
-            } catch (error) {
-                renderFailures.push({
-                    id: entity && entity.id,
-                    type: entity && entity.type,
-                    error
-                });
-            }
-        });
+        if (!overlayOnly) {
+            state.objects.forEach((entity) => {
+                try {
+                    appendFeatureLabel(svg, entity, state, bounds);
+                } catch (error) {
+                    renderFailures.push({
+                        id: entity && entity.id,
+                        type: entity && entity.type,
+                        error
+                    });
+                }
+            });
+        }
 
         /*
          * Live construction preview
@@ -205,6 +239,13 @@ import { renderPreview } from "./preview-render.js";
             state,
             bounds
         );
+
+        /*
+         * THE SELECTION IS AN OUTLINE OVER THE PICTURE. A selected feature is
+         * not redrawn in a highlight colour - the picture belongs to the
+         * source - so it is marked instead.
+         */
+        renderSelectionOutline(svg, state, bounds);
 
         renderSelectionHandles(svg, state, bounds);
     }

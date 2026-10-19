@@ -38,7 +38,7 @@ import enggCanvasPalette from "./canvas-palette.js";
      * WHY A MODULE-LEVEL VALUE RATHER THAN A PARAMETER.
      *
      * Twelve places emit a `font-size`: the annotation model, the annotate
-     * features, dimension and variable-dimension text, the diagram axis labels
+     * features, dimension text, the diagram axis labels
      * and tick numbers, and a handful inside the drawing helpers. Threading
      * `state` through every one of them - and through the helpers that do not
      * currently receive it - would be a dozen signature changes to carry one
@@ -158,7 +158,7 @@ import enggCanvasPalette from "./canvas-palette.js";
 
     function createSvgElement(type, attributes = {}) {
         const element =
-            document.createElementNS(
+            globalThis.document.createElementNS(
                 SVG_NAMESPACE,
                 type
             );
@@ -219,7 +219,7 @@ import enggCanvasPalette from "./canvas-palette.js";
 
         if (!svg) {
             svg =
-                document.createElementNS(
+                globalThis.document.createElementNS(
                     SVG_NAMESPACE,
                     "svg"
                 );

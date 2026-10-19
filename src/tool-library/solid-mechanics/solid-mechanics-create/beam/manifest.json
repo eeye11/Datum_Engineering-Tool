@@ -1,0 +1,9 @@
+{
+  "id": "solid-mechanics.solid-mechanics-create.beam",
+  "label": "Beam",
+  "category": "solid-mechanics",
+  "group": "solid-mechanics-create",
+  "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/beam",
+  "template": "template.tex",
+  "implemented": false
+}

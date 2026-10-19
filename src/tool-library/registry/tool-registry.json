@@ -1,0 +1,990 @@
+{
+  "version": 1,
+  "description": "DAETUM tool-library registry: the authoritative parent-child tool hierarchy. Each tool points at its library folder, where its manifest, Features declaration and TikZ template live.",
+  "categories": [
+    {
+      "id": "geometry",
+      "label": "Geometry",
+      "libraryPath": "src/tool-library/geometry",
+      "groups": [
+        {
+          "id": "selection",
+          "label": "Selection",
+          "kind": "group",
+          "libraryPath": "src/tool-library/geometry/selection",
+          "tools": [
+            {
+              "id": "geometry.selection.select",
+              "label": "Select",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/selection/select"
+            }
+          ]
+        },
+        {
+          "id": "create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/geometry/create",
+          "tools": [
+            {
+              "id": "geometry.create.point",
+              "label": "Point",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/point"
+            },
+            {
+              "id": "geometry.create.line",
+              "label": "Line",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/line"
+            },
+            {
+              "id": "geometry.create.triangle",
+              "label": "Triangle",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/triangle"
+            },
+            {
+              "id": "geometry.create.rectangle",
+              "label": "Rectangle",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/rectangle"
+            },
+            {
+              "id": "geometry.create.circle",
+              "label": "Circle",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/circle"
+            },
+            {
+              "id": "geometry.create.arc",
+              "label": "Arc",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/arc"
+            },
+            {
+              "id": "geometry.create.polygon",
+              "label": "Polygon",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/polygon"
+            },
+            {
+              "id": "geometry.create.freeform-polygon",
+              "label": "Freeform Polygon",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/create/freeform-polygon"
+            }
+          ]
+        },
+        {
+          "id": "construction",
+          "label": "Construction",
+          "kind": "group",
+          "libraryPath": "src/tool-library/geometry/construction",
+          "tools": [
+            {
+              "id": "geometry.construction.coordinate-system",
+              "label": "Coordinate System",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/construction/coordinate-system"
+            }
+          ]
+        },
+        {
+          "id": "modify",
+          "label": "Modify",
+          "kind": "group",
+          "libraryPath": "src/tool-library/geometry/modify",
+          "tools": [
+            {
+              "id": "geometry.modify.move",
+              "label": "Move",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/modify/move"
+            },
+            {
+              "id": "geometry.modify.rotate",
+              "label": "Rotate",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/modify/rotate"
+            },
+            {
+              "id": "geometry.modify.mirror",
+              "label": "Mirror",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/modify/mirror"
+            },
+            {
+              "id": "geometry.modify.trim",
+              "label": "Trim",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/modify/trim"
+            },
+            {
+              "id": "geometry.modify.extend",
+              "label": "Extend",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/modify/extend"
+            }
+          ]
+        },
+        {
+          "id": "view",
+          "label": "View",
+          "kind": "group",
+          "libraryPath": "src/tool-library/geometry/view",
+          "tools": [
+            {
+              "id": "geometry.view.pan",
+              "label": "Pan",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/view/pan"
+            },
+            {
+              "id": "geometry.view.zoom",
+              "label": "Zoom",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/view/zoom"
+            },
+            {
+              "id": "geometry.view.fit",
+              "label": "Fit",
+              "parentId": "geometry",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/geometry/view/fit"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "annotate",
+      "label": "Annotate",
+      "libraryPath": "src/tool-library/annotate",
+      "groups": [
+        {
+          "id": "selection",
+          "label": "Selection",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/selection",
+          "tools": [
+            {
+              "id": "annotate.selection.select",
+              "label": "Select",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/selection/select"
+            }
+          ]
+        },
+        {
+          "id": "dimensions",
+          "label": "Dimensions",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/dimensions",
+          "tools": [
+            {
+              "id": "annotate.dimensions.dimension",
+              "label": "Dimension",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/dimensions/dimension"
+            }
+          ]
+        },
+        {
+          "id": "text",
+          "label": "Text",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/text",
+          "tools": [
+            {
+              "id": "annotate.text.note",
+              "label": "Note / Text",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/text/note"
+            },
+            {
+              "id": "annotate.text.label",
+              "label": "Label",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/text/label"
+            }
+          ]
+        },
+        {
+          "id": "leaders",
+          "label": "Leaders",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/leaders",
+          "tools": [
+            {
+              "id": "annotate.leaders.leader",
+              "label": "Leader",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/leaders/leader"
+            },
+            {
+              "id": "annotate.leaders.callout",
+              "label": "Callout",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/leaders/callout"
+            }
+          ]
+        },
+        {
+          "id": "symbols",
+          "label": "Symbols",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/symbols",
+          "tools": [
+            {
+              "id": "annotate.symbols.symbol",
+              "label": "Symbol",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/symbols/symbol"
+            }
+          ]
+        },
+        {
+          "id": "tables",
+          "label": "Tables",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/tables",
+          "tools": [
+            {
+              "id": "annotate.tables.table",
+              "label": "Table",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/tables/table"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "statics",
+      "label": "Statics",
+      "libraryPath": "src/tool-library/statics",
+      "groups": [
+        {
+          "id": "selection",
+          "label": "Selection",
+          "kind": "group",
+          "libraryPath": "src/tool-library/statics/selection",
+          "tools": [
+            {
+              "id": "statics.selection.select",
+              "label": "Select",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/selection/select"
+            }
+          ]
+        },
+        {
+          "id": "bodies",
+          "label": "Bodies",
+          "kind": "parent-group",
+          "libraryPath": "src/tool-library/statics/bodies",
+          "tools": [
+            {
+              "id": "statics.bodies.body.particle",
+              "label": "Particle",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/particle"
+            },
+            {
+              "id": "statics.bodies.body.rigid-body",
+              "label": "Rigid Body",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/rigid-body"
+            },
+            {
+              "id": "statics.bodies.body.beam",
+              "label": "Beam",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/beam"
+            },
+            {
+              "id": "statics.bodies.body.truss",
+              "label": "Truss",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/truss"
+            },
+            {
+              "id": "statics.bodies.body.cable",
+              "label": "Cable",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/cable"
+            },
+            {
+              "id": "statics.bodies.body.shaft",
+              "label": "Shaft",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/body/shaft"
+            },
+            {
+              "id": "statics.bodies.load.distributed-load",
+              "label": "Distributed Load",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/load/distributed-load"
+            },
+            {
+              "id": "statics.bodies.load.varying-distributed-load",
+              "label": "Varying Distributed Load",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/load/varying-distributed-load"
+            },
+            {
+              "id": "statics.bodies.support.pin-support",
+              "label": "Pin Support",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/support/pin-support"
+            },
+            {
+              "id": "statics.bodies.support.roller-support",
+              "label": "Roller Support",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/support/roller-support"
+            },
+            {
+              "id": "statics.bodies.support.fixed-support",
+              "label": "Fixed Support",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/support/fixed-support"
+            },
+            {
+              "id": "statics.bodies.support.smooth-support",
+              "label": "Smooth Support",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/support/smooth-support"
+            },
+            {
+              "id": "statics.bodies.connection.pin-connection",
+              "label": "Pin Connection",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/connection/pin-connection"
+            },
+            {
+              "id": "statics.bodies.connection.fixed-connection",
+              "label": "Fixed Connection",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/connection/fixed-connection"
+            },
+            {
+              "id": "statics.bodies.connection.slider-connection",
+              "label": "Slider Connection",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/connection/slider-connection"
+            },
+            {
+              "id": "statics.bodies.bodies",
+              "label": "Bodies",
+              "parentId": "statics.bodies",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/bodies/bodies"
+            }
+          ],
+          "subgroups": [
+            {
+              "id": "body",
+              "label": "Body",
+              "kind": "parent-group",
+              "libraryPath": "src/tool-library/statics/bodies/body",
+              "tools": []
+            },
+            {
+              "id": "load",
+              "label": "Loads",
+              "kind": "parent-group",
+              "libraryPath": "src/tool-library/statics/bodies/load",
+              "tools": []
+            },
+            {
+              "id": "support",
+              "label": "Supports",
+              "kind": "parent-group",
+              "libraryPath": "src/tool-library/statics/bodies/support",
+              "tools": []
+            },
+            {
+              "id": "connection",
+              "label": "Connections",
+              "kind": "parent-group",
+              "libraryPath": "src/tool-library/statics/bodies/connection",
+              "tools": []
+            }
+          ]
+        },
+        {
+          "id": "analysis",
+          "label": "Analysis",
+          "kind": "group",
+          "libraryPath": "src/tool-library/statics/analysis",
+          "tools": [
+            {
+              "id": "statics.analysis.resultant",
+              "label": "Resultant",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/analysis/resultant"
+            },
+            {
+              "id": "statics.analysis.force-components",
+              "label": "Force Components",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/analysis/force-components"
+            },
+            {
+              "id": "statics.analysis.shear-force-diagram",
+              "label": "Shear Force (SFD)",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/analysis/shear-force-diagram"
+            },
+            {
+              "id": "statics.analysis.bending-moment-diagram",
+              "label": "Bending Moment (BMD)",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/analysis/bending-moment-diagram"
+            },
+            {
+              "id": "statics.analysis.axial-force-diagram",
+              "label": "Axial Force (AFD)",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/analysis/axial-force-diagram"
+            }
+          ]
+        },
+        {
+          "id": "reference",
+          "label": "Reference",
+          "kind": "group",
+          "libraryPath": "src/tool-library/statics/reference",
+          "tools": [
+            {
+              "id": "statics.reference.coordinate-system",
+              "label": "Coordinate System",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/reference/coordinate-system"
+            },
+            {
+              "id": "statics.reference.reference-point",
+              "label": "Reference Point",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/reference/reference-point"
+            },
+            {
+              "id": "statics.reference.reference-line",
+              "label": "Reference Line",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/reference/reference-line"
+            },
+            {
+              "id": "statics.reference.reference-arc",
+              "label": "Reference Arc",
+              "parentId": "statics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/statics/reference/reference-arc"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dynamics",
+      "label": "Dynamics",
+      "libraryPath": "src/tool-library/dynamics",
+      "groups": [
+        {
+          "id": "dynamics-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/dynamics/dynamics-create",
+          "tools": [
+            {
+              "id": "dynamics.dynamics-create.particle",
+              "label": "Particle",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/particle"
+            },
+            {
+              "id": "dynamics.dynamics-create.rigid-body",
+              "label": "Rigid Body",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/rigid-body"
+            },
+            {
+              "id": "dynamics.dynamics-create.velocity",
+              "label": "Velocity",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/velocity"
+            },
+            {
+              "id": "dynamics.dynamics-create.acceleration",
+              "label": "Acceleration",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/acceleration"
+            },
+            {
+              "id": "dynamics.dynamics-create.rotation",
+              "label": "Rotation",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/rotation"
+            },
+            {
+              "id": "dynamics.dynamics-create.motion-path",
+              "label": "Motion Path",
+              "parentId": "dynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/dynamics/dynamics-create/motion-path"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fluids",
+      "label": "Fluids",
+      "libraryPath": "src/tool-library/fluids",
+      "groups": [
+        {
+          "id": "fluids-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/fluids/fluids-create",
+          "tools": [
+            {
+              "id": "fluids.fluids-create.pipe",
+              "label": "Pipe",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/pipe"
+            },
+            {
+              "id": "fluids.fluids-create.reservoir",
+              "label": "Reservoir",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/reservoir"
+            },
+            {
+              "id": "fluids.fluids-create.valve",
+              "label": "Valve",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/valve"
+            },
+            {
+              "id": "fluids.fluids-create.pump",
+              "label": "Pump",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/pump"
+            },
+            {
+              "id": "fluids.fluids-create.flow-arrow",
+              "label": "Flow Arrow",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/flow-arrow"
+            },
+            {
+              "id": "fluids.fluids-create.pressure",
+              "label": "Pressure",
+              "parentId": "fluids",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/fluids/fluids-create/pressure"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "thermodynamics",
+      "label": "Thermodynamics",
+      "libraryPath": "src/tool-library/thermodynamics",
+      "groups": [
+        {
+          "id": "thermodynamics-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create",
+          "tools": [
+            {
+              "id": "thermodynamics.thermodynamics-create.control-volume",
+              "label": "Control Volume",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/control-volume"
+            },
+            {
+              "id": "thermodynamics.thermodynamics-create.piston-cylinder",
+              "label": "Piston Cylinder",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/piston-cylinder"
+            },
+            {
+              "id": "thermodynamics.thermodynamics-create.process-diagrams",
+              "label": "Process Diagrams",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/process-diagrams"
+            },
+            {
+              "id": "thermodynamics.thermodynamics-create.state-point",
+              "label": "State Point",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/state-point"
+            },
+            {
+              "id": "thermodynamics.thermodynamics-create.heat-transfer",
+              "label": "Heat Transfer",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/heat-transfer"
+            },
+            {
+              "id": "thermodynamics.thermodynamics-create.work",
+              "label": "Work",
+              "parentId": "thermodynamics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/work"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "heat-transfer",
+      "label": "Heat Transfer",
+      "libraryPath": "src/tool-library/heat-transfer",
+      "groups": [
+        {
+          "id": "heat-transfer-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create",
+          "tools": [
+            {
+              "id": "heat-transfer.heat-transfer-create.wall",
+              "label": "Wall",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/wall"
+            },
+            {
+              "id": "heat-transfer.heat-transfer-create.layer",
+              "label": "Layer",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/layer"
+            },
+            {
+              "id": "heat-transfer.heat-transfer-create.heat-flux",
+              "label": "Heat Flux",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/heat-flux"
+            },
+            {
+              "id": "heat-transfer.heat-transfer-create.temperature",
+              "label": "Temperature",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/temperature"
+            },
+            {
+              "id": "heat-transfer.heat-transfer-create.convection",
+              "label": "Convection",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/convection"
+            },
+            {
+              "id": "heat-transfer.heat-transfer-create.radiation",
+              "label": "Radiation",
+              "parentId": "heat-transfer",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/radiation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "solid-mechanics",
+      "label": "Solid Mechanics",
+      "libraryPath": "src/tool-library/solid-mechanics",
+      "groups": [
+        {
+          "id": "solid-mechanics-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create",
+          "tools": [
+            {
+              "id": "solid-mechanics.solid-mechanics-create.beam",
+              "label": "Beam",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/beam"
+            },
+            {
+              "id": "solid-mechanics.solid-mechanics-create.shaft",
+              "label": "Shaft",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/shaft"
+            },
+            {
+              "id": "solid-mechanics.solid-mechanics-create.load",
+              "label": "Load",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/load"
+            },
+            {
+              "id": "solid-mechanics.solid-mechanics-create.stress",
+              "label": "Stress",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/stress"
+            },
+            {
+              "id": "solid-mechanics.solid-mechanics-create.strain",
+              "label": "Strain",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/strain"
+            },
+            {
+              "id": "solid-mechanics.solid-mechanics-create.boundary-condition",
+              "label": "Boundary Condition",
+              "parentId": "solid-mechanics",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/boundary-condition"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mechanical-design",
+      "label": "Mechanical Design",
+      "libraryPath": "src/tool-library/mechanical-design",
+      "groups": [
+        {
+          "id": "mechanical-design-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create",
+          "tools": [
+            {
+              "id": "mechanical-design.mechanical-design-create.part",
+              "label": "Part",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/part"
+            },
+            {
+              "id": "mechanical-design.mechanical-design-create.hole",
+              "label": "Hole",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/hole"
+            },
+            {
+              "id": "mechanical-design.mechanical-design-create.shaft",
+              "label": "Shaft",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/shaft"
+            },
+            {
+              "id": "mechanical-design.mechanical-design-create.gear",
+              "label": "Gear",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/gear"
+            },
+            {
+              "id": "mechanical-design.mechanical-design-create.fastener",
+              "label": "Fastener",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/fastener"
+            },
+            {
+              "id": "mechanical-design.mechanical-design-create.section-view",
+              "label": "Section View",
+              "parentId": "mechanical-design",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/section-view"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "controls",
+      "label": "Controls",
+      "libraryPath": "src/tool-library/controls",
+      "groups": [
+        {
+          "id": "controls-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/controls/controls-create",
+          "tools": [
+            {
+              "id": "controls.controls-create.block",
+              "label": "Block",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/block"
+            },
+            {
+              "id": "controls.controls-create.input",
+              "label": "Input",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/input"
+            },
+            {
+              "id": "controls.controls-create.output",
+              "label": "Output",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/output"
+            },
+            {
+              "id": "controls.controls-create.sensor",
+              "label": "Sensor",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/sensor"
+            },
+            {
+              "id": "controls.controls-create.controller",
+              "label": "Controller",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/controller"
+            },
+            {
+              "id": "controls.controls-create.signal-arrow",
+              "label": "Signal Arrow",
+              "parentId": "controls",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/controls/controls-create/signal-arrow"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "math-analysis",
+      "label": "Math / Analysis",
+      "libraryPath": "src/tool-library/math-analysis",
+      "groups": [
+        {
+          "id": "math-analysis-create",
+          "label": "Create",
+          "kind": "group",
+          "libraryPath": "src/tool-library/math-analysis/math-analysis-create",
+          "tools": [
+            {
+              "id": "math-analysis.math-analysis-create.point",
+              "label": "Point",
+              "parentId": "math-analysis",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/math-analysis/math-analysis-create/point"
+            },
+            {
+              "id": "math-analysis.math-analysis-create.function",
+              "label": "Function",
+              "parentId": "math-analysis",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/math-analysis/math-analysis-create/function"
+            },
+            {
+              "id": "math-analysis.math-analysis-create.vector",
+              "label": "Vector",
+              "parentId": "math-analysis",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/math-analysis/math-analysis-create/vector"
+            },
+            {
+              "id": "math-analysis.math-analysis-create.graph",
+              "label": "Graph",
+              "parentId": "math-analysis",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/math-analysis/math-analysis-create/graph"
+            },
+            {
+              "id": "math-analysis.math-analysis-create.equation",
+              "label": "Equation",
+              "parentId": "math-analysis",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/math-analysis/math-analysis-create/equation"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

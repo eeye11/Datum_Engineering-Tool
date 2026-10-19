@@ -17,7 +17,7 @@ const root = path.resolve(__dirname, "..");
 const { locate } = require("./helpers/source-path.cjs");
 const read = p => fs.readFileSync(p.startsWith("src/") ? locate(path.basename(p)) : path.join(root, p), "utf8");
 
-const quantities = require(path.join(root, "src/core/units/quantities.js")).default;
+const quantities = require(path.join(root, "src/shared/units/quantities.js")).default;
 
 /*
  * THE UNIT RESOLUTION IS SHARED. The setter resolves the display unit
@@ -56,7 +56,7 @@ test("property-update resolves the display unit once, through one helper", () =>
  * calibrated sheet as well as an uncalibrated one.
  */
 test("5 metres round-trips through a calibrated sheet for every length unit", () => {
-    const dimensions = require(path.join(root, "src/core/scale/dimensions.js")).default;
+    const dimensions = require(path.join(root, "src/shared/scale/dimensions.js")).default;
 
     for (const unit of ["mm", "cm", "m", "in", "ft"]) {
         for (const scale of [

@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.arc",
+  "label": "Arc",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/arc",
+  "template": "template.tex",
+  "implemented": true
+}

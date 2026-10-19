@@ -1,0 +1,9 @@
+{
+  "id": "geometry.selection.select",
+  "label": "Select",
+  "category": "geometry",
+  "group": "selection",
+  "libraryPath": "src/tool-library/geometry/selection/select",
+  "template": "template.tex",
+  "implemented": false
+}

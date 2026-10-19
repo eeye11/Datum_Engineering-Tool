@@ -322,7 +322,8 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         style,
         state,
         bounds,
-        isPreview = false
+        isPreview = false,
+        rotation = 0
     ) {
         const scale =
             enggDrawingState
@@ -340,6 +341,21 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                     bounds,
                     state
                 );
+
+        /*
+         * A rotated axis is drawn as a rotated group rather than as four
+         * separately-computed endpoints. The origin is the pivot, so the arms
+         * turn about the point the student placed and the labels turn with
+         * them. A committed axis carries a rotation of 0 and lands exactly
+         * where it always did.
+         */
+        const group =
+            rotation
+                ? createSvgElement("g", {
+                      transform:
+                          `rotate(${(rotation * 180) / Math.PI} ${origin.x} ${origin.y})`
+                  })
+                : svg;
 
         /*
          * Four independent extensions one feature.
@@ -602,9 +618,18 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
             );
         }
 
-        svg.append(
+        /*
+         * THE ELEMENTS GO INTO THE GROUP, NOT STRAIGHT INTO THE SVG. When the
+         * axis is rotated the group carries the rotation, so appending to the
+         * svg would draw a rotated axis in the unrotated place.
+         */
+        group.append(
             ...elements
         );
+
+        if (group !== svg) {
+            svg.appendChild(group);
+        }
     }
 
     /*

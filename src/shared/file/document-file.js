@@ -1,56 +1,125 @@
-/*
- * The document body, and how a document name becomes a file name.
+﻿/*
+ * The native EnggDraw project format.
  *
- * A DAETUM document is a plain document model: sheets, each holding features
- * with their real type, geometry, parent and parameters. That model is
- * DAETUM's own internal state, and it is what a reopened file must give
- * back so every feature stays selectable, draggable and editable.
+ * A .enggdraw file is the AUTHORITATIVE, editable document. It holds the whole
+ * document model: sheets, each holding features with their real type, geometry,
+ * parent and parameters. That is what makes a reopened drawing selectable,
+ * draggable and editable.
  *
- * THE FORMAT IS NO LONGER PROPRIETARY. DAETUM used to wrap this body in a
- * `.enggdraw` envelope - a `"format": "enggdraw"` marker, a version number
- * and a migration chain - and save that as JSON. That format is gone. A
- * document is saved as a standard `.tex` file carrying the drawing's
- * LaTeX/TikZ source (see file/latex/latex-document.js), and what travels
- * alongside it, as an ordinary part of the document model, is this body.
- *
- * So this module keeps only what is genuinely about the document body and
- * its name:
- *
- *   normalizeDocument   make a loaded body safe to hand to the state model
- *   withExtension       give a document name the `.tex` extension
- *
- * There is no envelope, no format marker and no version number here. A
- * document written by this build is a `.tex`; a document read by this build
- * is a `.tex`, or the body a `.tex` carried. Nothing else is claimed.
+ * The file format is a compatibility contract, so it owns its own envelope,
+ * version number, and migration path.
  */
 
-/*
- * The extension a saved document file carries. Standard LaTeX source, so a
- * DAETUM drawing opens in any LaTeX installation and in Overleaf.
- */
-const EXTENSION = "tex";
+import enggSheets from "../../components/layout/workspace/sheets.js";
 
-const MEDIA_TYPE = "application/x-tex";
+const FORMAT = "enggdraw";
 
 /*
- * Make sure the sheets in a document are usable.
- *
- * A body that arrives from a file is not trusted to be well formed: it may
- * have no sheets at all, or a sheet list missing its active id. Repairing it
- * here means every sheet list in the application - the one being edited, the
- * one being recovered, the one a reference points into - has already been
- * through the same repair, so no other module has to ask whether the list is
- * there.
- *
- * The repair is delegated to the sheets module so there is one definition of
- * what a usable sheet collection is.
+ * The version this build WRITES.
  */
-function normalizeDocument(document, sheets) {
+const CURRENT_VERSION = 2;
+
+/*
+ * The oldest version this build can still read.
+ */
+const MINIMUM_SUPPORTED_VERSION = 1;
+
+const EXTENSION = "enggdraw";
+
+const MEDIA_TYPE = "application/vnd.enggdraw+json";
+
+/*
+ * Wrap a serialised document in the envelope.
+ */
+function createDocument(document) {
+  return {
+    format: FORMAT,
+    version: CURRENT_VERSION,
+    application: "EnggDraw",
+    savedAt: new Date().toISOString(),
+    document,
+  };
+}
+
+const Failure = {
+  NOT_JSON: "not-json",
+  WRONG_FORMAT: "wrong-format",
+  TOO_OLD: "too-old",
+  FROM_THE_FUTURE: "from-the-future",
+  NO_DOCUMENT: "no-document",
+};
+
+/* ------------------------------------------------------- migrations */
+
+const MIGRATIONS = {};
+
+/*
+ * Version 1 -> version 2: a drawing became a document of sheets.
+ */
+MIGRATIONS[1] = function migrateV1ToV2(document) {
+  const collection = enggSheets.createCollection();
+  const first = collection.sheets[0];
+
+  first.objects = Array.isArray(document?.objects) ? document.objects : [];
+  first.units = document?.units || first.units;
+
+  if (document?.snap) {
+    first.snap = {
+      ...first.snap,
+      ...document.snap,
+    };
+  }
+
+  if (document?.objectSnap) {
+    first.objectSnap = {
+      ...first.objectSnap,
+      ...document.objectSnap,
+    };
+  }
+
+  if (document?.styleDefaults) {
+    first.styleDefaults = {
+      ...document.styleDefaults,
+    };
+  }
+
+  if (document?.camera) {
+    first.viewport = {
+      zoom: Number(document.camera.zoom) || 1,
+      panX: Number(document.camera.panX) || 0,
+      panY: Number(document.camera.panY) || 0,
+    };
+  }
+
+  if (document?.grid) {
+    const resolvedGrid = enggSheets.resolveGridSnap(document.grid);
+
+    first.grid = {
+      ...first.grid,
+      ...resolvedGrid,
+    };
+  }
+
+  if (document?.scale) {
+    first.scale = {
+      ...document.scale,
+    };
+  }
+
+  return {
+    ...document,
+    sheets: enggSheets.serializeCollection(collection).sheets,
+    activeSheetId: first.id,
+    objects: undefined,
+  };
+};
+
+function normalize(document) {
   if (!document || typeof document !== "object") {
     return document;
   }
 
-  const collection = sheets.createCollection({
+  const collection = enggSheets.createCollection({
     sheets: document.sheets,
     activeSheetId: document.activeSheetId,
   });
@@ -62,12 +131,100 @@ function normalizeDocument(document, sheets) {
   };
 }
 
-/*
- * A document file name.
- *
- * The extension is added only when it is missing, so naming a file "Report"
- * does not become "Report.tex.tex" when the user has already typed it.
- */
+function migrate(document, fromVersion) {
+  let current = document;
+
+  if (!MIGRATIONS[CURRENT_VERSION - 1] && MINIMUM_SUPPORTED_VERSION < CURRENT_VERSION) {
+    return null;
+  }
+
+  for (let version = fromVersion; version < CURRENT_VERSION; version += 1) {
+    const step = MIGRATIONS[version];
+
+    if (!step) {
+      return null;
+    }
+
+    current = step(current);
+  }
+
+  return normalize(current);
+}
+
+/* ------------------------------------------------------- reading */
+
+function readDocument(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    return {
+      ok: false,
+      failure: Failure.NOT_JSON,
+      detail: "The file does not contain a drawing.",
+    };
+  }
+
+  const format = parsed.format === "engg-drawing" ? FORMAT : parsed.format;
+
+  if (format !== FORMAT) {
+    return {
+      ok: false,
+      failure: Failure.WRONG_FORMAT,
+      detail:
+        "This is not an EnggDraw drawing. An EnggDraw file starts with \"format\": \"" +
+        FORMAT +
+        "\".",
+    };
+  }
+
+  const version = Number(parsed.version);
+
+  if (!Number.isFinite(version)) {
+    return {
+      ok: false,
+      failure: Failure.NO_DOCUMENT,
+      detail: "The file does not say which version it is.",
+    };
+  }
+
+  if (version > CURRENT_VERSION) {
+    return {
+      ok: false,
+      failure: Failure.FROM_THE_FUTURE,
+      detail:
+        "This drawing was made with a newer version of EnggDraw (file version " +
+        version +
+        ", this build understands up to " +
+        CURRENT_VERSION +
+        "). Update EnggDraw to open it.",
+    };
+  }
+
+  if (version < MINIMUM_SUPPORTED_VERSION) {
+    return {
+      ok: false,
+      failure: Failure.TOO_OLD,
+      detail: "This drawing is too old to open (file version " + version + ").",
+    };
+  }
+
+  const migrated = migrate(parsed.document, version);
+
+  if (!migrated) {
+    return {
+      ok: false,
+      failure: Failure.NO_DOCUMENT,
+      detail: "The file contains no drawing.",
+    };
+  }
+
+  return {
+    ok: true,
+    document: migrated,
+    migratedFrom: version,
+  };
+}
+
+/* ------------------------------------------------------- file names */
+
 function withExtension(name) {
   const trimmed = String(name || "").trim();
 
@@ -81,9 +238,14 @@ function withExtension(name) {
 }
 
 const enggDocumentFile = {
+  CURRENT_VERSION,
   EXTENSION,
+  Failure,
   MEDIA_TYPE,
-  normalizeDocument,
+  MINIMUM_SUPPORTED_VERSION,
+  createDocument,
+  migrate,
+  readDocument,
   withExtension,
 };
 

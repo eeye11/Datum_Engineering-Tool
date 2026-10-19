@@ -1,0 +1,9 @@
+{
+  "id": "heat-transfer.heat-transfer-create.convection",
+  "label": "Convection",
+  "category": "heat-transfer",
+  "group": "heat-transfer-create",
+  "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/convection",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "annotate.leaders.callout",
+  "label": "Callout",
+  "category": "annotate",
+  "group": "leaders",
+  "libraryPath": "src/tool-library/annotate/leaders/callout",
+  "template": "template.tex",
+  "implemented": false
+}

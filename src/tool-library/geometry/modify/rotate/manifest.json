@@ -1,0 +1,9 @@
+{
+  "id": "geometry.modify.rotate",
+  "label": "Rotate",
+  "category": "geometry",
+  "group": "modify",
+  "libraryPath": "src/tool-library/geometry/modify/rotate",
+  "template": "template.tex",
+  "implemented": false
+}

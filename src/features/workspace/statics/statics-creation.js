@@ -4,10 +4,8 @@
 
 import enggBodyFrames from "../../../shared/geometry/body-frames.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggCreationDimensioning from "../model/dimensions/creation-dimensioning.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { RIGID_BODY_HEIGHT, RIGID_BODY_WIDTH, staticsForceLineWidth } from "../constants.js";
-import { beginCreationDimensioning, commitCreatedFeature } from "../geometry/creation-sizing.js";
 import { openMomentValuePrompt } from "../geometry/preview.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -319,65 +317,13 @@ export function createStaticsFeature(
     } else {
         return;
     }
-
     /*
-     * A BODY WITH A PHYSICAL SIZE IS SIZED BEFORE IT IS COMMITTED.
+     * Creation-time sizing prompts are disabled.
      *
-     * The other features created here - a Particle, a Point Force, a
-     * Moment, a Support, a Connection - have no meaningful creation
-     * length, so they are committed exactly as they always were. A
-     * Rigid Body is the exception: it is a real shape with a real
-     * Width and Height (or a Radius, once its shape is a circle), and
-     * a student who draws one has just decided where it goes but not
-     * how big it is. That is the same question a Beam answers through
-     * the same popup, so it is asked through the same popup.
-     *
-     * The object is NOT added first. The document is untouched while
-     * the popup is open, so cancelling - or pressing Escape - leaves
-     * nothing to remove and, crucially, leaves the document's scale
-     * exactly as uncalibrated as it was. This is the first creation
-     * dimension in many documents, so its answer is what establishes
-     * the scale, and a cancelled answer must establish nothing.
+     * Statics geometry is schematic (not to scale), so the drawn
+     * shape is committed immediately with no follow-up length/size
+     * entry and no drawing-scale calibration.
      */
-    const sized =
-        enggCreationDimensioning
-            ?.hasCreationSize(object);
-
-    if (sized) {
-        enggDrawingState.clearInteraction(
-            drawingState
-        );
-
-        /*
-         * `previous` - taken at the top of this function, before the
-         * feature was built and long before any size was applied - is
-         * the state Undo must return to. It is passed in rather than
-         * re-taken, because answering the popup can CALIBRATE the
-         * document and a snapshot taken afterwards would already carry
-         * that calibration.
-         */
-        beginCreationDimensioning(
-            object,
-            previous,
-            () => {
-                commitCreatedFeature(
-                    object,
-                    true,
-                    previous
-                );
-
-                setToolMessage(
-                    `Specify ${definition.label.toLowerCase()} position`
-                );
-
-                renderProperties();
-                renderCurrentDrawing();
-            }
-        );
-
-        return;
-    }
-
     /*
      * THE OBJECT THE DOCUMENT ACTUALLY HOLDS.
      *

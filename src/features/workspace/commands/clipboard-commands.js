@@ -122,15 +122,13 @@ export function pasteFromClipboard() {
     /*
      * The copies become the selection, so what was just pasted
      * is selected and can be pasted again or edited straight
-     * away, and the panel describes the new features.
+     * away, and the Features tab describes the new features - which it does by
+     * following the selection, so there is nothing to switch over.
      */
     enggDrawingState.selectObjects(
         drawingState,
         created
     );
-
-    editorState.featurePanelView = "tree";
-    editorState.featureTreePickedId = null;
 
     setToolMessage(
         created.length === 1

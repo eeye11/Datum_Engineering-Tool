@@ -18,6 +18,8 @@ import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../m
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
+import { rotationPivotFor } from "./handles.js";
+import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
@@ -190,6 +192,29 @@ export function beginManipulationDrag(
             anchor: hit.handle.point
                 ? { x: hit.handle.point.x, y: hit.handle.point.y }
                 : { ...point },
+
+            /*
+             * A ROTATION DRAG MEASURES FROM THE ANGLE OF THE GRAB.
+             *
+             * The pivot is the object's own (see `rotationPivotFor`), and the
+             * starting angle is the direction from that pivot to where the
+             * handle was pressed. Captured once here, so the first move turns
+             * the object by the angle the student has actually swept rather
+             * than snapping it under their hand.
+             */
+            rotationStartAngle:
+                hit.handle.kind === "rotate"
+                    ? (() => {
+                          const pivot = rotationPivotFor(hit.object);
+
+                          return pivot
+                              ? Math.atan2(
+                                    hit.handle.point.y - pivot.y,
+                                    hit.handle.point.x - pivot.x
+                                )
+                              : null;
+                      })()
+                    : undefined,
 
             /*
              * The WHOLE object is snapshotted, not just its geometry.
@@ -732,6 +757,68 @@ function applyManipulation(
             dx: initial.x + point.x - drag.start.x - g.points[index].x,
             dy: initial.y + point.y - drag.start.y - g.points[index].y
         };
+        return;
+    }
+
+    if (drag.kind === "rotate") {
+        /*
+         * ========================================================
+         * THE ROTATION HANDLE
+         * ========================================================
+         *
+         * The angle is read from the cursor about the object's pivot, and
+         * applied from the ORIGINAL geometry every frame - so the same
+         * pointer position always produces the same rotation, and the drag
+         * cannot accumulate rounding.
+         *
+         * The pivot comes from `rotationPivotFor`, which is the same pivot
+         * the Transform field uses: a Coordinate System turns about its
+         * origin, a Particle and a Reference Point keep their anchor, and
+         * everything else turns about its own centre.
+         */
+        const original =
+            drag.originals?.[object.id];
+
+        const pivot =
+            rotationPivotFor(object);
+
+        if (
+            !original ||
+            !pivot ||
+            !point ||
+            !Number.isFinite(point.x) ||
+            !Number.isFinite(point.y)
+        ) {
+            return;
+        }
+
+        const angle =
+            Math.atan2(
+                point.y - pivot.y,
+                point.x - pivot.x
+            );
+
+        const startAngle =
+            drag.rotationStartAngle ??
+            Math.atan2(
+                drag.start.y - pivot.y,
+                drag.start.x - pivot.x
+            );
+
+        const radians =
+            angle - startAngle;
+
+        /* Rebuild from the snapshot so the newest angle is applied once. */
+        object.geometry = JSON.parse(
+            JSON.stringify(original.geometry)
+        );
+
+        rotateObjectAbout(
+            object,
+            pivot,
+            radians
+        );
+
         return;
     }
 

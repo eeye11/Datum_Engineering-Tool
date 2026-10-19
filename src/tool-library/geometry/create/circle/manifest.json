@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.circle",
+  "label": "Circle",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/circle",
+  "template": "template.tex",
+  "implemented": true
+}

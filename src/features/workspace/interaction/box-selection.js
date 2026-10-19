@@ -1077,10 +1077,7 @@ export function objectIntersectsSelection(
      * covers what the student sees, for a linear dimension, an angle and a
      * radius alike, without a case for each.
      */
-    if (
-        object.type === "dimension" ||
-        object.type === "variable-dimension"
-    ) {
+    if (object.type === "dimension") {
         return dimensionIntersectsSelection(object, selectionBox);
     }
 
@@ -1399,9 +1396,6 @@ function annotationBoxIntersectsSelection(object, selectionBox) {
  * A dimension is drawn as extension lines, an arc or a line, and a text frame -
  * and `graphicsFor` is the one place that says where each of those goes. So the
  * graphics are read and each drawn LINE is tested, plus the text frame.
- *
- * A `variable-dimension` is drawn by the same machinery, so it takes the same
- * path rather than needing a case of its own.
  */
 function dimensionIntersectsSelection(object, selectionBox) {
     const model = enggDimensionModel;

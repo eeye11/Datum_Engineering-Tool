@@ -1,0 +1,9 @@
+{
+  "id": "statics.analysis.bending-moment-diagram",
+  "label": "Bending Moment (BMD)",
+  "category": "statics",
+  "group": "analysis",
+  "libraryPath": "src/tool-library/statics/analysis/bending-moment-diagram",
+  "template": "template.tex",
+  "implemented": false
+}

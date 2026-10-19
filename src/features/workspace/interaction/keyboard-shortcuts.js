@@ -29,11 +29,11 @@ import { fitDrawingToView } from "../../../components/layout/workspace/viewport.
  * by editor/index.js.
  */
 export function installKeyboardShortcuts() {
-    document.addEventListener(
+    globalThis.document.addEventListener(
         "keydown",
         event => {
             const activeElement =
-                document.activeElement;
+                globalThis.document.activeElement;
 
             const editable =
                 [

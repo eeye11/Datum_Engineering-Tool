@@ -2,7 +2,6 @@
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/workspace/model/dimensions/dimension-model.js";
-import enggVariableDimension from "../../features/workspace/model/dimensions/variable-dimension.js";
 import enggMeasurement from "../geometry/measurement-core.js";
 import enggDrawingSnap from "../snapping/object-snap.js";
 import { deepClone } from "../util/clone.js";
@@ -123,7 +122,7 @@ function createDrawingState() {
          */
         grid: {
             visible: true,
-            spacing: 5,
+            spacing: 7.5,
             snapToGrid: true
         },
         snap: {
@@ -487,6 +486,7 @@ function createGeometryObject(type, geometry, options = {}) {
         polyline: "Polyline",
         triangle: "Triangle",
         polygon: "Polygon",
+        "freeform-polygon": "Freeform Polygon",
         circle: "Circle",
         arc: "Arc",
         rectangle: "Rectangle",
@@ -704,6 +704,25 @@ const geometryFactories = {
                 radius,
                 sides,
                 rotation
+            },
+            options
+        ),
+
+    /*
+     * A Freeform Polygon is an irregular closed polygon, so its geometry is the
+     * ordered vertex list itself - there is no centre or radius to derive it
+     * from. It is a separate type from `polygon` rather than the same type with
+     * a flag, because the two are different objects to the student: a regular
+     * polygon has a side count and stays regular when it is reshaped, whereas a
+     * freeform polygon's vertices move independently. Keeping them apart is
+     * what stops a vertex edit from being applied to a regular polygon.
+     */
+    "freeform-polygon": (points, options) =>
+        createGeometryObject(
+            "freeform-polygon",
+            {
+                points,
+                closed: true
             },
             options
         ),
@@ -1111,8 +1130,15 @@ const geometryFactories = {
              * A drawing can mix N-m and kN-m, and a moment whose
              * unit is only in the document settings cannot be
              * re-labelled when the document's units change.
+             *
+             * THE MIDDLE DOT IS A REAL CHARACTER, not the two-character
+             * escape `\\u00B7`. It was written as a doubled escape, which
+             * stored a literal backslash-u-B-7 in the unit; every reader
+             * that puts a unit into LaTeX then emitted `\u00B7`, which TeX
+             * rejects - and because a compile is all-or-nothing, ONE moment
+             * on the sheet made the whole picture fail to render.
              */
-            unit: "N·m"
+            unit: "N\u00B7m"
         };
 
         /*
@@ -1149,6 +1175,19 @@ const geometryFactories = {
             options
         ),
 
+    /*
+     * A 2D COORDINATE SYSTEM.
+     *
+     * One object carrying an origin and four axis arms. The arms are stored
+     * as positive/negative lengths on each axis rather than as a single
+     * radius, so a side can be extended on its own - which is what the
+     * Features tab and the handle layer both rely on.
+     *
+     * A `rotation` turns the whole cross about its origin. A system drawn
+     * with a drag stores the angle its X arm points in, so the axes can be
+     * placed at any attitude; a system placed without one carries a rotation
+     * of 0 and is drawn exactly as before.
+     */
     coordinateSystem2D: (origin, options = {}) => {
         const xAxisLength = Number.isFinite(options.xAxisLength)
             ? options.xAxisLength
@@ -1163,7 +1202,35 @@ const geometryFactories = {
             {
                 origin,
                 xAxisLength,
-                yAxisLength
+                yAxisLength,
+
+                xPositiveLength: Number.isFinite(
+                    options.xPositiveLength
+                )
+                    ? options.xPositiveLength
+                    : xAxisLength,
+
+                xNegativeLength: Number.isFinite(
+                    options.xNegativeLength
+                )
+                    ? options.xNegativeLength
+                    : xAxisLength,
+
+                yPositiveLength: Number.isFinite(
+                    options.yPositiveLength
+                )
+                    ? options.yPositiveLength
+                    : yAxisLength,
+
+                yNegativeLength: Number.isFinite(
+                    options.yNegativeLength
+                )
+                    ? options.yNegativeLength
+                    : yAxisLength,
+
+                rotation: Number.isFinite(options.rotation)
+                    ? options.rotation
+                    : 0
             },
             options
         );
@@ -1484,50 +1551,8 @@ const geometryFactories = {
                     label: created.label,
                     orientation:
                         created.orientation,
-                    /*
-                     * THE DRIVEN BIT TRAVELS TOO.
-                     *
-                     * It was left out here, so a Driven dimension built through the
-                     * factory - which is EVERY dimension the tool creates - arrived
-                     * without its state and behaved as Driving. A dimension that had
-                     * been created as a reading could then move geometry, which is
-                     * the exact thing the Driven state exists to prevent. The model
-                     * sets the bit; the factory has to carry it, or the two disagree
-                     * about what the feature is.
-                     */
-                    driven: created.driven === true,
                     resolved:
                         created.resolved
-                }
-            }
-        );
-    },
-
-    "variable-dimension": (options = {}) => {
-        const created =
-            enggVariableDimension
-                .createVariableDimension(options);
-
-        /*
-         * THE SYMBOL TRAVELS IN `content`, like a dimension's measurement.
-         *
-         * The panel, the renderer and the hit test all read `variable.symbol`
-         * off the feature itself, so it has to arrive at that level rather than
-         * one layer down. The name is left to `addObject`, which numbers it -
-         * so a list of them reads "Variable Dimension 1, 2, 3".
-         */
-        return createGeometryObject(
-            "variable-dimension",
-            {},
-            {
-                id: created.id,
-                content: {
-                    sourceRefs: created.sourceRefs,
-                    symbol: created.symbol,
-                    unknown: created.unknown,
-                    label: created.label,
-                    placement: created.placement,
-                    orientation: created.orientation
                 }
             }
         );
@@ -1898,127 +1923,17 @@ function removeObjectsAndDescendants(
         state.selection.hoveredObjectId = null;
     }
 
-    resetScaleIfSheetIsEmpty(state);
-
     return [...doomed];
 }
 
 /*
- * ========================================================
- * AN EMPTY SHEET HAS NO SCALE
- * ========================================================
+ * Automatic scale reset removed.
  *
- * A sheet's scale is the relationship between ITS geometry and
- * real lengths, so when the last of that geometry is gone the
- * relationship has nothing left to relate. Keeping it would mean a
- * new beam drawn on the emptied sheet was silently measured with a
- * calibration established by geometry that no longer exists - the
- * student would be told a length nobody could account for.
- *
- * So the scale is dropped automatically, with no command for the
- * student to find, and the sheet's next first length establishes a
- * new one. That is the same rule the first length used to follow,
- * applied from the other end.
- *
- * ONLY THE ACTIVE SHEET IS CONSIDERED. The scale belongs to a
- * sheet, so emptying this one says nothing about any other: a
- * second sheet with its own calibration keeps it.
- *
- * WHAT DECIDES IT: THE LAST LENGTH FEATURE.
- * ----------------------------------------
- * The scale is DEFINED by a Length - the first dimension states what a drawn
- * distance really is - so it is the LENGTH FEATURES that hold it, not the raw
- * geometry. When the last of them is deleted the scale has nothing left behind
- * it, and a beam still sitting on the sheet does not change that: the thing that
- * declared what the beam MEASURED is what has gone.
- *
- * That is the rule the first-length calibration already follows, read from the
- * other end, and it is why this asks about Length features rather than about
- * whether any geometry remains.
+ * DAETUM geometry is schematic: deleting or editing annotations must not
+ * implicitly establish, reset, or erase a drawing scale.
  */
-
-/*
- * THE FEATURES THAT CAN DEFINE THE SCALE.
- *
- * A measured dimension is the ONE feature that states what a drawn distance is
- * really worth, so it is the one that establishes the sheet's scale - and when
- * the last one is deleted the scale has nothing left behind it.
- *
- * A `variable-dimension` is deliberately absent: it names a symbol (`L`, `L/2`)
- * rather than declaring a measurement, and a variable has never been able to
- * calibrate a sheet. Counting it here would keep a stale scale alive behind a
- * feature that never established it.
- */
-const SCALE_DEFINING_TYPES = new Set([
-    "dimension"
-]);
-
 function resetScaleIfSheetIsEmpty(state) {
-    if (!state.scale) {
-        return false;
-    }
-
-    const objects = state.objects || [];
-
-    /*
-     * ========================================================
-     * THE LAST LENGTH FEATURE TAKES THE SCALE WITH IT
-     * ========================================================
-     *
-     * The scale is DEFINED by a Length - the first dimension states what a
-     * drawn distance really is - so when the last of those goes, the
-     * definition has nothing left behind it and is reset. The NEXT Length the
-     * student makes becomes the new defining one, exactly as the first ever
-     * did.
-     *
-     * THIS IS ASKED FIRST, BEFORE THE GEOMETRY TEST BELOW, because it is the
-     * narrower and more precise question: a sheet may still carry a beam and a
-     * load while every Length has been deleted, and the requirement is that the
-     * scale resets then too - not only when the sheet is swept completely bare.
-     *
-     * WHAT COUNTS AS A LENGTH FEATURE. The structured kinds that state a
-     * measured length between geometry: a `dimension`. A `variable-dimension`
-     * is deliberately NOT one - it names a symbol (`L`, `L/2`) rather than
-     * declaring what the drawing measures, and a variable has never been able
-     * to establish a scale.
-     */
-    const holdsLengthFeature = objects.some(object =>
-        SCALE_DEFINING_TYPES.has(object.type)
-    );
-
-    if (holdsLengthFeature) {
-        return false;
-    }
-
-    /*
-     * NO LENGTH FEATURE REMAINS, so the scale goes.
-     *
-     * The geometry test that used to be the whole condition is subsumed by
-     * this one and is not asked separately. Its question - "is any drawn
-     * geometry left?" - was the right question while the scale was held by the
-     * GEOMETRY itself. Now that a Length DEFINES the scale, a sheet can keep
-     * every beam it ever drew and still have no scale to relate them to, because
-     * the feature that declared what they measured is gone.
-     *
-     * Leaving the geometry test in would in fact be the bug: a beam with no
-     * dimension on it would keep a calibration whose only justification has been
-     * deleted, and the next Length the student drew would be measured against a
-     * scale they can no longer see the source of.
-     */
-
-    /*
-     * Left in the HISTORY SNAPSHOT rather than applied here.
-     *
-     * This function runs while the edit is being made, but Undo
-     * works from snapshots taken before each change - and those
-     * already carry the scale. So resetting here makes the current
-     * state correct, and Undo restores the snapshot that had the
-     * scale in it, which is the same reasoning that lets Undo put
-     * a calibration back after it was withdrawn.
-     */
-    state.scale = null;
-
-    return true;
+    return false;
 }
 
 /*
@@ -2094,7 +2009,7 @@ function selectObject(state, objectId) {
 }
 
 function clearSelection(state) {
-    state.selection.selectedObjectIds = [];
+    selectObjects(state, []);
 }
 
 /*
@@ -2300,6 +2215,11 @@ function commitDrawingChange(state, previousObjects) {
         onDocumentChanged();
     }
 
+    const drawingChanged = makeAnnouncement("datum:drawing-changed", {});
+
+    if (drawingChanged && typeof document !== "undefined") {
+        document.dispatchEvent(drawingChanged);
+    }
     /*
      * THE SOURCE IS TOLD, with the object the edit changed. Called after the
      * document-changed handler so the dirty flag and the recovery copy are
@@ -2511,6 +2431,23 @@ function restoreDocumentSnapshot(state, entry) {
     restoreObjects(state, entry.objects || entry);
 
     /*
+     * A WHOLESALE REPLACEMENT IS ANNOUNCED AS ONE.
+     *
+     * Undo, Redo and a sheet load all arrive here, and all three replace the
+     * object set rather than editing it. The source has to be told which kind of
+     * change it is looking at: an edit is reconciled one region at a time, but a
+     * replacement has to be able to bring regions BACK - undoing a deletion is
+     * exactly that - and no per-object edit can express it.
+     *
+     * The announcement carries no object, because it is not about one.
+     */
+    const replaced = makeAnnouncement("datum:drawing-replaced", {});
+
+    if (replaced && typeof document !== "undefined") {
+        document.dispatchEvent(replaced);
+    }
+
+    /*
      * ...AND THE SCALE WITH IT, and from the entry rather than from
      * whatever the document happens to hold now. The snapshot is the
      * whole state at one moment, and restoring only part of it is how a
@@ -2699,7 +2636,7 @@ function clearInteraction(state) {
     state.interaction.dimensionPlacement = null;
 
     /*
-     * THE SMART DIMENSION STATE MACHINE.
+     * THE DIMENSION STATE MACHINE.
      *
      * `dimensionStage` records where in the workflow the tool is -
      * collecting references, or placing the annotation - and the

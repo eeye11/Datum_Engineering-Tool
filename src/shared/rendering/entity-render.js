@@ -9,7 +9,7 @@ import { isConnectionType, isSupportType } from "../model/feature-types.js";
 import { createSvgElement } from "./svg-primitives.js";
 import { drawVectorOrSymbol, drawGenericConnection } from "./entities/draw-forces-and-supports.js";
 import { drawMoment, drawUniformLoad, drawVaryingLoad } from "./entities/draw-loads.js";
-import { drawDimension, drawVariableDimension, drawAnnotate, drawAnnotation } from "./entities/draw-annotations.js";
+import { drawDimension, drawAnnotate, drawAnnotation } from "./entities/draw-annotations.js";
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
@@ -37,7 +37,6 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.type === "force" || entity.type === "resultant" || entity.type === "force-components" || isSupportType(entity.type) || isConnectionType(entity.type), draw: drawVectorOrSymbol },
         { matches: entity => entity.type === "moment", draw: drawMoment },
         { matches: entity => entity.type === "dimension", draw: drawDimension },
-        { matches: entity => entity.type === "variable-dimension", draw: drawVariableDimension },
         { matches: entity => entity.type === "annotate", draw: drawAnnotate },
         { matches: entity => entity.type === "annotation", draw: drawAnnotation },
         { matches: entity => entity.type === "beam" || entity.type === "truss" || entity.type === "cable" || entity.type === "shaft" || entity.type === "analysis-diagram", draw: drawMemberOrDiagram },
@@ -60,6 +59,7 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },
+        { matches: entity => entity.type === "freeform-polygon", draw: drawTriangle },
         { matches: entity => entity.type === "triangle", draw: drawTriangle },
         { matches: entity => entity.type === "arc", draw: drawArc },
         { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d }

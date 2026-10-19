@@ -1,0 +1,9 @@
+{
+  "id": "statics.analysis.axial-force-diagram",
+  "label": "Axial Force (AFD)",
+  "category": "statics",
+  "group": "analysis",
+  "libraryPath": "src/tool-library/statics/analysis/axial-force-diagram",
+  "template": "template.tex",
+  "implemented": false
+}

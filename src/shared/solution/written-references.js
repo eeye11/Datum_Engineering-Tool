@@ -33,10 +33,32 @@
  *     without anything being re-inserted: there is no image here to
  *     go stale.
  */
-import { enggDrawingSheets } from "../../features/workspace/index.js";
+/*
+ * ============================================================
+ * IMPORTED FROM ITS OWN MODULE, NOT THROUGH THE BARREL
+ * ============================================================
+ *
+ * This used to read `from "../../features/workspace/index.js"`, and that one
+ * line closed a cycle: the barrel imports the automation hooks, which import
+ * this file, which imported the barrel back. The cycle threw a
+ * temporal-dead-zone `ReferenceError` - "Cannot access 'enggWrittenReferences'
+ * before initialization" - while the graph was still linking, and a throw at
+ * that point silently aborts the tail of the entry module. Every `window.enggX`
+ * handle and `window.datum` went missing on a normal page load, and because the
+ * throw happened before the global error handlers were installed, nothing was
+ * reported anywhere.
+ *
+ * `enggDrawingSheets` is defined in `sheet-controller.js`, which is what the
+ * barrel re-exports it from, so importing it directly is the same object with
+ * the same behaviour and one fewer edge in the graph. The barrel keeps its
+ * re-export for every other caller.
+ */
+import { enggDrawingSheets } from "../../components/layout/workspace/sheet-controller.js";
 import enggDrawingReference from "../references/drawing-reference.js";
 import { parseDrawingBlocks } from "./embedded-drawings.js";
 import enggErrorLog from "../../app/error-log.js";
+
+const document = globalThis.document;
 
 /*
  * Embedded drawing blocks in the written solution.
@@ -486,7 +508,7 @@ function attach() {
       blank.className = "drawing-reference-empty";
 
       blank.textContent = rendered.caption
-        ? `${rendered.caption} — this sheet is empty`
+        ? `${rendered.caption} \u2014 this sheet is empty`
         : "This sheet is empty";
 
       figure.appendChild(blank);
@@ -673,11 +695,13 @@ function attach() {
   refreshAll();
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener(
-    "DOMContentLoaded",
-    attach
-  );
-} else {
-  attach();
+if (document) {
+  if (document.readyState === "loading") {
+    document.addEventListener(
+      "DOMContentLoaded",
+      attach
+    );
+  } else {
+    attach();
+  }
 }

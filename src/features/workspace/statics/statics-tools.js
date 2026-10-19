@@ -7,8 +7,10 @@ import { drawingState, editorState } from "../editor-state.js";
 import { activateTool, initialToolMessage } from "../../../components/layout/toolbar/tool-activation.js";
 import { closeCoordinateSystemMenu, openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { legacyPlaceholderMessage } from "../../../components/layout/toolbar/phase-reset.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
+import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { beginAnalysisDiagram, analysisDiagramIntroMessage, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS } from "./analysis-tools.js";
+import enggDrawingState from "../../../shared/model/drawing-state.js";
 
 export const STATICS_TOOL_MENUS = {
     body: [
@@ -227,12 +229,55 @@ export function openAnalysisModeMenu(
     button,
     item
 ) {
-    /*
-     * PHASE 1 RESET: the Sketch/Plot mode menu for the diagram
-     * tools is a placeholder. No mode is offered and no diagram
-     * is armed.
-     */
-    setToolMessage(legacyPlaceholderMessage());
+    const toolId =
+        item?.id;
+
+    if (!toolId) {
+        return;
+    }
+
+    openToolSubmenu(
+        button,
+        ANALYSIS_DIAGRAM_MODES.map(
+            mode => ({
+                id: mode,
+                label:
+                    ANALYSIS_DIAGRAM_MODE_LABELS[mode] ||
+                    mode
+            })
+        ),
+        mode => {
+            const previous =
+                drawingState.activeTool;
+
+            void previous;
+
+            /*
+             * THE MODE IS STORED ON THE INTERACTION, then the tool is
+             * armed. `beginAnalysisDiagram` reads it back, so the frame the
+             * student sees is the one they asked for - a Plot starts with an
+             * expression ready to type, a Sketch starts empty.
+             */
+            activateTool(toolId);
+
+            enggDrawingState.setInteraction(
+                drawingState,
+                {
+                    analysisMode: mode
+                }
+            );
+
+            beginAnalysisDiagram(toolId);
+
+            setToolMessage(
+                analysisDiagramIntroMessage(
+                    null
+                )
+            );
+
+            renderCurrentDrawing();
+        }
+    );
 }
 
 /*
@@ -773,12 +818,22 @@ export function openCoordinateSystemMenu(button) {
 
                     if (mode === "2d") {
                         /*
-                         * PHASE 1 RESET: the 2D coordinate system is a
-                         * placeholder; the submenu item reports that.
-                         * The original arming implementation has been
-                         * removed with the legacy tools.
+                         * Arm the real 2D coordinate-system tool. This is
+                         * the same shape `activate2DCoordinateSystemTool`
+                         * uses, written here rather than imported because
+                         * tool-activation imports this module and the
+                         * import would be circular.
                          */
-                        setToolMessage(legacyPlaceholderMessage());
+                        enggDrawingState.setActiveTool(
+                            drawingState,
+                            "coordinate-system-2d"
+                        );
+
+                        drawingState.interaction.phase = "idle";
+
+                        setToolMessage("Specify origin");
+
+                        renderCurrentDrawing();
                     } else {
                         setToolMessage(
                             "3D Coordinate System is not available on the 2D drawing canvas"

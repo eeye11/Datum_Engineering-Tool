@@ -3,7 +3,7 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
-import { coordinateSystemArms, rigidBodyHandles } from "../../../shared/geometry/feature-handles.js";
+import { coordinateSystemArms, rigidBodyHandles, rotationHandleFor } from "../../../shared/geometry/feature-handles.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDimensions from "../../../shared/scale/dimensions.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
@@ -15,6 +15,7 @@ import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
 import { translateObject } from "../geometry/transforms.js";
+import { selectionBounds } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 
 /*
@@ -921,6 +922,146 @@ function manipulationHandles(
 }
 
 /*
+ * ========================================================
+ * EVERY EDITING HANDLE A SELECTED OBJECT HAS
+ * ========================================================
+ *
+ * The shape-edit handles plus, when the object may be turned, the one
+ * rotation handle. This is the ONE list the renderer draws and the ONE list
+ * the hit test searches, so a handle can never be shown without being
+ * grabbable, or grabbable without being shown.
+ *
+ * WHAT IS NOT OFFERED:
+ *
+ *   FIXED      a locked feature keeps its selection highlight but no
+ *              handle at all - not even the rotation handle - so the lock
+ *              is visibly absolute rather than only enforced on drag.
+ *
+ *   DERIVED    a Resultant or a Force Components pair is re-derived from
+ *              its sources, so the rotation handle is not offered: turning
+ *              it would be undone by the next refresh. (These types also
+ *              carry their own engineering fields which a turn would have
+ *              to keep consistent, and the presentation rotation they DO
+ *              have is exposed through Transform.)
+ *
+ *   LABELS AND ANNOTATIONS have a placement rather than a shape, and a
+ *              turn of a piece of text about its own centre is not a
+ *              gesture the panel offers, so they are left with the handles
+ *              they already have.
+ *
+ * Everything else that is selected and not locked gets the rotation handle.
+ * A Particle, a Reference Point and a Coordinate System keep their anchor:
+ * their rotation is about that anchor, which is what `rotationPivotFor`
+ * returns.
+ */
+export function editableHandlesFor(
+    object
+) {
+    if (!object || object.locked === true) {
+        return [];
+    }
+
+    const shape =
+        manipulationHandles(object);
+
+    if (!supportsRotationHandle(object)) {
+        return shape;
+    }
+
+    const box =
+        selectionBounds(
+            [object],
+            [object.id]
+        );
+
+    const scale =
+        enggDrawingState.BASE_PIXELS_PER_UNIT *
+        (drawingState.camera?.zoom || 1);
+
+    const rotation =
+        rotationHandleFor(
+            object,
+            box,
+            scale
+        );
+
+    return rotation
+        ? [...shape, rotation]
+        : shape;
+}
+
+/*
+ * May this feature be turned by the rotation handle?
+ *
+ * A derived analysis child is excluded for the reason above; a dimension
+ * and an annotation are excluded because their stored model is a placement
+ * rather than a shape. Every other feature on the sheet turns.
+ */
+function supportsRotationHandle(
+    object
+) {
+    if (!object || !object.geometry) {
+        return false;
+    }
+
+    return ![
+        "dimension",
+        "annotation",
+        "annotate",
+        "resultant",
+        "force-components"
+    ].includes(object.type);
+}
+
+/*
+ * The pivot a single object turns about when the rotation handle is dragged.
+ *
+ * A Coordinate System turns about its ORIGIN, which is the thing it is
+ * anchored at; a Particle and a Reference Point keep their anchor too, so a
+ * turn moves only their attached graphics/labels. Everything else turns
+ * about its own centre. This mirrors `pivotForObject` in the Transform
+ * session, which is what keeps the handle and the Rotate field the same
+ * operation.
+ */
+export function rotationPivotFor(
+    object
+) {
+    const geometry =
+        object?.geometry || {};
+
+    if (
+        object?.type === COORDINATE_SYSTEM_TYPE &&
+        geometry.origin
+    ) {
+        return {
+            x: geometry.origin.x,
+            y: geometry.origin.y
+        };
+    }
+
+    if (
+        object?.type === "particle" ||
+        object?.type === "point"
+    ) {
+        const anchor =
+            geometry.position ||
+            geometry.point;
+
+        if (anchor) {
+            return {
+                x: anchor.x,
+                y: anchor.y
+            };
+        }
+    }
+
+    return enggFeatureGeometry.centerOf(
+        geometry,
+        object?.type
+    );
+}
+
+/*
  * The panel's Feature Type for a feature that reuses another
  * feature's geometry for a different engineering role.
  *
@@ -1005,8 +1146,16 @@ export function handleAtPoint(
                 return;
             }
 
-            manipulationHandles(
-                object
+            /*
+             * THE SAME LIST THE RENDERER DRAWS.
+             *
+             * Shape handles AND, for a selected transformable feature, the
+             * rotation handle. Using one resolver for both is what keeps a
+             * visible handle grabbable and a grabbable handle visible.
+             */
+            (selected
+                ? editableHandlesFor(object)
+                : manipulationHandles(object)
             ).forEach(
                 handle => {
                     if (!selected && object.metadata?.thermodynamicsKind === "process-path" && !handle.kind.startsWith("process-label-")) return;

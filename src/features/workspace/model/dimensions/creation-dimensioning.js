@@ -432,9 +432,9 @@ function planFor(object, state) {
  * student typed. One conversion, in one place, or the two routes
  * disagree about what a millimetre is.
  *
- * `field.unit` is the unit THE STUDENT CHOSEN, and it is what
- * establishes the scale below - which is what makes "0.5 m" and
- * "500 mm" the same physical length.
+ * `field.unit` is the unit THE STUDENT CHOSE, and it is preserved so
+ * a value typed as "0.5 m" and one typed as "500 mm" resolve to the
+ * same physical length.
  */
 function applyValue(object, state, field, engineeringValue, apply) {
   const value = Number(engineeringValue);
@@ -447,28 +447,6 @@ function applyValue(object, state, field, engineeringValue, apply) {
     field.unit && enggQuantities?.LENGTH_UNITS?.[field.unit]
       ? field.unit
       : displayUnit(state);
-
-  const wasCalibrated = enggDimensions.isCalibrated(state);
-
-  if (!wasCalibrated) {
-    /*
-     * The drawn extent of THIS dimension is what the scale is
-     * measured against. A dimension the drawing cannot measure
-     * - a suggestion of null - cannot establish a scale, so it
-     * is applied against the one-to-one assumption and leaves
-     * the document uncalibrated, which is the honest outcome.
-     */
-    const drawnWorld = Number(field.worldValue);
-
-    if (Number.isFinite(drawnWorld) && drawnWorld > 0) {
-      enggDimensions.calibrate(
-        state,
-        drawnWorld,
-        value,
-        unit
-      );
-    }
-  }
 
   return apply(
     object,
