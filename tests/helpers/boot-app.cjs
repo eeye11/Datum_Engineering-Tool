@@ -121,6 +121,13 @@ function runInFreshPage(taskSource, { timeout = 120_000 } = {}) {
       const result = await task({ window: page.window, document: page.document,
         projectRoot, require, bootError: page.error });
       process.stdout.write("\n__DATUM_REPORT__" + JSON.stringify(result === undefined ? null : result));
+      /*
+       * THE PAGE'S TIMERS ARE LEFT RUNNING - jsdom's clock, the source
+       * debounce, requestAnimationFrame - so a finished task tells the report,
+       * and the process is ended here rather than waiting for timers that will
+       * never be idle.
+       */
+      process.exit(0);
     })().catch((error) => {
       process.stdout.write("\n__DATUM_REPORT__" + JSON.stringify({ taskError: String(error && error.stack || error) }));
     });
