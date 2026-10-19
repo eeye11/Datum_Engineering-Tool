@@ -100,17 +100,23 @@ MIGRATIONS[1] = function migrateV1ToV2(document) {
     };
   }
 
-  if (document?.scale) {
-    first.scale = {
-      ...document.scale,
-    };
-  }
-
   return {
     ...document,
     sheets: enggSheets.serializeCollection(collection).sheets,
     activeSheetId: first.id,
     objects: undefined,
+
+    /*
+     * THE RETIRED WORLD SCALE IS NOT WRITTEN OUT.
+     *
+     * A file opened from an older build carries a `scale` block (and often a
+     * per-sheet `scale`). It is dropped here rather than carried forward: one
+     * drawing unit is one millimetre now, so keeping the block would persist a
+     * setting the application no longer has. Reading it on open is harmless -
+     * nothing consults it - which is the whole of the backwards compatibility
+     * this needs.
+     */
+    scale: undefined,
   };
 };
 

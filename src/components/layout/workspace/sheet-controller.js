@@ -154,28 +154,6 @@ function adoptSheetViewportIntoEditor() {
     drawingState.units = sheet.units;
 
     /*
-     * AND THE SHEET'S UNIVERSAL LENGTH SCALE.
-     *
-     * The editor is the live copy of whichever sheet is active, and
-     * the scale is what makes that sheet's lengths mean anything - so
-     * it is adopted here, in the same breath as the geometry it
-     * describes.
-     *
-     * Without this, a sheet opened after another would keep the
-     * previous sheet's calibration: every length on it would be
-     * measured with a scale that belonged to different geometry, and
-     * the two sheets would silently disagree about what the drawing
-     * looks like even where they are drawn identically.
-     *
-     * A sheet with no scale of its own hands over `null`, which is
-     * what makes it uncalibrated rather than silently inheriting the
-     * one it was left from.
-     */
-    drawingState.scale = sheet.scale
-        ? JSON.parse(JSON.stringify(sheet.scale))
-        : null;
-
-    /*
      * AND THE EDITOR TAKES THE SHEET'S FEATURES, because the editor is
      * the live copy of whichever sheet is active and the objects restored
      * immediately before this are the active sheet's.

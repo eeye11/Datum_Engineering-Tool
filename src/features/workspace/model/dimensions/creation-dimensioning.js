@@ -56,7 +56,6 @@
  * second global scale.
  */
 import enggFeatureGeometry from "../../../../shared/geometry/feature-geometry.js";
-import enggDimensions from "../../../../shared/scale/dimensions.js";
 import enggQuantities from "../../../../shared/units/quantities.js";
 
 /*
@@ -382,25 +381,13 @@ function planFor(object, state) {
  * through to both conversions below unchanged. That is what
  * makes "0.5 m" and "500 mm" the same physical length: each is
  * read in the unit it was typed in, and both resolve to the same
- * millimetres through the ONE scale. The document's own unit is
- * only a fallback for a field that somehow arrived without one.
+ * millimetres through the shared unit table. Millimetres are
+ * only a fallback for a field that somehow arrived without a
+ * unit.
  *
- * CALIBRATION, AND WHY IT IS HERE
- * -------------------------------
- * If the document has no scale yet, THIS value is what
- * establishes it. The scale is derived from the geometry the
- * student actually drew, not from the value they typed:
- *
- *     mm per world unit = typed mm / drawn world units
- *
- * which is exactly the relationship the Smart Dimension's
- * calibration uses, through the same `enggDimensions.calibrate`
- * call. `calibrate` converts the typed value to millimetres
- * itself, so a first dimension of "0.5 m" establishes the same
- * scale as "500 mm" would. After that the value is applied in
- * world units through the same conversion, so the feature ends
- * up the size the student asked for under the scale that value
- * established.
+ * There is no document scale: one drawing unit is one millimetre,
+ * so the typed size IS the geometry's size once the unit is
+ * normalised.
  */
 /*
  * Turn a typed engineering value into the feature's authoritative
@@ -414,23 +401,14 @@ function planFor(object, state) {
  * THE VALUE HANDED TO `apply` IS IN MILLIMETRES.
  * -------------------------------------------
  * The Features panel captions its length fields with a unit and
- * enters millimetres, so the setter accepts millimetres and does
- * the one conversion into world units. That means the number
- * crossing into the geometry has to ARRIVE in millimetres,
- * whatever unit the student typed it in.
+ * enters millimetres, and the setter's contract is millimetres.
+ * That means the number crossing into the geometry has to ARRIVE
+ * in millimetres, whatever unit the student typed it in.
  *
  * So a value typed as "0.5 m" becomes 500 mm here, by the factor
  * each unit declares against the millimetre, and `apply` receives
- * 500. This is a UNIT conversion only - it does not touch the
- * document scale, because the scale is not what turns metres into
- * millimetres.
- *
- * Converting through the scale as well was the bug this comment
- * exists to prevent: the value crossed the scale twice - once here
- * and once inside the setter - so a beam sized at 500 mm came out
- * five times too short and reported a fifth of the length the
- * student typed. One conversion, in one place, or the two routes
- * disagree about what a millimetre is.
+ * 500. This is a UNIT conversion only: one drawing unit is one
+ * millimetre, so there is nothing else to convert.
  *
  * `field.unit` is the unit THE STUDENT CHOSE, and it is preserved so
  * a value typed as "0.5 m" and one typed as "500 mm" resolve to the
@@ -460,19 +438,16 @@ function applyValue(object, state, field, engineeringValue, apply) {
  * CONVERSIONS
  * ========================================================
  *
- * These are thin wrappers over the ONE scale system. They
- * exist so this module never writes its own formula: a world
- * length becomes an engineering value by asking
- * enggDimensions, and nothing else.
+ * These are thin wrappers so this module never writes its own
+ * formula. A drawing length IS a millimetre, so the world value
+ * is the engineering value and the default unit is millimetres.
  */
-function worldToEngineering(state, worldValue) {
-  return enggDimensions.toEngineering(state, worldValue).value;
+function worldToEngineering(_state, worldValue) {
+  return Number(worldValue);
 }
 
-function displayUnit(state) {
-  const scale = enggDimensions.readScale(state);
-
-  return scale?.unit || enggDimensions.DEFAULT_UNIT || "mm";
+function displayUnit(_state) {
+  return "mm";
 }
 
 /*

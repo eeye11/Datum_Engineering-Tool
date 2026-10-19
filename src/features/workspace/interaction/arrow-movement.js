@@ -43,7 +43,6 @@ import enggBodyFrames from "../../../shared/geometry/body-frames.js";
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { isDerivedFeature, isSupportType } from "../../../shared/model/feature-types.js";
-import enggDimensions from "../../../shared/scale/dimensions.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -52,37 +51,18 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 /*
  * HOW FAR ONE STEP MOVES A FEATURE, in MILLIMETRES.
  *
- * In millimetres and not in world units, because that is the unit the student
- * thinks in and the unit the scale converts: the step is the same physical
- * distance whatever the sheet is calibrated to, and the same at every zoom. A
- * world-unit step would move a feature twice as far on a 1:2 sheet as on a
- * 1:1 one for no reason the student could see.
+ * One drawing unit is one millimetre, so the step is the same number in both
+ * - which is why a nudge moves the same distance at every zoom.
  */
 export const ARROW_STEP_MM = 5;
 
 /*
- * The step, in WORLD units, for the current document.
+ * The step, in DRAWING units.
  *
- * Derived from the shared scale on every press rather than stored, so an
- * uncalibrated sheet (one world unit = one millimetre) and a calibrated one
- * both move by the same real distance.
+ * A drawing unit IS a millimetre, so the physical step and the drawing-space
+ * step are the same number; there is no scale to derive it through.
  */
 function stepWorld() {
-    /*
-     * `fromEngineering` is the ONE conversion from millimetres to world units,
-     * asked of the shared scale module rather than restated - so a step is the
-     * same physical distance on an uncalibrated sheet and on a calibrated one.
-     */
-    const convert = enggDimensions?.fromEngineering;
-
-    if (typeof convert === "function") {
-        return convert(drawingState, ARROW_STEP_MM, "mm");
-    }
-
-    /*
-     * No scale module: one world unit is one millimetre, which is the default
-     * the whole application already assumes.
-     */
     return ARROW_STEP_MM;
 }
 

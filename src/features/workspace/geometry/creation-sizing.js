@@ -3,7 +3,6 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggDimensions from "../../../shared/scale/dimensions.js";
 import enggQuantities from "../../../shared/units/quantities.js";
 import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggCreationDimensioning from "../model/dimensions/creation-dimensioning.js";
@@ -34,19 +33,15 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
  * WHY THE FEATURE IS NOT ADDED FIRST
  * ----------------------------------
  * The document is untouched while the popup is open. If the
- * student cancels, there is nothing to remove, nothing to undo
- * and - crucially - no scale change: the FIRST dimension is what
- * calibrates the document, and a cancelled first dimension must
- * leave the document exactly as uncalibrated as it was. Adding
- * the feature first and removing it on cancel would make that
+ * student cancels, there is nothing to remove and nothing to undo:
+ * adding the feature first and removing it on cancel would make that
  * guarantee depend on the removal being perfect.
  */
 /*
  * Draw the feature being sized, at the size currently typed.
  *
  * The object is NOT in the document yet - adding it would mean a
- * cancelled popup had committed something, and the first dimension is
- * what calibrates the sheet, so a cancelled first dimension has to
+ * cancelled popup had committed something, so a cancelled popup has to
  * leave the sheet exactly as it found it. The preview is therefore
  * drawn from a COPY, through the very same setter the answer is
  * applied with, so the drawing the student is looking at is the
@@ -71,42 +66,25 @@ function showSizingPreview(
      * THROUGH THE SAME DOOR.
      *
      * `updateFeatureProperty` is the ONE property setter, and its contract
-     * is MILLIMETRES: it performs the single conversion into world units
-     * itself. The commit does exactly this - it normalises the typed value
-     * to millimetres with the unit the student chose, then hands it over - so
-     * the preview normalises it the same way, and a value typed in metres
-     * previews at the same size it will commit at.
+     * is MILLIMETRES: one drawing unit is one millimetre, so the number it is
+     * given IS the geometry's size. The commit does exactly this - it
+     * normalises the typed value to millimetres with the unit the student
+     * chose, then hands it over - so the preview normalises it the same way,
+     * and a value typed in metres previews at the same size it will commit at.
      *
-     * IT USED TO CONVERT TO WORLD UNITS FIRST AND HAND THOSE OVER. That
-     * crossed the scale twice - once here and once inside the setter - and
-     * the error compounded on every keystroke, because each preview was built
-     * from the previous preview's already-converted geometry. A beam typed at
-     * 300000 mm came out tens of billions of millimetres long and could no
-     * longer be edited. One conversion, in the setter, is what keeps the
-     * preview and the commit identical.
-     *
-     * ON AN UNCALIBRATED SHEET the drawn value is passed through unchanged,
-     * for the reason the commit does the same: the first length DEFINES the
-     * scale by declaring that the geometry already drawn is that long, so it
-     * is the interpretation that changes rather than the geometry.
+     * One normalisation, in one place, is what keeps the preview and the
+     * commit identical.
      */
-    const calibrated =
-        enggDimensions?.isCalibrated?.(
-            drawingState
-        ) === true;
+    const millimetres =
+        Number(value) *
+        (enggQuantities?.LENGTH_UNITS?.[unit || "mm"]?.mm ?? 1);
 
-    if (calibrated) {
-        const millimetres =
-            Number(value) *
-            (enggQuantities?.LENGTH_UNITS?.[unit || "mm"]?.mm ?? 1);
-
-        if (Number.isFinite(millimetres)) {
-            updateFeatureProperty(
-                preview,
-                field.key,
-                millimetres
-            );
-        }
+    if (Number.isFinite(millimetres)) {
+        updateFeatureProperty(
+            preview,
+            field.key,
+            millimetres
+        );
     } else if (Number.isFinite(Number(field.worldValue))) {
         updateFeatureProperty(
             preview,
@@ -150,18 +128,10 @@ export function beginCreationDimensioning(
      *
      * It is captured at the moment the span was completed - before
      * `applyValue` below can run - and passed in, rather than being
-     * taken here. That placement is the whole point.
+     * taken here. That placement is the whole point: the snapshot
+     * describes the drawing before the new feature's size was applied.
      *
-     * Applying a creation dimension can CALIBRATE the document - the
-     * first one in a new drawing must, because that is how a scale is
-     * ever established. A snapshot taken after that would already
-     * contain the calibration, so Undo would remove the beam while
-     * leaving its scale behind: a drawing with no features and a
-     * length scale derived from one of them.
-     *
-     * Passing it in also keeps creation and its dimension ONE
-     * undoable action - the beam and the calibration it established
-     * disappear together, and come back together.
+     * Passing it in keeps creation and its sizing ONE undoable action.
      */
 
     const plan =
@@ -199,10 +169,9 @@ export function beginCreationDimensioning(
          * The popup asks "how big is it?" about something the student
          * can see. Hiding the drawing while that question is open
          * answers it against nothing - they would be typing a length
-         * with no way to check what the length looks like, and on the
-         * very first dimension the sheet is also uncalibrated, so the
-         * drawing is the only thing that could have told them whether
-         * the number they are typing is the number they meant.
+         * with no way to check what the length looks like, and the
+         * drawing is the only thing that can tell them whether the
+         * number they are typing is the number they meant.
          *
          * So the pending object is kept as a preview and redrawn as
          * the value changes: 500 becomes 750 becomes 0.75 m, and the
@@ -239,11 +208,9 @@ export function beginCreationDimensioning(
         onConfirm: values => {
             /*
              * The values are applied in order. For a two-value
-             * shape the first establishes the scale and the
-             * second is read against it, which is what makes the
-             * second field land on the number the student typed
-             * rather than on a value derived from a second,
-             * competing scale.
+             * shape the first is the span and the second is read
+             * against it, which is what makes the second field land
+             * on the number the student typed.
              */
             plan.fields.forEach(
                 (field, index) => {
@@ -285,9 +252,7 @@ export function beginCreationDimensioning(
                          * has already normalised the typed value to
                          * millimetres - including a value the
                          * student typed in metres - so this is a
-                         * straight pass-through and the ONE
-                         * conversion into world units happens
-                         * inside the setter.
+                         * straight pass-through.
                          *
                          * Exactly one conversion, in exactly one
                          * place, is what makes a size set here and

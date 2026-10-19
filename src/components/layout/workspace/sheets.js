@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Drawing sheets: the first-class parts an EnggDraw document is made of.
  *
  * A document is not one drawing, it is an ordered list of drawings. A
@@ -179,29 +179,6 @@ function createSheetContent(overrides) {
     }),
 
     /*
-     * THE SHEET'S UNIVERSAL LENGTH SCALE.
-     *
-     * This is deliberately HERE, on the sheet, rather than once on
-     * the document. A drawing is a collection of sheets and each
-     * sheet is its own physical world: the same model geometry can
-     * mean 100 mm per unit on one sheet and 250 mm per unit on
-     * another, and a student comparing two sheets is comparing two
-     * different scales on purpose.
-     *
-     * Keeping one document-wide scale made that impossible. Either
-     * every sheet silently shared Sheet 1's calibration - so a
-     * length drawn on Sheet 2 would be measured with a scale that
-     * had nothing to do with it - or the first length on any sheet
-     * would overwrite the meaning of every length on every other.
-     *
-     * `null` is the honest value for a sheet that has never been
-     * calibrated, and it is deliberately distinct from a missing
-     * field: "this sheet has no scale yet" and "this sheet's scale
-     * was lost" must not look alike.
-     */
-    scale: null,
-
-    /*
      * THE SHEET'S DRAWING SOURCE.
      *
      * Each sheet is its own picture: the TikZ that draws THIS sheet's
@@ -264,26 +241,10 @@ function createSheet(collection, options = {}) {
     styleDefaults: content.styleDefaults,
     viewport: content.viewport,
     grid: content.grid,
-
-    /*
-     * THE SHEET'S CALIBRATION TRAVELS WITH IT.
-     *
-     * It is listed here for the same reason the grid and the viewport
-     * are: a sheet is created from its content, and a field left out of
-     * this object is a field the sheet does not have. Omitting it
-     * silently discarded the scale of every duplicated sheet - and, more
-     * seriously, of every sheet read back from a saved file, so a
-     * reopened drawing measured with the 1:1 default instead of the
-     * scale it was calibrated to.
-     */
-    scale: content.scale
-      ? JSON.parse(JSON.stringify(content.scale))
-      : null,
-
     /*
      * THE SHEET'S OWN DRAWING SOURCE.
      *
-     * Listed here for the same reason the scale is: a field left out of
+     * Listed here because a field left out of
      * this object is a field the sheet does not have. A duplicated sheet
      * would otherwise silently lose the picture it was duplicated from,
      * and one read back from a file would lose it entirely.
@@ -386,22 +347,8 @@ function createCollection(input) {
       objectSnap: content.objectSnap,
       styleDefaults: content.styleDefaults,
       viewport: content.viewport,
-      grid: content.grid,
-
-      /*
-       * THE SAVED CALIBRATION, RESTORED WITH THE SHEET.
-       *
-       * A reopened file must measure exactly as it did before it was
-       * closed. Leaving this field off the reconstructed sheet dropped
-       * the scale on every load, so the drawing silently fell back to
-       * one millimetre per unit and every length in every Features panel
-       * came back wrong - with no indication that anything had been
-       * lost.
-       */
-      scale: content.scale
-        ? JSON.parse(JSON.stringify(content.scale))
-        : null
-    };
+        grid: content.grid
+      };
   });
 
   /*
@@ -575,18 +522,8 @@ function duplicateSheet(collection, sheetId, options = {}) {
         JSON.stringify(source.styleDefaults)
       ),
       viewport: { ...source.viewport },
-      grid: { ...source.grid },
-
-      /*
-       * A DUPLICATE IS CALIBRATED LIKE ITS ORIGINAL. The copy is the
-       * same drawing, so a copy that arrived uncalibrated would show
-       * every length at the 1:1 default while the sheet it came from
-       * showed the truth.
-       */
-      scale: source.scale
-        ? JSON.parse(JSON.stringify(source.scale))
-        : null
-    }
+        grid: { ...source.grid }
+      }
   });
 
   collection.activeSheetId = copy.id;
@@ -761,20 +698,6 @@ function captureSheetContent(state) {
     grid: { ...state.grid },
 
     /*
-     * The sheet's scale travels with the sheet.
-     *
-     * Captured for the same reason it is stored there: the scale is
-     * what makes this sheet's lengths mean anything, so a snapshot
-     * that saved the geometry and left the scale behind would restore
-     * a sheet whose every length was wrong by a factor nobody could
-     * see. Copying it here also means switching sheets and saving
-     * them are the same operation - there is nowhere else to forget.
-     */
-    scale: state.scale
-      ? JSON.parse(JSON.stringify(state.scale))
-      : null,
-
-    /*
      * THE SHEET'S DRAWING SOURCE, CAPTURED WITH IT.
      *
      * The manager holds the ACTIVE sheet's source - that is the sheet
@@ -821,20 +744,6 @@ function applySheetContent(sheet, content) {
   };
   sheet.viewport = { ...next.viewport };
   sheet.grid = { ...next.grid };
-
-  /*
-   * ...AND THE SHEET'S OWN SCALE.
-   *
-   * Taken from what was captured, exactly like the grid beside it.
-   * Left as it was, a sheet switched back onto would keep the scale
-   * of whichever sheet the editor happened to have been showing -
-   * which is precisely the leak this storage is here to prevent,
-   * and the one that would make a length drawn on this sheet mean
-   * something different depending on how the student got here.
-   */
-  sheet.scale = next.scale
-    ? JSON.parse(JSON.stringify(next.scale))
-    : null;
 
   /*
    * THE SHEET'S DRAWING SOURCE, WRITTEN BACK WITH IT.
@@ -884,29 +793,6 @@ function loadSheet(state, sheet) {
     ...content.styleDefaults
   };
   state.grid = { ...content.grid };
-
-  /*
-   * THE SHEET'S OWN SCALE, LOADED WITH THE SHEET.
-   *
-   * The scale belongs to the sheet because it is the relationship
-   * between THIS sheet's geometry and real lengths - a sheet loaded
-   * without it would measure every length using whatever the sheet
-   * the student came from was calibrated to, which is a number with
-   * no connection to anything on screen.
-   *
-   * It is read here rather than left to the editor's adopt step,
-   * because that step belongs to Undo. A switch is not an undo, and
-   * relying on it would mean the scale arrived late and after
-   * something else had already drawn with it.
-   *
-   * `content.scale` is null for a sheet that has never been
-   * calibrated, and a sheet that has never been calibrated must
-   * arrive uncalibrated rather than quietly keeping the previous
-   * sheet's answer.
-   */
-  state.scale = content.scale
-    ? JSON.parse(JSON.stringify(content.scale))
-    : null;
 
   /*
    * THE SHEET'S DRAWING SOURCE, LOADED WITH IT.

@@ -77,29 +77,6 @@ function createDrawingState() {
         version: 1,
         units: "mm",
 
-        /*
-         * THE DOCUMENT'S LENGTH CALIBRATION, DECLARED UP FRONT.
-         *
-         * `null` means UNCALIBRATED: the geometry is real, but nothing has
-         * said how long any of it is, so a dimension has no honest number
-         * to print. That is a real state rather than a missing field -
-         * `undefined` meant the document could not tell "never calibrated"
-         * from "calibration lost", which is how a saved drawing silently
-         * came back uncalibrated.
-         *
-         * It belongs HERE, on the document, because it is one fact about
-         * the whole drawing. A scale stored per feature would be a second
-         * source of truth for every object that had one, free to disagree
-         * with its neighbours, and a beam measured in millimetres beside
-         * its own load measured in something else.
-         *
-         * Declared here it is also part of the document SHAPE, so the
-         * snapshot and the serializer below carry it without either of
-         * them having to remember to - which is exactly how it went
-         * missing before.
-         */
-        scale: null,
-
         objects: [],
         camera: {
             zoom: 1,
@@ -110,8 +87,7 @@ function createDrawingState() {
          * THE GRID IS A DRAWING AID, NOT AN ENGINEERING SCALE.
          *
          * `spacing` is measured in the SAME internal coordinates the geometry
-         * is stored in, and it never depends on whether `scale` above has been
-         * calibrated. Zooming and panning change neither the interval nor the
+         * is stored in. Zooming and panning change neither the interval nor the
          * snapping: both the drawn lines and the snap arithmetic are derived
          * from this one number.
          *
@@ -130,19 +106,6 @@ function createDrawingState() {
             spacing: 1
         },
 
-        /*
-         * THE STATICS ENVIRONMENT'S DISPLAY SETTINGS.
-         *
-         * One block for the whole Statics workspace, held at
-         * drawing level rather than on any individual feature. The
-         * Vector Scale in here is the single shared value that every
-         * force and load arrow is drawn through.
-         *
-         * It is a DISPLAY setting and nothing else. It changes how
-         * big the arrows look and never how big the forces are: a
-         * 100 N force drawn at 4x is still 100 N, and the analysis
-         * that reads it never sees this value at all.
-         */
         /*
          * ========================================================
          * THE THREE DISPLAY SETTINGS
@@ -164,9 +127,6 @@ function createDrawingState() {
             showUnits: true,
             showMagnitudes: true,
             showDimensions: true
-        },
-        statics: {
-            vectorScale: 1
         },
         objectSnap: {
             enabled: true,

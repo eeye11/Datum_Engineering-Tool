@@ -3,7 +3,6 @@
  */
 
 import enggBodyFrames from "../../../shared/geometry/body-frames.js";
-import enggDimensions from "../../../shared/scale/dimensions.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
 import enggDiagramEquations from "../model/analysis/diagram-equations.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
@@ -790,11 +789,7 @@ export function analysisPanelRows(
                         range &&
                         Number.isFinite(Number(range.from)) &&
                         Number.isFinite(Number(range.to))
-                        ? `${number(
-                            enggDimensions.toEngineering(drawingState, range.from).value,
-                        )} → ${number(
-                            enggDimensions.toEngineering(drawingState, range.to).value,
-                        )} ${enggDimensions.toEngineering(drawingState, range.to).unit}`
+                        ? `${number(range.from)} → ${number(range.to)} mm`
                         : "No source body"
                 )
             );
@@ -853,11 +848,7 @@ export function analysisPanelRows(
                         range &&
                         Number.isFinite(Number(range.from)) &&
                         Number.isFinite(Number(range.to))
-                        ? `${number(
-                            enggDimensions.toEngineering(drawingState, range.from).value,
-                        )} → ${number(
-                            enggDimensions.toEngineering(drawingState, range.to).value,
-                        )} ${enggDimensions.toEngineering(drawingState, range.to).unit}`
+                        ? `${number(range.from)} → ${number(range.to)} mm`
                         : "No source body"
                 )
             );
