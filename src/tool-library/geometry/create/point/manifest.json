@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.point",
+  "label": "Point",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/point",
+  "template": "template.tex",
+  "implemented": true
+}

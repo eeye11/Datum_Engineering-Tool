@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.state-point",
+  "label": "State Point",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/state-point",
+  "template": "template.tex",
+  "implemented": false
+}

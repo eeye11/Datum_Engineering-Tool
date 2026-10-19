@@ -166,12 +166,12 @@ console.log("\n  the label travels with the feature through a save\n");
     );
 }
 
-console.log("\n  the panel input is wired to the setter\n");
+console.log("\n  the panel field is wired to the model\n");
 
 {
     const fs = require("fs");
     const markup = fs.readFileSync(locate("feature-panel-markup.js"), "utf8");
-    const binding = fs.readFileSync(locate("property-binding.js"), "utf8");
+    const schema = fs.readFileSync(locate("feature-schema.js"), "utf8");
 
     check(
         "the Label field shows the LABEL, not the name",
@@ -184,20 +184,25 @@ console.log("\n  the panel input is wired to the setter\n");
         /data-object-label/.test(markup),
     );
 
+    /*
+     * THE INSPECTOR'S FEATURES PANE WRITES THE LABEL THROUGH ITS FIELD TABLE.
+     *
+     * The old panel bound the input by hand in `property-binding.js`, which was
+     * deleted with that panel. The new one declares the field once - `label`,
+     * kind `text` - and the pane renders and writes it from that declaration, so
+     * what has to be true is that the declaration exists and writes `object.label`
+     * rather than the name.
+     */
     check(
-        "there is a handler for it",
-        /querySelectorAll\('\[data-object-label\]'\)/.test(binding),
-        "the field had NO handler at all - the whole of the reported fault",
+        "there is a Label field in the schema",
+        /label:\s*\{[\s\S]{0,400}?kind:\s*"text"/.test(schema),
+        "the pane has no Label field to render",
     );
 
     check(
-        "which commits through the ONE setter",
-        /updateFeatureProperty\(\s*object,\s*'label'/.test(binding),
-    );
-
-    check(
-        "and takes an undo snapshot, so a label is one step back",
-        /data-object-label[\s\S]{0,700}?snapshotDrawing/.test(binding),
+        "which writes the feature's label, not its name",
+        /label:\s*\{[\s\S]{0,600}?object\.label\s*=/.test(schema),
+        "the field would rename the feature instead of labelling it",
     );
 }
 

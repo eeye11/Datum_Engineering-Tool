@@ -1,0 +1,9 @@
+{
+  "id": "geometry.view.fit",
+  "label": "Fit",
+  "category": "geometry",
+  "group": "view",
+  "libraryPath": "src/tool-library/geometry/view/fit",
+  "template": "template.tex",
+  "implemented": false
+}

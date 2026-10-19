@@ -52,7 +52,6 @@ const check = (name, ok, detail) => {
 const panel = fs.readFileSync(locate("property-panel.js"), "utf8");
 const markup = fs.readFileSync(locate("feature-panel-markup.js"), "utf8");
 const staticsPanel = fs.readFileSync(locate("statics-panel.js"), "utf8");
-const binding = fs.readFileSync(locate("property-binding.js"), "utf8");
 const dimensionModel = fs.readFileSync(
   locate("dimension-model.js"),
   "utf8",
@@ -127,22 +126,29 @@ check(
 
 console.log("\n  a unit change is WRITTEN as a unit\n");
 
+/*
+ * A UNIT IS WRITTEN AS A STRING, AND THE PANE IS NOT THE WRITER.
+ *
+ * The old panel routed a select's value through `updateFeatureProperty` by hand,
+ * in `property-binding.js` - deleted with that panel. The inspector's Features
+ * pane does not write anything itself: a field's `write` is the only place a
+ * value reaches the model, so the property that matters is that no field turns a
+ * unit into a boolean.
+ */
+const schemaSource = fs.readFileSync(locate("feature-schema.js"), "utf8");
+
 check(
-  "a select's value is routed through the ONE setter",
-  /updateFeatureProperty\(\s*object,\s*key,\s*select\.value\s*\)/.test(binding),
+  "no field stores a select's value as a boolean",
+  !/value === "true"/.test(schemaSource) && !/=== 'true'/.test(schemaSource),
   "writing geometry[key] = value === 'true' stores a unit as a boolean",
 );
 
 check(
-  "and the boolean-write that broke unit selects is gone",
-  !/object\.geometry\[key\]\s*=\s*key === "direction"[\s\S]{0,200}select\.value === "true"/.test(
-    binding,
-  ),
-);
-
-check(
   "a direction is still a word, not a flag",
-  /key === ['"]direction['"][\s\S]{0,120}CCW/.test(binding),
+  /key === ['"]direction['"][\s\S]{0,200}?setLoadDirection\(\s*g,\s*value\s*\)/.test(
+    fs.readFileSync(locate("property-update.js"), "utf8"),
+  ),
+  "a direction is passed through the profile's own setter, never coerced",
 );
 
 console.log("\n  a dimension can be READ in another length unit\n");

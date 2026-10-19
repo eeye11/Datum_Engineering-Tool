@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.connection.fixed-connection",
+  "label": "Fixed Connection",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/connection/fixed-connection",
+  "template": "template.tex",
+  "implemented": false
+}

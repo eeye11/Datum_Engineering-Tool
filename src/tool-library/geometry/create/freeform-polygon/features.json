@@ -1,0 +1,44 @@
+{
+  "tool": "geometry.create.freeform-polygon",
+  "construction": [],
+  "appearance": [
+    {
+      "key": "stroke",
+      "label": "Outline Colour",
+      "kind": "colour",
+      "default": "#000000"
+    },
+    {
+      "key": "fillMode",
+      "label": "Fill",
+      "kind": "choice",
+      "default": "none",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "solid", "label": "Solid" }
+      ]
+    },
+    {
+      "key": "fill",
+      "label": "Fill Colour",
+      "kind": "colour",
+      "default": "#000000",
+      "shownWhen": { "fillMode": ["solid"] }
+    },
+    {
+      "key": "lineWidth",
+      "label": "Thickness",
+      "kind": "choice",
+      "default": "normal",
+      "options": [
+        { "value": "very-thin", "label": "Very Thin" },
+        { "value": "thin", "label": "Thin" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "thick", "label": "Thick" },
+        { "value": "very-thick", "label": "Very Thick" }
+      ]
+    }
+  ],
+  "defaultFixed": false
+}

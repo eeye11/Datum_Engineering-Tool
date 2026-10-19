@@ -1,0 +1,9 @@
+{
+  "id": "geometry.modify.mirror",
+  "label": "Mirror",
+  "category": "geometry",
+  "group": "modify",
+  "libraryPath": "src/tool-library/geometry/modify/mirror",
+  "template": "template.tex",
+  "implemented": false
+}

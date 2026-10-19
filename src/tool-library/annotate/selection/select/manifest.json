@@ -1,0 +1,9 @@
+{
+  "id": "annotate.selection.select",
+  "label": "Select",
+  "category": "annotate",
+  "group": "selection",
+  "libraryPath": "src/tool-library/annotate/selection/select",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "annotate.text.label",
+  "label": "Label",
+  "category": "annotate",
+  "group": "text",
+  "libraryPath": "src/tool-library/annotate/text/label",
+  "template": "template.tex",
+  "implemented": false
+}

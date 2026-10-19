@@ -235,48 +235,44 @@ body.datum-topbar-hidden .drawing-workspace {
  */
 .drawing-topbar-hide {
     position: relative;
-    grid-row: 2;
-    grid-column: 1 / -1;
-    justify-self: end;
-    align-self: end;
-    margin-right: 32px;
-    transform: translateY(100%);
+    align-self: center;
+    margin-left: auto;
+    margin-right: 0;
     z-index: 61;
     align-items: center;
-    background: var(--datum-surface);
-    border: 1px solid var(--cad-border);
-    border-top: 0;
-    border-radius: 0 0 5px 5px;
-    color: var(--datum-ink);
+    background: var(--datum-panel);
+    border: 0;
+    color: var(--cad-muted);
     cursor: pointer;
     display: inline-flex;
     flex: 0 0 auto;
     font: inherit;
-    font-size: 11px;
+    font-size: 9px;
+    font-weight: 700;
     gap: 5px;
-    margin-left: 8px;
-    min-height: 24px;
-    padding: 3px 12px;
-    transition: background-color 120ms ease, border-color 120ms ease;
+    letter-spacing: .08em;
+    min-height: 22px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    transition: background .12s ease, color .12s ease;
     white-space: nowrap;
 }
 
 .drawing-topbar-hide:hover {
-    background: var(--datum-menu-hover);
-    color: var(--datum-ink);
+    background: var(--datum-panel);
+    color: var(--cad-ink);
 }
 
 .drawing-topbar-hide:focus-visible {
-    outline: 2px solid var(--datum-focus);
+    outline: 2px solid var(--datum-green);
     outline-offset: -2px;
 }
 
 .drawing-topbar-hide svg {
     flex: 0 0 auto;
-    height: 13px;
-    width: 13px;
+    height: 16px;
+    width: 16px;
 }
-
 /*
  * THE SHOW CONTROL, ON THE RIGHT OF THE SLIVER.
  *
@@ -297,56 +293,38 @@ body.datum-topbar-hidden .drawing-workspace {
  */
 .drawing-topbar-show {
     align-items: center;
-    background: var(--datum-surface);
-    border: 1px solid var(--cad-border);
-    border-top: 0;
-    border-radius: 0 0 5px 5px;
-    color: var(--datum-ink);
+    background: var(--datum-panel);
+    border: 0;
+    color: var(--cad-muted);
     cursor: pointer;
-    display: flex;
+    display: inline-flex;
     flex: 0 0 auto;
     font: inherit;
-    font-size: 11px;
+    font-size: 9px;
+    font-weight: 700;
     gap: 5px;
-    justify-content: center;
-    letter-spacing: .02em;
-    min-height: 24px;
-    padding: 3px 12px;
-    text-align: center;
-    transition: background-color 120ms ease;
-    width: auto;
-}
-
-body.datum-topbar-hidden .drawing-topbar-show {
-    /*
-     * RIGHT-ALIGNED, at the same corner the Hide button held. The row is still
-     * full width - the clickable strip is the whole line, as it was for the
-     * sliver above - but the LABEL sits at the right, where the student last
-     * pressed.
-     */
-    justify-content: flex-end;
-    margin-left: auto;
-    width: auto;
-    position: absolute;
-    top: 100%;
-    right: 32px;
+    letter-spacing: .08em;
+    min-height: 22px;
+    padding: 3px 8px;
+    text-transform: uppercase;
+    transition: background .12s ease, color .12s ease;
+    white-space: nowrap;
 }
 
 .drawing-topbar-show:hover {
-    background: var(--datum-menu-hover);
-    color: var(--datum-ink);
+    background: var(--datum-panel);
+    color: var(--cad-ink);
 }
 
 .drawing-topbar-show:focus-visible {
-    outline: 2px solid var(--datum-focus);
+    outline: 2px solid var(--datum-green);
     outline-offset: -2px;
 }
 
 .drawing-topbar-show svg {
-    height: 12px;
-    width: 12px;
+    height: 16px;
+    width: 16px;
 }
-
 .drawing-topbar-show[hidden] {
     display: none;
 }

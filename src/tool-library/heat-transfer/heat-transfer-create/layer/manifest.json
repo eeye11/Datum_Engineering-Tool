@@ -1,0 +1,9 @@
+{
+  "id": "heat-transfer.heat-transfer-create.layer",
+  "label": "Layer",
+  "category": "heat-transfer",
+  "group": "heat-transfer-create",
+  "libraryPath": "src/tool-library/heat-transfer/heat-transfer-create/layer",
+  "template": "template.tex",
+  "implemented": false
+}

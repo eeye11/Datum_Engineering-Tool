@@ -9,7 +9,7 @@
  * browser - not a runtime `undefined` - so the whole module graph failed to
  * evaluate from that point on.
  *
- * The symptom was nowhere near the cause: `main.js` stops where it imports the
+ * The symptom was nowhere near the cause: `app/entry/main.js` stops where it imports the
  * broken chain, so the menu bar, the command search and the drawing editor's own
  * wiring never ran, and the ENGINEERING DRAWING TAB did nothing when clicked -
  * the section never became active. No console error appeared in the app's own log,

@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.body.cable",
+  "label": "Cable",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/body/cable",
+  "template": "template.tex",
+  "implemented": false
+}

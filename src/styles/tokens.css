@@ -390,6 +390,26 @@
     /* Code editor keeps a dark, stable palette in every theme. */
     --editor-background: #1e1e1e;
     --editor-foreground: #e6e6e6;
+
+    /*
+     * THE SOURCE EDITOR, which is NOT the floating LaTeX window.
+     *
+     * The floating window keeps the conventional dark code palette above,
+     * because it is a separate surface over the workspace. The Source TAB is a
+     * pane INSIDE the interface, so its editor takes the theme's own surfaces -
+     * a soft ice-white well a step under the panel, dark ink, and a restrained
+     * syntax palette that never becomes a second visual theme.
+     */
+    --source-editor-bg: var(--precision-slate-50);
+    --source-editor-ink: var(--precision-slate-900);
+    --source-editor-gutter-bg: var(--precision-slate-100);
+    --source-editor-gutter-ink: var(--precision-slate-500);
+    --source-editor-line-rule: var(--precision-slate-200);
+    --source-editor-command: var(--precision-green-700);
+    --source-editor-arg: #8a5a00;
+    --source-editor-comment: var(--precision-slate-500);
+    --source-editor-brace: var(--precision-slate-400);
+    --source-editor-marker: #8a5a00;
 }
 
 /*
@@ -631,6 +651,24 @@
     /* Code editor keeps a dark, stable palette in every theme. */
     --editor-background: #1e1e1e;
     --editor-foreground: #e6e6e6;
+
+    /*
+     * THE SOURCE EDITOR, restated for the dark palette.
+     *
+     * The well is a step DEEPER than the panel it sits in, so the editor reads
+     * as a recess rather than a raised chip - the same relationship the input
+     * surface has. The syntax colours are lifted to stay legible on the charcoal.
+     */
+    --source-editor-bg: var(--precision-night-950);
+    --source-editor-ink: var(--precision-night-200);
+    --source-editor-gutter-bg: var(--precision-night-900);
+    --source-editor-gutter-ink: var(--precision-night-500);
+    --source-editor-line-rule: var(--precision-night-700);
+    --source-editor-command: var(--precision-green-dark-400);
+    --source-editor-arg: #e8c07a;
+    --source-editor-comment: var(--precision-night-500);
+    --source-editor-brace: var(--precision-night-bd-strong);
+    --source-editor-marker: #e8c07a;
 }
 
 /*
@@ -832,5 +870,17 @@
         /* Code editor keeps a dark, stable palette in every theme. */
         --editor-background: #1e1e1e;
         --editor-foreground: #e6e6e6;
+
+        /* The Source editor, mirrored from the explicit dark palette. */
+        --source-editor-bg: var(--precision-night-950);
+        --source-editor-ink: var(--precision-night-200);
+        --source-editor-gutter-bg: var(--precision-night-900);
+        --source-editor-gutter-ink: var(--precision-night-500);
+        --source-editor-line-rule: var(--precision-night-700);
+        --source-editor-command: var(--precision-green-dark-400);
+        --source-editor-arg: #e8c07a;
+        --source-editor-comment: var(--precision-night-500);
+        --source-editor-brace: var(--precision-night-bd-strong);
+        --source-editor-marker: #e8c07a;
     }
 }

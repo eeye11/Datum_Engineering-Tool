@@ -1,0 +1,9 @@
+{
+  "id": "annotate.leaders.leader",
+  "label": "Leader",
+  "category": "annotate",
+  "group": "leaders",
+  "libraryPath": "src/tool-library/annotate/leaders/leader",
+  "template": "template.tex",
+  "implemented": false
+}

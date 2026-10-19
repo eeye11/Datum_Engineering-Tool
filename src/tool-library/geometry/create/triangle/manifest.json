@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.triangle",
+  "label": "Triangle",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/triangle",
+  "template": "template.tex",
+  "implemented": true
+}

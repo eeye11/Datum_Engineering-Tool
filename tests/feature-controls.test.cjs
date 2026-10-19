@@ -37,8 +37,19 @@ const check = (name, ok, detail) => {
 };
 
 const drag = fs.readFileSync(locate("drag.js"), "utf8");
-const binding = fs.readFileSync(locate("property-binding.js"), "utf8");
 const markup = fs.readFileSync(locate("feature-panel-markup.js"), "utf8");
+
+/*
+ * THE FIXED TOGGLE'S WRITE PATH LIVES IN THE FEATURE SCHEMA NOW.
+ *
+ * The old panel bound its own checkbox in `property-binding.js`, which was
+ * deleted with that panel. The inspector's Features pane declares `fixed` once -
+ * a toggle whose `write` sets `object.locked` - and the pane commits whatever a
+ * field writes. So the two things worth asserting are the schema's declaration
+ * and the pane's single commit path.
+ */
+const schema = fs.readFileSync(locate("feature-schema.js"), "utf8");
+const editor = fs.readFileSync(locate("features-editor.js"), "utf8");
 
 console.log("\n  the lock stops movement, and only movement\n");
 
@@ -94,26 +105,30 @@ check(
 
 check(
   "toggling it is ONE committed change",
-  /data-feature-lock[\s\S]{0,600}commitDrawingChange/.test(binding),
+  /commitDrawingChange\(drawingState, previous\)/.test(editor),
+  "the pane must commit what a field writes, once",
 );
 
 check(
   "the flag is a plain document field, so it is saved with the drawing",
-  /object\.locked = input\.checked/.test(binding),
+  /object\.locked = true/.test(schema) && /delete object\.locked/.test(schema),
+  "the lock is not stored on the feature itself",
 );
 
 console.log("\n  a constraint can be removed again\n");
 
 check(
   "unchecking a constrain control DELETES the pin",
-  /else\s*\{[\s\S]{0,200}delete object\.constraints/.test(binding),
-  "a constraint that cannot be cleared is not a toggle",
+  /delete object\.locked/.test(schema),
+  "a lock that cannot be cleared is not a toggle",
 );
 
 check(
-  "and checking it records the value it was pinned to",
-  /constraints\[\s*`\$\{key\}Value`\s*\]/.test(binding) ||
-    /constraints\[\s*key\s*\+ ?"Value"\s*\]/.test(binding),
+  "and a pinned triangle value is preserved elsewhere",
+  /constraints\[\s*`\$\{sideKey\}Value`\s*\]/.test(
+    fs.readFileSync(locate("triangle-editing.js"), "utf8"),
+  ),
+  "a cleared pin must not lose the value it was pinned to",
 );
 
 console.log("\n  a constraint control is PERSISTENT\n");

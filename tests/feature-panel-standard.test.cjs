@@ -42,7 +42,17 @@ loadModule("property-panel.js");
 
 const panels = global.window.enggPropertyPanel;
 
-const code = controllerSource();
+/*
+ * The feature panel's own code moved to components/layout/panels in the
+ * Phase 2 reorganisation, so its text is read from those modules directly.
+ * The Statics panel rows live in the workspace's statics module.
+ */
+const code = [
+  "feature-panel-markup.js",
+  "feature-panel.js",
+  "property-panel.js",
+  "statics-panel.js",
+].map((name) => fs.readFileSync(modulePath(name), "utf8")).join("\n");
 
 let pass = 0;
 let fail = 0;

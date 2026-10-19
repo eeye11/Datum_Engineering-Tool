@@ -1,0 +1,9 @@
+{
+  "id": "solid-mechanics.solid-mechanics-create.shaft",
+  "label": "Shaft",
+  "category": "solid-mechanics",
+  "group": "solid-mechanics-create",
+  "libraryPath": "src/tool-library/solid-mechanics/solid-mechanics-create/shaft",
+  "template": "template.tex",
+  "implemented": false
+}

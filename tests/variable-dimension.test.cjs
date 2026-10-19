@@ -232,20 +232,16 @@ console.log("\n  the prompt is asked AFTER geometry selection, via the SHARED po
   );
 
   check(
-    "and it is asked BEFORE the calibration gate, because a variable measures nothing",
-    (() => {
-      const variableAt = tool.indexOf('"variable-dimension"');
-      const calibrationAt = tool.indexOf("isCalibrated");
-
-      return variableAt > 0 && calibrationAt > 0 && variableAt < calibrationAt;
-    })(),
-    "a variable must not be the tool that sets the drawing's scale",
+    "there is no drawing-scale calibration gate in the dimension tool",
+    tool.indexOf("isCalibrated") < 0 &&
+      tool.indexOf("scale-calibration") < 0,
+    "dimensioning must not require or trigger drawing scale calibration",
   );
 
   check(
     "and the prompt is the EXISTING shared value popup",
     /openLoadValuePopup\(\{/.test(tool) &&
-      /from "(?:\.\.\/)+ui\/editors\/load-value-popup\.js"/.test(tool),
+      /from "(?:\.\.\/)+shared\/ui\/editors\/load-value-popup\.js"/.test(tool),
     "a bespoke dialog would be a second thing to learn for the same act",
   );
 

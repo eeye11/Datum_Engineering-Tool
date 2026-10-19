@@ -35,9 +35,9 @@ const datum = window.datum;
 /* By file name, so a module can move between folders without breaking this. */
 const { locate } = require("./helpers/source-path.cjs");
 const src = (file) => require(locate(path.basename(file)));
-const model = src("core/model/drawing-state.js").default;
-const { drawingState } = src("editor/editor-state.js");
-const { allowedEmbedOrigins } = src("api/embed-bridge.js");
+const model = src("src/shared/model/drawing-state.js").default;
+const { drawingState } = src("features/workspace/editor-state.js");
+const { allowedEmbedOrigins } = src("src/shared/integration/embed-bridge.js");
 
 console.log("\n  the API is installed\n");
 

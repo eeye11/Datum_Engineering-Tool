@@ -1,0 +1,65 @@
+{
+  "tool": "geometry.create.polygon",
+  "construction": [
+    {
+      "key": "method",
+      "label": "Method",
+      "kind": "segmented",
+      "default": "centre",
+      "options": [
+        { "value": "centre", "label": "Centre" },
+        { "value": "sides", "label": "Side" }
+      ]
+    },
+    {
+      "key": "sides",
+      "label": "Number of Sides",
+      "kind": "number",
+      "default": 6,
+      "min": 3,
+      "max": 64,
+      "step": 1,
+      "integer": true
+    }
+  ],
+  "appearance": [
+    {
+      "key": "stroke",
+      "label": "Outline Colour",
+      "kind": "colour",
+      "default": "#000000"
+    },
+    {
+      "key": "fillMode",
+      "label": "Fill",
+      "kind": "choice",
+      "default": "none",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "solid", "label": "Solid" }
+      ]
+    },
+    {
+      "key": "fill",
+      "label": "Fill Colour",
+      "kind": "colour",
+      "default": "#000000",
+      "shownWhen": { "fillMode": ["solid"] }
+    },
+    {
+      "key": "lineWidth",
+      "label": "Thickness",
+      "kind": "choice",
+      "default": "normal",
+      "options": [
+        { "value": "very-thin", "label": "Very Thin" },
+        { "value": "thin", "label": "Thin" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "thick", "label": "Thick" },
+        { "value": "very-thick", "label": "Very Thick" }
+      ]
+    }
+  ],
+  "defaultFixed": false
+}

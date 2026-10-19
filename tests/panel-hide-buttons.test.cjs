@@ -72,11 +72,32 @@ check(
   "the left panel's outer edge is the window's left",
 );
 
+/*
+ * The right rail's invariant is SIBLING ORDER, not proximity. The rail is a
+ * flex row whose contents are the panel and the toggle; the toggle must come
+ * AFTER the whole panel element, so it lands on the window's right edge.
+ *
+ * This used to be asserted with a character window
+ * (/rail-right[\s\S]{0,400}inspector[\s\S]{0,600}toggle/), which was a proxy
+ * for "they are adjacent siblings" that only held while the inspector's markup
+ * was small. When the inspector grew a tab bar and three panes the gap exceeded
+ * the window and the check failed even though the order - the thing that
+ * actually places the button - had not changed. Measuring the closing tag
+ * instead tests the invariant directly and cannot be broken by the panel
+ * growing more content.
+ */
+const rightRailStart = html.indexOf("drawing-panel-rail-right");
+const rightRailEnd = html.indexOf("</div>", html.indexOf("drawingFeaturesPanelToggle"));
+const rightRail = html.slice(rightRailStart, rightRailEnd);
+const inspectorCloseInRail = rightRail.indexOf("</aside>");
+const toggleInRail = rightRail.indexOf("drawing-panel-toggle");
+
 check(
   "the RIGHT rail puts the button AFTER the panel",
-  /drawing-panel-rail-right[\s\S]*?drawing-inspector[\s\S]*?drawing-panel-toggle/.test(
-    html,
-  ),
+  rightRailStart !== -1 &&
+    inspectorCloseInRail !== -1 &&
+    toggleInRail !== -1 &&
+    inspectorCloseInRail < toggleInRail,
   "the right panel's outer edge is the window's right",
 );
 

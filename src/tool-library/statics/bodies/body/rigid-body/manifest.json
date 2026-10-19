@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.body.rigid-body",
+  "label": "Rigid Body",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/body/rigid-body",
+  "template": "template.tex",
+  "implemented": false
+}

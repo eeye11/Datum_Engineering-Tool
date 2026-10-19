@@ -1,0 +1,9 @@
+{
+  "id": "math-analysis.math-analysis-create.equation",
+  "label": "Equation",
+  "category": "math-analysis",
+  "group": "math-analysis-create",
+  "libraryPath": "src/tool-library/math-analysis/math-analysis-create/equation",
+  "template": "template.tex",
+  "implemented": false
+}

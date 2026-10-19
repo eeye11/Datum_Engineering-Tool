@@ -16,7 +16,12 @@ export default [
     {
         files: ["src/**/*.js"],
         languageOptions: {
-            ecmaVersion: 2022,
+            /*
+             * 2025, not 2022: import attributes (`with { type: "json" }`)
+             * are ES2025 syntax, and the tool registry's manifest is a
+             * module-load-time JSON import.
+             */
+            ecmaVersion: 2025,
             sourceType: "module",
             globals: {
                 ...globals.browser,

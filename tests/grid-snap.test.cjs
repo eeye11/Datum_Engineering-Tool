@@ -24,6 +24,7 @@ function check(name, condition) {
 check("grid snapping is enabled by default", state.grid.snapToGrid === true);
 
 {
+    state.grid.spacing = 10;
     const result = snap.resolveConstructionPoint(
         { x: 12.1, y: -7.6 },
         state,

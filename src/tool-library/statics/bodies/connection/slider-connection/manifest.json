@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.connection.slider-connection",
+  "label": "Slider Connection",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/connection/slider-connection",
+  "template": "template.tex",
+  "implemented": false
+}

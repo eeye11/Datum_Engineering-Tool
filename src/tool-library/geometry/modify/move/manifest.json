@@ -1,0 +1,9 @@
+{
+  "id": "geometry.modify.move",
+  "label": "Move",
+  "category": "geometry",
+  "group": "modify",
+  "libraryPath": "src/tool-library/geometry/modify/move",
+  "template": "template.tex",
+  "implemented": false
+}

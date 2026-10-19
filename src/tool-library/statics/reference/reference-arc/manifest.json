@@ -1,0 +1,9 @@
+{
+  "id": "statics.reference.reference-arc",
+  "label": "Reference Arc",
+  "category": "statics",
+  "group": "reference",
+  "libraryPath": "src/tool-library/statics/reference/reference-arc",
+  "template": "template.tex",
+  "implemented": false
+}

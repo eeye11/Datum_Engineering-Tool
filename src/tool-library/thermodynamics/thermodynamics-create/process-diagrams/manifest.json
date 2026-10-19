@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.process-diagrams",
+  "label": "Process Diagrams",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/process-diagrams",
+  "template": "template.tex",
+  "implemented": false
+}

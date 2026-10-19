@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.control-volume",
+  "label": "Control Volume",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/control-volume",
+  "template": "template.tex",
+  "implemented": false
+}

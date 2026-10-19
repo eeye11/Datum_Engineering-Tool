@@ -1,0 +1,9 @@
+{
+  "id": "statics.reference.coordinate-system",
+  "label": "Coordinate System",
+  "category": "statics",
+  "group": "reference",
+  "libraryPath": "src/tool-library/statics/reference/coordinate-system",
+  "template": "template.tex",
+  "implemented": false
+}

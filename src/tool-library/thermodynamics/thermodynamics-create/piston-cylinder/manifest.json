@@ -1,0 +1,9 @@
+{
+  "id": "thermodynamics.thermodynamics-create.piston-cylinder",
+  "label": "Piston Cylinder",
+  "category": "thermodynamics",
+  "group": "thermodynamics-create",
+  "libraryPath": "src/tool-library/thermodynamics/thermodynamics-create/piston-cylinder",
+  "template": "template.tex",
+  "implemented": false
+}

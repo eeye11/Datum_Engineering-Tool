@@ -1,0 +1,657 @@
+/* Engineering Drawing workspace */
+#drawing {
+    margin-top: 0;
+}
+
+.tab[onclick*="drawing"] {
+    font-size: 13px;
+    line-height: 1.1;
+    padding: 7px 18px;
+}
+
+.drawing-workspace {
+    --cad-ink: #26343b;
+    --cad-muted: #70808a;
+    --cad-border: #d4dde1;
+    --cad-panel: #f5f8f9;
+    --cad-accent: #1f5c38;
+    background: #edf2f3;
+    border: 1px solid var(--cad-border);
+    color: var(--cad-ink);
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-columns: 148px minmax(0, 1fr) 142px;
+    grid-template-rows: 25px auto 28px minmax(0, 1fr) 22px;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+}
+
+.drawing-app-toolbar {
+    align-items: center;
+    background: #eef3f4;
+    border-bottom: 1px solid var(--cad-border);
+    display: flex;
+    gap: 2px;
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 5px;
+}
+
+.drawing-app-toolbar-label {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin-right: 6px;
+}
+
+.drawing-app-toolbar button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 10px;
+    gap: 4px;
+    height: 21px;
+    padding: 0 7px;
+}
+
+.drawing-global-icon {
+    fill: none;
+    height: 13px;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.4;
+    width: 13px;
+}
+
+.drawing-app-toolbar button:hover {
+    background: #e1ebe6;
+    border-color: #c5d9cb;
+}
+
+.drawing-app-toolbar button:disabled {
+    cursor: default;
+    opacity: .42;
+}
+
+.drawing-app-toolbar-divider {
+    background: #cbd5d9;
+    height: 14px;
+    margin: 0 4px;
+    width: 1px;
+}
+
+.drawing-toolbar {
+    background: #f9fbfb;
+    border-bottom: 1px solid var(--cad-border);
+    display: flex;
+    gap: 0;
+    grid-column: 1 / -1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 3px 4px;
+}
+
+.drawing-style-strip {
+    align-items: center;
+    background: #f7faf9;
+    border-bottom: 1px solid var(--cad-border);
+    display: flex;
+    gap: 12px;
+    grid-column: 1 / -1;
+    padding: 0 7px;
+}
+
+.drawing-style-strip label {
+    align-items: center;
+    color: var(--cad-muted);
+    display: inline-flex;
+    font-size: 9px;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.drawing-style-strip select {
+    background: #ffffff;
+    border: 1px solid #cbd8dc;
+    color: var(--cad-ink);
+    font: inherit;
+    height: 20px;
+    padding: 0 3px;
+}
+
+.drawing-style-strip input[type="color"] {
+    border: 1px solid #cbd8dc;
+    height: 20px;
+    padding: 1px;
+    width: 28px;
+}
+
+.drawing-workspace-title {
+    align-items: center;
+    color: var(--cad-muted);
+    display: flex;
+    flex: 0 0 auto;
+    font-size: 10px;
+    letter-spacing: .01em;
+    margin: 0 14px 0 5px;
+    white-space: nowrap;
+}
+
+.drawing-workspace-title strong {
+    color: var(--cad-ink);
+    font-weight: 700;
+    margin-left: 3px;
+}
+
+.drawing-category {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-muted);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    min-height: 30px;
+    padding: 4px 8px;
+    white-space: nowrap;
+}
+
+.drawing-category:hover,
+.drawing-category.active {
+    background: #e6f0ea;
+    color: var(--cad-accent);
+}
+
+.drawing-category.active {
+    border-color: #c5d9cb;
+}
+
+.drawing-tool-panel,
+.drawing-inspector {
+    background: var(--cad-panel);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    padding: 9px 7px;
+}
+
+.drawing-tool-panel,
+.drawing-canvas-area,
+.drawing-inspector {
+    grid-row: 4;
+}
+
+.drawing-tool-panel {
+    border-right: 1px solid var(--cad-border);
+}
+
+.drawing-inspector {
+    border-left: 1px solid var(--cad-border);
+}
+
+.drawing-panel-heading {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    margin: 0 0 8px;
+}
+
+.drawing-tool-list {
+    align-content: start;
+    display: grid;
+    flex: 1 1 auto;
+    gap: 1px;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.drawing-tool-group {
+    border-bottom: 1px solid #e0e7e9;
+    padding: 4px 0 5px;
+}
+
+.drawing-tool-group:last-child {
+    border-bottom: 0;
+}
+
+.drawing-tool-group-label {
+    color: var(--cad-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin: 0 4px 2px;
+    text-transform: uppercase;
+}
+
+.drawing-tool {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font-size: 11px;
+    gap: 7px;
+    min-height: 29px;
+    padding: 3px 5px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-tool-icon {
+    align-items: center;
+    color: var(--cad-accent);
+    display: inline-flex;
+    flex: 0 0 21px;
+    height: 21px;
+    justify-content: center;
+    line-height: 1;
+    text-align: center;
+    width: 21px;
+}
+
+.drawing-tool-icon svg {
+    display: block;
+    height: 18px;
+    width: 18px;
+}
+
+.drawing-tool:hover,
+.drawing-tool.selected {
+    background: #e9efeb;
+    border-color: #ccdad0;
+}
+
+.drawing-tool.active {
+    background: #dcebe2;
+    border-color: #a9c7b4;
+    color: #164c2d;
+    font-weight: 700;
+}
+
+.drawing-canvas-area {
+    background: #ffffff;
+    min-height: 0;
+    min-width: 0;
+    padding: 0;
+}
+
+.drawing-canvas {
+    background-color: #ffffff;
+    background-image: linear-gradient(#e7ecef 1px, transparent 1px), linear-gradient(90deg, #e7ecef 1px, transparent 1px);
+    background-size: 24px 24px;
+    border: 1px solid #cbd4d9;
+    cursor: default;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+.drawing-canvas.drawing-tool-active {
+    cursor: crosshair;
+}
+
+.drawing-renderer {
+    height: 100%;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+}
+
+.drawing-snap-marker {
+    fill: #ffffff;
+    stroke: #00a9c7;
+    stroke-width: 1.5;
+}
+
+.drawing-snap-label {
+    fill: #008ca6;
+    font-family: Arial, sans-serif;
+    font-size: 9px;
+    font-weight: 700;
+    paint-order: stroke;
+    stroke: #ffffff;
+    stroke-width: 3px;
+}
+
+.drawing-selection-box {
+    fill: rgba(0, 169, 199, .12);
+    pointer-events: none;
+    stroke: #00a9c7;
+    stroke-dasharray: 4 3;
+    stroke-width: 1;
+}
+
+.drawing-canvas.grid-off {
+    background-image: none;
+}
+
+.drawing-axis-x,
+.drawing-axis-y {
+    background: #98a8b1;
+    position: absolute;
+}
+
+.drawing-axis-x {
+    height: 1px;
+    left: 24px;
+    right: 24px;
+    top: 50%;
+}
+
+.drawing-axis-y {
+    bottom: 24px;
+    left: 50%;
+    top: 24px;
+    width: 1px;
+}
+
+.drawing-origin {
+    background: var(--cad-accent);
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    height: 10px;
+    left: calc(50% - 5px);
+    position: absolute;
+    top: calc(50% - 5px);
+    width: 10px;
+}
+
+.drawing-axis-label {
+    color: #84939b;
+    font-size: 10px;
+    position: absolute;
+}
+
+.drawing-axis-label.x {
+    right: 27px;
+    top: calc(50% + 6px);
+}
+
+.drawing-axis-label.y {
+    left: calc(50% + 7px);
+    top: 27px;
+}
+
+.drawing-canvas-note {
+    background: rgba(255, 255, 255, .85);
+    color: #839098;
+    font-size: 11px;
+    left: 14px;
+    padding: 4px 6px;
+    position: absolute;
+    top: 12px;
+}
+
+.drawing-inspector-message {
+    color: #829098;
+    font-size: 11px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.drawing-components-back {
+    align-self: flex-start;
+    background: transparent;
+    border: 0;
+    color: var(--cad-accent);
+    cursor: pointer;
+    display: none;
+    font-size: 10px;
+    margin: -3px 0 8px;
+    padding: 0;
+}
+
+.drawing-components-back:hover {
+    text-decoration: underline;
+}
+
+.drawing-component-tree {
+    display: grid;
+    gap: 1px;
+    overflow-y: auto;
+}
+
+.drawing-component-group {
+    color: var(--cad-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .06em;
+    margin-top: 5px;
+    text-transform: uppercase;
+}
+
+.drawing-component-row {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--cad-ink);
+    cursor: pointer;
+    display: flex;
+    font-size: 10px;
+    gap: 5px;
+    min-height: 24px;
+    padding: 2px 3px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-component-row:hover,
+.drawing-component-row.selected {
+    background: #e4f0ea;
+    border-color: #c5d9cb;
+}
+
+.drawing-component-row svg {
+    color: var(--cad-accent);
+    height: 15px;
+    width: 15px;
+}
+
+.drawing-selection-summary {
+    color: var(--cad-muted);
+    font-size: 9px;
+    margin-bottom: 4px;
+}
+
+.drawing-properties-block {
+    color: var(--cad-ink);
+    display: grid;
+    font-size: 10px;
+    gap: 5px;
+    line-height: 1.3;
+}
+
+.drawing-properties-title {
+    color: var(--cad-accent);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.drawing-property-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.drawing-property-row span:first-child {
+    color: var(--cad-muted);
+}
+
+.drawing-status-bar {
+    align-items: center;
+    background: #e5eaed;
+    border-top: 1px solid var(--cad-border);
+    color: #64747d;
+    display: flex;
+    font-size: 10px;
+    height: 22px;
+    justify-content: space-between;
+    grid-column: 1 / -1;
+    grid-row: 5;
+    line-height: 1;
+    padding: 0 7px;
+}
+
+.drawing-status-meta,
+.drawing-zoom-controls {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    min-width: 0;
+}
+
+.drawing-status-meta span {
+    white-space: nowrap;
+}
+
+#drawingToolMessage {
+    color: var(--cad-muted);
+    font-style: italic;
+    min-width: 90px;
+}
+
+.drawing-status-toggle {
+    background: transparent;
+    border: 0;
+    color: #64747d;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    padding: 0;
+    white-space: nowrap;
+}
+
+.drawing-status-toggle:hover,
+.drawing-status-toggle.active:hover {
+    color: var(--cad-accent);
+}
+
+.drawing-status-toggle:not(.active) {
+    color: #9aa7ad;
+}
+
+.drawing-zoom-controls {
+    gap: 4px;
+}
+
+.drawing-zoom-controls button {
+    align-items: center;
+    background: transparent;
+    border: 1px solid transparent;
+    color: #52636c;
+    cursor: pointer;
+    display: inline-flex;
+    font-size: 13px;
+    height: 19px;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    width: 20px;
+}
+
+.drawing-zoom-controls button:hover {
+    background: #d9e4e0;
+    border-color: #bfd1c7;
+}
+
+#drawingZoomValue {
+    color: #52636c;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+    text-align: center;
+}
+
+@media (max-width: 900px) {
+    .drawing-workspace {
+        grid-template-columns: 126px minmax(0, 1fr) 132px;
+    }
+
+    .drawing-tool {
+        font-size: 10px;
+        gap: 5px;
+        padding: 4px;
+    }
+
+    .drawing-workspace-title {
+        font-size: 9px;
+        margin-right: 8px;
+    }
+
+    .drawing-app-toolbar button {
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+}
+
+@media (max-width: 720px) {
+    .drawing-workspace {
+        grid-template-columns: 108px minmax(0, 1fr) 118px;
+    }
+
+    .drawing-category {
+        font-size: 8px;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .drawing-tool {
+        font-size: 9px;
+        min-height: 27px;
+        padding: 3px;
+    }
+
+    .drawing-panel-heading {
+        font-size: 9px;
+    }
+}
+
+@media (max-width: 560px) {
+    .drawing-workspace {
+        grid-template-columns: 96px minmax(0, 1fr) 116px;
+    }
+
+    .drawing-toolbar {
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    .drawing-category {
+        font-size: 7px;
+        letter-spacing: 0;
+        padding-left: 2px;
+        padding-right: 2px;
+    }
+
+    .drawing-tool-panel,
+    .drawing-inspector {
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .drawing-status-meta {
+        gap: 5px;
+    }
+
+    .drawing-status-meta span:nth-child(2),
+    .drawing-status-meta span:nth-child(3) {
+        display: none;
+    }
+}

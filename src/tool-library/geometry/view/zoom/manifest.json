@@ -1,0 +1,9 @@
+{
+  "id": "geometry.view.zoom",
+  "label": "Zoom",
+  "category": "geometry",
+  "group": "view",
+  "libraryPath": "src/tool-library/geometry/view/zoom",
+  "template": "template.tex",
+  "implemented": false
+}

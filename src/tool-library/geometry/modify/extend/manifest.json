@@ -1,0 +1,9 @@
+{
+  "id": "geometry.modify.extend",
+  "label": "Extend",
+  "category": "geometry",
+  "group": "modify",
+  "libraryPath": "src/tool-library/geometry/modify/extend",
+  "template": "template.tex",
+  "implemented": false
+}

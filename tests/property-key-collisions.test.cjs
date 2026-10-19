@@ -23,7 +23,31 @@ const fs = require("fs");
 const path = require("path");
 
 const { controllerSource, locate, modulePath, sourceDir } = require("./helpers/source-path.cjs");
-const code = controllerSource();
+
+/*
+ * The panel markup moved to components/layout/panels in the Phase 2
+ * reorganisation, so the property rows live there; the status-bar middot
+ * feedback lives in the pointer module under features/workspace.
+ *
+ * CRLF is normalised so the line numbers reported below are stable.
+ */
+const code = [
+  "feature-panel-markup.js",
+  "appearance-panel.js",
+  "statics-panel.js",
+  "feature-panel.js",
+  "property-panel.js",
+  "pointer.js",
+].map((name) => fs.readFileSync(modulePath(name), "utf8").replace(/\r\n/g, "\n")).join("\n");
+
+/*
+ * The appearance panel's own text, for the line-width unit checks below.
+ * Since the Phase 2 reorganisation the width field lives there rather than
+ * inside the feature-panel markup.
+ */
+const lineWidthRow = fs
+  .readFileSync(modulePath("appearance-panel.js"), "utf8")
+  .replace(/\r\n/g, "\n");
 
 let pass = 0;
 let fail = 0;
@@ -319,16 +343,18 @@ console.log(
  * claimed the pen describes the geometry, which is the exact confusion the
  * document scale exists to prevent.
  */
-const lineWidthRow = section(
-  "function appearanceMarkup(",
-  "function trussOptimizeMarkup(",
-);
-
+/*
+ * It was labelled "mm", which put a screen property in the same vocabulary as
+ * the lengths on the same panel. A beam 500 mm long and one 5000 mm long are
+ * drawn with the same pen - the value goes to SVG stroke-width - so "mm"
+ * claimed the pen describes the geometry, which is the exact confusion the
+ * document scale exists to prevent. `lineWidthRow` is read at the top of the
+ * file, from the appearance panel's own module.
+ */
 check(
   "the line width field was found",
   lineWidthRow.includes('"Line Width"'),
 );
-
 check(
   'it is not labelled as millimetres',
   !/drawing-property-unit">mm<\/span>\s*<span><\/span>\s*<\/div>/.test(

@@ -1,0 +1,9 @@
+{
+  "id": "controls.controls-create.input",
+  "label": "Input",
+  "category": "controls",
+  "group": "controls-create",
+  "libraryPath": "src/tool-library/controls/controls-create/input",
+  "template": "template.tex",
+  "implemented": false
+}

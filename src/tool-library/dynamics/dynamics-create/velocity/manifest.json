@@ -1,0 +1,9 @@
+{
+  "id": "dynamics.dynamics-create.velocity",
+  "label": "Velocity",
+  "category": "dynamics",
+  "group": "dynamics-create",
+  "libraryPath": "src/tool-library/dynamics/dynamics-create/velocity",
+  "template": "template.tex",
+  "implemented": false
+}

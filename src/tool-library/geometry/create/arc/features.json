@@ -1,0 +1,49 @@
+{
+  "tool": "geometry.create.arc",
+  "construction": [
+    {
+      "key": "method",
+      "label": "Method",
+      "kind": "segmented",
+      "default": "three-point",
+      "options": [
+        { "value": "three-point", "label": "Three Points" },
+        { "value": "centrepoint", "label": "Centre\u2013Start\u2013End" }
+      ]
+    }
+  ],
+  "appearance": [
+    {
+      "key": "stroke",
+      "label": "Colour",
+      "kind": "colour",
+      "default": "#000000"
+    },
+    {
+      "key": "lineType",
+      "label": "Style",
+      "kind": "choice",
+      "default": "solid",
+      "options": [
+        { "value": "solid", "label": "Solid" },
+        { "value": "dashed", "label": "Dashed" },
+        { "value": "dotted", "label": "Dotted" }
+      ]
+    },
+    {
+      "key": "lineWidth",
+      "label": "Thickness",
+      "kind": "choice",
+      "default": "normal",
+      "options": [
+        { "value": "very-thin", "label": "Very Thin" },
+        { "value": "thin", "label": "Thin" },
+        { "value": "normal", "label": "Normal" },
+        { "value": "medium", "label": "Medium" },
+        { "value": "thick", "label": "Thick" },
+        { "value": "very-thick", "label": "Very Thick" }
+      ]
+    }
+  ],
+  "defaultFixed": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "mechanical-design.mechanical-design-create.part",
+  "label": "Part",
+  "category": "mechanical-design",
+  "group": "mechanical-design-create",
+  "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/part",
+  "template": "template.tex",
+  "implemented": false
+}

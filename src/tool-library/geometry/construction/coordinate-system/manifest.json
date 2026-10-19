@@ -1,0 +1,9 @@
+{
+  "id": "geometry.construction.coordinate-system",
+  "label": "Coordinate System",
+  "category": "geometry",
+  "group": "construction",
+  "libraryPath": "src/tool-library/geometry/construction/coordinate-system",
+  "template": "template.tex",
+  "implemented": true
+}

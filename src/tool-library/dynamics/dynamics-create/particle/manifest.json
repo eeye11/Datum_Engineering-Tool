@@ -1,0 +1,9 @@
+{
+  "id": "dynamics.dynamics-create.particle",
+  "label": "Particle",
+  "category": "dynamics",
+  "group": "dynamics-create",
+  "libraryPath": "src/tool-library/dynamics/dynamics-create/particle",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,590 @@
+const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">${content}</svg>`;
+const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
+
+export const toolIcons = {
+    "Const Temp/Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17L7 11H12C14 11 16 7 18 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    "Process Diagrams": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 14C7 8 8 5 10 5S14 11 17 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Const. Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15L8 10h5l4-7M3 18l5-5h5l4-6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Const. Temp Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
+	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
+	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
+	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
+	Triangle: drawingIcon(`<path ${iconStroke} d="M10 3l7 13H3z"/><circle ${iconStroke} cx="10" cy="3" r="1"/>`),
+	Polygon: drawingIcon(`<path ${iconStroke} d="M10 3l6 4v7l-6 3-6-3V7z"/>`),
+	"Freeform Polygon": drawingIcon(`<path ${iconStroke} d="M4 6l5-3 7 4-2 8-6 2-4-4z"/><circle ${iconStroke} cx="4" cy="6" r="1"/><circle ${iconStroke} cx="9" cy="3" r="1"/><circle ${iconStroke} cx="16" cy="7" r="1"/><circle ${iconStroke} cx="14" cy="15" r="1"/><circle ${iconStroke} cx="8" cy="17" r="1"/>`),
+	Arc: drawingIcon(`<path ${iconStroke} d="M4 14a7 7 0 0 1 10-9"/><path ${iconStroke} d="M13 5h2v2"/>`),
+	Circle: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/>`),
+	Rectangle: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/>`),
+	"Construction Geometry": drawingIcon(`<path ${iconStroke} stroke-dasharray="2 2" d="M3 15L17 5"/>`),
+	"Construction Line": drawingIcon(`<path ${iconStroke} stroke-dasharray="3 2" d="M3 15L17 5"/>`),
+	"Centre Line": drawingIcon(`<path ${iconStroke} stroke-dasharray="5 2 1 2" d="M3 15L17 5"/>`),
+	Move: drawingIcon(`<path ${iconStroke} d="M10 3v14M3 10h14M10 3l-2 2M10 3l2 2M10 17l-2-2M10 17l2-2M3 10l2-2M3 10l2 2M17 10l-2-2M17 10l-2 2"/>`),
+	Rotate: drawingIcon(`<path ${iconStroke} d="M15 7a6 6 0 1 0 1 6"/><path ${iconStroke} d="M15 3v4h-4"/>`),
+	Mirror: drawingIcon(`<path ${iconStroke} d="M10 3v14M4 6l4 4-4 4M16 6l-4 4 4 4"/>`),
+	Trim: drawingIcon(`<path ${iconStroke} d="M4 5l11 10M15 5L4 15M3 10h6"/>`),
+	Extend: drawingIcon(`<path ${iconStroke} d="M4 10h12M12 6l4 4-4 4M4 5v10"/>`),
+	Pan: drawingIcon(`<path ${iconStroke} d="M6 10V6a1 1 0 0 1 2 0v3V4a1 1 0 0 1 2 0v5V5a1 1 0 0 1 2 0v4V6a1 1 0 0 1 2 0v6c0 3-2 5-5 5-2 0-3-1-4-3l-1-2a1 1 0 0 1 2-1z"/>`),
+	Zoom: drawingIcon(`<circle ${iconStroke} cx="8.5" cy="8.5" r="4.5"/><path ${iconStroke} d="M12 12l4 4M8.5 6v5M6 8.5h5"/>`),
+
+	/*
+	 * THE TWO FIT MODES.
+	 *
+	 * One drawing shape for each, saying what it fits rather than how
+	 * it does it: the whole-page icon brackets a wide drawing, the
+	 * selected icon brackets one small thing. They are drawn from the
+	 * same corner-bracket language so they read as a pair, and they
+	 * differ in what is between the brackets - which is exactly the
+	 * difference between the two commands.
+	 */
+
+	"Fit Whole Page": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><path ${iconStroke} d="M5 12l3-4 3 3 4-4"/>`),
+
+	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
+	/*
+	 * DIMENSION is the one dimension tool.
+	 *
+	 * The retired Smart Dimension and Variable Dimension tools are gone from
+	 * the catalogue: a dimension is a single annotation tool whose linear,
+	 * aligned, angular, radius, diameter and arc-length types are read from
+	 * the geometry the student picks, and whose displayed value is editable
+	 * text rather than a second tool.
+	 */
+	Dimension: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
+	"Annotation": drawingIcon(`<path ${iconStroke} d="M4 5h8M4 9h8M4 13h5"/><path ${iconStroke} d="M12 16l1.5-4L18 7l-4.5 1.5L12 13"/>`),
+	"Note / Text": drawingIcon(`<path ${iconStroke} d="M4 4h12v9H9l-4 3v-3H4zM7 7h6M7 10h4"/>`),
+
+	/*
+	 * LABEL - a short identifier for a feature or subfeature.
+	 *
+	 * Drawn as a tag with its own leader tick, because that is what a label
+	 * IS: a name hung off a piece of geometry rather than a paragraph of
+	 * prose. It is deliberately different from Note / Text, which is drawn
+	 * as a text box, so the two read as different tools and different
+	 * features.
+	 */
+	Label: drawingIcon(`<path ${iconStroke} d="M4 6h9l3 4-3 4H4z"/><path ${iconStroke} d="M7 8.5h4M7 11.5h2"/>`),
+	Leader: drawingIcon(`<path ${iconStroke} d="M4 15L15 5M12 5h4v4"/><circle ${iconStroke} cx="4" cy="15" r="1"/>`),
+	Arrow: drawingIcon(`<path ${iconStroke} d="M4 16L16 4M11 4h5v5"/>`),
+	Callout: drawingIcon(`<path ${iconStroke} d="M4 4h10a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H9l-4 3v-3H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path ${iconStroke} d="M6 7h5M6 10h3"/>`),
+	Symbol: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
+	Tolerance: drawingIcon(`<rect ${iconStroke} x="3" y="5" width="14" height="10"/><path ${iconStroke} d="M6 8l2 2-2 2M11 8h3M11 12h3"/>`),
+	Table: drawingIcon(`<rect ${iconStroke} x="3" y="4" width="14" height="12"/><path ${iconStroke} d="M3 8h14M3 12h14M8 4v12M13 4v12"/>`),
+	Reference: drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM7 7h6M7 10h6M7 13h3"/>`),
+	"Coordinate System": drawingIcon(`<path ${iconStroke} d="M4 16V4M4 16h12M1 7l3-3 3 3M13 13l3 3-3 3"/>`),
+	"Reference Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v4M10 13v4M3 10h4M13 10h4"/>`),
+	"Reference Line": drawingIcon(`<path ${iconStroke} stroke-dasharray="3 2" d="M3 15L17 5"/><circle ${iconStroke} cx="3" cy="15" r="1"/><circle ${iconStroke} cx="17" cy="5" r="1"/>`),
+
+	/*
+	 * Reference Arc.
+	 *
+	 * The Reference Line's icon, with the straight chord replaced by
+	 * an arc, and dashed for the same reason it is: the dash is how
+	 * the whole reference family is marked as construction rather
+	 * than final geometry, so the two read as relatives.
+	 */
+	"Reference Arc": drawingIcon(`<path ${iconStroke} stroke-dasharray="3 2" d="M3 15A8 8 0 0 1 17 5"/><circle ${iconStroke} cx="3" cy="15" r="1"/><circle ${iconStroke} cx="17" cy="5" r="1"/>`),
+	Moment: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 1 1 7-9M13 5h3v3M10 10l3-3"/>`),
+	Moments: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 1 1 7-9M13 5h3v3M10 10l3-3"/>`),
+	Support: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15l4-7 4 7M4 17h12"/>`),
+	Supports: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15l4-7 4 7M4 17h12"/>`),
+	Beam: drawingIcon(`<path ${iconStroke} d="M3 7h14v6H3zM6 7v6M14 7v6"/>`),
+	Bodies: drawingIcon(`<path ${iconStroke} d="M5 7l5-3 5 3v6l-5 3-5-3zM5 7l5 3 5-3M10 10v6"/>`),
+	Connections: drawingIcon(`<path ${iconStroke} d="M3 10h5M12 10h5M8 7h4v6H8z"/>`),
+	Load: drawingIcon(`<path ${iconStroke} d="M10 3v11M7 11l3 3 3-3M5 17h10"/>`),
+	Loads: drawingIcon(`<path ${iconStroke} d="M10 3v11M7 11l3 3 3-3M5 17h10"/>`),
+
+	/*
+	 * Statics feature icons.
+	 *
+	 * Every real Statics feature owns a distinct symbol here.
+	 * These are the single authoritative artworks reused by the
+	 * toolbar, the Feature Tree and the Features panel through
+	 * featureIcons, so one feature never shows two different
+	 * glyphs and no feature falls back to a generic Statics icon.
+	 */
+	Truss: drawingIcon(`<path ${iconStroke} d="M3 6h14M3 6l14 8M17 6L3 14M3 14h14M8 6v8M12 6v8"/>`),
+	Cable: drawingIcon(`<path ${iconStroke} d="M3 5c5 8 9 8 14 0"/><circle ${iconStroke} cx="3" cy="5" r="1.2"/><circle ${iconStroke} cx="17" cy="5" r="1.2"/>`),
+	"Point Force": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
+	"Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 4h14M3 4v10M6.5 4v10M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
+	"Varying Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 11l7-7h7M3 11v3M6.5 7.5V14M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
+	"Applied Moment": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 5.6a4.4 4.4 0 0 1 3.7 2"/><path ${iconStroke} d="M10 14.4a4.4 4.4 0 0 1-3.7-2"/><path ${iconStroke} d="M12.6 5.2l3 1.7-1.7 3"/><path ${iconStroke} d="M7.4 14.8l-3-1.7 1.7-3"/>`),
+	"Pin Support": drawingIcon(`<path ${iconStroke} d="M4 14h12M7 14l3-6 3 6"/><path ${iconStroke} d="M4 17h12"/><circle ${iconStroke} cx="10" cy="9" r="1.6"/>`),
+	"Roller Support": drawingIcon(`<path ${iconStroke} d="M5 11h10M7 11l3-6 3 6"/><circle ${iconStroke} cx="7" cy="13.5" r="1.5"/><circle ${iconStroke} cx="13" cy="13.5" r="1.5"/><path ${iconStroke} d="M4 17h12"/>`),
+	"Fixed Support": drawingIcon(`<path ${iconStroke} d="M6 2v16M6 8h12v4H6M6 3L2 7M6 7l-4 4M6 11l-4 4M6 15l-3 3"/>`),
+	"Smooth Support": drawingIcon(`<path ${iconStroke} d="M5 12h10"/><path ${iconStroke} d="M8 12a2 2 0 0 1 4 0"/><path ${iconStroke} d="M4 15h12"/><path ${iconStroke} d="M4 17h12"/>`),
+	"Pin Connection": drawingIcon(`<path ${iconStroke} d="M3 10h5M12 10h5"/><circle ${iconStroke} cx="10" cy="10" r="3"/><circle ${iconStroke} cx="10" cy="10" r="1"/>`),
+	"Fixed Connection": drawingIcon(`<path ${iconStroke} d="M3 7h3v6H3zM14 7h3v6h-3zM6 8h8v4H6z"/><path ${iconStroke} d="M8 10h4M10 8v4"/>`),
+	"Slider Connection": drawingIcon(`<path ${iconStroke} d="M3 8h4M3 12h4M13 10h4"/><path ${iconStroke} d="M8 6h4v8H8z"/><path ${iconStroke} d="M9 3h2M9 17h2"/>`),
+	"Free Body Diagram": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M10 2v3M10 15v3M2 10h3M15 10h3"/>`),
+	Equilibrium: drawingIcon(`<path ${iconStroke} d="M10 4v12M4 8h12M6 8l-2 4h4zM14 8l-2 4h4z"/>`),
+	/*
+	 * THE ANALYSIS ICONS.
+	 *
+	 * One family, five members, built from the same parts: a 20x20
+	 * viewBox, the shared iconStroke, round caps and joins, no fills,
+	 * and a common 10,10 origin. They are meant to be read at about
+	 * twenty pixels in a toolbar, so each is built from at most three
+	 * strokes and none of them from a chart metaphor.
+	 *
+	 * What they say, in the student's own language:
+	 *
+	 *   Force Components  one force, split into two
+	 *   Resultant         two forces, combined into one
+	 *   SFD               shear, which JUMPS - a stepped profile
+	 *   BMD               moment, which CURVES - a smooth bow
+	 *   AFD               axial force, in blocks about the axis
+	 *
+	 * The last three are the ones that had to be told apart, and they
+	 * are separated by exactly the property that separates the real
+	 * diagrams: SFD is discontinuous, BMD is smooth, AFD is a block
+	 * diagram on a member axis. Stepped-versus-curved is the
+	 * difference a structural engineer looks for, so it is the
+	 * difference drawn here.
+	 *
+	 * These are ICONS, not example solutions. They show the shape a
+	 * diagram takes, never a value, so a student cannot read an
+	 * answer off the toolbar.
+	 */
+
+	/*
+	 * FORCE COMPONENTS: one diagonal force out of a common origin,
+	 * with the horizontal and vertical components drawn as the two
+	 * legs of the triangle it completes.
+	 *
+	 * The three vectors meet at ONE corner, and that is the whole
+	 * message: a single force F, resolved into Fx along the span and
+	 * Fy up the member. The dot marks the shared origin so the three
+	 * strokes read as one figure rather than as three arrows that
+	 * happen to be nearby.
+	 *
+	 * The earlier version of this drew the component legs as an
+	 * L-shaped path that ran straight through the diagonal, so the
+	 * three strokes piled up in the corner and read as a solid
+	 * block at toolbar size. Each leg is now its own stroke,
+	 * starting where it is meant to start.
+	 */
+	"Force Components": drawingIcon(`<path ${iconStroke} d="M3 16h13"/><path ${iconStroke} d="M16 16V4"/><path ${iconStroke} d="M3 16 16 4"/><path ${iconStroke} d="M12.5 4H16"/><path ${iconStroke} d="M16 8v4"/><circle ${iconStroke} cx="3" cy="16" r="1.3"/>`),
+
+	/*
+	 * RESULTANT: two forces converging on an origin and one long
+	 * arrow leaving it. The two input vectors are clearly paired and
+	 * the output is clearly singular, which is the whole difference
+	 * from Force Components - where the one input is a diagonal and
+	 * the two outputs are the legs.
+	 */
+	"Resultant": drawingIcon(`<path ${iconStroke} d="M10 10L3 4M10 10L3 16"/><path ${iconStroke} d="M10 10h7"/><path ${iconStroke} d="M15 8l3 2-3 2"/><path ${iconStroke} d="M1.5 2.5l3 3M1.5 17.5l3-3"/>`),
+
+	/*
+	 * SFD: a stepped shear profile with positive and negative regions
+	 * on either side of the zero baseline.
+	 */
+	"Shear Force (SFD)": drawingIcon(`<path ${iconStroke} d="M2 10h16"/><path ${iconStroke} d="M3 10V4h5v3h4v9h5v-6"/>`),
+
+	/*
+	 * BMD: a linear segment followed by a quadratic curve, returning
+	 * to the zero baseline.
+	 */
+	"Bending Moment (BMD)": drawingIcon(`<path ${iconStroke} d="M2 15h16"/><path ${iconStroke} d="M2 15L8 6Q12 0 18 15"/>`),
+
+	/*
+	 * AFD: a constant axial-force block above the zero baseline,
+	 * with outward arrows indicating tension along the member.
+	 */
+	"Axial Force (AFD)": drawingIcon(`<path ${iconStroke} d="M2 11h16M4 11V4h12v7M3 16h14M5 14l-2 2 2 2M15 14l2 2-2 2"/>`),
+	Particle: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
+	"Rigid Body": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Velocity: drawingIcon(`<path ${iconStroke} d="M3 14h12M11 7l5 7-5 1"/>`),
+	Acceleration: drawingIcon(`<path ${iconStroke} d="M3 14h12M11 6l5 8-5 2"/><path ${iconStroke} d="M6 8l3-3"/>`),
+	Rotation: drawingIcon(`<path ${iconStroke} d="M15 7a6 6 0 1 0 1 6M15 3v4h-4"/>`),
+	"Motion Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-8 8 5 14-6"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="17" cy="8" r="1"/>`),
+	Pipe: drawingIcon(`<path ${iconStroke} d="M4 5v8a3 3 0 0 0 3 3h9M4 5h4M12 16v-5a2 2 0 0 1 2-2h2"/>`),
+	Reservoir: drawingIcon(`<path ${iconStroke} d="M4 6h12v9H4zM4 9h12M7 4v2M13 4v2"/>`),
+	Valve: drawingIcon(`<path ${iconStroke} d="M3 10h5l2-3 2 3h5M8 14l2-4 2 4M10 7V4"/>`),
+	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 5v5l3 2M3 10h2M15 10h2"/>`),
+	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/>`),
+	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
+	"Control Volume": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10" stroke-dasharray="2 2"/><path ${iconStroke} d="M2 10h2M16 10h2"/>`),
+	"Piston Cylinder": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 10h12M4 12h12M10 10V3"/>`),
+	"Piston Cylinder With Stoppers": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 11h12M4 13h12M10 11V3"/><path ${iconStroke} d="M4 6h3v2H4M16 6h-3v2h3"/>`),
+	"State Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
+	"Process Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-7 5 4 8-2s4-3 6-6"/><path ${iconStroke} d="M14 6h3v3"/>`),
+	"Heat Transfer": drawingIcon(`<path ${iconStroke} d="M4 5c5 2 7 8 12 10M4 10c5 2 7 3 12 5"/>`),
+	Work: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15V8h8v7M8 8V5h4v3"/>`),
+	Wall: drawingIcon(`<path ${iconStroke} d="M6 3v14M10 3v14M14 3v14M3 5h14M3 10h14M3 15h14"/>`),
+	Layer: drawingIcon(`<path ${iconStroke} d="M4 6h12M4 10h12M4 14h12"/>`),
+	"Heat Flux": drawingIcon(`<path ${iconStroke} d="M4 10h12M12 6l4 4-4 4M7 6l-3 4 3 4"/>`),
+	Temperature: drawingIcon(`<path ${iconStroke} d="M8 5a2 2 0 0 1 4 0v6a4 4 0 1 1-4 0zM10 4v8"/>`),
+	Convection: drawingIcon(`<path ${iconStroke} d="M4 6c2-2 3 2 5 0s3 2 5 0 2 1 2 1M4 11c2-2 3 2 5 0s3 2 5 0 2 1 2 1"/>`),
+	Radiation: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="3"/><path ${iconStroke} d="M10 3v2M10 15v2M3 10h2M15 10h2M5 5l1 1M14 14l1 1M15 5l-1 1M6 14l-1 1"/>`),
+	Shaft: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M3 10h14M10 3v14"/>`),
+	Stress: drawingIcon(`<path ${iconStroke} d="M4 15h12M4 15l3-8 3 5 3-7 3 10"/>`),
+	Strain: drawingIcon(`<path ${iconStroke} d="M5 4v12M15 4v12M5 7h10M5 13h10"/>`),
+	"Boundary Condition": drawingIcon(`<path ${iconStroke} d="M4 4v12M4 16h12M7 13l-3 3 3 1M13 13l3 3-3 1"/>`),
+	Part: drawingIcon(`<path ${iconStroke} d="M5 7l5-3 5 3v6l-5 3-5-3zM5 7l5 3 5-3M10 10v6"/>`),
+	Hole: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Gear: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="3"/><path ${iconStroke} d="M10 3v3M10 14v3M3 10h3M14 10h3M5 5l2 2M13 13l2 2M15 5l-2 2M7 13l-2 2"/>`),
+	Fastener: drawingIcon(`<path ${iconStroke} d="M6 4h8M6 7h8M8 7v9M12 7v9M5 16h10"/>`),
+	"Section View": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM4 8h12M8 4v12"/>`),
+	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
+	Input: drawingIcon(`<path ${iconStroke} d="M3 10h10M10 6l4 4-4 4"/>`),
+	Output: drawingIcon(`<path ${iconStroke} d="M17 10H7M10 6l-4 4 4 4"/>`),
+	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
+	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
+	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
+	Point: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Function: drawingIcon(`<path ${iconStroke} d="M4 14c2-8 4 4 6-3s4-5 6-5"/>`),
+	Vector: drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
+	Graph: drawingIcon(`<path ${iconStroke} d="M4 16V4M4 16h12M7 13l3-4 2 2 3-5"/>`),
+	Equation: drawingIcon(`<path ${iconStroke} d="M4 6h4M6 4v4M10 10h6M4 15h4"/>`)
+};
+
+/*
+ * Feature icons.
+ *
+ * The single authoritative icon for each feature type. The
+ * toolbar reads the same artwork through toolIcons, and the
+ * Feature Tree and the Features panel read it from here, so a
+ * Particle or a Truss always shows the same symbol wherever it
+ * appears. Every entry is a real feature type: a submenu
+ * category such as Bodies or Loads is not a feature and has no
+ * entry here, so no tree row is ever created for one.
+ */
+export const featureIcons = {
+	point: toolIcons.Point,
+	particle: toolIcons.Particle,
+	"rigid-body": toolIcons["Rigid Body"],
+	beam: toolIcons.Beam,
+	truss: toolIcons.Truss,
+	cable: toolIcons.Cable,
+	shaft: toolIcons.Shaft,
+
+	force: toolIcons["Point Force"],
+	moment: toolIcons.Moment,
+
+	load: toolIcons["Distributed Load"],
+	"varying-load": toolIcons["Varying Distributed Load"],
+
+	"pin-support": toolIcons["Pin Support"],
+	"roller-support": toolIcons["Roller Support"],
+	"fixed-support": toolIcons["Fixed Support"],
+	"smooth-support": toolIcons["Smooth Support"],
+
+	"pin-connection": toolIcons["Pin Connection"],
+	"fixed-connection": toolIcons["Fixed Connection"],
+	"slider-connection": toolIcons["Slider Connection"],
+
+	"coordinate-system-2d": toolIcons["Coordinate System"]
+};
+
+export const drawingToolGroups = [
+	{
+		id: "selection",
+		label: "Selection",
+		tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+	},
+	{
+		id: "geometry",
+		label: "Create",
+		tools: [
+			{ id: "point", label: "Point", shortcut: "P" },
+			{ id: "line", label: "Line", shortcut: "L" },
+			{ id: "triangle", label: "Triangle", shortcut: "T" },
+			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
+			{ id: "circle", label: "Circle", shortcut: "C" },
+			{ id: "arc", label: "Arc", shortcut: "A" },
+			{ id: "polygon", label: "Polygon", shortcut: "G" },
+			{ id: "freeform-polygon", label: "Freeform Polygon", shortcut: "F" }
+		]
+	},
+	{
+		id: "construction",
+		label: "Construction",
+		tools: [{ id: "coordinate-system", label: "Coordinate System" }]
+	}
+];
+
+/*
+ * ========================================================
+ * ANNOTATE: THE TOOL GROUPS
+ * ========================================================
+ *
+ * Annotate is an ENGINEERING-DRAWING discipline, and it is organised
+ * EXACTLY the way Statics is: a short list of category headings, each with
+ * its commands listed directly underneath. The two are deliberately the
+ * same shape, because a student who has learned where a Statics tool lives
+ * should not have to learn a second arrangement for an Annotate one.
+ *
+ *     SELECTION     the shared selection system, offered first
+ *
+ *     CREATE        every annotate command, listed directly
+ *
+ * THERE IS NO SUB-CATEGORY LEVEL, AND THAT IS THE WHOLE POINT.
+ *
+ * A tool is a COMMAND. A command that is behind another command is a
+ * command the student has to go looking for, and the words for the kinds of
+ * annotation - Dimensions, Text, Leader - are descriptions, not places. So
+ * there is no "Dimensions -> Dimension", no caret, no flyout and no
+ * hover menu: Dimension and the other annotate commands are VISIBLE AND
+ * CLICKABLE THE MOMENT Annotate is selected.
+ *
+ * This mirrors Statics exactly. Bodies, Loads and Supports open menus there
+ * because each one is a FAMILY OF FEATURES with genuinely different
+ * geometry - a pin support and a roller support are different drawings - so
+ * choosing between them is a real step. Annotate's commands are not like
+ * that: a Dimension and a Leader are two separate tools with two separate
+ * buttons, and grouping them behind a parent would add a click and hide a
+ * command without deciding anything.
+ *
+ * THE TOOL IDS ARE DELIBERATELY THE FEATURE KINDS.
+ *
+ * `note`, `label`, `leader`, `callout`, `arrow`, `symbol`, `tolerance`,
+ * `table` are the ids the creation layer and the panel both key on, so a
+ * tool and the feature it makes cannot drift apart: there is one word for
+ * each thing. `dimension` is the single dimension tool: the retired Smart
+ * Dimension and Variable Dimension tools are no longer part of it.
+ */
+export const annotateToolGroups = [
+	{
+		id: "annotate-selection",
+		label: "Selection",
+		tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+	},
+
+	/*
+	 * ========================================================
+	 * ORGANISED BY WHAT AN ANNOTATION DOES
+	 * ========================================================
+	 *
+	 * A single "Create" heading holding all ten commands was too broad:
+	 * a measurement, a piece of writing, a leader and a table are
+	 * fundamentally different KINDS of annotation, and a student looking for
+	 * one had to read the whole list to find it. The categories below answer
+	 * the question the student actually arrives with:
+	 *
+	 *     Need a measurement?              Dimensions
+	 *     Need writing?                    Text
+	 *     Need to point at geometry?       Leaders
+	 *     Need a free arrow?               Markup
+	 *     Need a symbol or a tolerance?    Symbols & Tolerances
+	 *     Need a table?                    Tables
+	 *
+	 * THESE ARE CATEGORIES, NOT SUBMENUS.
+	 *
+	 * Every tool is listed DIRECTLY under its category and is clickable the
+	 * moment Annotate is selected. There is no caret, no flyout and no
+	 * second level: the hierarchy stops at Annotate -> Category -> Tool,
+	 * exactly as it does in Statics. The `submenu` flag is therefore absent
+	 * from every entry here - it is the flag Geometry and Statics use for
+	 * the tools that DO open a menu (Arc, Bodies, Loads), and leaving it off
+	 * is what makes each of these activate immediately.
+	 *
+	 * The headings are Organise, not Hide: a category is a place to look,
+	 * never a step to complete.
+	 */
+	{
+		id: "annotate-dimensions",
+		label: "Dimensions",
+		tools: [{ id: "dimension", label: "Dimension" }]
+	},
+	{
+		id: "annotate-text",
+		label: "Text",
+		tools: [
+			{ id: "note", label: "Note / Text" },
+			{ id: "label", label: "Label" }
+		]
+	},
+	{
+		id: "annotate-leaders",
+		label: "Leaders",
+		tools: [
+			{ id: "leader", label: "Leader" },
+			{ id: "callout", label: "Callout" }
+		]
+	},
+
+	/*
+	 * ========================================================
+	 * SYMBOLS - and the two V1 EXCLUSIONS
+	 * ========================================================
+	 *
+	 * The standalone ARROW and TOLERANCE tools are NOT part of V1. Both are
+	 * removed from the TOOLSET here, and from the toolset only.
+	 *
+	 * THE FEATURE KINDS REMAIN. `arrow` and `tolerance` are still declared in
+	 * annotate-model.js and still render, select, move, save and load - so a
+	 * drawing made with an earlier version keeps working, and the arrowheads the
+	 * task explicitly keeps (Leader and Callout endpoint symbols) are untouched.
+	 * Removing the kinds would have broken existing files; removing the TOOLS
+	 * takes the entry out of the V1 menu and nothing else.
+	 *
+	 * Markup is gone as a heading for the same reason: with Arrow out of V1 it
+	 * would be a category holding no command.
+	 */
+	{
+		id: "annotate-symbols",
+		label: "Symbols",
+		tools: [{ id: "symbol", label: "Symbol" }]
+	},
+	{
+		id: "annotate-tables",
+		label: "Tables",
+		tools: [{ id: "table", label: "Table" }]
+	}
+];
+
+/*
+ * Disciplines that are organised into labelled sections,
+ * mirroring how the Geometry tools are grouped.
+ *
+ * Each entry lists section groups in display order. The
+ * section labels match the wording used in the tool
+ * panel headings.
+ */
+export const disciplineToolGroups = {
+	ANNOTATE: annotateToolGroups,
+	STATICS: [
+		{
+			id: "statics-selection",
+			label: "Selection",
+			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+		},
+		{
+			id: "statics-create",
+			label: "Create",
+			tools: [
+				{ id: "body", label: "Bodies", submenu: true },
+
+				/*
+				 * A Point Force is a single direct tool, in
+				 * the same way Line and Circle are. It has no
+				 * submenu and opens no popup before drawing.
+				 */
+				{ id: "point-force", label: "Point Force" },
+
+				{ id: "load", label: "Loads", submenu: true },
+				{ id: "moment", label: "Moment" },
+				{ id: "support", label: "Supports", submenu: true },
+				{ id: "connection", label: "Connections", submenu: true }
+			]
+		},
+		{
+			id: "statics-analysis",
+			label: "Analysis",
+
+			/*
+			 * The Analysis section is DOCUMENTATION, not a solver.
+			 *
+			 * Every tool here helps the student draw, label and
+			 * organise their own reasoning: resolve a force they
+			 * have already drawn, combine vectors they have
+			 * already placed, or open a frame to draw a
+			 * shear/moment/axial diagram inside. None of them
+			 * works out an unknown, and none reports a solution.
+			 *
+			 * Equilibrium and Moment Analysis were removed for
+			 * that reason. Both read the student's forces and
+			 * print a verdict - "not balanced, ΣFx ..." - which
+			 * is a first step into doing the exercise for them,
+			 * and it is exactly the step the exercise exists to
+			 * make. They are not replaced with anything: if a
+			 * genuine analysis module is built later it will earn
+			 * its place here, rather than these two standing in
+			 * for it.
+			 */
+			/*
+			 * The diagram names carry their abbreviation in the
+			 * LABEL as well as the icon, because the abbreviation
+			 * is what the student will say and search for, and
+			 * because the full names wrap to three lines in a
+			 * narrow panel - which pushes the last tool in the
+			 * section out of sight.
+			 *
+			 * The names are shortened rather than abbreviated to
+			 * the point of being cryptic: "Shear Force (SFD)" is
+			 * still readable on its own, and it is what a student
+			 * would call it in a report.
+			 */
+			tools: [
+				{ id: "resultant", label: "Resultant" },
+				{ id: "force-components", label: "Force Components" },
+				{ id: "shear-force-diagram", label: "Shear Force (SFD)" },
+				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
+				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
+			]
+		},
+		{
+			id: "statics-reference",
+			label: "Reference",
+			tools: [
+				{ id: "coordinate-system", label: "Coordinate System" },
+				{ id: "reference-point", label: "Reference Point" },
+				{ id: "reference-line", label: "Reference Line" },
+
+				/*
+				 * Reference Arc.
+				 *
+				 * An ARC construction that produces construction
+				 * geometry, in the same way the Reference Line
+				 * produces construction linework.
+				 *
+				 * It is a separate tool rather than a mode of
+				 * Geometry → Arc because the two make different
+				 * things: one is final geometry a student drew,
+				 * the other is reference geometry a student
+				 * worked from. But the INTERACTION is the same code
+				 * - the same construction modes, snapping, preview
+				 * and editing - so it feels identical to use, and
+				 * only the finished feature differs.
+				 */
+				{ id: "reference-arc", label: "Reference Arc", submenu: true }
+			]
+		}
+	]
+};
+
+const globalToolGroups = [
+	{
+		id: "modify",
+		label: "Modify",
+		tools: [
+			{ id: "move", label: "Move" },
+			{ id: "rotate", label: "Rotate" },
+			{ id: "mirror", label: "Mirror" },
+			{ id: "trim", label: "Trim" },
+			{ id: "extend", label: "Extend" }
+		]
+	},
+	{
+		id: "view",
+		label: "View",
+		tools: [
+			{ id: "pan", label: "Pan" },
+			{ id: "zoom", label: "Zoom" },
+			{ id: "fit", label: "Fit" }
+		]
+	}
+];
+
+const sidebarToolDefinitions = drawingToolGroups.flatMap(group => group.tools);
+const globalToolDefinitions = globalToolGroups.flatMap(group => group.tools);
+export const drawToolDefinitions = [
+	...sidebarToolDefinitions,
+	...globalToolDefinitions
+];
+export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool => [tool.id, tool.label]));
+
+export const engineeringTools = {
+	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
+	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
+	FLUIDS: ["Pipe", "Reservoir", "Valve", "Pump", "Flow Arrow", "Pressure"],
+	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
+	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
+	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
+	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
+	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
+	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
+};

@@ -580,6 +580,32 @@
     width: 100%;
 }
 
+/*
+ * THE TWO LAYERS OF THE DRAWING SPACE.
+ *
+ * The PICTURE is the compiled TikZ source - the drawing. The OVERLAY is the
+ * editor's interaction aids drawn over it: the grid, selection outlines and
+ * handles, the live construction preview and the snap marker. They are stacked
+ * in that order and both ignore the pointer, which the canvas itself handles.
+ */
+.drawing-source-layer,
+.drawing-overlay {
+    height: 100%;
+    inset: 0;
+    overflow: visible;
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+}
+
+.drawing-source-layer {
+    z-index: 1;
+}
+
+.drawing-overlay {
+    z-index: 2;
+}
+
 .drawing-snap-marker {
     fill: var(--datum-surface);
     stroke: var(--datum-focus);

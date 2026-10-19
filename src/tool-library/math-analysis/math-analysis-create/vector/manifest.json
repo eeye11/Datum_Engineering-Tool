@@ -1,0 +1,9 @@
+{
+  "id": "math-analysis.math-analysis-create.vector",
+  "label": "Vector",
+  "category": "math-analysis",
+  "group": "math-analysis-create",
+  "libraryPath": "src/tool-library/math-analysis/math-analysis-create/vector",
+  "template": "template.tex",
+  "implemented": false
+}

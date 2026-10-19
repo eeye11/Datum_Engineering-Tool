@@ -1,18 +1,14 @@
 /*
  * ========================================================
- * DIMENSIONS: EDITING, THE DRIVING VALUE, AND THE PREVIEW
+ * DIMENSIONS: EDITING, VALUE PROMPTS, AND ANNOTATION LABELS
  * ========================================================
  *
- * Four requirements, all about the same idea - a dimension is a LIVE reading of
- * geometry, and the box a student edits it in is the application's one value
- * box:
+ * DAETUM geometry is schematic: a dimension may display a value supplied by
+ * the problem, and that display value must be an ANNOTATION that does not:
+ *   - resize geometry
+ *   - calibrate drawing scale
  *
- *   1. Double-clicking a dimension opens the STANDARD value popup and never
- *      the World Scale question.
- *   2. A Variable Dimension starts EMPTY and never shows the measured value.
- *   3. Its preview shows the dimension geometry, with no answer in it.
- *   4. A measured dimension stays DRIVING: its value is re-read from the
- *      geometry every frame, never frozen by the first entry.
+ * This file pins the UI wiring and the storage rules that support that.
  */
 
 const fs = require("fs");
@@ -45,9 +41,9 @@ check(
 );
 
 check(
-  "and NEVER the dimension editor that asks for World Scale",
+  "and NEVER the dimension editor that asked for World Scale",
   !/openDimensionEditorFor\(pointed\)/.test(events),
-  "the scale is a property of the sheet, not of one dimension",
+  "a drawing scale must never be asked as a side-effect of editing a label",
 );
 
 check(
@@ -78,10 +74,7 @@ check(
     const body = tool.slice(at, at + 4000);
 
     /* The factory call lives inside onConfirm, after the popup is opened. */
-    return (
-      body.indexOf("openLoadValuePopup({") <
-      body.indexOf('"variable-dimension"')
-    );
+    return body.indexOf("openLoadValuePopup({") < body.indexOf('"variable-dimension"');
   })(),
 );
 
@@ -114,44 +107,43 @@ check(
   ),
 );
 
-console.log("\n  a MEASURED dimension stays DRIVING\n");
+console.log("\n  editing a MEASURED dimension writes an ANNOTATION label\n");
 
 check(
-  "no measured dimension stores a magnitude on the feature",
-  !/object\.geometry\.magnitude\s*=/.test(model) &&
-    !/\.dimensionValue\s*=/.test(model),
-  "a stored copy is a second answer, free to go stale",
-);
-
-check(
-  "editing a dimension applies the value to the GEOMETRY, not the feature",
-  /applyDimensionValue\(\s*\n\s*object,\s*\n\s*drawingState,/.test(tool),
-  "the dimension then measures the geometry exactly as before",
-);
-
-check(
-  "and the edit does not write the feature's references",
+  "dimension editing does not drive geometry",
   (() => {
     const at = tool.indexOf("export function openDimensionValuePrompt");
-    const body = tool.slice(at, at + 5000);
+    const body = tool.slice(at, at + 4500);
 
-    /* `sourceRefs` must not be assigned anywhere in the edit path. */
-    return !/object\.sourceRefs\s*=/.test(body);
+    return !/applyDimensionValue\(/.test(body);
   })(),
-  "a value edit changes what it says, never what it is attached to",
+  "a schematic dimension label must not resize geometry",
 );
 
 check(
-  "the panel and the sheet read the same live measurement",
-  /measurementFor/.test(model),
-  "both must be recomputed from the geometry, never cached",
+  "dimension editing does not calibrate or set world scale",
+  (() => {
+    const at = tool.indexOf("export function openDimensionValuePrompt");
+    const body = tool.slice(at, at + 4500);
+
+    return !/isCalibrated/.test(body) && !/\.calibrate\(/.test(body);
+  })(),
 );
 
-console.log("\n  a symbolic entry on a dimension is its LABEL\n");
+check(
+  "a numeric entry is stored as the dimension's label override",
+  /answer\.kind === "number"[\s\S]{0,1200}object\.label =/.test(tool),
+);
 
 check(
-  "a symbol is written to the label, not to a number field",
-  /object\.magnitudeLabel = answer\.text/.test(tool),
+  "a symbolic entry is stored as the dimension's label override",
+  /answer\.kind === "symbol"[\s\S]{0,120}object\.label = answer\.text/.test(tool),
+);
+
+check(
+  "the renderer/model honours the label override",
+  /typeof dimension\?\.label === "string"[\s\S]{0,200}return override;/.test(model),
+  "formatMeasurement should return the override when present",
 );
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

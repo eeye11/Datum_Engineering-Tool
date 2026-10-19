@@ -1,0 +1,17 @@
+% Coordinate System - two axis paths through the committed origin, plus labels.
+%
+%   \draw[<appearance>, <->] (ox-xn,oy) -- (ox+xp,oy);   % X axis
+%   \draw[<appearance>, <->] (ox,oy-yn) -- (ox,oy+yp);   % Y axis
+%   \node[...] at (...) {x};   \node[...] at (...) {y};   \node[...] at (...) {O};
+%
+% The arms are independent extents in the model, so each axis spans what is
+% drawn. The Y axis is axis-aligned in the model, which is what keeps it exactly
+% perpendicular to X however the X arm was snapped.
+%
+% Showing or hiding an axis or a label omits it from the source and never moves
+% the system. Labels are the stored text, not a default.
+\draw[black, <->] (-20,0) -- (20,0);
+\draw[black, <->] (0,-20) -- (0,20);
+\node[anchor=south west] at (3,23) {y};
+\node[anchor=north west] at (23,-3) {x};
+\node[anchor=north east] at (-3,-3) {O};

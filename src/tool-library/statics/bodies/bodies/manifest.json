@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.bodies",
+  "label": "Bodies",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/bodies",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "controls.controls-create.sensor",
+  "label": "Sensor",
+  "category": "controls",
+  "group": "controls-create",
+  "libraryPath": "src/tool-library/controls/controls-create/sensor",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.rectangle",
+  "label": "Rectangle",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/rectangle",
+  "template": "template.tex",
+  "implemented": true
+}

@@ -155,8 +155,8 @@ check(
 );
 
 check(
-    "the window title is suffixed with DAETUM",
-    /- DAETUM`/.test(fs.readFileSync(locate("document-commands.js"), "utf8")),
+    "the window title stays DAETUM",
+    /document\.title = "DAETUM"/.test(fs.readFileSync(locate("document-commands.js"), "utf8")),
 );
 
 console.log("\n  while the TECHNICAL identifiers still say datum\n");
@@ -167,7 +167,7 @@ const theme = fs.readFileSync(locate("theme.js"), "utf8");
 
 check(
     "the integration API object is still window.datum",
-    /window\.datum/.test(fs.readFileSync(locate("main.js"), "utf8")),
+    /window\.datum/.test(fs.readFileSync(locate("app/entry/main.js"), "utf8")),
     "a host page scripts this name; renaming it breaks every integration",
 );
 

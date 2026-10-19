@@ -31,7 +31,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const solution = require(locate("solution/solution-state.js"));
+const solution = require(locate("src/shared/solution/solution-state.js"));
 
 console.log("\n  the outline is built from the source\n");
 

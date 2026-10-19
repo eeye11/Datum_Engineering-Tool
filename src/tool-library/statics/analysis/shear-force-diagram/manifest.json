@@ -1,0 +1,9 @@
+{
+  "id": "statics.analysis.shear-force-diagram",
+  "label": "Shear Force (SFD)",
+  "category": "statics",
+  "group": "analysis",
+  "libraryPath": "src/tool-library/statics/analysis/shear-force-diagram",
+  "template": "template.tex",
+  "implemented": false
+}

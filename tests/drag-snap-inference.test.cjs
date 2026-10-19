@@ -130,9 +130,9 @@ console.log(
 const grab = { x: 150, y: 200 };
 
 [
-  { x: 400, y: 204, label: "3 degrees above the row" },
-  { x: 400, y: 196, label: "3 degrees below the row" },
-  { x: 400, y: 200, label: "dead level" },
+  { x: 397.5, y: 204, label: "3 degrees above the row" },
+  { x: 397.5, y: 196, label: "3 degrees below the row" },
+  { x: 397.5, y: 200, label: "dead level" },
 ].forEach(({ x, y, label }) => {
   const resolution = dragResolve({ x, y }, grab);
 
@@ -157,9 +157,9 @@ console.log(
 );
 
 [
-  { x: 154, y: 500, label: "3 degrees right of the column" },
-  { x: 146, y: 500, label: "3 degrees left of the column" },
-  { x: 150, y: 500, label: "dead upright" },
+  { x: 154, y: 502.5, label: "3 degrees right of the column" },
+  { x: 146, y: 502.5, label: "3 degrees left of the column" },
+  { x: 150, y: 502.5, label: "dead upright" },
 ].forEach(({ x, y, label }) => {
   const resolution = dragResolve({ x, y }, grab);
 
@@ -189,7 +189,7 @@ console.log(
  * an inference but returned the raw cursor, a shape would show an alignment
  * line and stay off axis.
  */
-const offAxis = dragResolve({ x: 400, y: 206 }, grab);
+const offAxis = dragResolve({ x: 397.5, y: 206 }, grab);
 
 check(
   "the effective point differs from the raw cursor",
@@ -239,11 +239,11 @@ console.log("\n  a cursor clearly off every axis still moves freely\n");
  * 45 degrees from the anchor is far outside the shared 7-degree band, so the
  * point must come back where the cursor is.
  */
-const diagonal = dragResolve({ x: 400, y: 450 }, grab);
+const diagonal = dragResolve({ x: 397.5, y: 450 }, grab);
 
 check(
   "a cursor 45 degrees off the origin is NOT constrained",
-  near(diagonal.effectiveConstructionPoint.x, 400) &&
+  near(diagonal.effectiveConstructionPoint.x, 397.5) &&
     near(diagonal.effectiveConstructionPoint.y, 450),
   JSON.stringify(diagonal.effectiveConstructionPoint),
 );

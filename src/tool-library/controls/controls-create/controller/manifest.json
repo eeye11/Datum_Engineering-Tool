@@ -1,0 +1,9 @@
+{
+  "id": "controls.controls-create.controller",
+  "label": "Controller",
+  "category": "controls",
+  "group": "controls-create",
+  "libraryPath": "src/tool-library/controls/controls-create/controller",
+  "template": "template.tex",
+  "implemented": false
+}

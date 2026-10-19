@@ -165,14 +165,16 @@ const SANCTIONED = new Set([
   "sheet-tabs.js",
   "document-export.js",
   "drawing-reference.js",
-  "written-references.js"
+  "written-references.js",
+  /* The Source tab's canvas overlay: editor chrome, view-only, like wiring. */
+  "source-canvas-bridge.js"
 ]);
 
-/* The drawing editor (src/editor/) is the controller, and builds its own canvas overlay. */
-const inEditor = (name) => /[\\/]editor[\\/]/.test(modules.get(name));
+/* The drawing controller (src/features/workspace/) builds its own canvas overlay. */
+const inEditor = (name) => /[\\/]workspace[\\/]/.test(modules.get(name));
 
-/* Every module in src/rendering/ IS the renderer, split by concern. */
-const inRenderer = (name) => /[\\/]rendering[\\/]/.test(modules.get(name));
+/* The renderer lives in src/shared/rendering/ since the Phase 2 reorganisation. */
+const inRenderer = (name) => /[\\/]shared[\\/]rendering[\\/]/.test(modules.get(name));
 
 const offenders = [...modules.keys()]
   .filter((name) => !SANCTIONED.has(name) && !inEditor(name) && !inRenderer(name))

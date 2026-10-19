@@ -141,8 +141,8 @@ check(
 );
 
 check(
-  "the window title names the drawing, not the file",
-  /document\.title = `\$\{shown\} - DAETUM`/.test(commands),
+  "the window title stays DAETUM, without the drawing name",
+  /document\.title = "DAETUM"/.test(commands),
 );
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

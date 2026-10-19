@@ -1,0 +1,9 @@
+{
+  "id": "mechanical-design.mechanical-design-create.section-view",
+  "label": "Section View",
+  "category": "mechanical-design",
+  "group": "mechanical-design-create",
+  "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/section-view",
+  "template": "template.tex",
+  "implemented": false
+}

@@ -1,0 +1,9 @@
+% Polygon - a regular polygon written as a closed path through its vertices.
+%
+%   \draw[<appearance>, fill=<colour>] (v1) -- (v2) -- ... -- cycle;
+%
+% The vertices are derived from the committed centre, circumradius, rotation and
+% side count - the same four numbers the canvas draws from - so the code always
+% describes the polygon that was placed. The Side method stores a centre and
+% rotation that put vertex 0 and vertex 1 exactly on the dragged segment.
+\draw[black] (10,0) -- (5,8.6603) -- (-5,8.6603) -- (-10,0) -- (-5,-8.6603) -- (5,-8.6603) -- cycle;

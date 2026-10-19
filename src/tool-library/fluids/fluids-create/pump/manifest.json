@@ -1,0 +1,9 @@
+{
+  "id": "fluids.fluids-create.pump",
+  "label": "Pump",
+  "category": "fluids",
+  "group": "fluids-create",
+  "libraryPath": "src/tool-library/fluids/fluids-create/pump",
+  "template": "template.tex",
+  "implemented": false
+}

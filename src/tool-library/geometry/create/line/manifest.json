@@ -1,0 +1,9 @@
+{
+  "id": "geometry.create.line",
+  "label": "Line",
+  "category": "geometry",
+  "group": "create",
+  "libraryPath": "src/tool-library/geometry/create/line",
+  "template": "template.tex",
+  "implemented": true
+}

@@ -1,0 +1,9 @@
+{
+  "id": "mechanical-design.mechanical-design-create.shaft",
+  "label": "Shaft",
+  "category": "mechanical-design",
+  "group": "mechanical-design-create",
+  "libraryPath": "src/tool-library/mechanical-design/mechanical-design-create/shaft",
+  "template": "template.tex",
+  "implemented": false
+}

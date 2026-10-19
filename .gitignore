@@ -35,6 +35,9 @@ qa-shot.png
 *.tmp
 *.txt
 
+# Root-level scratch/probe files.
+tmp-*
+
 # Diagnostic scripts: `_`-prefixed and `tmp-`-prefixed files in tests/.
 # The real suite is `*.test.cjs`; these are throwaway probes that were never
 # meant to run as part of it.

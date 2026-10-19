@@ -356,7 +356,7 @@ console.log("\n  recovery is unsaved work, and uncaught errors are recorded\n");
     "a failed save must not clear the unsaved state",
   );
 
-  const mainSource = fs.readFileSync(locate("main.js"), "utf8");
+  const mainSource = fs.readFileSync(locate("app/entry/main.js"), "utf8");
 
   check(
     "the global error handlers are installed at start-up",

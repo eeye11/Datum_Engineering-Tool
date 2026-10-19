@@ -1,0 +1,966 @@
+/*
+ * THE DRAWING PANEL'S TABS, ITS OBJECTS LIST, ITS FEATURES EDITOR AND THE
+ * SOURCE EDITOR.
+ *
+ * One file for the right-side panel: the three-tab strip (Objects | Features |
+ * Source), the object inventory, the selection's property editor, and the Source
+ * tab's editor - a
+ * textarea with a mirror behind it, line numbers in a gutter, a status line
+ * and a diagnostics list.
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific. This file
+ * is imported LAST because its editor must be allowed to size itself inside
+ * the panel that features-panel.css lays out.
+ */
+
+/* ============================================================
+ * THE TAB STRIP
+ * ============================================================ */
+
+.drawing-panel-tabs {
+    background: var(--datum-panel);
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    flex: 0 0 auto;
+    gap: 1px;
+    padding: 2px 4px 0;
+}
+
+.drawing-panel-tab {
+    background: transparent;
+    border: 0;
+    border-radius: 3px 3px 0 0;
+    color: var(--datum-muted);
+    cursor: pointer;
+    flex: 1 1 auto;
+    font: inherit;
+    font-size: 10.5px;
+    line-height: 1;
+    padding: 6px 4px 7px;
+    white-space: nowrap;
+}
+
+.drawing-panel-tab:hover {
+    background: var(--datum-menu-hover);
+    color: var(--cad-ink);
+}
+
+/*
+ * THE OPEN TAB. The strip reads like a set of file folders: the open one is
+ * the panel's own surface and meets the pane below it without a seam, which
+ * is what a border-bottom on the strip and a covered border on the tab
+ * together produce.
+ */
+.drawing-panel-tab.active {
+    background: var(--datum-surface);
+    box-shadow: inset 0 -1px 0 var(--datum-surface), inset 0 2px 0 var(--datum-green);
+    color: var(--datum-green-ink);
+    font-weight: 700;
+}
+
+.drawing-panel-tab:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+/* ============================================================
+ * THE PANES
+ * ============================================================ */
+
+.drawing-panel-pane {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 6px;
+}
+
+.drawing-panel-pane[hidden] {
+    display: none;
+}
+
+/* ============================================================
+ * THE OBJECTS PANE
+ * ============================================================
+ *
+ * A compact navigator: one row per object, 24px high, icon then name. There is
+ * no card around a row and no second column of anything - the list has to stay
+ * scannable forty objects deep, and a drawing's inventory is a list, not a grid
+ * of cards.
+ *
+ * THE PANE THAT SCROLLS IS THE LIST. The tab strip and the pane stay put; only
+ * the rows move, so a long drawing never scrolls the whole application.
+ */
+
+#drawingPanelObjects {
+    gap: 0;
+    padding: 4px 4px 6px;
+}
+
+/*
+ * The host is a div; the list inside it owns the spacing and the scroll.
+ *
+ * THE HOST IS THE STABLE ELEMENT the panel listens on, and the list is created
+ * inside it once. So the host takes the height the pane has and the list, not
+ * the pane, is the thing that scrolls - the tab strip and the panel's edge stay
+ * put however many objects the sheet holds.
+ */
+#drawingObjects {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.drawing-objects-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.drawing-objects-empty {
+    padding: 8px 6px;
+}
+
+.drawing-objects-list {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 1px;
+    list-style: none;
+    margin: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0;
+    scrollbar-color: var(--datum-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+.drawing-objects-item {
+    align-items: center;
+    border-left: 2px solid transparent;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    gap: 7px;
+    min-height: 24px;
+    padding: 2px 6px 2px 5px;
+    user-select: none;
+}
+
+/*
+ * THREE STATES THAT ARE NOT SELECTION: resting, hovered, and focus.
+ * Hover is the list's own wash; focus is the model's ring; neither competes with
+ * the selected row's accent rail and tint.
+ */
+.drawing-objects-item:hover {
+    background: var(--datum-green-wash);
+}
+
+.drawing-objects-item:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+/*
+ * THE SELECTED ROW, WHICH STAYS SELECTED WHILE HOVERED.
+ *
+ * The selection is a left rail in the accent plus a tint - a rail rather than a
+ * border all round, because a ring around every selected row makes a
+ * multi-selection look like a stack of cards. The hovered-and-selected row keeps
+ * its rail and tints one step deeper, so "selected" is still the strongest
+ * statement on the row.
+ */
+.drawing-objects-item[aria-selected="true"] {
+    background: var(--datum-green-tint);
+    border-left-color: var(--datum-green);
+    color: var(--datum-green-ink);
+    font-weight: 600;
+}
+
+.drawing-objects-item[aria-selected="true"]:hover {
+    background: var(--datum-green-line);
+}
+
+.drawing-objects-icon {
+    color: var(--datum-muted);
+    display: inline-flex;
+    flex: 0 0 16px;
+    height: 16px;
+    width: 16px;
+}
+
+.drawing-objects-icon svg {
+    height: 100%;
+    width: 100%;
+}
+
+.drawing-objects-item[aria-selected="true"] .drawing-objects-icon {
+    color: var(--datum-green);
+}
+
+/*
+ * THE NAME TAKES WHAT IS LEFT AND NEVER PUSHES THE ROW WIDER. A long name is
+ * truncated with an ellipsis rather than wrapping into a two-line row, because
+ * rows of unequal height are what makes a list hard to scan; the full name is on
+ * the row's tooltip.
+ */
+.drawing-objects-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ============================================================
+ * THE SOURCE TAB
+ * ============================================================
+ *
+ * THE PANE DOES NOT SCROLL - THE EDITOR DOES. The generic pane rule above is a
+ * scrolling column, which is right for a list of properties; for the source it
+ * would scroll the status line and the diagnostics away from the code they
+ * describe, and the editor inside it has its own scroll for its own height.
+ * So the pane is a clipped flex column, and its three parts are pinned.
+ */
+
+#drawingPanelSource {
+    overflow: hidden;
+}
+
+#drawingPanelSource > .is-pinned {
+    flex: 0 0 auto;
+}
+
+.drawing-source-status {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+}
+
+.drawing-source-status.is-error {
+    color: var(--datum-error);
+}
+
+.drawing-source-status.is-dirty {
+    color: var(--source-editor-arg);
+}
+
+.drawing-source-status.is-rendering {
+    color: var(--datum-muted);
+    font-style: italic;
+}
+
+/*
+ * THE EDITOR. The pane's flexible child: it takes the height the panel has and
+ * runs edge to edge inside it, so it reads as part of the pane rather than a
+ * floating window or a box-within-a-box. No outer border or radius - the pane
+ * already has its edge, and a second frame around the same content is exactly
+ * the "separate window" look this tab must not have.
+ */
+.drawing-source-editor {
+  flex: 1 1 auto;
+  margin: -6px;
+  min-height: 140px;
+  position: relative;
+}
+
+.drawing-source-editor-root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/*
+ * THE GUTTER. A quiet column on the editor's own surface - no separate fill and
+ * no heavy rule - so the line numbers read as a margin rather than a second
+ * panel. Sized to its widest line number by its own content; the numbers are
+ * right-aligned so 9 and 10 do not shift the column.
+ */
+.drawing-source-gutter {
+  background: var(--source-editor-gutter-bg);
+  color: var(--source-editor-gutter-ink);
+  flex: 0 0 auto;
+  font-family: var(--datum-font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow: hidden;
+  /* Matches the mirror's top padding, so line 1 sits on line 1. */
+  padding: 4px 5px 4px 7px;
+  text-align: right;
+  user-select: none;
+}
+
+.drawing-source-gutter-row.selected {
+  background: var(--datum-green-tint);
+  color: var(--datum-green-ink);
+}
+
+.drawing-source-scroll {
+  background: var(--source-editor-bg);
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+/*
+ * THE MIRROR AND THE TEXTAREA SHARE ONE TYPESETTING - the same font, size,
+ * line height and padding - so the highlighted copy sits exactly under the
+ * editable one and the caret never drifts off its character.
+ */
+.drawing-source-mirror,
+.drawing-source-input {
+    font-family: var(--datum-font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    margin: 0;
+    padding: 4px 6px;
+    tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.drawing-source-mirror {
+    /*
+     * The pane's own surface, not the dark code palette: the editor reads as
+     * part of the panel in both themes rather than as a terminal pasted in.
+     */
+    background: var(--source-editor-bg);
+    bottom: 0;
+    box-sizing: border-box;
+    color: var(--source-editor-ink);
+    height: 100%;
+    left: 0;
+    overflow: hidden;
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+.drawing-source-line {
+    min-height: 1.5em;
+}
+
+/* ---- LaTeX highlighting, in the editor palette ---- */
+
+/*
+ * The restrained syntax palette from tokens.css, themed per appearance:
+ * commands in the application green, arguments and markers in the quiet
+ * amber, structure and comments fading back. Nothing shouts.
+ */
+.ds-command {
+    color: var(--source-editor-command);
+}
+
+.ds-option,
+.ds-coord {
+    color: var(--source-editor-arg);
+}
+
+.ds-brace {
+    color: var(--source-editor-brace);
+}
+
+.ds-comment {
+    color: var(--source-editor-comment);
+    font-style: italic;
+}
+
+.ds-marker {
+    color: var(--source-editor-marker);
+    font-weight: 700;
+    opacity: 0.75;
+}
+
+/*
+ * THE SELECTED OBJECT'S REGION. The same green wash the canvas uses for a
+ * selection, applied to the gutter row and the mirror lines, so "which part
+ * of the code is the thing I selected" is answerable by looking.
+ */
+.drawing-source-line.selected {
+    background: var(--datum-green-tint);
+}
+
+/* ---- the editable layer, transparent over the mirror ---- */
+
+.drawing-source-input {
+    background: transparent;
+    border: 0;
+    bottom: 0;
+    box-sizing: border-box;
+    caret-color: var(--source-editor-ink);
+    color: transparent;
+    height: 100%;
+    left: 0;
+    outline: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    position: absolute;
+    resize: none;
+    right: 0;
+    top: 0;
+    width: 100%;
+}
+
+.drawing-source-input::selection {
+    background: var(--datum-green-tint);
+}
+
+/*
+ * Focus is a hairline rule at the editor's left edge plus a faint wash, so
+ * "the editor has the keyboard" is visible without framing it as a widget.
+ */
+.drawing-source-input:focus-visible {
+    box-shadow: inset 2px 0 0 var(--datum-green);
+}
+
+/*
+ * SUBTLE SCROLLBARS. The textarea is the one scrollable element in the tab
+ * (the gutter follows it, the mirror follows it), so its bars are the only
+ * ones the student sees: hairline thumbs on the panel surface, no track.
+ */
+.drawing-source-input::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.drawing-source-input::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.drawing-source-input::-webkit-scrollbar-thumb {
+    background: var(--datum-border-strong);
+    border-radius: 4px;
+}
+
+.drawing-source-input::-webkit-scrollbar-thumb:hover {
+    background: var(--datum-muted);
+}
+
+.drawing-source-input {
+    scrollbar-color: var(--datum-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+/* ---- diagnostics ---- */
+
+.drawing-source-diagnostics {
+    flex: 0 0 auto;
+    margin: -6px;
+    max-height: 84px;
+    overflow-y: auto;
+}
+
+.drawing-source-diagnostic {
+    align-items: baseline;
+    border-left: 3px solid var(--datum-border-strong);
+    display: flex;
+    font-size: 9.5px;
+    gap: 6px;
+    padding: 2px 4px;
+}
+
+.drawing-source-diagnostic.is-error {
+    background: var(--datum-error-tint);
+    border-left-color: var(--datum-error);
+}
+
+.drawing-source-diagnostic.is-warning {
+    background: var(--datum-warning-tint);
+    border-left-color: var(--datum-warning-line);
+}
+
+.drawing-source-diagnostic-line {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    min-width: 22px;
+    text-align: right;
+}
+
+.drawing-source-diagnostic-text {
+    color: var(--cad-ink);
+    overflow-wrap: anywhere;
+}
+
+/* ============================================================
+ * THE FEATURES PANE - THE SELECTION'S PROPERTIES
+ * ============================================================
+ *
+ * A compact property editor: a header naming what is selected, then groups of
+ * two-column rows. It reuses the application's input treatment (the shared
+ * `--datum-input` well and border) so a field here looks like a field anywhere
+ * else in DAETUM.
+ *
+ * DEPTH COMES FROM SPACING, NOT FROM CARDS. There is no box around a group and
+ * no border around a row: a small uppercase heading, a little air above it, and
+ * one hairline between groups is the whole hierarchy. A panel of nested cards
+ * would compete with the sheet it is describing.
+ */
+
+#drawingPanelFeatures {
+    gap: 0;
+    padding: 0;
+}
+
+.drawing-features-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 8px 10px;
+    scrollbar-color: var(--datum-border-strong) transparent;
+    scrollbar-width: thin;
+}
+
+/* ---------------------------------------------------------- header */
+
+.dfp-header {
+    align-items: center;
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    gap: 7px;
+    padding: 0 2px 7px;
+}
+
+.dfp-header-icon {
+    color: var(--datum-green);
+    display: inline-flex;
+    flex: 0 0 18px;
+    height: 18px;
+    width: 18px;
+}
+
+.dfp-header-icon svg {
+    height: 100%;
+    width: 100%;
+}
+
+.dfp-header-icon-count {
+    align-items: center;
+    background: var(--datum-green-tint);
+    border-radius: 9px;
+    color: var(--datum-green-ink);
+    font-size: 9.5px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    justify-content: center;
+}
+
+.dfp-header-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.dfp-header-type {
+    color: var(--datum-green-ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.dfp-header-name {
+    color: var(--datum-muted);
+    font-size: 9.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------------------------------------------------------- groups */
+
+.dfp-section {
+    padding-top: 10px;
+}
+
+/* A hairline above every group but the first, so the groups read as groups. */
+.dfp-header + .dfp-section:not(.dfp-section-bare),
+.dfp-section + .dfp-section:not(.dfp-section-bare) {
+    border-top: 1px solid var(--datum-border);
+    margin-top: 10px;
+    padding-top: 8px;
+}
+
+.dfp-section-bare {
+    padding-top: 7px;
+}
+
+.dfp-section-heading {
+    color: var(--datum-muted);
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    margin-bottom: 4px;
+    padding: 0 2px;
+    text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------- rows */
+
+.dfp-row {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    min-height: 22px;
+    padding: 2px;
+}
+
+.dfp-row-label {
+    color: var(--datum-muted);
+    font-size: 9.5px;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.dfp-row-control {
+    align-items: center;
+    display: flex;
+    gap: 4px;
+    min-width: 0;
+}
+
+.dfp-row-control > .dfp-select,
+.dfp-row-control > .dfp-text,
+.dfp-row-control > .dfp-number {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 1px;
+}
+
+/* A segmented group is as wide as its track and shares it evenly. */
+.dfp-row-control > .dfp-segmented {
+    flex: 1 1 auto;
+}
+
+/* ---------------------------------------------------------- controls */
+
+.dfp-select,
+.dfp-text,
+.dfp-number {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    caret-color: var(--datum-green);
+    color: var(--datum-ink);
+    font: inherit;
+    font-size: 10px;
+    height: 20px;
+    line-height: 18px;
+    padding: 0 4px;
+}
+
+.dfp-select:hover,
+.dfp-text:hover,
+.dfp-number:hover {
+    border-color: var(--datum-border-strong);
+}
+
+.dfp-select:focus-visible,
+.dfp-text:focus-visible,
+.dfp-number:focus-visible {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * MIXED FIELDS ARE NOT EMPTY FIELDS, AND MUST NOT LOOK IT.
+ * An indeterminate checkbox or a blank number is already visually distinct; a
+ * text box or a select is not, so its placeholder is the only cue - and the
+ * placeholder is the control's own quiet grey, never the accent, because a
+ * mixed value is a state of the selection rather than a warning.
+ */
+.dfp-select[data-mixed="true"] {
+    color: var(--datum-muted);
+    font-style: italic;
+}
+
+.dfp-number[data-mixed="true"],
+.dfp-text[data-mixed="true"] {
+    color: var(--datum-muted);
+    font-style: italic;
+}
+
+.dfp-unit {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 9px;
+}
+
+/* ---------------------------------------------------------- segmented */
+
+/*
+ * A SEGMENTED CONTROL: one pill with dividers, the chosen segment filled. It is
+ * the same 20px height as every other row control, so a panel with a mixed set
+ * of control kinds still lines up.
+ */
+.dfp-segmented {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    height: 20px;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.dfp-seg {
+    background: transparent;
+    border: 0;
+    border-left: 1px solid var(--datum-border);
+    color: var(--datum-muted);
+    cursor: pointer;
+    flex: 1 1 0;
+    font: inherit;
+    font-size: 9.5px;
+    line-height: 18px;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 3px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dfp-seg:first-child {
+    border-left: 0;
+}
+
+.dfp-seg:hover {
+    background: var(--datum-green-wash);
+    color: var(--datum-ink);
+}
+
+.dfp-seg[aria-checked="true"] {
+    background: var(--datum-green-tint);
+    color: var(--datum-green-ink);
+    font-weight: 700;
+}
+
+.dfp-seg:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+/*
+ * A MIXED SEGMENTED GROUP HAS NO FILLED SEGMENT; the dashed inner edge says so
+ * without adding a label to the row.
+ */
+.dfp-segmented[data-mixed="true"] {
+    border-style: dashed;
+}
+
+.dfp-segmented[data-mixed="true"]::before {
+    color: var(--datum-muted);
+    content: "—";
+    flex: 0 0 auto;
+    font-size: 9.5px;
+    line-height: 1;
+    padding: 0 1px 0 5px;
+    pointer-events: none;
+}
+
+/* ---------------------------------------------------------- colour */
+
+/*
+ * THE COLOUR CONTROL IS A SWATCH BUTTON, AND IT OPENS THE SHARED PICKER.
+ *
+ * It is a real `<button>` carrying the value in `data-value`, so what is shown is
+ * what the picker opens with - and there is no native colour input in the panel
+ * at all, which is what keeps the toolbar's picker the only one in the
+ * application.
+ */
+.dfp-colour {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: flex;
+    flex: 1 1 auto;
+    font: inherit;
+    gap: 6px;
+    height: 20px;
+    min-width: 0;
+    padding: 0 2px;
+    text-align: left;
+}
+
+.dfp-colour-chip {
+    background: var(--dfp-colour, var(--datum-canvas-ink));
+    border: 1px solid var(--datum-input-border);
+    border-radius: 2px;
+    flex: 0 0 18px;
+    height: 15px;
+}
+
+.dfp-colour-text {
+    color: var(--datum-ink);
+    font-family: var(--datum-font-mono);
+    font-size: 9px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dfp-colour:hover .dfp-colour-chip {
+    border-color: var(--datum-green);
+}
+
+.dfp-colour:hover {
+    background: var(--datum-green-wash);
+}
+
+.dfp-colour:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * A MIXED COLOUR IS A HATCHED, NEUTRAL SWATCH. It cannot be any one object's
+ * colour - that would claim the colour described them all - and it cannot be
+ * blank, which would read as "no colour". A mid grey with a fine hatch says
+ * "several" without naming one, and the dashes say the same in outline.
+ */
+.dfp-colour.is-mixed .dfp-colour-chip {
+    background:
+        repeating-linear-gradient(
+            -45deg,
+            var(--datum-muted) 0 1px,
+            var(--datum-input) 1px 3px
+        );
+    border-style: dashed;
+}
+
+.dfp-colour.is-mixed .dfp-colour-text {
+    color: var(--datum-muted);
+    font-family: var(--datum-font);
+    font-style: italic;
+}
+
+/* ---------------------------------------------------------- toggle */
+
+.dfp-toggle {
+    align-items: center;
+    cursor: pointer;
+    display: inline-flex;
+    height: 20px;
+}
+
+/*
+ * A NATIVE CHECKBOX, SIZED FOR THIS PANEL. `accent-color` is what makes it the
+ * application's accent instead of the browser's blue; the mixed state is drawn
+ * by the platform as a dash in the accent, which is exactly the indeterminate
+ * mark a mixed value wants.
+ */
+.dfp-checkbox {
+    accent-color: var(--datum-green);
+    cursor: pointer;
+    height: 14px;
+    margin: 0;
+    width: 14px;
+}
+
+.dfp-checkbox:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------- transform */
+
+/*
+ * THE STEPPER PAIR sits beside the field, inside the row. Both buttons are on the
+ * SAME side, stacked - the arrangement the specification shows - rather than one
+ * on each end of the box, because a numeric field's own spinner is also there and
+ * two spinners at opposite ends are read as one control with no obvious halves.
+ */
+.dfp-transform-row .dfp-row-control {
+    gap: 3px;
+}
+
+.dfp-transform-input {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.dfp-steppers {
+    display: grid;
+    flex: 0 0 15px;
+    gap: 1px;
+    grid-template-rows: 1fr 1fr;
+    height: 20px;
+}
+
+.dfp-step {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: 2px;
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    padding: 0;
+}
+
+.dfp-step svg {
+    height: 10px;
+    width: 10px;
+}
+
+.dfp-step:hover {
+    background: var(--datum-green-tint);
+    border-color: var(--datum-green);
+    color: var(--datum-green-ink);
+}
+
+.dfp-step:active {
+    background: var(--datum-green-line);
+}
+
+.dfp-step:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * The numeric input's native spinner is hidden in the transform rows: the paired
+ * buttons ARE the stepper, and two of them in the same 20px would fight.
+ */
+.dfp-transform-input::-webkit-inner-spin-button,
+.dfp-transform-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.dfp-transform-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* An emptied pane is a pane with nothing in it - not an instruction. */
+.drawing-features-body:empty {
+    padding: 0;
+}

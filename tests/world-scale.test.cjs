@@ -188,7 +188,7 @@ console.log("\n  a dimension does NOT become static; it reads LIVE geometry\n");
   );
 }
 
-console.log("\n  deleting the LAST Length resets the scale\n");
+console.log("\n  deleting dimensions does not reset the sheet scale\n");
 
 {
   const st = state.createDrawingState();
@@ -233,15 +233,15 @@ console.log("\n  deleting the LAST Length resets the scale\n");
   state.removeObjectsAndDescendants(st, [d2.id]);
 
   check(
-    "and deleting the LAST Length resets it",
-    scale.isCalibrated(st) === false,
-    "a stale scale would silently mis-measure the next drawing",
+    "and deleting the LAST Length leaves it unchanged",
+    scale.isCalibrated(st) === true,
+    `scale=${JSON.stringify(st.scale)}`,
   );
 
   check(
     "even though the BEAM is still there",
     st.objects.some((object) => object.id === beam.id),
-    "the beam is geometry, not a Length feature",
+    "geometry may remain on the sheet",
   );
 }
 

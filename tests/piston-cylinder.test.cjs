@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const model = () => import("../src/features/thermodynamics/piston-cylinder.js");
+const model = () => import("../src/features/workspace/model/thermodynamics/piston-cylinder.js");
 const geometry = () => ({ position: { x: 10, y: 120 }, width: 80, height: 100, rotation: 0 });
 
 test("piston slides vertically without changing cylinder size or location", async () => {

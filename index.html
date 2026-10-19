@@ -328,7 +328,7 @@
                     <span class="solution-divider" aria-hidden="true"></span>
 
                     <div class="solution-toolbar-group solution-zoom">
-                        <button type="button" class="solution-tool solution-tool-icon" id="solutionZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+                        <button type="button" class="solution-tool solution-tool-icon" id="solutionZoomOut" title="Zoom out" aria-label="Zoom out">&minus;</button>
                         <span id="solutionZoomValue" class="solution-zoom-value" aria-live="polite">100%</span>
                         <button type="button" class="solution-tool solution-tool-icon" id="solutionZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
                     </div>
@@ -623,7 +623,6 @@
                         stays reachable at every width - which is also why it is
                         a separate grid row from the bar this button folds away.
                     -->
-                </nav>
 
                     <button
                         class="drawing-topbar-hide"
@@ -638,6 +637,9 @@
                         </svg>
                         <span class="header-hide-text">Hide</span>
                     </button>
+                </nav>
+
+
 
                 <!--
                     ========================================================
@@ -692,7 +694,7 @@
                             type="search"
                             id="drawingCommandSearch"
                             data-command-search
-                            placeholder="Search commands…"
+                            placeholder="Search commands&#8230;"
                             aria-label="Search commands"
                             autocomplete="off"
                             spellcheck="false"
@@ -905,7 +907,7 @@
                             <svg viewBox="0 0 20 20" width="17" height="17"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M7 17V3M3.5 6.5L7 3l3.5 3.5"/><path fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" d="M13 3h4M15 3v14M13 17h4"/></svg>
                         </span>
                         <select id="drawingVectorScale" aria-label="Vector Scale"></select>
-                        <span class="drawing-vector-scale-value" id="drawingVectorScaleValue" aria-hidden="true">1×</span>
+                        <span class="drawing-vector-scale-value" id="drawingVectorScaleValue" aria-hidden="true">1&#215;</span>
                         <span class="drawing-vector-scale-chevron" aria-hidden="true">
                             <svg viewBox="0 0 16 16" width="12" height="12"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M4 6.5l4 4 4-4"/></svg>
                         </span>
@@ -985,28 +987,48 @@
                 </div>
 
                 <!--
-                    The Features panel's column, mirroring the left
+                    The drawing inspector's column, mirroring the left
                     rail so both sides collapse by the same gesture
                     and the two arrows read as one idea.
+
+                    The inspector holds THREE sibling tabs, always in this
+                    order: Objects, Features, Source. Each has one job - Objects
+                    lists and selects what is drawn, Features edits the
+                    PROPERTIES OF THE SELECTION (across every tool category),
+                    Source edits the drawing's TikZ - and all three read the
+                    one shared selection and drawing state.
+
+                    There is deliberately no Properties tab: Features IS the
+                    properties editor, for whatever is selected.
                 -->
                 <div class="drawing-panel-rail drawing-panel-rail-right">
-                    <aside class="drawing-inspector" id="drawingFeaturesPanel" aria-label="Features inspector">
-                        <div class="drawing-inspector-tabs" role="tablist" aria-label="Drawing inspector">
-                            <button id="drawingObjectsTabButton" role="tab" aria-selected="true" aria-controls="drawingObjectsTab" type="button">Objects</button>
-                            <button id="drawingFeaturesTabButton" role="tab" aria-selected="false" aria-controls="drawingFeaturesTab" type="button">Features</button>
-                            <button id="drawingSourceTabButton" role="tab" aria-selected="false" aria-controls="drawingSourceTab" type="button">Source</button>
+                    <aside class="drawing-inspector" id="drawingFeaturesPanel" aria-label="Drawing inspector">
+                        <div class="drawing-panel-tabs" role="tablist" aria-label="Drawing panel">
+                            <button class="drawing-panel-tab" id="drawingPanelTabObjects" type="button" role="tab" data-panel-tab="objects" aria-selected="true" aria-controls="drawingPanelObjects">Objects</button>
+                            <button class="drawing-panel-tab" id="drawingPanelTabFeatures" type="button" role="tab" data-panel-tab="features" aria-selected="false" aria-controls="drawingPanelFeatures">Features</button>
+                            <button class="drawing-panel-tab" id="drawingPanelTabSource" type="button" role="tab" data-panel-tab="source" aria-selected="false" aria-controls="drawingPanelSource">Source</button>
                         </div>
-                        <section class="drawing-inspector-tab-panel" id="drawingObjectsTab" role="tabpanel" aria-labelledby="drawingObjectsTabButton">
-                            <div class="drawing-object-list" id="drawingObjectsList"></div>
+
+                        <!-- Objects: the list of everything drawn on the active sheet. -->
+                        <section class="drawing-panel-pane" id="drawingPanelObjects" role="tabpanel" aria-labelledby="drawingPanelTabObjects" data-panel-pane="objects">
+                            <div class="drawing-inspector-message" id="drawingObjects">No objects on this sheet yet.</div>
                         </section>
-                        <section class="drawing-inspector-tab-panel" id="drawingFeaturesTab" role="tabpanel" aria-labelledby="drawingFeaturesTabButton" hidden>
-                            <button class="drawing-components-back" id="drawingFeaturesBack" type="button">&lt;- Features</button>
-                            <div class="drawing-inspector-message" id="drawingProperties">No feature selected</div>
+
+                        <!--
+                            Features: the SELECTED objects' editable properties.
+                            Empty - with no message and no controls - when the
+                            selection is empty, which is why the host starts
+                            blank rather than holding an instruction.
+                        -->
+                        <section class="drawing-panel-pane drawing-panel-pane-features" id="drawingPanelFeatures" role="tabpanel" aria-labelledby="drawingPanelTabFeatures" data-panel-pane="features" hidden>
+                            <div class="drawing-features-body" id="drawingFeatures"></div>
                         </section>
-                        <section class="drawing-inspector-tab-panel drawing-source-panel" id="drawingSourceTab" role="tabpanel" aria-labelledby="drawingSourceTabButton" hidden>
-                            <textarea id="drawingSourceEditor" aria-label="TikZ source" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
-                            <div id="drawingSourceDiagnostics" class="drawing-source-diagnostics" aria-live="polite"></div>
-                            <button id="drawingSourceApply" class="engg-dialog-button engg-dialog-button-primary" type="button" disabled>Apply source</button>
+
+                        <!-- Source: the drawing's own LaTeX/TikZ. -->
+                        <section class="drawing-panel-pane" id="drawingPanelSource" role="tabpanel" aria-labelledby="drawingPanelTabSource" data-panel-pane="source" hidden>
+                            <div class="drawing-source-status" id="drawingSourceStatus">Rendered</div>
+                            <div class="drawing-source-editor" id="drawingSourceEditor"></div>
+                            <div class="drawing-source-diagnostics" id="drawingSourceDiagnostics" hidden></div>
                         </section>
                     </aside>
 
@@ -1047,7 +1069,7 @@
 
 
     <!-- The whole application is one ES module graph; src/main.js is its entry. -->
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="/src/app/entry/main.js"></script>
 
 </body>
 

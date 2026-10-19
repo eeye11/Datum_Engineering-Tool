@@ -1,0 +1,9 @@
+{
+  "id": "statics.bodies.body.truss",
+  "label": "Truss",
+  "category": "statics",
+  "group": "bodies",
+  "libraryPath": "src/tool-library/statics/bodies/body/truss",
+  "template": "template.tex",
+  "implemented": false
+}

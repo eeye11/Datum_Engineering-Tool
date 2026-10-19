@@ -1,0 +1,9 @@
+{
+  "id": "statics.analysis.resultant",
+  "label": "Resultant",
+  "category": "statics",
+  "group": "analysis",
+  "libraryPath": "src/tool-library/statics/analysis/resultant",
+  "template": "template.tex",
+  "implemented": false
+}

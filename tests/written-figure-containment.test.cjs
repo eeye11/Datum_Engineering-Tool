@@ -86,7 +86,7 @@ console.log("\n  the LaTeX source is still what drives the figure\n");
 
 {
   const written = fs.readFileSync(
-    path.join(__dirname, "..", "src", "solution", "written-references.js"),
+    path.join(__dirname, "..", "src", "shared", "solution", "written-references.js"),
     "utf8",
   );
 
