@@ -27,8 +27,13 @@ const TOOLS = [
     ["GEOMETRY", "arc", "3-Point Arc"], ["GEOMETRY", "arc", "Centrepoint Arc"],
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
-    ["ANNOTATE", "variable-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
-    ["ANNOTATE", "smart-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
+    /*
+     * ONE DIMENSION TOOL. Smart Dimension and Variable Dimension were retired
+     * and folded into this one, which infers the measurement from what is
+     * picked. The scenario listed the retired ids, so it timed out waiting for
+     * a button the catalogue no longer has rather than driving anything.
+     */
+    ["ANNOTATE", "dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
     ["ANNOTATE", "note"], ["ANNOTATE", "label", null, "line"],
     ["ANNOTATE", "leader"], ["ANNOTATE", "callout"],
     ["ANNOTATE", "symbol"], ["ANNOTATE", "table"],
