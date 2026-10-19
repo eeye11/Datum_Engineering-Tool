@@ -76,9 +76,12 @@ const PAGES = {
 
             <h4>Documents</h4>
             <p>
-                <strong>File &rarr; Save</strong> writes the drawing as an
-                <code>.enggdraw</code> file. A new document asks for a name the
-                first time it is saved rather than overwriting anything.
+                <strong>File &rarr; Save</strong> writes the drawing as a
+                <code>.tex</code> file: ordinary LaTeX that compiles anywhere,
+                which DAETUM reopens with every feature editable. A new document
+                asks for a name the first time it is saved rather than
+                overwriting anything. An older <code>.enggdraw</code> drawing
+                still opens; it is saved as a <code>.tex</code> beside it.
             </p>
         `,
   },

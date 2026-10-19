@@ -161,9 +161,9 @@ const fileMenu = () => ({
          * changes, and each is the same format the corresponding Save As or
          * Print route produces.
          *
-         * THE NATIVE ENTRY IS THE ACTUAL EXTENSION. It is read from the format
-         * module rather than typed here, so the label cannot name a format the
-         * serializer does not write.
+         * THE DRAWING ENTRY IS WHAT SAVE WRITES: the .tex with the editable
+         * document embedded. "LaTeX picture" is the picture alone, for pasting
+         * into another document.
          */
         {
             id: "download",
@@ -189,14 +189,14 @@ const fileMenu = () => ({
                     run: () => FILE_ACTIONS.download("png")
                 },
                 {
-                    id: "download-enggdraw",
-                    label: "ENGGDraw",
+                    id: "download-drawing",
+                    label: "Drawing (.tex, editable)",
                     icon: "file-pen",
-                    run: () => FILE_ACTIONS.download("enggdraw")
+                    run: () => FILE_ACTIONS.download("drawing")
                 },
                 {
                     id: "download-latex",
-                    label: "LaTeX (.tex)",
+                    label: "LaTeX picture (.tex)",
                     icon: "file-pen",
                     run: () => FILE_ACTIONS.download("latex")
                 },

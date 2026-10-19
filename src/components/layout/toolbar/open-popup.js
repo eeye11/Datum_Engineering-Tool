@@ -9,7 +9,7 @@
  *
  * Three sections, in the order a person usually wants them:
  *
- *     Templates   a starting document the user made from an .enggdraw
+ *     Templates   a starting document the user made from a drawing file
  *     Recent      a file that was open before, reopened directly
  *     Import      choose a .enggdraw from the laptop
  *
@@ -471,7 +471,7 @@ function recentRow(entry, handlers) {
    * NO SECOND LINE REPEATING THE FILENAME.
    *
    * The row used to print the name and then the file name under it, so
-   * `triangle.enggdraw` appeared in full and the drawing was named twice - once
+   * `triangle.tex` appeared in full and the drawing was named twice - once
    * as `triangle` and once with the extension. A drawing is named by its BASE
    * name; the extension belongs to the file on disk and is not part of how the
    * application talks about it.
@@ -587,7 +587,7 @@ function recentsSection(handlers) {
       element(
         "p",
         "datum-open-empty",
-        "No recent drawings yet. Import a .enggdraw file to add one."
+        "No recent drawings yet. Open a drawing (.tex) to add one."
       )
     );
 
@@ -865,7 +865,7 @@ function openOpenPopup() {
       className: "engg-dialog-lg",
       body: currentBody,
       buttons: [
-        { id: "import", label: "Import .enggdraw", primary: true },
+        { id: "import", label: "Open a drawing\u2026", primary: true },
         { id: "cancel", label: "Cancel", dismiss: true }
       ],
       onChoose: (id) =>

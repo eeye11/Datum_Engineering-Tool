@@ -186,7 +186,7 @@ function isAngular(type) {
  * Per-type capabilities, keyed by feature type.
  *
  * Populated by register() below. The ANNOTATE_TYPES table supplies
- * the defaults for every type EnggDraw already has, so a feature
+ * the defaults for every type DAETUM already has, so a feature
  * that has not been given special treatment is still dimensionable
  * in the obvious generic ways - its own extent - rather than being
  * excluded because nobody wrote a case for it.
@@ -420,7 +420,7 @@ function anchorsFor(object) {
 /*
  * A point's position, and the span between two of them.
  *
- * Everything positional in EnggDraw - points, particles, force
+ * Everything positional in DAETUM - points, particles, force
  * application points, support locations, truss joints - is a point
  * with a name. Handling them through one table rather than a dozen
  * near-identical cases is what keeps supports, connections and

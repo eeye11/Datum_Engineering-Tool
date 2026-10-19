@@ -72,7 +72,7 @@ console.log("\n  a failed write is reported and does not become a save\n");
   let aborted = false;
 
   save.setFileHandle({
-    name: "Beam.enggdraw",
+    name: "Beam.tex",
     createWritable: async () => ({
       write: async () => {
         throw new Error("disk full");
@@ -118,12 +118,12 @@ console.log("\n  a failed write is reported and does not become a save\n");
 
   check(
     "the handle is still the document's file, so a retry goes to the same place",
-    save.currentFileHandle() && save.currentFileHandle().name === "Beam.enggdraw",
+    save.currentFileHandle() && save.currentFileHandle().name === "Beam.tex",
   );
 
   /* And a healthy write still returns the name. */
   save.setFileHandle({
-    name: "Beam.enggdraw",
+    name: "Beam.tex",
     createWritable: async () => ({
       write: async () => {},
       close: async () => {},
@@ -134,8 +134,32 @@ console.log("\n  a failed write is reported and does not become a save\n");
 
   check(
     "a successful write still returns the file's name",
-    ok === "Beam.enggdraw",
+    ok === "Beam.tex",
     String(ok),
+  );
+
+  /*
+   * AN IMPORTED .enggdraw IS NEVER WRITTEN OVER. Its handle is not a save
+   * target: Save returns null (the caller then runs Save As), and nothing is
+   * written into the old file.
+   */
+  let wroteLegacy = false;
+
+  save.setFileHandle({
+    name: "Old Beam.enggdraw",
+    createWritable: async () => {
+      wroteLegacy = true;
+
+      return { write: async () => {}, close: async () => {} };
+    },
+  });
+
+  const legacy = await save.save(BODY);
+
+  check(
+    "Save refuses an imported .enggdraw and hands over to Save As",
+    legacy === null && wroteLegacy === false,
+    `returned ${legacy}, wrote ${wroteLegacy}`,
   );
 
   void file;
@@ -160,7 +184,7 @@ console.log("\n  a save panel that fails is reported\n");
   let result = null;
 
   try {
-    result = await save.saveAs({ objects: [], sheets: [] }, "x.enggdraw", {});
+    result = await save.saveAs({ objects: [], sheets: [] }, "x.tex", {});
   } catch (error) {
     thrown = error;
   }
@@ -184,7 +208,7 @@ console.log("\n  a save panel that fails is reported\n");
     throw error;
   };
 
-  const cancelled = await save.saveAs({ objects: [], sheets: [] }, "x.enggdraw", {});
+  const cancelled = await save.saveAs({ objects: [], sheets: [] }, "x.tex", {});
 
   check("cancelling still returns null and reports nothing", cancelled === null);
 }
@@ -215,7 +239,7 @@ console.log("\n  the recovery copy is separate from the file\n");
     activeSheetId: "s1"
   };
 
-  recovery.write(document, "Beam.enggdraw");
+  recovery.write(document, "Beam.tex");
 
   const read = recovery.read();
 
@@ -223,7 +247,7 @@ console.log("\n  the recovery copy is separate from the file\n");
 
   check(
     "the copy names the file it belongs to",
-    read && read.fileName === "Beam.enggdraw",
+    read && read.fileName === "Beam.tex",
   );
 
   check(

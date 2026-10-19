@@ -494,7 +494,7 @@ export function syncWorkspaceSettingToggles() {
  * file panel is done. The save panel is the OPERATING SYSTEM's, and
  * reusing it would be right because a file's location is the system's
  * business. A sheet name is the application's business: it belongs to
- * EnggDraw's document model, it is edited constantly, and a system
+ * DAETUM's document model, it is edited constantly, and a system
  * text box in the middle of a canvas is both foreign-looking and
  * impossible to style. So the two deliberately use different mechanisms,
  * each the one that fits.

@@ -86,9 +86,9 @@ function embeddedBlock(documentBody) {
     return [
         "% ---------------------------------------------------------------------",
         "% DAETUM DOCUMENT DATA. Everything below is a comment: LaTeX ignores it.",
-        "% It is the full drawing (base64-encoded .enggdraw JSON), so DAETUM can",
+        "% It is the full drawing (base64-encoded DAETUM document JSON), so DAETUM can",
         "% reopen this file with every feature editable. Do not edit it by hand.",
-        `${DATA_BEGIN} enggdraw base64`,
+        `${DATA_BEGIN} daetum-document base64`,
         ...lines,
         DATA_END
     ].join("\n");
@@ -100,8 +100,9 @@ export function hasEmbeddedDocument(text) {
 }
 
 /*
- * The .enggdraw envelope a .tex written by DAETUM carries, exactly as an
- * .enggdraw file would hold it - for the open path, which reads envelopes.
+ * The document envelope a .tex written by DAETUM carries - for the open path,
+ * which reads envelopes. (The word after the BEGIN marker is a label only, so
+ * files written when it said "enggdraw" read exactly the same.)
  *
  * { found: false }                          no block (written by hand or elsewhere)
  * { found: true, ok: true, envelope }       the block, decoded
@@ -135,8 +136,8 @@ export function readEmbeddedEnvelope(text) {
 }
 
 /*
- * The document a .tex written by DAETUM carries, read and migrated as an
- * .enggdraw would be: { found: false }, or { found: true, ok, document } /
+ * The document a .tex written by DAETUM carries, read and migrated through the
+ * envelope's own reader: { found: false }, or { found: true, ok, document } /
  * { found: true, ok: false, failure, detail }.
  */
 export function readEmbeddedDocument(text) {

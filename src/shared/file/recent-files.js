@@ -16,7 +16,7 @@
  * WHY THE DOCUMENT IS STORED
  * --------------------------
  * A browser cannot reopen a file by path. Without a stored handle there is no
- * way to read "Beam.enggdraw" again from the disk, and a Recents list that
+ * way to read "Beam.tex" again from the disk, and a Recents list that
  * cannot reopen what it lists would be a lie. So the serialised document is
  * kept with the entry: clicking it restores the drawing through the SAME
  * loader a file goes through, and the entry stays useful even after the
@@ -190,7 +190,7 @@ function report(message, error) {
  * them later showing "File not found". That is the duplication this replaces.
  *
  * So the key is the file's NAME, normalised for case so that the same file
- * selected as "Triangle.enggdraw" and "triangle.enggdraw" is one entry rather
+ * selected as "Triangle.tex" and "triangle.tex" is one entry rather
  * than two. Two genuinely different files that share a name in different
  * folders still collapse to one entry - a limitation of what a browser exposes
  * without a persisted handle - and that is the honest trade: one entry too few
@@ -201,10 +201,11 @@ function keyFor(name) {
 }
 
 /*
- * The drawing's name, without the .enggdraw extension, for display.
+ * The drawing's name, without its extension (.tex, or an older .enggdraw), for
+ * display.
  */
 function labelFor(name) {
-  return String(name || "drawing").replace(/\.enggdraw$/i, "");
+  return String(name || "drawing").replace(/\.(tex|enggdraw)$/i, "");
 }
 
 /*

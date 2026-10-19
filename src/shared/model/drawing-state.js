@@ -1311,7 +1311,7 @@ const geometryFactories = {
              * AXIAL FORCE DIAGRAM are each created here as ONE
              * semantic feature, not as a pile of lines and points.
              *
-             * They are TEMPLATES, and that is the whole point. EnggDraw
+             * They are TEMPLATES, and that is the whole point. DAETUM
              * draws the frame - a zero axis to measure against, a
              * region to draw in, and the source beam's span where there
              * is one - and the student draws the diagram itself with the

@@ -1,5 +1,5 @@
 /*
- * Drawing sheets: the first-class parts an EnggDraw document is made of.
+ * Drawing sheets: the first-class parts a DAETUM document is made of.
  *
  * A document is not one drawing, it is an ordered list of drawings. A
  * structural problem, its free body diagram, its shear force diagram

@@ -166,9 +166,9 @@ check(
 console.log("\n  the document format is the only editable output\n");
 
 check(
-  "a document save writes the format module's envelope",
-  /createDocument\(/.test(saveCode),
-  "the .enggdraw file is not being written by the format module",
+  "a document save writes the .tex, with the document embedded",
+  /writeLatexDocument\(/.test(saveCode),
+  "the saved drawing is not being written by the LaTeX document writer",
 );
 
 check(

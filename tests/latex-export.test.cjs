@@ -137,15 +137,34 @@ test("the file reopens as exactly the document that was saved", () => {
   assert.deepStrictEqual(back.document.sheets.map(s => s.objects), body.sheets.map(s => s.objects).map(o => JSON.parse(JSON.stringify(o))));
 });
 
-test("the open path gets the .enggdraw envelope itself, as a saved file holds it", () => {
+test("the open path gets the document envelope itself, as a saved file holds it", () => {
   const text = latex.writeLatexDocument(documentBody());
   const embedded = latex.readEmbeddedEnvelope(text);
 
   assert.strictEqual(latex.hasEmbeddedDocument(text), true);
   assert.strictEqual(latex.hasEmbeddedDocument("\documentclass{article}"), false);
   assert.strictEqual(embedded.ok, true);
-  assert.strictEqual(embedded.envelope.format, "enggdraw");
+  assert.strictEqual(embedded.envelope.format, "daetum-document");
   assert.strictEqual(embedded.envelope.document.sheets.length, 3);
+});
+
+test("a .tex saved before the .enggdraw format was retired still opens", () => {
+  /* The block an older build wrote: labelled "enggdraw", envelope format "enggdraw". */
+  const current = latex.readEmbeddedEnvelope(latex.writeLatexDocument(documentBody())).envelope;
+  const old = { ...current, format: "enggdraw", application: "EnggDraw" };
+  const encoded = Buffer.from(JSON.stringify(old), "utf8").toString("base64");
+  const text = [
+    "\\documentclass{standalone}",
+    "%% DAETUM-DOCUMENT-BEGIN enggdraw base64",
+    ...encoded.match(/.{1,76}/g).map((line) => `%% ${line}`),
+    "%% DAETUM-DOCUMENT-END"
+  ].join("\n");
+
+  const read = latex.readEmbeddedDocument(text);
+
+  assert.strictEqual(read.found, true);
+  assert.strictEqual(read.ok, true, read.detail);
+  assert.strictEqual(read.document.sheets.length, 3);
 });
 
 test("a .tex without DAETUM data is recognised as such, and damaged data is refused", () => {
