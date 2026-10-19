@@ -30,7 +30,6 @@ const check = (name, ok, detail) => {
 
 const events = fs.readFileSync(modulePath("canvas-events.js"), "utf8");
 const tool = fs.readFileSync(modulePath("dimension-tool.js"), "utf8");
-const renderer = rendererSource();
 const model = fs.readFileSync(modulePath("dimension-model.js"), "utf8");
 
 console.log("\n  a double-click opens the STANDARD value popup\n");
@@ -50,61 +49,6 @@ check(
   "the prompt is the application's ONE value popup",
   /openDimensionValuePrompt[\s\S]{0,4000}openLoadValuePopup\(\{/.test(tool),
   "a dimension-specific dialog would be a second thing to learn",
-);
-
-check(
-  "a variable dimension edits the same way",
-  /pointed\?\.type === "variable-dimension"[\s\S]{0,200}openDimensionValuePrompt/.test(
-    events,
-  ),
-);
-
-console.log("\n  a VARIABLE dimension starts EMPTY\n");
-
-check(
-  "the creation prompt opens on an empty field",
-  /title: "Variable Dimension"[\s\S]{0,120}value: ""/.test(tool),
-  "the measured value must never be offered as a starting answer",
-);
-
-check(
-  "and nothing is created until the student answers",
-  (() => {
-    const at = tool.indexOf("function openVariablePrompt(");
-    const body = tool.slice(at, at + 4000);
-
-    /* The factory call lives inside onConfirm, after the popup is opened. */
-    return body.indexOf("openLoadValuePopup({") < body.indexOf('"variable-dimension"');
-  })(),
-);
-
-console.log("\n  and its PREVIEW shows no measured value\n");
-
-check(
-  "the armed preview is built as a variable when that is the tool",
-  /previewingVariable[\s\S]{0,400}type: previewingVariable \? "variable-dimension" : "dimension"/.test(
-    renderer,
-  ),
-  "a dimension probe made the preview draw the measured number",
-);
-
-check(
-  "with an EMPTY symbol, which draws the shape and no text",
-  /symbol: previewingVariable \? "" : undefined/.test(renderer),
-);
-
-check(
-  "and the preview is drawn by that kind's OWN renderer",
-  /if \(previewingVariable\) \{\s*\n\s*appendVariableDimensionEntity\(/.test(
-    renderer,
-  ),
-);
-
-check(
-  "the variable renderer draws nothing for an empty symbol",
-  /const symbol = enggVariableDimension\.variableText\(entity\);[\s\S]{0,220}if \(!symbol\.trim\(\)\) \{\s*\n\s*return;/.test(
-    renderer,
-  ),
 );
 
 console.log("\n  editing a MEASURED dimension writes an ANNOTATION label\n");

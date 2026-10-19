@@ -5,7 +5,7 @@
  *
  * The workflow this file pins down:
  *
- *     Smart Dimension
+ *     Dimension
  *       -> click a Beam (the object itself, not its endpoints)
  *       -> press Enter
  *       -> a LENGTH dimension is produced, with its measured value
@@ -71,7 +71,6 @@ for (const name of [
   "quantities.js",
   "dimensions.js",
   "dimension-model.js",
-  "smart-dimension.js",
   "drawing-state.js",
   "feature-geometry.js",
 ]) {
@@ -111,7 +110,6 @@ const byId = (id) => OBJECTS.find((o) => o.id === id) || null;
 const sandbox = {
   console,
   enggMeasurement: measurement,
-  enggSmartDimension: global.window.enggSmartDimension,
   enggDimensionModel: dimModel,
   objectWithId: byId,
   twoPointSpanOf: (o) => measurement.twoPointSpan(o),
@@ -119,7 +117,7 @@ const sandbox = {
   findDimensionTarget: () => null,
   distanceToSegment: () => Infinity,
   pointInsideOutline: () => false,
-  drawingState: { objects: OBJECTS, scale: { mmPerUnit: 1, unit: "mm" } },
+  drawingState: { objects: OBJECTS },
   engDrawingState: stateMod,
 };
 

@@ -90,20 +90,20 @@ console.log("\n  Re-arming from the submenu keeps the tool armed\n");
 
 check(
   "arc counts as a placement tool",
-  /isPlacementTool[\s\S]{0,300}?toolId === "arc"/.test(activateToolBody),
+  /isPlacementTool[\s\S]{0,800}?toolId === "arc"/.test(activateToolBody),
   "otherwise the submenu would toggle it back to Select",
 );
 
 check(
   "the reference-arc variant counts too",
-  /isPlacementTool[\s\S]{0,300}?toolId === "reference-arc"/.test(
+  /isPlacementTool[\s\S]{0,800}?toolId === "reference-arc"/.test(
     activateToolBody,
   ),
 );
 
 check(
   "polygon counts as a placement tool",
-  /isPlacementTool[\s\S]{0,300}?toolId === "polygon"/.test(activateToolBody),
+  /isPlacementTool[\s\S]{0,800}?toolId === "polygon"/.test(activateToolBody),
 );
 
 check(

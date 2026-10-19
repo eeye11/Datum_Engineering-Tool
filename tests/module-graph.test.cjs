@@ -129,7 +129,7 @@ check(
  */
 console.log("\n  the editor barrel exports what the app needs\n");
 
-const barrel = fs.readFileSync(locate("index.js"), "utf8");
+const barrel = fs.readFileSync(locate("features/workspace/index.js"), "utf8");
 
 ["enggDrawing", "enggDrawingSheets", "enggTransforms"].forEach((name) => {
   check(

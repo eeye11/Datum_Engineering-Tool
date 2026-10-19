@@ -3,7 +3,7 @@ const path = require("path");
 
 const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-path.cjs");
 /*
- * Smart Dimension, tested directly.
+ * The Dimension tool's candidate choice, tested directly.
  *
  * What is worth checking here is JUDGEMENT, not geometry - the
  * geometry is the measurement layer's and is tested there. So the
@@ -52,9 +52,13 @@ global.window.enggFeatureGeometry = {
 };
 
 loadModule("dimension-model.js");
-loadModule("smart-dimension.js");
 
-const smart = global.window.enggSmartDimension;
+/* The unified Dimension tool's candidate finder (formerly Smart Dimension's). */
+const candidates = require(locate("dimension-candidates.js")).default;
+const smart = {
+  propose: (objects, state) => candidates.descriptorsFor(objects, state),
+  includedAngle: (...args) => candidates.includedAngle(...args),
+};
 
 let pass = 0;
 let fail = 0;

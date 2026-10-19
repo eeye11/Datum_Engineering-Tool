@@ -30,7 +30,6 @@ global.window = { crypto: { randomUUID: () => "angular-uuid" } };
 
 loadModule("dimensions.js");
 loadModule("measurement-core.js");
-loadModule("smart-dimension.js");
 loadModule("dimension-model.js");
 
 const model = global.window.enggDimensionModel;
@@ -106,7 +105,8 @@ const corner = {
 
 const [first, second] = corner.objects;
 
-const descriptor = global.window.enggSmartDimension.describePair(
+/* The unified Dimension tool's pair describer (formerly Smart Dimension's). */
+const descriptor = require(locate("dimension-candidates.js")).default.describePair(
   first,
   second,
   corner

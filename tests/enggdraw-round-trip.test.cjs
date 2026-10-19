@@ -160,10 +160,18 @@ function buildFixture() {
     placement: { x: 210, y: 10 },
   });
 
-  /* A VARIABLE dimension: a SYMBOL, not a measurement. */
-  const variable = F["variable-dimension"]({
-    refs: [{ kind: "between", featureId: line.id, anchor: "start" }],
-    symbol: "L",
+  /*
+   * A dimension whose text is a SYMBOL, not a measurement. The separate
+   * Variable Dimension tool is retired; the unified Dimension carries the
+   * symbol as its editable label text.
+   */
+  const variable = F.dimension({
+    dimensionType: "aligned",
+    refs: [
+      { kind: "between", featureId: line.id, anchor: "start" },
+      { kind: "between", featureId: line.id, anchor: "end" },
+    ],
+    label: "L",
     placement: { x: 30, y: -60 },
   });
 
@@ -449,9 +457,9 @@ check(
 console.log("\n  symbolic values are NOT replaced by measurements\n");
 
 check(
-  "a variable dimension reopens as its SYMBOL, not a number",
-  after[variable.id].symbol === "L",
-  `symbol is ${JSON.stringify(after[variable.id].symbol)}`,
+  "a dimension labelled with a symbol reopens as its SYMBOL, not a number",
+  after[variable.id].label === "L",
+  `label is ${JSON.stringify(after[variable.id].label)}`,
 );
 
 console.log("\n  annotations, including a table's cells\n");

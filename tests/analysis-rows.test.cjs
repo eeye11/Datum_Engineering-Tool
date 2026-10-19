@@ -53,7 +53,6 @@ global.window = { crypto: { randomUUID: () => "analysis-uuid" } };
 loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("feature-geometry.js");
-loadModule("smart-dimension.js");
 loadModule("dimension-model.js");
 loadModule("annotation-model.js");
 loadModule("drawing-state.js");

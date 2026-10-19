@@ -3,7 +3,7 @@
  * SMART DIMENSION: A SECOND LINE AFTER THE FIRST IS AN ANGLE
  * ========================================================
  *
- * THE DEFECT: clicking one line with Smart Dimension jumped the tool straight
+ * THE DEFECT: clicking one line with the Dimension tool jumped the tool straight
  * into PLACEMENT. The very next click was therefore read as "where to stand
  * the length dimension", never as a second reference - so a student could not
  * click a second line after the first to dimension the angle between them.
@@ -84,7 +84,7 @@ check(
   /function commitArmedMeasurement[\s\S]{0,900}commitDimension\(/.test(
     placement,
   ),
-  "the value, the calibration gate and the undo entry must be the shared ones",
+  "the value and the undo entry must be the shared ones",
 );
 
 console.log("\n  the angle path is still reachable and complete\n");

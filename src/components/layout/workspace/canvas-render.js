@@ -785,10 +785,27 @@ export function requestSourceRender({ immediately = false } = {}) {
         return;
     }
 
-    compileTimer = setTimeout(() => {
+    compileTimer = backgroundTimer(() => {
         compileTimer = null;
         compileCurrentSource();
     }, SOURCE_RENDER_DELAY_MS);
+}
+
+/*
+ * A COMPILE TIMER NEVER KEEPS A PROCESS ALIVE.
+ *
+ * With no reachable renderer the canvas keeps retrying - correct in a browser,
+ * where the server may come up in a moment. Under Node (the test harness) that
+ * pending retry was an open handle, so a test file that had finished every check
+ * never exited and `npm test` hung on it. `unref` exists only on Node's timers;
+ * in a browser this is an ordinary `setTimeout`.
+ */
+function backgroundTimer(callback, delay) {
+    const timer = setTimeout(callback, delay);
+
+    timer?.unref?.();
+
+    return timer;
 }
 
 /*
@@ -909,7 +926,7 @@ async function compileCurrentSource() {
 
             transientRetryMs = Math.min(transientRetryMs * 2, TRANSIENT_RETRY_CAP_MS);
             scheduledRevision = revision;
-            compileTimer = setTimeout(() => {
+            compileTimer = backgroundTimer(() => {
                 compileTimer = null;
                 compileCurrentSource();
             }, delay);

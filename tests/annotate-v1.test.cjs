@@ -47,9 +47,6 @@ const { loadModule, locate, modulePath, rendererSource } = require("./helpers/so
 const annotateModule = loadModule("annotate-model.js");
 const annotate = annotateModule.default || annotateModule;
 
-const dimModule = loadModule("dimension-model.js");
-const dim = dimModule.default || dimModule;
-
 /* ============================================================
  * 1. THE V1 TOOLSET
  * ============================================================ */
@@ -65,8 +62,13 @@ console.log("\n  the V1 Annotate toolset\n");
 
   const inMenu = (id) => new RegExp(`id:\\s*"${id}"`).test(groups);
 
-  ["variable-dimension", "smart-dimension", "note", "label", "leader", "callout", "symbol", "table"].forEach(
+  ["dimension", "note", "label", "leader", "callout", "symbol", "table"].forEach(
     (id) => check(`"${id}" is offered`, inMenu(id)),
+  );
+
+  /* Folded into the one Dimension tool - never offered on their own again. */
+  ["smart-dimension", "variable-dimension"].forEach(
+    (id) => check(`the retired "${id}" tool is NOT offered`, !inMenu(id)),
   );
 
   check("the standalone Arrow tool is NOT offered", !inMenu("arrow"));
@@ -82,136 +84,6 @@ console.log("\n  the V1 Annotate toolset\n");
   check(
     "the tolerance KIND still exists for saved drawings",
     Boolean(annotate.ANNOTATE_KINDS.tolerance),
-  );
-}
-
-/* ============================================================
- * 2. VARIABLE DIMENSION: MANDATORY CONTENT
- * ============================================================ */
-
-console.log("\n  Variable Dimension always asks for content\n");
-
-{
-  const popup = require("fs").readFileSync(
-    modulePath("load-value-popup.js"),
-    "utf8",
-  );
-
-  const tool = require("fs").readFileSync(modulePath("dimension-tool.js"), "utf8");
-
-  check(
-    "the popup has a requireContent option, off by default",
-    /requireContent = false/.test(popup),
-  );
-
-  check(
-    "an empty field is refused (kept open) when content is required",
-    /if \(requireContent\)[\s\S]{0,400}?errorEl\.textContent[\s\S]{0,200}?return;/.test(
-      popup,
-    ),
-    "the editor must stay open for correction, not close on empty",
-  );
-
-  check(
-    "the Variable Dimension creation prompt requires content",
-    /title: "Variable Dimension"[\s\S]{0,800}requireContent: true/.test(tool),
-  );
-
-  check(
-    "and its confirm refuses an empty answer as a second guard",
-    /if \(!answered\)[\s\S]{0,300}nothing was created/.test(tool),
-  );
-
-  check(
-    "the created variable carries the student's content, never 'Unknown'",
-    /symbol: answered,\s*\n\s*unknown: false/.test(tool),
-  );
-}
-
-/* ============================================================
- * 3. SMART DIMENSION: DRIVING / DRIVEN
- * ============================================================ */
-
-console.log("\n  Driving and Driven are states of ONE dimension feature\n");
-
-{
-  const driven = dim.createDimension({
-    dimensionType: "linear",
-    refs: [{ featureId: "f1", anchor: "start" }],
-    placement: { x: 0, y: 0 },
-    driven: true,
-  });
-
-  const driving = dim.createDimension({
-    dimensionType: "linear",
-    refs: [{ featureId: "f1", anchor: "start" }],
-    placement: { x: 0, y: 0 },
-  });
-
-  check("a dimension created with driven:true stores the state", driven.driven === true);
-  check("a dimension defaults to Driving", driving.driven === false);
-  check(
-    "both are the SAME feature type",
-    driven.type === "dimension" && driving.type === "dimension",
-  );
-  check(
-    "a Driven dimension has a distinct colour",
-    typeof dim.DRIVEN_COLOUR === "string" && dim.DRIVEN_COLOUR.length > 0,
-  );
-
-  const edit = require(modulePath("dimension-edit.js"));
-
-  check(
-    "a Driven dimension is not editable",
-    edit.dimensionEditable(driven, { objects: [] }) === false,
-  );
-
-  const refused = edit.applyDimensionValue(
-    driven,
-    { objects: [{ id: "f1", type: "line", geometry: { start: { x: 0, y: 0 }, end: { x: 10, y: 0 } } }] },
-    50,
-  );
-
-  check(
-    "and a typed value is refused, so a Driven dimension cannot move geometry",
-    refused.ok === false && refused.reason === "driven",
-    JSON.stringify(refused),
-  );
-}
-
-console.log("\n  a Driven dimension is chosen when the measurement is already stated\n");
-
-{
-  const tool = require("fs").readFileSync(modulePath("dimension-tool.js"), "utf8");
-
-  check(
-    "the commit asks the redundancy check for the Driving/Driven default",
-    /driven: isAlreadyStated\(\{ dimensionType, refs \}\)/.test(tool),
-  );
-
-  check(
-    "and it says WHY when a dimension is Driven",
-    /already stated/.test(tool),
-  );
-
-  check(
-    "editing a dimension does not promote Driven to Driving",
-    !/EDITING A DRIVEN DIMENSION PROMOTES IT TO DRIVING/.test(tool) &&
-      !/applyDimensionValue\(/.test(tool),
-    "dimension value edits are annotations only",
-  );
-}
-
-console.log("\n  the Driven colour reaches the canvas\n");
-
-{
-  const renderer = rendererSource();
-
-  check(
-    "the dimension renderer reads the Driven colour for a Driven entity",
-    /entity\.driven === true && model\.DRIVEN_COLOUR[\s\S]{0,160}model\.DRIVEN_COLOUR/.test(
-      renderer,
-    ),
   );
 }
 
