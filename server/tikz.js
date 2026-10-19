@@ -109,8 +109,38 @@ export function extraTikzLibraries(input) {
  * can assert that the picture is sent unchanged and that every library the
  * writers use is declared here rather than inside the editable source.
  */
-export function documentFor(tikz) {
+/*
+ * ANCHORING THE PICTURE TO ITS ORIGIN.
+ *
+ * TeX places a tikzpicture by its BOUNDING BOX, so the SVG it produces has lost
+ * where the drawing was: `(0,0) -- (10,0)` and `(20,10) -- (30,10)` compile to
+ * the identical SVG. That is right for a figure embedded in a document and
+ * wrong for the Drawing Space, which must put every compiled object exactly
+ * where the object model - and so hit testing, snapping and the selection
+ * outline - says it is.
+ *
+ * So the canvas asks for the picture's bounding box to be reset to the single
+ * point (0,0) at the very end of the picture. The drawing itself is untouched;
+ * only where TeX places it changes, and the SVG's own origin (its viewBox
+ * corner) is then the drawing's (0,0). The Source text is not edited - this is
+ * the compile wrapper's business, like the preamble.
+ */
+const ORIGIN_ANCHOR = String.raw`\pgfresetboundingbox\useasboundingbox (0,0);`;
+
+export function anchorPictureAtOrigin(body) {
+    const text = String(body);
+    const end = text.lastIndexOf("\\end{tikzpicture}");
+
+    if (end < 0) {
+        return text;
+    }
+
+    return `${text.slice(0, end)}${ORIGIN_ANCHOR}\n${text.slice(end)}`;
+}
+
+export function documentFor(tikz, { anchorOrigin = false } = {}) {
     const libraries = [...new Set([...BASE_LIBRARIES.split(","), ...extraTikzLibraries(tikz)])].join(",");
+    const body = anchorOrigin ? anchorPictureAtOrigin(cleanTikZ(tikz)) : cleanTikZ(tikz);
 
     return String.raw`\usepackage{tikz}
 \usepackage{amsmath}
@@ -120,7 +150,7 @@ export function documentFor(tikz) {
 
 \begin{document}
 
-${cleanTikZ(tikz)}
+${body}
 
 \end{document}
 `;
@@ -137,7 +167,7 @@ function withTimeout(promise, ms) {
 }
 
 /* Render TikZ source to SVG markup. Rejects if TikZ is not ready or the source does not compile. */
-export function renderTikz(tikz, { debug = false } = {}) {
+export function renderTikz(tikz, { debug = false, anchorOrigin = false } = {}) {
     if (!engine) {
         return Promise.reject(new Error(
             loadError ? "TikZ rendering is unavailable on this server." : "TikZ is still loading; try again shortly."
@@ -145,7 +175,7 @@ export function renderTikz(tikz, { debug = false } = {}) {
     }
 
     const job = queue.then(async () => {
-        const dvi = await engine.tex(documentFor(tikz), { showConsole: debug });
+        const dvi = await engine.tex(documentFor(tikz, { anchorOrigin }), { showConsole: debug });
         return engine.dvi2svg(dvi);
     });
 

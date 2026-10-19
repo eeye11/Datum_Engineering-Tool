@@ -62,7 +62,8 @@ app.post("/api/render-tikz", async (req, res) => {
     if (DEBUG) console.log("TikZ source:\n" + tikz);
 
     try {
-        const svg = await renderTikz(tikz, { debug: DEBUG });
+        /* `anchorOrigin`: the Drawing Space's request - see server/tikz.js. */
+        const svg = await renderTikz(tikz, { debug: DEBUG, anchorOrigin: req.body?.anchorOrigin === true });
         res.json({ success: true, svg });
     } catch (error) {
         console.error("TikZ rendering failed:", error.message);

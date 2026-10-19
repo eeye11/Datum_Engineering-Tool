@@ -17,6 +17,12 @@ import { activeSourceManager } from "../../../shared/rendering/latex/drawing-sou
 import { installSourceWriters } from "../../../shared/rendering/latex/source-writers/index.js";
 import { mappedObjectIds } from "../../../shared/rendering/latex/source-mapping.js";
 import {
+    clearSourceGenerationProblem,
+    clearSourceGenerationProblems,
+    hasSourceGenerationProblem,
+    sourceGenerationProblems
+} from "../../../shared/rendering/latex/source-diagnostics.js";
+import {
     addSourceWriter,
     removeObjectFromSource,
     reconcileSourceWithObjects,
@@ -117,6 +123,19 @@ function syncSourceWithDrawing() {
      */
     objects.forEach((object) => {
         if (sourceForObject(object, context) === null) {
+            /*
+             * A WRITER TRIED AND FAILED. The object's previous block describes
+             * geometry the object no longer has, so it is taken out rather than
+             * left drawing the old shape - Source and the Drawing Space must not
+             * show an object the model has moved on from. The failure itself is
+             * named in the Source tab's diagnostics. An object no writer claims
+             * at all is not touched: its region is the student's own content.
+             */
+            if (hasSourceGenerationProblem(object.id) && removeObjectFromSource(manager, object.id)) {
+                changed = true;
+                previously.delete(object.id);
+            }
+
             return;
         }
 
@@ -144,6 +163,17 @@ function syncSourceWithDrawing() {
         }
 
         previously.delete(id);
+    });
+
+    /*
+     * A DELETED OBJECT IS NO LONGER MISSING FROM THE SOURCE - it is gone. Its
+     * report is cleared whether or not it still had a region, because an
+     * object that could not be written had its region taken out above.
+     */
+    sourceGenerationProblems().forEach(({ id }) => {
+        if (!present.has(id)) {
+            clearSourceGenerationProblem(id);
+        }
     });
 
     /*
@@ -211,6 +241,9 @@ function handleObjectsReplaced() {
      */
     if (manager) {
         sourceObjectIds = null;
+
+        /* The problems recorded were about the objects that were replaced. */
+        clearSourceGenerationProblems();
 
         reconcileSourceWithObjects(manager, drawingState.objects || [], { state: drawingState });
 

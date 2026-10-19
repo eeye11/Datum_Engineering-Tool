@@ -33,6 +33,7 @@ import {
   setObjectRegion,
 } from "./source-mapping.js";
 import { validateDrawingSource } from "./source-validation.js";
+import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "./source-diagnostics.js";
 
 /*
  * ============================================================
@@ -116,12 +117,19 @@ export function sourceForObject(object, context = {}) {
 
     try {
       written = sourceWriters[index](object, context);
-    } catch {
-      /* A writer that throws declines the object; the next one is asked. */
+    } catch (error) {
+      /*
+       * A writer that throws declines the object and the next one is asked -
+       * but the failure is RECORDED against the object, so an object that ends
+       * up with no source is named rather than silently missing.
+       */
+      reportSourceGenerationProblem(object, `its source writer failed (${error && error.message})`);
       continue;
     }
 
     if (typeof written === "string" && written.trim() !== "") {
+      clearSourceGenerationProblem(object.id);
+
       return written;
     }
   }

@@ -409,7 +409,12 @@ const sfd = write(
 
 check("an SFD writes its zero axis", has(sfd, "(0,-120) -- (100,-120)"), sfd);
 check("and the calculated curve", count(sfd, /\\draw/g) >= 3, sfd);
-check("with the diagram's title and axes", has(sfd, "{SFD}") && has(sfd, "$V$ (N)") && has(sfd, "$x$ (m)"), sfd);
+/* Units are set in maths mode, so a BMD's `N\cdot m` compiles too. */
+check(
+  "with the diagram's title and axes",
+  has(sfd, "{SFD}") && has(sfd, "$V$ ($\\mathrm{N}$)") && has(sfd, "$x$ ($\\mathrm{m}$)"),
+  sfd,
+);
 
 const emptyPlot = write(
   objectOf("analysis-diagram", {

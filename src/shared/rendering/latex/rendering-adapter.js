@@ -79,12 +79,31 @@ export function wrapForRendering(source) {
  * and leaves the last successful drawing on the canvas; nothing is thrown away
  * here.
  */
-export async function renderDrawingSource(source, { signal } = {}) {
+/*
+ * A failure that says nothing about the source: the request never arrived, or
+ * the engine is not loaded yet. Flagged so the caller retries it rather than
+ * reporting the drawing as broken.
+ */
+function transientError(message, cause) {
+    const error = new Error(message, cause ? { cause } : undefined);
+
+    error.transient = true;
+
+    return error;
+}
+
+/*
+ * `anchorOrigin` asks the service to place the picture by its (0,0) rather than
+ * by its bounding box (see server/tikz.js), which is what the Drawing Space
+ * needs to lay the picture over the object model. The source text sent is the
+ * same either way.
+ */
+export async function renderDrawingSource(source, { signal, anchorOrigin = false } = {}) {
     let response;
 
     try {
         response = await fetch(RENDER_ENDPOINT, {
-            body: JSON.stringify({ tikz: wrapForRendering(source) }),
+            body: JSON.stringify({ tikz: wrapForRendering(source), ...(anchorOrigin ? { anchorOrigin: true } : {}) }),
             headers: { "Content-Type": "application/json" },
             method: "POST",
             signal
@@ -99,16 +118,26 @@ export async function renderDrawingSource(source, { signal } = {}) {
             throw error;
         }
 
-        throw new Error("The drawing could not be sent to the renderer. Check the connection to the DAETUM server.", { cause: error });
+        throw transientError("The drawing could not be sent to the renderer. Check the connection to the DAETUM server.", error);
     }
 
     let payload = await response.json().catch(() => null);
 
     if (!response.ok || !payload || !payload.success) {
-        throw new Error(
+        const message =
             (payload && payload.error) ||
-                `The renderer returned an error (${response.status}).`
-        );
+            `The renderer returned an error (${response.status}).`;
+
+        /*
+         * 503 is the service saying "not ready yet" (TikZ still loading), which
+         * is no verdict on the source - the canvas retries it later instead of
+         * marking this revision as broken.
+         */
+        if (response.status === 503) {
+            throw transientError(message);
+        }
+
+        throw new Error(message);
     }
 
     const holder = document.createElement("div");

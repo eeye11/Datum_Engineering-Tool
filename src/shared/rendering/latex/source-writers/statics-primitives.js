@@ -439,7 +439,15 @@ export function loadPoints(geometry) {
         return shared.profilePoints(geometry) || [];
     }
 
-    const points = Array.isArray(geometry?.points) ? geometry.points : [];
+    let points = Array.isArray(geometry?.points) ? geometry.points : [];
+
+    /* A varying load's two end intensities are its profile; see load-profile.js. */
+    if (!points.length && (geometry?.startIntensity !== undefined || geometry?.endIntensity !== undefined)) {
+        points = [
+            { t: 0, magnitude: Math.abs(Number(geometry.startIntensity) || 0) },
+            { t: 1, magnitude: Math.abs(Number(geometry.endIntensity) || 0) }
+        ];
+    }
 
     return points
         .map((entry) => ({ t: Number(entry.t) || 0, magnitude: Number(entry.magnitude) || 0 }))
@@ -1190,11 +1198,18 @@ function diagramNodes(object, unitHeight = 0) {
     }
 
     if (axes) {
-        /* The axis names, in the place a reader looks for them. */
+        /*
+         * The axis names, in the place a reader looks for them.
+         *
+         * THE UNIT IS SET IN MATHS MODE. The moment unit is `N\cdot m`, and
+         * `\cdot` outside `$...$` is a TeX error - one that stopped the WHOLE
+         * document, so a single Bending Moment Diagram blanked every object on
+         * the sheet while all of their code sat correctly in Source.
+         */
         nodes.push(
             labelNode({
                 at: { x: Number(start.x) - 2, y: Number(start.y) + 13 },
-                text: `$${axes.y}$ (${axes.unit})`,
+                text: `$${axes.y}$ ($\\mathrm{${axes.unit}}$)`,
                 colour,
                 font,
                 anchor: "north east",
@@ -1204,7 +1219,7 @@ function diagramNodes(object, unitHeight = 0) {
         nodes.push(
             labelNode({
                 at: { x: Number(end.x) + 2, y: Number(start.y) + 6 },
-                text: `$${axes.x}$ (${axes.xUnit})`,
+                text: `$${axes.x}$ ($\\mathrm{${axes.xUnit}}$)`,
                 colour,
                 font,
                 anchor: "south west",
