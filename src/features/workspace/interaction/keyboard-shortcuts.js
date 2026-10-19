@@ -3,7 +3,6 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
 import enggNoteEditor from "../../../shared/ui/editors/note-editor.js";
@@ -321,11 +320,6 @@ export function installKeyboardShortcuts() {
                  * the Escape the canvas needs.
                  */
                 if (
-                    enggCreationDimension?.handleEscape?.()
-                ) {
-                    return;
-                }
-                if (
                     enggSketchEditor?.handleEscape?.()
                 ) {
                     return;
@@ -400,8 +394,7 @@ export function installKeyboardShortcuts() {
              * clicking the canvas is how they hand focus back.
              */
             if (
-                editable ||
-                enggCreationDimension?.isOpen?.()
+                editable
             ) {
                 return;
             }

@@ -13,7 +13,6 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { isStaticsBody, trussJointHandles } from "../interaction/handles.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
 import { beginMomentPlacement } from "../geometry/preview.js";
-import { moveRigidBodyTo, setRigidBodyRadius } from "../../../components/layout/panels/property-inputs.js";
 import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, isBodyAttachedTool, staticsAttachmentId, staticsBodyMessage, staticsInstruction, staticsToolPointCount } from "./statics-tools.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -51,6 +50,29 @@ export function isStaticsFeature(
  * from these, so dragging a handle updates the drawing
  * exactly as typing in the panel would.
  */
+/*
+ * A RIGID BODY'S TWO HANDLE EDITS. Its centre handle moves the whole body to
+ * the point (a translation, so every point keeps its place relative to the
+ * centre), and its radius handle sets the radius of a round body.
+ */
+function moveRigidBodyTo(object, axis, value) {
+    const current = enggFeatureGeometry.rigidBodyCenter(object.geometry);
+
+    if (!current) {
+        return;
+    }
+
+    enggFeatureGeometry.translateObject(
+        object,
+        axis === "x" ? value - current.x : 0,
+        axis === "y" ? value - current.y : 0
+    );
+}
+
+function setRigidBodyRadius(object, radius) {
+    object.geometry.radius = radius;
+}
+
 export function applyStaticsManipulation(
     object,
     drag,

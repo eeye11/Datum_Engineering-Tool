@@ -43,7 +43,6 @@ import enggBodyFrames from "../../../shared/geometry/body-frames.js";
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { isDerivedFeature, isSupportType } from "../../../shared/model/feature-types.js";
-import enggDimensions from "../../../shared/scale/dimensions.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -67,22 +66,12 @@ export const ARROW_STEP_MM = 5;
  * uncalibrated sheet (one world unit = one millimetre) and a calibrated one
  * both move by the same real distance.
  */
+/*
+ * One arrow-key step, in drawing units. (It used to be converted through the
+ * sheet's world scale; that system is retired, and a drawing unit is the
+ * millimetre on the sheet.)
+ */
 function stepWorld() {
-    /*
-     * `fromEngineering` is the ONE conversion from millimetres to world units,
-     * asked of the shared scale module rather than restated - so a step is the
-     * same physical distance on an uncalibrated sheet and on a calibrated one.
-     */
-    const convert = enggDimensions?.fromEngineering;
-
-    if (typeof convert === "function") {
-        return convert(drawingState, ARROW_STEP_MM, "mm");
-    }
-
-    /*
-     * No scale module: one world unit is one millimetre, which is the default
-     * the whole application already assumes.
-     */
     return ARROW_STEP_MM;
 }
 

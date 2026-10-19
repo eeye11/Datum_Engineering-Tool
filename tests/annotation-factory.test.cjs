@@ -35,7 +35,6 @@ global.window = {
   crypto: { randomUUID: () => "factory-uuid" }
 };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 
 global.window.enggDrawingState = {

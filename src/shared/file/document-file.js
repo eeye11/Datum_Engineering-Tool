@@ -100,11 +100,6 @@ MIGRATIONS[1] = function migrateV1ToV2(document) {
     };
   }
 
-  if (document?.scale) {
-    first.scale = {
-      ...document.scale,
-    };
-  }
 
   return {
     ...document,

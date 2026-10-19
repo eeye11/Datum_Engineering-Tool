@@ -32,8 +32,7 @@ import { drawingCanvas } from "../dom.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { axisLabelPositions } from "../../../shared/geometry/axis-labels.js";
 import { drawingState } from "../editor-state.js";
-import { isLoadGeometry } from "../../../components/layout/panels/relative-coordinates.js";
-import { momentDirectionOf } from "../statics/statics-panel.js";
+import { momentIsClockwise } from "../../../shared/rendering/vector-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 
 /*
@@ -721,7 +720,7 @@ export function objectAtPoint(
                  * same profile, and it was falling through to a test for
                  * `start` and `end` that it does not have.
                  */
-                if (isLoadGeometry(object)) {
+                if (object.type === "load" || object.type === "varying-load") {
                     return (
                         enggLoadProfile.loadContainsPoint(
                             geometry,
@@ -1484,7 +1483,7 @@ function rotationalArrowHit(
                 drawingCanvas.getBoundingClientRect(),
                 drawingState
             ),
-            momentDirectionOf(geometry) === "CW",
+            momentIsClockwise(geometry),
             geometry.arcRadius
         );
 

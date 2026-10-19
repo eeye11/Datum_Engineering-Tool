@@ -17,7 +17,7 @@
  *   statics/statics-tools.js             Statics tool definitions: which tools attach to a body, how many points each takes, how each is placed, and their instructions.
  *   statics/analysis-tools.js            Analysis tools: resultant, force components, and the SFD/BMD/AFD diagram frames.
  *   toolbar/toolbar-render.js            Rendering the tool list for a toolbar category, and the status message.
- *   geometry/creation-sizing.js          Creation-time sizing: the popup that asks for a new feature's length, radius or size.
+ *   geometry/creation-commit.js          Committing a newly created feature as one undoable action.
  *   toolbar/tool-activation.js           Activating a tool, undo/redo, and turning pointer events into drawing coordinates.
  *   annotate/annotation-tool.js          The annotation and note tools.
  *   annotate/dimension-tool.js           The Dimension tool: choosing and committing a measurement.
@@ -34,18 +34,9 @@
  *   workspace/canvas-render.js           Drawing the editor's canvas.
  *   interaction/hit-testing.js           Hit-testing: which feature is under the pointer.
  *   interaction/box-selection.js         Box selection: which features a selection rectangle touches.
- *   panels/feature-tree.js               The Features panel's tree of components, and the analysis editors it opens.
  *   panels/feature-panel.js              Rendering the Features panel for the current selection.
- *   geometry/triangle-panel.js           The triangle's panel: sides and angles.
- *   panels/appearance-panel.js           The appearance section of a feature's panel.
+ *   statics/analysis-editor.js           Opening the analysis-diagram editor (Sketch / Plot).
  *   statics/truss-optimizer.js           Truss optimisation: evening out member triangles while keeping the structure.
- *   panels/relative-coordinates.js       Coordinates relative to a parent feature.
- *   statics/statics-panel.js             The Statics sections of a feature's panel: vectors, annotations, supports and loads.
- *   panels/feature-panel-markup.js       A feature's panel markup.
- *   panels/property-inputs.js            Numeric inputs and rigid-body shape edits.
- *   panels/property-binding.js           Wiring a feature panel's controls to the feature.
- *   geometry/triangle-editing.js         Solving a triangle from edited sides and angles.
- *   panels/property-update.js            Applying an edited property to a feature.
  *   panels/style-controls.js             The toolbar's thickness, colour and line-type controls.
  *   interaction/canvas-click.js          What a click on the canvas does.
  *   interaction/handles.js               Manipulation handles: which grips a feature has, and which one is under the pointer.

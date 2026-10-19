@@ -68,7 +68,6 @@ const frames = require(modulePath("body-frames.js")).default;
 
 for (const name of [
   "quantities.js",
-  "dimensions.js",
   "feature-geometry.js",
   "body-frames.js",
   "drawing-state.js",

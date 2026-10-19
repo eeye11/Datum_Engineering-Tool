@@ -23,7 +23,6 @@ global.window = {
 
 /* ---- the modules this one needs ---- */
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 
 global.window.enggDrawingState = {

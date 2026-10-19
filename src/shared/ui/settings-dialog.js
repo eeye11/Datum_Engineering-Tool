@@ -28,8 +28,6 @@
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { applyThemePreference } from "../../components/layout/workspace/theme-preference.js";
 import { drawingState } from "../../features/workspace/editor-state.js";
-import enggDrawingState from "../model/drawing-state.js";
-import enggScale from "../scale/dimensions.js";
 import { setToggleLabel } from "../../components/layout/workspace/sheet-controller.js";
 
 let openDialog = null;
@@ -109,8 +107,6 @@ function escapeHtml(value) {
  * Units, default appearance, display preferences and the application theme.
  */
 function drawingPage() {
-    const scale = enggScale.readScale(drawingState);
-
     const display = drawingState.display || {};
 
     const themeNow = enggTheme.readThemePreference();
@@ -128,11 +124,9 @@ function drawingPage() {
     return `
         <h4>Units</h4>
         ${row(
-            "Length unit",
-            `<span class="datum-settings-value">${
-                scale ? escapeHtml(scale.unit) : "mm (not yet calibrated)"
-            }</span>`,
-            "A sheet's unit is established by its first measured length, so it is shown rather than chosen here. Changing it would silently rescale the drawing.",
+            "Lengths",
+            `<span class="datum-settings-value">drawing units (mm on the sheet)</span>`,
+            "Geometry is drawn and read in the sheet's own units. There is no world scale: a dimension states what is drawn, and its text can be replaced with any value.",
         )}
         ${row(
             "Angle unit",
@@ -271,8 +265,6 @@ function measurementPage() {
 
     const feature = selected[0];
 
-    const scale = enggScale.readScale(drawingState);
-
     const detail = feature
         ? `
             ${row("Type", `<span class="datum-settings-value">${escapeHtml(feature.type)}</span>`)}
@@ -299,10 +291,10 @@ function measurementPage() {
                     ? row(
                           "Length",
                           `<span class="datum-settings-value">${escapeHtml(
-                              `${enggDrawingState.formatEngineeringLength?.(
-                                  drawingState,
-                                  feature.geometry,
-                              ) ?? ""}`,
+                              `${Math.hypot(
+                                  feature.geometry.end.x - feature.geometry.start.x,
+                                  feature.geometry.end.y - feature.geometry.start.y,
+                              ).toFixed(2)} drawing units`,
                           )}</span>`,
                       )
                     : ""
@@ -313,21 +305,14 @@ function measurementPage() {
     return `
         <h4>Measurement</h4>
         ${row(
-            "Measure a distance",
-            `<span class="datum-settings-value">Smart Dimension</span>`,
-            "Arm Smart Dimension and click the two points or the line to measure. The reading follows the geometry, so it stays right when the drawing changes.",
+            "Dimension a distance",
+            `<span class="datum-settings-value">Dimension</span>`,
+            "Arm Dimension (Annotate) and click the two points or the line. The annotation follows the geometry, so it stays right when the drawing changes.",
         )}
         ${row(
-            "Measure an angle",
-            `<span class="datum-settings-value">Smart Dimension, two lines</span>`,
-            "Arm Smart Dimension and click two non-parallel lines; the angular dimension follows the cursor so the sector can be chosen.",
-        )}
-        ${row(
-            "Current unit",
-            `<span class="datum-settings-value">${escapeHtml(
-                scale ? scale.unit : "mm (uncalibrated)",
-            )}</span>`,
-            "Readings use this sheet's unit and its World Scale.",
+            "Dimension an angle",
+            `<span class="datum-settings-value">Dimension, two lines</span>`,
+            "Arm Dimension and click two non-parallel lines; the angular dimension follows the cursor so the sector can be chosen.",
         )}
 
         <h4>Inspect selected feature</h4>

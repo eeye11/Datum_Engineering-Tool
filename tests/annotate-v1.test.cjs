@@ -181,15 +181,6 @@ console.log("\n  Leader and Callout endpoint symbols\n");
   check("a dot marker is drawn", /headStyle === "dot"/.test(renderer));
   check("a tick marker is drawn", /headStyle === "tick"/.test(renderer));
 
-  const markup = require("fs").readFileSync(locate("feature-panel-markup.js"), "utf8");
-
-  ["none", "open", "closed", "dot", "tick"].forEach((value) => {
-    check(
-      `the Arrowhead control offers "${value}"`,
-      new RegExp(`option\\("${value}",`).test(markup),
-    );
-  });
-
   /*
    * THE DEFECT THIS HOLDS DOWN: the data-style handler used to write EVERY
    * other control's value into `style.lineType`, so choosing an arrowhead did

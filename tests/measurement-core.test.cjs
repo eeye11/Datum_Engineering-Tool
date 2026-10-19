@@ -45,7 +45,6 @@ global.window = {
   }
 };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 
 const m = global.window.enggMeasurement;

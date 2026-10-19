@@ -12,7 +12,7 @@ import { analysisSourceBody, diagramPrerequisiteMessage } from "../statics/analy
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
-import { commitCreatedFeature } from "./creation-sizing.js";
+import { commitCreatedFeature } from "./creation-commit.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -357,7 +357,6 @@ export function commitFreeformPolygon(
 
     commitCreatedFeature(
         object,
-        false,
         previousObjects
     );
 
@@ -1698,7 +1697,6 @@ export function beginOrCompleteGeometry(
 
                     commitCreatedFeature(
                         object,
-                        false,
                         previousObjects
                     );
 
@@ -1726,7 +1724,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 
@@ -2166,7 +2163,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 

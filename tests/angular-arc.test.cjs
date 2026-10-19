@@ -28,7 +28,6 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "angular-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("dimension-model.js");
 

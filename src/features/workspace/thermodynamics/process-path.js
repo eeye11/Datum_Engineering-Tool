@@ -3,7 +3,7 @@ import { selectionBounds } from "../../../shared/selection/selection-transform.j
 import { isSaturationCurve } from "../model/thermodynamics/saturation-curve.js";
 import { drawingState } from "../editor-state.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { commitCreatedFeature } from "../geometry/creation-sizing.js";
+import { commitCreatedFeature } from "../geometry/creation-commit.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";

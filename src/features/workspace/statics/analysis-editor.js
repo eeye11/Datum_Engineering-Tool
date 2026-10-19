@@ -18,14 +18,14 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggDiagramEquations from "../../../features/workspace/model/analysis/diagram-equations.js";
+import enggDiagramEquations from "../model/analysis/diagram-equations.js";
 import enggDrawingRenderer from "../../../shared/rendering/renderer.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
-import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 
-import { drawingState } from "../../../features/workspace/editor-state.js";
-import { renderProperties } from "./feature-panel.js";
+import { drawingState } from "../editor-state.js";
+import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 
 /*
  * ========================================================

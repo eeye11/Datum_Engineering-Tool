@@ -50,7 +50,6 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "analysis-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("feature-geometry.js");
 loadModule("dimension-model.js");

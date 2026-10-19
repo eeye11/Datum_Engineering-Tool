@@ -69,7 +69,6 @@ global.document = dom.window.document;
 for (const name of [
   "measurement-core.js",
   "quantities.js",
-  "dimensions.js",
   "dimension-model.js",
   "drawing-state.js",
   "feature-geometry.js",

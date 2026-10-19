@@ -18,7 +18,7 @@ const { locate, rendererSource } = require("./helpers/source-path.cjs");
 /*
  * THE EDITOR'S MODULES REACH THE DOM AT LOAD TIME.
  *
- * `property-update.js` imports the editor state, which imports `dom.js`, which
+ * The model modules reach the editor state, which imports `dom.js`, which
  * looks its elements up as it loads. So the document has to exist BEFORE the
  * modules are required - the same bootstrap every editor-side test uses.
  */
@@ -44,7 +44,13 @@ const check = (name, ok, detail) => {
   }
 };
 
-const updater = require(locate("property-update.js"));
+/*
+ * THE FEATURES PANE WRITES A LABEL THROUGH ITS FIELD TABLE - the `label`
+ * field's own `write` - so that is what is exercised here. (The old panel's
+ * shared `updateFeatureProperty` setter is retired with that panel.)
+ */
+const schema = require(locate("feature-schema.js"));
+const setLabel = (feature, value) => schema.fieldDefinition("label").write(feature, value);
 const drawingState = require(locate("drawing-state.js")).default;
 
 const line = () =>
@@ -58,7 +64,7 @@ console.log("\n  the setter writes a LABEL, not a name\n");
     const feature = line();
     const nameBefore = feature.name;
 
-    const changed = updater.updateFeatureProperty(feature, "label", "AB");
+    const changed = setLabel(feature, "AB");
 
     check("setting a label reports a change", changed === true);
     check("and stores it on the feature", feature.label === "AB", feature.label);
@@ -77,9 +83,9 @@ console.log("\n  clearing it removes the text, not the feature\n");
 
 {
     const feature = line();
-    updater.updateFeatureProperty(feature, "label", "AB");
+    setLabel(feature, "AB");
 
-    const cleared = updater.updateFeatureProperty(feature, "label", "");
+    const cleared = setLabel(feature, "");
 
     check("clearing reports a change", cleared === true);
     check("and stores an empty label", feature.label === "", JSON.stringify(feature.label));
@@ -95,7 +101,7 @@ console.log("\n  it works the same way for a Point\n");
 {
     const feature = point();
 
-    updater.updateFeatureProperty(feature, "label", "P1");
+    setLabel(feature, "P1");
 
     check("a point carries a label", feature.label === "P1");
     check(
@@ -111,7 +117,7 @@ console.log("\n  a label never moves the geometry it belongs to\n");
     const feature = line();
     const before = JSON.stringify(feature.geometry);
 
-    updater.updateFeatureProperty(feature, "label", "A very long label, indeed");
+    setLabel(feature, "A very long label, indeed");
 
     check("setting a label leaves the geometry identical", JSON.stringify(feature.geometry) === before);
 }
@@ -130,7 +136,7 @@ console.log("\n  A LOCK DOES NOT BLOCK A LABEL\n");
 
     feature.constraints = { position: "fixed" };
 
-    const changed = updater.updateFeatureProperty(feature, "label", "Fixed node");
+    const changed = setLabel(feature, "Fixed node");
 
     check("a locked feature still takes a label", changed === true && feature.label === "Fixed node");
     check("and the constraint is untouched", feature.constraints.position === "fixed");
@@ -141,7 +147,7 @@ console.log("\n  the label travels with the feature through a save\n");
 
 {
     const feature = line();
-    updater.updateFeatureProperty(feature, "label", "Round Trip");
+    setLabel(feature, "Round Trip");
 
     /* The same serialization the document file uses. */
     const json = drawingState.serializeDrawing({
@@ -170,18 +176,12 @@ console.log("\n  the panel field is wired to the model\n");
 
 {
     const fs = require("fs");
-    const markup = fs.readFileSync(locate("feature-panel-markup.js"), "utf8");
-    const schema = fs.readFileSync(locate("feature-schema.js"), "utf8");
+    const schemaSource = fs.readFileSync(locate("feature-schema.js"), "utf8");
 
     check(
         "the Label field shows the LABEL, not the name",
-        /const label = panels\.text\(object\.label\)/.test(markup),
+        schema.readField({ type: "line", name: "Line 4", label: "AB", geometry: {} }, "label") === "AB",
         "it read object.name, so the field showed the wrong value",
-    );
-
-    check(
-        "and the input carries the label hook",
-        /data-object-label/.test(markup),
     );
 
     /*
@@ -195,13 +195,13 @@ console.log("\n  the panel field is wired to the model\n");
      */
     check(
         "there is a Label field in the schema",
-        /label:\s*\{[\s\S]{0,400}?kind:\s*"text"/.test(schema),
+        /label:\s*\{[\s\S]{0,400}?kind:\s*"text"/.test(schemaSource),
         "the pane has no Label field to render",
     );
 
     check(
         "which writes the feature's label, not its name",
-        /label:\s*\{[\s\S]{0,600}?object\.label\s*=/.test(schema),
+        /label:\s*\{[\s\S]{0,600}?object\.label\s*=/.test(schemaSource),
         "the field would rename the feature instead of labelling it",
     );
 }

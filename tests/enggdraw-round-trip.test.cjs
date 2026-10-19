@@ -63,7 +63,7 @@ const sheets = require(modulePath("sheets.js")).default;
  *   - dimensions: linear, angular across TWO EDGES OF ONE FEATURE, variable
  *   - annotations of several kinds, including a table with cells
  *   - constraints and a locked feature
- *   - a calibrated sheet, so world scale is exercised
+ *   - a sheet saved with a (retired) world-scale calibration, which must be dropped
  */
 function buildFixture() {
   const st = state.createDrawingState();
@@ -535,12 +535,15 @@ check(
   "the two must not be conflated",
 );
 
-console.log("\n  world scale and units\n");
+console.log("\n  units, and the retired world scale\n");
 
+/*
+ * The world-length scale is retired: a calibration left in a document from an
+ * older build is not written back, so the reopened drawing has none.
+ */
 check(
-  "the sheet's calibration survives, so lengths still mean something",
-  reopened.scale?.calibrated === true &&
-    reopened.scale?.unitsPerMillimetre === 0.5,
+  "a retired world-scale calibration is not carried into the reopened drawing",
+  reopened.scale === undefined || reopened.scale === null,
   JSON.stringify(reopened.scale),
 );
 

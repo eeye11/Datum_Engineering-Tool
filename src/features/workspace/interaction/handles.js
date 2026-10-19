@@ -5,7 +5,6 @@
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { coordinateSystemArms, rigidBodyHandles, rotationHandleFor } from "../../../shared/geometry/feature-handles.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggDimensions from "../../../shared/scale/dimensions.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
@@ -33,49 +32,6 @@ import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../sh
  * return to the list: with a feature still selected, the list
  * looked the same as a request to edit it.
  */
-/*
- * A LENGTH THE STUDENT TYPED, IN MILLIMETRES, AS WORLD UNITS.
- *
- * This is the INPUT direction of the one conversion: the panel shows and
- * accepts physical millimetres, the geometry stores world units, and the
- * document's World Scale relates them. `updateFeatureProperty` is the single
- * caller that writes it into geometry, so a coordinate and a Length cannot
- * end up converted differently.
- */
-export function worldLengthOf(typed, unit = "mm") {
-    return enggDimensions?.fromEngineering
-        ? enggDimensions.fromEngineering(drawingState, typed, unit)
-        : typed;
-}
-
-/*
- * A stored length, in MILLIMETRES, for a panel field captioned with
- * a unit.
- *
- * The geometry holds world units, which have no physical size of
- * their own - they only mean something through the document scale.
- * A panel field captioned "mm" therefore has to be given
- * millimetres, or it will print the raw world number under a unit
- * that says otherwise. That is how a beam sized at 500 mm came to
- * read "100.42 mm" in its own properties.
- *
- * There is ONE conversion for the whole panel so that a beam, a
- * circle, a rectangle and a rigid body cannot disagree about what a
- * millimetre is, and so that the number the student reads is the
- * same number the creation popup asked for.
- *
- * It is deliberately at module scope: the length rows live in more
- * than one panel builder, and a second copy of this conversion is
- * exactly the duplicate-scale-system problem.
- */
-export function mmOf(worldLength) {
-    const value = Number(worldLength);
-
-    return enggDimensions?.toEngineering
-        ? enggDimensions.toEngineering(drawingState, value)
-        : { value, unit: "mm" };
-}
-
 /*
  * Abandon an in-flight direct-manipulation drag.
  *

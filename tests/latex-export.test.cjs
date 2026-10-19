@@ -53,12 +53,12 @@ function documentBody() {
     name: "Note 1"
   };
   const lone = { ...annotate.createAnnotate({ kind: "note", position: { x: 5, y: 5 }, text: "Alone" }), id: "note-2", name: "Note 2" };
+  /* A calibration left by an older build: retired, so it must change nothing. */
   const scale = { mmPerUnit: 10, unit: "m", reference: null };
 
   return {
     version: 2,
     units: "mm",
-    scale: null,
     objects: [],
     sheets: [
       sheet("sheet_a", "Beam & shapes", [beam, line, circle, note], scale),
@@ -99,11 +99,11 @@ test("each sheet lists its features, and each feature is described above its com
   const text = latex.writeLatexDocument(documentBody());
 
   assert.match(text, /% Sheet 1 of 3: "Beam & shapes"/);
-  assert.match(text, /% World Scale: 1 drawing unit = 10 mm; lengths are given in m\./);
+  assert.doesNotMatch(text, /World Scale/, "the retired world scale is not described");
   assert.match(text, /% Features \(\d+\):/);
-  assert.match(text, /Beam "Beam 1", from \(0, 0\) to \(200, 0\), length 2 m/);
-  assert.match(text, /Circle "Circle 1", centred at \(150, 60\), radius 0\.2 m/);
-  assert.match(text, /% Sheet 3 of 3: "Empty"\n% World Scale not set: lengths are in drawing units\.\n% This sheet is empty\./);
+  assert.match(text, /Beam "Beam 1", from \(0, 0\) to \(200, 0\), length 200 drawing units/);
+  assert.match(text, /Circle "Circle 1", centred at \(150, 60\), radius 20 drawing units/);
+  assert.match(text, /% Sheet 3 of 3: "Empty"\n% This sheet is empty\./);
 });
 
 test("the drawing is in drawing units, y up, with real commands", () => {

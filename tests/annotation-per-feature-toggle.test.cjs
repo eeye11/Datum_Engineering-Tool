@@ -65,7 +65,6 @@ global.navigator = dom.window.navigator;
 for (const name of [
   "measurement-core.js",
   "quantities.js",
-  "property-panel.js",
   "dimension-model.js",
   "annotation-model.js",
 ]) {
