@@ -29,7 +29,6 @@
  * one.
  */
 import enggDrawingState from "../../../../shared/model/drawing-state.js";
-import enggLoadProfile from "./load-profile.js";
 import { isSupportType } from "../../../../shared/model/feature-types.js";
 
 /*
@@ -189,6 +188,41 @@ function registerDependency(
  * of nothing - and the caller must draw nothing rather than
  * defaulting to zero and presenting that as an answer.
  */
+/*
+ * THE ARROW A FORCE IS DRAWN AS, as a vector from its application point.
+ *
+ * This is DRAWING geometry - the stored `start` to `end` the student drew -
+ * and it is what a derived arrow (a Resultant, a pair of Components) is drawn
+ * from. The force's VALUE is `readForceVector`, and it is what the derived
+ * labels state. Keeping the two apart is what lets a 500 N force be drawn
+ * whatever length the student chose, and its resultant follow the drawing.
+ *
+ * A force with no drawn end (saved before arrows kept their drawn length) is
+ * drawn at its value, which is how it looked then.
+ */
+function drawnVectorOf(force) {
+    const geometry = force?.geometry || {};
+    const start = geometry.start || geometry.position;
+    const end = geometry.end;
+
+    if (
+        start && end &&
+        Number.isFinite(Number(start.x)) && Number.isFinite(Number(start.y)) &&
+        Number.isFinite(Number(end.x)) && Number.isFinite(Number(end.y))
+    ) {
+        const x = Number(end.x) - Number(start.x);
+        const y = Number(end.y) - Number(start.y);
+
+        if (Math.hypot(x, y) > 1e-9) {
+            return { known: true, x, y };
+        }
+    }
+
+    const value = readForceVector(force);
+
+    return value.known ? { known: true, x: value.x, y: value.y } : { known: false };
+}
+
 function readForceVector(force) {
     if (!force || !force.geometry) {
         return { known: false };
@@ -281,6 +315,14 @@ function deriveForceComponents(
         return null;
     }
 
+    /*
+     * THE ARROWS ARE THE DRAWN FORCE'S PROJECTIONS; THE NUMBERS ARE ITS VALUE.
+     * `x`/`y` carry the engineering components the labels state, `drawn` the
+     * arrows the components are drawn as.
+     */
+    const drawn = drawnVectorOf(force);
+    const arrow = drawn.known ? drawn : vector;
+
     return {
         origin,
         original: {
@@ -294,6 +336,11 @@ function deriveForceComponents(
         y: {
             x: 0,
             y: vector.y
+        },
+        drawn: {
+            original: { x: arrow.x, y: arrow.y },
+            x: { x: arrow.x, y: 0 },
+            y: { x: 0, y: arrow.y }
         },
         magnitude: vector.magnitude,
         angle: vector.angle,
@@ -904,24 +951,24 @@ function refreshForceComponents(
     geometry.original = {
         start: { ...origin },
         end: {
-            x: origin.x + derived.original.x,
-            y: origin.y + derived.original.y
+            x: origin.x + derived.drawn.original.x,
+            y: origin.y + derived.drawn.original.y
         }
     };
 
     geometry.horizontal = {
         start: { ...origin },
         end: {
-            x: origin.x + derived.x.x,
-            y: origin.y + derived.x.y
+            x: origin.x + derived.drawn.x.x,
+            y: origin.y + derived.drawn.x.y
         }
     };
 
     geometry.vertical = {
         start: { ...origin },
         end: {
-            x: origin.x + derived.y.x,
-            y: origin.y + derived.y.y
+            x: origin.x + derived.drawn.y.x,
+            y: origin.y + derived.drawn.y.y
         }
     };
 
@@ -933,8 +980,8 @@ function refreshForceComponents(
      */
     geometry.start = { ...origin };
     geometry.end = {
-        x: origin.x + derived.original.x,
-        y: origin.y + derived.original.y
+        x: origin.x + derived.drawn.original.x,
+        y: origin.y + derived.drawn.original.y
     };
 
     geometry.magnitude = derived.magnitude;
@@ -985,17 +1032,12 @@ function refreshResultant(
         : common;
 
     /*
-     * The length of the drawn arrow is PRESENTATION. A resultant of
-     * 500 N and one of 5 N are the same size on the drawing, and
-     * the scale the student draws at is theirs to choose - so the
-     * stored magnitude is not used to size it. It is the number
-     * that goes in the annotation.
+     * THE ARROW IS THE SUM OF THE DRAWN ARROWS; THE NUMBER IS THE SUM OF
+     * THE VALUES. A resultant is drawn the way the student would construct it
+     * - tip to tail from the arrows on the sheet - so it is comparable with
+     * them by eye, and its label states the engineering sum.
      */
-    const drawn = drawnLength(
-        derived.x,
-        derived.y,
-        vectorScaleOf(state)
-    );
+    const drawn = drawnResultant(sources);
 
     geometry.position = origin;
     geometry.start = { ...origin };
@@ -1031,148 +1073,37 @@ function commonOrigin(
 }
 
 /*
- * THE SHARED STATICS VECTOR SCALE.
+ * The resultant's drawn vector: the sum of its sources' drawn arrows.
  *
- * Read through the load profile module when it is loaded, because
- * that is where the scale is stored and it is the same value the
- * force and load arrows use. When it is not - the module may not have
- * loaded yet, or a file may be examined without it - the scale falls
- * back to 1, which draws everything at its natural size. That is a
- * safe direction to fail: a missing scale must never produce a
- * collapsed or enormous arrow.
- *
- * Read through a lookup rather than a bare global so that loading
- * order cannot make this throw.
+ * A LEGIBILITY FLOOR, NOT A SCALE. A resultant that nearly cancels is drawn
+ * short rather than not at all - a student who summed their forces to almost
+ * nothing needs to see that - so only an arrow that would be invisible is
+ * lengthened, along its own direction.
  */
-function vectorScaleOf(state) {
-    const profile =
-        typeof window !== "undefined"
-            ? enggLoadProfile
-            : null;
+const MIN_RESULTANT_UNITS = 2;
 
-    if (
-        profile &&
-        typeof profile.vectorScaleFor === "function"
-    ) {
-        const value = profile.vectorScaleFor(state);
+function drawnResultant(sources) {
+    let x = 0;
+    let y = 0;
 
-        if (Number.isFinite(value) && value > 0) {
-            return value;
+    sources.forEach(source => {
+        const arrow = drawnVectorOf(source);
+
+        if (arrow.known) {
+            x += arrow.x;
+            y += arrow.y;
         }
+    });
+
+    const length = Math.hypot(x, y);
+
+    if (length >= MIN_RESULTANT_UNITS) {
+        return { x, y };
     }
 
-    return 1;
-}
-
-/*
- * How long to draw a resultant on the sheet.
- *
- * THE LENGTH CARRIES THE MAGNITUDE, AT THE SHARED VECTOR SCALE.
- *
- * It used to be a fixed 30 units with only the direction taken from
- * the sum, on the reasoning that scaling by the magnitude would make
- * the sheet's scale depend on the units the student typed. That is
- * true of the STORED number and false of the DRAWING: 250 N and
- * 0.25 kN are the same force, and a sheet that draws them at
- * different sizes cannot show that they are the same force.
- *
- * So the length is now derived from the magnitude the same way a
- * force's own arrow is, through the one shared Statics Vector Scale.
- * The 30 units are kept as the REFERENCE: a resultant of 30 in the
- * drawing's own units draws at 30, exactly as before, so nothing that
- * looked right changes size. What changes is that a resultant ten
- * times bigger now draws ten times longer, which is what makes a
- * resultant comparable with the forces it is made of.
- *
- * The factor is applied to the whole vector rather than to each axis
- * separately, so the DIRECTION is untouched: scaling x and y
- * independently would turn a resultant of (30, 40) into something
- * that is no longer 30, 40 at all.
- */
-/*
- * THE UNITS AT WHICH THE RESULTANT IS DRAWN.
- *
- * One unit of the sum is one unit on the sheet, so a 500 N resultant
- * of 500 N draws as a 500-unit arrow and a 5 N one draws short. That
- * is what makes a resultant comparable with the forces it is made of.
- *
- * ========================================================
- * THE SAME UNIT CONVERSION A POINT FORCE USES
- * ========================================================
- *
- * The factor is the one a Point Force uses, so a resultant is
- * comparable with the forces it is made of by looking at them.
- *
- * IT WAS A THOUSANDTH OF ITS OWN, and that is why every resultant was
- * a stub. A 300 N resultant drew as 0.3 units - about a twentieth of a
- * pixel - so what appeared on the sheet was a dot with an arrowhead on
- * it, and the direction was the only thing it could possibly convey.
- * The separate factor had a reason written beside it (statics forces
- * are hundreds of newtons and the sheet is in millimetres), but the
- * Point Force solves the same problem by a different route and does not
- * need it: its stored magnitude IS its drawn length, scaled by the
- * shared Vector Scale.
- *
- * So the resultant uses that same rule rather than a second opinion
- * about what a newton is worth in millimetres. Two conversions for one
- * quantity is how a feature ends up drawn at a different scale from the
- * thing it describes - which is a diagram claiming a magnitude it does
- * not have, and doing it silently.
- */
-const RESULTANT_UNITS_PER_UNIT = 1;
-
-function drawnLength(
-    sumX,
-    sumY,
-    vectorScale = 1
-) {
-    /*
-     * THE VECTOR SCALE, AND NOTHING ELSE.
-     *
-     * The drawn length is the ENGINEERING magnitude times the shared
-     * Vector Scale, which is the rule a Point Force is drawn by. That is
-     * what makes 250 N draw about two and a half times the length of
-     * 100 N, and it is what lets a student compare a resultant against
-     * the arrows it was built from.
-     *
-     * A ZERO OR NEGATIVE SCALE MUST NOT COLLAPSE THE ARROW - one you
-     * cannot see is worse than a small one - so it falls back to the
-     * un-scaled length rather than to nothing.
-     */
-    const factor =
-        RESULTANT_UNITS_PER_UNIT *
-        Math.max(Number(vectorScale) || 0, 0);
-
-    const safeFactor =
-        factor > 0 ? factor : RESULTANT_UNITS_PER_UNIT;
-
-    const x = sumX * safeFactor;
-    const y = sumY * safeFactor;
-
-    /*
-     * A LEGIBILITY FLOOR, NOT A SCALE.
-     *
-     * A resultant of 0.5 N is a real quantity and must be drawn short
-     * rather than not drawn - a student who summed their forces to
-     * almost nothing needs to see that, not a full-length arrow. So the
-     * floor only rescues an arrow that would otherwise be invisible.
-     */
-    const MIN_RESULTANT_UNITS = 2;
-
-    if (
-        Math.hypot(x, y) < MIN_RESULTANT_UNITS
-    ) {
-        const magnitude = Math.hypot(x, y);
-
-        return magnitude > 0
-            ? {
-                  x: (x / magnitude) * MIN_RESULTANT_UNITS,
-                  y: (y / magnitude) * MIN_RESULTANT_UNITS
-              }
-            : { x: 0, y: 0 };
-    }
-
-    return { x, y };
+    return length > 0
+        ? { x: (x / length) * MIN_RESULTANT_UNITS, y: (y / length) * MIN_RESULTANT_UNITS }
+        : { x: 0, y: 0 };
 }
 
 function refreshDiagram(

@@ -176,13 +176,6 @@ function drawingPage() {
             }>`,
             "The same setting as the Magnitudes control on the style strip.",
         )}
-        ${row(
-            "Vector scale",
-            `<span class="datum-settings-value">${
-                drawingState.statics?.vectorScale ?? 1
-            }&times;</span>`,
-            "Changed from the Vector Scale control on the style strip, where its current value is always visible.",
-        )}
 
         <h4>Application theme</h4>
         ${row(

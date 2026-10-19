@@ -726,14 +726,7 @@ export function objectAtPoint(
                         enggLoadProfile.loadContainsPoint(
                             geometry,
                             point,
-                            tolerance,
-                            enggDrawingState
-                                .BASE_PIXELS_PER_UNIT *
-                                drawingState.camera.zoom,
-                            enggLoadProfile
-                                .vectorScaleFor(
-                                    drawingState
-                                )
+                            tolerance
                         )
                     );
                 }

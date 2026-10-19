@@ -1576,8 +1576,8 @@ export function beginOrCompleteGeometry(
          *
          * THE CURSOR-DRIVEN CREATION IS UNTOUCHED. The drag still defines the
          * application point, the direction and the initial drawn length; this
-         * only asks what the number IS. Vector Scale is not consulted here, so
-         * it cannot make the student drag further.
+         * only asks what the number IS, and the number is the label - it never
+         * resizes the arrow the drag drew.
          */
         if (
             drawingState.activeTool ===

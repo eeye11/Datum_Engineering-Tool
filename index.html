@@ -554,7 +554,7 @@
                         WHAT REMAINS IS BAND 4 BELOW, which is a row of
                         SETTINGS rather than commands - a command search, undo
                         and redo, then thickness, colour, line type, grid, snap,
-                        dimensions, magnitudes and vector scale. Those stay on
+                        dimensions and magnitudes. Those stay on
                         screen because they are adjusted constantly while drawing
                         and a menu click for each one would be friction with
                         nothing gained.
@@ -653,16 +653,14 @@
                     how it is read.
 
                         Search  Undo  Redo  |  Thickness  Color  Line Type
-                        |  Grid  Snap  Dimensions  Magnitudes  Vector Scale
+                        |  Grid  Snap  Dimensions  Magnitudes
 
-                    ICON-FIRST. Every control except Command Search and Vector
-                    Scale is represented by its ICON rather than by a word: a
-                    toolbar of eleven labelled controls was a paragraph of
-                    small text, and the labels were repeating what the icons
-                    and the tooltips already said. Command Search stays a text
-                    field because it has to be typed into, and Vector Scale
-                    keeps its value visible because the selected scale is
-                    information the student reads at a glance.
+                    ICON-FIRST. Every control except Command Search is
+                    represented by its ICON rather than by a word: a toolbar of
+                    labelled controls was a paragraph of small text, and the
+                    labels were repeating what the icons and the tooltips
+                    already said. Command Search stays a text field because it
+                    has to be typed into.
 
                     NOTHING IS LOST WITH THE WORDS. Every icon-only control
                     carries a `title` (the tooltip) and an `aria-label` (its
@@ -673,12 +671,12 @@
 
                     THE SEPARATORS SEPARATE FAMILIES: history actions | drawing
                     properties | display and annotation controls. There is no
-                    separator among Grid, Snap, Dimensions, Magnitudes and
-                    Vector Scale - they are one related group and read as one.
+                    separator among Grid, Snap, Dimensions and Magnitudes -
+                    they are one related group and read as one.
 
                     THREE KINDS OF CONTROL, THREE BEHAVIOURS: actions (Undo,
                     Redo) never stay lit; value selectors (Thickness, Color,
-                    Line Type, Vector Scale) show a real value without looking
+                    Line Type) show a real value without looking
                     toggled on; toggles (Grid, Snap, Dimensions, Magnitudes)
                     show a persistent on/off state.
 
@@ -879,40 +877,6 @@
                         <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M7 3H3v4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
                     </button>
 
-                    <!--
-                        VECTOR SCALE: THE FINAL CONTROL.
-
-                        It KEEPS ITS VALUE VISIBLE. Unlike the four toggles
-                        before it, this is a VALUE SELECTOR and the selected
-                        scale is information the student reads at a glance -
-                        requiring the dropdown to be opened to learn the current
-                        scale would make the control useless as a readout.
-
-                        THE SELECT STAYS THE CONTROL. The visible box shows the
-                        icon, the CURRENT VALUE and a chevron; the `<select>`
-                        sits on top of it, transparent, so the native dropdown,
-                        its options and the existing `change` handler are all
-                        exactly what they were. Nothing about the scaling logic
-                        is replaced.
-
-                        IT CHANGES THE PICTURE, NEVER THE PHYSICS. A 500 N force
-                        is 500 N whatever the scale; only the drawn length of
-                        its arrow moves.
-                    -->
-                    <div class="drawing-vector-scale" title="Vector Scale - how large force and load arrows are drawn. This is display only and never changes a magnitude.">
-                        <span class="drawing-vector-scale-icon" aria-hidden="true">
-                            <!--
-                                VECTOR SCALE: a force arrow beside a size marker.
-                            -->
-                            <svg viewBox="0 0 20 20" width="17" height="17"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M7 17V3M3.5 6.5L7 3l3.5 3.5"/><path fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" d="M13 3h4M15 3v14M13 17h4"/></svg>
-                        </span>
-                        <select id="drawingVectorScale" aria-label="Vector Scale"></select>
-                        <span class="drawing-vector-scale-value" id="drawingVectorScaleValue" aria-hidden="true">1&#215;</span>
-                        <span class="drawing-vector-scale-chevron" aria-hidden="true">
-                            <svg viewBox="0 0 16 16" width="12" height="12"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M4 6.5l4 4 4-4"/></svg>
-                        </span>
-                        <input id="drawingVectorScaleCustom" class="drawing-vector-scale-custom" type="number" step="any" min="0" aria-label="Custom vector scale" placeholder="e.g. 3" hidden>
-                    </div>
                 </div>
 
                 </div>

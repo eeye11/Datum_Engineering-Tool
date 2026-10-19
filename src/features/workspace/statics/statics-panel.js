@@ -18,28 +18,6 @@ import { relativeCoordinateRows } from "../../../components/layout/panels/relati
 import { staticsSupportSection } from "./statics-tools.js";
 
 /*
- * ========================================================
- * VECTOR SCALE IS NOT HERE ANY MORE
- * ========================================================
- *
- * The Vector Scale control used to be rendered at the top of this panel - a
- * STATICS DISPLAY block offering the decades and a custom box - because it
- * decides how large every force and load arrow is drawn.
- *
- * It is a SHEET-WIDE display setting, though, not a property of the feature in
- * front of the student, and a sheet-wide control does not belong in a panel
- * that describes one feature: it lived inside a long scrolling list where it
- * was easy to miss, and there was only ever one of it while the panel could
- * show many features. It now sits on the TOP TOOLBAR beside Magnitudes, where
- * every other global display control already is, and it is editable there
- * without selecting anything.
- *
- * The reading and writing are unchanged - `load-profile.vectorScaleFor` and
- * `state.statics.vectorScale` are still the one source of truth - so nothing
- * about how an arrow is drawn is affected by where the control lives.
- */
-
-/*
  * The Reverse Direction control for a load.
  *
  * Turning a load around is a single, frequent adjustment - a

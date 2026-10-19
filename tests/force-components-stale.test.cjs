@@ -28,6 +28,7 @@ global.window = {
 
 loadModule("feature-geometry.js");
 loadModule("body-frames.js");
+loadModule("load-profile.js");
 loadModule("analysis-dependencies.js");
 loadModule("drawing-state.js");
 
@@ -126,18 +127,27 @@ const reading = object => ({
  * stale alongside the code under test - which is the whole failure mode
  * being looked for, and it would be a poor way to test for it.
  */
+/*
+ * WHAT THE COMPONENTS SHOULD BE, FROM THE FORCE AS IT IS NOW. They are DRAWN
+ * as the projections of the force's drawn arrow (`derived.drawn`) and STATE
+ * its value (`forceX`/`forceY`) - the retired Vector Scale used to make the
+ * two the same numbers. A refresh that went stale would disagree with either.
+ */
 const expected = () => {
   const derived = deps.deriveForceComponents(force);
 
   if (!derived) return null;
 
   const o = derived.origin;
+  const d = derived.drawn;
 
   return {
-    original: { x: o.x + derived.original.x, y: o.y + derived.original.y },
-    horizontal: { x: o.x + derived.x.x, y: o.y + derived.x.y },
-    vertical: { x: o.x + derived.y.x, y: o.y + derived.y.y },
-    origin: o
+    original: { x: o.x + d.original.x, y: o.y + d.original.y },
+    horizontal: { x: o.x + d.x.x, y: o.y + d.x.y },
+    vertical: { x: o.x + d.y.x, y: o.y + d.y.y },
+    origin: o,
+    forceX: derived.x.x,
+    forceY: derived.y.y
   };
 };
 
@@ -155,6 +165,12 @@ const agrees = () => {
   if (!want) return { ok: false, why: "the force derives nothing" };
 
   const problems = [];
+
+  if (!near(components.geometry.forceX, want.forceX) || !near(components.geometry.forceY, want.forceY)) {
+    problems.push(
+      `the components state (${components.geometry.forceX}, ${components.geometry.forceY}), the force says (${want.forceX}, ${want.forceY})`
+    );
+  }
 
   ["original", "horizontal", "vertical", "origin"].forEach(key => {
     const a = got[key];
@@ -262,18 +278,14 @@ const afterBigger = reading(components);
  * thing it should have asked: does the x component actually carry most of
  * the force?
  */
-const xSpan = Math.abs(
-  afterBigger.horizontal.x - afterBigger.origin.x
-);
+const xSpan = Math.abs(components.geometry.forceX);
 
-const ySpan = Math.abs(
-  afterBigger.vertical.y - afterBigger.origin.y
-);
+const ySpan = Math.abs(components.geometry.forceY);
 
 check(
   "a force at 30 degrees has most of itself along x",
   xSpan > ySpan,
-  `x span ${xSpan}, y span ${ySpan}`
+  `Fx ${xSpan}, Fy ${ySpan}`
 );
 
 /*
@@ -283,18 +295,11 @@ check(
  */
 check(
   "the larger components still square back to the new magnitude",
-  near(
-    Math.hypot(
-      afterBigger.horizontal.x - afterBigger.origin.x,
-      afterBigger.vertical.y - afterBigger.origin.y
-    ),
-    250
-  ),
-  `hypot = ${Math.hypot(
-    afterBigger.horizontal.x - afterBigger.origin.x,
-    afterBigger.vertical.y - afterBigger.origin.y
-  )}`
+  near(Math.hypot(components.geometry.forceX, components.geometry.forceY), 250),
+  `hypot = ${Math.hypot(components.geometry.forceX, components.geometry.forceY)}`
 );
+
+void afterBigger;
 
 /* ============================================================
    THE DIRECTION CHANGES - INCLUDING THROUGH ZERO
@@ -309,7 +314,8 @@ console.log("\n  when the direction changes\n");
  * wrong - which is a subtle wrong, and the reason a magnitude-only check
  * would pass it.
  */
-force.geometry.angle = 120;
+/* Re-aimed as the panel does it: the value's direction AND the drawn arrow turn. */
+global.window.enggLoadProfile.setForceVector(force.geometry, force.geometry.magnitude, 120);
 
 deps.refreshAnalysis(components, drawing);
 
@@ -341,7 +347,8 @@ check(
 
 console.log("\n  when the force is reversed\n");
 
-force.geometry.angle = 300;
+/* Re-aimed as the panel does it: the value's direction AND the drawn arrow turn. */
+global.window.enggLoadProfile.setForceVector(force.geometry, force.geometry.magnitude, 300);
 
 deps.refreshAnalysis(components, drawing);
 
@@ -367,6 +374,10 @@ console.log("\n  when the force stops saying anything\n");
  */
 delete force.geometry.magnitude;
 delete force.geometry.angle;
+
+/* The same value in component form - a force that says nothing has neither. */
+delete force.geometry.forceX;
+delete force.geometry.forceY;
 
 deps.refreshAnalysis(components, drawing);
 

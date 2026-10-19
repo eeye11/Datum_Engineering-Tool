@@ -989,8 +989,7 @@
  * and be positioned against its own wrapper rather than the row.
  */
 .drawing-style-strip .drawing-strip-icon-select,
-.drawing-style-strip .drawing-strip-colour input[type="color"],
-.drawing-style-strip .drawing-vector-scale select {
+.drawing-style-strip .drawing-strip-colour input[type="color"] {
     appearance: none;
     background: transparent;
     border: 0;

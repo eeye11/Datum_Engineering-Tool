@@ -103,18 +103,18 @@ const PAGES = {
                 dimension opens the standard value box, never a scale question.
             </p>
             <p>
-                The first physical length on a sheet establishes that sheet's
-                <strong>scale</strong> - what a drawing unit is worth in real
-                units. It is not changed by anything else.
+                A dimension is an annotation: it reads the drawing in its own
+                units and never resizes what it measures. Its text can be
+                replaced with any value or symbol you type.
             </p>
 
-            <h4>Magnitudes and vector scale</h4>
+            <h4>Arrows and magnitudes</h4>
             <p>
-                Force and load arrows carry their values as
-                <strong>magnitudes</strong>, shown or hidden by the
-                <strong>Magnitudes</strong> control. <strong>Vector Scale</strong>
-                changes only how large those arrows are <em>drawn</em>; it never
-                changes a magnitude, a direction or any stored value.
+                A force or load arrow is as long as you <em>draw</em> it. Its
+                value - 20 N, 5 kN/m, <em>v</em> - is the label beside it,
+                shown or hidden by the <strong>Magnitudes</strong> control.
+                Changing the value never changes how long the arrow is drawn,
+                and dragging the arrow never changes the value.
             </p>
 
             <h4>Selection</h4>

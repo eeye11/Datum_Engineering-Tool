@@ -795,6 +795,57 @@ function unitVector(degrees) {
     }
 
     /*
+     * ============================================================
+     * HOW FAR A LOAD'S ARROWS REACH: THE DRAWN HEIGHT
+     * ============================================================
+     *
+     * A distributed load's arrows are as long as the student DREW them: the
+     * placement gesture stores `arrowLength`, the reach of the longest arrow,
+     * in drawing units, and its handle edits it. The intensities are the
+     * load's VALUES - the label text - and they never set the length.
+     *
+     * They do set the SHAPE of a varying load: each arrow is the drawn height
+     * scaled by its intensity over the peak intensity, so a load from 1 to 5
+     * kN/m tapers from a fifth of the height to all of it whatever the numbers'
+     * units. A uniform load is therefore a row of equal arrows.
+     *
+     * A load saved before `arrowLength` existed is drawn at its peak intensity
+     * - exactly how it looked at the retired Vector Scale's default of 1x - so
+     * an old drawing opens unchanged.
+     */
+    function loadArrowHeight(geometry) {
+        const stored = Number(geometry?.arrowLength);
+
+        if (Number.isFinite(stored) && stored > 1e-9) {
+            return stored;
+        }
+
+        return peakMagnitude(geometry);
+    }
+
+    function loadArrowReach(geometry, magnitude) {
+        const peak = peakMagnitude(geometry);
+        const value = Math.abs(finite(magnitude));
+
+        if (!(peak > 0) || !(value > 0)) {
+            return 0;
+        }
+
+        return loadArrowHeight(geometry) * value / peak;
+    }
+
+    /* Store the drawn height. A non-positive height is refused, not stored. */
+    function setLoadArrowHeight(geometry, height) {
+        const value = Math.abs(finite(height));
+
+        if (geometry && value > 1e-9) {
+            geometry.arrowLength = value;
+        }
+
+        return geometry;
+    }
+
+    /*
      * The world position of a fraction t along the loaded
      * span.
      */
@@ -1177,17 +1228,57 @@ function unitVector(degrees) {
     }
 
     /*
-     * Recompute the body from a moved point and the direction.
+     * THE LENGTH A FORCE IS DRAWN AT.
      *
-     * Both representations of a force describe the same
-     * vector, so writing one has to write the other. This is
-     * the single place that does it, which is why the panel
-     * and a drag can never leave the two disagreeing.
+     * The arrow is the one the student drew: from `start` to the stored `end`.
+     * Its length is a fact about the DRAWING, never derived from the magnitude.
+     * A force with no usable `end` - one saved before arrows kept their drawn
+     * length - is drawn at its magnitude, which is exactly how it looked then
+     * at the default scale, so an old file opens unchanged.
      */
-    function setForceVector(geometry, magnitude, directionDegrees) {
+    function drawnLengthOf(geometry) {
+        const start = geometry?.start || geometry?.position;
+        const end = geometry?.end;
+
+        if (
+            start && end &&
+            Number.isFinite(Number(start.x)) && Number.isFinite(Number(start.y)) &&
+            Number.isFinite(Number(end.x)) && Number.isFinite(Number(end.y))
+        ) {
+            const length = Math.hypot(
+                Number(end.x) - Number(start.x),
+                Number(end.y) - Number(start.y)
+            );
+
+            if (length > 1e-9) {
+                return length;
+            }
+        }
+
+        return Math.abs(finite(geometry?.magnitude));
+    }
+
+    /*
+     * Write a force's VALUE and DIRECTION, keeping the arrow it was drawn as.
+     *
+     * The magnitude is annotation content: typing 20 N or 5 kN changes the
+     * label, never how long the arrow is. The direction is geometry, so the
+     * drawn arrow is turned to it about the application point at the length it
+     * already has. `length` is passed only by a gesture that draws the arrow -
+     * the creation drag, a drag of the arrowhead.
+     *
+     * Every representation is still written here, together, so the panel, a
+     * drag and a reversal can never leave them disagreeing.
+     */
+    function setForceVector(geometry, magnitude, directionDegrees, { length } = {}) {
         const magnitudeValue = Math.max(0, finite(magnitude));
         const direction = finite(directionDegrees);
         const vector = unitVector(direction);
+
+        const drawn =
+            Number.isFinite(length) && length > 1e-9
+                ? length
+                : drawnLengthOf(geometry);
 
         const start = geometry.start ||
             geometry.position || { x: 0, y: 0 };
@@ -1206,8 +1297,8 @@ function unitVector(degrees) {
         geometry.angle = direction;
 
         geometry.end = {
-            x: geometry.start.x + vector.x * magnitudeValue,
-            y: geometry.start.y + vector.y * magnitudeValue
+            x: geometry.start.x + zeroIfAxis(vector.x) * drawn,
+            y: geometry.start.y + zeroIfAxis(vector.y) * drawn
         };
 
         /*
@@ -1399,9 +1490,24 @@ function unitVector(degrees) {
          * direction the components express, so the arrow, the components and
          * the panel all keep agreeing.
          */
+        /*
+         * THE DRAWN ARROW TURNS WITH IT, at the length it was drawn. The
+         * stored `end` is the arrowhead the Source writes and the canvas draws,
+         * so leaving it in place reversed the force in the model while Source
+         * went on drawing it the old way round.
+         */
+        const drawnLength = drawnLengthOf(geometry);
+
         geometry.angle = normaliseAngle(vector.angle + 180);
         geometry.forceX = reversed.x * vector.magnitude;
         geometry.forceY = reversed.y * vector.magnitude;
+
+        if (geometry.start && drawnLength > 1e-9) {
+            geometry.end = {
+                x: finite(geometry.start.x) + zeroIfAxis(reversed.x) * drawnLength,
+                y: finite(geometry.start.y) + zeroIfAxis(reversed.y) * drawnLength
+            };
+        }
 
         /*
          * `position` MIRRORS `start` and is read by some of the panel and by
@@ -1419,328 +1525,95 @@ function unitVector(degrees) {
     }
 
     /*
-     * THE VECTOR SCALE.
-     *
-     * One shared, presentational multiplier for every Statics arrow. It
-     * decides how BIG the arrows are drawn and nothing else.
-     *
-     * The offered values are DECADES, not fractions. An engineering arrow
-     * has to survive forces that differ by orders of magnitude - a 5 N
-     * reaction beside a 50 kN load - and a scale that only ever doubled
-     * could not put both of them on one readable sheet. Halving is not
-     * much use for that either, so the steps are powers of ten in each
-     * direction, with 1 as the middle: the true length, and the value
-     * every sheet starts at, so opening an older document changes
-     * nothing about how it looks.
-     *
-     * They are listed in INCREASING ORDER.
-     *
-     * They used to be listed shrinking-first then growing - "too big,
-     * smaller" down to a thousandth, then "too small, larger" up to a
-     * thousand times. That is the order a user reaches for them in, and
-     * it was the wrong thing to optimise for: a scale control read top to
-     * bottom should read small to large the way every other quantity on
-     * a sheet does, and a list that jumps 1, 0.1, 0.01, 0.001, 10 makes
-     * the user hunt for the one they want and cannot tell at a glance
-     * which side of 1 it is on.
-     *
-     * THE LIST IS THE DECADES, BOTH WAYS, AROUND ONE, PLUS THE
-     * SPECIFICATION'S PRACTICAL MULTIPLIERS.
-     *
-     * The decades cover the wide range an engineering sheet needs - a 5 N
-     * reaction beside a 50 kN load - and the half/double steps
-     * (0.25x, 0.5x, 2x, 4x) are the ones a student reaches for when an
-     * arrow is merely a little too big or a little too small. Offering
-     * only the decades forces a jump of ten when a factor of two was
-     * wanted; offering only the halves cannot span the range. Both are
-     * offered, deduplicated and in increasing order, so the control reads
-     * small to large and every named value is present.
-     */
-    const SPEC_VECTOR_SCALE_VALUES = [0.25, 0.5, 1, 2, 4];
-
-    const VECTOR_SCALE_VALUES = [
-        ...new Set([
-            ...Array.from(
-                { length: 7 },
-                (_, index) => 10 ** (index - 3)
-            ),
-            ...SPEC_VECTOR_SCALE_VALUES
-        ])
-    ].sort((a, b) => a - b);
-
-    const VECTOR_SCALE_OPTIONS = [
-        ...VECTOR_SCALE_VALUES
-    ]
-        .sort((a, b) => a - b)
-        .map(value => ({
-            value,
-            label: `${value}×`
-        }));
-
-    const DEFAULT_VECTOR_SCALE = 1;
-
-    /*
-     * The sentinel the panel offers for "let me type my own".
-     *
-     * It is not a scale. It is the value the dropdown holds while the
-     * custom field is showing, chosen so it can never be mistaken for a
-     * real one - a negative number is not a length multiplier.
-     */
-    const CUSTOM_VECTOR_SCALE = "custom";
-
-    /*
-     * The outermost decades are as far as the list goes; a custom scale may
-     * still sit outside them, since 0.001× and 1000× are where the list stops
-     * being useful rather than where a scale stops being legal.
-     */
-    const MIN_VECTOR_SCALE = 0.0001;
-    const MAX_VECTOR_SCALE = 100000;
-
-    /*
-     * Read the shared scale off the drawing state.
-     *
-     * A CUSTOM scale is a real scale, not a special case: the panel
-     * offers the decades for speed and a typed value for everything else,
-     * and both store the same number in the same place. That is why a
-     * custom value is accepted here on the same terms as a listed one -
-     * the alternative, letting the list decide what is real, would mean
-     * the dropdown had to be told which values it did not know about.
-     *
-     * What is refused is anything that is not a usable LENGTH
-     * multiplier: not a number, not positive, or outside the range a
-     * drawing can show. Those fall back to the default rather than being
-     * trusted, because this value decides how large an arrow is drawn and
-     * a corrupt one must not produce an invisible arrow or one that
-     * swallows the sheet.
-     */
-    function vectorScaleFor(state) {
-        const value = Number(state?.statics?.vectorScale);
-
-        if (!Number.isFinite(value)) {
-            return DEFAULT_VECTOR_SCALE;
-        }
-
-        if (
-            value < MIN_VECTOR_SCALE ||
-            value > MAX_VECTOR_SCALE
-        ) {
-            return DEFAULT_VECTOR_SCALE;
-        }
-
-        return value;
-    }
-
-    /*
-     * The length to DRAW a magnitude at, which is the engineering
-     * magnitude multiplied by the shared display scale.
-     *
-     * These are deliberately two separate numbers. The magnitude is the
-     * force; this is how long its arrow happens to be. Every caller that
-     * needs an arrow length goes through here, so no caller can
-     * accidentally scale one, skip another, or scale the stored value
-     * instead of the drawn one.
-     */
-    function vectorScale(state, magnitude) {
-        return (
-            Math.abs(Number(magnitude) || 0) *
-            vectorScaleFor(state)
-        );
-    }
-
-    /*
-     * WHERE A FORCE'S ARROWHEAD IS DRAWN.
-     *
-     * A force's stored `end` is its ENGINEERING vector - it sits exactly
-     * magnitude away from the application point, because that is the
-     * force. The arrow, however, is drawn at the shared display scale, so
-     * at 4x the arrowhead is four times further out than the stored end.
-     *
-     * That gap matters because the end is also a handle. A handle drawn
-     * at the stored end while the arrow runs past it leaves a dot
-     * floating in the middle of its own arrow, and grabbing that dot
-     * would shorten the force by three quarters of what the user can see.
-     *
-     * So anything that needs to know where the force LOOKS like it ends
-     * asks here, rather than reading `geometry.end` and drawing at a
-     * different place from the renderer.
-     */
-    /*
      * ============================================================
-     * THE LINE A FORCE IS DRAWN ALONG, AT THE DISPLAY SCALE.
+     * THE LINE A FORCE IS DRAWN ALONG.
      * ============================================================
      *
-     * The span is the line; the vector says which of its two ends carries the
-     * head. So the drawn arrow is the span, and the two questions a caller has
-     * are answered together here rather than independently by two functions
-     * that could disagree about which end is which.
+     * The arrow the student drew: from the application point `start` to the
+     * stored `end`, with the head at `end`. Every consumer that needs where a
+     * force is drawn - the line and its head, the handle, the hit test, the
+     * selection bounds, the label anchor, the Source writer - reads it here or
+     * from the same stored points, so none of them can disagree.
      *
-     * THE SCALE STRETCHES THE LINE FROM THE POINT THE FORCE ACTS AT.
+     * NOTHING IS SCALED. The drawn length is the gesture's, and the magnitude is
+     * annotation content. (A shared Vector Scale used to stretch every arrow by
+     * magnitude x scale; it is retired, and with it the gap between where an
+     * arrow was stored and where it was drawn.)
      *
-     * It has to be multiplied in somewhere, or the Vector Scale is a control
-     * that does nothing - and it was, for exactly this reason: with the tip
-     * taken straight from the span's end there was no length left for it to
-     * scale. Growing the line outward from `start` rather than from its middle
-     * keeps the force attached to the member it acts on, and - the part that
-     * matters - it is the SAME growth either way round, so reversing the force
-     * still cannot move the line:
-     *
-     *     forward:   start ---> grown end
-     *     reversed:  start <--- grown end
-     *
-     * `headAtGrownEnd` is which of those two is being drawn. It is decided by
-     * the vector projected onto the line's own direction, whose SIGN is
-     * meaningful whichever way round the span happens to be stored.
-     *
-     * A VECTOR THAT DISAGREES WITH ITS SPAN still goes by the vector: the
-     * projection's sign says which end it points at, and the vector is the
-     * engineering value. A force pushing square across the line it is drawn on
-     * has no end to point at, so the line's own direction decides instead -
-     * any other choice would claim something about the force that nothing
-     * supports.
-     *
-     * THE DISPLAY SCALE STRETCHES THE WHOLE VECTOR FROM THE POINT THE FORCE
-     * ACTS AT.
-     *
-     * The drawn line runs from `start` along the STORED DIRECTION by
-     * `magnitude x scale`. It is therefore rebuilt entirely from the
-     * authoritative facts - application point, stored magnitude, stored
-     * direction, current display scale - every time it is asked for. There is
-     * no second, screen-space endpoint kept anywhere: `start` and `end` are
-     * both computed here, so the line, its arrowhead, the handle and the
-     * magnitude annotation cannot drift apart.
-     *
-     * CHANGING THE SCALE THEREFORE MOVES THE ENDPOINT, which is what lets an
-     * annotation anchored to that endpoint follow the arrow. And a REVERSAL
-     * only swaps which end of the SAME line carries the head: the line is
-     * built from `start` outward along the direction, not from the stored
-     * span's far end, so turning the force round does not relocate the
-     * drawing.
+     * A force with no usable `end` is drawn from `start` along its direction at
+     * `drawnLengthOf` - its magnitude - which is how an old file looked.
      */
     function drawnForceAxis(state, geometry) {
-        const vector = forceVector(geometry);
-
-        const start = {
-            x: finite(geometry?.start?.x),
-            y: finite(geometry?.start?.y),
-        };
-
-        const magnitude = Math.abs(vector.magnitude);
-
-        /*
-         * NO USABLE MAGNITUDE leaves no vector to draw, so the stored span is
-         * reported back - a force that is momentarily empty is still shown
-         * where it was, rather than collapsing onto its application point.
-         */
-        if (!(magnitude > 1e-9)) {
-            const stored =
-                geometry?.end &&
-                Number.isFinite(geometry.end.x) &&
-                Number.isFinite(geometry.end.y)
-                    ? {
-                          x: Number(geometry.end.x),
-                          y: Number(geometry.end.y),
-                      }
-                    : null;
-
-            return {
-                tail: start,
-                head: stored || start,
-            };
-        }
-
-        const radians = (vector.angle * Math.PI) / 180;
-
-        const reach = vectorScale(state, vector.magnitude);
-
-        /*
-         * The tip is the application point plus the direction at the drawn
-         * length, which is exactly `magnitude x scale`. The components are
-         * cleaned with `zeroIfAxis`, so a force drawn straight along an axis
-         * lands exactly on it rather than a sliver off it.
-         */
-        /*
-         * WHICH END CARRIES THE HEAD.
-         *
-         * The arrow is drawn from the application point outward along the
-         * FORCE's own direction, so the head is at the tip. A reversal rotates
-         * that direction by half a turn, which puts the tip on the opposite
-         * side of the application point - so the head crosses over and the tail
-         * stays where the force acts, which is exactly what reversing a force
-         * means.
-         *
-         * THERE IS NO "reversed" BRANCH ANY MORE. One used to sit here,
-         * deciding between `tail: start` and `tail: tip` by comparing the
-         * vector's components against the direction they were derived from -
-         * which is the same angle, so the comparison was `magnitude > 0` and the
-         * branch could never fire. It was dead code that read as though it did
-         * something, which is worse than no code: it suggested the arrowhead
-         * case was handled here when in fact the rotation below is what does it.
-         */
-        const tip = {
-            x: start.x + zeroIfAxis(Math.cos(radians)) * reach,
-            y: start.y + zeroIfAxis(Math.sin(radians)) * reach,
-        };
-
-        return { tail: start, head: tip };
-    }
-
-    /*
-     * ============================================================
-     * The ENGINEERING force a drawn point describes.
-     *
-     * The inverse of `drawnForceEnd`, and what a drag of the arrowhead
-     * goes through. The point grabbed is on a scaled drawing, so the
-     * scale has to come back off before the value is stored - otherwise
-     * dragging the head to where it currently sits would silently
-     * quarter the force at a 4x display scale.
-     */
-    function forceVectorFromDrawnPoint(state, geometry, point) {
-        const vector = forceVector(geometry);
-
-        /*
-         * THE DRAG IS TAKEN BACK OFF THE DISPLAY SCALE.
-         *
-         * The drawn line is the vector at `vectorScale`, so a drag of it is a
-         * drag of something longer than the stored geometry by that factor.
-         * Storing the drawn distance unconverted is what makes a force grow
-         * every time it is grabbed, and the scale is a DRAWING setting, so the
-         * conversion has to happen here rather than being left to the user.
-         *
-         * THE LENGTH IS MEASURED FROM THE APPLICATION POINT, which is the
-         * fixed end of the vector - it is where the force acts, and a drag of
-         * the head does not move it. Measuring from the arrowHEAD instead was
-         * fine while the head always sat at the far end, but a REVERSED force
-         * carries its head at the application point: measuring from there
-         * would give the drag a zero length and turn every grab of a reversed
-         * force into a no-op.
-         */
         const start = {
             x: finite(geometry?.start?.x, finite(geometry?.position?.x)),
             y: finite(geometry?.start?.y, finite(geometry?.position?.y)),
         };
 
-        const length = Math.hypot(
-            point.x - start.x,
-            point.y - start.y
-        );
+        const end = geometry?.end;
 
-        const scale = vectorScaleFor(state);
+        if (
+            end &&
+            Number.isFinite(Number(end.x)) &&
+            Number.isFinite(Number(end.y)) &&
+            Math.hypot(Number(end.x) - start.x, Number(end.y) - start.y) > 1e-9
+        ) {
+            return { tail: start, head: { x: Number(end.x), y: Number(end.y) } };
+        }
 
-        if (length <= 1e-9 || scale <= 1e-9) {
+        const vector = forceVector(geometry);
+        const length = drawnLengthOf(geometry);
+
+        if (!(length > 1e-9)) {
+            return { tail: start, head: start };
+        }
+
+        const radians = (vector.angle * Math.PI) / 180;
+
+        return {
+            tail: start,
+            head: {
+                x: start.x + zeroIfAxis(Math.cos(radians)) * length,
+                y: start.y + zeroIfAxis(Math.sin(radians)) * length,
+            },
+        };
+    }
+
+    /*
+     * ============================================================
+     * A DRAG OF THE ARROWHEAD.
+     * ============================================================
+     *
+     * The head is dragged to `point`: the arrow is redrawn to it, so its
+     * direction AND its drawn length follow the gesture. The magnitude - the
+     * number in the label - is unchanged, because a drag is a drawing action,
+     * not a change to the force's stated value.
+     *
+     * `length` is returned for `setForceVector`, which writes the arrow at it.
+     * The length is measured from the application point, the fixed end of the
+     * vector, so grabbing the head and releasing it where it is changes nothing.
+     */
+    function forceVectorFromDrawnPoint(state, geometry, point) {
+        const vector = forceVector(geometry);
+
+        const start = {
+            x: finite(geometry?.start?.x, finite(geometry?.position?.x)),
+            y: finite(geometry?.start?.y, finite(geometry?.position?.y)),
+        };
+
+        const length = Math.hypot(point.x - start.x, point.y - start.y);
+
+        if (length <= 1e-9) {
             return {
                 magnitude: vector.magnitude,
-                angle: vector.angle
+                angle: vector.angle,
+                length: drawnLengthOf(geometry),
             };
         }
 
-        const radians = Math.atan2(
-            point.y - start.y,
-            point.x - start.x
-        );
-
         return {
-            magnitude: length / scale,
-            angle: radians * 180 / Math.PI
+            magnitude: vector.magnitude,
+            angle: Math.atan2(point.y - start.y, point.x - start.x) * 180 / Math.PI,
+            length,
         };
     }
 
@@ -1868,18 +1741,17 @@ function unitVector(degrees) {
    * the outline is the biggest and most obvious part of a uniform load, and
    * clicking the middle of it selected whatever was behind.
    *
-   * THE ARROW LENGTH IS TAKEN FROM THE SAME NUMBERS THE RENDERER USES, so
-   * what is clickable is exactly what is visible - at any zoom, and at any
-   * Vector Scale. A hit test that guesses its own arrow length is a hit test
-   * that does not match the drawing, and the mismatch is invisible until
-   * somebody zooms in.
+   * EACH ARROW'S REACH IS THE ONE THE RENDERER AND THE SOURCE USE
+   * (`loadArrowReach`), in the same world units as `point` and the body, so
+   * what is clickable is exactly what is drawn, at any zoom. (It used to be
+   * the peak intensity times pixels-per-unit times the Vector Scale - a
+   * screen length laid along a world-space body, so the clickable field grew
+   * with zoom.)
    */
   function loadContainsPoint(
     geometry,
     point,
-    tolerance,
-    pixelsPerUnit,
-    vectorScale
+    tolerance
   ) {
     const start = geometry?.start;
     const end = geometry?.end;
@@ -1917,17 +1789,13 @@ function unitVector(degrees) {
       loadBodyNormal(geometry) ||
       unitVector(loadDirection(geometry));
 
-    const reach =
-      Math.max(
-        peak * Math.max(pixelsPerUnit, 1e-6) * vectorScale,
-        2
-      );
+    const reachOf = (sample) => loadArrowReach(geometry, sample.magnitude);
 
     /* 1. The arrows. */
     for (const sample of samples) {
       const tip = {
-        x: sample.base.x + away.x * reach,
-        y: sample.base.y + away.y * reach
+        x: sample.base.x + away.x * reachOf(sample),
+        y: sample.base.y + away.y * reachOf(sample)
       };
 
       if (
@@ -1951,8 +1819,8 @@ function unitVector(degrees) {
      * corners of the drawing and rejecting the middle of the load.
      */
     const tips = samples.map(sample => ({
-      x: sample.base.x + away.x * reach,
-      y: sample.base.y + away.y * reach
+      x: sample.base.x + away.x * reachOf(sample),
+      y: sample.base.y + away.y * reachOf(sample)
     }));
 
     const bases = samples
@@ -2140,10 +2008,6 @@ function unitVector(degrees) {
       FORCE_UNITS,
       LOAD_UNITS,
       MOMENT_UNITS,
-      CUSTOM_VECTOR_SCALE,
-        MAX_VECTOR_SCALE,
-        MIN_VECTOR_SCALE,
-        VECTOR_SCALE_OPTIONS,
         arrowSamples,
         clampInterval,
         drawnForceEnd,
@@ -2184,8 +2048,9 @@ function unitVector(degrees) {
         setLoadUnit,
         setProfilePoints,
         unitVector,
-        vectorScale,
-        vectorScaleFor
+        loadArrowHeight,
+        loadArrowReach,
+        setLoadArrowHeight
     };
 
 export default enggLoadProfile;

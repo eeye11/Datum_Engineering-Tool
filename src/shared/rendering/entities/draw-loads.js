@@ -6,7 +6,7 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import { appendDerivedMagnitude } from "../annotation-render.js";
-import { appendRotationalArrow, arrowheadDirection, arrowheadTip, distributedLoadArrowHead, distributedLoadArrowLength, forceEndpoints, forceStrokeWidth, momentIsClockwise, vectorScaleOf } from "../vector-render.js";
+import { appendRotationalArrow, arrowheadDirection, arrowheadTip, distributedLoadArrowHead, distributedLoadArrowLength, forceEndpoints, forceStrokeWidth, momentIsClockwise } from "../vector-render.js";
 import { createSvgElement, paintColour, styledLine } from "../svg-primitives.js";
 import enggDrawingState from "../../model/drawing-state.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
@@ -187,9 +187,9 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 
                 const length =
                     distributedLoadArrowLength(
+                        geometry,
                         sample.magnitude,
-                        scale,
-                        vectorScaleOf(state)
+                        scale
                     );
 
                 /*
@@ -334,9 +334,9 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                         toScreen(sample.base),
                         direction,
                         distributedLoadArrowLength(
+                            geometry,
                             sample.magnitude,
-                            scale,
-                            vectorScaleOf(state)
+                            scale
                         ),
                         normal
                     );
@@ -529,9 +529,9 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 
                 const length =
                     distributedLoadArrowLength(
+                        geometry,
                         sample.magnitude,
-                        scale,
-                        vectorScaleOf(state)
+                        scale
                     );
 
                 /*

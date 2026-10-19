@@ -325,32 +325,35 @@ console.log(
     `resultant magnitude: ${resultant.geometry.magnitude}`,
   );
 
-  /* THE EDIT: a different force, as the panel would write it. */
-  force.geometry.magnitude = 200;
-  force.geometry.angle = 90;
+  /*
+   * THE EDIT: a different force, as the panel writes it - through
+   * `setForceVector`, which states the new value and turns the drawn arrow to
+   * the new direction at the length it was drawn.
+   */
+  global.window.enggLoadProfile.setForceVector(force.geometry, 200, 90);
 
   S.commitDrawingChange(
     state,
     S.snapshotDrawing(state),
   );
 
+  /*
+   * VALUES AND DRAWING, EACH FROM ITS OWN SOURCE. The components STATE the
+   * force's value (`forceX`/`forceY`) and are DRAWN as the projections of its
+   * drawn arrow - which turned to 90 degrees at its drawn length, 100.
+   */
   check(
     "it follows the magnitude",
-    near(
-      Math.hypot(
-        comps.geometry.horizontal.end.x -
-          comps.geometry.horizontal.start.x,
-        comps.geometry.vertical.end.y -
-          comps.geometry.vertical.start.y,
-      ),
-      200,
-    ),
+    near(Math.hypot(comps.geometry.forceX, comps.geometry.forceY), 200),
+    `value (${comps.geometry.forceX}, ${comps.geometry.forceY})`,
   );
 
   check(
     "it follows the direction",
-    near(comps.geometry.vertical.end.y, 200),
-    `Fy end y: ${comps.geometry.vertical.end.y}, expected 200 for a vertical force`,
+    near(comps.geometry.forceY, 200) &&
+      near(comps.geometry.vertical.end.y - comps.geometry.vertical.start.y, 100) &&
+      near(comps.geometry.horizontal.end.x - comps.geometry.horizontal.start.x, 0),
+    `value Fy ${comps.geometry.forceY}; drawn Fy ${comps.geometry.vertical.end.y - comps.geometry.vertical.start.y}`,
   );
 
   check(
@@ -385,6 +388,11 @@ console.log(
   );
 
   /* A DRAG: the point moves and nothing else about the force changes. */
+  /* A move translates the whole force - its drawn arrow with it. */
+  force.geometry.end = {
+    x: force.geometry.end.x + 40,
+    y: force.geometry.end.y + 60,
+  };
   force.geometry.start = { x: 40, y: 60 };
   force.geometry.position = { x: 40, y: 60 };
 

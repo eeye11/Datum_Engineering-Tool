@@ -283,6 +283,15 @@ export function isStaticsBody(
  * these values, so dragging a handle is the same action as
  * typing a new intensity in the panel.
  */
+/*
+ * A LOAD'S HANDLES: its two ends, and the tip of each defining arrow.
+ *
+ * Every arrow tip is placed where the arrow is DRAWN - its base plus the
+ * load's drawn height for that intensity (`loadArrowReach`) - so the handle
+ * sits on the arrowhead the student sees, for a uniform and a varying load
+ * alike. Dragging one changes the drawn height (see statics-attachment.js);
+ * the intensities are the load's values and are edited in Features.
+ */
 function loadHandles(
     object
 ) {
@@ -293,119 +302,38 @@ function loadHandles(
         { kind: "end", point: g.end }
     ];
 
-    if (object.type === "load") {
-        /*
-         * A distributed load's magnitude points are dragged the
-         * same way they are typed: each handle writes one point's
-         * magnitude, and the profile between them follows. The
-         * two ends of the body move the loaded region itself.
-         */
-        enggLoadProfile
-            .profilePoints(g)
-            .forEach((point, index) => {
-                const along =
-                    enggLoadProfile.pointAlong(
-                        g,
-                        point.t
-                    );
+    const direction =
+        enggLoadProfile.unitVector(
+            enggLoadProfile.loadDirection(g)
+        );
 
-                const direction =
-                    enggLoadProfile.unitVector(
-                        enggLoadProfile.loadDirection(
-                            g
-                        )
-                    );
+    enggLoadProfile
+        .profilePoints(g)
+        .forEach((point, index) => {
+            const along =
+                enggLoadProfile.pointAlong(
+                    g,
+                    point.t
+                );
 
-                handles.push({
-                    kind: `load-point${index}`,
-                    point: {
-                        x:
-                            along.x +
-                            direction.x *
-                                point.magnitude,
-                        y:
-                            along.y +
-                            direction.y *
-                                point.magnitude
-                    }
-                });
+            const reach =
+                enggLoadProfile.loadArrowReach(
+                    g,
+                    point.magnitude
+                );
+
+            handles.push({
+                kind: `load-point${index}`,
+                point: {
+                    x: along.x + direction.x * reach,
+                    y: along.y + direction.y * reach
+                }
             });
-
-        return handles;
-    }
-
-    handles.push(
-        loadMagnitudeHandle(
-            object,
-            g.start,
-            g.end,
-            "startIntensity"
-        ),
-
-        loadMagnitudeHandle(
-            object,
-            g.end,
-            g.start,
-            "startIntensity"
-        )
-    );
+        });
 
     return handles;
 }
 
-/*
- * A point off the loaded region whose distance from one end
- * is proportional to that end's intensity.
- *
- * Placing it this way means the handle is always somewhere
- * useful to grab, and it is derived from the real geometry
- * rather than from a fixed offset.
- */
-function loadMagnitudeHandle(
-    object,
-    from,
-    to,
-    key
-) {
-    const g = object.geometry;
-
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-
-    const length =
-        Math.hypot(dx, dy) || 1;
-
-    /*
-     * The world length of one unit of intensity, so the
-     * handle follows the zoom the way every other handle
-     * does.
-     */
-    const scale =
-        enggDrawingState.BASE_PIXELS_PER_UNIT *
-        drawingState.camera.zoom;
-
-    const pixels =
-        Math.abs(
-            Number(g[key]) || 0
-        ) * 6;
-
-    const world =
-        pixels / Math.max(scale, 1e-6);
-
-    return {
-        kind: `load-${key}`,
-        point: {
-            x: from.x - (dx / length) * world,
-            y: from.y - (dy / length) * world
-        }
-    };
-}
-
-/*
- * Handles for a support: the point where it attaches to its
- * body, and a point one step away that sets which way it
- * faces.
- */
 function supportHandles(
     object
 ) {

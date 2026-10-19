@@ -1823,7 +1823,14 @@ function openLoadMagnitudePopup({
             commitConstantLoadFromPopup({
                 direction,
                 magnitude: confirmed.value,
-                unit: confirmed.unit
+                unit: confirmed.unit,
+
+                /*
+                 * THE DRAWN HEIGHT IS THE CLICK'S, NOT THE TYPED VALUE. The
+                 * distance the student pulled out from the span is how far the
+                 * arrows reach; the number confirmed here is the label.
+                 */
+                drawnHeight: suggestedMagnitude
             });
         },
 
@@ -1848,7 +1855,8 @@ function openLoadMagnitudePopup({
 function commitConstantLoadFromPopup({
     direction,
     magnitude,
-    unit
+    unit,
+    drawnHeight
 }) {
     const previous =
         enggDrawingState.snapshotDrawing(
@@ -1859,7 +1867,8 @@ function commitConstantLoadFromPopup({
         commitConstantLoad(
             direction,
             magnitude,
-            unit
+            unit,
+            drawnHeight
         );
 
     if (!created) {
@@ -1973,7 +1982,8 @@ export function constantLoadDraft(
 function commitConstantLoad(
     direction,
     magnitude,
-    unit
+    unit,
+    drawnHeight
 ) {
     const interaction =
         drawingState.interaction;
@@ -2046,7 +2056,10 @@ function commitConstantLoad(
                 loadUnit:
                     enggLoadProfile.loadUnit({
                         loadUnit: unit
-                    })
+                    }),
+
+                /* How far the arrows reach - the placement click's distance. */
+                arrowLength: drawnHeight
             }
         );
 
@@ -2156,16 +2169,26 @@ export function finishDistributedLoadConstruction() {
             0
         );
 
+    /*
+     * THE DRAWN HEIGHT IS THE TALLEST POINT AS PLACED. Each profile point was
+     * clicked at its own distance from the span, so the peak of those
+     * distances is how far the longest arrow reaches; later edits to the
+     * points' values reshape the taper and leave this height alone.
+     */
     const object =
         enggDrawingState.geometryFactories.load(
             draft.start,
             draft.end,
             peak,
-            staticsAttachedStyle(
-                toolId,
-                drawingState.interaction
-                    .staticsTarget
-            )
+            {
+                ...staticsAttachedStyle(
+                    toolId,
+                    drawingState.interaction
+                        .staticsTarget
+                ),
+
+                arrowLength: peak
+            }
         );
 
     object.geometry.direction =

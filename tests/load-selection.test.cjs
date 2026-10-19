@@ -26,8 +26,8 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
  *   3. the body line between the two stations
  *
  * And the arrow length used to test them has to be the one the RENDERER
- * draws with, or the hit region drifts away from the ink as soon as the
- * student zooms or changes the Vector Scale.
+ * draws with - the load's drawn height for each intensity, in world units -
+ * or the hit region drifts away from the ink.
  */
 
 
@@ -59,16 +59,16 @@ loadModule("load-profile.js");
 
 const profile = global.window.enggLoadProfile;
 
-/* Pixels per world unit at zoom 1, as the drawing uses. */
-const PPU = 3.2;
-
-const hits = (geometry, point, tolerance = 1, scale = 1) =>
+/*
+ * The hit test works in WORLD units, like the body and the point it is given.
+ * (It used to take pixels-per-unit and the Vector Scale and lay a screen
+ * length along a world-space body, so the clickable field grew with zoom.)
+ */
+const hits = (geometry, point, tolerance = 1) =>
   profile.loadContainsPoint(
     geometry,
     point,
     tolerance,
-    PPU,
-    scale,
   );
 
 /*
@@ -93,7 +93,7 @@ const uniform = () => ({
  * Read rather than assumed, so the test cannot drift from the drawing.
  */
 const reach = geometry =>
-  profile.peakMagnitude(geometry) * PPU;
+  profile.loadArrowReach(geometry, profile.peakMagnitude(geometry));
 
 console.log("\n  an arrow is hittable\n");
 
@@ -253,32 +253,31 @@ check(
   ),
 );
 
-console.log("\n  the hit region follows the Vector Scale\n");
+console.log("\n  the hit region follows the DRAWN height\n");
 
 /*
- * The renderer multiplies every arrow by the same factor, so the hit region
- * has to. A test that used a fixed length would keep passing at scale 1 and
- * quietly stop matching the drawing the moment the student turned the scale
- * up.
+ * The arrows are as long as the load was drawn (`arrowLength`), so the hit
+ * region has to follow the stored height - a fixed length would keep passing
+ * for one load and stop matching the drawing for the next.
  */
+const tall = { ...uniform(), arrowLength: 30 };
+
 check(
-  "a bigger Vector Scale is still hittable",
-  hits(
-    load,
-    { x: 50, y: -arrowReach * 3 },
-    1,
-    3,
-  ),
+  "a taller drawn load is hittable out to its own height",
+  hits(tall, { x: 50, y: -28 }),
 );
 
 check(
-  "and so is a smaller one, inside the scaled arrows",
-  hits(
-    load,
-    { x: 50, y: -arrowReach * 0.5 * 0.5 },
-    1,
-    0.5,
-  ),
+  "and its intensity did not decide that height",
+  profile.loadArrowReach(tall, 10) === 30,
+  String(profile.loadArrowReach(tall, 10)),
+);
+
+const short = { ...uniform(), arrowLength: 4 };
+
+check(
+  "a shorter one is a miss beyond its own height",
+  !hits(short, { x: 50, y: -12 }),
 );
 
 console.log("\n  and a reversed load is hit in the same place\n");

@@ -131,19 +131,6 @@ function createDrawingState() {
         },
 
         /*
-         * THE STATICS ENVIRONMENT'S DISPLAY SETTINGS.
-         *
-         * One block for the whole Statics workspace, held at
-         * drawing level rather than on any individual feature. The
-         * Vector Scale in here is the single shared value that every
-         * force and load arrow is drawn through.
-         *
-         * It is a DISPLAY setting and nothing else. It changes how
-         * big the arrows look and never how big the forces are: a
-         * 100 N force drawn at 4x is still 100 N, and the analysis
-         * that reads it never sees this value at all.
-         */
-        /*
          * ========================================================
          * THE THREE DISPLAY SETTINGS
          * ========================================================
@@ -164,9 +151,6 @@ function createDrawingState() {
             showUnits: true,
             showMagnitudes: true,
             showDimensions: true
-        },
-        statics: {
-            vectorScale: 1
         },
         objectSnap: {
             enabled: true,
@@ -618,6 +602,21 @@ function createGeometryObject(type, geometry, options = {}) {
     };
 }
 
+/*
+ * A LOAD'S DRAWN HEIGHT, when the gesture that made it supplied one.
+ *
+ * `arrowLength` is how far the load's longest arrow reaches, in drawing units;
+ * the intensities are its label values and only shape a varying load's taper
+ * (see `loadArrowHeight` in load-profile.js). A load made without one is drawn
+ * at its peak intensity, which is how every load looked before heights were
+ * stored - so a factory call that does not know the height changes nothing.
+ */
+function drawnArrowLength(options) {
+    const value = Math.abs(Number(options?.arrowLength));
+
+    return Number.isFinite(value) && value > 1e-9 ? { arrowLength: value } : {};
+}
+
 const geometryFactories = {
     line: (start, end, options) =>
         createGeometryObject(
@@ -1009,7 +1008,9 @@ const geometryFactories = {
                  */
                 loadUnit:
                     options?.loadUnit ??
-                    "kN/m"
+                    "kN/m",
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -1058,7 +1059,9 @@ const geometryFactories = {
                         t: 1,
                         magnitude: intensity
                     }
-                ]
+                ],
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -3113,9 +3116,6 @@ function serializeDrawing(state) {
             },
             grid: {
                 ...state.grid
-            },
-            statics: {
-                ...state.statics
             },
             snap: {
                 ...state.snap

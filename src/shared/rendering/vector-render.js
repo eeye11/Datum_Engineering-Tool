@@ -548,68 +548,37 @@ import { arrowHeadSize } from "./dimension-render.js";
      * shaft rather than sitting at a fixed size, so a long arrow
      * does not end in a head too small to read.
      */
-    /*
-     * The shared Statics Vector Scale, read once per render.
-     *
-     * Read from the drawing rather than passed down through every
-     * drawing routine, so there is exactly one place that decides how
-     * large Statics arrows are and no drawing path can quietly use a
-     * different one. A missing or unrecognised value falls back to 1,
-     * which is how arrows were drawn before the setting existed.
-     */
-    function vectorScaleOf(state) {
-        /*
-         * The load drawing paths already guard their use of the profile,
-         * so this guards it too. Falling back to 1 keeps arrows at their
-         * true length rather than failing to draw.
-         */
-        if (typeof enggLoadProfile === "undefined") {
-            return 1;
-        }
-
-        return enggLoadProfile.vectorScaleFor(state);
-    }
-
     const DISTRIBUTED_LOAD_ARROW_MIN_PX = 2;
 
     /*
-     * A distributed load's arrow length, from its intensity.
+     * A distributed load's arrow length on screen.
      *
-     * `scale` is the canvas zoom. It is multiplied by the shared
-     * Statics Vector Scale as well, so the arrows on screen are the true
-     * intensities drawn at whatever size the user has asked for.
+     * The arrow reaches as far as the load's DRAWN height says for this
+     * intensity (`loadArrowReach`: the stored height, scaled by intensity over
+     * the peak) - the same reach the Source writer emits - converted to pixels
+     * by `scale`, the canvas zoom. The intensity is never itself a length.
      *
-     * The Vector Scale multiplies EVERY arrow by the SAME factor. It is
-     * never applied per arrow, which is what keeps a varying load's
-     * profile honest: a load rising from 2 to 8 stays in that 1:4
-     * relationship at any scale. Normalising each arrow to fit would
-     * flatten the profile and hide the very thing the diagram exists to
-     * show, so one factor is applied to the whole representation and the
-     * shape of it is untouched.
-     *
-     * The minimum is a legibility floor so a small load still has an
-     * arrow that ends in a head big enough to read. It is applied AFTER
-     * the scaling, so it cannot flatten the profile either - a tiny
-     * arrow is clamped to readable size rather than stretched.
+     * The minimum is a legibility floor so a small arrow still ends in a head
+     * big enough to read. It is applied AFTER the conversion, so it cannot
+     * flatten a varying load's taper.
      */
     function distributedLoadArrowLength(
+        geometry,
         magnitude,
-        scale,
-        vectorScale = 1
+        scale
     ) {
-        const world = Math.abs(
-            Number(magnitude) || 0
-        );
+        const world =
+            typeof enggLoadProfile === "undefined"
+                ? Math.abs(Number(magnitude) || 0)
+                : enggLoadProfile.loadArrowReach(geometry, magnitude);
 
-        if (world <= 0) {
+        if (!(world > 0)) {
             return 0;
         }
 
         return Math.max(
             DISTRIBUTED_LOAD_ARROW_MIN_PX,
-            world *
-                Math.max(scale, 1e-6) *
-                Math.max(vectorScale, 1e-6)
+            world * Math.max(scale, 1e-6)
         );
     }
 
@@ -900,7 +869,6 @@ export {
     forceEndpoints,
     arrowheadTip,
     arrowheadDirection,
-    vectorScaleOf,
     DISTRIBUTED_LOAD_ARROW_MIN_PX,
     distributedLoadArrowLength,
     forceStrokeWidth,
