@@ -65,66 +65,6 @@ const LENGTH_UNITS = {
 
 const DEFAULT_LENGTH_UNIT = "mm";
 
-/*
- * THE TORQUE UNITS THE DOCUMENT UNDERSTANDS.
- *
- * Every one is defined against the newton-metre, so converting
- * between them is exact and cannot accumulate the way repeated
- * multiplication would.
- *
- * The conversions:
- *   1 kN·m  = 1000 N·m                       (exact, by definition)
- *   1 lbf·ft = 1.3558179483314004 N·m        (exact by the international
- *                                             pound and foot: 4.4482216152605 N
- *                                             × 0.3048 m)
- */
-const TORQUE_UNITS = {
-  "N·m": { label: "N·m", Nm: 1 },
-  "kN·m": { label: "kN·m", Nm: 1000 },
-  /*
-   * WRITTEN AS THE PRODUCT, NOT AS ITS EXPANSION.
-   *
-   * The comment above states the derivation - one pound-force times one foot
-   * - and the literal it used to hold was that product already multiplied
-   * out. An IEEE double cannot hold the product exactly, so the expanded
-   * decimal was a slightly different number from the one the comment
-   * describes, and ESLint's `no-loss-of-precision` flagged it for exactly
-   * that reason.
-   *
-   * Multiplying here is not a rounding difference: it is the SAME double the
-   * product produces, and it keeps the code and its explanation saying the
-   * same thing. `4.4482216152605` is the exact conversion of one pound-force
-   * to newtons, which is where the value comes from.
-   */
-  "lbf·ft": { label: "lbf·ft", Nm: 4.4482216152605 * 0.3048 }
-};
-
-const DEFAULT_TORQUE_UNIT = "N·m";
-
-/*
- * THE QUANTITY TYPES, and the unit each one carries.
- *
- * A type rather than a unit per call site, because the unit follows from what
- * is being measured rather than from where it is being written: a moment is
- * force x length in whatever force and length units the document is using,
- * and a reader who wrote "25 N·m" beside a beam dimensioned in millimetres
- * means exactly that.
- *
- * `per` marks the types that are a rate - newtons per metre for a load
- * intensity - which is the only structural difference between them, and
- * writing it as data avoids a chain of conditionals that would need a new
- * branch every time a quantity type was added.
- */
-const QUANTITIES = {
-  length: { unit: () => null, suffix: "" },
-  angle: { unit: () => "°", suffix: "°" },
-
-  force: { unit: () => "N", suffix: "N" },
-  moment: { unit: () => "N·m", suffix: "N·m" },
-  distributedLoad: { unit: () => "N/m", suffix: "N/m" },
-  area: { unit: () => "mm²", suffix: "mm²" },
-};
-
 function finite(value) {
   /* `Number(null)` is 0, which is a finite number — but null is an absent
    * value, not a zero, and must not be silently converted. */
@@ -216,57 +156,6 @@ function formatLength(value, unit, options = {}) {
   const chosen = LENGTH_UNITS[unit] ? unit : DEFAULT_LENGTH_UNIT;
 
   return `${prefix}${text} ${chosen}`;
-}
-
-function formatAngle(value, precision = null) {
-  return `${atPrecision(value, precision)}°`;
-}
-
-/*
- * ============================================================
- * A MAGNITUDE
- * ============================================================
- *
- * The unit follows from the quantity type, so a caller states WHAT it is
- * measuring rather than what the unit should be. That is what stops a force
- * being labelled in millimetres: there is no path by which a force reaches
- * this function without saying it is a force.
- */
-function formatMagnitude(value, quantityType) {
-  const quantity = QUANTITIES[quantityType];
-
-  if (!quantity) {
-    return number(value);
-  }
-
-  return `${number(value)} ${quantity.unit()}`;
-}
-
-/*
- * A magnitude with the symbol that names it: "F = 100 N", "w = 5 N/m".
- *
- * The symbol is passed in rather than derived, because which letter is
- * correct depends on what the feature is and the feature knows that; what
- * this module owns is that the number and its unit are always right.
- */
-function formatLabeled(symbol, value, quantityType) {
-  const formatted = formatMagnitude(value, quantityType);
-
-  return symbol ? `${symbol} = ${formatted}` : formatted;
-}
-
-/*
- * ============================================================
- * IS A NUMBER MEANINGFUL YET?
- * ============================================================
- *
- * A measurement that cannot be taken is not a measurement of zero. Zero is a
- * real engineering value - a genuinely zero-length member, a force of zero -
- * and printing it for a reference that could not be resolved would put a
- * real answer on the drawing where there is none.
- */
-function isMeasurable(value) {
-  return finite(value) !== null;
 }
 
 /*
@@ -728,27 +617,14 @@ function readQuantity(text, quantityType, fallbackUnit) {
 }
 
 const enggQuantities = {
-  LENGTH_UNITS,
-  DEFAULT_LENGTH_UNIT,
-  TORQUE_UNITS,
-  DEFAULT_TORQUE_UNIT,
-
   number,
-  atPrecision,
   formatLength,
-  formatAngle,
-  formatMagnitude,
-  formatLabeled,
-  isMeasurable,
 
   QUANTITY_UNITS,
   unitsFor,
   conversionFactor,
-  unitOffset,
   convertValue,
   isUnitFor,
-  defaultUnitFor,
-  canonicalUnitFor,
   readQuantity,
 };
 

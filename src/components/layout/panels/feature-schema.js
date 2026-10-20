@@ -320,6 +320,8 @@ function axisLabelOf(object, key, fallback) {
  *   min/step/integer   the bounds of a numeric field
  *   visible    a follow-on rule - a field with no `visible` is always shown
  */
+const ANNOTATE_ARROWHEAD_KINDS = new Set(["arrow", "leader", "callout"]);
+const ANNOTATE_ARROWHEAD_VALUES = new Set(["closed", "open", "none"]);
 const ARROW_VALUES = new Set(["none", "open", "filled", "bar"]);
 
 const ARROW_OPTIONS = [
@@ -429,6 +431,36 @@ const FIELDS = {
             return true;
         },
         options: ARROW_OPTIONS
+    },
+
+    /*
+     * An Arrow, Leader or Callout's head. The renderer and the source writer
+     * both read `style.arrowhead`: "closed" (filled), "open" or "none".
+     */
+    arrowhead: {
+        kind: "choice",
+        applies: (object) =>
+            object.type === "annotate" &&
+            ANNOTATE_ARROWHEAD_KINDS.has(object.annotateKind),
+        read: (object) => {
+            const value = String(object.style?.arrowhead ?? "closed");
+
+            return ANNOTATE_ARROWHEAD_VALUES.has(value) ? value : "closed";
+        },
+        write: (object, value) => {
+            if (!ANNOTATE_ARROWHEAD_VALUES.has(value)) {
+                return false;
+            }
+
+            object.style = { ...(object.style || {}), arrowhead: value };
+
+            return true;
+        },
+        options: [
+            { value: "closed", label: "Filled Arrow" },
+            { value: "open", label: "Open Arrow" },
+            { value: "none", label: "None" }
+        ]
     },
 
     sides: {
@@ -705,7 +737,7 @@ function normaliseArrow(value) {
  */
 export const GROUPS = [
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
-    { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd"] },
+    { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
@@ -727,6 +759,7 @@ export function fieldLabel(field, key) {
         lineType: "Style",
         arrowStart: "Begin Arrow",
         arrowEnd: "End Arrow",
+        arrowhead: "Arrowhead",
         sides: "Number of Sides",
         fillMode: "Mode",
         fill: "Fill Colour",
