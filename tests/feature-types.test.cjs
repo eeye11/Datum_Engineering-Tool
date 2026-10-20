@@ -32,7 +32,21 @@ const members = (predicate) => ALL.filter(predicate).sort();
 same(
   "bodies, in the order the Statics tools offer them",
   types.STATICS_BODY_TYPES,
-  ["particle", "rigid-body", "beam", "truss", "cable", "shaft"],
+  [
+    "particle",
+    "rigid-body",
+    "beam",
+    "truss",
+    "cable",
+    "shaft",
+    /*
+     * A PIPE / DUCT RUN IS A BODY. It is a run a Statics feature may attach
+     * to, exactly as a Beam is, so it is declared with `body: true` and appears
+     * in the same list. It is listed last because it is declared last, and the
+     * order is the order the tools offer them.
+     */
+    "pipe-duct",
+  ],
 );
 
 same(
@@ -60,9 +74,16 @@ same(
     "beam",
     "cable",
     "connection",
+    /*
+     * A PIPE / DUCT RUN AND AN ELBOW BOTH RUN BETWEEN TWO ENDS, so both are
+     * span-shaped. Declaring them here is what lets box selection and the
+     * measurement layer see them as runs rather than as loose points.
+     */
+    "elbow",
     "fixed-connection",
     "line",
     "pin-connection",
+    "pipe-duct",
     /*
      * A POLYLINE IS A CHAIN OF SPANS. It was missing from the table, and that
      * omission is exactly why a polyline crossed by a selection rectangle was

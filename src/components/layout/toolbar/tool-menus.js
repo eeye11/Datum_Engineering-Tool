@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { isFluidsToolActive } from "../../../features/workspace/interaction/fluids-tool.js";
 import { drawToolLabelById, toolIcons } from "./tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
@@ -73,6 +74,23 @@ export function renderToolButton(tool) {
                 "coordinate-system" &&
             drawingState.activeTool ===
                 "coordinate-system-2d"
+        ) ||
+
+        /*
+         * A FLUIDS SHAPE BUTTON STANDS FOR ITS PRIMITIVE.
+         *
+         * A Pipe / Duct arms the shared Line tool, so the button the student
+         * pressed must be the button that lights up - not a Line button in
+         * another category they cannot see. Several Fluids tools may share
+         * one primitive (Pump, Valve and Flow Meter all place a Point), so the
+         * Fluids id that was pressed is recorded on the interaction and the
+         * highlight is decided from THAT rather than from the primitive.
+         */
+        isFluidsToolActive(
+            tool.id,
+            drawingState.activeTool,
+            drawingState.interaction
+                ?.fluidsTool
         );
 
     const shortcut =

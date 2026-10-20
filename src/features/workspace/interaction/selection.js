@@ -29,6 +29,7 @@ import { activeCategory, closeCoordinateSystemMenu, closePolygonSidesPrompt } fr
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { clearGlobalToolHighlight } from "../../../components/layout/workspace/workspace-controls.js";
+import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
 
 /*
  * ========================================================
@@ -1121,6 +1122,23 @@ export function finishActiveConstruction() {
         }
 
         finishTrussConstruction();
+        return true;
+    }
+
+    /*
+     * A PIPE / DUCT PATH IS FINISHED BY THE SAME RULE.
+     *
+     * Enter means "done" for anything being drawn, so an armed Pipe / Duct
+     * tool is finished here rather than by a special case at the keyboard
+     * handler. Each run was committed as it was released, so there is nothing
+     * half-built to guard: finishing only clears the continuation and the tool
+     * stays armed for a fresh path.
+     */
+    if (
+        phase === ROUTE_PHASE ||
+        interaction.fluidsTool === "pipe-duct"
+    ) {
+        finishRouteConstruction();
         return true;
     }
 

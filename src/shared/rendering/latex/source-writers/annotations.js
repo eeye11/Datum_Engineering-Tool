@@ -34,6 +34,8 @@
 
 import { num, point, texText } from "./statics-primitives.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
+import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -97,7 +99,7 @@ function colourPrelude(values) {
 }
 
 function defaultColour() {
-  const theme = globalThis.enggTheme;
+  const theme = enggTheme;
 
   return (theme && typeof theme.defaultLineColour === "function" && theme.defaultLineColour()) || "#193335";
 }
@@ -588,7 +590,7 @@ function serializeMarks(object, kind) {
  */
 
 function dimensionModel() {
-  return globalThis.enggDimensionModel || null;
+  return enggDimensionModel || null;
 }
 
 function stateWithObjects(_object, allObjects, state) {

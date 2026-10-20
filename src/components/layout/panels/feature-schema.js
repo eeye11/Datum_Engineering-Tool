@@ -29,6 +29,7 @@
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
+import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 
@@ -740,6 +741,11 @@ export const GROUPS = [
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
+    {
+        id: "cross-section",
+        heading: "Cross Section",
+        fields: ["pipeShape", "pipeDiameter", "pipeWidth", "pipeHeight", "pipeBendRadius", "pipeMaterial", "pipeRoughness"]
+    },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
@@ -759,6 +765,141 @@ export const GROUPS = [
  * `processBend:<segment>` - and reads and writes `geometry.segmentBends`, the
  * value the canvas's middle-dot drag sets. -1..1, and 0 is straight.
  */
+/*
+ * ============================================================
+ * A PIPE / DUCT RUN AND AN ELBOW: THE CROSS SECTION
+ * ============================================================
+ *
+ * Ported from the fluids toolset's panel. Everything is on `object.engineering`:
+ * the Shape decides which sizes exist (circular: Diameter; rectangular: Width
+ * and Height, through the model's `dimensionalKeysFor`), so only those are
+ * shown. Sizes and an elbow's Bend Radius must be positive - each decides
+ * geometry that cannot exist at zero - while Surface Roughness may be zero (a
+ * smooth bore). Lengths are drawing units, which are millimetres on the sheet.
+ */
+function isFluidRun(object) {
+    return object?.type === "pipe-duct" || object?.type === "elbow";
+}
+
+function engineeringOf(object) {
+    if (!object.engineering || typeof object.engineering !== "object") {
+        object.engineering = {};
+    }
+
+    return object.engineering;
+}
+
+const PIPE_DEFAULT_SIZES = {
+    diameter: () => enggPipeDuct.DEFAULT_DIAMETER,
+    width: () => enggPipeDuct.DEFAULT_WIDTH,
+    height: () => enggPipeDuct.DEFAULT_HEIGHT
+};
+
+function pipeSizeField(key) {
+    return {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: (object) => isFluidRun(object) && enggPipeDuct.dimensionalKeysFor(object.engineering || {}).includes(key),
+        read: (object) => Number(object.engineering?.[key]) || PIPE_DEFAULT_SIZES[key](),
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size <= 0) {
+                return false;
+            }
+
+            engineeringOf(object)[key] = size;
+
+            return true;
+        }
+    };
+}
+
+Object.assign(FIELDS, {
+    pipeShape: {
+        kind: "choice",
+        applies: isFluidRun,
+        read: (object) => object.engineering?.shape === enggPipeDuct.PIPE_SHAPES.rectangular
+            ? enggPipeDuct.PIPE_SHAPES.rectangular
+            : enggPipeDuct.PIPE_SHAPES.circular,
+        write: (object, value) => {
+            const engineering = engineeringOf(object);
+
+            engineering.shape = value === enggPipeDuct.PIPE_SHAPES.rectangular
+                ? enggPipeDuct.PIPE_SHAPES.rectangular
+                : enggPipeDuct.PIPE_SHAPES.circular;
+
+            enggPipeDuct.dimensionalKeysFor(engineering).forEach((size) => {
+                if (!Number.isFinite(Number(engineering[size]))) {
+                    engineering[size] = PIPE_DEFAULT_SIZES[size]();
+                }
+            });
+
+            return true;
+        },
+        options: [
+            { value: enggPipeDuct.PIPE_SHAPES.circular, label: "Circular" },
+            { value: enggPipeDuct.PIPE_SHAPES.rectangular, label: "Rectangular" }
+        ]
+    },
+    pipeDiameter: pipeSizeField("diameter"),
+    pipeWidth: pipeSizeField("width"),
+    pipeHeight: pipeSizeField("height"),
+    pipeBendRadius: {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: (object) => object?.type === "elbow",
+        read: (object) => Number(object.engineering?.bendRadius) || 0,
+        write: (object, value) => {
+            const radius = Number(value);
+            const geometry = object.geometry || {};
+
+            /* A radius the corner cannot hold has no drawable bend, so it is refused. */
+            if (
+                !Number.isFinite(radius) ||
+                radius <= 0 ||
+                !enggPipeDuct.elbowGeometry(geometry.previous, geometry.position, geometry.next, radius)
+            ) {
+                return false;
+            }
+
+            engineeringOf(object).bendRadius = radius;
+
+            return true;
+        }
+    },
+    pipeMaterial: {
+        kind: "text",
+        applies: isFluidRun,
+        read: (object) => String(object.engineering?.material ?? ""),
+        write: (object, value) => {
+            engineeringOf(object).material = String(value ?? "");
+
+            return true;
+        }
+    },
+    pipeRoughness: {
+        kind: "number",
+        min: 0,
+        step: 0.001,
+        applies: isFluidRun,
+        read: (object) => Number(object.engineering?.roughness) || 0,
+        write: (object, value) => {
+            const roughness = Number(value);
+
+            if (!Number.isFinite(roughness) || roughness < 0) {
+                return false;
+            }
+
+            engineeringOf(object).roughness = roughness;
+
+            return true;
+        }
+    }
+});
+
 const PROCESS_BEND_PREFIX = "processBend:";
 
 function isProcessPath(object) {
@@ -817,6 +958,13 @@ export function fieldLabel(field, key) {
         arrowStart: "Begin Arrow",
         arrowEnd: "End Arrow",
         arrowhead: "Arrowhead",
+        pipeShape: "Shape",
+        pipeDiameter: "Diameter (mm)",
+        pipeWidth: "Width (mm)",
+        pipeHeight: "Height (mm)",
+        pipeBendRadius: "Bend Radius (mm)",
+        pipeMaterial: "Material",
+        pipeRoughness: "Surface Roughness (mm)",
         sides: "Number of Sides",
         fillMode: "Mode",
         fill: "Fill Colour",
@@ -949,6 +1097,8 @@ export function supportsTransform(object) {
  * ============================================================ */
 
 const TYPE_LABELS = {
+    "pipe-duct": "Pipe / Duct",
+    elbow: "Elbow",
     point: "Point",
     line: "Line",
     polyline: "Polyline",

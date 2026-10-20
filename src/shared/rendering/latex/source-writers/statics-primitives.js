@@ -22,6 +22,7 @@
  */
 
 import { resolveLineWidth } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 /* ============================================================
  * NUMBERS AND COORDINATES
@@ -154,7 +155,7 @@ export function colourOf(style, key = "stroke") {
         return fill || "black";
     }
 
-    return colourName(value) || colourName(globalThis.enggTheme?.defaultLineColour?.()) || "black";
+    return colourName(value) || colourName(enggTheme?.defaultLineColour?.()) || "black";
 }
 
 /* ============================================================

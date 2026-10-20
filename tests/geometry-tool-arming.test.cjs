@@ -90,25 +90,25 @@ console.log("\n  Re-arming from the submenu keeps the tool armed\n");
 
 check(
   "arc counts as a placement tool",
-  /isPlacementTool[\s\S]{0,800}?toolId === "arc"/.test(activateToolBody),
+  /isPlacementTool[\s\S]{0,800}?(?:toolId|requestedTool) === "arc"/.test(activateToolBody),
   "otherwise the submenu would toggle it back to Select",
 );
 
 check(
   "the reference-arc variant counts too",
-  /isPlacementTool[\s\S]{0,800}?toolId === "reference-arc"/.test(
+  /isPlacementTool[\s\S]{0,800}?(?:toolId|requestedTool) === "reference-arc"/.test(
     activateToolBody,
   ),
 );
 
 check(
   "polygon counts as a placement tool",
-  /isPlacementTool[\s\S]{0,800}?toolId === "polygon"/.test(activateToolBody),
+  /isPlacementTool[\s\S]{0,800}?(?:toolId|requestedTool) === "polygon"/.test(activateToolBody),
 );
 
 check(
   "a placement tool is never toggled back to Select",
-  /activeTool ===\s*\n?\s*toolId &&\s*\n?\s*!isPlacementTool/.test(
+  /activeTool ===\s*\n?\s*(?:toolId|requestedTool) &&\s*\n?\s*!isPlacementTool/.test(
     activateToolBody,
   ),
   "the toggle must be guarded by the placement test",
@@ -116,11 +116,15 @@ check(
 
 check(
   "so the armed tool id is the one that was asked for",
-  /const nextTool =[\s\S]{0,200}\?\s*"select"\s*\n?\s*:\s*toolId/.test(
+  /const nextTool =[\s\S]{0,200}\?\s*"select"\s*\n?\s*:\s*(?:toolId|requestedTool)/.test(
     activateToolBody,
   ),
 );
 
+/*
+ * (`requestedTool` is the tool a Fluids entry arms - its primitive - and is
+ * `toolId` itself for every other tool, so either name is the asked-for tool.)
+ */
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 
 if (fail) {

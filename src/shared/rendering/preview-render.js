@@ -15,6 +15,7 @@ import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
+import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 
 
     /*
@@ -562,6 +563,34 @@ import { heatTransferTool } from "../../features/workspace/model/thermodynamics/
                         })
                     );
                 });
+        }
+
+        /*
+         * A PIPE / DUCT SEGMENT BEING ROUTED: its two walls, dashed, from the
+         * same `boundaryLines` the committed run is drawn with.
+         */
+        if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
+            enggPipeDuct.boundaryLines(
+                geometry.start,
+                geometry.end,
+                geometry.engineering || preview.engineering || {}
+            ).forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(createSvgElement("line", {
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
+                    stroke: style.stroke,
+                    "stroke-width": 1.5,
+                    "stroke-dasharray": "6 4",
+                    opacity: style.opacity
+                }));
+            });
+
+            return;
         }
 
         if (preview.type === "point") {

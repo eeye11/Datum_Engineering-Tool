@@ -25,6 +25,7 @@ import * as pistonCylinder from "../../../../features/workspace/model/thermodyna
 import * as saturationCurve from "../../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import * as processLabels from "../../../../features/workspace/model/thermodynamics/process-labels.js";
 import * as processCurves from "../../../../features/workspace/model/thermodynamics/process-curves.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -55,7 +56,7 @@ function colourNameOf(value) {
 }
 
 function colourOf(object) {
-  const theme = globalThis.enggTheme;
+  const theme = enggTheme;
 
   return (
     colourNameOf(object?.style?.stroke) ||

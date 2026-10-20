@@ -48,6 +48,7 @@ import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { hitTestAnnotateTarget } from "../interaction/hit-testing.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import enggFluidsTools from "../model/fluids/fluids-tools.js";
 
 /*
  * The Annotate tools, and the kind each one makes.
@@ -76,17 +77,41 @@ const workToolLabels = {
 };
 
 /*
+ * ========================================================
+ * FLUIDS REUSES THE ANNOTATE KINDS
+ * ========================================================
+ *
+ * The Fluids section's Flow Representation and Fluid Annotations entries are
+ * NOT a second annotation system. A Flow Arrow IS the `arrow` kind and a
+ * Fluid Property Label IS the `note` kind - the student finds them under
+ * Fluids, and what they place is the ordinary Annotate feature, with the
+ * ordinary selection, moving, panel, undo and save.
+ *
+ * The mapping is read FROM the Fluids registry rather than restated here, so
+ * a Fluids entry that names a kind cannot disagree with the kind it makes:
+ * there is one place that says "Fluid Property Label makes a note", and it is
+ * the entry itself.
+ */
+export function annotateKindFor(toolId) {
+  return (
+    ANNOTATE_TOOL_KINDS[toolId] ||
+    enggFluidsTools.fluidsAnnotateKind(toolId) ||
+    null
+  );
+}
+
+/*
  * Is this one of the Annotate tools?
  *
  * Asked by name, from ONE table, so a tool added to the Annotate toolset
  * and forgotten here is impossible: the two are the same list read twice.
+ *
+ * A Fluids entry that maps to a kind counts too - it IS an annotate tool in
+ * everything but where its button sits - so the click router, the drag router
+ * and the preview all reach it through the same predicate.
  */
 export function isAnnotateTool(toolId) {
-  return Boolean(ANNOTATE_TOOL_KINDS[toolId]);
-}
-
-export function annotateKindFor(toolId) {
-  return ANNOTATE_TOOL_KINDS[toolId] || null;
+  return Boolean(annotateKindFor(toolId));
 }
 
 /*

@@ -50,6 +50,15 @@ export function isConstructionTool(
                 "arc",
                 "rectangle"
             ].includes(toolId) ||
+
+            /*
+             * A PIPE / DUCT ROUTE IS A CONSTRUCTION TOOL. It runs through the
+             * same click pipeline as every other multi-point tool, so it picks
+             * up the shared snapping and inference - which is what makes a
+             * route's vertices snap to existing geometry rather than needing a
+             * Fluids-specific snap of its own.
+             */
+            toolId === "pipe-duct" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

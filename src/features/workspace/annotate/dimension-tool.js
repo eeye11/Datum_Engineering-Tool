@@ -3,6 +3,7 @@
  */
 
 import enggMeasurement from "../../../shared/geometry/measurement-core.js";
+import enggFluidsTools from "../model/fluids/fluids-tools.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import enggDimensionCandidates from "../model/dimensions/dimension-candidates.js";
@@ -21,10 +22,21 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
  * length - is read from what the student picked. The retired Smart Dimension
  * and Variable Dimension tools are not routed here any more.
  */
+/*
+ * THE FLUIDS MEASUREMENTS REUSE THE SAME ENGINE. A Pressure Tap, a Pipe
+ * Diameter and a Section Plane are measurements of something already drawn,
+ * which is what this tool does, so they are routed here rather than through a
+ * second measuring system. The capability is read FROM the Fluids registry, so
+ * the entry that says "this is a measurement" and this layer cannot disagree.
+ */
 export function isDimensionTool(
     toolId
 ) {
-    return toolId === "dimension";
+    return (
+        toolId === "dimension" ||
+        enggFluidsTools.fluidsCapability(toolId) ===
+            enggFluidsTools.FLUIDS_CAPABILITIES.DIMENSION
+    );
 }
 
 /*

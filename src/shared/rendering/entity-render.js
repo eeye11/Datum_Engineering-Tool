@@ -14,6 +14,7 @@ import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
+import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 
@@ -62,7 +63,9 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.type === "freeform-polygon", draw: drawTriangle },
         { matches: entity => entity.type === "triangle", draw: drawTriangle },
         { matches: entity => entity.type === "arc", draw: drawArc },
-        { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d }
+        { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d },
+        { matches: entity => entity.type === "pipe-duct", draw: drawPipeDuct },
+        { matches: entity => entity.type === "elbow", draw: drawElbow }
     ];
 
 

@@ -45,6 +45,7 @@ import {
     textNode
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -79,7 +80,7 @@ function finite(value, fallback = 0) {
  * not loaded it simply falls back to black.
  */
 function themeInk() {
-    const theme = globalThis.enggTheme;
+    const theme = enggTheme;
 
     try {
         if (theme && typeof theme.defaultLineColour === "function") {

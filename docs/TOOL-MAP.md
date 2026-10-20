@@ -18,6 +18,9 @@ interaction ? model ? rendering ? panels.
 | Preview | `src/features/workspace/geometry/preview.js` | `updatePreview` |
 | Geometry creation | `src/features/workspace/geometry/geometry-creation.js` | `beginOrCompleteGeometry` |
 | Statics creation / attachment | `src/features/workspace/statics/` | `createStaticsFeature`, `attachStaticsFeature` |
+| Fluids: Pipe / Duct routing, elbows | `src/features/workspace/interaction/pipe-duct-tool.js` + `src/features/workspace/model/fluids/pipe-duct.js` | `commitRouteSegment`, `generateElbowFor` |
+| Fluids: toolset registry (what each button arms) | `src/features/workspace/model/fluids/fluids-tools.js` + `src/features/workspace/interaction/fluids-tool.js` | `fluidsToolGroups`, `fluidsArmedTool` |
+| Source writers (TikZ per feature type) | `src/shared/rendering/latex/source-writers/` | `SOURCE_WRITERS` in `index.js` |
 | Model / history | `src/shared/model/drawing-state.js` | `commitDrawingChange`, `geometryFactories.*` |
 | Rendering | `src/shared/rendering/renderer.js` | `renderDrawing` |
 | Hit testing | `src/features/workspace/interaction/hit-testing.js` | `objectAtPoint` |

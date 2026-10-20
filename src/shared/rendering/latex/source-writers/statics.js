@@ -65,6 +65,7 @@ import {
   vector,
 } from "./statics-primitives.js";
 import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "../source-diagnostics.js";
+import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
 
 /* ============================================================
  * HELPERS
@@ -1104,7 +1105,7 @@ function diagramValueScale(geometry, width) {
 
   let peak = 0;
 
-  const equations = globalThis.enggDiagramEquations;
+  const equations = enggDiagramEquations;
 
   if (geometry.mode === "plot" && equations) {
     peak = equations.peakMagnitude(equations.readPlot(geometry));
@@ -1163,7 +1164,7 @@ export function diagramMarks(geometry) {
   const unitHeight = diagramValueScale(geometry, width);
   const place = onDiagramAxis(geometry, unitHeight);
 
-  const equations = globalThis.enggDiagramEquations;
+  const equations = enggDiagramEquations;
 
   if (geometry.mode === "plot" && equations) {
     const entries = equations.readPlot(geometry);
