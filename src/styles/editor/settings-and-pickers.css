@@ -87,22 +87,46 @@
 /*
  * THE PANEL IS ONE COLUMN: a title that stays put and a body that scrolls.
  *
- * The dialog element is the dimmed backdrop, so the panel inside it is given a
- * column layout and a bounded height - otherwise a long settings page would
+ * The dialog element is the dimmed backdrop; the title and body sit together in
+ * one bordered panel with a bounded height - otherwise a long settings page would
  * grow taller than the window and put its own Close button out of reach.
  */
-.datum-settings-dialog > .datum-settings-title,
-.datum-settings-dialog > .datum-settings-body,
-.datum-help-dialog > .datum-help-dialog-title,
-.datum-help-dialog > .datum-help-dialog-body {
+.datum-help-panel,
+.datum-settings-panel {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 48px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.datum-help-panel > .datum-help-dialog-title,
+.datum-settings-panel > .datum-settings-title {
     flex: 0 0 auto;
     margin: 0;
 }
 
-.datum-settings-dialog > .datum-settings-body,
-.datum-help-dialog > .datum-help-dialog-body {
+.datum-help-panel > .datum-help-dialog-body,
+.datum-settings-panel > .datum-settings-body {
     flex: 1 1 auto;
-    max-height: 70vh;
+    font-size: 13px;
+    line-height: 1.65;
+    margin: 0;
+    min-height: 0;
+    overflow-wrap: anywhere;
+    padding: 20px 24px;
+}
+
+.datum-help-dialog-body code {
+    background: var(--datum-panel);
+    border-radius: 3px;
+    font-family: var(--datum-font-mono);
+    font-size: .92em;
+    padding: 2px 4px;
 }
 
 .datum-settings-close,

@@ -133,7 +133,7 @@ function fractionAlongFeature(
 
 /*
  * ========================================================
- * SMART DIMENSION: WHAT THE STUDENT JUST CLICKED
+ * DIMENSION: WHAT THE STUDENT JUST CLICKED
  * ========================================================
  *
  * A dimension reference is not merely "a feature". The tool has to tell
@@ -615,11 +615,11 @@ export function twoPointSpanOf(object) {
 
 /*
  * ========================================================
- * SMART DIMENSION: INFERRING THE MEASUREMENT
+ * DIMENSION: INFERRING THE MEASUREMENT
  * ========================================================
  *
  * From one or two references, decide what should be measured. This is
- * the heart of Smart Dimension and the reason the tool needs no mode
+ * the heart of the Dimension tool and the reason the tool needs no mode
  * switch:
  *
  *   one line            its full length

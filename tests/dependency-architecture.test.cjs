@@ -69,7 +69,6 @@ const freshDrawing = objects => ({
   grid: { visible: false, spacing: 5 },
   snap: { enabled: true, spacing: 1 },
   objectSnap: { enabled: false, tolerancePx: 10 },
-  statics: { vectorScale: 1 },
   styleDefaults: { stroke: "#000000", lineWidth: 0.5, lineType: "solid" },
   selection: { selectedObjectIds: [], hoveredObjectId: null },
   interaction: { phase: "idle", previewObjects: [] },
@@ -198,23 +197,30 @@ state.commitDrawingChange(drawing, before);
  *
  * So what is checked is the geometry, which is the thing on the sheet.
  */
+/*
+ * VALUES, NOT DRAWN LENGTHS. A Force Components object is DRAWN as the
+ * projections of its force's drawn arrow, and STATES the force's value in
+ * `forceX`/`forceY` (the retired Vector Scale used to tie the two together).
+ * This file is about whether every edit reaches the dependents, and a value
+ * edit reaches them as values - so the checks read `forceX`/`forceY`.
+ */
 const segmentsOf = object => ({
   original: object.geometry.original,
   horizontal: object.geometry.horizontal,
   vertical: object.geometry.vertical,
-  origin: object.geometry.origin
+  origin: object.geometry.origin,
+  forceX: object.geometry.forceX,
+  forceY: object.geometry.forceY
 });
 
 check(
   "a force's components follow it through an ordinary commit",
   near(
-    segmentsOf(componentsOf(drawing)).horizontal.end.x -
-      segmentsOf(componentsOf(drawing)).origin.x,
+    segmentsOf(componentsOf(drawing)).forceX,
     600
   ) &&
     near(
-      segmentsOf(componentsOf(drawing)).vertical.end.y -
-        segmentsOf(componentsOf(drawing)).origin.y,
+      segmentsOf(componentsOf(drawing)).forceY,
       0
     ),
   `horizontal ${JSON.stringify(segmentsOf(componentsOf(drawing)).horizontal)}, vertical ${JSON.stringify(segmentsOf(componentsOf(drawing)).vertical)}`
@@ -323,13 +329,11 @@ state.commitDrawingChange(drawing, reaimedBefore);
 check(
   "a re-aimed force's components change length, not just direction",
   near(
-    componentsOf(drawing).geometry.horizontal.end.x -
-      componentsOf(drawing).geometry.origin.x,
+    componentsOf(drawing).geometry.forceX,
     0
   ) &&
     near(
-      componentsOf(drawing).geometry.vertical.end.y -
-        componentsOf(drawing).geometry.origin.y,
+      componentsOf(drawing).geometry.forceY,
       600
     ),
   `horizontal ${JSON.stringify(componentsOf(drawing).geometry.horizontal)}, vertical ${JSON.stringify(componentsOf(drawing).geometry.vertical)}`
@@ -398,13 +402,11 @@ state.commitDrawingChange(drawing, editedBefore);
 check(
   "the components describe the edited force before the undo",
   near(
-    componentsOf(drawing).geometry.horizontal.end.x -
-      componentsOf(drawing).geometry.origin.x,
+    componentsOf(drawing).geometry.forceX,
     600
   ) &&
     near(
-      componentsOf(drawing).geometry.vertical.end.y -
-        componentsOf(drawing).geometry.origin.y,
+      componentsOf(drawing).geometry.forceY,
       0
     ),
   `horizontal ${JSON.stringify(componentsOf(drawing).geometry.horizontal)}, vertical ${JSON.stringify(componentsOf(drawing).geometry.vertical)}`
@@ -430,8 +432,7 @@ check(
   "and the components in the restored state agree with it",
   undoneComponents &&
     near(
-      undoneComponents.geometry.vertical.end.y -
-        undoneComponents.geometry.origin.y,
+      undoneComponents.geometry.forceY,
       600
     ),
   `vertical ${
@@ -459,8 +460,8 @@ check(
   "redo leaves the components consistent with the force again",
   redoneComponents &&
     near(redoneComponents.geometry.origin.x, 80) &&
-    near(redoneComponents.geometry.horizontal.end.x, 680) &&
-    near(redoneComponents.geometry.vertical.end.y, 0),
+    near(redoneComponents.geometry.forceX, 600) &&
+    near(redoneComponents.geometry.forceY, 0),
   `origin ${redoneComponents && JSON.stringify(redoneComponents.geometry.origin)}, horizontal ${redoneComponents && JSON.stringify(redoneComponents.geometry.horizontal)}`
 );
 
@@ -619,8 +620,7 @@ state.refreshDerivedFeatures(countedDrawing);
 check(
   "a force edited in the panel brings its components with it at once",
   near(
-    componentsOf(countedDrawing).geometry.horizontal.end.x -
-      componentsOf(countedDrawing).geometry.origin.x,
+    componentsOf(countedDrawing).geometry.forceX,
     typedMagnitude
   ),
   `horizontal ${JSON.stringify(componentsOf(countedDrawing).geometry.horizontal)}`
@@ -730,10 +730,8 @@ for (let i = 1; i <= 5; i++) {
 
   frames.push({
     magnitude: 100 * i,
-    horizontal: componentsOf(draggedDrawing).geometry.horizontal.end.x -
-      componentsOf(draggedDrawing).geometry.origin.x,
-    vertical: componentsOf(draggedDrawing).geometry.vertical.end.y -
-      componentsOf(draggedDrawing).geometry.origin.y,
+    horizontal: componentsOf(draggedDrawing).geometry.forceX,
+    vertical: componentsOf(draggedDrawing).geometry.forceY,
     resultant: resultantOf(draggedDrawing).geometry.magnitude
   });
 }
@@ -892,8 +890,8 @@ const componentsAgree = drawingState => {
   return (
     near(drawn.origin.x, force.geometry.start.x) &&
     near(drawn.origin.y, force.geometry.start.y) &&
-    near(drawn.horizontal.end.x - drawn.origin.x, expectedX) &&
-    near(drawn.vertical.end.y - drawn.origin.y, expectedY)
+    near(drawn.forceX, expectedX) &&
+    near(drawn.forceY, expectedY)
   );
 };
 

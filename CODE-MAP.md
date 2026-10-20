@@ -46,7 +46,7 @@ See `src/features/workspace/editor-state.js` for both.
 | Right-side inspector (Objects / Features / Source) | `src/components/layout/panels/drawing-panel.js` |
 | Feature editing UI (existing “legacy” feature panel) | `src/components/layout/panels/feature-panel.js` |
 | Tool-library registry loader | `src/tool-library/registry/tool-registry.js` |
-| `.enggdraw` read/write + migrations | `src/shared/file/document-file.js` |
+| Document envelope read/write + migrations (saved inside the `.tex`; `.enggdraw` is import-only) | `src/shared/file/document-file.js` + `src/shared/file/latex/latex-document.js` |
 | Writing-tab LaTeX editor and render | `src/shared/solution/writing-tab.js` |
 | Embedded drawing blocks in LaTeX | `src/shared/solution/embedded-drawings.js` |
 | Integration API (`window.datum`, postMessage bridge) | `src/shared/integration/datum-api.js` + `src/shared/integration/embed-bridge.js` |

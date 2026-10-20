@@ -29,6 +29,7 @@ import { geometrySourceWriter } from "./geometry.js";
 import { staticsSourceWriter } from "./statics.js";
 import { annotationSourceWriter } from "./annotations.js";
 import { thermodynamicsSourceWriter } from "./thermodynamics.js";
+import { fluidsSourceWriter } from "./fluids.js";
 
 /*
  * The writers, in installation order. The synchronization layer asks the most
@@ -42,7 +43,8 @@ export const SOURCE_WRITERS = Object.freeze([
   { id: "statics", writer: staticsSourceWriter },
   { id: "geometry", writer: geometrySourceWriter },
   { id: "annotations", writer: annotationSourceWriter },
-  { id: "thermodynamics", writer: thermodynamicsSourceWriter }
+  { id: "thermodynamics", writer: thermodynamicsSourceWriter },
+  { id: "fluids", writer: fluidsSourceWriter }
 ]);
 
 /*

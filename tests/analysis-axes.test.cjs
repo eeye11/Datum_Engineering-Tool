@@ -65,7 +65,6 @@ for (const name of [
   "measurement-core.js",
   "dimension-model.js",
   "annotation-model.js",
-  "smart-dimension.js",
   "diagram-equations.js",
   "load-profile.js",
   "body-frames.js",

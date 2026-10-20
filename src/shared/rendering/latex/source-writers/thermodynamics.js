@@ -21,6 +21,11 @@
  */
 
 import { num, point, texText } from "./statics-primitives.js";
+import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import * as saturationCurve from "../../../../features/workspace/model/thermodynamics/saturation-curve.js";
+import * as processLabels from "../../../../features/workspace/model/thermodynamics/process-labels.js";
+import * as processCurves from "../../../../features/workspace/model/thermodynamics/process-curves.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -51,7 +56,7 @@ function colourNameOf(value) {
 }
 
 function colourOf(object) {
-  const theme = globalThis.enggTheme;
+  const theme = enggTheme;
 
   return (
     colourNameOf(object?.style?.stroke) ||
@@ -109,6 +114,25 @@ function closedPath(points, colour, options = []) {
   return `\\draw[${[colour, ...options].join(", ")}] ${body}${usable.length > 2 ? " -- cycle" : ""};`;
 }
 
+/* The object's line type as TikZ dash options, as the canvas draws it. */
+function dashOptionsOf(object) {
+  const type = String(object?.style?.lineType || "solid").toLowerCase();
+
+  if (type === "dashed" || type === "construction") {
+    return ["dashed"];
+  }
+
+  if (type === "dotted") {
+    return ["dotted"];
+  }
+
+  if (type === "center" || type === "centre") {
+    return ["dash dot"];
+  }
+
+  return [];
+}
+
 /* ------------------------------------------------------------------ kinds */
 
 /*
@@ -119,16 +143,21 @@ function closedPath(points, colour, options = []) {
  * one and this writer would draw it with another, and the two would silently be
  * allowed to drift. The published objects are the loaded ones.
  */
+/*
+ * THE MODEL'S OWN GEOMETRY, IMPORTED. These were read from `globalThis.engg...`
+ * handles that nothing ever published, so every piston-cylinder, saturation
+ * curve and process label wrote no source at all and never reached the picture.
+ */
 function cylinderModule() {
-  return globalThis.enggPistonCylinder || null;
+  return pistonCylinder;
 }
 
 function saturationModule() {
-  return globalThis.enggSaturationCurve || null;
+  return saturationCurve;
 }
 
 function processLabelsModule() {
-  return globalThis.enggProcessLabels || null;
+  return processLabels;
 }
 
 /* The geometry module's own corner transform, through the published object. */
@@ -174,7 +203,7 @@ function serializeCylinder(object) {
 function serializeSaturation(object) {
   const dome = saturationModule();
 
-  if (!dome || typeof dome.saturationPaths !== "function") {
+  if (!dome || typeof dome.processDiagramPaths !== "function") {
     return null;
   }
 
@@ -183,7 +212,8 @@ function serializeSaturation(object) {
 
   const commands = [];
 
-  dome.saturationPaths(geometry).forEach((path, index) => {
+  /* A saturation curve is the axes and the dome; a process plot is the axes alone. */
+  dome.processDiagramPaths(geometry, object).forEach((path, index) => {
     /*
      * THE AXIS AND THE DOME, and the two arrow tips on the axes. The paths are
      * the model's own - the same cubic the canvas draws - so the compiled dome
@@ -234,7 +264,12 @@ function serializeProcessPath(object, options) {
 
   const commands = [];
 
-  const path = polyline(points, colour, ["line width=1.1pt"]);
+  /*
+   * A BENT SEGMENT IS DRAWN CURVED, through the same points the canvas draws -
+   * `processPathPoints` follows each segment's own bend.
+   */
+  const drawn = processCurves.processPathPoints({ ...geometry, points });
+  const path = polyline(drawn.length >= 2 ? drawn : points, colour, ["line width=1.1pt"]);
 
   if (path) {
     commands.push(path);
@@ -245,7 +280,12 @@ function serializeProcessPath(object, options) {
    * student's own label offsets, through the model's `processLabelPoint`. A
    * state the student placed is numbered where they placed it.
    */
-  const scale = Number(options.vectorScale) || 1;
+  /*
+   * `processLabelPoint` takes a pixels-per-unit to turn its default 13 px
+   * offset into drawing units. The source is written in drawing units, so it
+   * is 1 - the value the retired Vector Scale used to pass here by default.
+   */
+  const scale = 1;
 
   points.forEach((at, index) => {
     if (index >= finite(object.metadata?.stateCount, points.length)) {
@@ -273,15 +313,25 @@ function serializeProcessPath(object, options) {
     );
 
     if (index > 0) {
-      const previous = points[index - 1];
-      const dx = finite(at.x) - finite(previous.x);
-      const dy = finite(at.y) - finite(previous.y);
+      /*
+       * THE ARROW SITS ON THE SEGMENT'S MIDDLE and points along it there - on a
+       * bent segment that is the curve's middle, as the canvas draws it.
+       */
+      const segment = processCurves.processSegmentPoints({ ...geometry, points }, index - 1);
+      const middle = Math.floor(segment.length / 2);
+      const previous = segment.length > 2 ? segment[middle - 1] : points[index - 1];
+      const next = segment.length > 2 ? segment[middle + 1] : at;
+      const mid = segment.length > 2
+        ? segment[middle]
+        : { x: (finite(at.x) + finite(previous.x)) / 2, y: (finite(at.y) + finite(previous.y)) / 2 };
+      const dx = finite(next.x) - finite(previous.x);
+      const dy = finite(next.y) - finite(previous.y);
       const length = Math.hypot(dx, dy);
 
       if (length > 1e-9) {
         commands.push(
-          `\\draw[${colour}, fill=${colour}] (${num((finite(at.x) + finite(previous.x)) / 2)},${num(
-            (finite(at.y) + finite(previous.y)) / 2
+          `\\draw[${colour}, fill=${colour}] (${num(finite(mid.x) + (dx / length))},${num(
+            finite(mid.y) + (dy / length)
           )}) -- ++(${num((-dx / length) * 2)},${num((-dy / length) * 2)}) -- ++(${num(
             (-dy / length) * 1.2
           )},${num((dx / length) * 1.2)}) -- cycle;`
@@ -297,17 +347,19 @@ function serializeControlVolume(object) {
   const geometry = object.geometry || {};
   const colour = colourOf(object);
 
-  const frame = [
-    { x: finite(geometry.position?.x), y: finite(geometry.position?.y) },
-    { x: finite(geometry.position?.x) + finite(geometry.width), y: finite(geometry.position?.y) },
-    {
-      x: finite(geometry.position?.x) + finite(geometry.width),
-      y: finite(geometry.position?.y) + finite(geometry.height)
-    },
-    { x: finite(geometry.position?.x), y: finite(geometry.position?.y) + finite(geometry.height) }
-  ];
+  /*
+   * The frame is the model's own corners - `position` is the top-left and the
+   * box runs down from it - so a rotated control volume is drawn rotated.
+   */
+  const frame = [[0, 1], [1, 1], [1, 0], [0, 0]]
+    .map(([x, y]) => cylinderPointOf(geometry, x, y))
+    .filter(Boolean);
 
-  return withPrelude(object, closedPath(frame, colour));
+  if (frame.length !== 4) {
+    return null;
+  }
+
+  return withPrelude(object, closedPath(frame, colour, dashOptionsOf(object)));
 }
 
 /* ------------------------------------------------------------------ routes */
@@ -338,6 +390,13 @@ export function thermodynamicsKindOf(object) {
   return null;
 }
 
+/*
+ * THE THERMODYNAMICS FEATURES STORED AS RECTANGLES. Each is a rectangle with a
+ * `thermodynamicsKind`, so this writer must claim it before the geometry writer
+ * draws it as a bare box.
+ */
+const RECTANGLE_KINDS = new Set(["control-volume", "saturation-curve", "process-plot", "piston-cylinder"]);
+
 export function thermodynamicsSourceWriter(object, options = {}) {
   if (!object || typeof object !== "object") {
     return null;
@@ -354,11 +413,11 @@ export function thermodynamicsSourceWriter(object, options = {}) {
    * feature. Recognition is the metadata, exactly as the canvas's renderer
    * table does it.
    */
-  if ((object.type === "rectangle" || object.type === "control-volume") && kind !== "control-volume") {
+  if ((object.type === "rectangle" || object.type === "control-volume") && !RECTANGLE_KINDS.has(kind)) {
     return null;
   }
 
-  if (kind === "saturation-curve") {
+  if (kind === "saturation-curve" || kind === "process-plot") {
     return serializeSaturation(object);
   }
 

@@ -38,8 +38,9 @@ const check = (name, ok, detail) => {
 };
 
 const creation = fs.readFileSync(locate("geometry-creation.js"), "utf8");
-const markup = fs.readFileSync(locate("feature-panel-markup.js"), "utf8");
-const update = fs.readFileSync(locate("property-update.js"), "utf8");
+/* The Features pane's own X/Y label fields - what the student types into. */
+const schema = require(locate("feature-schema.js"));
+const axes = () => ({ type: "coordinate-system-2d", geometry: { origin: { x: 0, y: 0 }, showLabels: true } });
 const render = fs.readFileSync(locate("canvas-render.js"), "utf8");
 
 console.log("\n  the defaults are written at creation, once\n");
@@ -58,26 +59,24 @@ check(
 
 console.log("\n  an empty label stays empty\n");
 
-check(
-  "the panel reads a MISSING label as empty, not as the default",
-  /geometry\.xLabel \?\? ""/.test(markup) &&
-    /geometry\.yLabel \?\? ""/.test(markup),
-  "substituting a default here is what would resurrect a cleared label",
-);
+{
+  const object = axes();
 
-check(
-  "clearing the field stores an empty string",
-  /key === 'xLabel' \|\| key === 'yLabel'[\s\S]{0,200}g\[key\] = String\(value \?\? ''\)/.test(
-    update,
-  ),
-  "an empty label must be stored as empty, not dropped",
-);
+  schema.fieldDefinition("xLabel").write(object, "");
+  schema.fieldDefinition("yLabel").write(object, "");
 
-check(
-  "and does NOT fall back to the default",
-  !/xLabel[\s\S]{0,160}\|\|\s*'X'/.test(update) &&
-    !/yLabel[\s\S]{0,160}\|\|\s*'Y'/.test(update),
-);
+  check(
+    "clearing the field stores an empty string",
+    object.geometry.xLabel === "" && object.geometry.yLabel === "",
+    "an empty label must be stored as empty, not dropped",
+  );
+
+  check(
+    "and the panel reads it back as empty, NOT as the default",
+    schema.readField(object, "xLabel") === "" && schema.readField(object, "yLabel") === "",
+    "substituting a default here is what would resurrect a cleared label",
+  );
+}
 
 console.log("\n  an empty label draws nothing\n");
 
@@ -119,12 +118,18 @@ check(
     /appendAxisLabel\(\s*yText/.test(render),
 );
 
-check(
-  "a label edits only its own stored text",
-  /key === 'xLabel' \|\| key === 'yLabel'/.test(update) &&
-    /g\[key\] = String\(value \?\? ''\)/.test(update),
-  "one write, keyed by which label was edited",
-);
+{
+  const object = axes();
+
+  object.geometry.yLabel = "Fy";
+  schema.fieldDefinition("xLabel").write(object, "Fx");
+
+  check(
+    "a label edits only its own stored text",
+    object.geometry.xLabel === "Fx" && object.geometry.yLabel === "Fy",
+    "one write, keyed by which label was edited",
+  );
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 

@@ -31,11 +31,10 @@ function previewFeatures(features) {
         id: "latex-preview",
         name: "Preview",
         objects: features,
-        scale: drawingState.scale || null,
         units: drawingState.units || "mm"
     };
     const rendered = enggDrawingExport.renderFittedDocument(
-        { version: 2, units: sheet.units, scale: sheet.scale, objects: [], sheets: [sheet], activeSheetId: sheet.id },
+        { version: 2, units: sheet.units, objects: [], sheets: [sheet], activeSheetId: sheet.id },
         { width: PREVIEW_WIDTH_PX, svgOnly: true }
     );
 

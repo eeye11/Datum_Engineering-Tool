@@ -77,7 +77,6 @@ const canvas = global.document.getElementById("canvas");
 const scene = (objects) => ({
   objects,
   display: { showMagnitudes: true, showUnits: true },
-  scale: { mmPerUnit: 1, unit: "mm" },
   selection: {
     selectedObjectIds: [],
     boxSelectionIds: [],

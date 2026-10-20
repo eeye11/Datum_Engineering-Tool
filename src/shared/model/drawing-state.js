@@ -514,7 +514,25 @@ function createGeometryObject(type, geometry, options = {}) {
          * `addObject` numbers duplicates within a kind through the same
          * naming pass every other feature uses.
          */
-        annotate: "Annotation"
+        annotate: "Annotation",
+
+        /*
+         * THE FLUIDS FLOW-PATH FEATURES.
+         *
+         * These are named by TYPE, and the type is now ONE thing: there is no
+         * Pipe Route parent and no Pipe Segment child. A student scanning the
+         * Features list reads the actual flat list -
+         * "Pipe / Duct 1", "Elbow 1", "Pipe / Duct 2" -
+         * rather than a hierarchy where three rows share one route name.
+         *
+         * The run name does not say pipe or duct, because the feature does not
+         * have that distinction: Pipe / Duct is one feature type whose
+         * cross-section SHAPE (circular or rectangular) is a property. The name
+         * cannot disagree with what was drawn, because there is nothing to
+         * disagree about.
+         */
+        "pipe-duct": "Pipe / Duct",
+        elbow: "Elbow"
     }[type] || type;
 
     return {
@@ -576,6 +594,21 @@ function createGeometryObject(type, geometry, options = {}) {
 
         engineering: options.engineering || undefined
     };
+}
+
+/*
+ * A LOAD'S DRAWN HEIGHT, when the gesture that made it supplied one.
+ *
+ * `arrowLength` is how far the load's longest arrow reaches, in drawing units;
+ * the intensities are its label values and only shape a varying load's taper
+ * (see `loadArrowHeight` in load-profile.js). A load made without one is drawn
+ * at its peak intensity, which is how every load looked before heights were
+ * stored - so a factory call that does not know the height changes nothing.
+ */
+function drawnArrowLength(options) {
+    const value = Math.abs(Number(options?.arrowLength));
+
+    return Number.isFinite(value) && value > 1e-9 ? { arrowLength: value } : {};
 }
 
 const geometryFactories = {
@@ -969,7 +1002,9 @@ const geometryFactories = {
                  */
                 loadUnit:
                     options?.loadUnit ??
-                    "kN/m"
+                    "kN/m",
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -1018,7 +1053,9 @@ const geometryFactories = {
                         t: 1,
                         magnitude: intensity
                     }
-                ]
+                ],
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -1290,7 +1327,7 @@ const geometryFactories = {
              * AXIAL FORCE DIAGRAM are each created here as ONE
              * semantic feature, not as a pile of lines and points.
              *
-             * They are TEMPLATES, and that is the whole point. EnggDraw
+             * They are TEMPLATES, and that is the whole point. DAETUM
              * draws the frame - a zero axis to measure against, a
              * region to draw in, and the source beam's span where there
              * is one - and the student draws the diagram itself with the
@@ -1887,16 +1924,6 @@ function removeObjectsAndDescendants(
 }
 
 /*
- * Automatic scale reset removed.
- *
- * DAETUM geometry is schematic: deleting or editing annotations must not
- * implicitly establish, reset, or erase a drawing scale.
- */
-function resetScaleIfSheetIsEmpty(state) {
-    return false;
-}
-
-/*
  * ========================================================
  * THE SHARED SELECTION AND TOOL EVENTS
  * ========================================================
@@ -1977,7 +2004,7 @@ function clearSelection(state) {
  *
  * WHAT THIS IS HANDED IS NOT ALWAYS AN ARRAY. It began as the feature list,
  * and it is now the DOCUMENT snapshot - an object carrying the objects, the
- * sheets, the scale and the camera - so a helper that assumed a list returned
+ * sheets and the camera - so a helper that assumed a list returned
  * an empty array and Undo restored an empty drawing.
  *
  * `deepClone` copies either shape, which is why it is the one used here. The
@@ -2230,9 +2257,6 @@ function restoreDocument(state, document) {
         state.units = document.units;
     }
 
-    if (document?.scale) {
-        state.scale = { ...document.scale };
-    }
 
     return state;
 }
@@ -2256,7 +2280,7 @@ function restoreDocument(state, document) {
  *
  *   - a sheet being added, removed, renamed or reordered,
  *   - a change to ANOTHER sheet's features,
- *   - a change to the document's units or scale.
+ *   - a change to the document's units.
  *
  * So the collection goes into the snapshot too. `sheets` is whatever
  * the caller supplies through `state.historySinks` - the editor is the
@@ -2344,23 +2368,6 @@ function snapshotDocument(state) {
         objects: entry,
         sheets: entry.sheets ?? null,
 
-        /*
-         * THE CALIBRATION TRAVELS WITH THE OBJECTS.
-         *
-         * A length only means something because of the scale, so a
-         * snapshot that restored the geometry but not the scale restored
-         * a drawing whose every dimension was wrong by a factor nobody
-         * could see - Undo of anything that followed a calibration gave
-         * back the numbers but not their meaning.
-         *
-         * `null` is the honest answer for a document that has never been
-         * calibrated, and it is distinct from a missing field for the same
-         * reason it is in the document: "never calibrated" and "calibration
-         * lost" must not look alike.
-         */
-        scale: state.scale
-            ? deepClone(state.scale)
-            : null
     };
 }
 
@@ -2407,18 +2414,6 @@ function restoreDocumentSnapshot(state, entry) {
         document.dispatchEvent(replaced);
     }
 
-    /*
-     * ...AND THE SCALE WITH IT, and from the entry rather than from
-     * whatever the document happens to hold now. The snapshot is the
-     * whole state at one moment, and restoring only part of it is how a
-     * drawing ends up self-inconsistent: real geometry paired with
-     * somebody else's scale.
-     */
-    if (entry && Object.prototype.hasOwnProperty.call(entry, "scale")) {
-        state.scale = entry.scale
-            ? deepClone(entry.scale)
-            : null;
-    }
     /*
      * A RESTORED SHEET'S VIEWPORT AND SETTINGS.
      *
@@ -2691,6 +2686,37 @@ function clearInteraction(state) {
     state.interaction.snapGeometry = [];
 
     /*
+     * ========================================================
+     * THE FLUIDS / PIPE ROUTE STATE GOES WITH THE INTERACTION
+     * ========================================================
+     *
+     * `fluidsTool` records WHICH Fluids button armed the running
+     * tool, and the toolbar highlight is decided from it (see
+     * `isFluidsToolActive`). It is therefore interaction state, not
+     * a preference: leaving it behind meant that choosing Select
+     * after Pipe / Duct left the Fluids id on the interaction, so
+     * the Pipe / Duct button STAYED LIT while Select ran - the
+     * highlight was a leftover rather than a statement of what is
+     * active.
+     *
+     * The route continuation fields are the operation's own state
+     * for the same reason: the previous run a new leg would join,
+     * the cross-section being drawn with, the count of legs placed
+     * and the resolved start of the leg being dragged all die with
+     * the operation. A tool activated later must not inherit them.
+     *
+     * Callers that re-arm a Fluids tool write `fluidsTool` again
+     * AFTER clearing (see tool-activation.js), so this cannot drop
+     * a legitimately-armed tool's own id.
+     */
+    state.interaction.fluidsTool = null;
+    state.interaction.previousRun = null;
+    state.interaction.routeEngineering = null;
+    state.interaction.routeCommittedCount = 0;
+    state.interaction.routeSegmentStart = null;
+    state.interaction.routeResolvedStart = null;
+
+    /*
      * The distributed load's construction state: the body it
      * loads, the direction its first force set, and the
      * magnitude points placed so far. All of it is temporary,
@@ -2917,9 +2943,8 @@ function snapCoordinate(value, state) {
  *    move the lattice. The same pointer position converts to the same
  *    coordinate at every zoom, and lands on the same line.
  *
- *  - the engineering scale. The interval is a drawing aid: five units apart is
- *    five units apart whether or not the document has been calibrated, and the
- *    snapping never reads `state.scale`.
+ *  - the document's units. The interval is a drawing aid: five units apart is
+ *    five drawing units apart.
  *
  * `gridSnapPoint` is the two-dimensional form, so a caller cannot snap one axis
  * and forget the other. An intersection is the normal result for a free point;
@@ -3049,33 +3074,12 @@ function serializeDrawing(state) {
             version: state.version,
             units: state.units,
 
-            /*
-             * THE CALIBRATION IS PART OF THE DOCUMENT.
-             *
-             * It is what makes a length mean anything, so a drawing saved
-             * without it reopened with every dimension wrong - the numbers
-             * were still right, they were just no longer in the units they
-             * claimed. The whole shape travels together for that reason.
-             */
-            scale: state.scale
-                ? {
-                      ...state.scale,
-                      reference: state.scale.reference
-                          ? {
-                                ...state.scale.reference
-                            }
-                          : undefined
-                  }
-                : null,
 
             camera: {
                 ...state.camera
             },
             grid: {
                 ...state.grid
-            },
-            statics: {
-                ...state.statics
             },
             snap: {
                 ...state.snap
@@ -3114,7 +3118,6 @@ const enggDrawingState = {
     addObject,
     removeObject,
     removeObjectsAndDescendants,
-    resetScaleIfSheetIsEmpty,
     selectObjects,
     selectObject,
     clearSelection,

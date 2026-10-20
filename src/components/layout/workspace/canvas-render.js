@@ -60,13 +60,57 @@ const SOURCE_RENDER_DELAY_MS = 180;
 /* revision -> svg. A small LRU: Undo and Redo revisit versions constantly. */
 const CACHE_LIMIT = 24;
 
+/*
+ * A failure that says nothing about the source - the engine is still loading,
+ * the server cannot be reached - is retried after this long, doubling up to
+ * the cap. A failure that IS about the source is not retried at all: the same
+ * text would fail the same way, so it waits for the next edit.
+ */
+const TRANSIENT_RETRY_MS = 1000;
+const TRANSIENT_RETRY_CAP_MS = 8000;
+
 let compiledCache = new Map();
 let compileTimer = null;
-let compileToken = 0;
 let compiledRevision = null;
 let lastCompiledSvg = null;
 let lastCompileError = null;
-let inFlight = null;
+
+/*
+ * WHAT EACH OBJECT LOOKED LIKE WHEN A SOURCE REVISION WAS WRITTEN.
+ *
+ * revision -> Map(object id -> serialised object). Recorded the first time a
+ * revision is drawn, which is straight after the commit that wrote it. Comparing
+ * the model with the record for the picture on screen says which objects the
+ * picture does not show yet - see `objectsThePictureDoesNotShow`.
+ */
+let modelAtRevision = new Map();
+
+/* The current source's object regions, parsed once per revision. */
+let regionsRevision = null;
+let regionsMap = null;
+
+/*
+ * THE SCHEDULER'S STATE, ALL KEYED BY SOURCE REVISION.
+ *
+ *   scheduledRevision  the revision the debounce timer will compile
+ *   inFlightRevision   the revision being compiled right now, or null
+ *   failedRevision     the last revision whose SOURCE failed to compile
+ *
+ * Keying by revision rather than by "the latest request" is what keeps the
+ * picture moving. A redraw asks for the current revision many times a second -
+ * every pointer move over the canvas - and each request used to restart the
+ * debounce and cancel the compile already running. While the pointer moved, no
+ * compile ever finished: the Source tab showed the new code and the Drawing
+ * Space never caught up. Now a request for a revision that is already
+ * scheduled, running or known to fail is a no-op.
+ */
+let scheduledRevision = null;
+let inFlightRevision = null;
+let failedRevision = null;
+let transientRetryMs = TRANSIENT_RETRY_MS;
+
+/* Bumped when the cache is reset for another document; see the reset below. */
+let generation = 0;
 
 function createSvgElement(
     name,
@@ -496,21 +540,35 @@ function canvasBounds() {
 /*
  * WHERE THE WORLD APPEARS IN THE PICTURE.
  *
- * The picture is drawn in drawing units (millimetres on paper), from (0,0) up
- * and to the right. The canvas shows world points through the camera:
+ * The source is written in drawing units (`x=1mm, y=1mm`). The canvas shows
+ * world points through the camera:
  *
  *     screen.x = width / 2 + (x - panX) * k
  *     screen.y = height / 2 - (y - panY) * k
  *
  * so a world point (panX, panY) belongs at the canvas centre, and one drawing
- * unit is `k` screen pixels. The picture is positioned with exactly that
- * transform, which keeps the compiled drawing on the same world coordinates
- * as the snapping, the handles and every other piece of interaction code.
+ * unit is `k` screen pixels.
  *
- * It is written as viewBox + width/height rather than an SVG transform so the
- * renderer's own coordinates are never rewritten: the source's numbers are the
- * drawing's numbers.
+ * THE COMPILED SVG IS NOT IN DRAWING UNITS. TeX writes TeX points, y downward,
+ * and places the page one inch in - so with the picture anchored at its (0,0)
+ * (the canvas asks for that; see server/tikz.js) a world point lands at
+ *
+ *     svg.x = PICTURE_ORIGIN + x * POINTS_PER_UNIT
+ *     svg.y = PICTURE_ORIGIN - y * POINTS_PER_UNIT
+ *
+ * The visible world rectangle is converted with exactly that map, so the
+ * compiled drawing sits on the same world coordinates as the snapping, the
+ * handles and every other piece of interaction code. Reading the SVG as if it
+ * were millimetres from the origin - as this used to - drew the picture about
+ * 2.8 times too large and shifted by its bounding box, away from the objects
+ * the student was clicking.
+ *
+ * It is written as a viewBox rather than an SVG transform so the renderer's own
+ * coordinates are never rewritten.
  */
+const POINTS_PER_UNIT = 72.27 / 25.4;
+const PICTURE_ORIGIN = -72.27;
+
 function positionPictureLayer(layer, bounds, state) {
     const zoom = Number(state?.camera?.zoom) || 1;
     const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
@@ -520,9 +578,12 @@ function positionPictureLayer(layer, bounds, state) {
     const viewWidth = Math.max(1, bounds.width / k);
     const viewHeight = Math.max(1, bounds.height / k);
 
+    const left = PICTURE_ORIGIN + (panX - viewWidth / 2) * POINTS_PER_UNIT;
+    const top = PICTURE_ORIGIN - (panY + viewHeight / 2) * POINTS_PER_UNIT;
+
     layer.setAttribute(
         "viewBox",
-        `${panX - viewWidth / 2} ${-panY - viewHeight / 2} ${viewWidth} ${viewHeight}`
+        `${left} ${top} ${viewWidth * POINTS_PER_UNIT} ${viewHeight * POINTS_PER_UNIT}`
     );
     layer.setAttribute("x", "0");
     layer.setAttribute("y", "0");
@@ -542,7 +603,18 @@ function positionPictureLayer(layer, bounds, state) {
 function showPicture(svg) {
     const layer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
 
+    /*
+     * THE SAME PICTURE IS NOT CLONED AGAIN. Every redraw - every pointer move of
+     * a drag - passes through here, and re-cloning an unchanged compiled picture
+     * each time was work the student felt as lag. Only a new picture is cloned;
+     * the camera is applied separately by `positionPictureLayer`.
+     */
+    if (svg && layer.__shownPicture === svg) {
+        return true;
+    }
+
     layer.replaceChildren();
+    layer.__shownPicture = null;
 
     if (!svg) {
         return false;
@@ -553,9 +625,130 @@ function showPicture(svg) {
 
     nodes.forEach((node) => layer.appendChild(node.cloneNode(true)));
 
+    showStrokesAtScreenWidth(layer);
+
+    layer.__shownPicture = svg;
     layer.dataset.rendered = "source";
 
     return true;
+}
+
+/*
+ * ============================================================
+ * AN OBJECT IS NEVER SHOWN ONLY WHERE IT USED TO BE
+ * ============================================================
+ *
+ * The Drawing Space is the compiled source, and a compile takes a moment. Until
+ * it lands, an object the student is moving - or has just drawn or edited -
+ * would be shown where it USED to be, or not at all, with only a dashed outline
+ * where it really is. With the render server not running, nothing would ever
+ * appear.
+ *
+ * So every object whose model differs from what the picture on screen was
+ * compiled from is drawn live by the overlay, and with no picture at all every
+ * object is. Once the new picture arrives the two agree and the live drawing
+ * steps aside.
+ */
+function serialiseObject(object) {
+    try {
+        return JSON.stringify(object);
+    } catch {
+        return null;
+    }
+}
+
+function rememberModelAt(revision) {
+    if (revision === null || revision === undefined || modelAtRevision.has(revision)) {
+        return;
+    }
+
+    modelAtRevision.set(
+        revision,
+        new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
+    );
+
+    while (modelAtRevision.size > CACHE_LIMIT) {
+        modelAtRevision.delete(modelAtRevision.keys().next().value);
+    }
+}
+
+/*
+ * AN OBJECT THE SOURCE HOLDS NO REGION FOR is never in any compiled picture -
+ * its writer is missing or failed - so it is drawn live too. Whatever the
+ * source can or cannot express, what the student drew is on the sheet.
+ */
+function sourceRegionsAt(revision) {
+    if (regionsRevision !== revision || !regionsMap) {
+        try {
+            regionsMap = createSourceMap(activeSourceManager().getSource());
+        } catch {
+            regionsMap = null;
+        }
+
+        regionsRevision = revision;
+    }
+
+    return regionsMap;
+}
+
+function objectsThePictureDoesNotShow(pictureRevision, revision) {
+    const objects = drawingState.objects || [];
+    const shown = pictureRevision === null || pictureRevision === undefined
+        ? null
+        : modelAtRevision.get(pictureRevision);
+
+    if (!shown) {
+        return new Set(objects.map((object) => object.id));
+    }
+
+    const regions = sourceRegionsAt(revision);
+    const live = new Set();
+
+    objects.forEach((object) => {
+        if (shown.get(object.id) !== serialiseObject(object) || (regions && !regions.has(object.id))) {
+            live.add(object.id);
+        }
+    });
+
+    return live;
+}
+
+/*
+ * ============================================================
+ * STROKES ARE SHOWN AT SCREEN WIDTH, AS THE MODEL DREW THEM
+ * ============================================================
+ *
+ * The compiled picture carries PRINT line widths: a normal line is 0.28pt
+ * (`lineWidth` x 0.56). Scaled to the canvas that is about a quarter of a pixel,
+ * which the browser paints as a pale smear - a drawn line was close to
+ * invisible against the grid.
+ *
+ * On the canvas each stroke is therefore drawn at the width the model renderer
+ * always used for it (`lineWidth` x 2.4 px, never under 0.5 px), in screen pixels
+ * via `non-scaling-stroke`, so it does not thin out as the student zooms out.
+ * Only the copy in this layer is changed: the source, the saved `.tex` and every
+ * export keep their print widths.
+ */
+const PRINT_POINTS_PER_LINE_WIDTH = 0.56;
+const SCREEN_PIXELS_PER_LINE_WIDTH = 2.4;
+const MIN_SCREEN_STROKE_PX = 0.5;
+
+function showStrokesAtScreenWidth(layer) {
+    layer.querySelectorAll("[stroke-width]").forEach((element) => {
+        const printWidth = Number.parseFloat(element.getAttribute("stroke-width"));
+
+        if (!Number.isFinite(printWidth) || printWidth <= 0) {
+            return;
+        }
+
+        const screenWidth = Math.max(
+            MIN_SCREEN_STROKE_PX,
+            (printWidth / PRINT_POINTS_PER_LINE_WIDTH) * SCREEN_PIXELS_PER_LINE_WIDTH
+        );
+
+        element.setAttribute("stroke-width", String(Number(screenWidth.toFixed(3))));
+        element.setAttribute("vector-effect", "non-scaling-stroke");
+    });
 }
 
 /*
@@ -638,20 +831,81 @@ function reportCompileError(message) {
 }
 
 /*
+ * THE RESULT OF A COMPILE, ANNOUNCED ONCE.
+ *
+ * The Source tab's status line follows this event rather than compiling the
+ * draft itself, so there is one compile per revision and one place that says
+ * whether it worked.
+ */
+function announceRendered(revision) {
+    try {
+        const view = globalThis.document?.defaultView || globalThis;
+        const Custom = view.CustomEvent || globalThis.CustomEvent;
+
+        if (typeof Custom === "function" && globalThis.document) {
+            globalThis.document.dispatchEvent(
+                new Custom("datum:source-rendered", { detail: { revision } })
+            );
+        }
+    } catch {
+        /* Reporting must never be the thing that breaks the render. */
+    }
+}
+
+/*
+ * A failure that is about the CONNECTION, not about the source. The adapter
+ * marks the ones it can tell apart; the message check covers an engine that
+ * answers "still loading" with an ordinary error status.
+ */
+function isTransientFailure(error) {
+    if (error && error.transient) {
+        return true;
+    }
+
+    const text = error instanceof Error ? error.message : String(error ?? "");
+
+    return /still loading|rendering is loading|could not be sent to the renderer/i.test(text);
+}
+
+/* Adopt the cached picture for `revision` as what the Drawing Space shows. */
+function adoptCachedPicture(revision) {
+    compiledRevision = revision;
+    lastCompiledSvg = cachedPicture(revision);
+    lastCompileError = null;
+}
+
+/*
  * ASK FOR A COMPILE OF THE CURRENT SOURCE.
  *
- * `immediately` is used on load, on Undo/Redo and on a committed gesture, where
- * there is nothing to coalesce. The ordinary path is debounced.
+ * Idempotent per revision: a revision already cached, scheduled, compiling or
+ * known to fail is not asked for again, so a redraw - which calls this on
+ * every frame the current revision has no picture - can never restart the
+ * debounce or abandon a compile that is running.
+ *
+ * `immediately` is used on load, on Undo/Redo, when Source opens and on a
+ * committed gesture, where there is nothing to coalesce. The ordinary path is
+ * debounced, and the debounce restarts only when the REVISION changes.
  */
 export function requestSourceRender({ immediately = false } = {}) {
     const manager = activeSourceManager();
     const revision = manager.revision();
 
     if (cachedPicture(revision)) {
-        compiledRevision = revision;
-        lastCompiledSvg = cachedPicture(revision);
-        renderCurrentDrawing();
+        if (compiledRevision !== revision) {
+            adoptCachedPicture(revision);
+            manager.markRendered(manager.getSource(), revision);
+            renderCurrentDrawing();
+            announceRendered(revision);
+        }
 
+        return;
+    }
+
+    if (revision === inFlightRevision || revision === failedRevision) {
+        return;
+    }
+
+    if (revision === scheduledRevision && !immediately) {
         return;
     }
 
@@ -660,22 +914,67 @@ export function requestSourceRender({ immediately = false } = {}) {
         compileTimer = null;
     }
 
+    scheduledRevision = revision;
+
+    /*
+     * WHILE A COMPILE IS RUNNING, the next one waits for it rather than
+     * queueing behind it: TeX runs one job at a time, and the running job's
+     * completion schedules whatever revision is current by then.
+     */
+    if (inFlightRevision !== null) {
+        return;
+    }
+
     if (immediately) {
         compileCurrentSource();
 
         return;
     }
 
-    compileTimer = setTimeout(() => {
+    compileTimer = backgroundTimer(() => {
         compileTimer = null;
         compileCurrentSource();
     }, SOURCE_RENDER_DELAY_MS);
+}
+
+/*
+ * A COMPILE TIMER NEVER KEEPS A PROCESS ALIVE.
+ *
+ * With no reachable renderer the canvas keeps retrying - correct in a browser,
+ * where the server may come up in a moment. Under Node (the test harness) that
+ * pending retry was an open handle, so a test file that had finished every check
+ * never exited and `npm test` hung on it. `unref` exists only on Node's timers;
+ * in a browser this is an ordinary `setTimeout`.
+ */
+function backgroundTimer(callback, delay) {
+    const timer = setTimeout(callback, delay);
+
+    timer?.unref?.();
+
+    return timer;
+}
+
+/*
+ * After a compile finishes, the revision the student is on now - which may
+ * have moved on while TeX was running - is compiled next if it still needs it.
+ */
+function compileWhatIsCurrent() {
+    const revision = activeSourceManager().revision();
+
+    if (cachedPicture(revision) || revision === failedRevision) {
+        return;
+    }
+
+    scheduledRevision = null;
+    requestSourceRender({ immediately: true });
 }
 
 async function compileCurrentSource() {
     const manager = activeSourceManager();
     const source = manager.getSource();
     const revision = manager.revision();
+
+    scheduledRevision = null;
 
     const validation = validateDrawingSource(source);
 
@@ -684,6 +983,7 @@ async function compileCurrentSource() {
          * A source that cannot even be parsed is not sent. The previous
          * picture stays, and the reason is reported.
          */
+        failedRevision = revision;
         reportCompileError(
             validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
                 "Invalid TikZ source"
@@ -693,45 +993,96 @@ async function compileCurrentSource() {
     }
 
     if (cachedPicture(revision)) {
-        compiledRevision = revision;
-        lastCompiledSvg = cachedPicture(revision);
-        lastCompileError = null;
+        adoptCachedPicture(revision);
         renderCurrentDrawing();
 
         return true;
     }
 
-    const token = (compileToken += 1);
+    inFlightRevision = revision;
+
+    const startedIn = generation;
 
     try {
-        inFlight = renderDrawingSource(visibleDrawingSource(source));
-
-        const svg = await inFlight;
-
         /*
-         * A NEWER COMPILE STARTED WHILE THIS ONE WAS RUNNING. Its result
-         * describes an older draft, so it is DISCARDED rather than drawn -
-         * which is what keeps a stale picture from appearing after a newer
-         * edit.
+         * THE TEXT COMPILED IS THE TEXT THE SOURCE TAB SHOWS - the marker-free
+         * visible form of this revision, nothing regenerated from the model.
          */
-        if (token !== compileToken) {
+        const svg = await renderDrawingSource(visibleDrawingSource(source), { anchorOrigin: true });
+
+        if (startedIn !== generation) {
+            compileWhatIsCurrent();
+
             return false;
         }
 
+        inFlightRevision = null;
+        transientRetryMs = TRANSIENT_RETRY_MS;
+
+        /*
+         * The picture is correct FOR ITS REVISION, so it is cached whatever
+         * happens next - Undo may come back to it. It is SHOWN only if that
+         * revision is still the current one: an older compile finishing late
+         * must never replace the output of a newer source.
+         */
         rememberPicture(revision, svg);
 
-        compiledRevision = revision;
-        lastCompiledSvg = svg;
-        lastCompileError = null;
+        if (revision !== manager.revision()) {
+            compileWhatIsCurrent();
+
+            return false;
+        }
+
+        adoptCachedPicture(revision);
 
         manager.markRendered(source, revision);
         renderCurrentDrawing();
+        announceRendered(revision);
 
         return true;
     } catch (error) {
-        if (token !== compileToken) {
+        if (startedIn !== generation) {
+            compileWhatIsCurrent();
+
             return false;
         }
+
+        inFlightRevision = null;
+
+        if (error && error.name === "AbortError") {
+            compileWhatIsCurrent();
+
+            return false;
+        }
+
+        if (revision !== manager.revision()) {
+            /* A failure of a draft the student has already replaced. */
+            compileWhatIsCurrent();
+
+            return false;
+        }
+
+        if (isTransientFailure(error)) {
+            /*
+             * Nothing is wrong with the source; the renderer is not ready. The
+             * same revision is tried again after a pause rather than being
+             * marked broken - and rather than on every redraw.
+             */
+            const delay = transientRetryMs;
+
+            transientRetryMs = Math.min(transientRetryMs * 2, TRANSIENT_RETRY_CAP_MS);
+            scheduledRevision = revision;
+            compileTimer = backgroundTimer(() => {
+                compileTimer = null;
+                compileCurrentSource();
+            }, delay);
+
+            reportCompileError(error);
+
+            return false;
+        }
+
+        failedRevision = revision;
 
         manager.markFailed(error);
         reportCompileError(error);
@@ -744,8 +1095,6 @@ async function compileCurrentSource() {
         renderCurrentDrawing();
 
         return false;
-    } finally {
-        inFlight = null;
     }
 }
 
@@ -768,10 +1117,29 @@ globalThis.enggDrawingPictureCache = {
 };
 
 export function resetSourcePictureCache() {
+    if (compileTimer) {
+        clearTimeout(compileTimer);
+        compileTimer = null;
+    }
+
+    /*
+     * A compile still running belongs to the document being left. Its revision
+     * number may coincide with one of the new document's, so it is disowned by
+     * generation rather than by revision.
+     */
+    generation += 1;
+
     compiledCache = new Map();
+    modelAtRevision = new Map();
+    regionsRevision = null;
+    regionsMap = null;
     compiledRevision = null;
     lastCompiledSvg = null;
     lastCompileError = null;
+    scheduledRevision = null;
+    inFlightRevision = null;
+    failedRevision = null;
+    transientRetryMs = TRANSIENT_RETRY_MS;
 }
 
 /* Export the current compiled picture, for an embed that must not recompile. */
@@ -864,6 +1232,10 @@ export function renderCurrentDrawing() {
 
     const picture = cachedPicture(revision) || (currentValid ? lastCompiledSvg : null);
 
+    rememberModelAt(revision);
+
+    const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
+
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
 
     if (picture) {
@@ -886,7 +1258,10 @@ export function renderCurrentDrawing() {
     enggDrawingRenderer.renderDrawing(
         drawingState,
         overlay,
-        { overlayOnly: true }
+        {
+            overlayOnly: true,
+            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision, revision)
+        }
     );
 
     /*

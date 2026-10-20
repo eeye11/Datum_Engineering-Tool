@@ -131,7 +131,6 @@ function createDimension({
   style = {},
   label = null,
   name,
-  displayUnit = null,
 } = {}) {
   const normalisedRefs = normaliseReferences(refs);
 
@@ -187,15 +186,6 @@ function createDimension({
       precision: null,
       ...style,
     },
-
-    /*
-     * WHICH LENGTH UNIT THE VALUE IS READ IN.
-     *
-     * The measurement itself is always taken in millimetres, so this says
-     * only how the number is WRITTEN: a 100 mm span read in cm shows "10 cm"
-     * while still measuring 100 mm. Null means millimetres, the default.
-     */
-    displayUnit: displayUnit || null,
 
     /*
      * True until a reference stops resolving. Not a flag the user
@@ -1214,33 +1204,14 @@ function formatMeasurement(
   const prefix = definition?.prefix || "";
 
   /*
-   * THE DISPLAY UNIT.
-   *
-   * The measurement is taken in the drawing's own units, which ARE millimetres.
-   * The student may READ it in another length unit - cm, m, in, ft - and that
-   * changes the NUMBER SHOWN, never the geometry or the measurement. The unit a
-   * dimension reads in is the dimension's own `displayUnit`; with none set it
-   * reads in millimetres.
-   *
-   * An ANGLE is not a length and has no length unit, so it is left alone.
+   * THE UNIT IS THE DRAWING'S. A dimension reads the geometry in drawing units,
+   * which are millimetres on the sheet, and writes that number - there is no
+   * per-dimension unit to convert into (a `displayUnit` read in cm or m was part
+   * of the retired world-length system). Any other wording is the dimension's
+   * own label, set as annotation text. An ANGLE has no length unit.
    */
-  const displayUnit =
-    measurement.angular
-      ? null
-      : dimension.displayUnit || measurement.unit;
-
-  const shown =
-    !measurement.angular &&
-    displayUnit &&
-    enggQuantities?.convertValue &&
-    displayUnit !== measurement.unit
-      ? enggQuantities.convertValue(
-          rounded,
-          "length",
-          measurement.unit,
-          displayUnit,
-        )
-      : rounded;
+  const unit = measurement.unit;
+  const shown = rounded;
 
   /*
    * ONE FORMATTER FOR EVERY DIMENSION.
@@ -1272,11 +1243,11 @@ function formatMeasurement(
    */
   if (!formatter) {
     return measurement.angular
-      ? `${prefix}${value}Â°`
-      : `${prefix}${formatAtPrecision(shown, precision)} ${displayUnit || measurement.unit}`;
+      ? `${prefix}${value}°`
+      : `${prefix}${formatAtPrecision(shown, precision)} ${unit}`;
   }
 
-  return formatter.formatLength(shown, displayUnit || measurement.unit, {
+  return formatter.formatLength(shown, unit, {
     prefix,
     precision,
     angular: measurement.angular === true,

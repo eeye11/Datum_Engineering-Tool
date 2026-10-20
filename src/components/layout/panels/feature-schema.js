@@ -28,6 +28,8 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
+import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 
@@ -320,6 +322,8 @@ function axisLabelOf(object, key, fallback) {
  *   min/step/integer   the bounds of a numeric field
  *   visible    a follow-on rule - a field with no `visible` is always shown
  */
+const ANNOTATE_ARROWHEAD_KINDS = new Set(["arrow", "leader", "callout"]);
+const ANNOTATE_ARROWHEAD_VALUES = new Set(["closed", "open", "none"]);
 const ARROW_VALUES = new Set(["none", "open", "filled", "bar"]);
 
 const ARROW_OPTIONS = [
@@ -429,6 +433,36 @@ const FIELDS = {
             return true;
         },
         options: ARROW_OPTIONS
+    },
+
+    /*
+     * An Arrow, Leader or Callout's head. The renderer and the source writer
+     * both read `style.arrowhead`: "closed" (filled), "open" or "none".
+     */
+    arrowhead: {
+        kind: "choice",
+        applies: (object) =>
+            object.type === "annotate" &&
+            ANNOTATE_ARROWHEAD_KINDS.has(object.annotateKind),
+        read: (object) => {
+            const value = String(object.style?.arrowhead ?? "closed");
+
+            return ANNOTATE_ARROWHEAD_VALUES.has(value) ? value : "closed";
+        },
+        write: (object, value) => {
+            if (!ANNOTATE_ARROWHEAD_VALUES.has(value)) {
+                return false;
+            }
+
+            object.style = { ...(object.style || {}), arrowhead: value };
+
+            return true;
+        },
+        options: [
+            { value: "closed", label: "Filled Arrow" },
+            { value: "open", label: "Open Arrow" },
+            { value: "none", label: "None" }
+        ]
     },
 
     sides: {
@@ -612,15 +646,15 @@ const FIELDS = {
 
     xLabel: {
         kind: "text",
-        applies: (object) => object.type === COORDINATE_SYSTEM && showLabelsOf(object),
-        read: (object) => axisLabelOf(object, "xLabel", "x"),
+        applies: (object) => (object.type === COORDINATE_SYSTEM && showLabelsOf(object)) || isProcessDiagram(object),
+        read: (object) => axisLabelOf(object, "xLabel", isProcessDiagram(object) ? "" : "x"),
         write: (object, value) => setGeometryText(object, "xLabel", value)
     },
 
     yLabel: {
         kind: "text",
-        applies: (object) => object.type === COORDINATE_SYSTEM && showLabelsOf(object),
-        read: (object) => axisLabelOf(object, "yLabel", "y"),
+        applies: (object) => (object.type === COORDINATE_SYSTEM && showLabelsOf(object)) || isProcessDiagram(object),
+        read: (object) => axisLabelOf(object, "yLabel", isProcessDiagram(object) ? "" : "y"),
         write: (object, value) => setGeometryText(object, "yLabel", value)
     },
 
@@ -705,8 +739,13 @@ function normaliseArrow(value) {
  */
 export const GROUPS = [
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
-    { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd"] },
+    { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
+    {
+        id: "cross-section",
+        heading: "Cross Section",
+        fields: ["pipeShape", "pipeDiameter", "pipeWidth", "pipeHeight", "pipeBendRadius", "pipeMaterial", "pipeRoughness"]
+    },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
@@ -716,8 +755,199 @@ export const GROUPS = [
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
+/*
+ * ============================================================
+ * A PROCESS PATH'S BENDS: ONE FIELD PER SEGMENT
+ * ============================================================
+ *
+ * A process path has as many segments as it has states, so its bend fields
+ * cannot be listed in the static table. Each is generated from its key -
+ * `processBend:<segment>` - and reads and writes `geometry.segmentBends`, the
+ * value the canvas's middle-dot drag sets. -1..1, and 0 is straight.
+ */
+/*
+ * ============================================================
+ * A PIPE / DUCT RUN AND AN ELBOW: THE CROSS SECTION
+ * ============================================================
+ *
+ * Ported from the fluids toolset's panel. Everything is on `object.engineering`:
+ * the Shape decides which sizes exist (circular: Diameter; rectangular: Width
+ * and Height, through the model's `dimensionalKeysFor`), so only those are
+ * shown. Sizes and an elbow's Bend Radius must be positive - each decides
+ * geometry that cannot exist at zero - while Surface Roughness may be zero (a
+ * smooth bore). Lengths are drawing units, which are millimetres on the sheet.
+ */
+function isFluidRun(object) {
+    return object?.type === "pipe-duct" || object?.type === "elbow";
+}
+
+function engineeringOf(object) {
+    if (!object.engineering || typeof object.engineering !== "object") {
+        object.engineering = {};
+    }
+
+    return object.engineering;
+}
+
+const PIPE_DEFAULT_SIZES = {
+    diameter: () => enggPipeDuct.DEFAULT_DIAMETER,
+    width: () => enggPipeDuct.DEFAULT_WIDTH,
+    height: () => enggPipeDuct.DEFAULT_HEIGHT
+};
+
+function pipeSizeField(key) {
+    return {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: (object) => isFluidRun(object) && enggPipeDuct.dimensionalKeysFor(object.engineering || {}).includes(key),
+        read: (object) => Number(object.engineering?.[key]) || PIPE_DEFAULT_SIZES[key](),
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size <= 0) {
+                return false;
+            }
+
+            engineeringOf(object)[key] = size;
+
+            return true;
+        }
+    };
+}
+
+Object.assign(FIELDS, {
+    pipeShape: {
+        kind: "choice",
+        applies: isFluidRun,
+        read: (object) => object.engineering?.shape === enggPipeDuct.PIPE_SHAPES.rectangular
+            ? enggPipeDuct.PIPE_SHAPES.rectangular
+            : enggPipeDuct.PIPE_SHAPES.circular,
+        write: (object, value) => {
+            const engineering = engineeringOf(object);
+
+            engineering.shape = value === enggPipeDuct.PIPE_SHAPES.rectangular
+                ? enggPipeDuct.PIPE_SHAPES.rectangular
+                : enggPipeDuct.PIPE_SHAPES.circular;
+
+            enggPipeDuct.dimensionalKeysFor(engineering).forEach((size) => {
+                if (!Number.isFinite(Number(engineering[size]))) {
+                    engineering[size] = PIPE_DEFAULT_SIZES[size]();
+                }
+            });
+
+            return true;
+        },
+        options: [
+            { value: enggPipeDuct.PIPE_SHAPES.circular, label: "Circular" },
+            { value: enggPipeDuct.PIPE_SHAPES.rectangular, label: "Rectangular" }
+        ]
+    },
+    pipeDiameter: pipeSizeField("diameter"),
+    pipeWidth: pipeSizeField("width"),
+    pipeHeight: pipeSizeField("height"),
+    pipeBendRadius: {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: (object) => object?.type === "elbow",
+        read: (object) => Number(object.engineering?.bendRadius) || 0,
+        write: (object, value) => {
+            const radius = Number(value);
+            const geometry = object.geometry || {};
+
+            /* A radius the corner cannot hold has no drawable bend, so it is refused. */
+            if (
+                !Number.isFinite(radius) ||
+                radius <= 0 ||
+                !enggPipeDuct.elbowGeometry(geometry.previous, geometry.position, geometry.next, radius)
+            ) {
+                return false;
+            }
+
+            engineeringOf(object).bendRadius = radius;
+
+            return true;
+        }
+    },
+    pipeMaterial: {
+        kind: "text",
+        applies: isFluidRun,
+        read: (object) => String(object.engineering?.material ?? ""),
+        write: (object, value) => {
+            engineeringOf(object).material = String(value ?? "");
+
+            return true;
+        }
+    },
+    pipeRoughness: {
+        kind: "number",
+        min: 0,
+        step: 0.001,
+        applies: isFluidRun,
+        read: (object) => Number(object.engineering?.roughness) || 0,
+        write: (object, value) => {
+            const roughness = Number(value);
+
+            if (!Number.isFinite(roughness) || roughness < 0) {
+                return false;
+            }
+
+            engineeringOf(object).roughness = roughness;
+
+            return true;
+        }
+    }
+});
+
+const PROCESS_BEND_PREFIX = "processBend:";
+
+function isProcessPath(object) {
+    return object?.metadata?.thermodynamicsKind === "process-path" && Array.isArray(object.geometry?.points);
+}
+
+function processBendField(key) {
+    if (typeof key !== "string" || !key.startsWith(PROCESS_BEND_PREFIX)) {
+        return null;
+    }
+
+    const index = Number(key.slice(PROCESS_BEND_PREFIX.length));
+
+    if (!Number.isInteger(index) || index < 0) {
+        return null;
+    }
+
+    return {
+        kind: "number",
+        label: `State ${index + 1} \u2192 ${index + 2}`,
+        min: -1,
+        max: 1,
+        step: 0.05,
+        applies: (object) => isProcessPath(object) && index < object.geometry.points.length - 1,
+        read: (object) => Number(object.geometry.segmentBends?.[index]) || 0,
+        write: (object, value) => {
+            const bend = Number(value);
+
+            if (!Number.isFinite(bend)) {
+                return false;
+            }
+
+            object.geometry.segmentBends = Array.isArray(object.geometry.segmentBends)
+                ? [...object.geometry.segmentBends]
+                : [];
+            object.geometry.segmentBends[index] = Math.max(-1, Math.min(1, bend));
+
+            return true;
+        }
+    };
+}
+
+function definitionOf(key) {
+    return FIELDS[key] || processBendField(key);
+}
+
 export function fieldDefinition(key) {
-    return FIELDS[key] || null;
+    return definitionOf(key) || null;
 }
 
 export function fieldLabel(field, key) {
@@ -727,6 +957,14 @@ export function fieldLabel(field, key) {
         lineType: "Style",
         arrowStart: "Begin Arrow",
         arrowEnd: "End Arrow",
+        arrowhead: "Arrowhead",
+        pipeShape: "Shape",
+        pipeDiameter: "Diameter (mm)",
+        pipeWidth: "Width (mm)",
+        pipeHeight: "Height (mm)",
+        pipeBendRadius: "Bend Radius (mm)",
+        pipeMaterial: "Material",
+        pipeRoughness: "Surface Roughness (mm)",
         sides: "Number of Sides",
         fillMode: "Mode",
         fill: "Fill Colour",
@@ -757,15 +995,29 @@ export function groupsFor(object) {
         return [];
     }
 
-    return GROUPS
+    const groups = GROUPS
         .map((group) => {
             const fields = group.fields
-                .map((key) => ({ key, definition: FIELDS[key] }))
+                .map((key) => ({ key, definition: definitionOf(key) }))
                 .filter((entry) => entry.definition && entry.definition.applies(object));
 
             return { ...group, fields };
         })
         .filter((group) => group.transform || group.fields.length);
+
+    /* A process path's bends, one per segment, ahead of its appearance. */
+    if (isProcessPath(object) && object.geometry.points.length > 1) {
+        const fields = object.geometry.points.slice(1).map((_, index) => {
+            const key = `${PROCESS_BEND_PREFIX}${index}`;
+
+            return { key, definition: definitionOf(key) };
+        });
+        const at = groups.findIndex((group) => group.id === "appearance");
+
+        groups.splice(at < 0 ? groups.length : at, 0, { id: "process-bends", heading: "Process Curves", fields });
+    }
+
+    return groups;
 }
 
 /* ============================================================
@@ -773,7 +1025,7 @@ export function groupsFor(object) {
  * ============================================================ */
 
 export function readField(object, key) {
-    const definition = FIELDS[key];
+    const definition = definitionOf(key);
 
     if (!definition || !object || !definition.applies(object)) {
         return undefined;
@@ -792,7 +1044,7 @@ export function readField(object, key) {
  * changes from the object's own, once.
  */
 export function writeField(object, key, value) {
-    const definition = FIELDS[key];
+    const definition = definitionOf(key);
 
     if (!definition || !object || !definition.applies(object)) {
         return false;
@@ -845,6 +1097,8 @@ export function supportsTransform(object) {
  * ============================================================ */
 
 const TYPE_LABELS = {
+    "pipe-duct": "Pipe / Duct",
+    elbow: "Elbow",
     point: "Point",
     line: "Line",
     polyline: "Polyline",
@@ -885,6 +1139,14 @@ const TYPE_LABELS = {
 export function typeLabelOf(object) {
     if (object?.type === "annotate") {
         return ANNOTATE_TYPE_LABELS[object.annotateKind] || TYPE_LABELS.annotate;
+    }
+
+    if (isProcessDiagram(object)) {
+        return object.metadata.thermodynamicsKind === "process-plot" ? "Process Plot" : "Saturation Curve";
+    }
+
+    if (isProcessPath(object)) {
+        return "Process Path";
     }
 
     return TYPE_LABELS[object?.type] || "Object";

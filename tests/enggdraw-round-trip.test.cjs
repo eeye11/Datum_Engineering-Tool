@@ -63,7 +63,7 @@ const sheets = require(modulePath("sheets.js")).default;
  *   - dimensions: linear, angular across TWO EDGES OF ONE FEATURE, variable
  *   - annotations of several kinds, including a table with cells
  *   - constraints and a locked feature
- *   - a calibrated sheet, so world scale is exercised
+ *   - a sheet saved with a (retired) world-scale calibration, which must be dropped
  */
 function buildFixture() {
   const st = state.createDrawingState();
@@ -160,10 +160,18 @@ function buildFixture() {
     placement: { x: 210, y: 10 },
   });
 
-  /* A VARIABLE dimension: a SYMBOL, not a measurement. */
-  const variable = F["variable-dimension"]({
-    refs: [{ kind: "between", featureId: line.id, anchor: "start" }],
-    symbol: "L",
+  /*
+   * A dimension whose text is a SYMBOL, not a measurement. The separate
+   * Variable Dimension tool is retired; the unified Dimension carries the
+   * symbol as its editable label text.
+   */
+  const variable = F.dimension({
+    dimensionType: "aligned",
+    refs: [
+      { kind: "between", featureId: line.id, anchor: "start" },
+      { kind: "between", featureId: line.id, anchor: "end" },
+    ],
+    label: "L",
     placement: { x: 30, y: -60 },
   });
 
@@ -449,9 +457,9 @@ check(
 console.log("\n  symbolic values are NOT replaced by measurements\n");
 
 check(
-  "a variable dimension reopens as its SYMBOL, not a number",
-  after[variable.id].symbol === "L",
-  `symbol is ${JSON.stringify(after[variable.id].symbol)}`,
+  "a dimension labelled with a symbol reopens as its SYMBOL, not a number",
+  after[variable.id].label === "L",
+  `label is ${JSON.stringify(after[variable.id].label)}`,
 );
 
 console.log("\n  annotations, including a table's cells\n");
@@ -527,12 +535,15 @@ check(
   "the two must not be conflated",
 );
 
-console.log("\n  world scale and units\n");
+console.log("\n  units, and the retired world scale\n");
 
+/*
+ * The world-length scale is retired: a calibration left in a document from an
+ * older build is not written back, so the reopened drawing has none.
+ */
 check(
-  "the sheet's calibration survives, so lengths still mean something",
-  reopened.scale?.calibrated === true &&
-    reopened.scale?.unitsPerMillimetre === 0.5,
+  "a retired world-scale calibration is not carried into the reopened drawing",
+  reopened.scale === undefined || reopened.scale === null,
   JSON.stringify(reopened.scale),
 );
 

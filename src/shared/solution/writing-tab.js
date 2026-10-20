@@ -537,7 +537,7 @@ export function installWritingTab() {
     /*
      * AN EDIT IN THE WRITE-UP IS AN UNSAVED CHANGE TO THE DOCUMENT.
      *
-     * The source is saved INTO the `.enggdraw` file, so editing it makes the
+     * The source is saved INTO the drawing's `.tex` file, so editing it makes the
      * document differ from that file exactly as moving a force does. Marking it
      * dirty is what puts the unsaved indicator on and what makes Open, New and
      * closing the window offer to save first - without it, a student could write
@@ -565,7 +565,7 @@ export function installWritingTab() {
     attachSolutionSourceLoader(enggSolutionWorkspace.loadSolutionSource);
 
     /*
-     * AND THE DOCUMENT'S OWN LOADER IS CONNECTED TOO, so a `.enggdraw` file
+     * AND THE DOCUMENT'S OWN LOADER IS CONNECTED TOO, so a saved drawing
      * that carries a written solution puts it back in the workspace when it is
      * opened - see `loadDrawing` in document-commands.
      */

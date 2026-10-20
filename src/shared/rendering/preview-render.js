@@ -13,7 +13,9 @@ import { appendDimensionEntity } from "./dimension-render.js";
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
-import { isSaturationCurve } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
+import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
+import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 
 
     /*
@@ -46,7 +48,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
-        if (isSaturationCurve(state.interaction.preview)) {
+        if (isProcessDiagram(state.interaction.preview)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -424,6 +426,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
+                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
@@ -432,7 +435,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
                     end: state.interaction.annotateEnd
                 },
                 style: {
-                    stroke: "#1f5c38",
+                    stroke: heatTransferTool(state.activeTool)?.colour || "#1f5c38",
                     fontSize: 12,
                     arrowhead: "closed"
                 }
@@ -560,6 +563,34 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
                         })
                     );
                 });
+        }
+
+        /*
+         * A PIPE / DUCT SEGMENT BEING ROUTED: its two walls, dashed, from the
+         * same `boundaryLines` the committed run is drawn with.
+         */
+        if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
+            enggPipeDuct.boundaryLines(
+                geometry.start,
+                geometry.end,
+                geometry.engineering || preview.engineering || {}
+            ).forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(createSvgElement("line", {
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
+                    stroke: style.stroke,
+                    "stroke-width": 1.5,
+                    "stroke-dasharray": "6 4",
+                    opacity: style.opacity
+                }));
+            });
+
+            return;
         }
 
         if (preview.type === "point") {

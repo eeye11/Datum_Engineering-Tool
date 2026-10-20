@@ -27,8 +27,7 @@ const TOOLS = [
     ["GEOMETRY", "arc", "3-Point Arc"], ["GEOMETRY", "arc", "Centrepoint Arc"],
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
-    ["ANNOTATE", "variable-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
-    ["ANNOTATE", "smart-dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
+    ["ANNOTATE", "dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
     ["ANNOTATE", "note"], ["ANNOTATE", "label", null, "line"],
     ["ANNOTATE", "leader"], ["ANNOTATE", "callout"],
     ["ANNOTATE", "symbol"], ["ANNOTATE", "table"],
@@ -57,7 +56,7 @@ const TOOLS = [
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
     ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc"],
-    ["DYNAMICS", "velocity"], ["FLUIDS", "pipe"], ["THERMODYNAMICS", "control-volume"],
+    ["DYNAMICS", "velocity"], ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];

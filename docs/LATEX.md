@@ -35,13 +35,12 @@ and any AI model given the file can read it.
 
 % ---------------------------------------------------------------------
 % Sheet 1 of 2: "Beam"
-% World Scale: 1 drawing unit = 10 mm; lengths are given in m.
 % Features (2):
-%   1. Beam "Beam 1", from (0, 0) to (200, 0), length 2 m, depth 0.12 m.
-%   2. Pin support "Support A", on Beam "Beam 1", at (0, -8), 0 m from its start.
+%   1. Beam "Beam 1", from (0, 0) to (200, 0), length 200 drawing units, depth 12 drawing units.
+%   2. Pin support "Support A", on Beam "Beam 1", at (0, -8), 0 drawing units from its start.
 % ---------------------------------------------------------------------
 \begin{tikzpicture}[x=1mm, y=1mm, scale=0.708]
-  % 1. Beam "Beam 1", from (0, 0) to (200, 0), length 2 m, depth 0.12 m.
+  % 1. Beam "Beam 1", from (0, 0) to (200, 0), length 200 drawing units, depth 12 drawing units.
   \draw[draw=daetum1, line width=0.677pt] (0,-1.5) -- (200,-1.5) -- ...;
   ...
 \end{tikzpicture}
@@ -58,13 +57,14 @@ and any AI model given the file can read it.
   canvas for every feature type — including ones added later — with no
   second implementation of how anything looks.
 - **Every feature is described** in a comment above its commands, and each
-  sheet starts with its feature list and World Scale. Lengths are in real
-  units; loads and moments keep their units. This is what lets an AI model
+  sheet starts with its feature list. Lengths are in drawing units, as
+  drawn; loads and moments keep their units. This is what lets an AI model
   understand the drawing rather than just its lines.
 - **Coordinates are drawing units, y up**, written with `x=1mm, y=1mm`.
   The picture's `scale` fits it to a page; strokes and text are sized from
   the page, as they are from the screen.
-- **It reopens exactly.** The whole document, as `.enggdraw` JSON in base64,
+- **It reopens exactly.** The whole document, as its JSON envelope in base64
+  (see [FILE-FORMAT.md](FILE-FORMAT.md)),
   follows `\end{document}` as comment lines. LaTeX ignores it; DAETUM opens
   it with every feature editable.
 - **It compiles.** Text is escaped; engineering symbols become LaTeX/amssymb
@@ -73,9 +73,10 @@ and any AI model given the file can read it.
 
 ### Opening
 
-A `.tex` with DAETUM's data opens as that document. It **never becomes the
-save target**: Save writes `beam.enggdraw` beside `beam.tex`, so the LaTeX is
-never overwritten with JSON. A `.tex` without the data (hand-written, or from
+A `.tex` with DAETUM's data opens as that document, and **is the save target**:
+Save writes the same `.tex` again, picture and embedded document together. (An
+older `.enggdraw` opens too, as an import; it is never written, and Save offers
+the same name as `.tex`.) A `.tex` without the data (hand-written, or from
 another program) opens in the LaTeX code editor instead, where the student
 sees what DAETUM can draw from it and inserts it.
 

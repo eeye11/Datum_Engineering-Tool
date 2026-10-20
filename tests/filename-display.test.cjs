@@ -133,8 +133,8 @@ console.log("\n  the extension is still used for the FILE\n");
   const file = fs.readFileSync(modulePath("document-file.js"), "utf8");
 
   check(
-    "the native extension is still .enggdraw",
-    /const EXTENSION = "enggdraw"/.test(file),
+    "a drawing's extension is .tex (the retired .enggdraw is import-only)",
+    /const EXTENSION = "tex"/.test(file) && /const LEGACY_EXTENSION = "enggdraw"/.test(file),
   );
 
   const save = fs.readFileSync(modulePath("file-save.js"), "utf8");

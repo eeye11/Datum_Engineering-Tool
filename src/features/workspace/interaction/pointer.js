@@ -175,7 +175,8 @@ function resolvePointerPoint(
 
     const isPolyline =
         drawingState.activeTool ===
-            "polyline";
+            "polyline" ||
+        drawingState.activeTool === "freeform-polygon";
 
     /*
      * The line tool needs its first point as the inference
@@ -223,7 +224,44 @@ function resolvePointerPoint(
 
     let lineStart = null;
 
-    if (isLine) {
+    /*
+     * ========================================================
+     * THE PIPE / DUCT LEG JOINS THE SAME SHARED INFERENCE
+     * ========================================================
+     *
+     * A run is a span placed between two points, exactly as a Line is:
+     * the press fixes the start, the pointer supplies the end. What it
+     * was missing was only the ANCHOR. With no `lineStart`, the shared
+     * resolver had nothing to align against, so horizontal and vertical
+     * inference never ran for a pipe - the preview showed a visibly
+     * diagonal run when the student meant level, and the committed run
+     * carried the same off-axis end, because the release resolves its
+     * end through this very same call.
+     *
+     * The anchor is the leg's own START, read from the interaction the
+     * same way the preview reads it (`routeSegmentStart`, falling back
+     * to `startPoint`), so the preview and the committed geometry are
+     * inferred from the identical reference and cannot disagree.
+     *
+     * Naming it here is the whole change. Every tolerance, every snap
+     * target, the priority order, the indicator and the instruction all
+     * come from the same `resolveConstructionPoint` call the Line tool
+     * has always used - nothing is reimplemented, and the pipe keeps its
+     * own semantic feature and its own drag lifetime.
+     *
+     * It is offered BOTH as `lineStart` and as an inference reference,
+     * because the anchor must align against itself when no other
+     * geometry is near - the run being drawn is not yet a feature, so
+     * the only reference that guarantees "level with where I started"
+     * is the start point passed here. A snapped start - on a previous
+     * run's endpoint or a corner - arrives already resolved, so aligning
+     * to it keeps the connection the snap established.
+     */
+    const isRoute =
+        drawingState.activeTool === "pipe-duct" ||
+        drawingState.interaction.fluidsTool === "pipe-duct";
+
+    if (isLine || isRoute) {
         /*
          * A truss anchors inference on the point its next member
          * starts from, exactly as a Line does on its own start
@@ -232,13 +270,16 @@ function resolvePointerPoint(
          * every respect that matters here, so it is treated as
          * one.
          */
-        lineStart =
-            drawingState.activeTool ===
+        lineStart = isRoute
+            ? interaction.routeSegmentStart ||
+              interaction.startPoint ||
+              null
+            : drawingState.activeTool ===
                 "truss"
-                ? trussInferenceAnchor(
+              ? trussInferenceAnchor(
                     drawingState.interaction
                 )
-                : interaction.startPoint;
+              : interaction.startPoint;
     } else if (isPolyline) {
         lineStart =
             interaction.points.length
@@ -631,6 +672,7 @@ export function resolvePointerEvent(
 function freeThermodynamicsMove(drag, rawPoint) {
     if (
         drag?.kind?.startsWith("process-label-") ||
+        drag?.kind?.startsWith("process-bend-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
         (drag?.kind === "body" &&
             ["control-volume", "piston-cylinder"].includes(drag.object?.metadata?.thermodynamicsKind)) ||

@@ -44,7 +44,7 @@ const read = (name) => fs.readFileSync(locate(name), "utf8");
 
 const renderer = rendererSource();
 const deps = read("analysis-dependencies.js");
-const drawing = controllerSource() + read("feature-tree.js");
+const drawing = controllerSource() + read("analysis-editor.js");
 const sketchEditor = read("sketch-editor.js");
 const sketch = sketchEditor;
 

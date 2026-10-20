@@ -162,7 +162,6 @@ console.log("\n  the placeholder reaches the sheet, muted\n");
       camera: { zoom: 1, panX: 0, panY: 0 },
       grid: { visible: false, spacing: 5 },
       snap: { enabled: false },
-      statics: { vectorScale: 1 },
       display: {},
       styleDefaults: { stroke: "#000000", lineWidth: 0.5, lineType: "solid" },
       selection: {
@@ -266,7 +265,6 @@ console.log("\n  a bent leader draws as a polyline\n");
       camera: { zoom: 1, panX: 0, panY: 0 },
       grid: { visible: false, spacing: 5 },
       snap: { enabled: false },
-      statics: { vectorScale: 1 },
       display: {},
       styleDefaults: { stroke: "#000000", lineWidth: 0.5, lineType: "solid" },
       selection: {

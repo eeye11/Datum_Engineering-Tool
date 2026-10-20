@@ -45,7 +45,6 @@ global.Element = dom.window.Element;
 
 for (const name of [
   "quantities.js",
-  "dimensions.js",
   "measurement-core.js",
   "annotation-model.js",
   "load-profile.js",

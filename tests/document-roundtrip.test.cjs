@@ -43,7 +43,6 @@ const body = {
     dim,
     ann
   ],
-  scale: { mmPerUnit: 1.25, unit: "mm" },
   units: "mm"
 };
 
@@ -74,7 +73,6 @@ check("keeping the student's chosen position", a2 && a2.content.placement, { x: 
 check("knowing that position was the student's choice", a2 && a2.content.placementMode, "manual");
 check("keeping its leader state", a2 && a2.content.leader.enabled, true);
 check("keeping visibility", a2 && a2.content.visible, true);
-check("keeping the calibration", body2.scale, { mmPerUnit: 1.25, unit: "mm" });
 
 
 /*

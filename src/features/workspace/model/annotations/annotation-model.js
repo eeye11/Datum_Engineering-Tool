@@ -1520,8 +1520,8 @@ function suggestSupportValuePlacement(annotation, object, value, state) {
  *
  * THE POINT, NOT THE GRAPHIC. This is worked out from the point's own
  * world position and the load's direction, never from where an arrowhead
- * happens to have been drawn after Vector Scale - so changing the visual
- * size of the arrows cannot shift where a fresh label appears.
+ * happens to have been drawn - so changing the drawn height of the arrows
+ * cannot shift where a fresh label appears.
  */
 function suggestProfilePlacement(annotation, object, point) {
   /*

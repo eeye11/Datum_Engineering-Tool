@@ -1,4 +1,4 @@
-# DAETUM
+# DAETUM - Anuj
 
 DAETUM is where an engineering student writes up a solution: the **written
 working** (LaTeX, usually produced by the OCR tool from a handwritten page)
@@ -20,9 +20,9 @@ Open DAETUM in a web browser. Nothing to install.
   Annotate, Statics…), then a tool on the left. The status bar at the bottom
   always says what the current tool expects next. `Esc` cancels, `Ctrl+Z`
   undoes.
-- **Save** keeps your work as a `.enggdraw` file you can open again later.
-  **File → Download → LaTeX** saves it as a `.tex` that compiles anywhere
-  and that DAETUM can reopen; **Insert → LaTeX Code…** draws LaTeX you write
+- **Save** keeps your work as a `.tex` file that compiles anywhere and that
+  DAETUM reopens with every feature editable. (Older `.enggdraw` files still
+  open, and are saved as `.tex` from then on.) **Insert → LaTeX Code…** draws LaTeX you write
   (see [docs/LATEX.md](docs/LATEX.md)).
   DAETUM also keeps a recovery copy in your browser in case the tab closes.
 

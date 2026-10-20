@@ -1,11 +1,21 @@
+import { fluidsToolGroups } from "../../../features/workspace/model/fluids/fluids-tools.js";
+
 const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">${content}</svg>`;
 const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
 
+
 export const toolIcons = {
+    "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
+    "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
+    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
+    "Heat Transfer": drawingIcon(`<path ${iconStroke} d="M3 7h13m-4-4 4 4-4 4M17 14H4m4-4-4 4 4 4"/>`),
+    "Heat Entering": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
+    "Heat Leaving": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
     "Const Temp/Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 17L7 11H12C14 11 16 7 18 3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     "Process Diagrams": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M6 14C7 8 8 5 10 5S14 11 17 14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
     "Const. Pressure Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 15L8 10h5l4-7M3 18l5-5h5l4-6" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
     "Const. Temp Lines": '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 6h14M3 10h14M3 14h14" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>',
+    "Process Plot": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M3 3l-2 3m2-3 2 3m12 11-3-2m3 2-3 2"/>`),
     "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
@@ -204,13 +214,116 @@ export const toolIcons = {
 	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 5v5l3 2M3 10h2M15 10h2"/>`),
 	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/>`),
 	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
+
+	/*
+	 * ========================================================
+	 * THE FLUIDS ICONS
+	 * ========================================================
+	 *
+	 * One family, built from the same parts as every other icon: a 20x20
+	 * viewBox, the shared iconStroke, round caps and joins, no fills. They are
+	 * meant to be read at about twenty pixels in a toolbar.
+	 *
+	 * The three that already existed - Pipe, Reservoir, Valve and Pump - are
+	 * REUSED rather than redrawn, and the two new labels that name a variant of
+	 * one of them (Pipe / Duct, Reservoir / Tank) reuse that same artwork, so a
+	 * Pipe and a Pipe / Duct are not two different glyphs for one idea.
+	 */
+
+	/*
+	 * PIPE / DUCT. The existing Pipe, with the two parallel walls of a duct
+	 * closed off at each end - a run of pipe seen along its length.
+	 */
+	"Pipe / Duct": drawingIcon(`<path ${iconStroke} d="M3 7h14M3 13h14M3 7v6M17 7v6M7 7v6M13 7v6"/>`),
+
+	/*
+	 * ELBOW. A pipe that turns a corner, drawn as the corner itself: two legs
+	 * meeting at a right angle with a rounded bend between them.
+	 */
+	Elbow: drawingIcon(`<path ${iconStroke} d="M4 4v7a5 5 0 0 0 5 5h7M4 4h3M4 4v3M16 16v-3M16 16h-3"/>`),
+
+	/*
+	 * JUNCTION. Three runs meeting: one in from the left, one out to the right,
+	 * and one down, with the tee at the middle.
+	 */
+	Junction: drawingIcon(`<path ${iconStroke} d="M3 8h14M10 8v8"/><circle ${iconStroke} cx="10" cy="8" r="1.4"/>`),
+
+	/*
+	 * REDUCER / EXPANDER. A run that changes bore: the wide wall narrows to the
+	 * narrow one across the middle, which is the whole difference a reducer
+	 * makes and an expander makes in reverse.
+	 */
+	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 5h4l6 5-6 5H3zM13 10h4M7 5v10"/>`),
+
+	/*
+	 * RESERVOIR / TANK. The existing Reservoir with a fluid level line across
+	 * it, so a tank reads as a vessel holding something rather than a box.
+	 */
+	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 5h12v11H4zM4 11h12M7 5v-2M13 5v-2"/>`),
+
+	/*
+	 * FLOW METER. A meter in a run: the pipe through it, with the dial that
+	 * reads it sitting on top.
+	 */
+	"Flow Meter": drawingIcon(`<path ${iconStroke} d="M3 13h14M5 13v-3M15 13v-3"/><circle ${iconStroke} cx="10" cy="6.5" r="3"/><path ${iconStroke} d="M10 6.5l2-1.5"/>`),
+
+	/*
+	 * FLUID LEVEL. A surface with the level marked on it: the fluid line, and
+	 * the level's own datum above it.
+	 */
+	"Fluid Level": drawingIcon(`<path ${iconStroke} d="M3 9h14M3 12h14M3 15h14M5 6v-2M15 6v-2M5 6h10"/>`),
+
+	/*
+	 * PRESSURE TAP. A tap into a run: the pipe wall, and the stem that reads the
+	 * pressure at that point.
+	 */
+	"Pressure Tap": drawingIcon(`<path ${iconStroke} d="M3 13h14M10 13V7"/><circle ${iconStroke} cx="10" cy="5.5" r="1.6"/>`),
+
+	/*
+	 * PIPE DIAMETER. A bore measured across: the pipe's two walls with the
+	 * dimension between them.
+	 */
+	"Pipe Diameter": drawingIcon(`<path ${iconStroke} d="M5 4v12M15 4v12M5 10h10M5 10l2-2M5 10l2 2M15 10l-2-2M15 10l-2 2"/>`),
+
+	/*
+	 * SECTION PLANE. A cutting plane through a run: the plane line with its
+	 * cut arrows, which is how a section is marked.
+	 */
+	"Section Plane": drawingIcon(`<path ${iconStroke} d="M4 4v12M4 10h12M4 4h3M4 16h3M16 10l-3-2M16 10l-3 2"/>`),
+
+	/*
+	 * FLUID PROPERTY LABEL. A written note about a fluid: the note's corner and
+	 * ruled lines, in the same language as the Annotate Note icon.
+	 */
+	"Fluid Property Label": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM7 8h6M7 11h6M7 14h3"/>`),
+
+	/*
+	 * FLOW RATE LABEL. A rate written against a run: the flow arrow with a
+	 * value box hung from it.
+	 */
+	"Flow Rate Label": drawingIcon(`<path ${iconStroke} d="M3 8h9M10 5l3 3-3 3M6 12h9v4H6z"/>`),
+
+	/*
+	 * ELEVATION MARKER. A level marked on a drawing: the datum line with its
+	 * leader and the level's own arrow, which is how an elevation is written.
+	 */
+	"Elevation Marker": drawingIcon(`<path ${iconStroke} d="M3 15h14M6 15L14 5M14 5l-3 1M14 5l1 3"/>`),
+
+	/*
+	 * THE ROUTE FEATURE ICONS.
+	 *
+	 * A route is drawn as a bent single line, and its two parts are the straight
+	 * run and the corner - so the three icons are the whole route, one straight
+	 * piece of it, and the corner itself. They read as one family because they
+	 * are: the same line, at three scales of the same idea.
+	 */
+	"Pipe Route": drawingIcon(`<path ${iconStroke} d="M3 16h6l4-5h4M3 16h3M16 11h-2"/><circle ${iconStroke} cx="9" cy="16" r="1"/><circle ${iconStroke} cx="13" cy="11" r="1"/>`),
+	"Pipe Segment": drawingIcon(`<path ${iconStroke} d="M3 10h14M3 10h3M14 10h3"/><circle ${iconStroke} cx="3" cy="10" r="1"/><circle ${iconStroke} cx="17" cy="10" r="1"/>`),
 	"Control Volume": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10" stroke-dasharray="2 2"/><path ${iconStroke} d="M2 10h2M16 10h2"/>`),
 	"Piston Cylinder": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 10h12M4 12h12M10 10V3"/>`),
 	"Piston Cylinder With Stoppers": drawingIcon(`<path ${iconStroke} d="M4 4v13h12V4M4 11h12M4 13h12M10 11V3"/><path ${iconStroke} d="M4 6h3v2H4M16 6h-3v2h3"/>`),
 	"State Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Process Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-7 5 4 8-2s4-3 6-6"/><path ${iconStroke} d="M14 6h3v3"/>`),
-	"Heat Transfer": drawingIcon(`<path ${iconStroke} d="M4 5c5 2 7 8 12 10M4 10c5 2 7 3 12 5"/>`),
-	Work: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15V8h8v7M8 8V5h4v3"/>`),
 	Wall: drawingIcon(`<path ${iconStroke} d="M6 3v14M10 3v14M14 3v14M3 5h14M3 10h14M3 15h14"/>`),
 	Layer: drawingIcon(`<path ${iconStroke} d="M4 6h12M4 10h12M4 14h12"/>`),
 	"Heat Flux": drawingIcon(`<path ${iconStroke} d="M4 10h12M12 6l4 4-4 4M7 6l-3 4 3 4"/>`),
@@ -274,8 +387,20 @@ export const featureIcons = {
 	"fixed-connection": toolIcons["Fixed Connection"],
 	"slider-connection": toolIcons["Slider Connection"],
 
-	"coordinate-system-2d": toolIcons["Coordinate System"]
-};
+	"coordinate-system-2d": toolIcons["Coordinate System"],
+
+	    /*
+	     * THE FLUIDS FLOW PATHS.
+	     *
+	     * A run and an elbow each own a distinct symbol, so the two kinds of row a
+	     * Flow Paths drawing produces in the Features list are told apart by their
+	     * icons as well as their names. Both come from the SAME toolbar art the
+	     * tool buttons use, so a feature cannot be filed under a different glyph
+	     * from the tool that drew it.
+	     */
+	    "pipe-duct": toolIcons["Pipe / Duct"],
+	    elbow: toolIcons.Elbow
+	};
 
 export const drawingToolGroups = [
 	{
@@ -444,6 +569,28 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
+
+	/*
+	 * ========================================================
+	 * FLUIDS: THE TOOLSET, IMPORTED FROM ITS OWN MODULE
+	 * ========================================================
+	 *
+	 * Fluids is organised the way Statics and Annotate are - category
+	 * headings with their commands listed directly underneath - and its
+	 * groups live in features/fluids/fluids-tools.js rather than in this
+	 * file.
+	 *
+	 * The reason is MODULARITY, and it is the requirement's own: a Fluid
+	 * tool is registered ONCE, beside the capability it travels, so
+	 * adding, moving or building out a fluid-mechanics tool is an edit in
+	 * one place. Listing the seventeen entries here as well would be a
+	 * second copy of the section, free to fall out of step with the first.
+	 *
+	 * This is the SAME arrangement the other disciplines use - they are
+	 * registered in this map and their tools travel the shared pipeline.
+	 */
+	FLUIDS: fluidsToolGroups,
+
 	STATICS: [
 		{
 			id: "statics-selection",
@@ -580,7 +727,36 @@ export const engineeringTools = {
 	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
-	FLUIDS: ["Pipe", "Reservoir", "Valve", "Pump", "Flow Arrow", "Pressure"],
+	/*
+	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,
+	 * imported from features/fluids/fluids-tools.js - so this flat list is no
+	 * longer what the toolbar renders. It is kept in step because it is the
+	 * validity gate `renderEngineeringTools` reads and the list the
+	 * documentation and the inventory QA quote, and a stale copy here would
+	 * describe a section that no longer exists.
+	 *
+	 * The names are the LABELS from the registry, in the same order, with
+	 * Select omitted: the flat branch prepends Select itself, exactly as it
+	 * does for every other discipline.
+	 */
+	FLUIDS: [
+		"Pipe / Duct",
+		"Elbow",
+		"Junction",
+		"Reducer / Expander",
+		"Reservoir / Tank",
+		"Pump",
+		"Valve",
+		"Flow Meter",
+		"Flow Arrow",
+		"Fluid Level",
+		"Pressure Tap",
+		"Pipe Diameter",
+		"Section Plane",
+		"Fluid Property Label",
+		"Flow Rate Label",
+		"Elevation Marker"
+	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],

@@ -22,8 +22,8 @@
  *
  * WHAT THE API OFFERS
  * -------------------
- *   getDocument()               the whole document, as a .enggdraw file object
- *   loadDocument(file)          replace the document with a .enggdraw file
+ *   getDocument()               the whole document, as a document envelope object
+ *   loadDocument(file)          replace the document with a document envelope
  *   listSheets()                [{ id, name }] in document order
  *   renderSheetSvg(id, options) one sheet drawn as standalone SVG markup
  *   getSolution()               the LaTeX source and the references in it
@@ -77,7 +77,7 @@ function getDocument() {
 }
 
 /*
- * Replace the document with a .enggdraw file: the parsed object, or its
+ * Replace the document with a document envelope: the parsed object, or its
  * JSON text. Older file versions are migrated; a file that is not a DAETUM
  * document is refused and the current document is left as it was.
  */

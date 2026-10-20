@@ -3,7 +3,6 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import { commitAnalysisAxis, commitAnalysisInput } from "../statics/analysis-tools.js";
@@ -30,6 +29,7 @@ import { activeCategory, closeCoordinateSystemMenu, closePolygonSidesPrompt } fr
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { clearGlobalToolHighlight } from "../../../components/layout/workspace/workspace-controls.js";
+import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
 
 /*
  * ========================================================
@@ -1031,7 +1031,7 @@ export function finishActiveConstruction() {
         drawingState.interaction;
 
     /*
-     * SMART DIMENSION REFERENCE SELECTION. Enter is the commit point:
+     * DIMENSION REFERENCE SELECTION. Enter is the commit point:
      * it means "use what I picked" rather than "pick one more".
      *
      * It is checked BEFORE the phase test because the dimension tool
@@ -1125,6 +1125,23 @@ export function finishActiveConstruction() {
         return true;
     }
 
+    /*
+     * A PIPE / DUCT PATH IS FINISHED BY THE SAME RULE.
+     *
+     * Enter means "done" for anything being drawn, so an armed Pipe / Duct
+     * tool is finished here rather than by a special case at the keyboard
+     * handler. Each run was committed as it was released, so there is nothing
+     * half-built to guard: finishing only clears the continuation and the tool
+     * stays armed for a fresh path.
+     */
+    if (
+        phase === ROUTE_PHASE ||
+        interaction.fluidsTool === "pipe-duct"
+    ) {
+        finishRouteConstruction();
+        return true;
+    }
+
     if (isLoadBuildPhase(interaction)) {
         /*
          * Only the VARYING load can be finished with Enter.
@@ -1204,8 +1221,7 @@ export function deselectIfJustCreated() {
      * belongs to the dialog's own confirm and cancel.
      */
     if (
-        enggPlotEditor?.isOpen?.() ||
-        enggCreationDimension?.isOpen?.()
+        enggPlotEditor?.isOpen?.()
     ) {
         return false;
     }

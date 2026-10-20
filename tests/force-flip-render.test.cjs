@@ -113,7 +113,6 @@ function baseState(objects) {
     camera: { zoom: 1, panX: 0, panY: 0 },
     grid: { visible: false, spacing: 5 },
     snap: { enabled: false },
-    statics: { vectorScale: 1 },
     display: { showMagnitudes: false, showUnits: true },
     styleDefaults: { stroke: "#000000", lineWidth: 0.5, lineType: "solid" },
     selection: {

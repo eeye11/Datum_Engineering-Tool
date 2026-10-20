@@ -13,6 +13,9 @@ import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
+import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
+import { beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -66,12 +69,41 @@ export function activateTool(
     }
 
     /*
+     * ========================================================
+     * A FLUIDS TOOL ARMS THE SHARED SYSTEM ITS ENTRY NAMES
+     * ========================================================
+     *
+     * The Fluids section reuses existing systems rather than duplicating
+     * them, so pressing a Fluids button arms the tool that ACTUALLY runs:
+     *
+     *     a shape entry      its primitive (`line`, `rectangle`, `point`),
+     *                        so the shared creation pipeline draws it
+     *     an annotate entry  its own id, routed to the Annotate handler
+     *     a dimension entry  its own id, routed to the dimension handler
+     *
+     * `fluidsArmedTool` is the one place that decision is made, and the
+     * toolbar asks the same module which button to highlight - so the button
+     * the student pressed and the tool that runs cannot disagree.
+     *
+     * A PLANNED entry has no behaviour to arm, so it is refused here with an
+     * honest message rather than leaving a tool active that does nothing.
+     */
+    if (enggFluidsTools.isPlannedFluidsTool(toolId)) {
+        setToolMessage(fluidsInstruction(toolId));
+        return;
+    }
+
+    const requestedTool = isFluidsTool(toolId)
+        ? fluidsArmedTool(toolId)
+        : toolId;
+
+    /*
      * Choosing Select always abandons whatever the
      * previous tool was doing, so a half-finished
      * operation can never be left running underneath.
      */
     if (
-        toolId === "select"
+        requestedTool === "select"
     ) {
         closePolygonSidesPrompt();
 
@@ -168,27 +200,27 @@ export function activateTool(
     const isPlacementTool =
         Boolean(
             STATICS_PLACEMENT_TOOLS[
-                toolId
+                requestedTool
             ]
         ) ||
         Boolean(
             STATICS_SPAN_TOOLS[
-                toolId
+                requestedTool
             ]
         ) ||
-        isBodyAttachedTool(toolId) ||
-        toolId === "truss" ||
-        toolId === "point" ||
-        toolId === "arc" ||
-        toolId === "reference-arc" ||
-        toolId === "polygon";
+        isBodyAttachedTool(requestedTool) ||
+        requestedTool === "truss" ||
+        requestedTool === "point" ||
+        requestedTool === "arc" ||
+        requestedTool === "reference-arc" ||
+        requestedTool === "polygon";
 
     const nextTool =
         drawingState.activeTool ===
-                toolId &&
+                requestedTool &&
             !isPlacementTool
             ? "select"
-            : toolId;
+            : requestedTool;
 
     /*
      * Picking any tool from the geometry list ends any
@@ -220,14 +252,66 @@ export function activateTool(
     );
 
     /*
+     * REMEMBER WHICH FLUIDS BUTTON WAS PRESSED.
+     *
+     * A Fluids shape tool arms its PRIMITIVE (`line`, `rectangle`, `point`),
+     * and several Fluids tools may share one primitive - Pump, Valve and Flow
+     * Meter all place a Point. The primitive says which shared tool is running;
+     * this says which Fluids button asked for it, so the toolbar highlights the
+     * one the student pressed rather than all of them.
+     *
+     * Written AFTER the interaction is cleared, or the clear would drop it.
+     */
+    if (isFluidsTool(toolId)) {
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: toolId
+        });
+    }
+
+    /*
+     * ========================================================
+     * THE PIPE / DUCT ROUTE BEGINS ITS OWN CONSTRUCTION
+     * ========================================================
+     *
+     * Pipe / Duct is a CLICK-HOLD-DRAG tool: press the primary button to set
+     * the start, drag to develop the double-line run and release to commit it.
+     * Arming it therefore does NOT begin construction - there is nothing to
+     * begin until the student presses the button. It arms the interaction in
+     * its idle phase and waits.
+     *
+     * A run is one feature type. The circular/rectangular decision is a
+     * property of that feature, so nothing is chosen here.
+     */
+    if (requestedTool === "pipe-duct") {
+        beginRouteConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
      * A freshly activated tool gets its own opening
      * instruction; otherwise the previous tool's
      * instruction would linger.
+     *
+     * A FLUIDS TOOL IS ASKED FOR ITS OWN WORDING, by the id the student
+     * pressed - not by the id that ended up armed. A Pipe / Duct arms the
+     * shared Line tool, but the bottom bar must say "Specify Pipe / Duct start
+     * point" rather than the Line's own line, because that is the tool the
+     * student chose. The wording lives in the Fluids layer beside the binding
+     * it describes.
      */
     setToolMessage(
-        initialToolMessage(
-            nextTool
-        )
+        isFluidsTool(toolId)
+            ? fluidsInstruction(toolId)
+            : initialToolMessage(
+                  nextTool
+              )
     );
 
     renderEngineeringTools(
@@ -335,9 +419,10 @@ export function initialToolMessage(
             "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
             "coordinate-system-2d": "Specify origin",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
+            "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
-            "process-path": "Click inside a saturation diagram to place the first process state",
-            "constant-temp-pressure-lines": "Click points on a saturation diagram to draw a constant temperature/pressure line; Enter finishes",
+            "process-path": "Click inside a process diagram to place the first process state",
+            "constant-temp-pressure-lines": "Click points on a process diagram to draw a constant temperature/pressure line; Enter finishes",
             "piston-cylinder": "Drag to draw a piston cylinder; select it and drag the centre dot to adjust piston height",
             "piston-cylinder-stoppers": "Drag to draw a piston cylinder with stoppers; drag a stopper dot to adjust its height",
             pan: "Drag to pan the view"

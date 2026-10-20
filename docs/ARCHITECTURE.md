@@ -18,11 +18,11 @@ src/
 ├── api/           the integration API — the only supported way in for other tools
 ├── app/           page shell: the tabs, the automation handles
 ├── editor/        the drawing editor: tools, interaction, panels, commands
-├── core/          shared machinery: geometry, units, scale, the document model, snapping
+├── core/          shared machinery: geometry, units, the document model, snapping
 ├── features/      persistent feature models: dimensions, annotations, analysis
 ├── rendering/     the document drawn as SVG
 ├── sheets/        sheets and the sheet tab bar
-├── file/          the .enggdraw format, save, export, crash recovery; latex/ (LATEX.md)
+├── file/          the document format (saved as .tex), save, export, crash recovery; latex/ (LATEX.md)
 ├── references/    drawing references: a sheet placed in the written solution
 ├── solution/      the Written Solution tab
 ├── ui/            shared panel vocabulary, dialogs, the analysis editors
@@ -126,24 +126,21 @@ recovery copy, re-renders any drawing reference, and raises the API's
 ### The document and its sheets
 
 A document is an ordered list of **sheets**, each a separate drawing with
-its own features, view, grid and scale. The editor has exactly one live
+its own features, view and grid. The editor has exactly one live
 drawing state, always the active sheet's; switching sheets writes the
 editor back to its sheet and loads the next one. A sheet has a permanent
 **id** (what references and files use) and a **name** (what the student
 sees and may change).
 
-### The Universal Length Scale
+### Drawing units
 
-A drawing's coordinates are numbers until something says how big they
-are. The **Universal Length Scale** does, and **it belongs to the sheet**:
+DAETUM geometry is schematic. Lengths are read in **drawing units**, as drawn;
+there is no world-length scale or calibration (the Universal Length Scale and
+its unit selectors are retired).
 
-- implemented in `core/scale/dimensions.js` (`readScale`, `calibrate`,
-  `toEngineering`, `fromEngineering`);
-- established by the first real physical length on a sheet;
-- reset when the sheet is emptied of length-bearing geometry.
-
-Do not confuse it with the **Vector Display Scale**, which only changes how
-large a force arrow is *drawn* and never a magnitude.
+A force or load arrow is **as long as it was drawn**: the placement click sets
+its length and its handle edits it. A magnitude or intensity is the label only
+and never resizes an arrow (the shared Vector Scale is retired).
 
 ### Dimensions and annotations
 
@@ -191,7 +188,7 @@ object; the drawing itself is split by concern, and depends only downward:
 | `entities/draw-*.js`   | the per-type draw functions that table names                   |
 | `vector-render.js`     | force and load arrows, arrowheads, the moment's rotational arrow |
 | `symbol-render.js`     | supports, connections, coordinate systems, the rigid body      |
-| `dimension-render.js`  | dimensions and variable dimensions                             |
+| `dimension-render.js`  | dimensions                                                     |
 | `annotation-render.js` | magnitude labels, the Annotate features, feature labels        |
 | `analysis-render.js`   | SFD / BMD / AFD frames, axes, ticks, plots and sketches        |
 | `overlay-render.js`    | snap markers, inference lines, selection box and handles, grid |
@@ -210,7 +207,8 @@ Other tools use `src/api/` and nothing else:
   `renderSheetSvg`, `getSolution`, `setSolution`, `on(event)`;
 - the postMessage bridge for embedding pages, off unless the embedding
   origin is named in the URL;
-- the `.enggdraw` file format, versioned and migrated by `file/document-file.js`.
+- the document format (a `.tex` with the document embedded), versioned and
+  migrated by `file/document-file.js`.
 
 See [INTEGRATION.md](INTEGRATION.md) and [FILE-FORMAT.md](FILE-FORMAT.md).
 `src/app/automation-hooks.js` also exposes internal `window.engg*`
@@ -253,8 +251,9 @@ the expanded text with `stylesheetSource("editor.css")`.
 5. **Interaction** — hit-testing (`editor/interaction/hit-testing.js`,
    `editor/interaction/box-selection.js`), handles (`editor/interaction/handles.js`), transforms
    (`editor/geometry/transforms.js`).
-6. **Panel** — `editor/panels/feature-panel-markup.js` (Statics sections in
-   `editor/statics/statics-panel.js`), edits in `editor/panels/property-update.js`.
+6. **Panel** — the Features tab is schema-driven: declare the feature's
+   fields in its tool-library folder and `components/layout/panels/feature-schema.js`;
+   `features-editor.js` renders and applies them.
 7. **File format** — if the stored shape changes, see
    [FILE-FORMAT.md](FILE-FORMAT.md#changing-the-format).
 8. **Tests** — `tests/`, loading modules with `loadModule()`.

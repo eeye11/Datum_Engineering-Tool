@@ -5,7 +5,7 @@
  *
  * A template is a USER-CREATED starting document. DAETUM ships none: the library
  * begins empty, and a template exists only because the user made one from an
- * `.enggdraw` file they already had.
+ * drawing file they already had.
  *
  * WHAT A TEMPLATE IS
  * ------------------
@@ -13,13 +13,13 @@
  *
  *     { id, name, createdAt, document, preview }
  *
- * `document` is the whole editable document - the same shape a `.enggdraw` file
+ * `document` is the whole editable document - the same shape a saved drawing carries
  * carries - so using a template goes through the SAME loader a file does. There
  * is no second drawing format, and nothing here knows how a feature is built.
  *
  * WHY THE DOCUMENT IS COPIED
  * --------------------------
- * The source `.enggdraw` is an ordinary file the user owns. It may be moved,
+ * The source drawing is an ordinary file the user owns. It may be moved,
  * renamed or deleted at any moment, so a template cannot depend on it still
  * being there. The document is copied into DAETUM's own storage at the moment
  * the template is created, and the template keeps working whatever happens to
@@ -104,7 +104,7 @@ function readAll() {
   } catch (error) {
     /*
      * A damaged library is reported and reset rather than carried around. The
-     * user's own `.enggdraw` files are untouched by this - only DAETUM's copies
+     * user's own drawing files are untouched by this - only DAETUM's copies
      * are lost, and a template can be made again from the source.
      */
     if (typeof console !== "undefined" && console.warn) {
@@ -176,23 +176,18 @@ function writeAll(templates) {
  * A template's display name, WITHOUT a file extension.
  *
  * The name is whatever the user typed, and a user is free to type
- * "statics.enggdraw" - or to accept a default that arrived from a source file
+ * "statics.tex" - or to accept a default that arrived from a source file
  * before this rule existed. So the extension is stripped where the name is
  * SHOWN, not only where it is created: a display rule that depends on every
  * writer having remembered it is a rule that holds until the first writer
  * forgets.
  *
- * Only the FINAL `.enggdraw` goes, so `Statics.V2.Final.enggdraw` reads
- * `Statics.V2.Final` - the rest of the name is the user's.
+ * Only the FINAL extension goes (`.tex`, or an older `.enggdraw`), so
+ * `Statics.V2.Final.tex` reads `Statics.V2.Final` - the rest of the name is the
+ * user's.
  */
 function displayName(name) {
-  const trimmed = String(name || "").trim();
-
-  const suffix = ".enggdraw";
-
-  return trimmed.toLowerCase().endsWith(suffix)
-    ? trimmed.slice(0, -suffix.length)
-    : trimmed;
+  return String(name || "").trim().replace(/\.(tex|enggdraw)$/i, "");
 }
 
 function list() {
@@ -253,7 +248,7 @@ function copyDocumentFor(id) {
  *
  *   addTemplate({ name, document, preview })
  *
- * The document is the validated document from an `.enggdraw` the user chose.
+ * The document is the validated document from a drawing the user chose.
  * This function does not read, parse or validate anything - that is the file
  * pipeline's job, and the caller has already done it, so a template can only
  * ever be created from a document DAETUM could actually open.
@@ -295,7 +290,7 @@ function addTemplate({ name, document, preview } = {}) {
  * which is what makes a rename safe: nothing that referenced the template can
  * be broken by it.
  *
- * A typed extension is stripped, so a name that arrives as "statics.enggdraw"
+ * A typed extension is stripped, so a name that arrives as "statics.tex"
  * is stored the way it will be shown. The display rule would catch it anyway -
  * this just keeps what is stored and what is seen the same thing.
  */
@@ -324,7 +319,7 @@ function renameTemplate(id, name) {
 /*
  * Remove a template.
  *
- * This deletes DAETUM's stored copy and NOTHING else. The `.enggdraw` the
+ * This deletes DAETUM's stored copy and NOTHING else. The drawing file the
  * template was made from is the user's file, is not referenced here, and is
  * never touched - removing a template is not a file deletion.
  */

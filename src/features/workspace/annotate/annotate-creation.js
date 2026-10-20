@@ -42,11 +42,13 @@
  */
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
+import { HEAT_TRANSFER_TOOLS, heatTransferTool } from "../model/thermodynamics/heat-transfer.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { hitTestAnnotateTarget } from "../interaction/hit-testing.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import enggFluidsTools from "../model/fluids/fluids-tools.js";
 
 /*
  * The Annotate tools, and the kind each one makes.
@@ -64,21 +66,52 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
  * needed; this file cannot fall behind.
  */
 export const ANNOTATE_TOOL_KINDS = Object.fromEntries(
-  Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind])
+  [...Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind]),
+    ...Object.keys(HEAT_TRANSFER_TOOLS).map(toolId => [toolId, "arrow"]),
+    ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
 );
+
+const workToolLabels = {
+  "electric-work": "Electric Work",
+  "mechanical-work": "Mechanical Work"
+};
+
+/*
+ * ========================================================
+ * FLUIDS REUSES THE ANNOTATE KINDS
+ * ========================================================
+ *
+ * The Fluids section's Flow Representation and Fluid Annotations entries are
+ * NOT a second annotation system. A Flow Arrow IS the `arrow` kind and a
+ * Fluid Property Label IS the `note` kind - the student finds them under
+ * Fluids, and what they place is the ordinary Annotate feature, with the
+ * ordinary selection, moving, panel, undo and save.
+ *
+ * The mapping is read FROM the Fluids registry rather than restated here, so
+ * a Fluids entry that names a kind cannot disagree with the kind it makes:
+ * there is one place that says "Fluid Property Label makes a note", and it is
+ * the entry itself.
+ */
+export function annotateKindFor(toolId) {
+  return (
+    ANNOTATE_TOOL_KINDS[toolId] ||
+    enggFluidsTools.fluidsAnnotateKind(toolId) ||
+    null
+  );
+}
 
 /*
  * Is this one of the Annotate tools?
  *
  * Asked by name, from ONE table, so a tool added to the Annotate toolset
  * and forgotten here is impossible: the two are the same list read twice.
+ *
+ * A Fluids entry that maps to a kind counts too - it IS an annotate tool in
+ * everything but where its button sits - so the click router, the drag router
+ * and the preview all reach it through the same predicate.
  */
 export function isAnnotateTool(toolId) {
-  return Boolean(ANNOTATE_TOOL_KINDS[toolId]);
-}
-
-export function annotateKindFor(toolId) {
-  return ANNOTATE_TOOL_KINDS[toolId] || null;
+  return Boolean(annotateKindFor(toolId));
 }
 
 /*
@@ -117,6 +150,14 @@ export function isGeometricAnnotateTool(toolId) {
  * to do next rather than leaving the previous tool's wording in place.
  */
 export function annotateInstruction(toolId) {
+  if (toolId === "electric-work") return "Drag from the upper lead to the lower lead; the resistor extends to the right";
+  if (workToolLabels[toolId]) {
+    return `${workToolLabels[toolId]}: drag from the arrow tail to where the work flows`;
+  }
+  const heat = heatTransferTool(toolId);
+  if (heat) {
+    return `${heat.label}: drag from the arrow tail to where the heat flows`;
+  }
   const kind = annotateKindFor(toolId);
 
   if (!kind) {
@@ -259,6 +300,18 @@ export function commitAnnotate(options) {
     object.text = labelName;
   }
 
+  const heat = kind === "arrow" && heatTransferTool(drawingState.activeTool);
+  const workLabel = kind === "arrow" && workToolLabels[drawingState.activeTool];
+  if (workLabel) {
+    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : workLabel;
+    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
+  }
+  if (heat) {
+    object.name = heat.label;
+    object.style.stroke = heat.colour;
+    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
+  }
+
   enggDrawingState.addObject(drawingState, object);
 
   enggDrawingState.commitDrawingChange(
@@ -270,7 +323,7 @@ export function commitAnnotate(options) {
 
   enggDrawingState.selectObject(drawingState, object.id);
 
-  setToolMessage(annotatePlacedMessage(kind));
+  setToolMessage(heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();
   renderCurrentDrawing();
@@ -574,7 +627,9 @@ export function beginAnnotateAnchor({ kind, point, targetFeatureId }) {
   });
 
   setToolMessage(
-    kind === "arrow"
+    drawingState.activeTool === "electric-work"
+      ? "Place the lower lead to size the resistor; Esc cancels"
+      : kind === "arrow"
       ? "Specify arrow endpoint"
       : "Move to place the text, click to confirm, Esc to cancel"
   );

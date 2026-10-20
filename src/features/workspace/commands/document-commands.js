@@ -153,7 +153,7 @@ export function newDrawing() {
  * A browser cannot write to a path the user did not choose, so Save
  * always produces a download. Remembering the name is what lets a
  * second Save do the obvious thing - offer the same file again -
- * rather than silently inventing "drawing.enggdraw" again, and it is
+ * rather than silently inventing "drawing.tex" again, and it is
  * also what the dirty indicator and the unsaved-changes prompt
  * compare against.
  */
@@ -327,14 +327,15 @@ function documentFile() {
  * THE DOCUMENT'S NAME, WITHOUT ITS EXTENSION
  * ========================================================
  *
- * A file called `triangle.enggdraw` is shown as `triangle`.
+ * A file called `triangle.tex` is shown as `triangle`.
  *
- * ONLY THE FINAL `.enggdraw` IS REMOVED - never another period, and never
- * anything else. `Statics.V2.Final.enggdraw` is `Statics.V2.Final`, because the
- * rest of the name is the user's and this rule has no business editing it.
+ * ONLY THE FINAL `.tex` IS REMOVED - never another period, and never anything
+ * else. `Statics.V2.Final.tex` is `Statics.V2.Final`, because the rest of the
+ * name is the user's and this rule has no business editing it. (A drawing
+ * imported from a retired `.enggdraw` is named the same way.)
  *
  * The EXTENSION IS STILL THERE on disk. This is a display rule: the file is
- * `triangle.enggdraw`, and only the way the application TALKS about it changes.
+ * `triangle.tex`, and only the way the application TALKS about it changes.
  * A window title, a menu, a recent file - they all name the drawing, and the
  * drawing is called "triangle".
  */
@@ -345,11 +346,20 @@ function displayNameFor(fileName) {
         return "Untitled";
     }
 
-    const suffix = `.${enggDocumentFile.EXTENSION}`;
+    return withoutDocumentExtension(name);
+}
 
-    return name.toLowerCase().endsWith(suffix.toLowerCase())
-        ? name.slice(0, -suffix.length)
-        : name;
+/* A name without its drawing extension: `.tex`, or a legacy `.enggdraw`. */
+function withoutDocumentExtension(name) {
+    for (const extension of [enggDocumentFile.EXTENSION, enggDocumentFile.LEGACY_EXTENSION]) {
+        const suffix = `.${extension}`;
+
+        if (name.toLowerCase().endsWith(suffix.toLowerCase())) {
+            return name.slice(0, -suffix.length);
+        }
+    }
+
+    return name;
 }
 
 /*
@@ -425,7 +435,7 @@ function refreshDocumentTitle() {
 /*
  * The serialised document body, exactly as the state model holds it.
  *
- * This is the whole document: units, calibration, camera, every
+ * This is the whole document: units, camera, every
  * object's real type, geometry, style, parent and parameters. The
  * format module wraps it; nothing here decides what the file is
  * called or how it is versioned.
@@ -459,7 +469,7 @@ export function serializeDocumentBody() {
          * A submission is BOTH halves - the diagrams and the write-up - so the
          * write-up's source is stored in the same file as the sheets that explain
          * it. It is an ADDITIVE key: the format module spreads the body through
-         * unchanged, so a file carrying it is still a valid `.enggdraw`, and one
+         * unchanged, so a document carrying it is still a valid document, and one
          * saved before this existed simply reads back an empty solution.
          *
          * The DRAFT in localStorage is a safety copy of unsaved typing; THIS is
@@ -508,16 +518,10 @@ function downloadBlob(blob, fileName) {
 
 /*
  * The document's name WITHOUT a known extension, so a download can add whichever
- * one its format wants without ever doubling it ("Beam.pdf.enggdraw").
+ * one its format wants without ever doubling it ("Beam.pdf.tex").
  */
 function baseDocumentName() {
-    const current = String(documentFileName || "drawing");
-
-    const suffix = `.${enggDocumentFile.EXTENSION}`;
-
-    return current.toLowerCase().endsWith(suffix.toLowerCase())
-        ? current.slice(0, -suffix.length)
-        : current;
+    return withoutDocumentExtension(String(documentFileName || "drawing"));
 }
 
 /*
@@ -534,24 +538,24 @@ function exportFileName(extension) {
         : `${base}.${extension}`;
 }
 
+/*
+ * The drawing as a file: the .tex a Save writes, with the editable document
+ * embedded, so a downloaded copy reopens exactly as a saved one does.
+ */
 function downloadDocumentFile(name) {
     const fileName =
         enggDocumentFile.withExtension(
             name || documentFileName || "drawing"
         );
 
-    const payload =
-        enggDocumentFile.createDocument(
-            serializeDocumentBody()
-        );
+    const text = writeLatexDocument(serializeDocumentBody(), {
+        title: displayNameFor(fileName)
+    });
 
-    const blob =
-        new Blob(
-            [JSON.stringify(payload, null, 2)],
-            { type: enggDocumentFile.MEDIA_TYPE }
-        );
-
-    downloadBlob(blob, fileName);
+    downloadBlob(
+        new Blob([text], { type: enggDocumentFile.MEDIA_TYPE }),
+        fileName
+    );
 
     return fileName;
 }
@@ -561,12 +565,12 @@ function downloadDocumentFile(name) {
  * DOWNLOAD: THE FOUR EXPORT FORMATS
  * ========================================================
  *
- * The File menu's Download submenu offers PDF, JPG, PNG and the native
- * `.enggdraw`. Each one is a REAL export of the document as it stands right now
+ * The File menu's Download submenu offers PDF, JPG, PNG, the drawing itself
+ * and LaTeX. Each one is a REAL export of the document as it stands right now
  * - including unsaved changes - and none of them is a screenshot of the
  * application:
  *
- *   enggdraw  the editable document, through the same serializer Save uses
+ *   drawing   the editable .tex, exactly what Save writes
  *   png/jpg   the active sheet, through `renderSheetImageBlob` - the same
  *             image producer Save As already uses
  *   pdf       a print-ready page of the fitted drawing, handed to the
@@ -585,7 +589,7 @@ function downloadDocumentFile(name) {
 
 /* The extension each format downloads with, and its media type. */
 const DOWNLOAD_FORMATS = {
-    enggdraw: {
+    drawing: {
         extension: enggDocumentFile.EXTENSION,
         type: enggDocumentFile.MEDIA_TYPE
     },
@@ -673,12 +677,11 @@ export async function downloadDrawing(format) {
     }
 
     /*
-     * THE NATIVE FORMAT IS THE DOCUMENT ITSELF, and it goes through the very
-     * serializer Save uses - so a downloaded `.enggdraw` reopens with all of its
-     * geometry, annotations, dimensions, ordering and sheet settings intact. It
-     * is not an image of the drawing.
+     * THE DRAWING IS THE DOCUMENT ITSELF, written exactly as Save writes it - so
+     * a downloaded copy reopens with all of its geometry, annotations,
+     * dimensions, ordering and sheet settings intact. It is not an image.
      */
-    if (format === "enggdraw") {
+    if (format === "drawing") {
         try {
             const name = downloadDocumentFile();
 
@@ -686,7 +689,7 @@ export async function downloadDrawing(format) {
 
             return name;
         } catch (error) {
-            enggErrorLog.reportError("download enggdraw", error, {});
+            enggErrorLog.reportError("download drawing", error, {});
 
             setToolMessage("The document could not be downloaded");
 
@@ -905,7 +908,7 @@ function confirmDiscardUnsavedChanges(action) {
                  * guarded must not raise the same prompt a second time.
                  *
                  * Only the in-memory dirty state is discarded. No file is
-                 * deleted, and the saved .enggdraw on disk is untouched.
+                 * deleted, and the saved drawing on disk is untouched.
                  */
                 markDocumentClean();
             }
@@ -1590,7 +1593,7 @@ function suggestedFileName() {
 }
 
 /*
- * Open a .enggdraw file.
+ * Open a drawing - a .tex DAETUM wrote, or an older .enggdraw imported.
  *
  * Reading is separated from applying on purpose. The format module
  * decides whether a file can be opened and, if so, what it should
@@ -1683,7 +1686,7 @@ export function loadDrawing(
         !Array.isArray(data.sheets)
     ) {
         return reportFileProblem(
-            "That file is an EnggDraw drawing but contains no pages of " +
+            "That file is a DAETUM drawing but contains no pages of " +
                 "geometry. Your current drawing has not been changed.",
             { fileName, failure: "no-document-body" }
         );
@@ -1781,9 +1784,9 @@ function restoreSolutionSource(source) {
  */
 function applyLoadedDocument(data, fileName, previous, result) {
     /*
-     * The document's own settings, not just its features. Units and
-     * calibration travel with the drawing because a length in a file
-     * means nothing without them.
+     * The document's own settings, not just its features. Units travel
+     * with the drawing because a length in a file means nothing without
+     * them.
      *
      * Applied to the state, not to the collection: these are settings
      * of the whole document - the unit every length on every sheet is
@@ -1879,7 +1882,7 @@ function applyLoadedDocument(data, fileName, previous, result) {
 }
 
 /*
- * Choose a .enggdraw file from the laptop and open it.
+ * Choose a drawing (.tex, or an older .enggdraw) from the laptop and open it.
  *
  * This is IMPORT: the one action in the Open launcher that uses the operating
  * system's file panel. The file is read and validated before anything is
@@ -1944,7 +1947,7 @@ export function importDrawingFile() {
             globalThis.document.createElement("input");
 
         input.type = "file";
-        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json,.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex`;
+        input.accept = `.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex,.${enggDocumentFile.LEGACY_EXTENSION},${enggDocumentFile.LEGACY_MEDIA_TYPE},application/json`;
 
         /*
          * Cancelling raises `cancel` in every browser that fires it, and no
@@ -2031,8 +2034,8 @@ function openChosenFile(file) {
              */
             resolve(
                 reportFileProblem(
-                    `"${file.name}" could not be read. Choose an EnggDraw ` +
-                        "drawing file.",
+                    `"${file.name}" could not be read. Choose a DAETUM ` +
+                        "drawing (.tex).",
                     { fileName: file.name, failure: "unreadable" }
                 )
             );
@@ -2061,13 +2064,13 @@ function openChosenFile(file) {
  * ================================================================
  *
  * A .tex DAETUM wrote carries the whole document in a comment block
- * (file/latex/latex-document.js), so it opens exactly as the .enggdraw it
- * came from: every feature editable, every sheet and setting restored.
+ * (file/latex/latex-document.js), so it opens with every feature editable and
+ * every sheet and setting restored.
  *
- * IT NEVER BECOMES THE SAVE TARGET. Save writes .enggdraw JSON, and writing
- * that over the student's .tex would destroy the LaTeX they chose to open. So
- * the file handle is forgotten and the document takes the .tex's name with
- * the drawing extension: Save then writes "beam.enggdraw" beside "beam.tex".
+ * IT IS THE SAVE TARGET. A drawing IS a .tex, so Save writes the updated
+ * drawing back to the file that was opened - the same file, the same format.
+ * A .tex DAETUM did not write (no embedded document) opens in the code editor
+ * instead and never becomes the document.
  */
 function isLatexFile(name, text) {
     return /\.tex$/i.test(String(name || "")) || hasEmbeddedDocument(text);
@@ -2088,15 +2091,13 @@ function applyOpenedLatex(text, name, file) {
         return openLatexCode(text, base);
     }
 
-    enggFileSave.setFileHandle(null);
-
     const opened = loadDrawing(embedded.envelope, base);
 
     if (opened) {
         enggRecentFiles.remember({
             name: enggDocumentFile.withExtension(base),
             file,
-            handle: null,
+            handle: enggFileSave.currentFileHandle(),
             document: opened,
             preview: renderDocumentPreview(opened)
         });
@@ -2133,14 +2134,26 @@ function applyOpenedText(text, name, file) {
         parsed = JSON.parse(text);
     } catch (error) {
         return reportFileProblem(
-            `"${name || "That file"}" is not an EnggDraw drawing. It may be ` +
+            `"${name || "That file"}" is not a DAETUM drawing. It may be ` +
                 "a different kind of file, or it may have been damaged. " +
                 "Your current drawing has not been changed.",
             { fileName: name, failure: "not-json" }
         );
     }
 
+    /*
+     * A RETIRED .enggdraw OPENS AS AN IMPORT. It is read through the same
+     * loader, and the drawing takes the .tex form of its name; Save then
+     * writes that .tex beside it and never over the .enggdraw (see
+     * `enggFileSave.save`).
+     */
     const opened = loadDrawing(parsed, name);
+
+    if (opened && enggDocumentFile.isLegacyName(name)) {
+        setToolMessage(
+            `Opened ${name} (older format) - it will be saved as ${documentFileName}`
+        );
+    }
 
     /*
      * ONLY A FILE THAT ACTUALLY OPENED IS REMEMBERED.
@@ -2313,7 +2326,8 @@ function openTemplate(templateId) {
 }
 
 /*
- * Choose a .enggdraw and add it to the template library.
+ * Choose a drawing (a DAETUM .tex, or an older .enggdraw) and add it to the
+ * template library.
  *
  * The file is READ AND VALIDATED by the same loader an Open uses, so a template
  * can only ever be created from a document DAETUM could actually open - there is
@@ -2334,12 +2348,26 @@ async function addTemplateFromFile() {
 
     let parsed;
 
+    /*
+     * A .tex carries the document in its embedded block; an older .enggdraw IS
+     * the envelope. Either way the same reader validates it below.
+     */
+    const embedded = readEmbeddedEnvelope(chosen.text);
+
     try {
-        parsed = JSON.parse(chosen.text);
+        parsed = embedded.found
+            ? embedded.ok
+                ? embedded.envelope
+                : null
+            : JSON.parse(chosen.text);
     } catch (error) {
+        parsed = null;
+    }
+
+    if (!parsed) {
         reportFileProblem(
             "That file could not be read. It may be damaged, or it may not " +
-            "be an EnggDraw drawing."
+            "be a DAETUM drawing."
         );
 
         return false;
@@ -2366,7 +2394,7 @@ async function addTemplateFromFile() {
      */
     const suggested =
         String(chosen.fileName || "")
-            .replace(/\.enggdraw$/i, "")
+            .replace(/\.(tex|enggdraw)$/i, "")
             .trim() || "New Template";
 
     const name = await askForTemplateName(suggested);
@@ -2434,7 +2462,7 @@ function askForTemplateName(suggested) {
  * Rename a stored template.
  *
  * The display name only. The template's document and id are untouched, and the
- * `.enggdraw` it was made from is not referenced at all.
+ * file it was made from is not referenced at all.
  */
 async function renameTemplate(id) {
     const existing = enggTemplates
@@ -2459,7 +2487,7 @@ async function renameTemplate(id) {
 }
 
 /*
- * Read a chosen .enggdraw as text.
+ * Read a chosen drawing file as text.
  *
  * Returns null when the panel was dismissed, which is the ordinary way to
  * change your mind and is not an error. The reader is the one place a file's
@@ -2473,10 +2501,10 @@ function readFileAsText() {
         input.type = "file";
 
         /*
-         * THE NATIVE TYPE, NAMED AS THE FORMAT. The software is DAETUM; the
-         * drawing format is EnggDraw, and `.enggdraw` is its extension.
+         * A drawing is a .tex; an older .enggdraw is still accepted as an
+         * import.
          */
-        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},application/json`;
+        input.accept = `.${enggDocumentFile.EXTENSION},${enggDocumentFile.MEDIA_TYPE},text/x-tex,.${enggDocumentFile.LEGACY_EXTENSION},${enggDocumentFile.LEGACY_MEDIA_TYPE},application/json`;
 
         input.addEventListener("cancel", () => resolve(null));
 
@@ -2522,7 +2550,7 @@ function readFileAsText() {
  * A small SVG picture of a stored globalThis.document.
  *
  * A THIN WRAPPER over the shared fitted render, which is where the drawing
- * bounds, the sheet's World Scale and the neutral camera are decided. Keeping
+ * bounds and the neutral camera are decided. Keeping
  * the decision there - and not here - is what makes a Recent thumbnail, a
  * template card and a written-solution figure the same picture of the same
  * drawing.
@@ -2709,20 +2737,20 @@ export function shareDrawing() {
 
     /*
      * The two actions the dialog really offers, wired to the commands that
-     * already exist for them: the clipboard copy above, and the NATIVE download
-     * - the same `.enggdraw` a Save writes, so what someone is passed can be
+     * already exist for them: the clipboard copy above, and the drawing
+     * download - the same .tex a Save writes, so what someone is passed can be
      * reopened and edited rather than being a picture of it.
      */
     onCopy: () => copyDrawingToClipboard(),
-    onDownload: () => downloadDrawing("enggdraw")
+    onDownload: () => downloadDrawing("drawing")
   });
 }
 
 /*
  * Copy the whole document to the system clipboard.
  *
- * The same JSON a `.enggdraw` file holds, so what is pasted is a complete
- * document that can be saved back as one - not a picture and not a summary.
+ * The document's JSON - the same document a saved .tex carries in its embedded
+ * block - so what is pasted is complete, not a picture and not a summary.
  */
 export async function copyDrawingToClipboard() {
   const payload = enggDocumentFile.createDocument(
@@ -2944,19 +2972,14 @@ export async function offerRecoveryIfAvailable() {
     }
 
     const loaded = loadDrawing(
-        {
-            /*
-             * The stored copy is already a document body. It is
-             * wrapped in the same envelope a file carries and read
-             * back through the same loader, so a recovered drawing
-             * is version-checked and migrated exactly as an opened
-             * file would be - there is no second, less careful path
-             * for recovered work.
-             */
-            format: "enggdraw",
-            version: enggDocumentFile.CURRENT_VERSION,
-            document: stored.document
-        },
+        /*
+         * The stored copy is already a document body. It is wrapped in the
+         * same envelope a file carries and read back through the same loader,
+         * so a recovered drawing is version-checked and migrated exactly as an
+         * opened file would be - there is no second, less careful path for
+         * recovered work.
+         */
+        enggDocumentFile.createDocument(stored.document),
         stored.fileName || undefined
     );
 

@@ -19,6 +19,15 @@ const projectRoot = path.join(__dirname, "..", "..");
 
 let booted = null;
 
+/*
+ * A SECOND PAGE IS A SECOND PROCESS, NOT A SECOND BOOT.
+ *
+ * ES modules are singletons: once the application is loaded, a second jsdom in
+ * this process shares its state. A test that needs a genuinely fresh page can
+ * ask for one with `DATUM_FRESH_BOOT=1` - which re-executes this file in a
+ * child Node process, gets that child's report as JSON, and installs nothing in
+ * the caller. Without that variable the old single-boot behaviour is unchanged.
+ */
 function bootApp() {
   if (booted) return booted;
 
@@ -35,9 +44,12 @@ function bootApp() {
   global.Element = window.Element;
   global.Node = window.Node;
   global.Event = window.Event;
+  global.CustomEvent = window.CustomEvent;
   global.KeyboardEvent = window.KeyboardEvent;
   global.MouseEvent = window.MouseEvent;
   global.XMLSerializer = window.XMLSerializer;
+  global.DOMRect = window.DOMRect;
+  global.getSelection = window.getSelection.bind(window);
   global.getComputedStyle = window.getComputedStyle.bind(window);
   global.requestAnimationFrame = (cb) => setTimeout(cb, 0);
   global.cancelAnimationFrame = (id) => clearTimeout(id);
@@ -77,4 +89,74 @@ function whenReady() {
   });
 }
 
-module.exports = { bootApp, projectRoot, whenReady };
+/*
+ * ============================================================
+ * RUN AN ARBITRARY ASYNC SCRIPT AGAINST A FRESH PAGE
+ * ============================================================
+ *
+ * `runInFreshPage(task)` boots a brand-new application in a child Node process
+ * and evaluates `task({ window, document, projectRoot, require })` there in
+ * async context. Whatever the task returns is JSON-serialised and handed back.
+ *
+ * WHY A CHILD PROCESS. The render pipeline's module-level state (the compiled
+ * picture cache, the compile token, the last picture) lives in the page's own
+ * module instance. A regression test must observe a REAL page that has not been
+ * warmed up by an earlier test in the same file, and ES modules cannot be
+ * re-evaluated in a process. A child process is a second page in the only sense
+ * that matters.
+ *
+ * The task is source text, so it must be self-contained apart from the values
+ * given to it. This keeps the helper free of a test framework: it is plain
+ * Node, usable from `node --test` and from a manual script alike.
+ */
+function runInFreshPage(taskSource, { timeout = 120_000 } = {}) {
+  const { spawnSync } = require("child_process");
+
+  const child = String.raw`
+    const { bootApp, projectRoot, whenReady } = require(${JSON.stringify(__filename)});
+    const page = bootApp();
+    const task = ${taskSource};
+    (async () => {
+      await whenReady();
+      const result = await task({ window: page.window, document: page.document,
+        projectRoot, require, bootError: page.error });
+      process.stdout.write("\n__DATUM_REPORT__" + JSON.stringify(result === undefined ? null : result));
+      /*
+       * THE PAGE'S TIMERS ARE LEFT RUNNING - jsdom's clock, the source
+       * debounce, requestAnimationFrame - so a finished task tells the report,
+       * and the process is ended here rather than waiting for timers that will
+       * never be idle.
+       */
+      process.exit(0);
+    })().catch((error) => {
+      process.stdout.write("\n__DATUM_REPORT__" + JSON.stringify({ taskError: String(error && error.stack || error) }));
+    });
+  `;
+
+  const run = spawnSync(process.execPath, ["-e", child], {
+    cwd: projectRoot,
+    encoding: "utf8",
+    env: { ...process.env, DATUM_FRESH_BOOT: "1" },
+    timeout,
+  });
+
+  const out = `${run.stdout || ""}`;
+  const marker = out.lastIndexOf("__DATUM_REPORT__");
+
+  if (marker < 0) {
+    return {
+      bootError: null,
+      taskError: `the fresh page produced no report\nstdout:\n${out}\nstderr:\n${run.stderr || ""}`,
+    };
+  }
+
+  const text = out.slice(marker + "__DATUM_REPORT__".length);
+
+  try {
+    return JSON.parse(text.slice(0, text.lastIndexOf("}") + 1));
+  } catch {
+    return { bootError: null, taskError: `unreadable report: ${text}` };
+  }
+}
+
+module.exports = { bootApp, projectRoot, whenReady, runInFreshPage };

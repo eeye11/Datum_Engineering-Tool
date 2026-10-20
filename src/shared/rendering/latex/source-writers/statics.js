@@ -32,8 +32,7 @@
  * therefore part of the drawing workflow, not a generator a caller has to
  * remember to run: draw a beam and its code appears in the Source tab.
  *
- * PURITY. Every function here is a pure function of the object (and, where the
- * drawn geometry depends on it, the document's Statics vector scale). Nothing
+ * PURITY. Every function here is a pure function of the object. Nothing
  * is mutated, so the same object always produces the same code and a test can
  * call the serializer without a canvas.
  *
@@ -65,6 +64,8 @@ import {
   texText,
   vector,
 } from "./statics-primitives.js";
+import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "../source-diagnostics.js";
+import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
 
 /* ============================================================
  * HELPERS
@@ -211,34 +212,17 @@ function headFor(style, fallback = "filled") {
   return arrowHeadTip(declared);
 }
 
-/* ============================================================
+/*
+ * ============================================================
  * THE GENERATION OPTIONS
  * ============================================================
  *
- * Most objects are drawn from their own geometry alone. A Statics VECTOR's
- * drawn length is its magnitude times the sheet's shared Vector Scale - the
- * same rule the canvas renderer uses - so the scale is an option rather than
- * part of the object: changing it changes the picture, never the magnitude.
+ * Every object is drawn from its own stored geometry. The sheet is passed
+ * through for the few things that genuinely belong to it (display switches
+ * read by the text nodes); nothing here converts a magnitude into a length.
  */
 export function generationOptions(state, overrides = {}) {
-  let scale = state?.statics?.vectorScale;
-
-  /*
-   * Read through the load-profile module when it is loaded, because that is
-   * where the authoritative clamp lives. A scale outside the accepted range
-   * falls back to the default rather than drawing an invisible or enormous
-   * arrow.
-   */
-  const profile = globalThis.enggLoadProfile;
-
-  if (profile && typeof profile.vectorScaleFor === "function") {
-    scale = profile.vectorScaleFor(state);
-  }
-
-  const value = Number(scale);
-
   return {
-    vectorScale: Number.isFinite(value) && value > 0 ? value : 1,
     units: state?.units || "mm",
     state: state || null,
     ...overrides,
@@ -587,38 +571,16 @@ function serializeTruss(entity, object) {
  * POINT FORCES AND LOADS
  * ============================================================ */
 
-function styleFor(entity) {
-  return entity?.__generationOptions || { vectorScale: 1 };
-}
-
 /*
  * WHERE A FORCE IS DRAWN.
  *
- * The application point and the stored vector are the two facts; the drawn
- * reach is the magnitude times the sheet's Vector Scale. That keeps the
- * physical magnitude separate from the display length, which is the rule the
- * canvas follows - a force of 20 N draws 20 units at 1x and 40 at 2x, and the
- * number in its label is 20 N at both.
+ * The arrow the student drew: the application point `start` to the stored
+ * `end`. Its length is the gesture's and the magnitude is only its label, so
+ * typing 20 N or 5 kN never resizes it. A force with no stored `end` (saved
+ * before arrows kept their drawn length) is drawn along its angle at its
+ * magnitude - how it looked then.
  */
-/*
- * WHERE A FORCE IS DRAWN.
- *
- * THE STORED ARROW IS THE DEFAULT, and the magnitude is a DISPLAY LENGTH only
- * when the sheet asks for one.
- *
- * The factory stores the arrow the student dragged (`start`, `end`) AND the
- * magnitude and angle those imply. The canvas draws the stored arrow; it does
- * not multiply the magnitude by a scale to decide where the head goes. Reading
- * the two the other way round - magnitude times vector scale first - drew every
- * force a different length from the one on the canvas, which is exactly the
- * divergence between code and picture this pipeline exists to prevent.
- *
- * A force with no stored `end` (one created from a magnitude alone) falls back
- * to `start + magnitude * scale * direction`, which is the only case where the
- * scale is a drawing length.
- */
-function drawnForceSpan(object, options) {
-  const geometry = object.geometry || {};
+function storedSpan(geometry) {
   const start = validPoint(geometry.start)
     ? pointOf(geometry.start)
     : validPoint(geometry.position)
@@ -629,10 +591,6 @@ function drawnForceSpan(object, options) {
     return null;
   }
 
-  const magnitude = Number(geometry.magnitude);
-  const angle = Number(geometry.angle);
-  const scale = Number(options.vectorScale) || 1;
-
   if (validPoint(geometry.end)) {
     const end = pointOf(geometry.end);
 
@@ -641,9 +599,12 @@ function drawnForceSpan(object, options) {
     }
   }
 
-  if (Number.isFinite(angle) && Number.isFinite(magnitude)) {
+  const magnitude = Number(geometry.magnitude);
+  const angle = Number(geometry.angle);
+
+  if (Number.isFinite(angle) && Number.isFinite(magnitude) && Math.abs(magnitude) > 1e-9) {
     const direction = vector(angle);
-    const reach = Math.abs(magnitude) * scale;
+    const reach = Math.abs(magnitude);
 
     return {
       start,
@@ -654,8 +615,12 @@ function drawnForceSpan(object, options) {
   return null;
 }
 
+function drawnForceSpan(object) {
+  return storedSpan(object.geometry || {});
+}
+
 function serializePointForce(entity, object) {
-  const span = drawnForceSpan(object, styleFor(entity));
+  const span = drawnForceSpan(object);
 
   if (!span) {
     return null;
@@ -668,51 +633,12 @@ function serializePointForce(entity, object) {
 }
 
 /*
- * A RESULTANT IS THE STORED, CALCULATED ARROW - and its DRAWN LENGTH is the
- * one the canvas shows.
- *
- * The analysis pass writes `start` and `end` from the forces the student
- * selected, and the canvas draws exactly that span. A stored `magnitude` is a
- * physical number and is never a head position; a resultant created from a
- * magnitude alone falls back to it, scaled by the sheet's Vector Scale.
+ * A RESULTANT IS THE STORED, CALCULATED ARROW. The analysis pass writes its
+ * drawn span - the sum of the drawn source arrows - and its value separately,
+ * so it is drawn exactly like a force.
  */
-function resultantSpan(object, options) {
-  const geometry = object.geometry || {};
-  const start = validPoint(geometry.start)
-    ? pointOf(geometry.start)
-    : validPoint(geometry.position)
-      ? pointOf(geometry.position)
-      : null;
-
-  if (!start) {
-    return null;
-  }
-
-  if (validPoint(geometry.end)) {
-    const end = pointOf(geometry.end);
-
-    if (distance(start, end) > 1e-9) {
-      return { start, end };
-    }
-  }
-
-  const magnitude = Number(geometry.magnitude);
-  const angle = Number(geometry.angle);
-  const scale = Number(options.vectorScale) || 1;
-
-  if (Number.isFinite(magnitude) && Number.isFinite(angle)) {
-    const direction = vector(angle);
-
-    return {
-      start,
-      end: {
-        x: start.x + direction.x * Math.abs(magnitude) * scale,
-        y: start.y + direction.y * Math.abs(magnitude) * scale,
-      },
-    };
-  }
-
-  return null;
+function resultantSpan(object) {
+  return storedSpan(object.geometry || {});
 }
 
 /*
@@ -750,7 +676,6 @@ function serializeLoadArrows(entity, object) {
 
   const { samples, start, end, direction, normal, reversed } = profile;
   const style = object.style || {};
-  const scale = styleFor(entity).vectorScale || 1;
 
   const arrowOptions = styleOptions(style);
   const tip = headFor(style, "filled");
@@ -771,14 +696,12 @@ function serializeLoadArrows(entity, object) {
 
     /*
      * THE ARROW STANDS ON THE LOADED SPAN. Its tail is the sample's own base
-     * point, and only its LENGTH depends on the sheet's Vector Scale - which is
-     * the rule the canvas draws by. A standoff would shift the tails off the
-     * span and shorten every arrow by that much, so the scale would no longer
-     * mean what it means everywhere else.
+     * point and its length is the load's drawn height for this intensity -
+     * the rule the canvas draws by (`loadArrowLength`).
      */
     const base = { x: Number(sample.base.x), y: Number(sample.base.y) };
 
-    const reach = loadArrowLength(sample.magnitude, scale);
+    const reach = loadArrowLength(object.geometry || {}, sample.magnitude);
 
     const far = {
       x: base.x + direction.x * reach,
@@ -855,7 +778,15 @@ function serializeMoment(entity, object) {
    * rather than reversed with a hand-placed marker.
    */
   const tip = headFor(object.style || {}, "filled");
-  const arrow = clockwise ? `${tip}-` : `-${tip}`;
+
+  /*
+   * THE HEAD IS AT THE END OF THE SWEEP FOR BOTH SENSES. The arc is already
+   * drawn in the direction of rotation (decreasing angles for a clockwise
+   * moment), so a head at its end points the way the moment turns. Putting a
+   * clockwise moment's head at the START - as this used to - pointed it
+   * against its own sweep, and every CW moment rendered as anticlockwise.
+   */
+  const arrow = `-${tip}`;
 
   const options = withArrow(styleOptions(object.style), tip ? arrow : null);
 
@@ -1031,7 +962,7 @@ function serializeConnection(entity, object) {
  * ============================================================ */
 
 function serializeResultant(entity, object) {
-  const span = resultantSpan(object, styleFor(entity));
+  const span = resultantSpan(object);
 
   if (!span) {
     return null;
@@ -1174,7 +1105,7 @@ function diagramValueScale(geometry, width) {
 
   let peak = 0;
 
-  const equations = globalThis.enggDiagramEquations;
+  const equations = enggDiagramEquations;
 
   if (geometry.mode === "plot" && equations) {
     peak = equations.peakMagnitude(equations.readPlot(geometry));
@@ -1233,7 +1164,7 @@ export function diagramMarks(geometry) {
   const unitHeight = diagramValueScale(geometry, width);
   const place = onDiagramAxis(geometry, unitHeight);
 
-  const equations = globalThis.enggDiagramEquations;
+  const equations = enggDiagramEquations;
 
   if (geometry.mode === "plot" && equations) {
     const entries = equations.readPlot(geometry);
@@ -1410,16 +1341,19 @@ function serializeReferenceArc(entity, object) {
   const geometry = object.geometry || {};
   const centre = pointOf(geometry.center);
   const radius = finite(geometry.radius);
-  const startAngle = finite(geometry.startAngle);
-  const endAngle = finite(geometry.endAngle);
+  /* Stored in radians, as every arc is; TikZ takes degrees. */
+  const startRadians = finite(geometry.startAngle);
+  const endRadians = finite(geometry.endAngle);
+  const startAngle = (startRadians * 180) / Math.PI;
+  const endAngle = (endRadians * 180) / Math.PI;
 
-  if (!(radius > 0) || startAngle === endAngle) {
+  if (!(radius > 0) || startRadians === endRadians) {
     return null;
   }
 
   const startAt = {
-    x: centre.x + Math.cos((startAngle * Math.PI) / 180) * radius,
-    y: centre.y + Math.sin((startAngle * Math.PI) / 180) * radius,
+    x: centre.x + Math.cos(startRadians) * radius,
+    y: centre.y + Math.sin(startRadians) * radius,
   };
 
   return draws(
@@ -1580,9 +1514,28 @@ export function serializeStaticsObject(object, options = {}) {
 
   try {
     geometry = shape(entity, object);
-  } catch {
-    /* A half-built object writes nothing rather than throwing mid-drawing. */
-    geometry = null;
+  } catch (error) {
+    /*
+     * A serializer that throws writes NOTHING for this object, and says so.
+     * It used to fall through with `geometry = null` and still emit the text
+     * nodes - so a force whose arrow failed appeared in Source and on the sheet
+     * as a floating "F" with no arrow, which is source that does not describe
+     * the object and a picture that does not show it.
+     */
+    reportSourceGenerationProblem(object, `its ${object.type} drawing failed (${error && error.message})`);
+
+    return null;
+  }
+
+  if (typeof geometry !== "string" || geometry.trim() === "") {
+    /*
+     * NO GEOMETRY, NO OBJECT. Text nodes alone are not this object - they are
+     * its annotations - so an object whose shape could not be drawn from its
+     * stored geometry contributes nothing rather than a label in empty space.
+     */
+    reportSourceGenerationProblem(object, `its stored geometry does not describe a drawable ${object.type}`);
+
+    return null;
   }
 
   /*
@@ -1629,10 +1582,12 @@ export function serializeStaticsObject(object, options = {}) {
   const problem = texProblem(combined);
 
   if (problem) {
-    reportSourceProblem(object, problem);
+    reportSourceGenerationProblem(object, problem);
 
     return null;
   }
+
+  clearSourceGenerationProblem(object.id);
 
   return combined;
 }
@@ -1691,23 +1646,58 @@ function texProblem(text) {
     return "an undecoded unicode escape in a label";
   }
 
+  const outside = mathCommandOutsideMath(value);
+
+  if (outside) {
+    return `\\${outside} outside maths mode`;
+  }
+
   return null;
 }
 
 /*
- * Report a source problem the same way a render failure is reported: visible,
- * with the object named, so a missing object is never silent.
+ * A MATHS-ONLY COMMAND IN TEXT MODE. `\cdot` in a label outside `$...$` is a
+ * hard TeX error, and like every TeX error it stops the whole document - which
+ * is exactly how one diagram's axis unit blanked every Statics object on a
+ * sheet. Only commands that are NEVER valid in text are listed, so an ordinary
+ * text command can never be mistaken for one.
  */
-function reportSourceProblem(object, problem) {
-  try {
-    if (typeof console !== "undefined" && console.warn) {
-      console.warn(
-        `[DAETUM] "${object.name || object.id}" (${object.type}) was left out of the source: ${problem}.`
-      );
+const MATH_ONLY_COMMANDS = new Set([
+  "cdot", "times", "frac", "tfrac", "dfrac", "mathrm", "mathbf", "sqrt",
+  "alpha", "beta", "gamma", "delta", "Delta", "theta", "omega", "Omega",
+  "sigma", "tau", "mu", "pi", "phi", "leq", "geq", "approx", "pm"
+]);
+
+function mathCommandOutsideMath(text) {
+  let inMath = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (character !== "\\") {
+      if (character === "$") {
+        inMath = !inMath;
+      }
+
+      continue;
     }
-  } catch {
-    /* Reporting must never be the thing that breaks generation. */
+
+    const name = /^[A-Za-z]+/.exec(text.slice(index + 1));
+
+    if (!name) {
+      /* `\$`, `\\` and friends: skip the escaped character. */
+      index += 1;
+      continue;
+    }
+
+    if (!inMath && MATH_ONLY_COMMANDS.has(name[0])) {
+      return name[0];
+    }
+
+    index += name[0].length;
   }
+
+  return null;
 }
 
 /* ============================================================
@@ -1909,12 +1899,18 @@ export function isStaticsObject(object) {
   return engineering.discipline === "statics" || typeof engineering.staticsType === "string";
 }
 
-export function staticsSourceWriter(object) {
+/*
+ * The synchronization layer hands every writer the sheet (`context.state`). It
+ * is passed on, so a Statics object is written against the same sheet settings
+ * the rest of the drawing is - not against defaults because the writer dropped
+ * its second argument.
+ */
+export function staticsSourceWriter(object, context = {}) {
   if (!isStaticsObject(object)) {
     return null;
   }
 
-  return serializeStaticsObject(object);
+  return serializeStaticsObject(object, { state: context.state || null });
 }
 
 export function writtenStaticsTypes() {

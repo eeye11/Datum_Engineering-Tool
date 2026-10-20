@@ -187,7 +187,6 @@ console.log("\n  the range follows the member, not the moment of creation\n");
  */
 const state = {
   objects: [],
-  statics: { vectorScale: 1 },
   display: {},
   styleDefaults: {},
 };

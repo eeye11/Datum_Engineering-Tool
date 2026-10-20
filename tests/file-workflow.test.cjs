@@ -247,17 +247,17 @@ console.log("\n  the saved file reopens with every part intact\n");
     doc.activeSheetId === "sheet_one"
   );
 
-  check(
-    "the first sheet keeps its own scale",
-    first.scale && first.scale.mmPerUnit === 2.5
-  );
-
   const second = (doc.sheets || []).find((s) => s.id === "sheet_two") || {};
 
+  /*
+   * THE PER-SHEET WORLD SCALE IS RETIRED. A file saved while it existed still
+   * opens - every sheet, every feature - but its calibration is not carried
+   * into the document: a drawing states what it draws.
+   */
   check(
-    "the second sheet keeps a DIFFERENT scale",
-    second.scale && second.scale.mmPerUnit === 10,
-    "a per-sheet scale must not be flattened into one document scale"
+    "an old file's per-sheet world scale is not carried forward",
+    first.scale === undefined && second.scale === undefined,
+    `first ${JSON.stringify(first.scale)}, second ${JSON.stringify(second.scale)}`
   );
 
   const force = (first.objects || []).find((o) => o.id === "force_9");

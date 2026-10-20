@@ -61,9 +61,9 @@ async function compile(source) {
 }
 
 /* The real request the application makes, answered by the real engine. */
-async function renderEndpoint(tikzText) {
+async function renderEndpoint(tikzText, options = {}) {
   try {
-    const svg = await (await engine()).renderTikz(tikzText);
+    const svg = await (await engine()).renderTikz(tikzText, { anchorOrigin: options.anchorOrigin === true });
 
     return {
       ok: true,
@@ -97,7 +97,7 @@ window.fetch = globalThis.fetch = async (url, options = {}) => {
 
     requests.push(body.tikz);
 
-    return renderEndpoint(body.tikz);
+    return renderEndpoint(body.tikz, { anchorOrigin: body.anchorOrigin });
   }
 
   return { ok: true, status: 200, json: async () => ({ success: true }) };
@@ -295,7 +295,8 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     f.line({ x: 140, y: -150 }, { x: 180, y: -150 }),
     "reference-line",
   );
-  created["reference-arc"] = reference(f.arc({ x: 160, y: -90 }, 15, 0, 120), "reference-arc");
+  /* An arc is stored in radians (120 degrees here) and written in degrees. */
+  created["reference-arc"] = reference(f.arc({ x: 160, y: -90 }, 15, 0, (120 * Math.PI) / 180), "reference-arc");
 
   /* ---------------------------------------------------------- every tool */
 
@@ -309,26 +310,36 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     particle: ["(-80,0) circle[radius=1]"],
     "rigid-body": ["(-70,20)"],
     beam: ["(-60,63)"],
-    truss: ["(-60,90)"],
+    /* the two chords, 12 either side of the stored centre line y=90 */
+    truss: ["(-60,102) -- (60,102)", "(-60,78) -- (60,78)"],
     cable: ["(-60,130) -- (60,130)"],
-    shaft: ["(-60,170)"],
+    /* diameter 20 about the stored axis y=150, and the axis itself */
+    shaft: ["(-60,160)", "(-60,150) -- (60,150)"],
     force: ["(0,100)", "{Latex}"],
-    load: ["{-Latex}", "(0,16)"],
-    "varying-load": ["{-Latex}"],
-    moment: ["arc[start angle=60, end angle=-240, radius=7]"],
+    load: ["-{Latex}", "(0,16)"],
+    /* the end intensity (5) reaches the far end - a varying load is not blank */
+    "varying-load": ["-{Latex}", "(60,12) -- (60,7)"],
+    /*
+     * CW: the arc sweeps clockwise (decreasing angle) and the head is at its
+     * END, so it points the way the moment turns. `{Latex}-` here would be the
+     * regression that drew every clockwise moment as anticlockwise.
+     */
+    moment: ["arc[start angle=-60, end angle=-360, radius=7]", ", -{Latex}]"],
     "pin-support": ["-- cycle"],
     "roller-support": ["circle[radius=1.5]"],
     "fixed-support": ["line width=0.35pt"],
     "smooth-support": ["circle[radius=2]"],
     "pin-connection": ["circle[radius=2]"],
     "fixed-connection": ["-- cycle"],
-    "slider-connection": ["circle[radius=2]"],
+    /* the slot, and the block riding in it */
+    "slider-connection": ["(-8,130) -- (8,130)", "-- cycle"],
     resultant: ["{Latex}", "(-140,0)"],
     "force-components": ["{Latex}"],
     sfd: ["-{Latex}"],
     bmd: ["-{Latex}"],
     afd: ["-{Latex}"],
-    "coordinate-system": ["{Latex}", "(-150,-150)"],
+    /* both axes, 25 either side of the stored origin (-150,-150) */
+    "coordinate-system": ["(-175,-150) -- (-125,-150)", "(-150,-175) -- (-150,-125)"],
     "reference-point": ["(150,-120)"],
     "reference-line": ["(140,-150) -- (180,-150)"],
     "reference-arc": ["arc[start angle=0, end angle=120, radius=15]"],
@@ -429,7 +440,7 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     "the deleted object's source is still in the document",
   );
   assert.ok(
-    !manager.getVisibleSource().includes("end angle=-240"),
+    !manager.getVisibleSource().includes("end angle=-360"),
     "the deleted moment is still being compiled",
   );
   assert.ok(
@@ -443,6 +454,56 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     afterDelete.ok,
     `the sheet after a deletion does not compile:\n${afterDelete.error}`,
   );
+});
+
+test("the compiled picture lies on the objects' own world coordinates", async () => {
+  /*
+   * TeX places a picture by its bounding box and writes TeX points, so a
+   * compiled drawing knows neither where its origin was nor what a millimetre
+   * is. The canvas anchors the picture at (0,0) and maps world millimetres to
+   * those points; this checks the two halves agree, with a known line and a
+   * known camera. A picture laid out as if it were millimetres - the old
+   * behaviour - is ~2.8x too large and offset, and fails here.
+   */
+  const k = 72.27 / 25.4;
+  const origin = -72.27;
+
+  const svg = await (await engine()).renderTikz(
+    "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\draw (20,10) -- (30,10);\n\\end{tikzpicture}",
+    { anchorOrigin: true },
+  );
+
+  const start = /d="M(-?[\d.]+)\s*(-?[\d.]+)h([\d.]+)"/.exec(svg);
+
+  assert.ok(start, `no horizontal path in the compiled picture:\n${svg}`);
+  assert.ok(Math.abs(Number(start[1]) - (origin + 20 * k)) < 0.05, `x=20 compiled to ${start[1]}`);
+  assert.ok(Math.abs(Number(start[2]) - (origin - 10 * k)) < 0.05, `y=10 compiled to ${start[2]}`);
+  assert.ok(Math.abs(Number(start[3]) - 10 * k) < 0.05, `10 units compiled to ${start[3]}`);
+
+  /* The canvas's view of the world, in the same units: centred on the camera. */
+  const previous = { ...drawingState.camera };
+
+  drawingState.camera.panX = 25;
+  drawingState.camera.panY = 10;
+
+  try {
+    const { renderCurrentDrawing } = require(require("./helpers/source-path.cjs").locate("canvas-render.js"));
+
+    renderCurrentDrawing();
+
+    const [left, top, width, height] = pictureLayer().getAttribute("viewBox").split(/\s+/).map(Number);
+
+    assert.ok(
+      Math.abs(left + width / 2 - (origin + 25 * k)) < 0.05,
+      "the canvas centre is not world x = panX in the compiled picture's units",
+    );
+    assert.ok(
+      Math.abs(top + height / 2 - (origin - 10 * k)) < 0.05,
+      "the canvas centre is not world y = panY in the compiled picture's units",
+    );
+  } finally {
+    Object.assign(drawingState.camera, previous);
+  }
 });
 
 test("the compiled picture is produced from the Source tab's current text", async () => {

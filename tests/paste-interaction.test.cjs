@@ -14,7 +14,8 @@ test("paste creates serializable identities and selects movable copies on repeat
     child.parentId = parent.id;
     stateModel.addObject(drawingState, child);
     stateModel.selectObjects(drawingState, [parent.id, child.id]);
-    const editorState = { manipulationDrag: { awaitingPlacement: true } };
+    /* An unfinished move: paste must cancel it before adding the copies. */
+    const editorState = { manipulationDrag: { pointerId: 1, kind: "body", moved: true } };
     let cancellations = 0;
     const sandbox = {
         enggDrawingState: stateModel, enggDrawingClipboard: clipboardModel,

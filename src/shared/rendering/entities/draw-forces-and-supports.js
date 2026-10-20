@@ -190,15 +190,11 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                 entity.type === "resultant"
             ) {
                 /*
-                 * THE SHARED VECTOR SCALE.
+                 * THE ARROW THE STUDENT DREW.
                  *
-                 * The arrow is drawn at the length the shared Statics
-                 * display scale asks for. The scale is applied to the
-                 * LENGTH, never to the stored magnitude - scaling the
-                 * magnitude would change the engineering value, and
-                 * scaling the application point would move where the force
-                 * acts. A Vector Scale is a drawing setting and nothing
-                 * else.
+                 * Tail and head are the force's stored drawn points (see
+                 * `drawnForceAxis`); the magnitude is only the label. Nothing
+                 * converts a value into a length.
                  *
                  * BOTH ENDS GO THROUGH THE SAME PROJECTION.
                  *

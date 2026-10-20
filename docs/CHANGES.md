@@ -1,6 +1,6 @@
-# Changes: restructure, thermodynamics merge, LaTeX
+# Changes: restructure, thermodynamics merge, LaTeX, Statics sync, legacy cleanup
 
-A summary of the work done from 13 to 15 October 2026. It covers what changed
+A summary of the work done from 13 to 19 October 2026. It covers what changed
 at each stage and how it was done. Every stage was checked against the version
 before it in the same way, described under [How every stage was checked](#how-every-stage-was-checked).
 The detail for any line is in its commit message (`git log`).
@@ -11,6 +11,8 @@ The detail for any line is in its commit message (`git log`).
 | 2. Thermodynamics merge | `port/thermodynamics` | into `main` (PR #27, `0312dc5`) |
 | 3. LaTeX save, open and editor | `feature/latex` | not yet |
 | 4. Menu flyout fix | `feature/latex` | not yet |
+| 5. Statics source and render sync | `fix/statics-source-render-sync` | not yet |
+| 6. Legacy cleanup | `chore/legacy-cleanup` (on top of 5) | not yet |
 
 ---
 
@@ -22,7 +24,7 @@ below passed.
 
 | Check | What it proves |
 | --- | --- |
-| `npm run lint`, `npm test` (now 253 tests), `npm run build` | The code is clean, the tests pass and the site builds. |
+| `npm run lint`, `npm test` (now 257 tests), `npm run build` | The code is clean, the tests pass and the site builds. |
 | **Golden scenario**: every toolbar tool, Move/Rotate/Mirror, clipboard, sheets, export and the written solution, run in Chrome and compared step by step with `main` | **Behaviour** is unchanged (66/66 steps identical). |
 | **Visual comparison**: four screens compared pixel by pixel with `main` | **Appearance** is unchanged. |
 | **Integration API check** in Chrome | Other tools can still drive DAETUM. |
@@ -76,7 +78,7 @@ server are involved. See [LATEX.md](LATEX.md).
 | **File → Download → LaTeX** | `file/latex/latex-document.js` writes one `standalone` file with one picture per sheet. Each picture is the renderer's own SVG converted to drawing code (`svg-to-tikz.js`), so it matches the canvas for every feature type. |
 | **Readable by people and AI** | `feature-description.js` writes a sentence above each feature (type, position, real lengths, loads with their units) and a feature list for each sheet. |
 | **Exact reopen** | The whole document is embedded as a base64 comment after `\end{document}`. LaTeX ignores it. |
-| **File → Open accepts `.tex`** | A DAETUM `.tex` opens as the original document. It never becomes the save target, so Save writes `name.enggdraw` and the `.tex` is never overwritten. A `.tex` without DAETUM data opens in the code editor. |
+| **File → Open accepts `.tex`** | A DAETUM `.tex` opens as the original document. (At this stage Save wrote `name.enggdraw` beside it; since stage 6 the `.tex` is the save target.) A `.tex` without DAETUM data opens in the code editor. |
 | **Insert → LaTeX Code…** | `latex-reader.js` turns common drawing code into editable lines, polylines, triangles, rectangles, circles, arcs, arrows and notes. Anything it cannot draw is listed by line number. `ui/editors/latex-editor.js` shows code and a live preview side by side, and has Insert (one undo step), From drawing, and minimise/restore. |
 | **Proof** | All 63 golden-scenario sheets compile with a real TeX engine (`tools/dev/compile-latex.mjs`, used as a test harness only) and match the canvas side by side. Reopening gives identical documents. 23 new tests. |
 
@@ -92,11 +94,44 @@ cause was CSS: the menu panel scrolls vertically, and that forces it to clip
 horizontally as well (`ui/menubar/menu-bar.js`, `placeSubmenu`). Checked at
 three window sizes.
 
+## 5. Statics source and render sync (`fix/statics-source-render-sync`)
+
+**Goal:** the object model, the Source tab and the LaTeX-rendered Drawing Space
+stay in step for every Statics tool.
+
+| What | How |
+| --- | --- |
+| **One compile per source revision** | `canvas-render.js` schedules compiles by source revision: a revision is compiled once, a newer one supersedes an older one in flight, and a transient server failure retries. The Source tab no longer compiles on its own; it listens for `datum:source-rendered` and the diagnostics events. |
+| **The picture sits where the model is** | The render server anchors every picture at the origin (`anchorPictureAtOrigin`), so the compiled SVG maps onto drawing coordinates exactly. |
+| **Writer failures are reported, not swallowed** | `source-diagnostics.js` collects serializer exceptions and LaTeX errors per object. Fixed writers: BMD `\cdot` outside math, the varying load's intensities, the clockwise moment arrow. |
+| **Proof** | Live-pipeline and scheduler tests (8 new), and `tests/e2e/statics-browser-check.mjs`, which places every Statics tool in Edge and compares the Source and the Drawing Space. |
+
+## 6. Legacy cleanup (`chore/legacy-cleanup`)
+
+**Goal:** remove retired features completely, keeping the unified Dimension,
+drawing-space coordinates, snapping, transforms, Statics source and render, the
+Objects | Features | Source panels, and save/reopen.
+
+| Removed | What replaces it |
+| --- | --- |
+| Smart Dimension, Variable Dimension, Driving/Driven | The one Dimension tool, which reads what was picked. |
+| World-length scale, calibration, unit selectors (`scale/dimensions.js`, `scale-calibration.js`, the creation-sizing popups, `state.scale`) | Drawing units, as drawn. An old file's `scale` is ignored. |
+| Vector Scale | An arrow is as long as it was drawn: the placement click sets it and its handle edits it. A varying load tapers by intensity ratio; the value is the label only. |
+| The old combined Features panel (`feature-panel-markup`, `property-*`, `triangle-panel`, `statics-panel`, …) | The Objects / Features / Source inspector. The Statics analysis editor moved to `statics/analysis-editor.js`. |
+| The `.enggdraw` format | Save and Save As write `.tex` with the document embedded (`format: "daetum-document"`). `.enggdraw` opens as a one-way import and is never written over. Recovery moved to `daetum:recovery`, migrating the old key. |
+| Dead styles, a no-op scale reset, stale fixtures and comments | — |
+
+Tests for removed features were deleted; tests that still describe current
+behaviour were renamed or reframed (for example, drawn arrow length instead of
+Vector Scale). 257/257 pass; lint has 0 errors.
+
 ---
 
 ## Branches and what to do with them
 
 - `feature/latex` holds stages 3 and 4 and has not been pushed.
+- `fix/statics-source-render-sync` (stage 5) and `chore/legacy-cleanup`
+  (stage 6, stacked on 5) have not been pushed.
 - After merging, category owners should merge `main` into their `category/*`
   branch before continuing, so they pick up the new folder layout.
 - `toolbar-changes` (5 commits) was never merged into `main` and predates the

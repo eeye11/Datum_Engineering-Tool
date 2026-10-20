@@ -3,7 +3,6 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
 import enggNoteEditor from "../../../shared/ui/editors/note-editor.js";
@@ -23,6 +22,7 @@ import { activeCategory, closeCoordinateSystemMenu } from "../../../components/l
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { cancelTrussConstruction } from "../statics/truss-tool.js";
 import { fitDrawingToView } from "../../../components/layout/workspace/viewport.js";
+import { ROUTE_PHASE, cancelRouteConstruction } from "./pipe-duct-tool.js";
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -321,11 +321,6 @@ export function installKeyboardShortcuts() {
                  * the Escape the canvas needs.
                  */
                 if (
-                    enggCreationDimension?.handleEscape?.()
-                ) {
-                    return;
-                }
-                if (
                     enggSketchEditor?.handleEscape?.()
                 ) {
                     return;
@@ -365,6 +360,25 @@ export function installKeyboardShortcuts() {
                     return;
                 }
 
+                /*
+                 * A PIPE / DUCT LEG IN PROGRESS IS THROWN AWAY THE SAME WAY.
+                 *
+                 * The leg being dragged is temporary state, so Escape leaves
+                 * no ghost geometry, no orphaned elbow and no half-built path -
+                 * nothing has been written to the document until the release.
+                 * That is the same guarantee the Truss makes, reached through
+                 * the same key.
+                 */
+                if (
+                    drawingState.interaction.phase === ROUTE_PHASE ||
+                    drawingState.interaction.fluidsTool === "pipe-duct"
+                ) {
+                    editorState.creationDrag = null;
+
+                    cancelRouteConstruction();
+                    return;
+                }
+
                 cancelInteraction();
 
                 return;
@@ -400,8 +414,7 @@ export function installKeyboardShortcuts() {
              * clicking the canvas is how they hand focus back.
              */
             if (
-                editable ||
-                enggCreationDimension?.isOpen?.()
+                editable
             ) {
                 return;
             }

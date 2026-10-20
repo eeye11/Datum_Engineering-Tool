@@ -100,8 +100,8 @@ async function main() {
 console.log("\n  the native panel is offered Datum, PNG and JPG\n");
 
 {
-  const calls = fakePicker("drawing.enggdraw");
-  await save.saveAs(BODY, "drawing.enggdraw", {});
+  const calls = fakePicker("drawing.tex");
+  await save.saveAs(BODY, "drawing.tex", {});
 
   const types = saved(calls).types;
 
@@ -117,7 +117,7 @@ console.log("\n  the native panel is offered Datum, PNG and JPG\n");
 
   check(
     "the Datum extension is offered",
-    extensions.includes(".enggdraw"),
+    extensions.includes(".tex"),
     extensions.join(", "),
   );
   check("PNG is offered", extensions.includes(".png"), extensions.join(", "));
@@ -139,20 +139,20 @@ console.log("\n  the format follows the chosen filename\n");
 
 {
   check(
-    ".enggdraw is the document",
-    save.formatForName("Beam.enggdraw").id === "enggdraw",
+    ".tex is the document",
+    save.formatForName("Beam.tex").id === "tex",
   );
   check(".png is a PNG", save.formatForName("Beam.png").id === "png");
   check(".jpg is a JPG", save.formatForName("Beam.jpg").id === "jpg");
   check(".jpeg is a JPG", save.formatForName("Beam.jpeg").id === "jpg");
   check(
     "an unknown extension saves the document",
-    save.formatForName("Beam.xyz").id === "enggdraw",
+    save.formatForName("Beam.xyz").id === "tex",
     "a freely-typed name must not become an image",
   );
   check(
     "a bare name saves the document",
-    save.formatForName("Beam").id === "enggdraw",
+    save.formatForName("Beam").id === "tex",
   );
   check(
     "the match is case-insensitive",
@@ -176,10 +176,10 @@ console.log("\n  the extension is not doubled\n");
     save.normaliseName("Beam.png", { id: "png", extensions: [".png"] }),
   );
   check(
-    "Beam.enggdraw + PNG is Beam.png",
-    save.normaliseName("Beam.enggdraw", { id: "png", extensions: [".png"] }) ===
+    "Beam.tex + PNG is Beam.png",
+    save.normaliseName("Beam.tex", { id: "png", extensions: [".png"] }) ===
       "Beam.png",
-    save.normaliseName("Beam.enggdraw", { id: "png", extensions: [".png"] }),
+    save.normaliseName("Beam.tex", { id: "png", extensions: [".png"] }),
   );
   check(
     "Beam.jpg + JPG is Beam.jpg, not Beam.jpg.jpg",
@@ -197,11 +197,11 @@ console.log("\n  the extension is not doubled\n");
 console.log("\n  a document save writes the document\n");
 
 {
-  const calls = fakePicker("Beam.enggdraw");
+  const calls = fakePicker("Beam.tex");
 
   let rendered = 0;
 
-  const result = await save.saveAs(BODY, "Beam.enggdraw", {
+  const result = await save.saveAs(BODY, "Beam.tex", {
     renderImage: async () => {
       rendered++;
       return new Blob(["img"], { type: "image/png" });
@@ -210,7 +210,7 @@ console.log("\n  a document save writes the document\n");
 
   check(
     "the result reports the document format",
-    result && result.format === "enggdraw" && result.image === false,
+    result && result.format === "tex" && result.image === false,
     JSON.stringify(result),
   );
   check(
@@ -233,7 +233,7 @@ console.log("\n  an image save writes an image and does NOT re-brand the documen
 
   let requestedFormat = null;
 
-  const result = await save.saveAs(BODY, "Beam.enggdraw", {
+  const result = await save.saveAs(BODY, "Beam.tex", {
     renderImage: async (formatId) => {
       requestedFormat = formatId;
       return new Blob(["img"], { type: "image/png" });
@@ -266,7 +266,7 @@ console.log("\n  cancelling the panel does nothing\n");
 
   let rendered = 0;
 
-  const result = await save.saveAs(BODY, "Beam.enggdraw", {
+  const result = await save.saveAs(BODY, "Beam.tex", {
     renderImage: async () => {
       rendered++;
       return new Blob(["img"]);
@@ -296,7 +296,7 @@ console.log("\n  a failed render is reported, not silently saved\n");
 
   fakePicker("Beam.png");
 
-  const result = await save.saveAs(BODY, "Beam.enggdraw", {
+  const result = await save.saveAs(BODY, "Beam.tex", {
     renderImage: async () => null,
   });
 
@@ -316,7 +316,7 @@ console.log("\n  Save writes the DOCUMENT to the remembered file\n");
 {
   save.forgetFileHandle();
   save.setFileHandle({
-    name: "Beam.enggdraw",
+    name: "Beam.tex",
     createWritable: async () => ({
       write: async (blob) => {
         lastWritten = blob;
@@ -331,7 +331,7 @@ console.log("\n  Save writes the DOCUMENT to the remembered file\n");
 
   check(
     "Save returns the file's name",
-    name === "Beam.enggdraw",
+    name === "Beam.tex",
     String(name),
   );
   check(

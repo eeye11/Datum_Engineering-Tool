@@ -7,11 +7,9 @@
  * length - and asking for it is the same kind of question the creation
  * popup asks for a length: one number, with the unit it is stated in.
  *
- * So this is a SMALL, SELF-CONTAINED POPUP that reuses the creation
- * popup's styling and conventions but offers the LOAD units - kN/m and
- * N/mm - rather than length units. It deliberately does not touch the
- * shared creation-dimension popup, which is wired to the document's length
- * units and the world scale; a load magnitude is neither.
+ * So this is a SMALL, SELF-CONTAINED POPUP that offers the LOAD units -
+ * kN/m and N/mm - rather than length units. (Its styling classes are named
+ * for the retired creation-size popup that first used them.)
  *
  * WHAT IT COLLECTS, AND WHAT IT DOES NOT
  * --------------------------------------

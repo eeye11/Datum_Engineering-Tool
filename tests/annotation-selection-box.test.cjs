@@ -104,7 +104,6 @@ function forceScene(magnitude) {
     camera: { zoom: 1, panX: 0, panY: 0 },
     grid: { visible: false, spacing: 5 },
     snap: { enabled: false },
-    statics: { vectorScale: 1 },
     display: { showMagnitudes: true, showUnits: true },
     styleDefaults: { stroke: "#000", lineWidth: 0.5, lineType: "solid" },
     selection: {

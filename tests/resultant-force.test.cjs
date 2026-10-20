@@ -51,23 +51,31 @@ const check = (name, ok, detail) => {
 const near = (a, b) =>
   Number.isFinite(a) && Math.abs(a - b) < 1e-9;
 
-const force = (id, magnitude, angleDegrees) => ({
-  id,
-  type: "force",
-  geometry: {
-    start: { x: 0, y: 0 },
-    end: { x: 10, y: 0 },
-    position: { x: 0, y: 0 },
-    magnitude,
-    angle: angleDegrees
-  }
-});
+/*
+ * A force as the application stores one: drawn as an arrow along its angle,
+ * and stating a value. The arrow is drawn a TENTH of the value long here, so
+ * nothing below can pass by confusing the two.
+ */
+const force = (id, magnitude, angleDegrees, drawnLength = magnitude / 10) => {
+  const radians = angleDegrees * Math.PI / 180;
+
+  return {
+    id,
+    type: "force",
+    geometry: {
+      start: { x: 0, y: 0 },
+      end: { x: Math.cos(radians) * drawnLength, y: Math.sin(radians) * drawnLength },
+      position: { x: 0, y: 0 },
+      magnitude,
+      angle: angleDegrees
+    }
+  };
+};
 
 const drawingFor = sources => ({
   objects: sources,
   selection: { selectedObjectIds: [] },
-  interaction: { phase: "idle" },
-  statics: { vectorScale: 1 }
+  interaction: { phase: "idle" }
 });
 
 console.log("\n  the resultant is the sum, at the sum's size\n");
@@ -119,31 +127,20 @@ check(
 );
 
 /* ============================================================
-   THE DRAWN LENGTH CARRIES THE MAGNITUDE
+   THE ARROW FOLLOWS THE DRAWING; THE VALUE IS THE SUM
    ============================================================ */
 
-console.log("\n  the drawn arrow is the size of the sum\n");
+console.log("\n  the resultant is drawn from the drawn arrows\n");
 
 /*
- * THE CENTRAL CLAIM. The drawn arrow's length must be PROPORTIONAL to the
- * sum, and proportional to the shared Vector Scale, and nothing else. The
- * constant factor is the module's own, so it is read from a known case
- * rather than assumed - a test that hard-codes the factor would keep
- * passing if the factor were changed, which is the whole thing being
- * checked.
+ * THE CONTRACT. A resultant STATES the engineering sum - its magnitude and
+ * components - and is DRAWN as the sum of its sources' drawn arrows, tip to
+ * tail, the way the student would construct it on the sheet. (A shared Vector
+ * Scale used to draw it at magnitude x scale; it is retired, and no value ever
+ * sets an arrow's length.)
  *
- * THE REFERENCE IS THE MAGNITUDE ITSELF, not a multiple of a private
- * constant. The old check asserted `drawn === magnitude * 0.001`, which
- * looks like a test of proportionality and is really a test of one
- * particular unit conversion: the factor is a detail of how newtons are
- * expressed in millimetres, and pinning it means the check would have
- * gone on passing if the stub had been made three times smaller. It also
- * meant that FIXING the stub - to the same conversion a Point Force uses -
- * failed the very test meant to guard it.
- *
- * So what is asserted here is the property that matters: the drawn length
- * is the magnitude times the shared Vector Scale, and twice the magnitude
- * is twice the arrow.
+ * The sources here are drawn at a tenth of their values: 300 N as 30 long
+ * along x, 400 N as 40 long along y.
  */
 const resultant = state.geometryFactories.resultant(
   { x: 0, y: 0 },
@@ -157,16 +154,8 @@ const drawing = drawingFor([a, b, resultant]);
 
 deps.refreshAnalysis(resultant, drawing, null);
 
-const drawn = Math.hypot(
-  resultant.geometry.end.x - resultant.geometry.start.x,
-  resultant.geometry.end.y - resultant.geometry.start.y
-);
-
-/*
- * 500 N must draw LONGER than 50 N, and by exactly ten times. This is the
- * fault as reported: under a fixed length these were identical.
- */
-const reference = deps.deriveResultant([a, b]);
+const drawnX = resultant.geometry.end.x - resultant.geometry.start.x;
+const drawnY = resultant.geometry.end.y - resultant.geometry.start.y;
 
 check(
   "the stored magnitude is the true resultant",
@@ -181,217 +170,74 @@ check(
   `(${resultant.geometry.forceX}, ${resultant.geometry.forceY})`
 );
 
-/*
- * PROPORTION, NOT A CONSTANT.
- *
- * The check used to be `drawn === magnitude * 0.001`, which asserts a
- * particular unit conversion rather than the property that matters: that
- * the drawn length is the magnitude times the Vector Scale, so a bigger
- * resultant draws longer.
- *
- * That the conversion was a THOUSANDTH is why every resultant was a stub -
- * 300 N drew as 0.3 units, a twentieth of a pixel, so what appeared was a
- * dot with an arrowhead and the only thing it could convey was direction.
- * The resultant now uses the same rule as a Point Force, so the factor is
- * whatever the shared Vector Scale says and nothing else.
- *
- * Asserting the factor itself would pin the bug back in place, so this
- * asserts the RELATIONSHIP and lets the scale decide the size.
- */
-const drawnPerUnit =
-  drawn / reference.magnitude;
-
 check(
-  "the drawn length is the magnitude times the vector scale",
-  near(drawnPerUnit, 1) || drawnPerUnit > 0,
-  `drawn ${drawn} for ${reference.magnitude} N - one newton must draw as the vector scale asks, not as a thousandth of one`,
+  "the drawn arrow is the sum of the drawn arrows",
+  near(drawnX, 30) && near(drawnY, 40),
+  `drawn (${drawnX}, ${drawnY}), expected (30, 40)`
 );
 
 check(
   "and it is drawn at a visible length, not a stub",
-  drawn > 1,
-  `drawn ${drawn} units - a 500 N resultant has to be visible`,
+  Math.hypot(drawnX, drawnY) > 1,
+  `drawn ${Math.hypot(drawnX, drawnY)} units`
 );
 
+check(
+  "the drawn arrow points the same way as the sum",
+  near(Math.atan2(drawnY, drawnX) * 180 / Math.PI, resultant.geometry.angle),
+  `drawn ${Math.atan2(drawnY, drawnX) * 180 / Math.PI}, stored ${resultant.geometry.angle}`
+);
+
+console.log("\n  a value never sizes the arrow\n");
+
 /*
- * PROPORTION, which is the property the thousandth was standing in for:
- * twice the magnitude, twice the arrow.
+ * The same arrows stating twice the values: the resultant's VALUE doubles and
+ * its drawn arrow does not move.
  */
 {
-  const bigger = {
-    id: "res-big",
-    type: "resultant",
-    geometry: {},
-    engineering: {
-      discipline: "statics",
-      analysisKind: "resultant",
-      sourceFeatureIds: [],
-    },
-  };
+  const doubled = [force("f-a", 600, 0, 30), force("f-b", 800, 90, 40)];
+  const bigger = state.geometryFactories.resultant({ x: 0, y: 0 }, { x: 1, y: 0 }, {});
 
-  /* The same forces, doubled. */
-  const doubled = [a, b].map(object =>
-    object.id.startsWith("f")
-      ? {
-          ...object,
-          geometry: {
-            ...object.geometry,
-            magnitude: object.geometry.magnitude * 2,
-          },
-        }
-      : object,
-  );
-
-  const biggerState = drawingFor([...doubled, bigger]);
-
-  /*
-   * THE DEPENDENCY, or nothing to re-derive.
-   *
-   * The sources have to be REGISTERED, not merely present: the refresh
-   * resolves its ids through the dependency list, and an object with an
-   * empty list has nothing to read and correctly draws nothing.
-   */
   deps.registerDependency(bigger, ["f-a", "f-b"]);
+  deps.refreshAnalysis(bigger, drawingFor([...doubled, bigger]), null);
 
-  deps.refreshAnalysis(bigger, biggerState);
-
-  const longer = Math.hypot(
-    bigger.geometry.end.x - bigger.geometry.start.x,
-    bigger.geometry.end.y - bigger.geometry.start.y,
+  check(
+    "twice the values is twice the stated resultant",
+    near(bigger.geometry.magnitude, 1000),
+    `stored ${bigger.geometry.magnitude}`
   );
 
   check(
-    "twice the magnitude draws about twice as long",
-    near(longer / drawn, 2, 0.01),
-    `${drawn} for 500 N, ${longer} for 1000 N`,
+    "and the same drawn arrow",
+    near(bigger.geometry.end.x - bigger.geometry.start.x, 30) &&
+      near(bigger.geometry.end.y - bigger.geometry.start.y, 40),
+    `drawn (${bigger.geometry.end.x - bigger.geometry.start.x}, ${bigger.geometry.end.y - bigger.geometry.start.y})`
   );
 }
 
 /*
- * AND THE DIRECTION, WHICH SCALING COULD EASILY BREAK. The drawn vector
- * must point the same way as the sum: atan2 of the drawn components has
- * to equal the derived angle. A length check alone would pass a resultant
- * drawn along +x whatever the forces were.
+ * ...and drawing a source longer draws the resultant longer, with no value
+ * changed: the geometry follows the drawing.
  */
-const drawnAngle =
-  Math.atan2(
-    resultant.geometry.end.y - resultant.geometry.start.y,
-    resultant.geometry.end.x - resultant.geometry.start.x
-  ) * 180 / Math.PI;
+{
+  const redrawn = [force("f-a", 300, 0, 60), force("f-b", 400, 90, 40)];
+  const followed = state.geometryFactories.resultant({ x: 0, y: 0 }, { x: 1, y: 0 }, {});
 
-check(
-  "the drawn arrow points the same way as the sum",
-  near(drawnAngle, resultant.geometry.angle),
-  `drawn ${drawnAngle}, stored ${resultant.geometry.angle}`
-);
+  deps.registerDependency(followed, ["f-a", "f-b"]);
+  deps.refreshAnalysis(followed, drawingFor([...redrawn, followed]), null);
 
-/* ============================================================
-   A BIGGER SUM DRAWS LONGER
-   ============================================================ */
+  check(
+    "a source drawn longer draws the resultant longer",
+    near(followed.geometry.end.x - followed.geometry.start.x, 60),
+    `drawn x ${followed.geometry.end.x - followed.geometry.start.x}`
+  );
 
-console.log("\n  ten times the force, ten times the arrow\n");
-
-/*
- * THE FAULT AS REPORTED. Under the old fixed length, this was exactly
- * equal and the drawing could not distinguish the two systems at all.
- */
-const small = force("f-small", 30, 0);
-const large = force("f-large", 300, 0);
-
-const smallResultant = state.geometryFactories.resultant(
-  { x: 0, y: 0 },
-  { x: 30, y: 0 },
-  {}
-);
-deps.registerDependency(smallResultant, ["f-small"]);
-
-const largeResultant = state.geometryFactories.resultant(
-  { x: 0, y: 0 },
-  { x: 30, y: 0 },
-  {}
-);
-deps.registerDependency(largeResultant, ["f-large"]);
-
-const smallDrawing = drawingFor([small, smallResultant]);
-const largeDrawing = drawingFor([large, largeResultant]);
-
-deps.refreshAnalysis(smallResultant, smallDrawing, null);
-deps.refreshAnalysis(largeResultant, largeDrawing, null);
-
-const smallLength = Math.hypot(
-  smallResultant.geometry.end.x - smallResultant.geometry.start.x,
-  smallResultant.geometry.end.y - smallResultant.geometry.start.y
-);
-
-const largeLength = Math.hypot(
-  largeResultant.geometry.end.x - largeResultant.geometry.start.x,
-  largeResultant.geometry.end.y - largeResultant.geometry.start.y
-);
-
-check(
-  "a ten times larger force draws a ten times longer arrow",
-  near(largeLength / smallLength, 10),
-  `small ${smallLength}, large ${largeLength}, ratio ${
-    largeLength / smallLength
-  }`
-);
-
-/* ============================================================
-   THE SHARED VECTOR SCALE
-   ============================================================ */
-
-console.log("\n  the shared Vector Scale applies to it too\n");
-
-/*
- * ONE scale for the whole Statics environment, so the resultant is drawn
- * at the same size as the forces it sums at any scale. A result that
- * ignored it would be drawn at a different size from its own sources the
- * moment the student changed the setting.
- */
-const scaledResultant = state.geometryFactories.resultant(
-  { x: 0, y: 0 },
-  { x: 30, y: 0 },
-  {}
-);
-deps.registerDependency(scaledResultant, ["f-a", "f-b"]);
-
-const scaledDrawing = drawingFor([a, b, scaledResultant]);
-scaledDrawing.statics = { vectorScale: 4 };
-
-deps.refreshAnalysis(scaledResultant, scaledDrawing, null);
-
-const scaledLength = Math.hypot(
-  scaledResultant.geometry.end.x - scaledResultant.geometry.start.x,
-  scaledResultant.geometry.end.y - scaledResultant.geometry.start.y
-);
-
-check(
-  "the Vector Scale multiplies the drawn arrow",
-  near(scaledLength / drawn, 4),
-  `at 1: ${drawn}, at 4: ${scaledLength}`
-);
-
-check(
-  "the Vector Scale does not change the stored magnitude",
-  near(scaledResultant.geometry.magnitude, 500),
-  `stored ${scaledResultant.geometry.magnitude}`
-);
-
-check(
-  "the Vector Scale does not change the direction",
-  near(
-    Math.atan2(
-      scaledResultant.geometry.end.y -
-        scaledResultant.geometry.start.y,
-      scaledResultant.geometry.end.x -
-        scaledResultant.geometry.start.x
-    ) *
-      180 /
-      Math.PI,
-    scaledResultant.geometry.angle
-  ),
-  "scaling changed the angle, which it must not"
-);
+  check(
+    "while the stated resultant is unchanged",
+    near(followed.geometry.magnitude, 500),
+    `stored ${followed.geometry.magnitude}`
+  );
+}
 
 /* ============================================================
    IT FOLLOWS ITS FORCES

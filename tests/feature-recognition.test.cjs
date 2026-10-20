@@ -259,14 +259,15 @@ add(
 );
 
 add(
-  "Variable Dimension",
-  F["variable-dimension"]({
+  "Dimension labelled with a symbol",
+  F.dimension({
+    dimensionType: "aligned",
     refs: [
       { kind: "between", featureId: lineForDim.id, anchor: "start" },
       { kind: "between", featureId: lineForDim.id, anchor: "end" },
     ],
     placement: { x: 60, y: -90 },
-    symbol: "L",
+    label: "L",
   }),
   { x: 60, y: -90 },
 );

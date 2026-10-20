@@ -605,13 +605,10 @@ function renderFittedDocument(documentBody, options = {}) {
   }
 
   /*
-   * The read-only state the renderer draws. It carries the sheet's OWN scale
-   * and units, so a calibrated drawing is measured and drawn in its own frame
-   * rather than in the open document's.
+   * The read-only state the renderer draws. It carries the sheet's own units.
    */
   const state = {
     objects,
-    scale: active.scale || null,
     units: active.units || documentBody.units || "mm",
     camera: { zoom: 1, panX: 0, panY: 0 },
     selection: {

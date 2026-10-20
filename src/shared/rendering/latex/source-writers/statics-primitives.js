@@ -22,6 +22,7 @@
  */
 
 import { resolveLineWidth } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
+import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 /* ============================================================
  * NUMBERS AND COORDINATES
@@ -154,7 +155,7 @@ export function colourOf(style, key = "stroke") {
         return fill || "black";
     }
 
-    return colourName(value) || colourName(globalThis.enggTheme?.defaultLineColour?.()) || "black";
+    return colourName(value) || colourName(enggTheme?.defaultLineColour?.()) || "black";
 }
 
 /* ============================================================
@@ -439,7 +440,15 @@ export function loadPoints(geometry) {
         return shared.profilePoints(geometry) || [];
     }
 
-    const points = Array.isArray(geometry?.points) ? geometry.points : [];
+    let points = Array.isArray(geometry?.points) ? geometry.points : [];
+
+    /* A varying load's two end intensities are its profile; see load-profile.js. */
+    if (!points.length && (geometry?.startIntensity !== undefined || geometry?.endIntensity !== undefined)) {
+        points = [
+            { t: 0, magnitude: Math.abs(Number(geometry.startIntensity) || 0) },
+            { t: 1, magnitude: Math.abs(Number(geometry.endIntensity) || 0) }
+        ];
+    }
 
     return points
         .map((entry) => ({ t: Number(entry.t) || 0, magnitude: Number(entry.magnitude) || 0 }))
@@ -650,19 +659,31 @@ export function bodyNormal(geometry) {
 /*
  * HOW LONG A LOAD'S ARROW IS DRAWN, in drawing units.
  *
- * The intensity times the sheet's Vector Scale - the same rule as the canvas,
- * scaled to drawing units rather than pixels. It is the physical magnitude
- * that decides it and the drawing scale that scales it; the arrow SPACING
- * never does.
+ * The load's DRAWN height (`arrowLength`, set by its placement gesture),
+ * scaled by this arrow's intensity over the peak - the same rule the canvas
+ * uses (`loadArrowReach` in load-profile.js), so the two cannot disagree. The
+ * intensity is the label's value and only shapes a varying load's taper; it
+ * is never itself a length. A load with no stored height is drawn at its peak
+ * intensity, which is how it looked before heights were stored.
  */
-export function loadArrowLength(magnitude, vectorScale = 1) {
-    const value = Math.abs(Number(magnitude) || 0);
+export function loadArrowLength(geometry, magnitude) {
+    const shared = globalThis.enggLoadProfile;
 
-    if (!(value > 0)) {
+    if (shared && typeof shared.loadArrowReach === "function") {
+        return shared.loadArrowReach(geometry, magnitude);
+    }
+
+    const value = Math.abs(Number(magnitude) || 0);
+    const peak = loadPoints(geometry).reduce((most, entry) => Math.max(most, Math.abs(entry.magnitude)), 0);
+
+    if (!(value > 0) || !(peak > 0)) {
         return 0;
     }
 
-    return value * Math.max(Number(vectorScale) || 0, 0.0001);
+    const stored = Number(geometry?.arrowLength);
+    const height = Number.isFinite(stored) && stored > 0 ? stored : peak;
+
+    return (height * value) / peak;
 }
 
 /* ============================================================
@@ -864,16 +885,19 @@ function forceNodes(object) {
     const direction = vector(angle);
     const reach = Number.isFinite(magnitude) ? Math.abs(magnitude) : 0;
 
-    const scale = Number(object?.__generationOptions?.vectorScale) || 1;
-
     /*
-     * THE REAL VISUAL FORCE SCALE DECIDES WHERE THE LABEL SITS, because that
-     * is where the arrowhead is drawn. The number inside it is still the
-     * engineering magnitude: the scale is a drawing setting and never a value.
+     * THE LABEL SITS AT THE ARROWHEAD THE SOURCE DRAWS - the stored `end`, the
+     * arrow the student drew. Placing it at `start + magnitude * direction`
+     * floated it away from the head whenever the typed value differed from
+     * the drawn length. A force with no stored end is drawn at its magnitude,
+     * and so is labelled there.
      */
-    const end = Number.isFinite(angle)
-        ? { x: Number(start.x) + direction.x * reach * scale, y: Number(start.y) + direction.y * reach * scale }
-        : geometry.end || start;
+    const storedEnd =
+        geometry.end && Number.isFinite(Number(geometry.end.x)) && Number.isFinite(Number(geometry.end.y))
+            ? { x: Number(geometry.end.x), y: Number(geometry.end.y) }
+            : null;
+
+    const end = storedEnd || { x: Number(start.x) + direction.x * reach, y: Number(start.y) + direction.y * reach };
 
     const at = { x: Number(end.x) + direction.x * 3, y: Number(end.y) + direction.y * 3 };
 
@@ -1190,11 +1214,18 @@ function diagramNodes(object, unitHeight = 0) {
     }
 
     if (axes) {
-        /* The axis names, in the place a reader looks for them. */
+        /*
+         * The axis names, in the place a reader looks for them.
+         *
+         * THE UNIT IS SET IN MATHS MODE. The moment unit is `N\cdot m`, and
+         * `\cdot` outside `$...$` is a TeX error - one that stopped the WHOLE
+         * document, so a single Bending Moment Diagram blanked every object on
+         * the sheet while all of their code sat correctly in Source.
+         */
         nodes.push(
             labelNode({
                 at: { x: Number(start.x) - 2, y: Number(start.y) + 13 },
-                text: `$${axes.y}$ (${axes.unit})`,
+                text: `$${axes.y}$ ($\\mathrm{${axes.unit}}$)`,
                 colour,
                 font,
                 anchor: "north east",
@@ -1204,7 +1235,7 @@ function diagramNodes(object, unitHeight = 0) {
         nodes.push(
             labelNode({
                 at: { x: Number(end.x) + 2, y: Number(start.y) + 6 },
-                text: `$${axes.x}$ (${axes.xUnit})`,
+                text: `$${axes.x}$ ($\\mathrm{${axes.xUnit}}$)`,
                 colour,
                 font,
                 anchor: "south west",

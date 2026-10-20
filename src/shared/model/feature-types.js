@@ -33,14 +33,14 @@ export const FEATURE_TYPES = Object.freeze({
      * ====================================================
      *
      * Every feature type the application can create answers here, so the
-     * SHARED systems - hit testing, box selection, fit bounds, attachment,
-     * vector scale - can ask what a thing IS rather than testing for it by
+     * SHARED systems - hit testing, box selection, fit bounds, attachment -
+     * can ask what a thing IS rather than testing for it by
      * name.
      *
      * `spanShaped`  a straight member between two ends: measured along its
      *               span rather than as an area.
      * `body`        something a load, support or connection attaches to.
-     * `vector`      drawn as an arrow whose length is the shared Vector Scale.
+     * `vector`      drawn as an arrow whose length is the one the student drew.
      * `pointLike`   an engineering node drawn AT a position.
      * `area`        a closed outline, selected as a shape rather than a span.
      *
@@ -129,7 +129,35 @@ export const FEATURE_TYPES = Object.freeze({
     "analysis-diagram": { annotation: true },
     "coordinate-system-2d": { annotation: true },
 
-    construction: { annotation: true }
+    construction: { annotation: true },
+
+    /*
+     * ====================================================
+     * THE FLUIDS FLOW PATHS
+     * ====================================================
+     *
+     * A PIPE / DUCT run is a SPAN-SHAPED thing: it runs between a start and an
+     * end, so box selection and the measurement layer treat it as a run rather
+     * than as a point. `body: true` says a Statics feature may attach to it,
+     * which is the same relationship a Beam has - so a load or a support can
+     * sit on a run without any Fluids-specific attachment code.
+     *
+     * An ELBOW is span-shaped too: it joins two runs through its two ends and
+     * carries a curved centreline between them. It is NOT point-like - a
+     * fitting occupies the corner it turns, and a student sweeping a rectangle
+     * over that corner expects to catch it. It is not a `body`, though: nothing
+     * abnormal attaches to a fitting.
+     *
+     * THE FLAT MODEL IS THE POINT. There is no `pipe-route` parent and no
+     * `pipe-segment` child: every run and every fitting is a top-level feature
+     * in one flat list.
+     *
+     * THE LESSON FROM `polyline` APPLIES: a type missing from this registry
+     * gets the weak fallback, which is a feature that can be clicked but not
+     * swept up. So both are declared here.
+     */
+    "pipe-duct": { body: true, spanShaped: true },
+    elbow: { spanShaped: true }
 });
 
 const traitOf = (type, trait) => Boolean(FEATURE_TYPES[type]?.[trait]);

@@ -1,18 +1,28 @@
 ﻿/*
- * The native EnggDraw project format.
+ * The DAETUM document envelope.
  *
- * A .enggdraw file is the AUTHORITATIVE, editable document. It holds the whole
- * document model: sheets, each holding features with their real type, geometry,
- * parent and parameters. That is what makes a reopened drawing selectable,
- * draggable and editable.
+ * A drawing is saved as a .tex file: the TikZ pictures a reader compiles, and -
+ * in a comment block LaTeX ignores - this envelope, which holds the whole
+ * document model (sheets, each holding features with their real type,
+ * geometry, parent and parameters). That is what makes a reopened drawing
+ * selectable, draggable and editable. See file/latex/latex-document.js.
  *
- * The file format is a compatibility contract, so it owns its own envelope,
- * version number, and migration path.
+ * The envelope is a compatibility contract, so it owns its version number and
+ * migration path.
+ *
+ * THE RETIRED .enggdraw FORMAT. Drawings used to be saved as bare `.enggdraw`
+ * JSON holding this same envelope (format id "enggdraw"). That is no longer
+ * written anywhere. It is still READ - an old .enggdraw file opens as a
+ * one-way import, and the next save is a .tex - which is why the legacy
+ * extension, media type and format ids are kept here and nowhere else.
  */
 
 import enggSheets from "../../components/layout/workspace/sheets.js";
 
-const FORMAT = "enggdraw";
+const FORMAT = "daetum-document";
+
+/* Format ids written by older builds, still read. */
+const LEGACY_FORMATS = new Set(["enggdraw", "engg-drawing"]);
 
 /*
  * The version this build WRITES.
@@ -24,9 +34,20 @@ const CURRENT_VERSION = 2;
  */
 const MINIMUM_SUPPORTED_VERSION = 1;
 
-const EXTENSION = "enggdraw";
+/* What a saved drawing is: a .tex file. */
+const EXTENSION = "tex";
 
-const MEDIA_TYPE = "application/vnd.enggdraw+json";
+const MEDIA_TYPE = "application/x-tex";
+
+/* The retired format, accepted by Open as a one-way import and nothing else. */
+const LEGACY_EXTENSION = "enggdraw";
+
+const LEGACY_MEDIA_TYPE = "application/vnd.enggdraw+json";
+
+/* Whether a file name is a retired .enggdraw - opened, never written. */
+function isLegacyName(name) {
+  return String(name || "").toLowerCase().endsWith("." + LEGACY_EXTENSION);
+}
 
 /*
  * Wrap a serialised document in the envelope.
@@ -35,7 +56,7 @@ function createDocument(document) {
   return {
     format: FORMAT,
     version: CURRENT_VERSION,
-    application: "EnggDraw",
+    application: "DAETUM",
     savedAt: new Date().toISOString(),
     document,
   };
@@ -168,16 +189,11 @@ function readDocument(parsed) {
     };
   }
 
-  const format = parsed.format === "engg-drawing" ? FORMAT : parsed.format;
-
-  if (format !== FORMAT) {
+  if (parsed.format !== FORMAT && !LEGACY_FORMATS.has(parsed.format)) {
     return {
       ok: false,
       failure: Failure.WRONG_FORMAT,
-      detail:
-        "This is not an EnggDraw drawing. An EnggDraw file starts with \"format\": \"" +
-        FORMAT +
-        "\".",
+      detail: "This is not a DAETUM drawing.",
     };
   }
 
@@ -196,11 +212,11 @@ function readDocument(parsed) {
       ok: false,
       failure: Failure.FROM_THE_FUTURE,
       detail:
-        "This drawing was made with a newer version of EnggDraw (file version " +
+        "This drawing was made with a newer version of DAETUM (file version " +
         version +
         ", this build understands up to " +
         CURRENT_VERSION +
-        "). Update EnggDraw to open it.",
+        "). Update DAETUM to open it.",
     };
   }
 
@@ -231,8 +247,17 @@ function readDocument(parsed) {
 
 /* ------------------------------------------------------- file names */
 
+/*
+ * A drawing's file name: the name with `.tex`, exactly once. A name carried
+ * over from an imported .enggdraw loses that extension, so the first save of
+ * an old drawing writes "beam.tex" beside "beam.enggdraw" and never over it.
+ */
 function withExtension(name) {
-  const trimmed = String(name || "").trim();
+  let trimmed = String(name || "").trim();
+
+  if (isLegacyName(trimmed)) {
+    trimmed = trimmed.slice(0, trimmed.length - LEGACY_EXTENSION.length - 1);
+  }
 
   if (!trimmed) {
     return "drawing." + EXTENSION;
@@ -247,9 +272,12 @@ const enggDocumentFile = {
   CURRENT_VERSION,
   EXTENSION,
   Failure,
+  LEGACY_EXTENSION,
+  LEGACY_MEDIA_TYPE,
   MEDIA_TYPE,
   MINIMUM_SUPPORTED_VERSION,
   createDocument,
+  isLegacyName,
   migrate,
   readDocument,
   withExtension,

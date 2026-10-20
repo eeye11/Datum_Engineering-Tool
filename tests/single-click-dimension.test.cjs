@@ -5,7 +5,7 @@
  *
  * The workflow this file pins down:
  *
- *     Smart Dimension
+ *     Dimension
  *       -> click a Beam (the object itself, not its endpoints)
  *       -> press Enter
  *       -> a LENGTH dimension is produced, with its measured value
@@ -69,9 +69,7 @@ global.document = dom.window.document;
 for (const name of [
   "measurement-core.js",
   "quantities.js",
-  "dimensions.js",
   "dimension-model.js",
-  "smart-dimension.js",
   "drawing-state.js",
   "feature-geometry.js",
 ]) {
@@ -111,7 +109,6 @@ const byId = (id) => OBJECTS.find((o) => o.id === id) || null;
 const sandbox = {
   console,
   enggMeasurement: measurement,
-  enggSmartDimension: global.window.enggSmartDimension,
   enggDimensionModel: dimModel,
   objectWithId: byId,
   twoPointSpanOf: (o) => measurement.twoPointSpan(o),
@@ -119,7 +116,7 @@ const sandbox = {
   findDimensionTarget: () => null,
   distanceToSegment: () => Infinity,
   pointInsideOutline: () => false,
-  drawingState: { objects: OBJECTS, scale: { mmPerUnit: 1, unit: "mm" } },
+  drawingState: { objects: OBJECTS },
   engDrawingState: stateMod,
 };
 
@@ -197,7 +194,6 @@ const descriptorFor = (picked) =>
 const stateFor = () => {
   const state = stateMod.createDrawingState();
   state.objects = OBJECTS;
-  state.scale = { mmPerUnit: 1, unit: "mm" };
   return state;
 };
 
@@ -474,7 +470,6 @@ console.log("\n  AN ANGLE DOES NOT DEPEND ON WHICH WAY A LINE WAS DRAWN\n");
   const angleOf = (a, b) => {
     const state = stateMod.createDrawingState();
     state.objects = [a, b];
-    state.scale = { mmPerUnit: 1, unit: "mm" };
 
     const dim = dimModel.createDimension({
       dimensionType: "angular",

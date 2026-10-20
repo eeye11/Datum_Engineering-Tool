@@ -69,8 +69,7 @@ check(
 console.log("\n  every command is listed DIRECTLY under its category\n");
 
 [
-  "variable-dimension",
-  "smart-dimension",
+  "dimension",
   "note",
   "label",
   "leader",
@@ -82,6 +81,18 @@ console.log("\n  every command is listed DIRECTLY under its category\n");
     `"${id}" is a command in the toolset`,
     new RegExp(`id:\\s*"${id}"`).test(groups),
     `${id} was not found in the Annotate groups`,
+  );
+});
+
+/*
+ * THE RETIRED DIMENSION TOOLS. Smart Dimension and Variable Dimension were
+ * folded into the one Dimension tool; neither may come back as a command.
+ */
+["smart-dimension", "variable-dimension"].forEach((id) => {
+  check(
+    `the retired "${id}" tool is NOT offered`,
+    !new RegExp(`id:\s*"${id}"`).test(groups),
+    `${id} is still listed in the Annotate groups`,
   );
 });
 

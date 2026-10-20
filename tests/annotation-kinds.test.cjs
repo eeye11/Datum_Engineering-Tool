@@ -31,7 +31,6 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "kinds-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("feature-geometry.js");
 loadModule("annotation-model.js");
@@ -60,7 +59,6 @@ const check = (name, actual, expected) => {
 };
 
 const scene = (...objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 

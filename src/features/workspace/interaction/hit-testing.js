@@ -10,10 +10,13 @@ import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
+import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
-import { isSaturationCurve, saturationPaths } from "../model/thermodynamics/saturation-curve.js";
+import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
+import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
+import enggPipeDuct from "../model/fluids/pipe-duct.js";
 
 /*
  * THE POINT PRIMITIVES ARE RE-EXPORTED, NOT RE-DEFINED.
@@ -32,8 +35,7 @@ import { drawingCanvas } from "../dom.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { axisLabelPositions } from "../../../shared/geometry/axis-labels.js";
 import { drawingState } from "../editor-state.js";
-import { isLoadGeometry } from "../../../components/layout/panels/relative-coordinates.js";
-import { momentDirectionOf } from "../statics/statics-panel.js";
+import { momentIsClockwise } from "../../../shared/rendering/vector-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 
 /*
@@ -73,6 +75,65 @@ function distanceToPolygon(
         },
         Infinity
     );
+}
+
+/*
+ * ========================================================
+ * IS A POINT ON AN ELBOW?
+ * ========================================================
+ *
+ * An elbow is a curved fitting, so it is picked against the CURVE it draws -
+ * not against its corner point alone. When a bend radius exists and fits, the
+ * curve is sampled from the same `elbowGeometry` the renderer draws with, so
+ * what the student sees and what they can click are the same thing.
+ *
+ * WHEN THERE IS NO DRAWABLE CURVE the elbow still has to be selectable, because
+ * it is still a feature with properties to edit. It falls back to the sharp
+ * corner itself, which is where the fitting is - so a radius-less elbow remains
+ * clickable at the point the two runs meet.
+ */
+function elbowContainsPoint(
+    object,
+    point,
+    tolerance
+) {
+    const geometry = object.geometry || {};
+
+    const curves = enggPipeDuct.elbowGeometry(
+        geometry.previous,
+        geometry.position,
+        geometry.next,
+        (object.engineering || {}).bendRadius
+    );
+
+    if (!curves) {
+        return Boolean(
+            geometry.position &&
+                distance(point, geometry.position) <= tolerance * 2
+        );
+    }
+
+    const sweep =
+        ((curves.endAngle - curves.startAngle + Math.PI * 3) %
+            (Math.PI * 2)) -
+        Math.PI;
+
+    const steps = 12;
+
+    for (let index = 0; index <= steps; index += 1) {
+        const angle = curves.startAngle + (sweep * index) / steps;
+
+        const sample = {
+            x: curves.centre.x + curves.radius * Math.cos(angle),
+            y: curves.centre.y + curves.radius * Math.sin(angle)
+        };
+
+        if (distance(point, sample) <= tolerance) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /*
@@ -208,6 +269,10 @@ function annotateContainsPoint(object, point) {
     const tolerance =
         ANNOTATE_PICK_TOLERANCE_PIXELS /
         Math.max(drawingState.camera.zoom, 0.25);
+    if (object.metadata?.thermodynamicsKind === "electric-work") {
+        const points = resistorPoints(geometry);
+        return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
 
     /*
      * THE WORDS. Every kind has a text box at a placement - the note's
@@ -614,6 +679,42 @@ export function objectAtPoint(
                 }
 
                 /*
+                 * ========================================================
+                 * THE FLUIDS PIPE / DUCT RUN
+                 * ========================================================
+                 *
+                 * A RUN IS PICKED ON EITHER OF ITS TWO BOUNDARY LINES. The
+                 * student clicks a WALL of the pipe - that is what they see -
+                 * and the whole feature is selected. The boundary lines are
+                 * generated from the centreline, so testing the centreline for
+                 * the click is the same test, and it means the two walls can
+                 * never become independently selectable objects: there is one
+                 * feature, and one thing to hit.
+                 */
+                if (object.type === "pipe-duct") {
+                    return Boolean(
+                        geometry.start &&
+                            geometry.end &&
+                            distanceToSegment(
+                                point,
+                                geometry.start,
+                                geometry.end
+                            ) <= tolerance
+                    );
+                }
+
+                /*
+                 * AN ELBOW IS PICKED ALONG ITS CURVED CENTRELINE, which is
+                 * the only place a fitting physically is. The curve is
+                 * approximated by its two tangent ends and the corner for the
+                 * hit test, so clicking anywhere along the bend selects the
+                 * whole fitting.
+                 */
+                if (object.type === "elbow") {
+                    return elbowContainsPoint(object, point, tolerance);
+                }
+
+                /*
                  * A Point Force is a vector, so it is picked
                  * along the arrow rather than only at its
                  * application point. Clicking anywhere on
@@ -721,19 +822,12 @@ export function objectAtPoint(
                  * same profile, and it was falling through to a test for
                  * `start` and `end` that it does not have.
                  */
-                if (isLoadGeometry(object)) {
+                if (object.type === "load" || object.type === "varying-load") {
                     return (
                         enggLoadProfile.loadContainsPoint(
                             geometry,
                             point,
-                            tolerance,
-                            enggDrawingState
-                                .BASE_PIXELS_PER_UNIT *
-                                drawingState.camera.zoom,
-                            enggLoadProfile
-                                .vectorScaleFor(
-                                    drawingState
-                                )
+                            tolerance
                         )
                     );
                 }
@@ -877,8 +971,8 @@ export function objectAtPoint(
                     return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
 
-                if (isSaturationCurve(object)) {
-                    return saturationPaths(geometry).some(path => path.some((start, index) =>
+                if (isProcessDiagram(object)) {
+                    return processDiagramPaths(geometry, object).some(path => path.some((start, index) =>
                         index > 0 && distanceToSegment(point, path[index - 1], start) <= tolerance));
                 }
 
@@ -1109,7 +1203,8 @@ export function objectAtPoint(
                     object.type ===
                     "polyline"
                 ) {
-                    return geometry.points.some(
+                    const pathPoints = object.metadata?.thermodynamicsKind === "process-path" ? processPathPoints(geometry) : geometry.points;
+                    return pathPoints.some(
                         (
                             current,
                             index
@@ -1117,7 +1212,7 @@ export function objectAtPoint(
                             index > 0 &&
                             distanceToSegment(
                                 point,
-                                geometry.points[
+                                pathPoints[
                                     index - 1
                                 ],
                                 current
@@ -1491,7 +1586,7 @@ function rotationalArrowHit(
                 drawingCanvas.getBoundingClientRect(),
                 drawingState
             ),
-            momentDirectionOf(geometry) === "CW",
+            momentIsClockwise(geometry),
             geometry.arcRadius
         );
 
@@ -1933,6 +2028,50 @@ export function objectPoints(
         "polyline"
     ) {
         return geometry.points;
+    }
+
+    /*
+     * THE FLUIDS FLOW PATHS.
+     *
+     * A run contributes BOTH its centrelines' ends AND the ends of its two
+     * boundary lines, so a Fit frames the whole width of the pipe rather than
+     * clipping it to its centreline. Both sets come from the same geometry, so
+     * they cannot disagree.
+     *
+     * An elbow contributes its corner and its two tangent ends, which is where
+     * the fitting physically sits.
+     */
+    if (
+        object.type ===
+        "pipe-duct"
+    ) {
+        const points = [
+            geometry.start,
+            geometry.end
+        ];
+
+        enggPipeDuct
+            .boundaryLines(
+                geometry.start,
+                geometry.end,
+                object.engineering || {}
+            )
+            .forEach((boundary) => {
+                points.push(boundary.start, boundary.end);
+            });
+
+        return points.filter(Boolean);
+    }
+
+    if (
+        object.type ===
+        "elbow"
+    ) {
+        const ends = enggPipeDuct.elbowEnds(object);
+
+        return [geometry.position, ...ends.map((end) => end.point)].filter(
+            Boolean
+        );
     }
 
     if (

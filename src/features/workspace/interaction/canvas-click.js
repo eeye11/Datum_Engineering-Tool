@@ -243,8 +243,8 @@ export function handleCanvasClick(
      * A BARE CLICK WITH A ONE-GESTURE PATH TOOL LEAVES THE TOOL
      * ========================================================
      *
-     * A Line, a Beam, a Rectangle, an Arrow and a Note are all made by ONE
-     * press-drag-release - their gesture arrives through the drag path, which
+     * A Beam and an Arrow are made by ONE press-drag-release - their gesture
+     * arrives through the drag path, which
      * has already armed the press and will have committed on release. So a
      * plain `click` reaching here is NOT the first point of a shape: it is the
      * student finishing with the tool. It exits to Select and selects whatever
@@ -553,28 +553,22 @@ function selectFromCanvasClick(
  * is a view of the model, plus the two kinds of change the model
  * permits.
  *
- * THE TWO KINDS OF CHANGE
+ * WHAT CAN CHANGE
  *
  *   DISPLAY   precision and whether units are shown. Belongs to this
  *             one dimension and touches nothing else. Recorded on the
  *             dimension's own style, so it travels with the dimension
  *             when the file is saved.
  *
- *   CALIBRATION
- *             a real-world length, which means the DRAWING is a
- *             different size than assumed. That is a change to the
- *             document, not to the dimension, and it is applied through
- *             the one scale every dimension reads. So it updates all
- *             of them, which is correct: they all measure the same
- *             drawing.
- *
- * Neither path can invent a number. There is no code path from this
+ * There is no calibration path: the retired world-length scale is gone,
+ * and a dimension reads the drawing in drawing units. Nothing here can
+ * invent a number. There is no code path from this
  * dialog to "set this dimension's value", because the model has no
  * such field to set and there must never be one.
  *
  * ASSOCIATION IS NEVER TOUCHED
  * ----------------------------
- * Neither path writes `sourceRefs`, `dimensionType` or the geometry
+ * Nothing here writes `sourceRefs`, `dimensionType` or the geometry
  * they point at. A dimension that was measuring Line 004 before the
  * edit is measuring Line 004 after it, and will go on following it
  * when the line moves.
@@ -586,15 +580,10 @@ export function openDimensionEditorFor(object) {
      * ========================================================
      *
      * This used to open a dimension-specific dialog whose first question was
-     * the sheet's WORLD SCALE, alongside precision and text settings. Two
-     * things were wrong with that, and both are fixed by routing here.
+     * the sheet's world scale. That scale is retired, and routing here also
+     * fixes the other problem with the old dialog:
      *
-     * FIRST, THE SCALE QUESTION. A scale is a property of the DRAWING, not of
-     * the dimension the student just double-clicked, and it was being asked
-     * every time somebody wanted to change a number. It is now asked where a
-     * drawing setting belongs - nowhere in this path.
-     *
-     * SECOND, THERE WERE TWO WAYS TO EDIT A DIMENSION. The canvas double-click
+     * THERE WERE TWO WAYS TO EDIT A DIMENSION. The canvas double-click
      * and the picked-row click both came to this function, and it is the one
      * place both reach - so putting the shared popup HERE means neither can
      * present a different box from the other, and a third caller added later

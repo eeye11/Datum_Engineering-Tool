@@ -10,7 +10,7 @@ import { distanceToSegment } from "../../../shared/geometry/points.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { openAnalysisEditorFor } from "../../../components/layout/panels/feature-tree.js";
+import { openAnalysisEditorFor } from "./analysis-editor.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
 /*

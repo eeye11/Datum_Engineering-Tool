@@ -860,8 +860,7 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                  * fraction along the frame, never from a screen
                  * coordinate, and the vertical one from the value the
                  * equation returns. NEITHER IS READ FROM THE RENDERER,
-                 * so the curve is the same curve at any zoom and the
-                 * vector scale cannot touch it.
+                 * so the curve is the same curve at any zoom.
                  *
                  * WHATEVER KIND OF RELATION IT IS. A vertical line is
                  * drawn from its own stored position and range, and is

@@ -12,7 +12,7 @@ import { analysisSourceBody, diagramPrerequisiteMessage } from "../statics/analy
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
-import { commitCreatedFeature } from "./creation-sizing.js";
+import { commitCreatedFeature } from "./creation-commit.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -357,7 +357,6 @@ export function commitFreeformPolygon(
 
     commitCreatedFeature(
         object,
-        false,
         previousObjects
     );
 
@@ -791,7 +790,8 @@ export function beginOrCompleteGeometry(
 
                     points: [
                         point
-                    ]
+                    ],
+                    snapGeometry: []
                 }
             );
 
@@ -920,8 +920,9 @@ export function beginOrCompleteGeometry(
             );
 
             setToolMessage(
-                drawingState.activeTool ===
-                    "polyline"
+                ["polyline", "freeform-polygon"].includes(
+                    drawingState.activeTool
+                )
                     ? "Specify next point"
 
                     : drawingState.activeTool ===
@@ -934,7 +935,7 @@ export function beginOrCompleteGeometry(
 
                     : (drawingState.activeTool === "rectangle" ||
                         drawingState.activeTool === "control-volume" ||
-                        drawingState.activeTool === "saturation-curve" ||
+                        ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
 
@@ -955,12 +956,25 @@ export function beginOrCompleteGeometry(
     }
 
     if (
-        drawingState.activeTool ===
-        "polyline"
+        ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
     ) {
+        if (
+            drawingState.activeTool === "freeform-polygon" &&
+            interaction.points.length >= 3 &&
+            distance(point, interaction.points[0]) < 1e-9
+        ) {
+            commitFreeformPolygon(interaction);
+            return;
+        }
+
         interaction.points.push(
             point
         );
+        interaction.snapGeometry =
+            interaction.points.slice(1).map((end, index) => ({
+                start: interaction.points[index],
+                end
+            }));
 
         interaction.startPoint =
             point;
@@ -969,7 +983,9 @@ export function beginOrCompleteGeometry(
             point;
 
         setToolMessage(
-            "Click next point or double-click to finish"
+            drawingState.activeTool === "freeform-polygon"
+                ? "Click next vertex or snap to the first point to close"
+                : "Click next point or double-click to finish"
         );
 
         renderCurrentDrawing();
@@ -1548,10 +1564,7 @@ export function beginOrCompleteGeometry(
          * has been written, so "before" means the document the student
          * was looking at when they answered the popup.
          *
-         * That matters because answering it can CALIBRATE the drawing.
-         * A snapshot taken afterwards would already carry the new scale,
-         * and Undo would remove the member while leaving its calibration
-         * behind.
+         * Undo then returns to exactly that document in one step.
          */
         const previousObjects =
             enggDrawingState.snapshotDrawing(
@@ -1576,8 +1589,8 @@ export function beginOrCompleteGeometry(
          *
          * THE CURSOR-DRIVEN CREATION IS UNTOUCHED. The drag still defines the
          * application point, the direction and the initial drawn length; this
-         * only asks what the number IS. Vector Scale is not consulted here, so
-         * it cannot make the student drag further.
+         * only asks what the number IS, and the number is the label - it never
+         * resizes the arrow the drag drew.
          */
         if (
             drawingState.activeTool ===
@@ -1698,7 +1711,6 @@ export function beginOrCompleteGeometry(
 
                     commitCreatedFeature(
                         object,
-                        false,
                         previousObjects
                     );
 
@@ -1726,7 +1738,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 
@@ -1912,7 +1923,7 @@ export function beginOrCompleteGeometry(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
-        drawingState.activeTool === "saturation-curve" ||
+        ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         /*
@@ -1936,9 +1947,9 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
-        const isSaturation = drawingState.activeTool === "saturation-curve";
+        const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isControlVolume || isPiston || isSaturation) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -1961,7 +1972,7 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isPiston || isSaturation ? { lineType: "solid", fill: "none" } : {})
+                        ...(isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
@@ -1972,14 +1983,18 @@ export function beginOrCompleteGeometry(
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
         }
-        if (isSaturation) {
-            object.name = "Saturation Curve";
-            object.metadata = { thermodynamicsKind: "saturation-curve" };
+        if (isDiagram) {
+            object.name = drawingState.activeTool === "process-plot" ? "Process Plot" : "Saturation Curve";
+            object.metadata = { thermodynamicsKind: drawingState.activeTool };
         }
     } else if (
-        drawingState.activeTool ===
-        "polyline"
+        ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
     ) {
+        if (drawingState.activeTool === "freeform-polygon") {
+            commitFreeformPolygon(interaction);
+            return;
+        }
+
         object =
             enggDrawingState.geometryFactories.polyline(
                 [
@@ -1995,6 +2010,13 @@ export function beginOrCompleteGeometry(
                         currentEngineeringMetadata()
                 }
             );
+        if (drawingState.activeTool === "freeform-polygon") {
+            object.geometry.closed = true;
+            object.name = `Freeform Polygon ${drawingState.objects.filter(
+                candidate => candidate.type === "polyline" &&
+                    candidate.geometry?.closed === true
+            ).length + 1}`;
+        }
     } else if (
         drawingState.activeTool ===
             "triangle" &&
@@ -2133,9 +2155,9 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["control-volume", "piston-cylinder", "saturation-curve"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["piston-cylinder", "saturation-curve"].includes(object.metadata.thermodynamicsKind)) {
+            if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
@@ -2146,7 +2168,9 @@ export function beginOrCompleteGeometry(
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : object.metadata.thermodynamicsKind === "saturation-curve"
                     ? "Saturation curve created - drag the corner dots to resize"
-                    : "Control volume created");
+                    : object.metadata.thermodynamicsKind === "process-plot"
+                        ? "Process plot created - drag the corner dots to resize"
+                        : "Control volume created");
             renderProperties();
             renderCurrentDrawing();
             return;
@@ -2166,7 +2190,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 

@@ -3,8 +3,8 @@
  */
 
 import enggMeasurement from "../../../shared/geometry/measurement-core.js";
+import enggFluidsTools from "../model/fluids/fluids-tools.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggQuantities from "../../../shared/units/quantities.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import enggDimensionCandidates from "../model/dimensions/dimension-candidates.js";
 import { openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
@@ -22,10 +22,21 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
  * length - is read from what the student picked. The retired Smart Dimension
  * and Variable Dimension tools are not routed here any more.
  */
+/*
+ * THE FLUIDS MEASUREMENTS REUSE THE SAME ENGINE. A Pressure Tap, a Pipe
+ * Diameter and a Section Plane are measurements of something already drawn,
+ * which is what this tool does, so they are routed here rather than through a
+ * second measuring system. The capability is read FROM the Fluids registry, so
+ * the entry that says "this is a measurement" and this layer cannot disagree.
+ */
 export function isDimensionTool(
     toolId
 ) {
-    return toolId === "dimension";
+    return (
+        toolId === "dimension" ||
+        enggFluidsTools.fluidsCapability(toolId) ===
+            enggFluidsTools.FLUIDS_CAPABILITIES.DIMENSION
+    );
 }
 
 /*
@@ -274,7 +285,13 @@ export function openDimensionValuePrompt(object) {
         title: "Dimension",
         label: "Value",
         value: current,
-        units: MEASURED_UNITS,
+
+        /*
+         * FREE TEXT. A dimension's text is annotation - 250 mm, 2.5 m, L, 2a -
+         * so there is no unit list to choose from and nothing is converted:
+         * what is typed is what the dimension says.
+         */
+        expression: true,
 
         onConfirm: (confirmed) => {
             const previous =
@@ -288,16 +305,6 @@ export function openDimensionValuePrompt(object) {
             if (answer.kind === "unknown") {
                 object.label = null;
             } else if (answer.kind === "number") {
-                if (
-                    answer.unit &&
-                    !enggQuantities?.isUnitFor?.("length", answer.unit)
-                ) {
-                    setToolMessage(
-                        `A length dimension should use a length unit - "${answer.unit}" is not a length unit`
-                    );
-                    return;
-                }
-
                 const numberText = formatDimensionLabelValue(answer.value);
 
                 object.label = `${numberText}${answer.unit ? ` ${answer.unit}` : ""}`.trim();
@@ -343,13 +350,6 @@ function formatDimensionLabelValue(value) {
     return String(Number(numeric.toFixed(6)));
 }
 
-
-
-const MEASURED_UNITS = [
-    ...(
-        enggQuantities?.unitsFor?.("length") || ["mm", "cm", "m", "in", "ft"]
-    )
-];
 
 /*
  * WHICH FEATURE IS BEING DIMENSIONED

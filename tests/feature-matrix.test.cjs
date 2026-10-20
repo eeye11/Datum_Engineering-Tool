@@ -47,17 +47,20 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "matrix-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("quantities.js");
 loadModule("feature-geometry.js");
-loadModule("smart-dimension.js");
 loadModule("dimension-model.js");
 loadModule("annotation-model.js");
 loadModule("drawing-state.js");
 
 const factories = global.window.enggDrawingState.geometryFactories;
-const smart = global.window.enggSmartDimension;
+/*
+ * The unified Dimension tool's candidate finder - what Smart Dimension's
+ * `propose` became when the separate dimension tools were retired.
+ */
+const candidates = require(locate("dimension-candidates.js")).default;
+const smart = { propose: (objects, state) => candidates.descriptorsFor(objects, state) };
 const measurement = global.window.enggMeasurement;
 const dimensionModel = global.window.enggDimensionModel;
 const annotationModel = global.window.enggAnnotationModel;
@@ -78,7 +81,6 @@ const check = (name, ok, detail) => {
 };
 
 const scene = (...objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 
@@ -116,12 +118,12 @@ const measureEverything = (object) => {
   try {
     descriptors = smart.propose([object], scene(object)) || [];
   } catch (error) {
-    problems.push(`Smart Dimension threw - ${error.message}`);
+    problems.push(`the Dimension tool threw - ${error.message}`);
     return problems;
   }
 
   if (descriptors.length === 0) {
-    problems.push("Smart Dimension offered nothing");
+    problems.push("the Dimension tool offered nothing");
     return problems;
   }
 

@@ -28,9 +28,7 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "angular-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
-loadModule("smart-dimension.js");
 loadModule("dimension-model.js");
 
 const model = global.window.enggDimensionModel;
@@ -85,7 +83,6 @@ const sweptAngle = (graphics) => {
  * is exactly the configuration that produced a zero-length leg.
  */
 const corner = {
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects: [
     {
       id: "a",
@@ -106,7 +103,8 @@ const corner = {
 
 const [first, second] = corner.objects;
 
-const descriptor = global.window.enggSmartDimension.describePair(
+/* The unified Dimension tool's pair describer (formerly Smart Dimension's). */
+const descriptor = require(locate("dimension-candidates.js")).default.describePair(
   first,
   second,
   corner
