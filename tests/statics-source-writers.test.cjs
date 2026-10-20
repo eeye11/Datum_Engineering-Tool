@@ -503,7 +503,8 @@ const referenceLine = write(objectOf("line", { start: { x: 0, y: 0 }, end: { x: 
 check("a reference line runs between its endpoints", has(referenceLine, "(0,0) -- (30,40)"), referenceLine);
 check("in its own style", has(referenceLine, "dash pattern"), referenceLine);
 
-const referenceArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: 90 }));
+/* Stored in radians, as every arc is; written in degrees. */
+const referenceArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: Math.PI / 2 }));
 
 check("a reference arc writes its own radius and sweep", has(referenceArc, "radius=10") && has(referenceArc, "start angle=0") && has(referenceArc, "end angle=90"), referenceArc);
 

@@ -319,8 +319,16 @@ const SHAPES = {
     arc(object) {
         const centre = pointOf(object.geometry?.center);
         const radius = finite(object.geometry?.radius);
-        const startAngle = finite(object.geometry?.startAngle);
-        const endAngle = finite(object.geometry?.endAngle);
+
+        /*
+         * THE MODEL STORES AN ARC'S ANGLES IN RADIANS (they come from atan2,
+         * and the canvas draws them with Math.cos/Math.sin directly). TikZ
+         * takes degrees. Writing the radians as degrees made a quarter circle a
+         * 1.57-degree sliver - the arc showed while it was drawn live and
+         * vanished as soon as its compiled picture arrived.
+         */
+        const startAngle = (finite(object.geometry?.startAngle) * 180) / Math.PI;
+        const endAngle = (finite(object.geometry?.endAngle) * 180) / Math.PI;
 
         if (radius <= 0 || startAngle === endAngle) {
             return null;

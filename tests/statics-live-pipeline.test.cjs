@@ -295,7 +295,8 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     f.line({ x: 140, y: -150 }, { x: 180, y: -150 }),
     "reference-line",
   );
-  created["reference-arc"] = reference(f.arc({ x: 160, y: -90 }, 15, 0, 120), "reference-arc");
+  /* An arc is stored in radians (120 degrees here) and written in degrees. */
+  created["reference-arc"] = reference(f.arc({ x: 160, y: -90 }, 15, 0, (120 * Math.PI) / 180), "reference-arc");
 
   /* ---------------------------------------------------------- every tool */
 

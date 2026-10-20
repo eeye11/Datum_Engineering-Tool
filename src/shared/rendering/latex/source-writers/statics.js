@@ -1341,16 +1341,19 @@ function serializeReferenceArc(entity, object) {
   const geometry = object.geometry || {};
   const centre = pointOf(geometry.center);
   const radius = finite(geometry.radius);
-  const startAngle = finite(geometry.startAngle);
-  const endAngle = finite(geometry.endAngle);
+  /* Stored in radians, as every arc is; TikZ takes degrees. */
+  const startRadians = finite(geometry.startAngle);
+  const endRadians = finite(geometry.endAngle);
+  const startAngle = (startRadians * 180) / Math.PI;
+  const endAngle = (endRadians * 180) / Math.PI;
 
-  if (!(radius > 0) || startAngle === endAngle) {
+  if (!(radius > 0) || startRadians === endRadians) {
     return null;
   }
 
   const startAt = {
-    x: centre.x + Math.cos((startAngle * Math.PI) / 180) * radius,
-    y: centre.y + Math.sin((startAngle * Math.PI) / 180) * radius,
+    x: centre.x + Math.cos(startRadians) * radius,
+    y: centre.y + Math.sin(startRadians) * radius,
   };
 
   return draws(

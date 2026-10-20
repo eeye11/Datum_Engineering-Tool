@@ -188,17 +188,18 @@ check("a Solid circle writes its fill", has(filledCircle, "fill=daetumC00FF00"),
 console.log("\nArc");
 console.log("---");
 
-const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: 90 }));
+/* An arc's angles are stored in RADIANS (as the canvas draws them) and written in degrees. */
+const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: Math.PI / 2 }));
 
 check("an arc writes its committed radius and sweep", has(arc, "radius=10") && has(arc, "start angle=0") && has(arc, "end angle=90"), arc);
 check("and starts at the point on its own circle", has(arc, "(10,0)"), arc);
 
 /* An arc that crosses the 0/360 seam keeps its unwrapped end angle. */
-const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 350, endAngle: 370 }));
+const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: (350 * Math.PI) / 180, endAngle: (370 * Math.PI) / 180 }));
 
 check("an arc across the 0-degree seam keeps its unwrapped angles", has(seamArc, "start angle=350") && has(seamArc, "end angle=370"), seamArc);
 
-check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 40, endAngle: 40 })) === null);
+check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0.7, endAngle: 0.7 })) === null);
 
 /* ============================================================= Polygon */
 
