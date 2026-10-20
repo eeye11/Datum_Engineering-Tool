@@ -157,7 +157,12 @@ console.log("---------");
 
 const rectangle = write(objectOf("rectangle", { position: { x: 10, y: 50 }, width: 30, height: 20, rotation: 0 }));
 
-check("a rectangle uses its two committed opposite corners", has(rectangle, "(10,50) rectangle (40,70)"), rectangle);
+/*
+ * `position` is the TOP-LEFT corner and y grows upward, so the rectangle runs
+ * down from it - the canvas draws it there. (This used to expect it written
+ * upward, one height above where it is drawn.)
+ */
+check("a rectangle uses its two committed opposite corners", has(rectangle, "(10,30) rectangle (40,50)"), rectangle);
 
 const rotated = write(objectOf("rectangle", { position: { x: 0, y: 0 }, width: 10, height: 10, rotation: 45 }));
 

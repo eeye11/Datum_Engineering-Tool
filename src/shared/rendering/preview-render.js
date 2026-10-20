@@ -13,7 +13,8 @@ import { appendDimensionEntity } from "./dimension-render.js";
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
-import { isSaturationCurve } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
+import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
 
 
     /*
@@ -46,7 +47,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
-        if (isSaturationCurve(state.interaction.preview)) {
+        if (isProcessDiagram(state.interaction.preview)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -424,6 +425,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
+                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
@@ -432,7 +434,7 @@ import { isSaturationCurve } from "../../features/workspace/model/thermodynamics
                     end: state.interaction.annotateEnd
                 },
                 style: {
-                    stroke: "#1f5c38",
+                    stroke: heatTransferTool(state.activeTool)?.colour || "#1f5c38",
                     fontSize: 12,
                     arrowhead: "closed"
                 }

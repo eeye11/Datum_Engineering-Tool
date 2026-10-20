@@ -11,6 +11,7 @@ import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
+import { processBendPoint } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
 import { translateObject } from "../geometry/transforms.js";
@@ -375,7 +376,8 @@ function manipulationHandles(
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
         return (g.points || []).flatMap((point, index) => [
             { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
-            { kind: `vertex${index}`, point }
+            { kind: `vertex${index}`, point },
+            ...(index < g.points.length - 1 ? [{ kind: `process-bend-${index}`, point: processBendPoint(g, index) }] : [])
         ]);
     }
 

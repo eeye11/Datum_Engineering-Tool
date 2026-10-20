@@ -28,6 +28,7 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 
@@ -644,15 +645,15 @@ const FIELDS = {
 
     xLabel: {
         kind: "text",
-        applies: (object) => object.type === COORDINATE_SYSTEM && showLabelsOf(object),
-        read: (object) => axisLabelOf(object, "xLabel", "x"),
+        applies: (object) => (object.type === COORDINATE_SYSTEM && showLabelsOf(object)) || isProcessDiagram(object),
+        read: (object) => axisLabelOf(object, "xLabel", isProcessDiagram(object) ? "" : "x"),
         write: (object, value) => setGeometryText(object, "xLabel", value)
     },
 
     yLabel: {
         kind: "text",
-        applies: (object) => object.type === COORDINATE_SYSTEM && showLabelsOf(object),
-        read: (object) => axisLabelOf(object, "yLabel", "y"),
+        applies: (object) => (object.type === COORDINATE_SYSTEM && showLabelsOf(object)) || isProcessDiagram(object),
+        read: (object) => axisLabelOf(object, "yLabel", isProcessDiagram(object) ? "" : "y"),
         write: (object, value) => setGeometryText(object, "yLabel", value)
     },
 
@@ -748,8 +749,64 @@ export const GROUPS = [
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
+/*
+ * ============================================================
+ * A PROCESS PATH'S BENDS: ONE FIELD PER SEGMENT
+ * ============================================================
+ *
+ * A process path has as many segments as it has states, so its bend fields
+ * cannot be listed in the static table. Each is generated from its key -
+ * `processBend:<segment>` - and reads and writes `geometry.segmentBends`, the
+ * value the canvas's middle-dot drag sets. -1..1, and 0 is straight.
+ */
+const PROCESS_BEND_PREFIX = "processBend:";
+
+function isProcessPath(object) {
+    return object?.metadata?.thermodynamicsKind === "process-path" && Array.isArray(object.geometry?.points);
+}
+
+function processBendField(key) {
+    if (typeof key !== "string" || !key.startsWith(PROCESS_BEND_PREFIX)) {
+        return null;
+    }
+
+    const index = Number(key.slice(PROCESS_BEND_PREFIX.length));
+
+    if (!Number.isInteger(index) || index < 0) {
+        return null;
+    }
+
+    return {
+        kind: "number",
+        label: `State ${index + 1} \u2192 ${index + 2}`,
+        min: -1,
+        max: 1,
+        step: 0.05,
+        applies: (object) => isProcessPath(object) && index < object.geometry.points.length - 1,
+        read: (object) => Number(object.geometry.segmentBends?.[index]) || 0,
+        write: (object, value) => {
+            const bend = Number(value);
+
+            if (!Number.isFinite(bend)) {
+                return false;
+            }
+
+            object.geometry.segmentBends = Array.isArray(object.geometry.segmentBends)
+                ? [...object.geometry.segmentBends]
+                : [];
+            object.geometry.segmentBends[index] = Math.max(-1, Math.min(1, bend));
+
+            return true;
+        }
+    };
+}
+
+function definitionOf(key) {
+    return FIELDS[key] || processBendField(key);
+}
+
 export function fieldDefinition(key) {
-    return FIELDS[key] || null;
+    return definitionOf(key) || null;
 }
 
 export function fieldLabel(field, key) {
@@ -790,15 +847,29 @@ export function groupsFor(object) {
         return [];
     }
 
-    return GROUPS
+    const groups = GROUPS
         .map((group) => {
             const fields = group.fields
-                .map((key) => ({ key, definition: FIELDS[key] }))
+                .map((key) => ({ key, definition: definitionOf(key) }))
                 .filter((entry) => entry.definition && entry.definition.applies(object));
 
             return { ...group, fields };
         })
         .filter((group) => group.transform || group.fields.length);
+
+    /* A process path's bends, one per segment, ahead of its appearance. */
+    if (isProcessPath(object) && object.geometry.points.length > 1) {
+        const fields = object.geometry.points.slice(1).map((_, index) => {
+            const key = `${PROCESS_BEND_PREFIX}${index}`;
+
+            return { key, definition: definitionOf(key) };
+        });
+        const at = groups.findIndex((group) => group.id === "appearance");
+
+        groups.splice(at < 0 ? groups.length : at, 0, { id: "process-bends", heading: "Process Curves", fields });
+    }
+
+    return groups;
 }
 
 /* ============================================================
@@ -806,7 +877,7 @@ export function groupsFor(object) {
  * ============================================================ */
 
 export function readField(object, key) {
-    const definition = FIELDS[key];
+    const definition = definitionOf(key);
 
     if (!definition || !object || !definition.applies(object)) {
         return undefined;
@@ -825,7 +896,7 @@ export function readField(object, key) {
  * changes from the object's own, once.
  */
 export function writeField(object, key, value) {
-    const definition = FIELDS[key];
+    const definition = definitionOf(key);
 
     if (!definition || !object || !definition.applies(object)) {
         return false;
@@ -918,6 +989,14 @@ const TYPE_LABELS = {
 export function typeLabelOf(object) {
     if (object?.type === "annotate") {
         return ANNOTATE_TYPE_LABELS[object.annotateKind] || TYPE_LABELS.annotate;
+    }
+
+    if (isProcessDiagram(object)) {
+        return object.metadata.thermodynamicsKind === "process-plot" ? "Process Plot" : "Saturation Curve";
+    }
+
+    if (isProcessPath(object)) {
+        return "Process Path";
     }
 
     return TYPE_LABELS[object?.type] || "Object";

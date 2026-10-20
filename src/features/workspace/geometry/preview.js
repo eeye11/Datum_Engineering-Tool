@@ -609,7 +609,7 @@ export function updatePreview(
     } else if (
         drawingState.activeTool === "rectangle" ||
         drawingState.activeTool === "control-volume" ||
-        drawingState.activeTool === "saturation-curve" ||
+        ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
         /*
@@ -638,8 +638,8 @@ export function updatePreview(
                 )
             );
 
-        if (drawingState.activeTool === "saturation-curve") {
-            interaction.preview.metadata = { thermodynamicsKind: "saturation-curve" };
+        if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+            interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
         }
 
         setToolMessage(

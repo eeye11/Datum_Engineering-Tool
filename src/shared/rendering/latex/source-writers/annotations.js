@@ -33,6 +33,7 @@
  */
 
 import { num, point, texText } from "./statics-primitives.js";
+import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -275,6 +276,16 @@ function serializePen(object) {
   const kind = object.annotateKind;
   const colour = strokeOf(object);
   const definitions = colourPrelude([object.style?.stroke]);
+
+  /*
+   * ELECTRIC WORK IS A RESISTOR, not an arrow: two leads and the zigzag between
+   * them, through the same points the canvas draws (`resistorPoints`).
+   */
+  if (object.metadata?.thermodynamicsKind === "electric-work") {
+    const leads = resistorPoints(geometry).filter(valid);
+
+    return leads.length >= 2 ? join(definitions, pathThrough(leads, colour, [])) : null;
+  }
 
   const path = [
     geometry.start,

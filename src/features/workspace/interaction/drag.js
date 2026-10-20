@@ -13,6 +13,7 @@ import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
 import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
+import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynamics/process-curves.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
@@ -84,7 +85,7 @@ export function beginManipulationDrag(
     const hit = handleAtPoint(point);
     const pistonHandle = hit && isPistonCylinder(hit.object) &&
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
-    const processLabelHandle = hit?.handle.kind.startsWith("process-label-");
+    const processLabelHandle = hit?.handle.kind.startsWith("process-label-") || hit?.handle.kind.startsWith("process-bend-");
     if (selectedIds.length > 1 && box && !pistonHandle && !processLabelHandle) {
         const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
         const corners = selectionCorners(box);
@@ -720,6 +721,16 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    if (drag.kind.startsWith("process-bend-")) {
+        const index = Number(drag.kind.slice("process-bend-".length));
+        const initial = processBendPoint(drag.originals[object.id].geometry, index);
+        setProcessBendFromPoint(g, index, {
+            x: initial.x + point.x - drag.start.x,
+            y: initial.y + point.y - drag.start.y
+        }, 6 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom));
+        return;
+    }
 
     if (drag.kind.startsWith("process-label-")) {
         const index = Number(drag.kind.slice("process-label-".length));

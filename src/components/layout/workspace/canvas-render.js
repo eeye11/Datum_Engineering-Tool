@@ -85,6 +85,10 @@ let lastCompileError = null;
  */
 let modelAtRevision = new Map();
 
+/* The current source's object regions, parsed once per revision. */
+let regionsRevision = null;
+let regionsMap = null;
+
 /*
  * THE SCHEDULER'S STATE, ALL KEYED BY SOURCE REVISION.
  *
@@ -668,7 +672,26 @@ function rememberModelAt(revision) {
     }
 }
 
-function objectsThePictureDoesNotShow(pictureRevision) {
+/*
+ * AN OBJECT THE SOURCE HOLDS NO REGION FOR is never in any compiled picture -
+ * its writer is missing or failed - so it is drawn live too. Whatever the
+ * source can or cannot express, what the student drew is on the sheet.
+ */
+function sourceRegionsAt(revision) {
+    if (regionsRevision !== revision || !regionsMap) {
+        try {
+            regionsMap = createSourceMap(activeSourceManager().getSource());
+        } catch {
+            regionsMap = null;
+        }
+
+        regionsRevision = revision;
+    }
+
+    return regionsMap;
+}
+
+function objectsThePictureDoesNotShow(pictureRevision, revision) {
     const objects = drawingState.objects || [];
     const shown = pictureRevision === null || pictureRevision === undefined
         ? null
@@ -678,10 +701,11 @@ function objectsThePictureDoesNotShow(pictureRevision) {
         return new Set(objects.map((object) => object.id));
     }
 
+    const regions = sourceRegionsAt(revision);
     const live = new Set();
 
     objects.forEach((object) => {
-        if (shown.get(object.id) !== serialiseObject(object)) {
+        if (shown.get(object.id) !== serialiseObject(object) || (regions && !regions.has(object.id))) {
             live.add(object.id);
         }
     });
@@ -1107,6 +1131,8 @@ export function resetSourcePictureCache() {
 
     compiledCache = new Map();
     modelAtRevision = new Map();
+    regionsRevision = null;
+    regionsMap = null;
     compiledRevision = null;
     lastCompiledSvg = null;
     lastCompileError = null;
@@ -1234,7 +1260,7 @@ export function renderCurrentDrawing() {
         overlay,
         {
             overlayOnly: true,
-            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision)
+            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision, revision)
         }
     );
 

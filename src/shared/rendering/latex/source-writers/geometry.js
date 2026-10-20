@@ -44,6 +44,7 @@ import {
     straightLine,
     textNode
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
+import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
 
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -280,32 +281,25 @@ const SHAPES = {
         const style = renderStyle(object.style);
 
         /*
+         * `position` IS THE TOP-LEFT CORNER, with y growing upward, so the
+         * rectangle runs DOWN from it - exactly as the canvas draws it. Adding
+         * the height drew every rectangle one height too high.
+         *
          * A rotated rectangle is not a rectangle to TikZ, so it is drawn as a
-         * closed path through its four corners rather than being silently
-         * squared up. A rotation of zero takes the exact `rectangle` operation,
-         * which closes without a seam.
+         * closed path through the model's own corners (rotated about the
+         * centre, as `rectangleCorners` defines them) rather than being squared
+         * up. A rotation of zero takes the exact `rectangle` operation, which
+         * closes without a seam.
          */
         if (rotation !== 0) {
-            const radians = (rotation * Math.PI) / 180;
-            const cos = Math.cos(radians);
-            const sin = Math.sin(radians);
+            const corners = enggFeatureGeometry.rectangleCorners(object.geometry);
 
-            const corners = [
-                { x: 0, y: 0 },
-                { x: width, y: 0 },
-                { x: width, y: height },
-                { x: 0, y: height }
-            ].map(corner => ({
-                x: position.x + corner.x * cos - corner.y * sin,
-                y: position.y + corner.x * sin + corner.y * cos
-            }));
-
-            return closedShape(corners, style);
+            return corners.length === 4 ? closedShape(corners, style) : null;
         }
 
         return rectanglePrimitive({
-            from: position,
-            to: { x: position.x + width, y: position.y + height },
+            from: { x: position.x, y: position.y - height },
+            to: { x: position.x + width, y: position.y },
             style
         });
     },

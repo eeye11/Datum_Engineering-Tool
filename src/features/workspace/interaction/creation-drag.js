@@ -106,6 +106,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "rectangle",
     "control-volume",
     "saturation-curve",
+    "process-plot",
     "piston-cylinder",
     "piston-cylinder-stoppers",
     "circle",

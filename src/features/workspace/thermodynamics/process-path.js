@@ -1,6 +1,6 @@
 import model from "../../../shared/model/drawing-state.js";
 import { selectionBounds } from "../../../shared/selection/selection-transform.js";
-import { isSaturationCurve } from "../model/thermodynamics/saturation-curve.js";
+import { isProcessDiagram } from "../model/thermodynamics/saturation-curve.js";
 import { drawingState } from "../editor-state.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { commitCreatedFeature } from "../geometry/creation-commit.js";
@@ -31,12 +31,12 @@ export function addProcessPoint(point) {
     const interaction = drawingState.interaction;
     if (interaction.phase === "idle") {
         const diagram = [...drawingState.objects].reverse().find(object => {
-            if (!isSaturationCurve(object)) return false;
+            if (!isProcessDiagram(object)) return false;
             const box = selectionBounds([object], [object.id]);
             return box && point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
         });
         if (!diagram) {
-            setToolMessage("Click inside a saturation diagram to place the first process state");
+            setToolMessage("Click inside a process diagram to place the first process state");
             return;
         }
         model.setInteraction(drawingState, {
@@ -73,7 +73,9 @@ export function finishProcessPath() {
     object.parentId = interaction.sourceId;
     commitCreatedFeature(object);
     activateTool("select");
-    setToolMessage(`${plotName(tool)} created - drag its dots to adjust`);
+    setToolMessage(tool === "process-path"
+        ? "Process path created - drag a middle dot to curve a segment, or a state dot to move a state"
+        : `${plotName(tool)} created - drag its dots to adjust`);
     renderProperties();
     renderCurrentDrawing();
     return true;

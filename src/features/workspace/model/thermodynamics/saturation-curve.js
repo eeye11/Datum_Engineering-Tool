@@ -4,6 +4,15 @@ export function isSaturationCurve(object) {
     return object?.metadata?.thermodynamicsKind === "saturation-curve";
 }
 
+export function isProcessDiagram(object) {
+    return isSaturationCurve(object) || object?.metadata?.thermodynamicsKind === "process-plot";
+}
+
+export function processDiagramPaths(geometry, object) {
+    const paths = saturationPaths(geometry);
+    return isSaturationCurve(object) ? paths : paths.slice(0, 3);
+}
+
 // Schematic coordinates, not substance property data.
 export function saturationPaths(geometry) {
     const point = (x, y) => cylinderPoint(geometry, x, y);

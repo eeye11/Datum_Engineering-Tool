@@ -10,9 +10,11 @@ import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
+import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
-import { isSaturationCurve, saturationPaths } from "../model/thermodynamics/saturation-curve.js";
+import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
+import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
 
 /*
@@ -207,6 +209,10 @@ function annotateContainsPoint(object, point) {
     const tolerance =
         ANNOTATE_PICK_TOLERANCE_PIXELS /
         Math.max(drawingState.camera.zoom, 0.25);
+    if (object.metadata?.thermodynamicsKind === "electric-work") {
+        const points = resistorPoints(geometry);
+        return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
 
     /*
      * THE WORDS. Every kind has a text box at a placement - the note's
@@ -869,8 +875,8 @@ export function objectAtPoint(
                     return segments.some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
 
-                if (isSaturationCurve(object)) {
-                    return saturationPaths(geometry).some(path => path.some((start, index) =>
+                if (isProcessDiagram(object)) {
+                    return processDiagramPaths(geometry, object).some(path => path.some((start, index) =>
                         index > 0 && distanceToSegment(point, path[index - 1], start) <= tolerance));
                 }
 
@@ -1101,7 +1107,8 @@ export function objectAtPoint(
                     object.type ===
                     "polyline"
                 ) {
-                    return geometry.points.some(
+                    const pathPoints = object.metadata?.thermodynamicsKind === "process-path" ? processPathPoints(geometry) : geometry.points;
+                    return pathPoints.some(
                         (
                             current,
                             index
@@ -1109,7 +1116,7 @@ export function objectAtPoint(
                             index > 0 &&
                             distanceToSegment(
                                 point,
-                                geometry.points[
+                                pathPoints[
                                     index - 1
                                 ],
                                 current
