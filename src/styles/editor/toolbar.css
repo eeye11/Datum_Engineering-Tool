@@ -780,3 +780,120 @@
     overflow: hidden;
     padding: 9px 7px;
 }
+
+/*
+ * ============================================================
+ * LINE TYPE AND THICKNESS: CHOICES SHOWN AS PICTURES
+ * ============================================================
+ *
+ * A transparent button over the strip icon opens a small menu that draws each
+ * choice (toolbar-wiring.js, `setupStyleMenu`); "Custom..." on the thickness
+ * menu opens the custom-thickness dialog. Every colour is a token, so both
+ * follow the theme.
+ */
+.drawing-line-type-trigger {
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    height: 100%;
+    inset: 0;
+    position: absolute;
+    width: 100%;
+    z-index: 2;
+}
+
+.drawing-line-type-trigger:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.drawing-line-type-menu {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+    color: var(--datum-ink);
+    padding: 4px;
+    position: fixed;
+    width: 150px;
+    z-index: 1000;
+}
+
+.drawing-line-type-menu button {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 3px;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    font-size: 11px;
+    gap: 8px;
+    padding: 7px 6px;
+    width: 100%;
+}
+
+.drawing-line-type-menu button[aria-checked="true"],
+.drawing-line-type-menu button:hover,
+.drawing-line-type-menu button:focus-visible {
+    background: var(--datum-green-soft);
+    color: var(--datum-ink);
+}
+
+.drawing-line-type-menu button:focus-visible {
+    outline: 1px solid var(--datum-focus);
+}
+
+.drawing-line-type-menu svg {
+    flex: 0 0 30px;
+    height: 12px;
+    width: 30px;
+}
+
+.drawing-thickness-dialog {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+    color: var(--datum-ink);
+    max-width: calc(100vw - 32px);
+    padding: 16px;
+    width: 300px;
+}
+
+.drawing-thickness-dialog::backdrop { background: var(--datum-overlay); }
+.drawing-thickness-dialog h2 { font-size: 14px; margin: 0 0 16px; }
+.drawing-thickness-fields { align-items: center; display: flex; gap: 16px; }
+.drawing-thickness-fields label { display: grid; flex: 1; font-size: 11px; gap: 8px; min-width: 0; }
+
+.drawing-thickness-fields input {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    box-sizing: border-box;
+    color: inherit;
+    font: inherit;
+    padding: 7px;
+    width: 100%;
+}
+
+.drawing-thickness-preview { font-size: 11px; text-align: center; }
+.drawing-thickness-preview svg { background: var(--datum-panel); border-radius: 3px; display: block; margin-top: 4px; }
+.drawing-thickness-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+
+.drawing-thickness-actions button {
+    background: transparent;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-size: 11px;
+    padding: 7px 12px;
+}
+
+.drawing-thickness-actions button[type="submit"],
+.drawing-thickness-actions button:hover { background: var(--datum-green-soft); }
+.drawing-thickness-dialog :focus-visible { outline: 2px solid var(--datum-focus); outline-offset: 2px; }
+.drawing-thickness-actions button:disabled { cursor: default; opacity: .5; }
