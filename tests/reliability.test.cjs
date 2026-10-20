@@ -322,7 +322,7 @@ console.log("\n  one unrenderable feature does not take the drawing down\n");
 
   check(
     "each feature is drawn inside its own try",
-    /state\.objects\.forEach\([\s\S]{0,200}try\s*\{[\s\S]{0,200}appendEntity/.test(
+    /(?:state\.objects|drawn)\.forEach\([\s\S]{0,200}try\s*\{[\s\S]{0,200}appendEntity/.test(
       source,
     ),
     "one throwing feature would abandon the whole repaint",

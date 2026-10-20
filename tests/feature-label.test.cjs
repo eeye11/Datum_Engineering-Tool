@@ -233,7 +233,7 @@ console.log("\n  the renderer draws it, and only when there is one\n");
 
     check(
         "it is drawn for EVERY feature, in one pass",
-        /state\.objects\.forEach\(\(entity\) => \{[\s\S]{0,200}?appendFeatureLabel/.test(renderer),
+        /(?:state\.objects|drawn)\.forEach\(\(entity\) => \{[\s\S]{0,200}?appendFeatureLabel/.test(renderer),
         "a per-type branch is exactly what was missing for Line and Point",
     );
 }
