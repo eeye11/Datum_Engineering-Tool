@@ -34,6 +34,8 @@ import {
 } from "./source-mapping.js";
 import { validateDrawingSource } from "./source-validation.js";
 import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "./source-diagnostics.js";
+import { drawingBounds } from "./model-bounds.js";
+import { createExportContext, IDENTITY_EXPORT } from "./export-transform.js";
 
 /*
  * ============================================================
@@ -156,7 +158,19 @@ export function writeObjectIntoSource(manager, object, context = {}) {
     return false;
   }
 
-  const commands = sourceForObject(object, context);
+  /*
+   * THE OBJECT IS WRITTEN AT THE DRAWING'S EXPORT SCALE, not on its own.
+   *
+   * `allObjects` is the drawing the object belongs to; without it the transform
+   * would be fitted to this one object, and a beam alone on a sheet would be
+   * drawn at a different scale from the same beam beside a graph. A caller that
+   * supplies the sheet - the panel, a reconcile, an Undo - passes it in the
+   * context; a caller that does not gets a single-object fit, which is the best
+   * answer available and is still consistent for that object.
+   */
+  const objects = Array.isArray(context.allObjects) ? context.allObjects : [object];
+
+  const commands = sourceForObject(object, writeContextFor(object, objects, context));
 
   if (commands === null) {
     /*
@@ -175,7 +189,7 @@ export function writeObjectIntoSource(manager, object, context = {}) {
     commands,
   );
 
-  return manager.setSource(next);
+  return manager.setSource(next, { origin: "object" });
 }
 
 /*
@@ -200,7 +214,7 @@ export function removeObjectFromSource(manager, objectId) {
     ...lines.slice(region.endLine + 1),
   ].join("\n");
 
-  return manager.setSource(next);
+  return manager.setSource(next, { origin: "object" });
 }
 
 /*
@@ -258,6 +272,68 @@ export function objectIdAtSourceLine(manager, line) {
 
 /*
  * ============================================================
+ * THE DRAWING'S ONE EXPORT TRANSFORM
+ * ============================================================
+ *
+ * Every object of a drawing is written through the SAME transform, computed once
+ * from the bounds of the WHOLE drawing. That is what keeps a beam and the graph
+ * above it in the same figure, at the same scale and in their real positions -
+ * rather than each object being fitted to its own little box.
+ *
+ * THE BOUNDS ARE THE APPLICATION'S FIT-ALL MEASUREMENT (`model-bounds.js`),
+ * which measures MODEL coordinates at zoom 1. Canvas zoom and pan map model space
+ * onto the screen and never reach stored geometry, so the transform is identical
+ * at every zoom, in every window size and on every tab - which is the property
+ * the exported source has to have.
+ *
+ * A caller that has already fitted the drawing passes its own `transform`
+ * (the Written Solution does, when a document's width is known); otherwise it is
+ * derived here, so a writer is never handed a drawing without one.
+ */
+export function exportTransformFor(objects, options = {}) {
+  if (options.transform && typeof options.transform.point === "function") {
+    return options.transform;
+  }
+
+  /*
+   * THE MEASUREMENT IS THE APPLICATION'S FIT-ALL ONE.
+   *
+   * `model-bounds.js` asks the installed bounds provider first, which is the
+   * same `renderedPointsForObjects` the Fit button, Print and the thumbnails
+   * measure with - so an export is fitted to the COMPLETE drawing (sketch ink,
+   * arrow heads, labels, analysis curves), not to a partial or axis-only extent.
+   * The provider is asked at zoom 1, so the current camera cannot reach the
+   * export scale.
+   */
+  const bounds = drawingBounds(objects);
+
+  if (!bounds) {
+    return IDENTITY_EXPORT;
+  }
+
+  return createExportContext({
+    bounds,
+    maxWidth: options.maxWidth,
+    maxHeight: options.maxHeight,
+    minFontPt: options.minFontPt,
+  });
+}
+
+/*
+ * The context one object is written in: the sheet's own settings, plus the one
+ * export transform the whole drawing shares.
+ */
+function writeContextFor(object, objects, context = {}) {
+  return {
+    ...context,
+    state: context?.state || null,
+    allObjects: objects,
+    transform: exportTransformFor(objects, context || {}),
+  };
+}
+
+/*
+ * ============================================================
  * MAKING THE SOURCE REPRESENT THE OBJECTS
  * ============================================================
  *
@@ -270,20 +346,36 @@ export function objectIdAtSourceLine(manager, line) {
  * to run when the two have drifted apart, rather than a destructive "regenerate
  * everything".
  */
-export function reconcileSourceWithObjects(manager, objects, context = {}) {
+export function reconcileSourceWithObjects(
+  manager,
+  objects,
+  { state, transform, maxWidth, maxHeight } = {},
+) {
   if (!manager) {
     return false;
   }
 
+  /*
+   * THE COORDINATE SYSTEM A WRITER READS IS `state`. The caller passes the live
+   * drawing state; a writer that needs the sheet's scale or the other objects
+   * would otherwise receive a context missing them and write an object that is
+   * drawn at the wrong place.
+   *
+   * THE EXPORT TRANSFORM IS THE DRAWING'S, computed once from every object, so a
+   * block that is rebuilt and one that is updated in place come out at the same
+   * size.
+   */
+  const context = { state, allObjects: objects, transform, maxWidth, maxHeight };
+
   const next = rebuildDrawingSourceFromObjects(manager.getSource(), objects, {
-    write: (object) => sourceForObject(object, { allObjects: objects, ...context }),
+    write: (object) => sourceForObject(object, writeContextFor(object, objects, context)),
   });
 
   if (next === manager.getSource()) {
     return false;
   }
 
-  return manager.setSource(next);
+  return manager.setSource(next, { origin: "object" });
 }
 
 /*

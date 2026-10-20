@@ -16,20 +16,42 @@
  *
  * WHAT IT IS NOT.
  *
- *   - It does not render. It hands source to rendering-adapter.js.
- *   - It does not know about the canvas or the panels.
+ *   - It does not render. It hands prepared text to rendering-adapter.js.
+ *   - It does not know about the canvas or the panels beyond announcing a change.
  *   - It does not decide what a property change MEANS. That is
  *     source-synchronization.js's job, which calls the setter here.
  *
- * STATE IT TRACKS, AND WHY EACH IS SEPARATE.
+ * THE STATES, AND WHY EACH IS SEPARATE.
  *
- *   source         the draft - exactly what the student has, character for
- *                  character. Never regenerated behind their back.
- *   renderedSource the version that last rendered successfully. Kept so the
- *                  canvas can go on showing it while the draft is broken.
- *   dirty          whether the draft differs from what was last saved.
- *   revision       a monotonic counter, so an in-flight render can tell whether
- *                  the draft it started from is still the current one.
+ *   source          THE DRAFT - exactly what the student has, character for
+ *                   character, including anything malformed. Never regenerated
+ *                   behind their back and never "repaired" after the fact.
+ *
+ *   revision        a monotonic counter. Every change bumps it, so any piece of
+ *                   asynchronous work can tell whether it still describes the
+ *                   current draft. Out-of-order results compare against it.
+ *
+ *   analysis        the latest parse of the draft: validation, diagnostics,
+ *                   statements and the object blocks. Derived, never edited.
+ *
+ *   renderInput     the text the RENDERER is given: the draft with unfinished
+ *                   statements replaced by comments. Separate from `source`,
+ *                   because the student's text must never be edited to make a
+ *                   picture possible - and separate is what lets a scribbled
+ *                   half-command not stop the rest of the sheet rendering.
+ *
+ *   render          what the renderer said about a revision: pending, up to date,
+ *                   failed (with the reason), or stale. Keyed by revision, so a
+ *                   late response for an old draft cannot overwrite a newer one.
+ *
+ *   lastError       the most recent RENDERER failure (not a validation problem).
+ *                   Cleared by any successful render of a newer revision.
+ *
+ *   saveStatus      saved / pending / saving / error. Independent of whether the
+ *                   draft renders: an invalid draft is still saved.
+ *
+ *   renderedSource  the last text that rendered successfully. Kept so a reader
+ *                   can see what the current picture was made from.
  */
 
 import {
@@ -40,9 +62,14 @@ import {
     sourceHasDrawableContent,
     visibleDrawingSource
 } from "./drawing-source.js";
+import { prepareRenderInput } from "./source-statements.js";
+import { blockContents } from "./source-model.js";
 import { validateDrawingSource } from "./source-validation.js";
 
-/*
+/* ============================================================
+ * EVENTS
+ * ============================================================
+ *
  * A DOCUMENT EVENT THAT WORKS WHEREVER THE MANAGER RUNS.
  *
  * The application runs in a browser. A test harness may build its own window
@@ -62,7 +89,24 @@ function managerEvent(type, detail) {
     return new (view.Event || globalThis.Event)(type);
 }
 
-/*
+function dispatch(type, detail) {
+    const target = globalThis.document;
+
+    if (!target || typeof target.dispatchEvent !== "function") {
+        return;
+    }
+
+    try {
+        target.dispatchEvent(managerEvent(type, detail));
+    } catch {
+        /* A notification failure is not a document failure. */
+    }
+}
+
+/* ============================================================
+ * THE MANAGER
+ * ============================================================
+ *
  * The manager is per-DRAWING, but the application edits one drawing at a time -
  * the active sheet - so there is one live instance. `createSourceManager` is
  * exported so a test or a future multi-sheet editor can make its own without
@@ -70,34 +114,35 @@ function managerEvent(type, detail) {
  */
 export function createSourceManager(initialSource) {
     let source = typeof initialSource === "string" ? initialSource : emptyDrawingSource();
+
     let renderedSource = source;
     let dirty = false;
     let revision = 0;
+
+    /*
+     * THE ANALYSIS IS DERIVED ONCE PER REVISION, NOT PER READER.
+     *
+     * The Source tab, the canvas, the object reader and the status line all want
+     * the parse. Deriving it lazily and remembering it until the draft changes
+     * means a keystroke parses the document once, however many readers ask.
+     */
+    let analysisRevision = null;
+    let analysis = null;
+
+    /* The render state of the CURRENT revision, plus the last failure. */
+    let renderState = "idle";
+    let renderRevision = null;
     let lastError = null;
+    let lastErrorRevision = null;
+
+    /* Saving is reported by the application, not performed here. */
+    let saveStatus = "saved";
+    let saveError = null;
 
     const listeners = new Set();
 
-    /*
-     * `datum:source-changed` - one announcement, from the one place the source
-     * can change. A listener that throws must not break the edit, exactly as
-     * for `notify` above.
-     */
-    function announceSourceChanged() {
-        const target = globalThis.document;
-
-        if (!target || typeof target.dispatchEvent !== "function") {
-            return;
-        }
-
-        try {
-            target.dispatchEvent(managerEvent("datum:source-changed", { revision }));
-        } catch {
-            /* A notification failure is not a document failure. */
-        }
-    }
-
     function notify() {
-        listeners.forEach(listener => {
+        listeners.forEach((listener) => {
             try {
                 listener(manager);
             } catch {
@@ -110,8 +155,131 @@ export function createSourceManager(initialSource) {
         });
     }
 
+    /* The parse of the current draft, computed at most once per revision. */
+    function analyse() {
+        if (analysisRevision === revision && analysis) {
+            return analysis;
+        }
+
+        const validation = validateDrawingSource(source);
+
+        /*
+         * THE RENDERER IS GIVEN THE VISIBLE FORM, with its unfinished statements
+         * commented out.
+         *
+         * The marker comments name DAETUM objects; they are not part of the
+         * drawing and the Source tab never shows them (`visibleDrawingSource`). The
+         * render input has the same rule: the compiler is sent the SOURCE THE
+         * STUDENT SEES, with incomplete statements replaced by a comment that names
+         * the skipped line - not the student's text. Feeding it the canonical form
+         * put every object's markers into the compiled document, which compiles (a
+         * comment is a comment) but is not the text the Source tab shows, and it
+         * meant an object's id appeared in a picture that should carry none.
+         */
+        const prepared = prepareRenderInput(visibleDrawingSource(source));
+
+        let map = null;
+
+        try {
+            map = createSourceMap(source);
+        } catch {
+            map = null;
+        }
+
+        analysis = {
+            revision,
+            source,
+            visible: visibleDrawingSource(source),
+            validation,
+            diagnostics: validation.diagnostics,
+            statements: validation.statements,
+            /*
+             * THE BLOCKS, WITH THEIR STATEMENTS.
+             *
+             * `map.blocks` is the marker list from `drawing-source.js` - ids and
+             * line ranges. The object reader needs what is BETWEEN the markers
+             * too, so the blocks are parsed once here and carried with the
+             * analysis. A reader that wanted only ids can use `block.id`.
+             */
+            blocks: blockContents(source, map).blocks,
+            map,
+            renderInput: prepared.text,
+            skipped: prepared.skipped,
+            renderInputChanged: prepared.changed,
+            hasDrawableContent: sourceHasDrawableContent(source)
+        };
+
+        analysisRevision = revision;
+
+        return analysis;
+    }
+
+    /*
+     * A CHANGE TO THE DRAFT, IN ONE PLACE.
+     *
+     * Everything that edits the source goes through here, so there is exactly
+     * one place that bumps the revision, invalidates the analysis and announces
+     * the change. `origin` says WHAT changed it - an edit, a canvas object, a
+     * load, an undo - because a listener that only cares about one of those
+     * (the object reader, say) should not have to guess.
+     */
+    function assign(text, { origin = "edit", fromLoad = false, silent = false } = {}) {
+        source = String(text ?? "");
+        revision += 1;
+
+        analysisRevision = null;
+        analysis = null;
+
+        renderState = "idle";
+        renderRevision = null;
+
+        /*
+         * A NEW DRAFT IS NOT A NEW RENDER FAILURE. The failure belonged to the
+         * text that was sent; this is different text, and whether it fails is
+         * the renderer's next answer. Keeping the old message here is exactly
+         * how a Source tab comes to show an error it has already fixed.
+         */
+        lastError = null;
+        lastErrorRevision = null;
+
+        if (fromLoad) {
+            /*
+             * A reopened drawing has rendered its own source already - or is
+             * about to - so the two versions agree until something is typed.
+             * Marking it dirty here would show a fresh document as modified,
+             * which is how "Save" comes to mean "Save As".
+             */
+            renderedSource = source;
+            dirty = false;
+            saveStatus = "saved";
+        } else {
+            dirty = true;
+            saveStatus = "pending";
+        }
+
+        saveError = null;
+
+        if (!silent) {
+            notify();
+            announceSourceChanged(origin);
+        }
+
+        return true;
+    }
+
+    /*
+     * AND THE DRAWING SPACE IS TOLD, in a single event, with the revision and
+     * the origin. The canvas keeps the last picture that compiled while this
+     * draft is broken, and reports why - so a source the student broke is
+     * explained at once, rather than after a recompile that was never going to
+     * be sent.
+     */
+    function announceSourceChanged(origin) {
+        dispatch("datum:source-changed", { revision, origin });
+    }
+
     const manager = {
-        /* ---------- reading ---------- */
+        /* ---------- reading: the draft ---------- */
 
         getSource() {
             return source;
@@ -130,13 +298,114 @@ export function createSourceManager(initialSource) {
             return visibleDrawingSource(source);
         },
 
-        /*
-         * Whether the drawing has any drawable content - not merely an
-         * initialised picture. Used to label a sheet "Empty" and to refuse to
-         * insert one as a figure.
-         */
         hasDrawableContent() {
             return sourceHasDrawableContent(source);
+        },
+
+        revision() {
+            return revision;
+        },
+
+        isDirty() {
+            return dirty;
+        },
+
+        /* ---------- reading: the parse ---------- */
+
+        /** The whole parse of the current draft. Derived; never mutated. */
+        analysis() {
+            return analyse();
+        },
+
+        validate() {
+            return analyse().validation;
+        },
+
+        diagnostics() {
+            return analyse().diagnostics;
+        },
+
+        /** `{ id, type, beginLine, endLine, ... }` per object block, in order. */
+        blocks() {
+            return analyse().blocks;
+        },
+
+        map() {
+            return analyse().map || createSourceMap(source);
+        },
+
+        /**
+         * The text the renderer should be given: unfinished statements replaced
+         * by comments. Never the draft itself when the draft is broken.
+         */
+        renderInput() {
+            return analyse().renderInput;
+        },
+
+        /** Which statements were left out of `renderInput`, by line. */
+        skippedStatements() {
+            return analyse().skipped;
+        },
+
+        /* ---------- reading: rendering ---------- */
+
+        getRenderedSource() {
+            return renderedSource;
+        },
+
+        /** "idle" | "pending" | "rendering" | "rendered" | "failed" */
+        renderStatus() {
+            if (renderState === "rendered" && renderRevision !== revision) {
+                return "pending";
+            }
+
+            if (renderState === "failed" && renderRevision !== revision) {
+                /* The failure was about older text; the new text is unrendered. */
+                return "pending";
+            }
+
+            return renderState;
+        },
+
+        /** The revision the current render state describes, or null. */
+        renderedRevision() {
+            return renderRevision;
+        },
+
+        /** The last RENDERER failure - not a validation problem. */
+        lastError() {
+            return lastError;
+        },
+
+        lastErrorRevision() {
+            return lastErrorRevision;
+        },
+
+        /* ---------- reading: saving ---------- */
+
+        saveStatus() {
+            return saveStatus;
+        },
+
+        saveError() {
+            return saveError;
+        },
+
+        /* ---------- writing: the draft ---------- */
+
+        /*
+         * Replace the whole draft. Called by the Source tab as the student
+         * types, by the object synchronization when a canvas object changes, and
+         * by persistence when a drawing is reopened.
+         */
+        setSource(next, options = {}) {
+            const text = String(next ?? "");
+
+            if (text === source) {
+                return false;
+            }
+
+            return assign(text, options);
         },
 
         /*
@@ -159,22 +428,24 @@ export function createSourceManager(initialSource) {
         },
 
         /*
-         * Translate a character offset in the VISIBLE text to the same place
-         * in the canonical text.
+         * Replace one object's region in place. This is the targeted update the
+         * synchronization layer uses: everything the student typed elsewhere in
+         * the text is preserved, byte for byte.
+         */
+        setRegion(next, options = { origin: "object" }) {
+            return manager.setSource(next, options);
+        },
+
+        /*
+         * Translate a character offset in the VISIBLE text to the same place in
+         * the canonical text.
          *
-         * The two differ only by whole marker lines, so the translation adds
-         * the length of every marker line that sits above the offset. It is
-         * used for one thing - resolving "which object does this selection
-         * fall inside?" - and a caller that does not need it never touches it.
+         * The two differ only by whole marker lines, so the translation adds the
+         * length of every marker line that sits above the offset. It is used for
+         * one thing - resolving "which object does this selection fall inside?"
+         * - and a caller that does not need it never touches it.
          */
         canonicalOffsetForVisibleOffset(offset) {
-            /*
-             * Walk the canonical text one character at a time, tracking the
-             * offset in the VISIBLE text that corresponds to each canonical
-             * position. Marker lines map to no visible character at all, so
-             * they are skipped; every other character advances both counts by
-             * one.
-             */
             const canonical = String(source ?? "");
             const target = Math.max(0, Number(offset) || 0);
 
@@ -208,129 +479,137 @@ export function createSourceManager(initialSource) {
             return canonical.length;
         },
 
-        getRenderedSource() {
-            return renderedSource;
-        },
-
-        isDirty() {
-            return dirty;
-        },
-
-        revision() {
-            return revision;
-        },
-
-        lastError() {
-            return lastError;
-        },
-
-        /*
-         * The source map for the CURRENT draft. Derived on demand, so it can
-         * never describe a version of the text that no longer exists.
-         */
-        map() {
-            return createSourceMap(source);
-        },
-
-        /* ---------- writing ---------- */
-
-        /*
-         * Replace the whole draft. Called by the Source tab as the student
-         * types, and by persistence when a drawing is reopened.
-         */
-        setSource(next, { fromLoad = false } = {}) {
-            const text = String(next ?? "");
-
-            if (text === source) {
-                return false;
-            }
-
-            source = text;
-            revision += 1;
-            dirty = !fromLoad;
-
-            lastError = null;
-
-            if (fromLoad) {
-                /*
-                 * A reopened drawing has rendered its own source already - or
-                 * is about to - so the two versions agree until something is
-                 * typed. Marking it dirty here would show a fresh document as
-                 * modified, which is how "Save" comes to mean "Save As".
-                 */
-                renderedSource = text;
-                lastError = null;
-            }
-
-            notify();
-
-            /*
-             * AND THE DRAWING SPACE IS TOLD, in a single event. The canvas keeps
-             * the last picture that compiled while this draft is broken, and
-             * reports why - so a source the student broke is explained at once,
-             * rather than after a recompile that was never going to be sent.
-             */
-            announceSourceChanged();
-
-            return true;
-        },
-
-        /*
-         * Replace one object's region in place. This is the targeted update the
-         * synchronization layer uses: everything the student typed elsewhere in
-         * the text is preserved, byte for byte.
-         */
-        setRegion(next) {
-            return manager.setSource(next);
-        },
-
         /* ---------- rendering outcome ---------- */
 
         /*
-         * Record that a version of the source rendered successfully. If it is
-         * still the current draft, the draft is no longer "unrendered"; if the
-         * student has typed since, only `renderedSource` moves, and the canvas
-         * keeps showing the last thing that worked.
+         * A RENDER STARTED for `revision`. Nothing is announced: this is a
+         * background fact, and announcing it would make every reader redraw for
+         * a state they were about to get anyway.
          */
-        markRendered(renderedText, revisionAtStart) {
-            renderedSource = String(renderedText ?? "");
-            lastError = null;
+        markRendering(revisionAtStart) {
+            renderState = "rendering";
+            renderRevision = revisionAtStart;
 
-            /*
-             * The comparison is by revision, not by text: two identical texts
-             * are the same source, but a render that finished for an older
-             * revision must not be mistaken for one that covers the current
-             * draft even when the text happens to match.
-             */
-            if (revisionAtStart === revision) {
-                dirty = dirty && false;
-            }
-
-            notify();
+            dispatch("datum:source-render-status", {
+                revision: revisionAtStart,
+                status: "rendering"
+            });
         },
 
         /*
-         * Record a render failure. The draft is untouched - that is the whole
-         * point of keeping the two versions apart - so a student can correct a
-         * typo and try again without having lost anything.
+         * RECORD THAT A VERSION OF THE SOURCE RENDERED SUCCESSFULLY.
+         *
+         * The comparison is by revision, not by text: two identical texts are
+         * the same source, but a render that finished for an older revision must
+         * not be mistaken for one that covers the current draft even when the
+         * text happens to match.
          */
-        markFailed(error) {
-            lastError = error instanceof Error ? error.message : String(error ?? "Rendering failed");
+        markRendered(renderedText, revisionAtStart) {
+            const current = revisionAtStart === revision;
+
+            if (revisionAtStart !== null && revisionAtStart !== undefined) {
+                if (renderRevision === null || revisionAtStart >= renderRevision) {
+                    renderedSource = String(renderedText ?? renderedSource ?? "");
+                    renderState = current ? "rendered" : "pending";
+                    renderRevision = revisionAtStart;
+                }
+            }
+
+            /*
+             * A SUCCESSFUL RENDER CLEARS THE FAILURE IT REPLACED. Only a render
+             * of a revision that is at least as new as the failure can, so a
+             * late success cannot erase the diagnosis of a newer broken draft.
+             */
+            if (lastErrorRevision === null || revisionAtStart >= lastErrorRevision) {
+                lastError = null;
+                lastErrorRevision = null;
+            }
+
+            notify();
+            dispatch("datum:source-rendered", { revision: revisionAtStart, current });
+        },
+
+        /*
+         * Record a RENDERER failure - the engine refusing the source, or the
+         * engine itself failing. The draft is untouched, and so is the last
+         * picture; only the state changes. A validation problem is NOT recorded
+         * here: it is part of the analysis, and deriving it twice would let the
+         * two disagree.
+         */
+        markFailed(error, revisionAtStart, { transient = false } = {}) {
+            const message = error instanceof Error ? error.message : String(error ?? "Rendering failed");
+
+            /*
+             * AN OLDER FAILURE NEVER REPLACES A NEWER STATE. A response for a
+             * revision the student has already moved past is dropped, exactly
+             * as an old success is.
+             */
+            if (
+                revisionAtStart !== null &&
+                revisionAtStart !== undefined &&
+                renderRevision !== null &&
+                revisionAtStart < renderRevision
+            ) {
+                return;
+            }
+
+            renderState = transient ? "pending" : "failed";
+            renderRevision = revisionAtStart ?? null;
+
+            if (!transient) {
+                lastError = message;
+                lastErrorRevision = revisionAtStart ?? null;
+            }
+
+            notify();
+            dispatch("datum:source-render-error", {
+                revision: revisionAtStart,
+                message,
+                transient
+            });
+        },
+
+        /* The render state was reset - a new document, a sheet load. */
+        resetRenderState() {
+            renderState = "idle";
+            renderRevision = null;
+            lastError = null;
+            lastErrorRevision = null;
+        },
+
+        /* ---------- saving ---------- */
+
+        /*
+         * The application's auto-save reports through here. Saving is
+         * INDEPENDENT of rendering: a draft that cannot render is still saved,
+         * because it is the student's work and is what they will reopen.
+         */
+        markSaving() {
+            saveStatus = "saving";
             notify();
         },
 
-        /* ---------- validation ---------- */
+        markSaved() {
+            dirty = false;
+            saveStatus = "saved";
+            saveError = null;
+            notify();
+            dispatch("datum:source-save-status", { status: "saved" });
+        },
 
-        validate() {
-            return validateDrawingSource(source);
+        markSaveFailed(error) {
+            saveStatus = "error";
+            saveError = error instanceof Error ? error.message : String(error ?? "The draft could not be saved");
+            notify();
+            dispatch("datum:source-save-status", { status: "error", message: saveError });
         },
 
         /* ---------- persistence ---------- */
 
         /*
-         * The state a saved document needs. The source travels as it is; the
-         * map does not, because it is derivable from the markers and a stored
-         * copy would be a second thing to keep in step.
+         * The state a saved document needs. The source travels as it is; the map,
+         * the analysis and the render state do not, because they are derivable
+         * and a stored copy would be a second thing to keep in step.
          */
         serialize() {
             return {
@@ -341,11 +620,11 @@ export function createSourceManager(initialSource) {
         },
 
         /*
-         * A drawing saved before the source existed has none. It is created
-         * empty rather than guessed at; the synchronization layer fills it from
-         * the objects when the sheet is first shown.
+         * A drawing saved before the source existed has none. It is created empty
+         * rather than guessed at; the synchronization layer fills it from the
+         * objects when the sheet is first shown.
          */
-        restore(saved) {
+        restore(saved, { origin = "load" } = {}) {
             const next = saved && typeof saved.source === "string" ? saved.source : emptyDrawingSource();
 
             source = next;
@@ -353,13 +632,20 @@ export function createSourceManager(initialSource) {
                 saved && typeof saved.renderedSource === "string" ? saved.renderedSource : next;
             dirty = Boolean(saved && saved.dirty);
             revision += 1;
-            lastError = null;
-            notify();
-        },
 
-        markSaved() {
-            dirty = false;
+            analysisRevision = null;
+            analysis = null;
+
+            renderState = "idle";
+            renderRevision = null;
+            lastError = null;
+            lastErrorRevision = null;
+
+            saveStatus = dirty ? "pending" : "saved";
+            saveError = null;
+
             notify();
+            announceSourceChanged(origin);
         },
 
         /* ---------- subscription ---------- */
@@ -368,6 +654,33 @@ export function createSourceManager(initialSource) {
             listeners.add(listener);
 
             return () => listeners.delete(listener);
+        },
+
+        /*
+         * Everything a status line or a test needs to describe the document,
+         * read as one consistent snapshot of the current revision.
+         */
+        snapshot() {
+            const parsed = analyse();
+
+            return {
+                revision,
+                source,
+                visibleSource: parsed.visible,
+                dirty,
+                saveStatus,
+                saveError,
+                renderStatus: manager.renderStatus(),
+                renderedRevision: renderRevision,
+                renderedSource,
+                lastError,
+                empty: parsed.validation.empty,
+                ok: parsed.validation.ok,
+                diagnostics: parsed.diagnostics,
+                blockCount: parsed.blocks.length,
+                skippedCount: parsed.skipped.length,
+                hasDrawableContent: parsed.hasDrawableContent
+            };
         }
     };
 
@@ -375,9 +688,9 @@ export function createSourceManager(initialSource) {
 }
 
 /*
- * The application's one live source manager. A module-level instance rather
- * than a singleton class, so tests can create their own and the application
- * shares one without a global.
+ * The application's one live source manager. A module-level instance rather than
+ * a singleton class, so tests can create their own and the application shares one
+ * without a global.
  */
 let activeManager = createSourceManager();
 

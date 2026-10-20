@@ -1,0 +1,10 @@
+{
+    "id":  "dynamics.dynamics-reference.coordinate-system",
+    "label":  "Coordinate System",
+    "category":  "dynamics",
+    "group":  "dynamics-reference",
+    "parentId":  "dynamics",
+    "libraryPath":  "src/tool-library/dynamics/dynamics-reference/coordinate-system",
+    "template":  "template.tex",
+    "implemented":  false
+}

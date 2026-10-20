@@ -23,6 +23,7 @@ import { renderEngineeringTools, setToolMessage } from "../../../components/layo
 import { cancelTrussConstruction } from "../statics/truss-tool.js";
 import { fitDrawingToView } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, cancelRouteConstruction } from "./pipe-duct-tool.js";
+import { formatDrawingSource } from "../commands/source-commands.js";
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -63,7 +64,6 @@ export function installKeyboardShortcuts() {
 
                 return;
             }
-
             if (
                 !editable &&
                 event.ctrlKey &&
@@ -253,6 +253,28 @@ export function installKeyboardShortcuts() {
 
                 renderProperties();
                 renderCurrentDrawing();
+
+                return;
+            }
+
+            /*
+             * FORMAT SOURCE, FROM ANYWHERE.
+             *
+             * Ctrl+Shift+F is not a browser binding and not a text-editing
+             * binding, so it works with the editor focused - which is where the
+             * student is when they want it. It is not conditional on a
+             * construction being idle: formatting the text cannot disturb a
+             * drawing in progress, because it changes no statement.
+             */
+            if (
+                event.ctrlKey &&
+                event.shiftKey &&
+                event.key.toLowerCase() ===
+                    "f"
+            ) {
+                event.preventDefault();
+
+                formatDrawingSource();
 
                 return;
             }

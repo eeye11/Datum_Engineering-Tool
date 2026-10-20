@@ -990,10 +990,24 @@
                         </section>
 
                         <!-- Source: the drawing's own LaTeX/TikZ. -->
-                        <section class="drawing-panel-pane" id="drawingPanelSource" role="tabpanel" aria-labelledby="drawingPanelTabSource" data-panel-pane="source" hidden>
-                            <div class="drawing-source-status" id="drawingSourceStatus">Rendered</div>
+                        <section class="drawing-panel-pane drawing-panel-pane-source" id="drawingPanelSource" role="tabpanel" aria-labelledby="drawingPanelTabSource" data-panel-pane="source" hidden>
+                            <!--
+                                THREE REGIONS, NEVER OVERLAPPING.
+
+                                The note is instructional and static; the editor takes
+                                the height that is left; the status bar sits BELOW the
+                                editor and is never part of its scroll area. The editor
+                                used to be the pane's only child with a negative margin
+                                and an absolutely-sized mirror, so it grew over the
+                                status line - which is why the bottom of the pane was
+                                unreadable.
+                            -->
+                            <p class="drawing-source-note" id="drawingSourceNote">Edit the source directly. Changes update the drawing automatically.</p>
                             <div class="drawing-source-editor" id="drawingSourceEditor"></div>
-                            <div class="drawing-source-diagnostics" id="drawingSourceDiagnostics" hidden></div>
+                            <div class="drawing-source-footer" id="drawingSourceFooter">
+                                <div class="drawing-source-status" id="drawingSourceStatus" role="status" aria-live="polite">Up to date</div>
+                                <div class="drawing-source-diagnostics" id="drawingSourceDiagnostics" hidden></div>
+                            </div>
                         </section>
                     </aside>
 

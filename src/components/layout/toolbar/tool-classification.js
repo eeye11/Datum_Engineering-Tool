@@ -212,7 +212,19 @@ export function isMultiStepTool(toolId) {
 export const CLICK_CLICK_TOOLS = [
     "line",
     "rectangle",
-    "circle"
+    "circle",
+
+    /*
+     * PIPE / DUCT KEEPS ITS CLICK TOO.
+     *
+     * A run is drawn by press-drag-release, so its TRAILING click has always to
+     * reach the router as "nothing" - and the router's construction branch only
+     * touches the geometry phase machine, which a run does not use. Treating a
+     * bare click on a run as the end of the tool is what keeps a path alive: the
+     * student's click after releasing a leg must neither place a run nor drop
+     * them out of the tool mid-path.
+     */
+    "pipe-duct"
 ];
 
 export function isClickClickTool(toolId) {

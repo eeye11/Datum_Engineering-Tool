@@ -30,6 +30,7 @@ import { staticsSourceWriter } from "./statics.js";
 import { annotationSourceWriter } from "./annotations.js";
 import { thermodynamicsSourceWriter } from "./thermodynamics.js";
 import { fluidsSourceWriter } from "./fluids.js";
+import { dynamicsSourceWriter } from "./dynamics.js";
 
 /*
  * The writers, in installation order. The synchronization layer asks the most
@@ -44,7 +45,23 @@ export const SOURCE_WRITERS = Object.freeze([
   { id: "geometry", writer: geometrySourceWriter },
   { id: "annotations", writer: annotationSourceWriter },
   { id: "thermodynamics", writer: thermodynamicsSourceWriter },
-  { id: "fluids", writer: fluidsSourceWriter }
+  { id: "fluids", writer: fluidsSourceWriter },
+
+  /*
+   * DYNAMICS LAST, SO IT IS ASKED FIRST.
+   *
+   * The synchronization layer consults the most recently installed writer
+   * before the others, and that is exactly what Dynamics needs: a Dynamics
+   * particle, a Dynamics rigid body, a Reference Line, a Reference Arc and a
+   * Coordinate System are all ordinary types at heart, so the Geometry and
+   * Statics writers would otherwise answer for them with their own code - and
+   * the symbol's own marks (the body's centre of mass, the reference's
+   * construction style) would be missing from the source.
+   *
+   * The Dynamics writer declines everything that is not a Dynamics object, so
+   * a Line drawn with the Line tool is still written by Geometry.
+   */
+  { id: "dynamics", writer: dynamicsSourceWriter }
 ]);
 
 /*

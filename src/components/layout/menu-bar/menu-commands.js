@@ -38,6 +38,7 @@ import {
 import { deleteSelectedObjects } from "../../../features/workspace/commands/delete-command.js";
 import { FILE_ACTIONS } from "../../../features/workspace/commands/document-commands.js";
 import { openLatexCodeEditor } from "../../../features/workspace/commands/latex-commands.js";
+import { formatDrawingSource } from "../../../features/workspace/commands/source-commands.js";
 import { fitDrawingToView } from "../workspace/viewport.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { activateTool } from "../toolbar/tool-activation.js";
@@ -73,7 +74,8 @@ const KEYS = {
     paste: "Ctrl+V",
     all: "Ctrl+A",
     fit: "Ctrl+0",
-    delete: "Del"
+    delete: "Del",
+    formatSource: "Ctrl+Shift+F"
 };
 
 /*
@@ -548,11 +550,24 @@ const toolsMenu = () => ({
             disabledReason: "Select a feature to inspect first",
             run: () => showSettings("inspect")
         },
+        { id: "shortcuts", label: "Keyboard Shortcuts\u2026", icon: "keyboard", run: () => showSettings("shortcuts") },
+
+        { separator: true },
+
+        /*
+         * FORMAT SOURCE.
+         *
+         * The one source-specific command. It is here - with the application's
+         * other tools - rather than as a button in the Source tab, because that
+         * is where every other command the student can run lives, and a tab with
+         * its own toolbar would be a second interface inside the panel.
+         */
         {
-            id: "shortcuts",
-            label: "Keyboard Shortcuts\u2026",
-            icon: "keyboard",
-            run: () => showSettings("shortcuts")
+            id: "format-source",
+            label: "Format Source",
+            icon: "align-left",
+            shortcut: KEYS.formatSource,
+            run: formatDrawingSource
         },
 
         { separator: true },

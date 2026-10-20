@@ -1,0 +1,10 @@
+{
+    "id":  "dynamics.dynamics-create.pulley",
+    "label":  "Pulley",
+    "category":  "dynamics",
+    "group":  "dynamics-create",
+    "parentId":  "dynamics.dynamics-create.mechanical-elements",
+    "libraryPath":  "src/tool-library/dynamics/dynamics-create/pulley",
+    "template":  "template.tex",
+    "implemented":  false
+}

@@ -4,13 +4,14 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDrawingRenderer from "../../../shared/rendering/renderer.js";
+import enggCanvasStroke from "../../../shared/rendering/canvas-stroke-constants.js";
 import { SVG_NAMESPACE } from "../../../features/workspace/constants.js";
 import { drawingCanvas, drawingZoomValue } from "../../../features/workspace/dom.js";
 import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { updateHistoryControls } from "../toolbar/tool-activation.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
-import { createSourceMap, visibleDrawingSource } from "../../../shared/rendering/latex/drawing-source.js";
+import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
 
@@ -74,6 +75,25 @@ let compileTimer = null;
 let compiledRevision = null;
 let lastCompiledSvg = null;
 let lastCompileError = null;
+
+/*
+ * WHAT KIND OF MESSAGE `lastCompileError` IS.
+ *
+ * A renderer failure (`true`) is the compiler refusing the source; a draft
+ * diagnostic (`false`) is the student's own unfinished statement. Only the
+ * first is answered by a picture arriving - see the clear in
+ * `compileCurrentSource`.
+ */
+let lastCompileErrorIsRendererFailure = true;
+
+/*
+ * WHETHER THE MESSAGE IN HAND IS ONLY A HINT.
+ *
+ * A draft diagnostic is advice about the text; a renderer failure is the reason
+ * the drawing would not build. A hint may be replaced by a real failure - but a
+ * real failure is never replaced, and a hint may not overwrite one either.
+ */
+let lastCompileErrorIsReplaceable = false;
 
 /*
  * WHAT EACH OBJECT LOOKED LIKE WHEN A SOURCE REVISION WAS WRITTEN.
@@ -718,33 +738,61 @@ function objectsThePictureDoesNotShow(pictureRevision, revision) {
  * STROKES ARE SHOWN AT SCREEN WIDTH, AS THE MODEL DREW THEM
  * ============================================================
  *
- * The compiled picture carries PRINT line widths: a normal line is 0.28pt
- * (`lineWidth` x 0.56). Scaled to the canvas that is about a quarter of a pixel,
- * which the browser paints as a pale smear - a drawn line was close to
- * invisible against the grid.
+ * The compiled picture carries PRINT line widths, in points, and the generator
+ * writes them as `lineWidth` x `SCREEN_PIXELS_PER_LINE_WIDTH` - the SAME number
+ * the model paints the stroke at (see `tikz-style.js` and
+ * `canvas-stroke-constants.js`, which owns the constant and the conversion).
  *
- * On the canvas each stroke is therefore drawn at the width the model renderer
- * always used for it (`lineWidth` x 2.4 px, never under 0.5 px), in screen pixels
- * via `non-scaling-stroke`, so it does not thin out as the student zooms out.
- * Only the copy in this layer is changed: the source, the saved `.tex` and every
- * export keep their print widths.
+ * So the two agree by construction, and this function's job is to keep them
+ * agreeing: it adopts the picture's stroke for the screen, never under a
+ * half-pixel, and pins it against zoom so a line does not thin out as the
+ * student zooms out. Nothing in the source, the saved `.tex` or an export is
+ * changed - the picture states one width and the sheet shows it at that width.
  */
-const PRINT_POINTS_PER_LINE_WIDTH = 0.56;
-const SCREEN_PIXELS_PER_LINE_WIDTH = 2.4;
-const MIN_SCREEN_STROKE_PX = 0.5;
+const MIN_SCREEN_STROKE_PX = enggCanvasStroke.MIN_SCREEN_STROKE_PX;
+
+void MIN_SCREEN_STROKE_PX;
+
+/*
+ * THE WIDTH A COMPILED STROKE IS SHOWN AT, given what the picture states.
+ *
+ * THE PICTURE STATES THE WIDTH IN PT, AND ONE PT IS ONE SCREEN PIXEL HERE.
+ *
+ * The generated source writes `lineWidth x SCREEN_PIXELS_PER_LINE_WIDTH` pt, so
+ * showing a stroke at that same number of pixels makes the compiled picture look
+ * exactly like the object the model configured - which is what this function
+ * enforces, and what the canvas everywhere else already assumes (one drawing
+ * unit is one base pixel, per `BASE_PIXELS_PER_UNIT`).
+ *
+ * WHY NOT CONVERT PT TO PX THROUGH 72.27/25.4. That was tried, and it is wrong
+ * in the other direction: it makes the compiled picture 2.85 times heavier than
+ * the model's own overlay, so a line jumps weight the moment its compile lands.
+ * The picture is a DRAWING, not a page of print, and its strokes are shown at
+ * their stated size.
+ *
+ * A SOURCE WRITTEN BEFORE THE CONVERSION WAS FIXED is in an exported file or an
+ * old draft: its widths were `lineWidth x 0.56`. Those cannot be told apart from
+ * a deliberately very thin stroke by their value alone, so they are shown as
+ * stated - slightly thin, never invisible - until the object is next edited and
+ * its source regenerated at the current width.
+ */
+function shownStrokeWidth(printWidth) {
+    const width = Number(printWidth);
+
+    if (!Number.isFinite(width) || width <= 0) {
+        return null;
+    }
+
+    return Math.max(MIN_SCREEN_STROKE_PX, width);
+}
 
 function showStrokesAtScreenWidth(layer) {
     layer.querySelectorAll("[stroke-width]").forEach((element) => {
-        const printWidth = Number.parseFloat(element.getAttribute("stroke-width"));
+        const screenWidth = shownStrokeWidth(element.getAttribute("stroke-width"));
 
-        if (!Number.isFinite(printWidth) || printWidth <= 0) {
+        if (screenWidth === null) {
             return;
         }
-
-        const screenWidth = Math.max(
-            MIN_SCREEN_STROKE_PX,
-            (printWidth / PRINT_POINTS_PER_LINE_WIDTH) * SCREEN_PIXELS_PER_LINE_WIDTH
-        );
 
         element.setAttribute("stroke-width", String(Number(screenWidth.toFixed(3))));
         element.setAttribute("vector-effect", "non-scaling-stroke");
@@ -767,20 +815,32 @@ function showStrokesAtScreenWidth(layer) {
  * answer is already known and the compile is never going to be sent.
  */
 if (typeof globalThis.document !== "undefined" && globalThis.document) {
+    /*
+     * ============================================================
+     * A SOURCE CHANGE CLEARS AN OLDER COMPILER MESSAGE - NOTHING ELSE
+     * ============================================================
+     *
+     * "lastCompileError" is THE COMPILER'S ANSWER about the picture. It is what
+     * "is the drawing showing a failure?" means, and the only things that may
+     * write it are a compile: its rejection, or its success.
+     *
+     * IT IS NOT THE PLACE FOR A DRAFT HINT. "This command is unfinished" is a
+     * statement about the text in the editor, made by the parser before any
+     * compile runs. Recording it here made the drawing report a failure the
+     * compiler never gave, kept the message after the compiler had spoken, and -
+     * because a revision known to fail is not re-sent - stopped later revisions
+     * from rendering at all. The Source tab shows draft diagnostics itself, from
+     * the manager's analysis, where they belong; the canvas reports only what
+     * the renderer said.
+     *
+     * What IS cleared here is an answer about OLDER text: the draft has changed,
+     * so a message from a previous revision describes something no longer on
+     * screen. The compile now scheduled for this revision answers for it.
+     */
     globalThis.document.addEventListener("datum:source-changed", () => {
-        const manager = activeSourceManager();
-        const validation = validateDrawingSource(manager.getSource());
-
-        if (!validation.ok) {
-            reportCompileError(
-                validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
-                    "Invalid TikZ source"
-            );
-
-            return;
-        }
-
         lastCompileError = null;
+        lastCompileErrorIsRendererFailure = true;
+        lastCompileErrorIsReplaceable = false;
     });
 }
 
@@ -796,14 +856,73 @@ function rememberPicture(revision, svg) {
     }
 }
 
-function reportCompileError(message) {
-    const text = message instanceof Error ? message.message : String(message ?? "");
+/*
+ * A FAILURE IS REPORTED WITH THE REVISION IT BELONGS TO.
+ *
+ * The revision is what makes a stale report impossible. A failure of revision 7
+ * that arrives after the student has reached revision 9 describes text that is
+ * no longer on screen, so it is dropped - and a success at revision 9 clears the
+ * message outright. Without the revision, the Source tab could be shown an
+ * error for a draft that had already been corrected, which is precisely the
+ * "error that does not make sense" this pipeline used to produce.
+ */
+function reportCompileError(revisionOrMessage, maybeMessage, { kind = "renderer", replaceable = false } = {}) {
+    const revision = typeof revisionOrMessage === "number" ? revisionOrMessage : null;
+    const raw = typeof revisionOrMessage === "number" ? maybeMessage : revisionOrMessage;
+    const text = raw instanceof Error ? raw.message : String(raw ?? "");
+
+    /*
+     * AN OLDER REVISION'S FAILURE IS NOT NEWS. The draft it was about has been
+     * replaced, so the message is dropped rather than shown beside newer code.
+     */
+    if (revision !== null && revision < activeSourceManager().revision()) {
+        return;
+    }
 
     if (text === lastCompileError) {
         return;
     }
 
+    /*
+     * A HINT AND A FAILURE ARE NOT INTERCHANGEABLE.
+     *
+     * A hint ("this command is unfinished") may be replaced by a real failure -
+     * the compiler's message is the specific reason the drawing would not build,
+     * and it is what names the actual fault. It may NOT replace one: a hint shown
+     * over a compiler message hides the diagnostic the student needs, and the
+     * compiler is the only thing that knows what TeX objected to.
+     *
+     * A real failure never replaces another real failure either: two complaints
+     * about one draft are two facts, and the first is the one that stopped it.
+     */
+    const incomingIsHint = kind === "draft";
+
+    /* A hint may not hide a real failure. */
+    if (incomingIsHint && lastCompileError && lastCompileErrorIsRendererFailure) {
+        return;
+    }
+
+    /* A real failure replaces a hint, and is never replaced by another failure. */
+    if (
+        !incomingIsHint &&
+        lastCompileError &&
+        !lastCompileErrorIsRendererFailure &&
+        !lastCompileErrorIsReplaceable
+    ) {
+        return;
+    }
+
     lastCompileError = text;
+    lastCompileErrorIsRendererFailure = !incomingIsHint;
+
+    /*
+     * A HINT IS ALWAYS A HINT, whether or not the caller said so.
+     *
+     * `replaceable` is what a REAL failure uses to say "a later, better message
+     * may supersede me". A hint is replaceable by definition, so it is marked as
+     * such however it was reported.
+     */
+    lastCompileErrorIsReplaceable = Boolean(replaceable) || incomingIsHint;
 
     /*
      * The error is VISIBLE, through the same document event the Source tab
@@ -871,7 +990,22 @@ function isTransientFailure(error) {
 function adoptCachedPicture(revision) {
     compiledRevision = revision;
     lastCompiledSvg = cachedPicture(revision);
-    lastCompileError = null;
+
+    /*
+     * A DRAFT DIAGNOSTIC OUTLIVES THE PICTURE.
+     *
+     * This compile was of the RECOVERED input - the unfinished statement was a
+     * comment in it - so it succeeded, and a successful render must clear a
+     * RENDERER failure. It must not clear a problem in the draft: the line the
+     * student typed is still unfinished, and the message about it is still true.
+     * Clearing it here is how the report appeared for a moment and then vanished
+     * while the red line stayed on screen.
+     */
+    if (lastCompileErrorIsRendererFailure || lastCompileErrorIsReplaceable) {
+        lastCompileError = null;
+        lastCompileErrorIsRendererFailure = true;
+        lastCompileErrorIsReplaceable = false;
+    }
 }
 
 /*
@@ -976,7 +1110,20 @@ async function compileCurrentSource() {
 
     scheduledRevision = null;
 
-    const validation = validateDrawingSource(source);
+    /*
+     * THE RENDER INPUT, NOT THE DRAFT.
+     *
+     * Every unfinished statement is replaced by a comment in the text handed to
+     * the renderer, so a single half-typed command in an otherwise good drawing
+     * does not stop the compiler at it and return nothing. The student's own
+     * text is untouched; the picture is the drawing as far as it is complete.
+     *
+     * What is left for the validation to reject is a document that cannot be
+     * rendered AT ALL - there is no picture and no commands, or the picture
+     * itself is broken.
+     */
+    const renderText = manager.renderInput();
+    const validation = validateDrawingSource(renderText);
 
     if (!validation.ok) {
         /*
@@ -984,9 +1131,13 @@ async function compileCurrentSource() {
          * picture stays, and the reason is reported.
          */
         failedRevision = revision;
+        manager.markFailed(
+            validation.diagnostics.find((entry) => entry.severity === "error")?.message || "Invalid TikZ source",
+            revision
+        );
         reportCompileError(
-            validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
-                "Invalid TikZ source"
+            revision,
+            validation.diagnostics.find((entry) => entry.severity === "error")?.message || "Invalid TikZ source"
         );
 
         return false;
@@ -1008,7 +1159,9 @@ async function compileCurrentSource() {
          * THE TEXT COMPILED IS THE TEXT THE SOURCE TAB SHOWS - the marker-free
          * visible form of this revision, nothing regenerated from the model.
          */
-        const svg = await renderDrawingSource(visibleDrawingSource(source), { anchorOrigin: true });
+        manager.markRendering(revision);
+
+        const svg = await renderDrawingSource(renderText, { anchorOrigin: true });
 
         if (startedIn !== generation) {
             compileWhatIsCurrent();
@@ -1036,6 +1189,22 @@ async function compileCurrentSource() {
         adoptCachedPicture(revision);
 
         manager.markRendered(source, revision);
+
+        /*
+         * A SUCCESSFUL COMPILE CLEARS A RENDERER FAILURE AND A HINT.
+         *
+         * A compiler complaint is answered by the picture that compiled, so it
+         * goes. A DRAFT HINT ("this command is unfinished") is about the text the
+         * student is looking at, and the compile succeeding did not fix it - so it
+         * is also cleared only when the hint no longer applies, which the
+         * source-changed handler re-decides.
+         */
+        if (lastCompileErrorIsRendererFailure || lastCompileErrorIsReplaceable) {
+            lastCompileError = null;
+            lastCompileErrorIsRendererFailure = true;
+            lastCompileErrorIsReplaceable = false;
+        }
+
         renderCurrentDrawing();
         announceRendered(revision);
 
@@ -1077,15 +1246,31 @@ async function compileCurrentSource() {
                 compileCurrentSource();
             }, delay);
 
-            reportCompileError(error);
+            /*
+             * AND NOTHING IS REPORTED TO THE STUDENT. A service that is down or
+             * answering 405 is not something they can act on in their source,
+             * and putting "the renderer returned an error (405)" beside their
+             * code reads as a problem with the code. The retry is scheduled
+             * above; the status bar shows "Updating" until it succeeds. A REAL
+             * rejection - the compiler refusing the TikZ - takes the branch
+             * below and IS reported.
+             */
+            manager.markFailed(error, revision, { transient: true });
 
             return false;
         }
 
         failedRevision = revision;
 
-        manager.markFailed(error);
-        reportCompileError(error);
+        /*
+         * AN ENGINE FAILURE, REPORTED AS ONE. The message is the renderer's own,
+         * the revision is recorded with it, and the last picture that worked
+         * stays on the canvas - so a failure of the engine is never presented as
+         * "every line of your source is wrong", which is what marking each
+         * statement invalid would amount to.
+         */
+        manager.markFailed(error, revision);
+        reportCompileError(revision, error);
 
         /*
          * The last picture that worked stays on screen. Nothing is drawn in
@@ -1228,9 +1413,21 @@ export function renderCurrentDrawing() {
      * never a picture compiled from a DIFFERENT source left there by an earlier
      * sheet or document.
      */
-    const currentValid = validateDrawingSource(manager.getSource()).ok;
-
-    const picture = cachedPicture(revision) || (currentValid ? lastCompiledSvg : null);
+    /*
+     * THE PICTURE STAYS WHILE THE DRAFT IS BEING EDITED.
+     *
+     * It used to be dropped for a draft that failed to VALIDATE - so a source
+     * being typed at, or one with a single unfinished statement, lost the whole
+     * drawing until it was corrected. The drawing is the last thing that
+     * compiled; a draft being edited says nothing about whether that picture is
+     * still the best one to show, and blanking it is the "whole drawing
+disappeared while I typed" failure.
+     *
+     * What this still refuses is showing ANOTHER document's picture: the cache
+     * is cleared when a sheet is loaded (see `resetSourcePictureCache`), so a
+     * surviving entry always belongs to this document.
+     */
+    const picture = cachedPicture(revision) || lastCompiledSvg;
 
     rememberModelAt(revision);
 

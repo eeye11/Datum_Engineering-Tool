@@ -76,11 +76,14 @@ import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool } 
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
-import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
+import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
+import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import { objectAtPoint, hitTestAnnotateTarget } from "./hit-testing.js";
+import { isClickClickTool, isMultiStepTool } from "../../../components/layout/toolbar/tool-classification.js";
 import {
     ROUTE_PHASE,
     commitRouteSegment,
@@ -470,13 +473,28 @@ export function beginCreationDrag(
             pressResolution: annotateArmed
                 ? null
                 : resolvePointerEvent(event),
-            startScreen: {
-                x: event.clientX,
-                y: event.clientY
-            },
-            moved: false,
-            onExisting: annotateOnExisting
-        };
+                startScreen: {
+                    x: event.clientX,
+                    y: event.clientY
+                },
+
+                moved: false,
+
+                /*
+                 * WHERE THE PRESS LANDED, IN MODEL COORDINATES.
+                 *
+                 * A click that never travels asks ONE question on release: was there
+                 * something under the pointer? That is answered against the raw model
+                 * position the press had - not a snapped one, which could have pulled
+                 * the answer onto a feature the student did not aim at. See
+                 * finishCreationClick.
+                 */
+                pressPoint: annotateArmed
+                    ? null
+                    : resolvePointerEvent(event).rawPointerPoint,
+
+                onExisting: annotateOnExisting
+            };
 
         return true;
     }
@@ -521,6 +539,12 @@ export function beginCreationDrag(
                 y: event.clientY
             },
             moved: false,
+            pressPoint: pressPoint
+                ? {
+                      x: pressPoint.x,
+                      y: pressPoint.y
+                  }
+                : null,
             committedCount:
                 Number(drawingState.interaction.routeCommittedCount) || 0
         };
@@ -552,6 +576,13 @@ export function beginCreationDrag(
             },
             moved: false,
             onExisting,
+            pressPoint: (() => {
+                const raw = resolvePointerEvent(event).rawPointerPoint;
+
+                return raw
+                    ? { x: raw.x, y: raw.y }
+                    : null;
+            })(),
             singlePointTool: drawingState.activeTool,
             pressResolution: null
         };
@@ -651,6 +682,14 @@ export function beginCreationDrag(
         moved: false,
 
         /*
+         * THE RAW PRESS POSITION, for a click that never travels. See
+         * finishCreationClick.
+         */
+        pressPoint: startsHere
+            ? (resolvePointerEvent(event).rawPointerPoint || null)
+            : null,
+
+        /*
          * THE PRESS LANDED ON AN EXISTING FEATURE. It is not a decision, only
          * a note: the drag path uses it so a press that never travels is left
          * to the click pipeline (which selects that feature), while a press
@@ -672,7 +711,115 @@ export function beginCreationDrag(
  * getting it wrong in the large direction makes a short drag need a second
  * click.
  */
-const DRAG_THRESHOLD_PX = 4;
+export const DRAG_THRESHOLD_PX = 4;
+
+/*
+ * ========================================================
+ * A BARE CLICK WITH A DRAG TOOL LEAVES THE TOOL
+ * ========================================================
+ *
+ * The ONE rule every creation tool shares:
+ *
+ *     press, drag, release on empty canvas   -> create the feature
+ *     press, release without travel          -> back to Select, create nothing
+ *     press on an existing feature, no drag  -> back to Select, select it
+ *
+ * A drag tool's gesture is already classified on release (see
+ * finishCreationDrag); what was missing was the second half. A bare click used
+ * to fall through to `handleCanvasClick`, which for a two-point tool read it as
+ * the FIRST POINT of click-move-click - so the tool stayed armed and a second
+ * click (or no click at all) was needed to get out of it.
+ *
+ * The decision belongs here, beside the threshold and the session that knows
+ * how far the pointer travelled, rather than in the click router: the tool, the
+ * gesture and the thing under the pointer are all facts this module already
+ * owns, and the router can stay a list of tool-specific rules.
+ *
+ * WHAT IS DELIBERATELY NOT INCLUDED
+ * ---------------------------------
+ *   - a press that TRAVELLED is a drag. It is never read as a click, however
+ *     briefly the pointer pauses before the release.
+ *   - a tool with an EXPLICIT REQUIRED INPUT (a dimension collecting
+ *     references, a Label or a Leader attaching to a feature, a Resultant
+ *     being told which force) is not a drag tool at all, so it never reaches
+ *     here - see `isDragCreationTool`.
+ *   - a construction that is PART-WAY through its own steps (a Triangle after
+ *     its first corner, an Arc after its centre, a load after its span) is not
+ *     abandoned: those steps are real decisions, and Escape is the established
+ *     way to give them up.
+ */
+export function finishCreationClick(session) {
+    /*
+     * The caller has read the session out of `editorState` and cleared it.
+     * Without one there was no press with a creation tool, so there is nothing
+     * to reinterpret.
+     */
+    if (
+        !session ||
+        session.moved ||
+        session.pipeDuct ||
+        session.singlePointTool
+    ) {
+        return false;
+    }
+
+    /*
+     * THE DECISION IS ONLY FOR A TOOL THAT DRAWS WITH A GESTURE. A tool that
+     * places a point, or that is mid-way through several points, keeps the
+     * click it was given.
+     */
+    if (
+        !isDragCreationTool(
+            drawingState.activeTool
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        isClickClickTool(
+            drawingState.activeTool
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        isMultiStepTool(
+            drawingState.activeTool
+        ) &&
+        drawingState.interaction.phase !==
+            "idle"
+    ) {
+        return false;
+    }
+
+    /*
+     * A CLICK, NOT A DRAG: the canvas goes back to Select. The point under the
+     * pointer is chosen against the RAW position through the shared hit test, so
+     * a click on a feature selects it and a click on nothing clears the
+     * selection - exactly what the same click would do with Select active.
+     */
+    const hit =
+        session.pressPoint
+            ? objectAtPoint(
+                  session.pressPoint
+              )
+            : null;
+
+    activateTool("select");
+
+    enggDrawingState.selectObject(
+        drawingState,
+        hit ? hit.id : null
+    );
+
+    renderProperties();
+    renderFeatures();
+    renderCurrentDrawing();
+
+    return true;
+}
 
 /*
  * Track how far the pointer has travelled during a creation press - and, the
@@ -858,11 +1005,10 @@ export function moveCreationDrag(event) {
  *                       gesture that says both ends, so the feature is
  *                       committed at the released point.
  *
- *   THE POINTER DID NOT  the student simply CLICKED. That is the FIRST CLICK
- *                       of a click-move-click construction, and it must NOT
- *                       commit anything: the feature is left waiting, its
- *                       preview already following the cursor, and the next
- *                       click supplies the second point.
+ *   THE POINTER DID NOT  the student simply CLICKED. For a tool that draws
+ *                       with a gesture that is not a creation at all: it
+ *                       returns to Select, selecting whatever was under the
+ *                       press - see finishCreationClick.
  *
  * WITHOUT THE DISTINCTION the two workflows cannot both exist. The press
  * started the feature and armed this session, so a plain click was completed on
@@ -875,9 +1021,10 @@ export function moveCreationDrag(event) {
  * endpoint is committed exactly as it was previewed.
  *
  * Returns true when this release owned the gesture, so the trailing
- * click is swallowed rather than read as a new first point. A CLICK that
- * did not move is NOT swallowed: it is the first point, and the browser's
- * own click for it must reach the construction pipeline untouched.
+ * click is swallowed rather than read as a new first point. A CLICK with a
+ * tool that keeps its click workflow is NOT swallowed: it is that tool's own
+ * next step, and the browser's click for it must reach the click router
+ * untouched.
  */
 export function finishCreationDrag(
     event
@@ -887,6 +1034,22 @@ export function finishCreationDrag(
 
     if (!session) {
         return false;
+    }
+
+    /*
+     * A CLICK WITH A DRAG TOOL LEAVES THE TOOL.
+     *
+     * Read BEFORE the session is dropped, because the decision is made from the
+     * gesture the session recorded. The event's trailing click is CONSUMED - it
+     * has been answered here, and must not also be read as a first point or as a
+     * fresh selection - so true is returned and the caller sets the consumed
+     * flag.
+     */
+    if (
+        !session.moved &&
+        finishCreationClick(session)
+    ) {
+        return true;
     }
 
     editorState.creationDrag = null;

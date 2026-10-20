@@ -21,8 +21,14 @@
  * the code and the picture at different scales.
  */
 
-import { resolveLineWidth } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
-import enggTheme from "../../../../components/layout/workspace/theme.js";
+import {
+  DEFAULT_STROKE,
+  colourName as sharedColourName,
+  colourDefinition as sharedColourDefinition,
+  strokeOptions as sharedStrokeOptions,
+  fillOptions as sharedFillOptions,
+  unique as sharedUnique,
+} from "../../../../tool-library/shared/primitives/tikz-style.js";
 
 /* ============================================================
  * NUMBERS AND COORDINATES
@@ -40,8 +46,116 @@ export function num(value, precision = 4) {
     return String(Object.is(rounded, -0) ? 0 : rounded);
 }
 
+/*
+ * THE EXPORT TRANSFORM IN EFFECT FOR THE OBJECT BEING SERIALIZED.
+ *
+ * The serializers are written in terms of `point(x, y)` with MODEL coordinates,
+ * because that is the geometry they read. The export reduces the whole drawing
+ * and shifts it to a local origin, so the transform is threaded in here - one
+ * place - rather than added to every coordinate expression in every serializer.
+ *
+ * It is set for the duration of ONE object's serialization and restored after,
+ * so it can never leak between objects or into a second pass over the same
+ * drawing. That is what makes repeated generation idempotent: each call starts
+ * from the model's own coordinates and applies the factor once.
+ *
+ * With no transform (or the identity one) `point` writes the coordinates it was
+ * given, unchanged.
+ */
+let exportTransformInEffect = null;
+
+/* Run `fn` with one object's export transform in effect. */
+export function withExportTransform(transform, fn) {
+    const previous = exportTransformInEffect;
+
+    exportTransformInEffect = transform && typeof transform.point === "function" ? transform : null;
+
+    try {
+        return fn();
+    } finally {
+        exportTransformInEffect = previous;
+    }
+}
+
+/* The transform currently in effect, for a writer that needs its factor. */
+export function currentExportTransform() {
+    return exportTransformInEffect;
+}
+
+/*
+ * A MODEL COORDINATE, WRITTEN IN EXPORT SPACE.
+ *
+ * The serializers compute everything in MODEL space - that is where the object's
+ * own coordinates live - and hand the result here. This is the ONE place a model
+ * coordinate becomes an exported one, so the transform is applied exactly once:
+ * here, not also in `pointOf` and not again in a caller.
+ *
+ * LENGTHS are different: a radius, a symbol's offset or an arrow's reach has no
+ * origin and is multiplied by the factor without being shifted. They go through
+ * `symbolSize` / `currentExportTransform().length`, never through this.
+ */
 export function point(x, y) {
-    return `(${num(x)},${num(y)})`;
+    const px = Number(x);
+    const py = Number(y);
+
+    const at = exportTransformInEffect
+        ? exportTransformInEffect.point(Number.isFinite(px) ? px : 0, Number.isFinite(py) ? py : 0)
+        : { x: Number.isFinite(px) ? px : 0, y: Number.isFinite(py) ? py : 0 };
+
+    return `(${num(at.x)},${num(at.y)})`;
+}
+
+/* A model point, in export space - for a caller that needs the numbers. */
+export function exportPoint(candidate) {
+    const x = Number(candidate?.x) || 0;
+    const y = Number(candidate?.y) || 0;
+
+    return exportTransformInEffect ? exportTransformInEffect.point(x, y) : { x, y };
+}
+
+/*
+ * ============================================================
+ * SKETCH STROKES - ONE WRITER FOR EVERY TOOL THAT CARRIES THEM
+ * ============================================================
+ *
+ * An SFD, BMD or AFD can hold hand-drawn strokes; a Resultant holds the same
+ * kind of thing (its vector triangle, its closing line). All of them are
+ * `{ kind, start, bend, end, points }` records in GRAPH-LOCAL or MODEL space,
+ * and all of them must reach the source in the same way - otherwise one tool's
+ * sketch is drawn on the sheet and missing from TeX, which is exactly the
+ * failure this module exists to prevent.
+ *
+ * The caller supplies `toModel`, the projection from an element's own points to
+ * MODEL space (the transform in effect converts model space to export space),
+ * and the points an element is drawn through (`pointsOf`). The path is written
+ * as a polyline through those points - the same shape the canvas draws - so a
+ * `curve3` becomes the two-segment quadratic it is on screen and a legacy
+ * many-point curve its chain of segments.
+ *
+ * Returns one command per element (or null for an element with no drawable
+ * extent), and never invents a stroke: an empty list writes nothing.
+ */
+export function sketchStrokeCommands(elements, { pointsOf, toModel, options }) {
+    const list = Array.isArray(elements) ? elements : [];
+    const commands = [];
+
+    list.forEach((element) => {
+        const local = pointsOf(element);
+
+        if (!Array.isArray(local) || local.length < 2) {
+            return;
+        }
+
+        const placed = local.map((at) => toModel(at));
+
+        const body = placed
+            .map((at, index) => (index === 0 ? point(at.x, at.y) : `-- ${point(at.x, at.y)}`))
+            .join(" ");
+
+        commands.push(`\\draw[${options.join(", ")}] ${body};`);
+    });
+
+    return commands;
 }
 
 /* ============================================================
@@ -55,6 +169,7 @@ export function point(x, y) {
  * same name wherever it appears.
  */
 export const BLACK_HEX = "193335";
+
 export function normaliseHex(value) {
     const text = String(value ?? "").trim();
 
@@ -84,43 +199,24 @@ export function colourName(value) {
         return null;
     }
 
-    const hex = normaliseHex(text);
-
-    if (!hex) {
-        return text;
-    }
-
-    if (hex === "000000") {
-        return "black";
-    }
-
-    if (hex === "FFFFFF") {
-        return "white";
-    }
-
-    return `daetumC${hex}`;
+    return sharedColourName(text, { fallback: DEFAULT_STROKE });
 }
 
 /*
+ * The definitions one list of hex values needs, as `\definecolor` lines. Used by
+ * the export to lift the picture's colours into the preamble.
+ */
+/*
  * A `\definecolor` line for one hex colour.
  *
- * THE RGB MODEL, NOT HTML. DAETUM's renderer (TikZJax) loads xcolor without
- * the `x11names`/`svgnames` families, and with a bare xcolor its HTML model is
- * not available - so `{HTML}` compiles in a full TeX Live installation and
- * fails in the renderer the Source tab actually uses. `{RGB}` is a CORE model
- * of xcolor, so one spelling works in both. The channels are the R, G and B
- * of the same hex value, so the colour is the one the canvas shows.
+ * THE RGB MODEL, NOT HTML. DAETUM's renderer (TikZJax) loads xcolor without the
+ * `x11names`/`svgnames` families, and with a bare xcolor its HTML model is not
+ * available - so `{HTML}` compiles in a full TeX Live installation and fails in
+ * the renderer the Source tab actually uses. `{RGB}` is a CORE model of xcolor,
+ * so one spelling works in both.
  */
 export function colourDefinition(name, hex) {
-    const digits = normaliseHex(`#${hex}`);
-
-    if (!digits) {
-        return null;
-    }
-
-    const channels = [0, 2, 4].map((at) => parseInt(digits.slice(at, at + 2), 16));
-
-    return `\\definecolor{${name}}{RGB}{${channels.join(",")}}`;
+    return sharedColourDefinition(name, `#${String(hex ?? "").replace(/^#/, "")}`);
 }
 
 export function colourDefinitions(values) {
@@ -138,24 +234,27 @@ export function colourDefinitions(values) {
 }
 
 /*
- * The colour of a feature, in the order the canvas reads it: the explicit
- * stroke, then the theme's default line colour, then black. A fill that is
- * `none` never becomes a colour.
+ * The colour of a feature: the student's own stroke, or BLACK.
+ *
+ * THEME INK IS NOT PART OF THE DRAWING. `theme.defaultLineColour()` is how a new
+ * object STARTS, and writing it here made every un-chosen line a dark teal in
+ * TeX while the sheet showed black - and made a saved file's colour depend on
+ * the interface theme. Black is what the document is made of.
  */
 export function colourOf(style, key = "stroke") {
     const value = style?.[key];
 
     if (key === "fill") {
-        if (String(style?.fillMode ?? "").toLowerCase() !== "solid") {
-            return null;
-        }
+        const fill = sharedFillOptions({
+            fillMode: style?.fillMode,
+            fill: value,
+            stroke: style?.stroke,
+        });
 
-        const fill = colourName(value && value !== "none" ? value : style?.stroke);
-
-        return fill || "black";
+        return fill.option ? fill.option.replace(/^fill=/, "") : null;
     }
 
-    return colourName(value) || colourName(enggTheme?.defaultLineColour?.()) || "black";
+    return colourName(value) || "black";
 }
 
 /* ============================================================
@@ -168,67 +267,50 @@ export function colourOf(style, key = "stroke") {
  * appears in a document preamble.
  */
 export function styleOptions(style = {}, fillMode = null) {
-    const options = [];
-    const prelude = [];
+    /*
+     * THE PEN IS WRITTEN AT THE EXPORT SCALE, through the shared conversion.
+     * `style` holds the NOMINAL width the student chose; the transform in effect
+     * contributes the one factor it gets, and so does the dash pattern.
+     */
+    const { options, definitions } = sharedStrokeOptions(style || {}, {
+        transform: exportTransformInEffect,
+    });
 
-    const stroke = colourName(style?.stroke);
+    /*
+     * THE FILL IS THIS MODULE'S OWN second argument, which some callers pass as
+     * "fill" rather than setting the style's fill mode. It is folded into one
+     * style before the shared conversion answers for it.
+     */
+    const wantsFill =
+        String(fillMode ?? "").toLowerCase() === "fill" ||
+        String(style?.fillMode ?? "").toLowerCase() === "solid";
 
-    if (String(style?.stroke ?? "").toLowerCase() === "none" || style?.draw === false) {
-        options.push("draw=none");
-    } else if (stroke) {
-        const hex = normaliseHex(style.stroke);
+    const fill = wantsFill
+        ? sharedFillOptions({ ...style, fillMode: "solid" })
+        : { option: null, definitions: [] };
 
-        if (hex && hex !== "000000" && hex !== "FFFFFF") {
-            prelude.push(colourDefinition(`daetumC${hex}`, hex));
-        }
-
-        options.push(`draw=${stroke}`);
+    if (fill.option) {
+        options.push(fill.option);
     }
 
-    const width = resolveLineWidth(style?.lineWidth);
+    /*
+     * THE DEFINITIONS TRAVEL IN FRONT OF THE OPTIONS, so a caller can put the
+     * list straight behind `\draw[...]`. They are `\definecolor` lines, not
+     * options, and `splitPrelude` takes them back out - a `\definecolor` inside
+     * an option list would be invalid TikZ.
+     *
+     * A caller that REPLACES a colour (a filled marker writing `draw=none` and
+     * its own `fill=`) merges the original DEFINITIONS with its replacement
+     * options and de-duplicates the result, so one `\definecolor` per colour is
+     * what reaches the command - never the same definition twice.
+     */
+    return uniqueList([...definitions, ...fill.definitions, ...options]);
+}
 
-    if (Number.isFinite(width) && width > 0) {
-        options.push(`line width=${num(width * 0.56, 3)}pt`);
-    }
-
-    const lineType = String(style?.lineType ?? "").toLowerCase();
-
-    if (lineType === "dashed") {
-        options.push("dashed");
-    } else if (lineType === "dotted") {
-        options.push("dotted");
-    } else if (lineType === "center") {
-        options.push("dash pattern=on 4pt off 2pt on 1pt off 2pt");
-    } else if (lineType === "construction") {
-        options.push("dash pattern=on 1pt off 2pt", "gray");
-    }
-
-    if (fillMode === "fill" || String(style?.fillMode ?? "").toLowerCase() === "solid") {
-        const fill = colourOf(style, "fill");
-
-        if (fill) {
-            const hex = normaliseHex(style?.fill && style.fill !== "none" ? style.fill : style?.stroke);
-
-            if (hex && hex !== "000000" && hex !== "FFFFFF") {
-                prelude.push(colourDefinition(`daetumC${hex}`, hex));
-            }
-
-            options.push(`fill=${fill}`);
-        }
-    }
-
-      /*
-       * THE DEFINITIONS TRAVEL IN FRONT OF THE OPTIONS, so a caller can put the
-       * list straight behind `\draw[...]`. They are `\definecolor` lines, not
-       * options, and `splitPrelude` takes them back out - a `\definecolor` inside
-       * an option list would be invalid TikZ.
-       */
-      if (prelude.length) {
-        options.unshift(...[...new Set(prelude)]);
-      }
-
-      return options;
-    }
+/* Remove repeated options, keeping the first occurrence's position. */
+function uniqueList(values) {
+    return sharedUnique(values || []);
+}
 
 /*
  * Split an option list into its `\definecolor` prelude and its options, so a
@@ -869,7 +951,19 @@ function defaultLabel(object) {
  * One label node beside an anchor, kept clear of the feature by `offset`.
  */
 function labelNode({ at, text, colour, font, anchor }) {
-    return `\\node[anchor=${anchor || "south"}, text=${colour}, font=\\fontsize{${num(font, 2)}}{${num(font * 1.2, 2)}}\\selectfont] at ${point(at.x, at.y)} {${text}};`;
+    /*
+     * THE LABEL'S SIZE FOLLOWS THE EXPORT, WITH A READABLE FLOOR.
+     *
+     * `font` is the NOMINAL size the object's style chose. A figure reduced to
+     * 35% would otherwise print a 9pt label at 3.1pt - present and unreadable -
+     * so the export context applies its floor (6pt by default). The leading is
+     * stated as a multiple of the size actually used, so the two always agree.
+     * The object's own font setting is never changed.
+     */
+    const transform = exportTransformInEffect;
+    const size = transform ? transform.font(font) : font;
+
+    return `\\node[anchor=${anchor || "south"}, text=${colour}, font=\\fontsize{${num(size, 2)}}{${num(size * 1.2, 2)}}\\selectfont] at ${point(at.x, at.y)} {${text}};`;
 }
 
 /* A force's own label and its magnitude, kept apart. */
@@ -1380,6 +1474,8 @@ export function sourceMapFor(lines, id) {
 export default {
     num,
     point,
+    exportPoint,
+    sketchStrokeCommands,
     normaliseHex,
     colourName,
     colourDefinition,

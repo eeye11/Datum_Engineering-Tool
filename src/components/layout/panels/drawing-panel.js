@@ -30,6 +30,7 @@ import {
     sourceForObject,
     writeObjectIntoSource
 } from "../../../shared/rendering/latex/source-synchronization.js";
+import { setSourceGeometryFactories } from "../../../shared/rendering/latex/source-object-sync.js";
 
 import { drawingCanvas } from "../../../features/workspace/dom.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
@@ -390,6 +391,14 @@ export function installDrawingPanel() {
      * is now the only place a category is added, and it is installed whole.
      */
     installSourceWriters({ addSourceWriter, setSourceWriter });
+
+    /*
+     * AND THE SOURCE READER'S FACTORIES. A statement typed in Source becomes an
+     * object through the SAME geometry factories a tool uses, so the object it
+     * creates has the model's own fields, defaults and label rather than a shape
+     * invented by the parser.
+     */
+    setSourceGeometryFactories(enggDrawingState.geometryFactories);
 
     /* Let committed model edits patch just their own source region. */
     enggDrawingState.setSourceSink(handleObjectCommitted);

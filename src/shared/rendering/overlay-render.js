@@ -10,6 +10,7 @@ import enggDrawingState from "../model/drawing-state.js";
 import { axisLabelPositions } from "../geometry/axis-labels.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import { createSvgElement, paintColour } from "./svg-primitives.js";
+import { SVG_NAMESPACE } from "../../features/workspace/constants.js";
 import { selectionBounds, selectionCorners } from "../selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 
@@ -1031,3 +1032,92 @@ export {
                 }));
             });
     }
+
+/*
+ * ========================================================
+ * THE CONSTRUCTION CROSSHAIR
+ * ========================================================
+ *
+ * A thin crosshair at the POINTER, drawn in the interaction overlay, while a
+ * construction is actually running.
+ *
+ * WHY IT IS DRAWN HERE AT ALL.
+ *
+ * The canvas used to say `cursor: crosshair`, which is the WINDOW SYSTEM's
+ * crosshair: full-screen sized on a high-DPI display, unstylable, and painted
+ * over everything - the panel, the Source editor, a dialog - for as long as a
+ * tool stayed armed. This is the same information at the editor's own scale: two
+ * hairline arms, 7 px each, in the tool's colour.
+ *
+ * WHEN IT IS ABSENT, which matters as much as when it is present:
+ *
+ *   - no construction running (idle), so selecting, panning, hovering and
+ *     clicking the panel all use the normal pointer;
+ *   - the pointer is outside the canvas, so nothing is left behind at the last
+ *     position;
+ *   - a clean render (print, export, a Drawing Reference) never calls this at
+ *     all - it is overlay-only, like every other interaction mark.
+ *
+ * It never takes a click: the SVG is `pointer-events: none`, so the hit test and
+ * the tool underneath it see the press, exactly as before.
+ */
+export function renderCrosshair(svg, state, bounds) {
+    const interaction = state.interaction || {};
+
+    /*
+     * A CONSTRUCTION IS RUNNING. `phase` moves off "idle" when the first point is
+     * placed; `preview` covers the tools that track the pointer before the first
+     * click. Both mean the student is placing geometry, which is the only time a
+     * crosshair says anything the arrow does not.
+     */
+    const running = interaction.phase && interaction.phase !== "idle";
+    const tracking = Boolean(interaction.preview) || Boolean(interaction.snapCandidate);
+
+    if (!running && !tracking) {
+        return;
+    }
+
+    const point = interaction.rawPointerPoint || interaction.snapCandidate?.point;
+
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+        return;
+    }
+
+    const screen = enggDrawingState.engineeringToScreen(point, bounds, state);
+
+    /*
+     * INSIDE THE CANVAS, OR NOTHING. A crosshair at the edge is the pointer
+     * having left through it; drawing one there would leave a mark behind on the
+     * sheet after the student moved to the panel.
+     */
+    if (screen.x < 0 || screen.y < 0 || screen.x > bounds.width || screen.y > bounds.height) {
+        return;
+    }
+
+    const arm = 7;
+    const group = document.createElementNS(SVG_NAMESPACE, "g");
+
+    group.setAttribute("class", "drawing-crosshair");
+    group.setAttribute("pointer-events", "none");
+    group.setAttribute("data-editor-only", "crosshair");
+
+    [
+        [screen.x - arm, screen.y, screen.x + arm, screen.y],
+        [screen.x, screen.y - arm, screen.x, screen.y + arm]
+    ].forEach(([x1, y1, x2, y2]) => {
+        const line = document.createElementNS(SVG_NAMESPACE, "line");
+
+        line.setAttribute("x1", String(x1));
+        line.setAttribute("y1", String(y1));
+        line.setAttribute("x2", String(x2));
+        line.setAttribute("y2", String(y2));
+        line.setAttribute("stroke", "#00a9c7");
+        line.setAttribute("stroke-width", "1");
+        line.setAttribute("vector-effect", "non-scaling-stroke");
+        line.setAttribute("pointer-events", "none");
+
+        group.appendChild(line);
+    });
+
+    svg.appendChild(group);
+}

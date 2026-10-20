@@ -44,8 +44,8 @@ import {
     straightLine,
     textNode
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
+import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
-import enggTheme from "../../../../components/layout/workspace/theme.js";
 
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -71,36 +71,35 @@ function finite(value, fallback = 0) {
  * the model it was handed.
  */
 /*
- * THE THEME'S DEFAULT INK, resolved through the published theme module.
+ * THE AUTHORED STYLE, AND NOTHING ELSE.
  *
- * Reached by name rather than imported, for the same reason the Statics
- * writer does: `theme.js` owns the light/dark default, and a private copy of
- * the two hex values here would be a second answer to "what colour is a line
- * when nobody chose one". In a browser it is already loaded; a test that has
- * not loaded it simply falls back to black.
+ * `style.stroke` is the colour the student's object was drawn with; absent, the
+ * drawing is BLACK. It is deliberately NOT the interface theme's default ink:
+ * that value (`#193335`, a dark teal) is what a NEW object starts from, and
+ * writing it into the source made every un-chosen black line a dark teal in TeX
+ * - and would have made a saved file change colour when the interface theme
+ * did. The colour conversion itself, the pen width and the opacity all come
+ * from the shared `tikz-style.js`, through the primitives.
  */
-function themeInk() {
-    const theme = enggTheme;
-
-    try {
-        if (theme && typeof theme.defaultLineColour === "function") {
-            return theme.defaultLineColour();
-        }
-    } catch {
-        /* fall through */
-    }
-
-    return null;
-}
+const NO_STROKE = /^none$/i;
 
 function renderStyle(style = {}) {
     const normalised = { ...style };
 
-    normalised.stroke = style.stroke || themeInk() || "#000000";
+    const declared = String(style.stroke ?? "").trim();
 
-    const width = resolveLineWidth(style.lineWidth);
+    normalised.stroke = NO_STROKE.test(declared)
+        ? "none"
+        : declared || "#000000";
 
-    normalised.lineWidth = width;
+    /*
+     * THE WIDTH STAYS NOMINAL HERE.
+     *
+     * `primitives` receive it with the export transform alongside, and reduce it
+     * by that factor exactly once. Putting the factor on the style as well would
+     * multiply twice - the failure this contract exists to prevent.
+     */
+    normalised.lineWidth = resolveLineWidth(style.lineWidth);
 
     normalised.fill =
         String(style.fillMode ?? "").toLowerCase() === "solid"
@@ -112,23 +111,76 @@ function renderStyle(style = {}) {
     return normalised;
 }
 
+/*
+ * THE EXPORT TRANSFORM IN EFFECT, FOR THE OBJECT BEING WRITTEN.
+ *
+ * Every coordinate this writer emits goes through `pointOf`, so the export
+ * reduction and the shift to a local origin are applied THERE - once, in one
+ * place - rather than in every shape's own arithmetic. The model coordinates are
+ * read unchanged; only what is written comes out normalized.
+ *
+ * It is set for ONE object's serialization and restored afterwards, so it cannot
+ * leak between objects and a second pass over the same drawing starts from the
+ * model again - which is what makes repeated generation idempotent.
+ */
+let exportTransformInEffect = null;
+
+function withExportTransform(transform, fn) {
+    const previous = exportTransformInEffect;
+
+    exportTransformInEffect = transform && typeof transform.point === "function" ? transform : null;
+
+    try {
+        return fn();
+    } finally {
+        exportTransformInEffect = previous;
+    }
+}
+
 function pointOf(candidate) {
     if (!candidate || typeof candidate !== "object") {
         return { x: 0, y: 0 };
     }
 
-    return {
-        x: finite(candidate.x),
-        y: finite(candidate.y)
-    };
+    const x = finite(candidate.x);
+    const y = finite(candidate.y);
+
+    return exportTransformInEffect ? exportTransformInEffect.point(x, y) : { x, y };
+}
+
+/*
+ * A LENGTH IN MODEL UNITS, AT THE EXPORT SCALE.
+ *
+ * A radius, a width or a marker size is a DISTANCE, not a position: it has no
+ * origin, so it is multiplied by the factor and never shifted. Scaling it here
+ * - next to `pointOf`, where the coordinates are scaled - is what keeps a circle
+ * circular and a rectangle's aspect ratio intact in a reduced figure.
+ */
+function lengthOf(value) {
+    const number = finite(value);
+
+    return exportTransformInEffect ? exportTransformInEffect.length(number) : number;
+}
+
+/*
+ * AN ARC ANGLE IN DEGREES.
+ *
+ * The model stores degrees - that is what the factory takes and what the canvas
+ * draws with. A value outside the degree range is a genuinely radian-valued arc
+ * from an older file, and is converted ONCE; a degree value passes unchanged.
+ * `5156.62` is what the old unconditional multiplication made of a right angle.
+ */
+function toDegrees(value) {
+    const angle = finite(value);
+
+    return Math.abs(angle) > 2 * Math.PI ? angle : (angle * 180) / Math.PI;
 }
 
 function pointsOf(geometry) {
     return Array.isArray(geometry?.points) ? geometry.points.map(pointOf) : [];
 }
 
-/* The polygon's vertices, derived from centre, radius, sides and rotation. */
-function polygonPoints(geometry) {
+/* The polygon's vertices, derived from centre, radius, sides and rotation. */function polygonPoints(geometry) {
     const centre = pointOf(geometry?.center);
     const radius = finite(geometry?.radius);
     const sides = Math.max(3, Math.round(finite(geometry?.sides, 3)));
@@ -197,8 +249,7 @@ function crossMarker(at, style, size) {
     ].join("\n");
 }
 
-const SHAPES = {
-    line(object) {
+const SHAPES = {    line(object) {
         const start = pointOf(object.geometry?.start);
         const end = pointOf(object.geometry?.end);
         const style = renderStyle(object.style);
@@ -212,7 +263,8 @@ const SHAPES = {
          */
         return straightLine(start, end, style, {
             arrowStart: style.arrowStart || "none",
-            arrowEnd: style.arrowEnd || "none"
+            arrowEnd: style.arrowEnd || "none",
+            transform: exportTransformInEffect
         });
     },
 
@@ -228,8 +280,8 @@ const SHAPES = {
          */
         const drawn =
             style.markerStyle === "cross"
-                ? crossMarker(at, style, size)
-                : marker({ at, style, size });
+                ? crossMarker(at, style, lengthOf(size))
+                : marker({ at, style, size: lengthOf(size) });
 
         return [coordinate(`${safeName(object)}`, at.x, at.y), drawn].join("\n");
     },
@@ -275,7 +327,22 @@ const SHAPES = {
     },
 
     rectangle(object) {
-        const position = pointOf(object.geometry?.position);
+        /*
+         * THE CORNER IS COMPUTED IN MODEL SPACE, THEN TRANSFORMED ONCE.
+         *
+         * `position` is the TOP-LEFT corner with y growing upward, so the
+         * rectangle runs DOWN from it. The other corner is therefore computed
+         * from the MODEL position and the MODEL height, and only the finished
+         * pair is passed through `pointOf` - transforming `position` first and
+         * then subtracting an export-scaled height would offset the corner
+         * twice and leave the rectangle at a different size from its own
+         * neighbours.
+         */
+        const position = {
+            x: finite(object.geometry?.position?.x),
+            y: finite(object.geometry?.position?.y)
+        };
+
         const width = finite(object.geometry?.width);
         const height = finite(object.geometry?.height);
         const rotation = finite(object.geometry?.rotation);
@@ -293,21 +360,27 @@ const SHAPES = {
          * closes without a seam.
          */
         if (rotation !== 0) {
+            /*
+             * A rotated rectangle's corners are computed in MODEL space - that is
+             * where the rotation lives - and then passed through `pointOf` into
+             * export space, exactly as every other coordinate is. Transforming
+             * them here keeps the corners in the same figure as the rest.
+             */
             const corners = enggFeatureGeometry.rectangleCorners(object.geometry);
 
-            return corners.length === 4 ? closedShape(corners, style) : null;
+            return corners.length === 4 ? closedShape(corners.map(pointOf), style) : null;
         }
 
         return rectanglePrimitive({
-            from: { x: position.x, y: position.y - height },
-            to: { x: position.x + width, y: position.y },
+            from: pointOf({ x: position.x, y: position.y - height }),
+            to: pointOf({ x: position.x + width, y: position.y }),
             style
         });
     },
 
     circle(object) {
         const centre = pointOf(object.geometry?.center);
-        const radius = finite(object.geometry?.radius);
+        const radius = lengthOf(object.geometry?.radius);
 
         if (radius <= 0) {
             return null;
@@ -318,17 +391,24 @@ const SHAPES = {
 
     arc(object) {
         const centre = pointOf(object.geometry?.center);
-        const radius = finite(object.geometry?.radius);
+        const radius = lengthOf(object.geometry?.radius);
 
         /*
-         * THE MODEL STORES AN ARC'S ANGLES IN RADIANS (they come from atan2,
-         * and the canvas draws them with Math.cos/Math.sin directly). TikZ
-         * takes degrees. Writing the radians as degrees made a quarter circle a
-         * 1.57-degree sliver - the arc showed while it was drawn live and
-         * vanished as soon as its compiled picture arrived.
+         * THE MODEL STORES AN ARC'S ANGLES IN DEGREES, and TikZ takes degrees.
+         *
+         * The factories take the angle the student drew (`arc(centre, r, 0, 90)`),
+         * and the geometry keeps it as given - so the conversion here was WRONG
+         * IN BOTH DIRECTIONS: it multiplied an already-degree value by 180/pi,
+         * turning a quarter circle into `end angle=5156.62`. The arc still looked
+         * right on the live overlay, which draws from the model directly, and was
+         * only wrong once the compiled picture arrived.
+         *
+         * `toDegrees` therefore accepts EITHER: a value the model stored in
+         * degrees is written as it stands, and a value past the degree range - a
+         * genuinely radian-valued arc from an older file - is converted once.
          */
-        const startAngle = (finite(object.geometry?.startAngle) * 180) / Math.PI;
-        const endAngle = (finite(object.geometry?.endAngle) * 180) / Math.PI;
+        const startAngle = toDegrees(object.geometry?.startAngle);
+        const endAngle = toDegrees(object.geometry?.endAngle);
 
         if (radius <= 0 || startAngle === endAngle) {
             return null;
@@ -522,7 +602,7 @@ function safeName(object) {
  * source is still being implemented is handled: its object exists, its region
  * is untouched, and nothing is fabricated.
  */
-export function geometrySourceWriter(object) {
+export function geometrySourceWriter(object, context = {}) {
     if (!object || typeof object !== "object") {
         return null;
     }
@@ -533,7 +613,72 @@ export function geometrySourceWriter(object) {
         return null;
     }
 
-    return shape(object);
+    /*
+     * THE OBJECT IS WRITTEN INSIDE ITS EXPORT TRANSFORM.
+     *
+     * `context.transform` is the drawing's export context. It is in effect for
+     * THIS object only: every coordinate comes out normalized and every length
+     * reduced by the one export factor, and no other object can inherit it.
+     * Without one the object is written at its authored size - which is what a
+     * single-object preview and a test want.
+     */
+    return withExportTransform(context?.transform || null, () => {
+        const written = shape(object);
+
+        if (typeof written !== "string" || !written.trim()) {
+            return written;
+        }
+
+        /*
+         * THE COLOUR DEPENDENCIES GO WITH THE COMMAND THAT USES THEM.
+         *
+         * A hex colour is written as `daetumC<hex>` and NEEDS its
+         * `\definecolor` line, or the picture fails with "Undefined color".
+         * `strokeOptionsWithPrelude` already hands the definitions back beside
+         * the options, but the shapes return only the command - so every
+         * coloured object used to be written into the source without the one
+         * line that makes its colour exist, and the whole sheet failed to
+         * compile with an error that pointed at nothing the student could fix.
+         *
+         * The definitions are gathered from the command's own option group and
+         * emitted ABOVE it: one definition per colour, in a deterministic order,
+         * so the same drawing always writes the same text.
+         */
+        const definitions = colourDefinitionsIn(written);
+
+        return definitions.length ? `${definitions.join("\n")}\n${written}` : written;
+    });
+}
+
+/*
+ * THE COLOUR NAMES A COMMAND USES THAT DO NOT EXIST IN xcolor YET.
+ *
+ * Reads the command's `[...]` option group for `draw=`/`color=`/`fill=` values
+ * of DAETUM's own form (`daetumC193335`) and returns the `\definecolor` line each
+ * one needs, in a stable order. A name the student wrote themselves is left to
+ * them: rewriting `red` into a definition would change a drawing that already
+ * compiles.
+ */
+function colourDefinitionsIn(command) {
+    const optionGroup = /^\\[A-Za-z]+\*?\s*\[([^\]]*)\]/.exec(command);
+
+    if (!optionGroup) {
+        return [];
+    }
+
+    const names = new Set();
+
+    optionGroup[1].replace(
+        /(?:draw|color|fill|text)\s*=\s*(\{)?\s*(daetumC[0-9A-Fa-f]{6})\b/g,
+        (match, brace, name) => {
+            names.add(name);
+            return match;
+        }
+    );
+
+    return [...names]
+        .map((name) => definitionForName(name))
+        .filter(Boolean);
 }
 
 /*

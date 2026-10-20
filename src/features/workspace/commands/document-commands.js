@@ -18,6 +18,7 @@ import enggSheets from "../../../components/layout/workspace/sheets.js";
 import enggOpenPopup from "../../../components/layout/toolbar/open-popup.js";
 import enggUi from "../../../shared/ui/ui.js";
 import enggSolutionState from "../../../shared/solution/solution-state.js";
+import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 
 /*
@@ -2858,6 +2859,11 @@ export const FILE_ACTIONS = {
   save() {
     saveDrawing();
   },
+
+  /* The Source tab's automatic save; see `autosaveSourceDraft`. */
+  autosaveDraft() {
+    return autosaveSourceDraft();
+  },
   "save-as"(options) {
     saveDrawingAs(options);
   },
@@ -2888,6 +2894,69 @@ export const FILE_ACTIONS = {
     return moveDrawingToTrash();
   }
 };
+
+/* ============================================================
+ * THE SOURCE DRAFT'S OWN SAVE
+ * ============================================================
+ *
+ * The Source tab writes the draft here as the student types. It is separate from
+ * `markDocumentDirty` - which is driven by a COMMITTED canvas edit - because the
+ * source draft changes on every keystroke and is never a drawing commit.
+ *
+ * WHAT IT DOES NOT DO: it does not write the `.tex` file, and it does not make
+ * the document look saved. It writes the RECOVERY COPY - the copy a reload or a
+ * crash restores from - and it reports the save state to the source manager, so
+ * the Source tab can say "Up to date" truthfully.
+ *
+ * IT SAVES WHAT WAS TYPED, INCLUDING WHAT DOES NOT PARSE. A draft that cannot
+ * render is still the student's work, and a save that skipped it would lose the
+ * one thing a save exists to keep.
+ */
+export function autosaveSourceDraft() {
+    const manager = activeSourceManager?.();
+
+    if (!manager || !manager.isDirty()) {
+        return false;
+    }
+
+    try {
+        manager.markSaving();
+
+        /*
+         * THE RECOVERY COPY IS WRITTEN FROM THE SHEET, so the sheet has to hold
+         * the text that is in the manager FIRST. This is the same write-back a
+         * committed edit does, and it is what makes a reload restore the exact
+         * draft - markers, comments, mistakes and all.
+         */
+        syncActiveSheet();
+
+        /*
+         * THE COPY IS WRITTEN AFTER A SHORT PAUSE - the recovery module's own
+         * debounce - so a word typed is one write rather than five, and nothing
+         * blocks the keystroke. The slow synchronous part (serialising the
+         * document) has already happened above by the time this is called, which
+         * is why it is called from the change handler rather than from every
+         * `input` event.
+         */
+        enggRecovery.schedule(
+            serializeDocumentBody(),
+            documentFileName
+        );
+
+        /*
+         * MARKED SAVED AFTER THE SCHEDULE, IN THE SAME TURN. A listener that
+         * changes the text again during this turn marks the draft dirty again,
+         * so `markSaved` can never claim an edit that has already arrived.
+         */
+        manager.markSaved();
+
+        return true;
+    } catch (error) {
+        manager.markSaveFailed(error);
+
+        return false;
+    }
+}
 
 /*
  * Offer the user a recovery copy, if there is one worth offering.
@@ -3030,6 +3099,23 @@ export function installDocumentCommands() {
     enggDrawingExport.setBoundsProvider(
         drawnBoundsPoints
     );
+
+    /*
+     * AND THE SOURCE PIPELINE MEASURES THE SAME WAY.
+     *
+     * The export transform - the one that fits a drawing into a written
+     * solution - needs the extent of the WHOLE drawing, including the sketch,
+     * the supports and the graph. That is exactly what `drawnBoundsPoints`
+     * already answers, and it is the measurement Fit All itself uses. Publishing
+     * it under one name means the export scale and the Fit All viewport are
+     * derived from the SAME bounds: a drawing that fills the screen when fitted
+     * also fills the figure, and neither can disagree about how big it is.
+     *
+     * The provider is asked at zoom 1 - it takes the zoom as a parameter - so
+     * the answer describes the DRAWING and not the current view. The student's
+     * manual zoom never reaches the export.
+     */
+    globalThis.enggDrawnBoundsProvider = drawnBoundsPoints;
 
     /*
      * Teach the reference system where sheets are and how a feature is

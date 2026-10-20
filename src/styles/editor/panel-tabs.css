@@ -234,12 +234,96 @@
  * So the pane is a clipped flex column, and its three parts are pinned.
  */
 
+/*
+ * ============================================================
+ * THE SOURCE PANE - THREE REGIONS, ONE COLUMN
+ * ============================================================
+ *
+ * THE PANE OWNS THE HEIGHT; THE REGIONS SPLIT IT. A column, top to bottom:
+ *
+ *     .drawing-source-note      the one instruction, static, flex: 0 0 auto
+ *     .drawing-source-editor    everything that is left, flex: 1 1 auto
+ *     .drawing-source-footer    the status line, flex: 0 0 auto
+ *
+ * WHY THE STATUS BAR USED TO BE COVERED, AND WHY THIS FIXES IT AT THE CAUSE.
+ *
+ * The editor had `margin: -6px` (and so did the diagnostics list) to run edge to
+ * edge, and `min-height: 140px`. A negative margin makes a box LARGER than the
+ * space it was given, so with a short panel the editor extended over whatever
+ * followed it and painted its own background on top - the status line was
+ * underneath the editor rather than below it. `min-height: 140px` made that
+ * certain on a short pane: the editor refused to shrink to the height available.
+ *
+ * So: no negative margin, and the editor is allowed to shrink (`min-height: 0`,
+ * `overflow: hidden`). Everything below it is in the flow and cannot be covered,
+ * because nothing is positioned over it and nothing overlaps it.
+ *
+ * `flex-direction: column` is stated rather than inherited, because a pane rule
+ * elsewhere is a scrolling column and this one must not be - the SCROLL belongs
+ * to the editor inside, so the note and the status line never scroll away from
+ * the code they describe.
+ */
 #drawingPanelSource {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
     overflow: hidden;
+    padding: 6px;
 }
 
-#drawingPanelSource > .is-pinned {
+/*
+ * A HIDDEN PANE TAKES NO ROOM - AND PAINTS NOTHING.
+ *
+ * The `hidden` attribute is overridden by any rule that names a `display`, and
+ * this one does (`display: flex`). With no rule of its own, the pane stayed a
+ * flex column of its full height while `hidden`, and its two fixed regions - the
+ * note and the status footer - were laid out at their natural sizes inside a box
+ * the browser had collapsed, so they spilled BELOW the Objects list and appeared
+ * under whichever tab was open.
+ *
+ * This is the whole fix for "the Source tab shows up under Objects and
+ * Features": it is not positioned, not z-indexed and not moved - it is simply
+ * not laid out when it is not the open tab.
+ */
+#drawingPanelSource[hidden] {
+    display: none;
+}
+
+/*
+ * THE INSTRUCTION. One line, quiet, and never scrolled: it is the tab's whole
+ * explanation, and there is deliberately only one - a second note at the bottom
+ * used to repeat it, and a panel that says the same thing twice at both ends
+ * reads as a warning rather than a hint.
+ */
+.drawing-source-note {
+    color: var(--datum-muted);
     flex: 0 0 auto;
+    font-size: 10px;
+    line-height: 1.35;
+    margin: 0;
+    overflow: hidden;
+    padding: 0 2px;
+    text-overflow: ellipsis;
+    /* One line: it is an instruction, not a paragraph. */
+    white-space: nowrap;
+}
+
+/*
+ * THE FOOTER. The status line and, when there are any, the diagnostics: both
+ * BELOW the editor, in the flow, with their own ceiling so a long list cannot
+ * push the editor out of the pane.
+ */
+.drawing-source-footer {
+    border-top: 1px solid var(--datum-border);
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 40%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 3px 2px 0;
 }
 
 .drawing-source-status {
@@ -247,13 +331,23 @@
     flex: 0 0 auto;
     font-size: 9px;
     letter-spacing: 0.04em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.drawing-source-status.is-error {
+.drawing-source-status.is-ok {
+    color: var(--datum-muted);
+}
+
+.drawing-source-status.is-error,
+.drawing-source-status.is-failed,
+.drawing-source-status.is-save-error {
     color: var(--datum-error);
 }
 
-.drawing-source-status.is-dirty {
+.drawing-source-status.is-pending,
+.drawing-source-status.is-saving {
     color: var(--source-editor-arg);
 }
 
@@ -263,17 +357,17 @@
 }
 
 /*
- * THE EDITOR. The pane's flexible child: it takes the height the panel has and
- * runs edge to edge inside it, so it reads as part of the pane rather than a
- * floating window or a box-within-a-box. No outer border or radius - the pane
- * already has its edge, and a second frame around the same content is exactly
- * the "separate window" look this tab must not have.
+ * THE EDITOR. The pane's flexible child: it takes the height that is left and
+ * SHRINKS when there is less of it. No negative margin, so it cannot extend over
+ * the status line; `min-height: 0` and `overflow: hidden`, so its own scroll
+ * area - the textarea and the layers behind it - handles a long document instead
+ * of the box growing.
  */
 .drawing-source-editor {
-  flex: 1 1 auto;
-  margin: -6px;
-  min-height: 140px;
-  position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
 }
 
 .drawing-source-editor-root {
@@ -309,114 +403,291 @@
 }
 
 .drawing-source-scroll {
-  background: var(--source-editor-bg);
-  flex: 1 1 auto;
-  min-width: 0;
-  position: relative;
+    background: var(--source-editor-bg);
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
 }
 
 /*
- * THE MIRROR AND THE TEXTAREA SHARE ONE TYPESETTING - the same font, size,
- * line height and padding - so the highlighted copy sits exactly under the
- * editable one and the caret never drifts off its character.
+ * ============================================================
+ * THE SOURCE EDITOR'S FOUR LAYERS, AND WHICH ONE DRAWS WHAT
+ * ============================================================
+ *
+ * Bottom to top, inside .drawing-source-scroll:
+ *
+ *   1. .drawing-source-decor   BACKGROUNDS ONLY - the object band, the
+ *                              soft-red error mark, the search match. Its text
+ *                              is present (so every line box measures exactly
+ *                              as tall as the real one, wrapped lines included)
+ *                              but coloured transparent.
+ *
+ *   2. .drawing-source-text    THE GLYPHS - syntax colours, no background at
+ *                              all. This is what the student reads.
+ *
+ *   3. .drawing-source-caret-layer  the selection and the caret, drawn from the
+ *                              real offsets. The selection is a translucent
+ *                              block UNDER the glyphs above it.
+ *
+ *   4. .drawing-source-input   the textarea itself: transparent text, no
+ *                              background, and a transparent ::selection. It
+ *                              owns the keyboard, the caret's position and the
+ *                              scrollbar - never the visible text.
+ *
+ * THE BUG THIS REPLACES. The old editor had one layer with both the text AND
+ * the object band, under a textarea whose text was transparent AND whose native
+ * ::selection was the translucent green. A browser paints ::selection above
+ * everything in the element, so selecting the object's code covered the only
+ * copy of the glyphs with a wash - the highlight read as "over the text". With
+ * backgrounds and glyphs in separate layers, a selection can be as strong as it
+ * likes and the text still sits on top of it.
+ *
+ * ALL FOUR SHARE ONE TYPESETTING - font, size, line height, padding, tab size,
+ * wrapping - or the caret and the selection would drift off their characters.
  */
-.drawing-source-mirror,
+
+.drawing-source-decor,
+.drawing-source-text,
 .drawing-source-input {
+    box-sizing: border-box;
     font-family: var(--datum-font-mono);
     font-size: 11.5px;
+    font-variant-ligatures: none;
     line-height: 1.5;
     margin: 0;
     padding: 4px 6px;
     tab-size: 2;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    white-space: pre;
 }
 
-.drawing-source-mirror {
-    /*
-     * The pane's own surface, not the dark code palette: the editor reads as
-     * part of the panel in both themes rather than as a terminal pasted in.
-     */
+/*
+ * THE DECORATION LAYER. Absolute, sized to the scroll box, and never
+ * interactive. Its own text is transparent - it exists to give every line the
+ * right box - while the spans inside it paint backgrounds.
+ */
+.drawing-source-decor {
     background: var(--source-editor-bg);
     bottom: 0;
-    box-sizing: border-box;
-    color: var(--source-editor-ink);
+    color: transparent;
     height: 100%;
     left: 0;
     overflow: hidden;
     position: absolute;
     right: 0;
     top: 0;
+    user-select: none;
+    z-index: 0;
+}
+
+/*
+ * THE TEXT LAYER. Transparent background so every decoration below shows
+ * through, and the glyph colours of the syntax palette.
+ */
+.drawing-source-text {
+    background: transparent;
+    bottom: 0;
+    color: var(--source-editor-ink);
+    height: 100%;
+    left: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    user-select: none;
+    z-index: 1;
+}
+
+.theme-dark .drawing-source-decor,
+[data-theme="dark"] .drawing-source-decor {
+    color: transparent;
 }
 
 .drawing-source-line {
     min-height: 1.5em;
 }
 
-/* ---- LaTeX highlighting, in the editor palette ---- */
-
 /*
- * The restrained syntax palette from tokens.css, themed per appearance:
- * commands in the application green, arguments and markers in the quiet
- * amber, structure and comments fading back. Nothing shouts.
- */
-.ds-command {
-    color: var(--source-editor-command);
-}
-
-.ds-option,
-.ds-coord {
-    color: var(--source-editor-arg);
-}
-
-.ds-brace {
-    color: var(--source-editor-brace);
-}
-
-.ds-comment {
-    color: var(--source-editor-comment);
-    font-style: italic;
-}
-
-.ds-marker {
-    color: var(--source-editor-marker);
-    font-weight: 700;
-    opacity: 0.75;
-}
-
-/*
- * THE SELECTED OBJECT'S REGION. The same green wash the canvas uses for a
- * selection, applied to the gutter row and the mirror lines, so "which part
- * of the code is the thing I selected" is answerable by looking.
+ * THE OBJECT BAND. The same green wash the canvas uses for a selection, applied
+ * as a background in the decoration layer - so it sits UNDER the glyphs and the
+ * code stays black-on-green rather than green-through-green.
  */
 .drawing-source-line.selected {
     background: var(--datum-green-tint);
 }
 
-/* ---- the editable layer, transparent over the mirror ---- */
+/*
+ * THE ERROR MARK. Soft red, low opacity, behind the text. A statement that never
+ * finished is marked on every line it covers, so a multi-line command reads as
+ * one problem rather than as several.
+ */
+.drawing-source-line.ds-error-line {
+    background: color-mix(in srgb, var(--datum-error) 14%, transparent);
+    box-shadow: inset 2px 0 0 color-mix(in srgb, var(--datum-error) 55%, transparent);
+}
+
+/*
+ * AN OBJECT BAND AND AN ERROR MARK ON THE SAME LINE. Neither may hide the other:
+ * the error keeps the red rule at the start of the line and the combined wash is
+ * the two tints over one another, which is what the specification asks for.
+ */
+.drawing-source-line.selected.ds-error-line {
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--datum-error) 12%, transparent),
+            color-mix(in srgb, var(--datum-error) 12%, transparent)
+        ),
+        var(--datum-green-tint);
+}
+
+.drawing-source-line.ds-search-range {
+    background: color-mix(in srgb, var(--datum-warning-line) 28%, transparent);
+}
+
+/* ---- the caret and selection layer ---- */
+
+.drawing-source-caret-layer {
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 2;
+}
+
+/*
+ * A SELECTION BLOCK. Under the glyphs (the text layer is above this one), with
+ * enough tint to be obvious and enough transparency to read through - and it
+ * never covers text, because the text is on top of it.
+ */
+.drawing-source-selection {
+    background: color-mix(in srgb, var(--datum-green) 26%, transparent);
+    border-radius: 1px;
+    position: absolute;
+}
+
+.drawing-source-input:focus ~ .drawing-source-caret-layer .drawing-source-selection,
+.drawing-source-selection {
+    background: color-mix(in srgb, var(--datum-green) 24%, transparent);
+}
+
+/* The caret itself: a one-pixel rule, at the caret's real offset. */
+.drawing-source-caret {
+    animation: drawing-source-caret-blink 1.06s steps(1, end) infinite;
+    background: var(--source-editor-ink);
+    position: absolute;
+    width: 1.5px;
+}
+
+@keyframes drawing-source-caret-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drawing-source-caret { animation: none; }
+}
+
+/* A matched bracket outline, above the glyphs, on the pair under the caret. */
+.drawing-source-bracket {
+    border-bottom: 2px solid var(--datum-green);
+    position: absolute;
+    width: 4px;
+}
+
+/* ---- find ---- */
+
+.drawing-source-find {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 3px 2px;
+}
+
+.drawing-source-find[hidden] {
+    display: none;
+}
+
+.drawing-source-find input {
+    background: var(--datum-input, transparent);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    flex: 1 1 auto;
+    font-family: var(--datum-font-mono);
+    font-size: 10px;
+    min-width: 0;
+    padding: 2px 4px;
+}
+
+.drawing-source-find-count {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 9px;
+}
+
+.drawing-source-find button {
+    background: none;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--cad-ink);
+    cursor: pointer;
+    font-size: 9px;
+    padding: 2px 6px;
+}
+
+/* ---- the editable layer ---- */
 
 .drawing-source-input {
     background: transparent;
     border: 0;
     bottom: 0;
     box-sizing: border-box;
-    caret-color: var(--source-editor-ink);
+    caret-color: transparent;
     color: transparent;
+    /*
+     * THE POINTER SAYS WHAT THE CLICK WILL DO.
+     *
+     * The textarea's own text is transparent, but the thing under the pointer is
+     * still text - so the I-beam is the honest cursor, and a `default` arrow here
+     * reads as "this is not editable". The layers above take no pointer events, so
+     * this is the cursor the student actually sees.
+     */
+    cursor: text;
     height: 100%;
     left: 0;
     outline: none;
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-y: auto;
     position: absolute;
     resize: none;
     right: 0;
     top: 0;
+    white-space: pre;
     width: 100%;
+    z-index: 3;
 }
 
+/*
+ * THE BROWSER'S OWN SELECTION IS MADE INVISIBLE, NOT RELIED ON. It is drawn
+ * above everything in the element (which is what used to cover the glyphs), so
+ * the visible selection is the block painted in the layer below - and this only
+ * suppresses the one that would sit on top of it.
+ */
 .drawing-source-input::selection {
-    background: var(--datum-green-tint);
+    background: transparent;
+    color: transparent;
+}
+
+.drawing-source-input::-moz-selection {
+    background: transparent;
+    color: transparent;
 }
 
 /*
@@ -429,8 +700,8 @@
 
 /*
  * SUBTLE SCROLLBARS. The textarea is the one scrollable element in the tab
- * (the gutter follows it, the mirror follows it), so its bars are the only
- * ones the student sees: hairline thumbs on the panel surface, no track.
+ * (the decoration, text and gutter follow it), so its bars are the only ones
+ * the student sees: hairline thumbs on the panel surface, no track.
  */
 .drawing-source-input::-webkit-scrollbar {
     height: 8px;
@@ -457,20 +728,39 @@
 
 /* ---- diagnostics ---- */
 
+/*
+ * THE DIAGNOSTIC LIST. Inside the footer, so it is below the editor and above
+ * nothing it could cover; it scrolls ITSELF when there are many.
+ */
 .drawing-source-diagnostics {
-    flex: 0 0 auto;
-    margin: -6px;
-    max-height: 84px;
+    flex: 0 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
 .drawing-source-diagnostic {
     align-items: baseline;
+    background: none;
+    border: 0;
     border-left: 3px solid var(--datum-border-strong);
+    color: inherit;
+    cursor: pointer;
     display: flex;
+    font-family: inherit;
     font-size: 9.5px;
     gap: 6px;
     padding: 2px 4px;
+    text-align: left;
+    width: 100%;
+}
+
+.drawing-source-diagnostic:hover {
+    background: var(--datum-hover, rgba(0, 0, 0, 0.04));
+}
+
+.drawing-source-diagnostic.is-renderer {
+    background: var(--datum-warning-tint);
+    border-left-color: var(--datum-warning-line);
 }
 
 .drawing-source-diagnostic.is-error {
@@ -651,6 +941,39 @@
 /* A segmented group is as wide as its track and shares it evenly. */
 .dfp-row-control > .dfp-segmented {
     flex: 1 1 auto;
+}
+
+/*
+ * THE DIAGRAM EDITOR BUTTONS (Sketch Editor / Plot Editor).
+ *
+ * They open a dialog rather than changing a value, so they are shaped like the
+ * pane's other controls - same height, same radius, same type size - but carry
+ * the accent's ink so they read as ACTIONS among the property fields beside
+ * them. One set of rules for both buttons, so the two editors look like a pair.
+ */
+.dfp-row-control > .dfp-button {
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    flex: 1 1 auto;
+    font: inherit;
+    font-size: 10px;
+    height: 20px;
+    line-height: 18px;
+    padding: 0 8px;
+}
+
+.dfp-row-control > .dfp-button:hover,
+.dfp-row-control > .dfp-button:focus-visible {
+    border-color: var(--datum-green);
+    color: var(--datum-green);
+    outline: none;
+}
+
+.dfp-row-control > .dfp-button:active {
+    background: var(--datum-hover, var(--datum-input));
 }
 
 /* ---------------------------------------------------------- controls */

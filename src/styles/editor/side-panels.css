@@ -567,8 +567,34 @@
     position: relative;
 }
 
+/*
+ * THE CANVAS DOES NOT USE THE OPERATING SYSTEM'S CROSSHAIR.
+ *
+ * `cursor: crosshair` on a tool-active canvas is drawn BY THE WINDOW SYSTEM, at
+ * its own size and with its own hotspot. On a high-DPI display or a scaled
+ * desktop that is a cursor several times larger than every other one on the
+ * screen - a big floating crosshair that sits over the drawing, over the panel
+ * and over the Source editor whenever a tool is armed, and that cannot be
+ * styled, sized or positioned. That is the "oversized floating cursor".
+ *
+ * So the canvas keeps the ordinary arrow, and the construction crosshair is drawn
+ * by the EDITOR, inside the canvas, at the pointer's real position - see
+ * `renderCrosshair` in `canvas-render.js`. It is a thin, precise mark that follows
+ * the existing coordinate transform, and it exists only while a construction is
+ * running.
+ */
 .drawing-canvas.drawing-tool-active {
-    cursor: crosshair;
+    cursor: default;
+}
+
+/*
+ * AND NOTHING ELSE IN THE WORKSPACE ASKS FOR A SYSTEM CROSSHAIR EITHER. A
+ * geometry handle is a small dot with a move cursor; a crosshair there was the
+ * same oversized pointer appearing over a two-pixel handle.
+ */
+.drawing-geometry-handle-start,
+.drawing-geometry-handle-end {
+    cursor: grab;
 }
 
 .drawing-renderer {

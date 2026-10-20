@@ -2314,7 +2314,17 @@ function open(options = {}) {
 
       close();
 
-      options.onApply?.(committed);
+      /*
+       * THE SCALE IS HANDED BACK WITH THE STROKES.
+       *
+       * A sketch's points are GRAPH-LOCAL - x is a station, y is a value - and
+       * how far one value is drawn is decided HERE, when the sketch is drawn.
+       * The sheet and the source generator both need that one answer, or the
+       * curve is written at a different height from the one the student drew.
+       * The fourth argument carries it; a caller that ignores it still gets the
+       * elements, and one that stores it makes the two agree.
+       */
+      options.onApply?.(committed, { unitHeight: scale.unitHeight });
     });
 
   dialog

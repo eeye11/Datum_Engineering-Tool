@@ -34,6 +34,7 @@ import enggDocumentFile from "../document-file.js";
 import enggDrawingExport from "../document-export.js";
 import { describeFeature } from "./feature-description.js";
 import { createPalette, num, svgToTikz, unmappedCharacters } from "./svg-to-tikz.js";
+import enggExportTransform from "../../../shared/rendering/latex/export-transform.js";
 
 export const LATEX_EXTENSION = "tex";
 export const LATEX_MEDIA_TYPE = "application/x-tex";
@@ -370,18 +371,24 @@ function cleanSheetPicture(documentBody, sheet, index, count, palette) {
     }
 
     /*
-     * THE SHEET'S SOURCE IS THE SHEET'S DRAWING.
+     * THE SHEET'S SOURCE IS THE SHEET'S DRAWING, FITTED TO THE PAGE.
      *
-     * What goes into the written solution is the picture the Drawing Space
-     * shows, which is the sheet's TikZ source - markers removed, because they
-     * are bookkeeping and not drawing. The SVG this used to convert is the old
-     * object renderer's output, which is no longer what the student sees; using
-     * it put a different picture in the write-up from the one they approved.
+     * What goes into the written solution is the picture the Drawing Space shows,
+     * which is the sheet's TikZ source - markers removed, because they are
+     * bookkeeping and not drawing. The SVG this used to convert is the old object
+     * renderer's output, which is no longer what the student sees.
+     *
+     * AND IT IS FITTED. The stored source is at the drawing's AUTHORED size, one
+     * model unit per millimetre, which for an ordinary engineering sketch is
+     * several times wider than the page. `fittedSheetSource` rewrites the
+     * coordinates and every physical size to the page's width - the same
+     * transform the source pipeline uses, so the figure matches the sheet's
+     * proportions and its strokes keep their relative weight.
      */
     const storedSource = sheet.source && typeof sheet.source.source === "string" ? sheet.source.source : "";
 
     if (sourceHasCommands(storedSource)) {
-        return sheetSourcePicture(storedSource, palette);
+        return sheetSourcePicture(fittedSheetSource(storedSource, sheet), palette);
     }
 
     const rendered = enggDrawingExport.renderFittedDocument(
@@ -443,13 +450,201 @@ function sourceHasCommands(source) {
 }
 
 /*
+ * THE SHEET'S SOURCE, FITTED TO THE WRITTEN PAGE.
+ *
+ * A drawing is authored at one model unit per millimetre, and a written solution
+ * is 170 mm wide. An ordinary beam-and-graph sketch is several times that, so the
+ * stored source cannot be embedded as it stands - it would run off the page and
+ * the student would be left resizing it by hand.
+ *
+ * THE DRAWING IS NORMALISED AT ITS SOURCE, not wrapped in `scale=` or
+ * `\resizebox`. Rewriting the numbers is what lets the STROKES, DASHES, ARROW
+ * HEADS and LABELS come with it: a `scale=` shrinks the geometry and leaves a
+ * full-size pen and a full-size head on it, and a `\resizebox` shrinks the
+ * rendered result while leaving the code unreadable and un-editable.
+ *
+ * The transform is the drawing's own (`exportTransformFor`), so a figure in the
+ * written solution is the same shape as the one on the sheet - and the per-sheet
+ * transform is computed from the whole sheet, so the beam, the supports and the
+ * graph keep their relative layout.
+ *
+ * THE STORED SOURCE IS ALREADY IN EXPORT SPACE.
+ *
+ * The source pipeline normalises every object as it writes it: coordinates are
+ * shifted to a local origin and reduced, and pens, dashes and heads are reduced
+ * with them. Applying a SECOND export transform to that text would reduce it
+ * twice - the drawing would shrink twice and every stroke would thin twice - and
+ * (because a second reduction of an already-shifted picture sees a smaller
+ * bounding box) it would do so inconsistently.
+ *
+ * So the sheet's own source is embedded as it stands. It is already the drawn
+ * figure at the page's limits; the picture is the one the Source tab shows.
+ * Rewriting is kept for source that was NOT produced by the pipeline - a figure
+ * stored before the normalisation existed - which is detected by its picture
+ * declaring `x=1mm, y=1mm` and containing coordinates outside the page. There is
+ * exactly one path, and it is the identity for current documents.
+ */
+function fittedSheetSource(storedSource, sheet) {
+    const objects = Array.isArray(sheet?.objects) ? sheet.objects : [];
+
+    if (!objects.length || !sourceNeedsNormalising(storedSource)) {
+        return storedSource;
+    }
+
+    /*
+     * THE LEGACY CASE: source stored before the pipeline normalised it.
+     *
+     * It is written in raw model millimetres, so it is reduced here with the
+     * drawing's ONE transform (the same Fit-All measurement the current source
+     * uses) - coordinates, pens, dashes, heads and fonts together.
+     */
+    const visible = objects.filter((object) => object && object.visible !== false && object.hidden !== true);
+
+    const transform = syncExportTransform(visible, {
+        maxWidth: PAPER_WIDTH_MM,
+        maxHeight: PAPER_HEIGHT_MM,
+    });
+
+    if (!transform || transform.factor >= 1) {
+        return storedSource;
+    }
+
+    return rewritePictureAtExportScale(storedSource, transform);
+}
+
+/*
+ * WHETHER A STORED PICTURE IS STILL IN RAW MODEL MILLIMETRES.
+ *
+ * Current source has been shifted to a local origin and reduced, so every
+ * coordinate is inside the page. Source written before that existed keeps its
+ * authored coordinates, which for any ordinary sketch run past it - so a
+ * coordinate outside the paper limits is the honest, text-only signal.
+ */
+function sourceNeedsNormalising(source) {
+    const text = String(source || "");
+
+    for (const match of text.matchAll(/\(\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)/g)) {
+        const x = Number(match[1]);
+        const y = Number(match[2]);
+
+        if (Number.isFinite(x) && Number.isFinite(y) && (Math.abs(x) > PAPER_WIDTH_MM || Math.abs(y) > PAPER_HEIGHT_MM)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/*
+ * REWRITE ONE PICTURE AT THE EXPORT SCALE.
+ *
+ * A STORED SOURCE IS ALREADY WRITTEN, so its coordinates cannot be transformed
+ * by the model - they have to be read back out of the text and rewritten. This
+ * does exactly that, and only for the things that are size-dependent:
+ *
+ *   every coordinate      (x - minX) * factor,  (y - minY) * factor
+ *   every `line width`     nominal * factor
+ *   every `dash pattern`   each on/off length * factor
+ *   every `font=\fontsize{s}{p}`  s and p, with the readable floor
+ *
+ * NOTHING ELSE IS TOUCHED. A colour, an opacity, a label's text, an axis name, an
+ * `arc`'s angles, a node's anchor - all of them are left character for character.
+ * That is what keeps the rewrite honest: it scales SIZE, and only size.
+ *
+ * A coordinate that is not a plain number (a relative `++(2,0)`, a named node)
+ * is left as it is: it is expressed in relation to something already scaled, and
+ * rewriting it would move the drawing. The same is true of an `arc`'s radius,
+ * which is a LENGTH - it is scaled by the length rule below, never shifted.
+ */
+function rewritePictureAtExportScale(source, transform) {
+    const factor = transform.factor;
+    const origin = transform.bounds || { minX: 0, minY: 0 };
+
+    const number = (value) => {
+        const parsed = Number(value);
+
+        if (!Number.isFinite(parsed)) {
+            return value;
+        }
+
+        return String(Number(parsed.toFixed(4)));
+    };
+
+    const scaleLength = (value) => number(Number(value) * factor);
+
+    /* A POINT, in the computed coordinate space. A relative step is left alone. */
+    const scalePoint = (match, prefix, x, y, suffix) => {
+        const px = Number(x);
+        const py = Number(y);
+
+        if (!Number.isFinite(px) || !Number.isFinite(py) || /[+\-]$/.test(prefix)) {
+            return match;
+        }
+
+        return `${prefix}${number((px - (origin.minX || 0)) * factor)},${number(
+            (py - (origin.minY || 0)) * factor
+        )}${suffix}`;
+    };
+
+    let text = String(source || "");
+
+    text = text.replace(/(\+{0,2}\()\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*(\))/g, scalePoint);
+
+    text = text.replace(/line width\s*=\s*([\d.]+)\s*pt/g, (match, value) =>
+        `line width=${scaleLength(value)}pt`
+    );
+
+    text = text.replace(/dash pattern=((?:(?:on|off)\s+[\d.]+pt\s*)+)/g, (match, body) => {
+        const rewritten = body.replace(/(on|off)\s+([\d.]+)pt/g, (mark, kind, value) =>
+            `${kind} ${scaleLength(value)}pt`
+        );
+
+        return `dash pattern=${rewritten.trim()}`;
+    });
+
+    /* A bare `dashed` / `dotted` is TikZ's own physical pattern; state it. */
+    text = text.replace(/(?<=[,\[])\s*dashed\s*(?=[,\]])/g, () =>
+        ` dash pattern=on ${scaleLength(3)}pt off ${scaleLength(3)}pt`
+    );
+
+    text = text.replace(/(?<=[,\[])\s*dotted\s*(?=[,\]])/g, () =>
+        ` dash pattern=on ${scaleLength(0.8)}pt off ${scaleLength(2.4)}pt`
+    );
+
+    text = text.replace(/font=\\fontsize\{([\d.]+)\}\{([\d.]+)\}/g, (match, size, leading) => {
+        const scaled = Math.max(enggExportTransform.MIN_EXPORT_FONT_PT, Number(size) * factor);
+
+        return `font=\\fontsize{${number(scaled)}}{${number(scaled * 1.2)}}`;
+    });
+
+    return text;
+}
+
+/*
+ * THE PAINTING HELPERS THE SHEET SOURCE NEEDS, reached by name so this module
+ * does not import the source pipeline (which imports the drawing state).
+ */
+function syncExportTransform(objects, limits) {
+    if (typeof enggExportTransform?.drawingBounds !== "function") {
+        return null;
+    }
+
+    const bounds = enggExportTransform.drawingBounds(objects);
+
+    if (!bounds) {
+        return null;
+    }
+
+    return enggExportTransform.createExportContext({ bounds, ...limits });
+}
+
+/*
  * THE SHEET'S OWN SOURCE, as the picture a written solution embeds.
  *
- * The text is used AS STORED - it is the code that drew the sheet - with the
- * object markers dropped and any inline colour definitions lifted into the
- * shared palette, so two sheets sharing a colour define it once. Nothing is
- * re-scaled: the picture's coordinates are the drawing's coordinates, the same
- * ones the Drawing Space compiles.
+ * The text arrives ALREADY FITTED to the page (see `fittedSheetSource`), so it
+ * is used as it stands - it is the code that drew the sheet, with the object
+ * markers dropped and any inline colour definitions lifted into the shared
+ * palette, so two sheets sharing a colour define it once.
  */
 function sheetSourcePicture(source, palette) {
     const lines = String(source || "").split("\n");

@@ -10,6 +10,7 @@ import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, MAX_TICKS_PER_AXIS, anal
 import { applyStyle, createSvgElement, paintColour, scaledStrokeWidth, zoomedFontHere } from "../svg-primitives.js";
 import enggDiagramEquations from "../../../features/workspace/model/analysis/diagram-equations.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
+import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
 
 
     /*
@@ -84,8 +85,15 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                 /*
                  * A beam is a slim outlined bar, so it reads
                  * as a solid member rather than a line.
+                 *
+                 * THE HALF-DEPTH IS THE SHARED ONE. This used to be a local
+                 * `6` applied to BOTH sides (a 12-unit bar), while the source
+                 * writer and the Fit-All bounds each used a half-depth of 3 - so
+                 * the same beam was twice as deep on the sheet as in the
+                 * generated code, and the fit reserved only half of it. One
+                 * constant, read by the canvas, the writer and the bounds.
                  */
-                const depth = 6;
+                const depth = BEAM_HALF_DEPTH;
 
                 svg.appendChild(
                     createSvgElement("polygon", {

@@ -1,0 +1,10 @@
+{
+    "id":  "dynamics.dynamics-create.angular-vector",
+    "label":  "Angular Vector",
+    "category":  "dynamics",
+    "group":  "dynamics-create",
+    "parentId":  "dynamics.dynamics-create.kinematics",
+    "libraryPath":  "src/tool-library/dynamics/dynamics-create/angular-vector",
+    "template":  "template.tex",
+    "implemented":  false
+}

@@ -106,6 +106,11 @@ const thick = write(objectOf("line", { start: { x: 0, y: 0 }, end: { x: 10, y: 0
 const widthOf = (text) => Number((text.match(/line width=([\d.]+)pt/) || [])[1]);
 
 check("a named thickness is written as a pen width", Number.isFinite(widthOf(thin)), thin);
+check(
+  "and it is the preset's width through the ONE canvas calibration - Thin is 0.5 x 2.4 = 1.2pt",
+  widthOf(thin) === 1.2,
+  thin,
+);
 check("and Thick is wider than Thin", widthOf(thick) > widthOf(thin), `${widthOf(thick)} vs ${widthOf(thin)}`);
 
 const arrowed = write(objectOf("line", { start: { x: 0, y: 0 }, end: { x: 20, y: 0 } }, { arrowStart: "bar", arrowEnd: "filled" }));
@@ -188,18 +193,19 @@ check("a Solid circle writes its fill", has(filledCircle, "fill=daetumC00FF00"),
 console.log("\nArc");
 console.log("---");
 
-/* An arc's angles are stored in RADIANS (as the canvas draws them) and written in degrees. */
-const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: Math.PI / 2 }));
+/* An arc's angles are stored in DEGREES - what the factories take and what TikZ
+ * wants - so they are written as they stand. */
+const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: 90 }));
 
 check("an arc writes its committed radius and sweep", has(arc, "radius=10") && has(arc, "start angle=0") && has(arc, "end angle=90"), arc);
 check("and starts at the point on its own circle", has(arc, "(10,0)"), arc);
 
 /* An arc that crosses the 0/360 seam keeps its unwrapped end angle. */
-const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: (350 * Math.PI) / 180, endAngle: (370 * Math.PI) / 180 }));
+const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 350, endAngle: 370 }));
 
 check("an arc across the 0-degree seam keeps its unwrapped angles", has(seamArc, "start angle=350") && has(seamArc, "end angle=370"), seamArc);
 
-check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0.7, endAngle: 0.7 })) === null);
+check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 40, endAngle: 40 })) === null);
 
 /* ============================================================= Polygon */
 

@@ -6,7 +6,7 @@
  * Deep Teal & Ice gives each theme a default line colour that is legible against
  * the canvas it is drawn on:
  *
- *   LIGHT   #193335 - a dark teal-charcoal on the light sheet
+ *   LIGHT   #000000 - BLACK: ordinary drawing ink on white paper
  *   DARK    #E8F5F3 - an ice-white on the dark sheet
  *
  * The rules, and the ones this pins (a colour-only feature, §4):
@@ -77,8 +77,8 @@ const root = global.document.documentElement;
 console.log("\n  the theme names a default line colour for each palette\n");
 
 check(
-  "light is the dark teal-charcoal",
-  theme.DEFAULT_LINE_COLOUR.light === "#193335",
+  "light is drawing black",
+  theme.DEFAULT_LINE_COLOUR.light === "#000000",
   theme.DEFAULT_LINE_COLOUR.light,
 );
 
@@ -100,7 +100,7 @@ console.log("\n  it resolves against the theme in force, including System\n");
 theme.setThemePreference("light");
 check(
   "an explicit light theme gives the light line",
-  theme.defaultLineColour() === "#193335",
+  theme.defaultLineColour() === "#000000",
   theme.defaultLineColour(),
 );
 
@@ -122,7 +122,7 @@ check(
 osPrefersDark = false;
 check(
   "and follows it back to light",
-  theme.defaultLineColour() === "#193335",
+  theme.defaultLineColour() === "#000000",
   theme.defaultLineColour(),
 );
 
@@ -138,8 +138,8 @@ engg.setThemeLineColour(theme.defaultLineColour());
   );
 
   check(
-    "a light-theme line defaults to #193335",
-    line.style.stroke === "#193335",
+    "a light-theme line defaults to black",
+    line.style.stroke === "#000000",
     line.style.stroke,
   );
 }
@@ -192,7 +192,7 @@ console.log("\n  changing the theme leaves existing geometry alone\n");
 
   check(
     "the line is the light colour to begin with",
-    existing.style.stroke === "#193335",
+    existing.style.stroke === "#000000",
     existing.style.stroke,
   );
 
@@ -201,13 +201,13 @@ console.log("\n  changing the theme leaves existing geometry alone\n");
 
   check(
     "switching to dark does NOT recolour the existing line",
-    existing.style.stroke === "#193335",
+    existing.style.stroke === "#000000",
     existing.style.stroke,
   );
 
   check(
     "and the object the SHEET holds is unchanged too",
-    state.objects[0].style.stroke === "#193335",
+    state.objects[0].style.stroke === "#000000",
     state.objects[0].style.stroke,
   );
 
@@ -258,7 +258,7 @@ console.log("\n  the initial state carries the theme default and the flag\n");
 
   check(
     "a fresh state's default stroke is the theme's",
-    state.styleDefaults.stroke === "#193335",
+    state.styleDefaults.stroke === "#000000",
     state.styleDefaults.stroke,
   );
 
@@ -344,3 +344,4 @@ console.log(`\n  ${pass} passed, ${fail} failed\n`);
 if (fail) {
   process.exitCode = 1;
 }
+

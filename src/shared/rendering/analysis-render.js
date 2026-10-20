@@ -480,7 +480,16 @@ import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
      *
      *   { kind: "curve", id, points: [worldPoint, …] }
      */
-    function analysisSketchMarks(geometry) {
+    /*
+     * THE OBJECT, OR ITS GEOMETRY.
+     *
+     * Callers have both at hand - the renderer holds the geometry, while a
+     * bounds or hit-test path holds the object - and answering either is what
+     * keeps a caller from having to know the difference. A diagram passed as its
+     * geometry is the same diagram.
+     */
+    function analysisSketchMarks(source) {
+        const geometry = source && source.geometry ? source.geometry : source;
         const elements = Array.isArray(geometry?.sketchElements)
             ? geometry.sketchElements
             : [];

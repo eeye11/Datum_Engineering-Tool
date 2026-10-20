@@ -1,4 +1,4 @@
-﻿﻿/*
+﻿/*
  * ============================================================
  * THE FEATURES PANE - THE SELECTION'S OWN PROPERTIES
  * ============================================================
@@ -53,6 +53,7 @@ import { settingsFor } from "./tool-settings-store.js";
 import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pane.js";
 import { openColourPicker } from "../../../shared/ui/colour-picker.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
 
 let host = null;
 
@@ -462,7 +463,71 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
         );
     }
 
+    /*
+     * THE ANALYSIS EDITORS, IN THE FEATURES TAB.
+     *
+     * An SFD, BMD or AFD is not only a set of properties: it is a diagram, and
+     * the two ways of producing one - drawing it by hand or typing its equation
+     * - are the EXISTING Sketch Editor and Plot Editor (`shared/ui/editors/`).
+     * They were reachable only from the placement commit, so a diagram saved,
+     * reopened or deselected could not be edited again without re-creating it.
+     *
+     * The buttons live here rather than on a toolbar because this tab already
+     * answers "what can I change about what I have selected?" - and they are
+     * shown only for a diagram, because the editors edit a diagram's own sketch
+     * or plot and nothing else's. Each one opens the SAME editor the commit
+     * opens, with the same callbacks, so there is no second editing path to
+     * keep in step.
+     */
+    const editors = analysisEditorsMarkup(objects);
+
+    if (editors) {
+        markup.push(editors);
+    }
+
     return headerMarkup(objects) + markup.join("");
+}
+
+/*
+ * The Sketch Editor and Plot Editor rows for a single selected diagram.
+ *
+ * A multi-selection has no single sketch to open, so no editors are offered for
+ * one - an editor that silently picked the first object of three would edit
+ * something the student did not choose.
+ */
+function analysisEditorsMarkup(objects) {
+    if (objects.length !== 1) {
+        return "";
+    }
+
+    const object = objects[0];
+    const editors = analysisEditorsFor(object);
+
+    if (!editors.length) {
+        return "";
+    }
+
+    const rows = editors
+        .map(
+            (editor) =>
+                `<div class="dfp-row" data-analysis-editor-row="${escapeHtml(editor.id)}">` +
+                `<span class="dfp-row-label">${escapeHtml(editor.label)}</span>` +
+                `<span class="dfp-row-control">` +
+                `<button type="button" class="dfp-button" ` +
+                `data-analysis-editor="${escapeHtml(editor.id)}" ` +
+                `data-object-id="${escapeHtml(object.id)}">` +
+                `${escapeHtml(editor.button)}</button>` +
+                `</span>` +
+                `</div>`
+        )
+        .join("");
+
+    return (
+        `<div class="dfp-section" data-feature-group="analysis-editors">` +
+        `<div class="dfp-section-heading">Diagram Editors</div>` +
+        rows +
+        `</div>`
+    );
 }
 
 /*
@@ -805,6 +870,14 @@ export function installFeaturesPane() {
     }
 
     host.addEventListener("click", (event) => {
+        const editorButton = event.target.closest?.("[data-analysis-editor]");
+
+        if (editorButton) {
+            openAnalysisEditorForObject(editorButton.dataset.objectId, editorButton.dataset.analysisEditor);
+
+            return;
+        }
+
         const swatch = event.target.closest?.("[data-feature-colour]");
 
         if (swatch) {

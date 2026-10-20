@@ -188,7 +188,15 @@ function createDrawingState() {
              */
             strokeExplicit: false,
             fill: "none",
-            lineWidth: 0.5,
+            /*
+             * THIN, BY NAME - and Thin is TikZ's 0.4pt.
+             *
+             * The width a NEW object starts at, expressed as the preset the
+             * Features panel shows so the panel opens on "Thin" rather than on a
+             * Custom box. It is a NOMINAL width: an export reduces it with the
+             * drawing and never writes back over it.
+             */
+            lineWidth: "thin",
             lineType: "solid",
             opacity: 1
         },
@@ -301,9 +309,22 @@ function createDrawingState() {
  * ========================================================
  *
  * A NEWLY drawn feature gets a stroke when the student has not chosen one. That
- * value is no longer a fixed literal: it follows the INTERFACE THEME - a dark
- * teal-charcoal on the light sheet, an ice-white on the dark one - so a default
- * line is always legible against the paper it lands on.
+ * value follows the INTERFACE THEME, because it is chosen for LEGIBILITY AGAINST
+ * THE SHEET: black ink on the dark sheet is no line at all.
+ *
+ * The two values are the drawing's own conventions:
+ *
+ *   LIGHT (white paper)   BLACK. This is what a drawing is made of, and what
+ *                         the source printer and every external TeX renderer
+ *                         produce - so a line drawn and never recoloured is the
+ *                         same colour in DAETUM and in the document.
+ *   DARK  (charcoal UI)   an ICE-WHITE paper ink, so a default line stays visible
+ *                         on the dark sheet.
+ *
+ * It used to be `#193335` - a dark TEAL-CHARCOAL - on the light sheet. That is a
+ * theme accommodation, not the drawing's ink, and every object left at the
+ * default then arrived in TikZ as `\definecolor{daetumC193335}{RGB}{25,51,53}`:
+ * visibly teal, and different from the black the student asked for.
  *
  * WHY A SETTABLE VALUE RATHER THAN AN IMPORT.
  *
@@ -322,7 +343,7 @@ function createDrawingState() {
  * The fallback literal is the LIGHT default, so a module-load check or a pure
  * geometry test - which never sets a theme - still draws a real, dark line.
  */
-const LIGHT_LINE_COLOUR = "#193335";
+const LIGHT_LINE_COLOUR = "#000000";
 
 let themeLineColour = LIGHT_LINE_COLOUR;
 
@@ -356,7 +377,7 @@ function createStyle(overrides = {}) {
     return {
         stroke: resolveDefaultStroke(overrides),
         fill: "none",
-        lineWidth: 0.5,
+        lineWidth: "thin",
         lineType: "solid",
         opacity: 1,
         ...overrides
@@ -433,6 +454,42 @@ function seedSupportAttachment(
     }
 
     return attachment;
+}
+
+/*
+ * ========================================================
+ * A FACTORY THAT ALSO TAKES THE DOCUMENT'S IDENTITY
+ * ========================================================
+ *
+ * The factories above MINT an id, because a tool drawing something new needs
+ * one. The source reader does not: a block says which object it belongs to, and
+ * an object created from that block must carry THAT id or the block would stop
+ * describing the object on the very next parse.
+ *
+ * Rather than a second table of factories, this builds through the same
+ * `createGeometryObject`, then puts the block's id and name on the object and
+ * gives it the block's style. The object shape, its defaults, its label and its
+ * derived fields therefore stay the model's decision, in one place.
+ */
+function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
+    if (!type) {
+        return null;
+    }
+
+    const object = createGeometryObject(
+        type,
+        geometry,
+        {
+            name: name || undefined,
+            style: style ? { ...style } : undefined
+        }
+    );
+
+    if (id) {
+        object.id = String(id);
+    }
+
+    return object;
 }
 
 function createGeometryObject(type, geometry, options = {}) {
@@ -3114,6 +3171,7 @@ const enggDrawingState = {
     resolveDefaultStroke,
     setThemeLineColour,
     createGeometryObject,
+    geometryObjectFromSource,
     geometryFactories,
     addObject,
     removeObject,

@@ -124,7 +124,11 @@ check("a rotated body keeps its rotation in the corners", !has(turnedBody, "(10,
 
 const beam = write(objectOf("beam", { start: { x: 0, y: 100 }, end: { x: 120, y: 100 }, depth: 12 }));
 
-check("a beam is drawn between its committed endpoints", has(beam, "(0,103)") && has(beam, "(120,103)") && has(beam, "(0,97)"), beam);
+check(
+  "a beam is drawn between its committed endpoints",
+  has(beam, "(0,106)") && has(beam, "(120,106)") && has(beam, "(0,94)"),
+  beam,
+);
 check("as a member with depth, closed", has(beam, "-- cycle"), beam);
 check("with no automatic label", !has(beam, "\\node"), beam);
 
@@ -343,9 +347,33 @@ const roller = write(objectOf("roller-support", { position: { x: 50, y: 0 }, ori
 const fixed = write(objectOf("fixed-support", { position: { x: 0, y: 0 }, orientation: Math.PI / 2, flipped: false }));
 const smooth = write(objectOf("smooth-support", { position: { x: 50, y: 0 }, orientation: Math.PI / 2, flipped: false }));
 
-check("a pin support is a triangle on its ground line", has(pin, "-- cycle") && has(pin, "line width=0.35pt"), pin);
-check("a roller support adds its two rollers", count(roller, /circle\[radius=1.5\]/g) === 2, roller);
-check("a fixed support is a wall with hatching", has(fixed, "line width=0.35pt") && !has(fixed, "-- cycle"), fixed);
+/*
+ * A SUPPORT'S HATCHING IS DRAWN AT THE OBJECT'S OWN PEN.
+ *
+ * It used to append a literal `line width=0.35pt` to an option list that already
+ * carried the object's width, so every support command declared TWO widths and
+ * TeX used the last one. The symbol now draws at the width the object states.
+ */
+const COMMAND_WIDTH_OPTION = /\\draw\[([^\]]*)\][^;]*;/g;
+
+function widthsPerCommand(text) {
+  return [...String(text).matchAll(COMMAND_WIDTH_OPTION)].map(
+    (match) => (match[1].match(/line width=/g) || []).length,
+  );
+}
+
+check(
+  "a pin support is a triangle on its ground line",
+  has(pin, "-- cycle") && widthsPerCommand(pin).every((n) => n <= 1),
+  pin,
+);
+check("a roller support adds its two rollers", count(roller, /circle\[radius=1\.5\]/g) === 2, roller);
+check("a fixed support is a wall with hatching", has(fixed, "--") && !has(fixed, "-- cycle"), fixed);
+check(
+  "and no support command carries two widths",
+  widthsPerCommand(fixed).every((n) => n <= 1) && widthsPerCommand(roller).every((n) => n <= 1),
+  fixed,
+);
 check("a smooth support is a rounded contact", has(smooth, "circle[radius=2]"), smooth);
 check("the four symbols are genuinely different", new Set([pin, roller, fixed, smooth]).size === 4);
 check("and none carries an automatic label", ![pin, roller, fixed, smooth].some((text) => has(text, "\\node")));
@@ -637,7 +665,7 @@ check("it declares the colours it uses", has(standalone, "\\definecolor{daetumC1
 check("and it has document boundaries", has(standalone, "\\begin{document}") && has(standalone, "\\end{document}"));
 check(
   "with the picture unchanged inside",
-  has(standalone, "(0,103)") && has(standalone, "(120,103)") && has(standalone, "% DAETUM_OBJECT_BEGIN id=\"exported-beam\""),
+  has(standalone, "(0,106)") && has(standalone, "(120,106)") && has(standalone, "% DAETUM_OBJECT_BEGIN id=\"exported-beam\""),
   standalone.slice(0, 1200),
 );
 check(

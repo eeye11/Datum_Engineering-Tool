@@ -109,11 +109,54 @@ test("an object being moved is drawn where it is, not where the picture last saw
   assert.deepEqual(liveIds(), [line.id]);
 });
 
-test("the picture's print line widths are shown at the model's screen width", () => {
+/*
+ * A COMPILED STROKE IS SHOWN AT THE WIDTH IT STATES.
+ *
+ * `showStrokesAtScreenWidth` adopts the picture's own print width for the screen
+ * (pinned against zoom), and the generator writes that width as
+ * `nominalWidth x the drawing's export factor`. So the number on the sheet is the
+ * number in the source - which is what makes the picture look the same here and
+ * in any external renderer.
+ *
+ * The stub above states `stroke-width=".28"`, which is under the half-pixel
+ * floor the canvas keeps so a hairline stays visible - so the sheet shows 0.5 px.
+ * What matters is the INVARIANT: the shown width equals the stated width, never
+ * the `x 4.3` inflation an older conversion applied to recover a "screen" width.
+ */
+test("the picture's print line widths are shown at the width they state", () => {
   const stroke = canvas.querySelector(":scope > svg.drawing-source-layer [stroke-width]");
 
   assert.ok(stroke, "the compiled picture is on screen");
-  /* 0.28pt is lineWidth 0.5, which the model always drew 1.2px wide. */
-  assert.equal(Number(stroke.getAttribute("stroke-width")), 1.2);
+
+  /* 0.28pt is below the readable floor, so it is shown there - not inflated. */
+  assert.equal(Number(stroke.getAttribute("stroke-width")), 0.5);
   assert.equal(stroke.getAttribute("vector-effect"), "non-scaling-stroke");
+});
+
+test("and every declared width is a nominal preset at the drawing's one factor", () => {
+  const { activeSourceManager } = require(locate("drawing-source-manager.js"));
+  const { exportTransformFor } = require(locate("source-synchronization.js"));
+
+  const source = activeSourceManager().getSource();
+  const declared = [...source.matchAll(/line width=([\d.]+)pt/g)].map((match) => Number(match[1]));
+
+  assert.ok(declared.length > 0, `the drawing has a stroke width: ${source}`);
+
+  /*
+   * ONE FACTOR, APPLIED ONCE. Dividing a declared width by the drawing's export
+   * factor gives back the NOMINAL width the object's style holds. If the factor
+   * were applied twice, or not at all, this quotient would not be one of the
+   * presets - which is the whole contract in one assertion.
+   */
+  const factor = exportTransformFor(drawingState.objects).factor;
+  const presets = [0.1, 0.2, 0.4, 0.6, 0.8, 1.2, 1.6];
+
+  for (const width of declared) {
+    const nominal = width / factor;
+
+    assert.ok(
+      presets.some((preset) => Math.abs(preset - nominal) < 0.02),
+      `a declared width of ${width}pt is ${nominal.toFixed(3)}pt nominal at factor ${factor.toFixed(4)}`,
+    );
+  }
 });

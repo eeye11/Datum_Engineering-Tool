@@ -759,7 +759,14 @@ export function installCanvasEvents() {
                             null,
 
                         inference:
-                            null
+                            null,
+
+                        /*
+                         * AND THE POINTER'S OWN POSITION, so the crosshair the
+                         * overlay draws from it is not left behind at the edge
+                         * the pointer went out through.
+                         */
+                        rawPointerPoint: null
                     }
                 );
 

@@ -328,6 +328,16 @@ if (error) {
 
   check("typing reaches the document's source", manager.getSource().includes("(0,0) -- (10,0)"));
 
+  /*
+   * THE MODEL AS THE DRAFT LEAVES IT.
+   *
+   * A typed, complete command for a shape the drawing does not hold is ADOPTED -
+   * that is the point of the source round trip: hand-typed TikZ becomes editable.
+   * The number of objects is therefore recorded HERE, after that adoption, so the
+   * next assertion can prove that an INCOMPLETE draft changes nothing further.
+   */
+  const objectsAfterDraft = drawingState.objects.length;
+
   const broken = "\\begin{tikzpicture}\n\\draw (0,0 -- (10,0);";
 
   textarea.value = broken;
@@ -338,7 +348,12 @@ if (error) {
     manager.getSource().includes("\\draw (0,0 -- (10,0);"),
     manager.getSource().slice(0, 80),
   );
-  check("and the drawing is not rebuilt from it", drawingState.objects.length === 1, String(drawingState.objects.length));
+
+  check(
+    "and an unfinished command adds nothing to the model",
+    drawingState.objects.length === objectsAfterDraft,
+    `${drawingState.objects.length} vs ${objectsAfterDraft}`,
+  );
 
   /* ======================================================== no loops, no duplicates */
 
@@ -379,7 +394,11 @@ if (error) {
       countOf(afterEdit, `DAETUM_OBJECT_END id="${surviving.id}"`) === 1,
     afterEdit,
   );
-  check("and the object model was not changed by the source round trip", drawingState.objects.length === 1);
+  check(
+    "and the object model was not changed by the source round trip",
+    drawingState.objects.length === objectsAfterDraft,
+    `${drawingState.objects.length} vs ${objectsAfterDraft}`,
+  );
   check("the drawing edit reached the source", /22AA44/i.test(afterEdit));
 
   /* ======================================================== undo */

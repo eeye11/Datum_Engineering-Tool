@@ -240,16 +240,16 @@ export function handleCanvasClick(
 
     /*
      * ========================================================
-     * A BARE CLICK WITH A ONE-GESTURE PATH TOOL LEAVES THE TOOL
+     * A BARE CLICK WITH A ONE-GESTURE TOOL LEAVES THE TOOL
      * ========================================================
      *
      * A Beam and an Arrow are made by ONE press-drag-release - their gesture
-     * arrives through the drag path, which
-     * has already armed the press and will have committed on release. So a
-     * plain `click` reaching here is NOT the first point of a shape: it is the
-     * student finishing with the tool. It exits to Select and selects whatever
-     * was under the cursor, which is the automatic way out that stops a tool
-     * trapping someone who has just drawn something.
+     * arrives through the drag path, which has already classified it on release
+     * (see creation-drag.js `finishCreationClick`). What remains here is the
+     * click that reaches this router WITHOUT a creation session behind it - an
+     * edge case such as a release whose session was already dropped - and it is
+     * answered the same way: back to Select, selecting whatever was under the
+     * cursor.
      *
      * IT IS PLACED BEFORE the construction branch below, because that branch
      * would otherwise consume the click as a first point. It is placed AFTER the
@@ -257,11 +257,18 @@ export function handleCanvasClick(
      * EXPLICIT REQUIRED INPUT - a dimension collecting references, a label or a
      * leader attaching, a Resultant being told which force - must keep receiving
      * the click. The classification decides this; see tool-classification.js.
+     *
+     * A TOOL MID-WAY THROUGH ITS OWN STEPS IS NOT "FINISHED". A Triangle waiting
+     * for its third corner, a Polygon for its side count, an Arc for its next
+     * point, a load for its span - those clicks are real decisions, so they go
+     * to the construction pipeline below exactly as before.
      */
     if (
         shouldExitToSelectOnClick(
             drawingState.activeTool
-        )
+        ) &&
+        drawingState.interaction.phase ===
+            "idle"
     ) {
         exitToolToSelect(
             event

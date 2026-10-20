@@ -24,6 +24,29 @@
  */
 
 /*
+ * ============================================================
+ * THE STYLE CONVERSION IS `tikz-style.js`
+ * ============================================================
+ *
+ * Colour, pen width, dash pattern and opacity are decided there, once, so every
+ * tool serialises a given style identically and the export factor is applied in
+ * exactly one place. The width presets live there too and are re-exported, so a
+ * module that asks this one for them still gets the single copy.
+ */
+import {
+  DEFAULT_STROKE,
+  NOMINAL_ARROW_HEAD_PT,
+  THICKNESS_PRESETS,
+  resolveLineWidth,
+  colourName as sharedColourName,
+  colourDefinition as sharedColourDefinition,
+  strokeOptions as sharedStrokeOptions,
+  fillOptions as sharedFillOptions
+} from "./tikz-style.js";
+
+export { THICKNESS_PRESETS, resolveLineWidth };
+
+/*
  * HOW LONG ONE DRAWING UNIT IS DRAWN, in millimetres.
  *
  * DAETUM stores geometry in drawing units and the canvas paints one unit as
@@ -71,40 +94,11 @@ export function relativePoint(dx, dy) {
  * THICKNESS PRESETS
  * ============================================================
  *
- * The Features panel offers named thicknesses, and the object model stores a
- * NUMERIC `lineWidth`. This table is the one conversion between the two, so a
- * named preset chosen in the panel and a speed read back from a saved file can
- * never disagree about which width "Thin" means.
- *
- * The values are in the model's own drawing units, which the renderer scales to
- * screen pixels. They are NOT engineering measurements and carry no unit in the
- * interface.
+ * The table and `resolveLineWidth` live in `tikz-style.js` - the ONE place that
+ * turns a DAETUM style into TikZ - and are re-exported at the top of this
+ * module, so every existing importer keeps working while there is still exactly
+ * one copy of the numbers.
  */
-export const THICKNESS_PRESETS = {
-  "very-thin": 0.25,
-  thin: 0.5,
-  normal: 0.75,
-  medium: 1.25,
-  thick: 2,
-  "very-thick": 3
-};
-
-/*
- * A numeric line width from either a preset name or a number.
- *
- * Absent means Normal, which is the documented default for a new Geometry
- * object. An unknown name also falls back to Normal rather than producing
- * `undefined` and a path with no width at all.
- */
-export function resolveLineWidth(value) {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
-    return value;
-  }
-
-  const named = THICKNESS_PRESETS[String(value ?? "").toLowerCase()];
-
-  return named !== undefined ? named : THICKNESS_PRESETS.normal;
-}
 
 /*
  * ============================================================
@@ -117,37 +111,14 @@ export function resolveLineWidth(value) {
  * deterministic name.
  */
 
-function normaliseHex(value) {
-  const text = String(value ?? "").trim();
-
-  if (!text || text === "none" || text === "transparent") {
-    return null;
-  }
-
-  const short = text.match(/^#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])$/);
-
-  if (short) {
-    return short
-      .slice(1)
-      .map((c) => c + c)
-      .join("")
-      .toUpperCase();
-  }
-
-  const long = text.match(/^#([0-9a-fA-F]{6})$/);
-
-  if (long) {
-    return long[1].toUpperCase();
-  }
-
-  return null;
-}
-
-function colourNameForHex(hex) {
-  // Must start with a letter for maximum TeX compatibility.
-  return `daetumC${hex}`;
-}
-
+/*
+ * THE COLOUR CONVERSION IS `tikz-style.js`'s.
+ *
+ * A hex colour becomes its deterministic `daetumC<hex>` name with an `{RGB}`
+ * definition - the one model DAETUM's renderer loads - and an absent colour is
+ * BLACK, never the interface theme's ink: the theme decides how a NEW object
+ * starts, not what colour an existing drawing is made of.
+ */
 function resolveTikzColour(value) {
   if (value == null) {
     return { name: null, define: null };
@@ -159,18 +130,9 @@ function resolveTikzColour(value) {
     return { name: null, define: null, none: true };
   }
 
-  const hex = normaliseHex(text);
+  const name = sharedColourName(text, { fallback: DEFAULT_STROKE });
 
-  if (hex) {
-    const name = colourNameForHex(hex);
-
-    return {
-      name,
-      define: `\\definecolor{${name}}{HTML}{${hex}}`,
-    };
-  }
-
-  return { name: text, define: null };
+  return { name, define: sharedColourDefinition(name, text) };
 }
 
 function uniqueLines(lines) {
@@ -215,55 +177,24 @@ function withPrelude(prelude, command) {
  * the picture or the tool - so an object that never set a width does not have
  * one written into its source as if the student had chosen it.
  */
-function strokeOptionsWithPrelude(style = {}) {
-  const options = [];
-  const prelude = [];
-
-  const stroke = resolveTikzColour(style.stroke);
-
-  if (stroke && stroke.none) {
-    options.push("draw=none");
-  } else if (stroke && stroke.name) {
-    if (stroke.define) {
-      prelude.push(stroke.define);
-    }
-
-    options.push(stroke.name);
-  }
-
+function strokeOptionsWithPrelude(style = {}, transform = null) {
   /*
-   * THE WIDTH is resolved through the shared preset table, so a style that
-   * names its thickness ("thin") and one that stores a number both produce a
-   * pen width. A style that names NEITHER gets the documented Normal default,
-   * which keeps an absent width from silently drawing a hairline.
+   * ONE CONVERSION, SHARED BY EVERY WRITER.
+   *
+   * Colour, width, dash pattern and opacity are turned into options by
+   * `tikz-style.js`, so a Line drawn with a Geometry tool, a Beam drawn with a
+   * Statics tool and a Note drawn with an Annotate tool, all at the same style,
+   * produce exactly the same option list. `transform` is the export context: it
+   * contributes the ONE factor that reduces the figure, and every width and dash
+   * length is multiplied by it exactly once.
    */
-  const width = resolveLineWidth(style.lineWidth);
+  const { options, definitions } = sharedStrokeOptions(style, { transform });
 
-  if (Number.isFinite(width) && width > 0) {
-    /*
-     * A pen width in points. DAETUM stores a lineWidth that maps to points
-     * through the same factor the LaTeX writer uses, so a width read back
-     * from source matches the width the panel showed.
-     */
-    options.push(`line width=${num(width * 0.56, 3)}pt`);
-  }
-
-  if (style.lineType === "dashed") {
-    options.push("dashed");
-  } else if (style.lineType === "dotted") {
-    /* `dotted` is TikZ's own name, so it needs no hand-written pattern. */
-    options.push("dotted");
-  } else if (style.lineType === "center") {
-    options.push("dash pattern=on 4pt off 2pt on 1pt off 2pt");
-  } else if (style.lineType === "construction") {
-    options.push("dash pattern=on 1pt off 2pt", "gray");
-  }
-
-  return { options, prelude };
+  return { options, prelude: definitions };
 }
 
-export function strokeOptions(style = {}) {
-  return strokeOptionsWithPrelude(style).options;
+export function strokeOptions(style = {}, transform = null) {
+  return strokeOptionsWithPrelude(style, transform).options;
 }
 
 function fillOptionWithPrelude(value, mode) {
@@ -279,16 +210,13 @@ function fillOptionWithPrelude(value, mode) {
     return { option: null, prelude: [] };
   }
 
-  const fill = resolveTikzColour(value);
+  const fill = sharedFillOptions({ fillMode: mode, fill: value });
 
-  if (!fill || fill.none || !fill.name) {
+  if (!fill.option) {
     return { option: null, prelude: [] };
   }
 
-  return {
-    option: `fill=${fill.name}`,
-    prelude: fill.define ? [fill.define] : [],
-  };
+  return { option: fill.option, prelude: fill.definitions };
 }
 
 /* The bracket after `\draw`, or nothing when there are no options. */
@@ -304,8 +232,13 @@ export function optionsBracket(options) {
  * A straight segment from one point to another. An arrowhead may be requested
  * at either end, or both.
  */
-export function straightLine(from, to, style = {}, { arrow = "none", arrowStart = null, arrowEnd = null } = {}) {
-  const { options, prelude } = strokeOptionsWithPrelude(style);
+export function straightLine(
+  from,
+  to,
+  style = {},
+  { arrow = "none", arrowStart = null, arrowEnd = null, transform = null } = {},
+) {
+  const { options, prelude } = strokeOptionsWithPrelude(style, transform);
 
   /*
    * AN INDEPENDENT HEAD AT EITHER END.
@@ -324,13 +257,19 @@ export function straightLine(from, to, style = {}, { arrow = "none", arrowStart 
    * the default single-line head, `{Latex}` a filled head, `|` a bar - and no
    * tip at all writes the bare `-` side of the token, which is the plain path.
    */
-  const startTip = arrowStart === null || arrowStart === undefined
-    ? (arrow === "start" || arrow === "both" ? ">" : "")
-    : arrowTip(arrowStart);
+  const startTip = scaleTip(
+    arrowStart === null || arrowStart === undefined
+      ? (arrow === "start" || arrow === "both" ? ">" : "")
+      : arrowTip(arrowStart),
+    transform,
+  );
 
-  const endTip = arrowEnd === null || arrowEnd === undefined
-    ? (arrow === "end" || arrow === "both" ? ">" : "")
-    : arrowTip(arrowEnd);
+  const endTip = scaleTip(
+    arrowEnd === null || arrowEnd === undefined
+      ? (arrow === "end" || arrow === "both" ? ">" : "")
+      : arrowTip(arrowEnd),
+    transform,
+  );
 
   const arrows = `${startTip}-${endTip}`;
 
@@ -344,6 +283,37 @@ export function straightLine(from, to, style = {}, { arrow = "none", arrowStart 
     `\\draw${optionsBracket(options)} ${point(from.x, from.y)} -- ${point(to.x, to.y)};`,
   );
 }
+
+/*
+ * THE ARROW TIP AT THE EXPORT SCALE.
+ *
+ * A TikZ tip's size is PHYSICAL and does not follow the coordinates, so a head
+ * on a reduced figure would stay full-size on a hairline shaft. `arrows.meta`
+ * (loaded by DAETUM's renderer AND by the standalone export) allows the size to
+ * be stated: `{Latex[length=.., width=..]}`. Only the two named tips can take
+ * it - `>` and `|` are the plain ones, and writing a size on them would change
+ * the drawing rather than preserve it.
+ */
+function scaleTip(tip, transform) {
+  const factor = Number(transform?.factor);
+
+  if (!tip || tip === ">" || tip === "|" || !Number.isFinite(factor) || factor >= 1) {
+    return tip;
+  }
+
+  const name = /^\{?([A-Za-z]+)\}?$/.exec(tip);
+
+  if (!name) {
+    return tip;
+  }
+
+  const length = Number((NOMINAL_ARROW_HEAD_PT * factor).toFixed(3));
+  const width = Number((length * 0.6).toFixed(3));
+
+  return `{${name[1]}[length=${length}pt, width=${width}pt]}`;
+}
+
+export { scaleTip as scaledArrowTip };
 
 /*
  * The TikZ arrow tip for one end of a line.

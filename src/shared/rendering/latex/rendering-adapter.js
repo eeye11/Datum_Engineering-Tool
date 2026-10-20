@@ -47,10 +47,27 @@ export const RENDER_ENDPOINT = "/api/render-tikz";
  * where that is decided.
  */
 export function wrapForRendering(source) {
-    const text = String(source ?? "").trim();
+    let text = String(source ?? "").trim();
 
     if (text === "") {
         return "\\begin{tikzpicture}\n\\end{tikzpicture}";
+    }
+
+    /*
+     * A PICTURE THAT IS NEVER CLOSED IS CLOSED HERE.
+     *
+     * The source can be halfway through an edit: the student has typed
+     * `\begin{tikzpicture}` and the `\end` has not been written yet. TeX would
+     * stop at the missing end and return nothing for the whole document, so the
+     * wrapper - which already owns the document's own boundaries - supplies the
+     * one that is missing. The student's text is NOT edited: this is the text
+     * that is compiled, and it is thrown away with the response.
+     */
+    const begins = (text.match(/\\begin\s*\{tikzpicture\}/g) || []).length;
+    const ends = (text.match(/\\end\s*\{tikzpicture\}/g) || []).length;
+
+    if (begins > ends) {
+        text += `\n\\end{tikzpicture}`.repeat(begins - ends);
     }
 
     if (/\\begin\s*\{tikzpicture\}/.test(text)) {
@@ -97,8 +114,7 @@ function transientError(message, cause) {
  * by its bounding box (see server/tikz.js), which is what the Drawing Space
  * needs to lay the picture over the object model. The source text sent is the
  * same either way.
- */
-export async function renderDrawingSource(source, { signal, anchorOrigin = false } = {}) {
+ */export async function renderDrawingSource(source, { signal, anchorOrigin = false } = {}) {
     let response;
 
     try {
@@ -129,11 +145,17 @@ export async function renderDrawingSource(source, { signal, anchorOrigin = false
             `The renderer returned an error (${response.status}).`;
 
         /*
-         * 503 is the service saying "not ready yet" (TikZ still loading), which
-         * is no verdict on the source - the canvas retries it later instead of
-         * marking this revision as broken.
+         * A SERVICE THAT IS NOT THERE IS NOT A VERDICT ON THE SOURCE.
+         *
+         * 503 is "still loading"; 404 and 405 mean the endpoint does not exist
+         * or does not accept a POST where this page is served - a static host, or
+         * a dev server without the proxy. Neither says anything about the TikZ
+         * the student wrote, so both are TRANSIENT: the last good drawing stays,
+         * a retry is scheduled, and no error is put in front of the student. Only
+         * a real compile rejection (422, or the compiler's own message) is an
+         * error about the source.
          */
-        if (response.status === 503) {
+        if (response.status === 503 || response.status === 404 || response.status === 405) {
             throw transientError(message);
         }
 

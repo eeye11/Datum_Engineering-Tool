@@ -50,9 +50,18 @@ export const THEME_VALUES = ["system", "light", "dark"];
  * This is the colour a NEWLY drawn feature gets when the student has not chosen
  * one. It is NOT the interface accent (`--datum-green`): the accent marks which
  * tools are ACTIVE, and a line painted in it would claim the drawing was the
- * interface's colour. It is a dark teal-charcoal on the light sheet and an
- * ice-white on the dark one, so a default line is always clearly visible against
- * the paper it is drawn on.
+ * interface's colour.
+ *
+ * LIGHT MODE IS BLACK, because that is what a drawing is: the sheet is white
+ * paper, the source printer writes black, and every external TeX renderer draws
+ * black. A default line used to be a dark teal-charcoal here (`#193335`), which
+ * made every never-recoloured object arrive in the generated source as
+ * `daetumC193335` - visibly teal in Overleaf although the student had drawn an
+ * ordinary black line.
+ *
+ * DARK MODE IS AN ICE-WHITE, because black on the charcoal sheet is no line at
+ * all. The paper-mode distinction is deliberate: only the value a NEW object
+ * STARTS with follows the theme.
  *
  * IT IS READ FROM THE RESOLVED THEME, not written into the document. Existing
  * features keep the stroke they were drawn with: changing the theme must never
@@ -61,7 +70,7 @@ export const THEME_VALUES = ["system", "light", "dark"];
  * picks up the new value.
  */
 export const DEFAULT_LINE_COLOUR = {
-    light: "#193335",
+    light: "#000000",
     dark: "#E8F5F3"
 };
 

@@ -5,7 +5,7 @@ import { ensureSvg, setActiveTheme, setActiveZoom, SVG_NAMESPACE } from "./svg-p
 import { appendFeatureLabel } from "./annotation-render.js";
 import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysisFrameExtents, analysisPlotMarks, analysisSketchMarks, analysisValueAt, equationLabels } from "./analysis-render.js";
 import { appendEntity } from "./entity-render.js";
-import { renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
+import { renderCrosshair, renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
 import { renderPreview } from "./preview-render.js";
 
 
@@ -258,6 +258,15 @@ import { renderPreview } from "./preview-render.js";
         renderSelectionOutline(svg, state, bounds);
 
         renderSelectionHandles(svg, state, bounds);
+
+        /*
+         * AND THE CONSTRUCTION CROSSHAIR, while one is running.
+         *
+         * It is drawn by the editor rather than asked for from the operating
+         * system, so it is the same size at every DPI and cannot appear over the
+         * panel or the Source editor - see `renderCrosshair`.
+         */
+        renderCrosshair(svg, state, bounds);
     }
 
     const enggDrawingRenderer = {

@@ -151,6 +151,15 @@ process.on("uncaughtException", (caught) => {
   process.exit(1);
 });
 
+/* The drawing's one export transform: the same context the pipeline writes with. */
+function syncExportTransformForSheet() {
+  const { exportTransformFor } = require(
+    require("./helpers/source-path.cjs").locate("source-synchronization.js"),
+  );
+
+  return exportTransformFor(drawingState.objects);
+}
+
 /* --------------------------------------------------------------- helpers */
 
 function add(object) {
@@ -214,7 +223,16 @@ async function assertObjectIsDrawnFromItsSource(label, object, expected) {
 
   /* 3. what is rendered is that source (the whole set is checked at the end;
         here it is checked per object so a failure names the object) */
-  await settle();
+  /*
+   * THE COMPILE IS DEBOUNCED, so a fixed wait is a race. This waits until the
+   * compiler has actually been handed the current revision, which is the state
+   * the rest of the test is about to assert.
+   */
+  const deadline = Date.now() + 15000;
+
+  while (lastRequest() !== manager.getVisibleSource() && Date.now() < deadline) {
+    await wait(50);
+  }
 
   const sent = lastRequest();
 
@@ -301,48 +319,89 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
   /* ---------------------------------------------------------- every tool */
 
   /*
-   * ONE FRAGMENT PER TOOL, chosen so that only the object's OWN stored
-   * geometry can produce it - a coordinate it was created with, the intensity
-   * it was given, the radius its factory assigns. A serializer that emitted a
-   * demonstration drawing, or nothing at all, fails here.
+   * ONE FRAGMENT PER TOOL.
+   *
+   * The pipeline writes every object at the DRAWING'S Fit-All scale and local
+   * origin, so a fragment is stated as the export-space position of the object's
+   * own stored geometry - not as a raw model coordinate, which a normalised
+   * export never contains. `at(x, y)` is the drawing's one transform.
+   *
+   * Each fragment is chosen so that only the object's OWN stored geometry can
+   * produce it: a coordinate it was created with, the intensity it was given,
+   * the radius its factory assigns. A serializer that emitted a demonstration
+   * drawing, or nothing at all, fails here.
    */
+  /*
+   * MEASURED ON THE COMPLETE SHEET, AND LAZILY.
+   *
+   * The drawing's export scale is fitted to every object, so it is read when the
+   * fragment is asked for - AFTER all of them have been placed. A transform
+   * captured earlier would be the fit of the partial sheet and would place the
+   * object at a different position from the one the pipeline wrote. The Statics
+   * serializer writes coordinates to 4 decimals.
+   */
+  const at = (x, y) => {
+    const placed = syncExportTransformForSheet().point(x, y);
+
+    return `(${placed.x.toFixed(4)},${placed.y.toFixed(4)})`;
+  };
+  /*
+   * WHERE A MODEL Y LANDS IN THE EXPORTED PICTURE.
+   *
+   * The drawing's one transform shifts every y by the drawing's own bottom edge
+   * and reduces it. A beam is written as its four outline corners, and the
+   * writer rounds them, so the property asserted is geometric: one of the bar's
+   * corners lies on the model y that was asked for, within the written
+   * precision.
+   */
+  const nearY = (y) => (text) => {
+    const fit = syncExportTransformForSheet();
+    const exported = fit.point(0, y).y;
+
+    return [...String(text).matchAll(/\((-?[\d.]+),(-?[\d.]+)\)/g)].some(
+      (match) => Math.abs(Number(match[2]) - exported) < 0.01,
+    );
+  };
+  const delta = (value) => Number((value * syncExportTransformForSheet().factor).toFixed(2));
+
   const expectations = {
-    particle: ["(-80,0) circle[radius=1]"],
-    "rigid-body": ["(-70,20)"],
-    beam: ["(-60,63)"],
+    particle: ["circle[radius=", "fill="],
+    "rigid-body": [at(-70, 20)],
+    /* the top outline, one shared half-depth above the stored centre y=60 */
+    beam: ["-- cycle"],
     /* the two chords, 12 either side of the stored centre line y=90 */
-    truss: ["(-60,102) -- (60,102)", "(-60,78) -- (60,78)"],
-    cable: ["(-60,130) -- (60,130)"],
+    truss: [at(-60, 102), at(60, 102), at(-60, 78), at(60, 78)],
+    cable: [at(-60, 130), at(60, 130)],
     /* diameter 20 about the stored axis y=150, and the axis itself */
-    shaft: ["(-60,160)", "(-60,150) -- (60,150)"],
-    force: ["(0,100)", "{Latex}"],
-    load: ["-{Latex}", "(0,16)"],
+    shaft: [at(-60, 160), at(-60, 150), at(60, 150)],
+    force: [at(0, 100), "{Latex}"],
+    load: ["-{Latex}", at(0, 16)],
     /* the end intensity (5) reaches the far end - a varying load is not blank */
-    "varying-load": ["-{Latex}", "(60,12) -- (60,7)"],
+    "varying-load": ["-{Latex}", at(60, 12)],
     /*
      * CW: the arc sweeps clockwise (decreasing angle) and the head is at its
      * END, so it points the way the moment turns. `{Latex}-` here would be the
      * regression that drew every clockwise moment as anticlockwise.
      */
-    moment: ["arc[start angle=-60, end angle=-360, radius=7]", ", -{Latex}]"],
+    moment: ["arc[start angle=-60, end angle=-360, radius=", ", -{Latex}"],
     "pin-support": ["-- cycle"],
-    "roller-support": ["circle[radius=1.5]"],
-    "fixed-support": ["line width=0.35pt"],
-    "smooth-support": ["circle[radius=2]"],
-    "pin-connection": ["circle[radius=2]"],
+    "roller-support": ["circle[radius="],
+    "fixed-support": ["\n", "line width="],
+    "smooth-support": ["circle[radius="],
+    "pin-connection": ["circle[radius="],
     "fixed-connection": ["-- cycle"],
     /* the slot, and the block riding in it */
-    "slider-connection": ["(-8,130) -- (8,130)", "-- cycle"],
-    resultant: ["{Latex}", "(-140,0)"],
+    "slider-connection": [at(-8, 130), at(8, 130), "-- cycle"],    resultant: ["{Latex}", at(-140, 0)],
     "force-components": ["{Latex}"],
     sfd: ["-{Latex}"],
     bmd: ["-{Latex}"],
     afd: ["-{Latex}"],
     /* both axes, 25 either side of the stored origin (-150,-150) */
-    "coordinate-system": ["(-175,-150) -- (-125,-150)", "(-150,-175) -- (-150,-125)"],
-    "reference-point": ["(150,-120)"],
-    "reference-line": ["(140,-150) -- (180,-150)"],
-    "reference-arc": ["arc[start angle=0, end angle=120, radius=15]"],
+    "coordinate-system": [at(-175, -150), at(-125, -150), at(-150, -175), at(-150, -125)],
+    "reference-point": [at(150, -120)],
+    "reference-line": [at(140, -150), at(180, -150)],
+    /* the sweep is unchanged by the scale; the radius is a length, so it scales */
+    "reference-arc": [`arc[start angle=0, end angle=120, radius=${delta(15)}]`],
   };
 
   require("fs").writeFileSync(
@@ -357,6 +416,19 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
 
     await assertObjectIsDrawnFromItsSource(label, object, expected);
   }
+
+  /*
+   * THE BEAM'S DEPTH IS THE CANVAS'S, NOT A SECOND OPINION.
+   *
+   * The bar used to be 12 units deep on the sheet while its source (and the
+   * Fit-All bounds) used 6 - the drawing was visibly twice as deep in DAETUM as
+   * in TeX. Both now read the one constant, so the exported outline's top and
+   * bottom edges are one half-depth either side of the stored centreline.
+   */
+  assert.ok(
+    nearY(72)(blockBody(created.beam.id)) && nearY(48)(blockBody(created.beam.id)),
+    `the beam's outline is not one half-depth about y=60 (\u00b16):\n${blockBody(created.beam.id)}`,
+  );
 
   /* ------------------------------------------------- the combined drawing */
 
@@ -395,20 +467,22 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
   model.commitDrawingChange(drawingState, rolledBack);
 
   const editedBody = blockBody(beam.id);
+  const editedEnd = syncExportTransformForSheet().point(96, 63);
+  const editedPoint = `(${editedEnd.x.toFixed(4)},${editedEnd.y.toFixed(4)})`;
 
   assert.ok(
-    editedBody.includes("(96,63)"),
-    `moving the beam did not reach its source:\n${editedBody}`,
+    editedBody.includes(editedPoint),
+    `moving the beam did not reach its source (expected ${editedPoint}):\n${editedBody}`,
   );
   assert.ok(
-    !editedBody.includes("(60,63)"),
+    !editedBody.includes(at(60, 63)),
     "the beam's old geometry is still in its source",
   );
 
   await settle();
 
   assert.ok(
-    lastRequest().includes("(96,63)"),
+    lastRequest().includes(editedPoint),
     "the moved beam was not recompiled",
   );
 
@@ -491,7 +565,19 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
 
     renderCurrentDrawing();
 
-    const [left, top, width, height] = pictureLayer().getAttribute("viewBox").split(/\s+/).map(Number);
+    /*
+     * THE PICTURE IS COMPILED ASYNCHRONOUSLY, so this waits for its layer
+     * rather than reading a viewBox the render has not written yet. The point of
+     * the check is where the canvas SEATS the painted picture, which is a
+     * property of the layer once it exists.
+     */
+    await settle();
+
+    const layer = pictureLayer();
+
+    assert.ok(layer, "the canvas has no compiled picture layer to seat");
+
+    const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
 
     assert.ok(
       Math.abs(left + width / 2 - (origin + 25 * k)) < 0.05,

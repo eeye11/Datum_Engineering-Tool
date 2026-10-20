@@ -92,6 +92,7 @@ const settle = async (ms = 500) => {
   const { activeSourceManager } = src("drawing-source-manager.js");
   const mapping = src("source-mapping.js");
   const writerIndex = src("source-writers/index.js");
+  const syncExportTransform = src("source-synchronization.js").exportTransformFor;
   const statics = src("source-writers/statics.js");
   const { renderedSourceRevision, lastCompiledError } = src("src/components/layout/workspace/canvas-render.js");
   const {
@@ -143,14 +144,31 @@ const settle = async (ms = 500) => {
 
   const line = add(
     model.geometryFactories.line({ x: -40, y: 0 }, { x: 40, y: 0 }, {
-      style: { stroke: "#112233", lineWidth: 0.5, lineType: "solid" }
+      style: { stroke: "#112233", lineWidth: "thin", lineType: "solid" }
     })
   );
 
   let source = manager.getSource();
 
+  /*
+   * THE COMMITTED ENDPOINTS, IN THE DRAWING'S EXPORT SPACE.
+   *
+   * The source is normalised for the page, so its coordinates are the drawing's
+   * own reduced and shifted to a local origin - not the raw millimetres the
+   * model holds. What is asserted is that the block describes the SAME segment:
+   * the exported positions of the two endpoints are both present, and the block
+   * is a single `--` path between them.
+   */
+  const lineFit = syncExportTransform([line], {});
+  const lineStart = lineFit.point(-40, 0);
+  const lineEnd = lineFit.point(40, 0);
+
   check("a drawn line has a source region", mapping.regionForObject(source, line.id) !== null, source);
-  check("with its committed endpoints", /\(-40,0\) -- \(40,0\)/.test(source), source);
+  check(
+    "with its committed endpoints, in export space",
+    source.includes(`(${lineStart.x},${lineStart.y}) -- (${lineEnd.x},${lineEnd.y})`),
+    `expected (${lineStart.x},${lineStart.y}) -- (${lineEnd.x},${lineEnd.y})\n${source}`
+  );
   check("and its colour", /112233/i.test(source), source);
 
   await settle();
@@ -159,7 +177,8 @@ const settle = async (ms = 500) => {
 
   check(
     "the CURRENT source is what was sent to the compiler",
-    renderedLineSource.includes("DAETUM_OBJECT_BEGIN") === false && renderedLineSource.includes("(-40,0) -- (40,0)"),
+    renderedLineSource.includes("DAETUM_OBJECT_BEGIN") === false &&
+      renderedLineSource.includes(`(${lineStart.x},${lineStart.y}) -- (${lineEnd.x},${lineEnd.y})`),
     renderedLineSource
   );
   check("the picture layer shows the compiled result", Boolean(pictureLayer()?.querySelector("[data-render-index]")));
@@ -295,14 +314,14 @@ const settle = async (ms = 500) => {
 
   /*
    * THE SUPPORT'S OWN GEOMETRY, NOT ITS ANCHOR. A pin support is drawn as a
-   * triangle whose apex sits ON the anchor and whose base is offset outward -
-   * so `(300,300)` is the apex and `(296,300)` its outward neighbour. The
-   * literal anchor coordinate never appears; the committed geometry does.
+   * triangle whose apex sits ON the anchor and whose base is offset outward.
+   * The literal anchor coordinate never appears; the committed geometry does - at
+   * the drawing's export scale, which is why the symbol is asserted by its SHAPE
+   * (a closed triangle plus its hatching) rather than by raw millimetres.
    */
   check(
     "the compiled drawing includes the committed symbol",
-    requests[requests.length - 1].includes("(296,300)") &&
-      requests[requests.length - 1].includes("(304,296)"),
+    /-- cycle/.test(requests[requests.length - 1]) && (requests[requests.length - 1].match(/\\draw/g) || []).length >= 3,
     requests[requests.length - 1].slice(-400)
   );
   check("the picture layer is showing a compiled render", Boolean(pictureLayer()?.querySelector("[data-render-index]")));

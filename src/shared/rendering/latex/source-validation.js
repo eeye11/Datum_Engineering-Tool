@@ -3,280 +3,342 @@
  * SOURCE VALIDATION
  * ============================================================
  *
- * What can be said about a piece of drawing source WITHOUT compiling it: is it
- * balanced, does it sit inside a picture, are its DAETUM markers well formed.
- * These are the checks that can run on every keystroke, cheaply, and they exist
- * so a student gets an answer before a render is even attempted.
+ * What can be said about a piece of drawing source WITHOUT compiling it: which
+ * statements never finished, which delimiters are unbalanced, whether the
+ * picture is whole, and which commands the renderer cannot honour.
  *
- * WHAT THIS IS NOT.
+ * WHAT IT IS NOT.
  *
- * It is not a LaTeX parser and it does not pretend to be one. A syntax error in
- * the middle of a command is only certain once TeX has read it, so the LAST word
- * belongs to the renderer, and its answer arrives through the rendering adapter.
- * This module's job is to catch the mistakes that do not need TeX to recognise -
- * and to do it without ever throwing away the student's text.
+ * It is not a LaTeX parser, and it does not pretend to be one. A mistake inside a
+ * well-formed command is only certain once TeX has read it, so the LAST word
+ * belongs to the renderer, and its answer arrives through the canvas. This
+ * module's job is to catch what does not need TeX to recognise - and to do it
+ * without ever throwing away the student's text.
  *
- * A diagnostic never replaces or edits the source. The draft is the student's;
- * this only describes it.
+ * THE THREE SEVERITIES, AND WHY THEY ARE KEPT APART.
+ *
+ *   error    the source cannot be rendered as written. The diagnostic carries
+ *            its exact source RANGE (`start`/`end` offsets and `line`/`endLine`),
+ *            so the editor paints it and the student can click it.
+ *
+ *   warning  a non-fatal problem: a command the renderer cannot honour, a marker
+ *            that is not paired, an id that appears twice. The drawing still
+ *            renders; the student should know.
+ *
+ *   info     an observation that is not a problem at all (there is no
+ *            `tikzpicture`; DAETUM will wrap the commands).
+ *
+ * PARTIAL RESULTS ARE THE POINT. One unfinished statement produces ONE error,
+ * naming its own range; every other statement is still validated, still
+ * rendered, and still an object. The whole document is never marked failed
+ * because one line is being typed.
+ *
+ * AN EMPTY DOCUMENT IS NOT AN ERROR. A drawing with nothing on it is a
+ * legitimate state - a new sheet, a cleared sheet - and the Source tab owes the
+ * student a clean editor, not a complaint. (This used to be reported as an
+ * error, which is what made a fresh Source tab open showing one.)
  */
 
-import { createSourceMap, isObjectMarkerLine, parseDrawingSource } from "./drawing-source.js";
+import { PICTURE_BEGIN, PICTURE_END, isObjectMarkerLine, parseDrawingSource } from "./drawing-source.js";
+import { SUPPORTED, splitStatements, unsupportedStatements } from "./source-statements.js";
 
-/*
- * THE COMMANDS THAT REACH THE COMPILER - the source minus its object markers.
- *
- * Markers are comments, which TeX ignores, so they are harmless either way - but
- * they are not part of the drawing, and a check that counts them would report a
- * false problem in a picture whose every object is a comment.
- */
-function drawableSource(text) {
-  return String(text ?? "")
-    .split("\n")
-    .filter((line) => !isObjectMarkerLine(line))
-    .join("\n")
-    .trim();
+/* A delimiter and the one that closes it. */
+const OPENING = { "{": "}", "(": ")", "[": "]" };
+
+/* Whether `character` at `index` is escaped by an odd number of backslashes. */
+function escapedAt(text, index) {
+  let backslashes = 0;
+
+  for (let back = index - 1; back >= 0 && text[back] === "\\"; back -= 1) {
+    backslashes += 1;
+  }
+
+  return backslashes % 2 === 1;
 }
 
 /*
- * Strip LaTeX comments so a `%` inside a comment cannot unbalance the brace
- * count. A comment runs to the end of the line unless the `%` is escaped, which
- * is why the check looks at the character before it.
+ * The first closing delimiter in a statement that closes nothing, or null.
+ *
+ * A statement the scanner already found unfinished is not asked this question -
+ * it has its own, clearer diagnostic - so the answer here is always about a
+ * statement that is otherwise complete.
  */
-function withoutComments(line) {
-  for (let index = 0; index < line.length; index += 1) {
-    if (line[index] !== "%") {
+function firstStrayClosing(statementText, offset) {
+  const open = [];
+
+  for (let index = 0; index < statementText.length; index += 1) {
+    const character = statementText[index];
+
+    if (character === "%" && !escapedAt(statementText, index)) {
+      /* A comment runs to the end of its line. */
+      const newline = statementText.indexOf("\n", index);
+
+      if (newline < 0) {
+        break;
+      }
+
+      index = newline;
       continue;
     }
 
-    let backslashes = 0;
-
-    for (let back = index - 1; back >= 0 && line[back] === "\\"; back -= 1) {
-      backslashes += 1;
+    if (character === "\\") {
+      index += 1;
+      continue;
     }
 
-    if (backslashes % 2 === 0) {
-      return line.slice(0, index);
+    if (OPENING[character]) {
+      open.push(character);
+      continue;
     }
-  }
 
-  return line;
-}
+    if (character === "}" || character === ")" || character === "]") {
+      if (!open.length) {
+        /* Only a brace is unambiguous; a bare `)` or `]` can be text. */
+        if (character === "}") {
+          return { index: offset + index, character };
+        }
 
-/*
- * Count braces over the whole text, ignoring comments. A `\{` or `\}` is an
- * escaped literal and does not count, so it is removed first.
- */
-function braceBalance(text) {
-  const stripped = text
-    .replace(/\\[{}]/g, "")
-    .split("\n")
-    .map(withoutComments)
-    .join("\n");
+        continue;
+      }
 
-  let depth = 0;
-
-  for (const character of stripped) {
-    if (character === "{") {
-      depth += 1;
-    } else if (character === "}") {
-      depth -= 1;
+      if (OPENING[open[open.length - 1]] === character) {
+        open.pop();
+      }
     }
   }
 
-  return depth;
+  return null;
 }
 
-/*
- * ============================================================
- * PARENTHESES AND OPTION BRACKETS
- * ============================================================
- *
- * In TikZ a `(` opens a coordinate and a `[` opens an option list; both are
- * ALWAYS paired on a path or node command. A `\draw (0,0 -- (10,0);` is the
- * canonical half-typed command, and it is not a brace problem - the braces are
- * balanced - so counting braces alone lets it through.
- *
- * It used to, and the result was a source that was SENT to the compiler and
- * only rejected there. The student saw a render failure for a mistake that was
- * knowable in the editor, and the "nothing was sent" guarantee the canvas
- * documents was quietly false for this whole class of typo.
- *
- * Counted the same way as braces: comments are stripped, and an ESCAPED
- * bracket - `\(`, `\)`, `\[`, `\]`, which are literal text in LaTeX rather than
- * grouping - does not count. A `\left(` / `\right)` pair is text too, but the
- * count of each character is what matters: `\left(` has one `(` and `\right)`
- * has one `)`, so the pair balances either way.
- *
- * A mismatch is reported as an error, because no well-formed drawing source
- * has one. Text inside `\node {..}` is not special-cased: a literal parenthesis
- * there must be written `\(`, exactly as in LaTeX, so a raw `(` in node text is
- * the same mistake as a raw `(` in a coordinate.
- */
-function groupBalance(text, open, close) {
-  const stripped = text
-    .replace(new RegExp(`\\\\[${open}${close}]`, "g"), "")
-    .split("\n")
-    .map(withoutComments)
-    .join("\n");
+/* What a statement left open, spelled for a student. */
+function describeOpen(statement) {
+  const names = { "}": "brace", ")": "parenthesis", "]": "option bracket" };
+  const characters = statement.open || "";
 
-  let depth = 0;
+  if (!characters) {
+    return "the command is not finished (no closing \";\")";
+  }
 
-  for (const character of stripped) {
-    if (character === open) {
-      depth += 1;
-    } else if (character === close) {
-      depth -= 1;
+  return characters
+    .split("")
+    .map((character) => `a "${character}" is never closed (${names[character] || "delimiter"})`)
+    .join(" and ");
+}
+
+/* The first line of a statement, shortened, for a diagnostic's label. */
+function statementLabel(statement) {
+  const first = statement.text.split("\n")[0].trim();
+
+  return first.length > 60 ? `${first.slice(0, 57)}...` : first;
+}
+
+/* The character offset at which a line begins. */
+function offsetOfLine(text, line) {
+  if (line <= 0) {
+    return 0;
+  }
+
+  let offset = 0;
+
+  for (let index = 0; index < text.length && line > 0; index += 1) {
+    if (text[index] === "\n") {
+      line -= 1;
+      offset = index + 1;
     }
   }
 
-  return depth;
+  return offset;
 }
 
-/*
- * ============================================================
- * VALIDATE A DRAWING SOURCE
+/* ============================================================
+ * VALIDATE
  * ============================================================
  *
- * Returns `{ ok, diagnostics, blocks }`. `ok` is true when nothing would stop
- * the source from being sent to the renderer. A warning - an unclosed marker,
- * a duplicate id - leaves `ok` true, because the source may still compile and
- * the student may be halfway through typing.
+ * Returns:
+ *
+ *   ok           no error-severity diagnostic
+ *   empty        nothing to draw at all
+ *   hasPicture   whether the text contains `\begin{tikzpicture}`
+ *   diagnostics  [{ severity, kind, message, line, endLine, start, end }]
+ *                - `line` is ONE-BASED (what the editor shows)
+ *                - `start`/`end` are CHARACTER OFFSETS, so the editor can
+ *                  highlight the exact text rather than search for it
+ *   statements   every statement, for callers that need the structure
+ *   blocks       the marker blocks, in document order
+ *   supported    what the renderer can honour
  */
 export function validateDrawingSource(source) {
   const text = String(source ?? "");
   const diagnostics = [];
-  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const statements = splitStatements(text);
 
-  if (drawableSource(text) === "") {
+  const add = (diagnostic) => {
     diagnostics.push({
       severity: "error",
       line: 1,
-      message:
-        "The drawing source is empty. Add TikZ commands to draw something.",
+      endLine: null,
+      start: null,
+      end: null,
+      kind: "syntax",
+      ...diagnostic
     });
+  };
 
-    return { ok: false, diagnostics, blocks: [] };
+  const hasPicture = statements.some((statement) => statement.name === "begin-tikzpicture");
+
+  if (text.trim() === "") {
+    return {
+      ok: true,
+      empty: true,
+      diagnostics: [],
+      blocks: [],
+      statements,
+      hasPicture: false,
+      supported: SUPPORTED
+    };
   }
 
-  const balance = braceBalance(text);
+  /* ---- 1. statements that never finished ---- */
+  statements.forEach((statement) => {
+    if (statement.kind === "prologue") {
+      return;
+    }
 
-  if (balance !== 0) {
-    diagnostics.push({
-      severity: "error",
-      line: lines.length,
-      message:
-        balance > 0
-          ? `${balance} unclosed brace${balance === 1 ? "" : "s"} - a "{" with no matching "}".`
-          : `${-balance} extra closing brace${balance === -1 ? "" : "s"} "}".`,
+    if (statement.complete) {
+      const stray = firstStrayClosing(statement.text, statement.start);
+
+      if (stray) {
+        add({
+          message: `Unexpected "${stray.character}" - there is no delimiter open for it to close.`,
+          line: statement.startLine + 1,
+          endLine: statement.endLine + 1,
+          start: stray.index,
+          end: stray.index + 1
+        });
+      }
+
+      return;
+    }
+
+    /*
+     * A STATEMENT THAT IS SENDABLE IS NOT AN ERROR HERE.
+     *
+     * It is a command that ran out of file without its `;`. That is either a
+     * half-typed line (which needs the student, not a diagnosis) or a command
+     * TeX will reject (which only TeX can say, and does - through the renderer's
+     * own error). Calling it broken here would report the second case wrongly,
+     * and would report the first as an error while the student is still typing.
+     * The status line shows a quiet "incomplete command" note instead - see the
+     * Source tab - and nothing stops rendering.
+     */
+    if (statement.sendable) {
+      return;
+    }
+
+    add({
+      message: `This drawing command is unfinished: ${describeOpen(statement)}. Everything else still renders.`,
+      line: statement.startLine + 1,
+      endLine: statement.endLine + 1,
+      start: statement.start,
+      end: statement.end,
+      label: statementLabel(statement)
+    });
+  });
+
+  /* ---- 2. a picture that was opened and never closed ---- */
+  const lastBegin = statements.filter((statement) => statement.name === "begin-tikzpicture").pop();
+  const lastEnd = statements.filter((statement) => statement.name === "end-tikzpicture").pop();
+
+  if (lastBegin && (!lastEnd || lastEnd.start < lastBegin.start)) {
+    add({
+      message: `The picture is never closed - it needs ${PICTURE_END}.`,
+      line: lastBegin.startLine + 1,
+      start: lastBegin.start,
+      end: lastBegin.end
     });
   }
 
-  /*
-   * A COORDINATE OR AN OPTION LIST LEFT OPEN. See `groupBalance` for why these
-   * are separate from the brace count and why a mismatch is an error.
-   */
-  const parens = groupBalance(text, "(", ")");
-
-  if (parens !== 0) {
-    diagnostics.push({
-      severity: "error",
-      line: lines.length,
-      message:
-        parens > 0
-          ? `${parens} unclosed parenthesis - a "(" with no matching ")". A path coordinate must be closed.`
-          : `${-parens} extra closing parenthesis ")".`,
-    });
-  }
-
-  const brackets = groupBalance(text, "[", "]");
-
-  if (brackets !== 0) {
-    diagnostics.push({
-      severity: "error",
-      line: lines.length,
-      message:
-        brackets > 0
-          ? `${brackets} unclosed option bracket - a "[" with no matching "]".`
-          : `${-brackets} extra closing option bracket "]".`,
-    });
-  }
-
-  const begins = lines.filter((line) =>
-    /DAETUM_OBJECT_BEGIN/.test(line),
-  ).length;
-  const ends = lines.filter((line) => /DAETUM_OBJECT_END/.test(line)).length;
+  /* ---- 3. the markers that make an object's region findable ---- */
+  const begins = statements.filter((statement) => statement.kind === "marker-begin").length;
+  const ends = statements.filter((statement) => statement.kind === "marker-end").length;
 
   if (begins !== ends) {
-    diagnostics.push({
+    add({
       severity: "warning",
-      line: 1,
+      kind: "marker",
       message: `${begins} object marker${begins === 1 ? "" : "s"} but ${ends} closing marker${
         ends === 1 ? "" : "s"
       }. An object may not be mapped until its markers are paired.`,
+      line: 1
     });
   }
 
   const blocks = parseDrawingSource(text);
   const seen = new Map();
+  const lines = text.split("\n");
 
   blocks.forEach((block) => {
+    const beginOffset = offsetOfLine(text, block.beginLine);
+    const beginLength = (lines[block.beginLine] || "").length;
+
     if (seen.has(block.id)) {
-      diagnostics.push({
+      add({
         severity: "warning",
-        line: block.beginLine + 1,
+        kind: "mapping",
         message: `Object id "${block.id}" appears more than once. Only the first region is updated.`,
+        line: block.beginLine + 1,
+        start: beginOffset,
+        end: beginOffset + beginLength
       });
     } else {
       seen.set(block.id, block);
     }
 
     if (block.unclosed) {
-      diagnostics.push({
+      add({
         severity: "warning",
-        line: block.beginLine + 1,
+        kind: "marker",
         message: `Object "${block.id}" has a BEGIN marker with no END marker.`,
+        line: block.beginLine + 1,
+        start: beginOffset,
+        end: beginOffset + beginLength
       });
     }
   });
 
-  /*
-   * A picture is not required to render - the server wraps the input in a
-   * document and will accept a bare \draw - but a drawing source SHOULD be a
-   * picture, because that is what "the source that generates the drawing"
-   * means. Its absence is reported as a note rather than an error.
-   */
-  if (!/\\begin\s*\{tikzpicture\}/.test(text)) {
-    diagnostics.push({
+  /* ---- 4. commands the renderer cannot honour ---- */
+  unsupportedStatements(text).forEach((warning) => {
+    add({
+      severity: "warning",
+      kind: "unsupported",
+      message: warning.message,
+      line: warning.startLine + 1,
+      endLine: warning.endLine + 1,
+      start: warning.start,
+      end: warning.end
+    });
+  });
+
+  /* ---- 5. a picture is recommended; a bare command list is allowed ---- */
+  if (!hasPicture && statements.filter((statement) => statement.kind === "command" || statement.kind === "environment").length) {
+    add({
       severity: "info",
-      line: 1,
-      message:
-        "No tikzpicture found. DAETUM will wrap this code in a tikzpicture when rendering.",
+      kind: "format",
+      message: "No tikzpicture found. DAETUM will wrap these commands in one when rendering."
     });
   }
 
-  /*
-   * AN EMPTY PICTURE IS A VALID DRAWING.
-   *
-   * A sheet with nothing on it is exactly `\begin{tikzpicture}` /
-   * `\end{tikzpicture}`, and that compiles to a blank sheet - which is the
-   * honest picture of an untouched drawing. It used to be reported as an error,
-   * so a NEW DOCUMENT could not be rendered at all until something was drawn,
-   * and a deletion that emptied a sheet failed the same way. Only a source with
-   * NO PICTURE AT ALL and no commands is an error.
-   */
-  const drawable = drawableSource(text);
-
-  if (!/\\begin\s*\{tikzpicture\}/.test(drawable) && drawable === "") {
-    diagnostics.push({
-      severity: "error",
-      line: 1,
-      message: "The drawing source is empty. Add TikZ commands to draw something.",
-    });
-  }
-
-  const ok = !diagnostics.some((diagnostic) => diagnostic.severity === "error");
-
-  return { ok, diagnostics, blocks };
+  return {
+    ok: !diagnostics.some((diagnostic) => diagnostic.severity === "error"),
+    empty: false,
+    diagnostics,
+    blocks,
+    statements,
+    hasPicture,
+    supported: SUPPORTED,
+    begin: PICTURE_BEGIN,
+    end: PICTURE_END
+  };
 }
 
 /*
@@ -288,31 +350,40 @@ export function validationSummary(validation) {
     return "";
   }
 
-  const errors = validation.diagnostics.filter(
-    (item) => item.severity === "error",
-  );
-  const warnings = validation.diagnostics.filter(
-    (item) => item.severity === "warning",
-  );
+  const count = (severity) =>
+    (validation.diagnostics || []).filter((item) => item.severity === severity).length;
 
-  if (errors.length) {
-    return errors.length === 1 ? "1 error" : `${errors.length} errors`;
+  const errors = count("error");
+  const warnings = count("warning");
+
+  if (errors) {
+    return errors === 1 ? "1 error" : `${errors} errors`;
   }
 
-  if (warnings.length) {
-    return warnings.length === 1 ? "1 warning" : `${warnings.length} warnings`;
+  if (warnings) {
+    return warnings === 1 ? "1 warning" : `${warnings} warnings`;
   }
 
   return "";
 }
 
-/*
- * The map, exposed here too so a caller validating and mapping in one step does
- * not have to import the same module twice.
- */
-export { createSourceMap };
+/* The errors, in document order. */
+export function errorDiagnostics(validation) {
+  return (validation?.diagnostics || [])
+    .filter((diagnostic) => diagnostic.severity === "error")
+    .sort((left, right) => (left.start ?? 0) - (right.start ?? 0));
+}
+
+/* The warnings and notes, in document order. */
+export function advisoryDiagnostics(validation) {
+  return (validation?.diagnostics || []).filter((diagnostic) => diagnostic.severity !== "error");
+}
+
+export { isObjectMarkerLine };
 
 export default {
   validateDrawingSource,
   validationSummary,
+  errorDiagnostics,
+  advisoryDiagnostics
 };

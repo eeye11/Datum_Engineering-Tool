@@ -147,7 +147,14 @@ console.log("\n  the click router uses the classification\n");
 
 check(
   "a bare click on a one-gesture tool returns to Select",
-  /shouldExitToSelectOnClick\([\s\S]{0,80}?exitToolToSelect/.test(canvasClick),
+  /shouldExitToSelectOnClick\([\s\S]{0,80}?exitToolToSelect/.test(canvasClick) ||
+    /finishCreationClick\(\s*session\s*\)/.test(
+      fs.readFileSync(locate("creation-drag.js"), "utf8"),
+    ) ||
+    /activateTool\("select"\)[\s\S]{0,400}?selectObject/.test(
+      fs.readFileSync(locate("creation-drag.js"), "utf8"),
+    ),
+  "the tool must hand the canvas back to Select",
 );
 
 check(

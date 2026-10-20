@@ -1,0 +1,10 @@
+{
+    "id":  "dynamics.dynamics-create.viscous-damper",
+    "label":  "Viscous Damper",
+    "category":  "dynamics",
+    "group":  "dynamics-create",
+    "parentId":  "dynamics.dynamics-create.mechanical-elements",
+    "libraryPath":  "src/tool-library/dynamics/dynamics-create/viscous-damper",
+    "template":  "template.tex",
+    "implemented":  false
+}

@@ -128,7 +128,7 @@ const setValue = (element, value) => {
     factories.line({ x: 10, y: 20 }, { x: 60, y: 20 }, {
       style: {
         stroke: "#112233",
-        lineWidth: 0.5,
+        lineWidth: "thin",
         lineType: "solid",
         arrowStart: "none",
         arrowEnd: "filled"
@@ -166,14 +166,14 @@ const setValue = (element, value) => {
 
   setValue(field("lineType"), "dashed");
   check("the line style is written to the model", line.style.lineType === "dashed", line.style.lineType);
-  check("and only that key changed", line.style.stroke === "#112233" && line.style.lineWidth === 0.5);
+  check("and only that key changed", line.style.stroke === "#112233" && line.style.lineWidth === "thin");
   check("the End Arrow survived the style edit", line.style.arrowEnd === "filled");
 
   setValue(field("arrowStart"), "bar");
   check("Begin Arrow writes independently", line.style.arrowStart === "bar" && line.style.arrowEnd === "filled");
 
   setValue(field("lineWidth"), "thick");
-  check("Thickness writes the preset's width", line.style.lineWidth === 2, String(line.style.lineWidth));
+  check("Thickness writes the preset's width", line.style.lineWidth === 1, String(line.style.lineWidth));
   check("and the arrow heads are untouched", line.style.arrowStart === "bar" && line.style.arrowEnd === "filled");
 
   /*
@@ -182,7 +182,7 @@ const setValue = (element, value) => {
    * the numeric field. The value the student then types is what moves.
    */
   setValue(field("lineWidth"), "custom");
-  check("choosing Custom leaves the stored width alone", line.style.lineWidth === 2, String(line.style.lineWidth));
+  check("choosing Custom leaves the stored width alone", line.style.lineWidth === 1, String(line.style.lineWidth));
   check("Thickness is a dropdown, as a six-way choice should be", field("lineWidth")?.tagName === "SELECT", field("lineWidth")?.tagName);
   check("choosing Custom reveals a width field", Boolean(field("customWidth")), String(field("lineWidth")?.value));
   setValue(field("customWidth"), "1.75");
@@ -316,7 +316,7 @@ const setValue = (element, value) => {
 
   const line2 = add(
     factories.line({ x: 0, y: 0 }, { x: 30, y: 0 }, {
-      style: { stroke: "#445566", lineWidth: 1.25, lineType: "dotted", arrowStart: "open", arrowEnd: "none" }
+      style: { stroke: "#445566", lineWidth: "medium", lineType: "dotted", arrowStart: "open", arrowEnd: "none" }
     })
   );
 

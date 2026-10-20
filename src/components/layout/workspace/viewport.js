@@ -12,6 +12,7 @@ import { resistorPoints } from "../../../features/workspace/model/thermodynamics
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
+import { analysisSketchMarks } from "../../../shared/rendering/analysis-render.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import { arcSelectionPoints, distributedLoadArrowScreenLength } from "../../../features/workspace/interaction/box-selection.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
@@ -929,6 +930,32 @@ function geometryRenderedBounds(
             typeof analysisFrameExtents === "function"
                 ? analysisFrameExtents()
                 : null;
+
+        /*
+         * THE STUDENT'S OWN STROKES ARE PART OF WHAT IS FITTED.
+         *
+         * A sketch can be drawn far above or below the axis - deliberately, to
+         * show a spike - and its ink is then the outermost thing the diagram
+         * occupies. Measuring only the frame (which is a fixed band around the
+         * axis) let a Fit crop the very curve the student drew, and let the
+         * export compute its scale from a smaller extent than the drawing has.
+         *
+         * `analysisSketchMarks` is the renderer's OWN projection - the marks the
+         * canvas paints - so the room reserved is the room the ink takes.
+         */
+        if (typeof analysisSketchMarks === "function") {
+            try {
+                analysisSketchMarks(object).forEach((mark) => {
+                    (Array.isArray(mark?.points) ? mark.points : []).forEach((at) => {
+                        if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) {
+                            points.push({ x: at.x, y: at.y });
+                        }
+                    });
+                });
+            } catch (error) {
+                /* A diagram with no drawable sketch contributes its frame only. */
+            }
+        }
 
         if (!frame) {
             return points;
