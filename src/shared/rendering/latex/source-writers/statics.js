@@ -65,6 +65,7 @@ import {
   texText,
   vector,
 } from "./statics-primitives.js";
+import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "../source-diagnostics.js";
 
 /* ============================================================
  * HELPERS
@@ -855,7 +856,15 @@ function serializeMoment(entity, object) {
    * rather than reversed with a hand-placed marker.
    */
   const tip = headFor(object.style || {}, "filled");
-  const arrow = clockwise ? `${tip}-` : `-${tip}`;
+
+  /*
+   * THE HEAD IS AT THE END OF THE SWEEP FOR BOTH SENSES. The arc is already
+   * drawn in the direction of rotation (decreasing angles for a clockwise
+   * moment), so a head at its end points the way the moment turns. Putting a
+   * clockwise moment's head at the START - as this used to - pointed it
+   * against its own sweep, and every CW moment rendered as anticlockwise.
+   */
+  const arrow = `-${tip}`;
 
   const options = withArrow(styleOptions(object.style), tip ? arrow : null);
 
@@ -1580,9 +1589,28 @@ export function serializeStaticsObject(object, options = {}) {
 
   try {
     geometry = shape(entity, object);
-  } catch {
-    /* A half-built object writes nothing rather than throwing mid-drawing. */
-    geometry = null;
+  } catch (error) {
+    /*
+     * A serializer that throws writes NOTHING for this object, and says so.
+     * It used to fall through with `geometry = null` and still emit the text
+     * nodes - so a force whose arrow failed appeared in Source and on the sheet
+     * as a floating "F" with no arrow, which is source that does not describe
+     * the object and a picture that does not show it.
+     */
+    reportSourceGenerationProblem(object, `its ${object.type} drawing failed (${error && error.message})`);
+
+    return null;
+  }
+
+  if (typeof geometry !== "string" || geometry.trim() === "") {
+    /*
+     * NO GEOMETRY, NO OBJECT. Text nodes alone are not this object - they are
+     * its annotations - so an object whose shape could not be drawn from its
+     * stored geometry contributes nothing rather than a label in empty space.
+     */
+    reportSourceGenerationProblem(object, `its stored geometry does not describe a drawable ${object.type}`);
+
+    return null;
   }
 
   /*
@@ -1629,10 +1657,12 @@ export function serializeStaticsObject(object, options = {}) {
   const problem = texProblem(combined);
 
   if (problem) {
-    reportSourceProblem(object, problem);
+    reportSourceGenerationProblem(object, problem);
 
     return null;
   }
+
+  clearSourceGenerationProblem(object.id);
 
   return combined;
 }
@@ -1691,23 +1721,58 @@ function texProblem(text) {
     return "an undecoded unicode escape in a label";
   }
 
+  const outside = mathCommandOutsideMath(value);
+
+  if (outside) {
+    return `\\${outside} outside maths mode`;
+  }
+
   return null;
 }
 
 /*
- * Report a source problem the same way a render failure is reported: visible,
- * with the object named, so a missing object is never silent.
+ * A MATHS-ONLY COMMAND IN TEXT MODE. `\cdot` in a label outside `$...$` is a
+ * hard TeX error, and like every TeX error it stops the whole document - which
+ * is exactly how one diagram's axis unit blanked every Statics object on a
+ * sheet. Only commands that are NEVER valid in text are listed, so an ordinary
+ * text command can never be mistaken for one.
  */
-function reportSourceProblem(object, problem) {
-  try {
-    if (typeof console !== "undefined" && console.warn) {
-      console.warn(
-        `[DAETUM] "${object.name || object.id}" (${object.type}) was left out of the source: ${problem}.`
-      );
+const MATH_ONLY_COMMANDS = new Set([
+  "cdot", "times", "frac", "tfrac", "dfrac", "mathrm", "mathbf", "sqrt",
+  "alpha", "beta", "gamma", "delta", "Delta", "theta", "omega", "Omega",
+  "sigma", "tau", "mu", "pi", "phi", "leq", "geq", "approx", "pm"
+]);
+
+function mathCommandOutsideMath(text) {
+  let inMath = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+
+    if (character !== "\\") {
+      if (character === "$") {
+        inMath = !inMath;
+      }
+
+      continue;
     }
-  } catch {
-    /* Reporting must never be the thing that breaks generation. */
+
+    const name = /^[A-Za-z]+/.exec(text.slice(index + 1));
+
+    if (!name) {
+      /* `\$`, `\\` and friends: skip the escaped character. */
+      index += 1;
+      continue;
+    }
+
+    if (!inMath && MATH_ONLY_COMMANDS.has(name[0])) {
+      return name[0];
+    }
+
+    index += name[0].length;
   }
+
+  return null;
 }
 
 /* ============================================================
@@ -1909,12 +1974,18 @@ export function isStaticsObject(object) {
   return engineering.discipline === "statics" || typeof engineering.staticsType === "string";
 }
 
-export function staticsSourceWriter(object) {
+/*
+ * The synchronization layer hands every writer the sheet (`context.state`). It
+ * is passed on, so a Statics object is written against the same sheet settings
+ * the rest of the drawing is - not against defaults because the writer dropped
+ * its second argument.
+ */
+export function staticsSourceWriter(object, context = {}) {
   if (!isStaticsObject(object)) {
     return null;
   }
 
-  return serializeStaticsObject(object);
+  return serializeStaticsObject(object, { state: context.state || null });
 }
 
 export function writtenStaticsTypes() {

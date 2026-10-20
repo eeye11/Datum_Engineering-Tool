@@ -44,29 +44,19 @@
 
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { objectIdAtLine } from "../../../shared/rendering/latex/source-mapping.js";
-import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource, validationSummary } from "../../../shared/rendering/latex/source-validation.js";
+import { sourceGenerationProblems } from "../../../shared/rendering/latex/source-diagnostics.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { createSourceEditor } from "./source-editor.js";
 import { activePanelTab } from "./panel-tabs.js";
 import { setActivePanelTab } from "./panel-tabs.js";
-import { refreshCanvasFromSource } from "./source-canvas-bridge.js";
-
-/*
- * Rendering a drawing is expensive - the server runs TeX - so a keystroke does
- * not trigger a render. The pause is short enough that the preview feels live
- * and long enough that typing a word causes one render rather than five.
- */
-const RENDER_DELAY_MS = 450;
+import { currentCompiledPicture, requestSourceRender } from "../workspace/canvas-render.js";
 
 let editor = null;
 let host = null;
 let statusEl = null;
 let diagnosticsEl = null;
-let renderTimer = null;
-let renderToken = 0;
-let lastRendered = null;
 let unsubscribe = null;
 
 function element(id) {
@@ -143,6 +133,19 @@ function renderDiagnostics(validation) {
         });
     }
 
+    /*
+     * AN OBJECT THAT HAS NO SOURCE IS NAMED HERE. It is in the drawing's model
+     * but its writer had to leave it out, so neither this editor nor the canvas
+     * shows it - and without this line nothing would say why.
+     */
+    sourceGenerationProblems().forEach((problem) => {
+        items.push({
+            severity: "error",
+            line: "\u2014",
+            message: `"${problem.name || problem.type || problem.id}" is not in the source: ${problem.message}`
+        });
+    });
+
     if (!items.length) {
         diagnosticsEl.hidden = true;
         diagnosticsEl.innerHTML = "";
@@ -179,19 +182,21 @@ function escapeHtml(text) {
  * RENDERING
  * ============================================================
  *
- * The draft is rendered; on success the canvas adopts the result and the
- * manager records the version that worked. On failure the error is shown and
- * NOTHING ELSE changes - the canvas keeps its last successful drawing and the
- * editor keeps the text the student typed.
+ * THE TAB DOES NOT COMPILE. It used to: it sent its own copy of the draft (with
+ * the object markers still in it) to the renderer, and the canvas then compiled
+ * the marker-free text again - two jobs per edit in a TeX queue that runs one at
+ * a time, two different documents for "the same" source, and two writers of the
+ * manager's rendered/failed state. The canvas owns the one compile per
+ * revision; this tab asks it to hurry and reports what it announces.
+ *
+ * On failure NOTHING ELSE changes - the canvas keeps its last successful drawing
+ * and the editor keeps the text the student typed.
  */
-async function renderCurrentDraft() {
-    const manager = activeSourceManager();
-    const draft = manager.getSource();
-    const revision = manager.revision();
-
-    const validation = validateDrawingSource(draft);
+function renderCurrentDraft() {
+    const validation = activeSourceManager().validate();
 
     renderDiagnostics(validation);
+    renderStatusFromManager(validation);
 
     if (!validation.ok) {
         /*
@@ -199,60 +204,14 @@ async function renderCurrentDraft() {
          * same answer more slowly, and the diagnostics already say why. The last
          * successful drawing stays on the canvas.
          */
-        manager.markFailed(validation.diagnostics.find(d => d.severity === "error")?.message || "Invalid source");
-        renderStatusFromManager(validation);
-
         return;
     }
 
-    const token = (renderToken += 1);
-
-    setStatus("rendering", "TikZ source \u00B7 Rendering\u2026");
-
-    try {
-        const svg = await renderDrawingSource(draft);
-
-        /*
-         * A newer render started while this one was in flight. Its result is
-         * stale and adopting it would draw the older draft over the newer one.
-         */
-        if (token !== renderToken) {
-            return;
-        }
-
-        lastRendered = svg;
-
-        manager.markRendered(draft, revision);
-
-        /*
-         * Hand the drawing to the canvas through the one bridge that knows how
-         * the canvas is drawn. See source-canvas-bridge.js for why that is a
-         * separate module rather than an import from here.
-         */
-        refreshCanvasFromSource(svg, { source: draft });
-
-        renderDiagnostics(manager.validate());
-        renderStatusFromManager();
-    } catch (error) {
-        if (token !== renderToken) {
-            return;
-        }
-
-        manager.markFailed(error);
-        renderDiagnostics(manager.validate());
-        renderStatusFromManager();
-    }
-}
-
-function scheduleRender() {
-    if (renderTimer) {
-        clearTimeout(renderTimer);
+    if (activeSourceManager().isDirty()) {
+        setStatus("rendering", "TikZ source \u00B7 Rendering\u2026");
     }
 
-    renderTimer = setTimeout(() => {
-        renderTimer = null;
-        renderCurrentDraft();
-    }, RENDER_DELAY_MS);
+    requestSourceRender({ immediately: true });
 }
 
 /*
@@ -414,7 +373,11 @@ export function renderSourceTab() {
                 renderDiagnostics(validation);
                 renderStatusFromManager(validation);
 
-                scheduleRender();
+                /*
+                 * The edit has already bumped the revision, and the canvas's
+                 * subscription to the manager schedules its compile - debounced,
+                 * so a word typed is one compile rather than five.
+                 */
             },
             onSelectionChange() {
                 syncSelectionFromSource();
@@ -609,6 +572,22 @@ export function installSourceTab() {
     });
 
     /*
+     * THE CANVAS'S COMPILE SUCCEEDED. The status and diagnostics are re-read
+     * from the manager, which the canvas has just marked rendered - so an error
+     * left over from an earlier draft is cleared the moment a newer one works.
+     */
+    globalThis.document.addEventListener("datum:source-generation-changed", () => {
+        renderDiagnostics();
+    });
+
+    globalThis.document.addEventListener("datum:source-rendered", () => {
+        const validation = activeSourceManager().validate();
+
+        renderStatusFromManager(validation);
+        renderDiagnostics(validation);
+    });
+
+    /*
      * A DRAWING CHANGED WHILE SOURCE IS OPEN. The regions have moved - a new
      * object was appended, a deleted one's block is gone - so the highlight is
      * resolved again against the new text. The text itself is already being kept
@@ -628,7 +607,7 @@ export function installSourceTab() {
  * drawing without rendering it again.
  */
 export function lastRenderedSourceSvg() {
-    return lastRendered;
+    return currentCompiledPicture();
 }
 
 export default {

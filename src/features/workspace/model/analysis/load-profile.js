@@ -414,6 +414,32 @@ import enggQuantities from "../../../../shared/units/quantities.js";
         }
 
         /*
+         * A VARYING LOAD made by its tool stores the two end
+         * intensities, not a profile. It is read as the two-point
+         * profile it describes - the same reading `drawnProfile`
+         * gives the canvas - so the source and the overlay agree
+         * on its arrows. Without this the source writer saw no
+         * intensity at all and wrote the load as nothing.
+         */
+        if (
+            geometry.startIntensity !== undefined ||
+            geometry.endIntensity !== undefined
+        ) {
+            return [
+                {
+                    id: legacyPointId(0, { t: 0 }),
+                    t: 0,
+                    magnitude: Math.max(0, Math.abs(finite(geometry.startIntensity)))
+                },
+                {
+                    id: legacyPointId(1, { t: 1 }),
+                    t: 1,
+                    magnitude: Math.max(0, Math.abs(finite(geometry.endIntensity)))
+                }
+            ];
+        }
+
+        /*
          * A load with no profile of its own is the original
          * uniform one: the same intensity everywhere along
          * the body. Reading it this way means an old file
