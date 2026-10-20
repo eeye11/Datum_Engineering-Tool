@@ -657,7 +657,16 @@ export function updatePreview(
                 {
                     points: [
                         ...interaction.points,
-                        point
+                        point,
+                        ...(drawingState.activeTool === "freeform-polygon" &&
+                        interaction.points.length >= 3 &&
+                        resolution.snapCandidate?.type === "endpoint" &&
+                        distance(
+                            resolution.snapCandidate.point,
+                            interaction.points[0]
+                        ) < 1e-9
+                            ? [interaction.points[0]]
+                            : [])
                     ]
                 }
             );

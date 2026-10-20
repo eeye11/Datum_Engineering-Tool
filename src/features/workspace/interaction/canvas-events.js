@@ -219,8 +219,9 @@ export function installCanvasEvents() {
                 }
 
                 if (
-                    drawingState.activeTool ===
-                        "polyline"
+                    ["polyline", "freeform-polygon"].includes(
+                        drawingState.activeTool
+                    )
                 ) {
                     event.preventDefault();
 

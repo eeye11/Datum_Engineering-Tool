@@ -67,4 +67,3 @@ export function isLegacyResetTool(toolId) {
 export function legacyPlaceholderMessage() {
     return "Tool placeholder - drawing implementation removed for the LaTeX tool library migration";
 }
-
