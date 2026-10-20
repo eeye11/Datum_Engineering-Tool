@@ -50,10 +50,8 @@ const { loadModule, locate, modulePath, sourceDir } = require("./helpers/source-
 
 global.window = { crypto: { randomUUID: () => "analysis-uuid" } };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 loadModule("feature-geometry.js");
-loadModule("smart-dimension.js");
 loadModule("dimension-model.js");
 loadModule("annotation-model.js");
 loadModule("drawing-state.js");
@@ -79,7 +77,6 @@ const check = (name, actual, expected) => {
 };
 
 const scene = (...objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 

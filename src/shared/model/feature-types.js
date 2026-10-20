@@ -33,14 +33,14 @@ export const FEATURE_TYPES = Object.freeze({
      * ====================================================
      *
      * Every feature type the application can create answers here, so the
-     * SHARED systems - hit testing, box selection, fit bounds, attachment,
-     * vector scale - can ask what a thing IS rather than testing for it by
+     * SHARED systems - hit testing, box selection, fit bounds, attachment -
+     * can ask what a thing IS rather than testing for it by
      * name.
      *
      * `spanShaped`  a straight member between two ends: measured along its
      *               span rather than as an area.
      * `body`        something a load, support or connection attaches to.
-     * `vector`      drawn as an arrow whose length is the shared Vector Scale.
+     * `vector`      drawn as an arrow whose length is the one the student drew.
      * `pointLike`   an engineering node drawn AT a position.
      * `area`        a closed outline, selected as a shape rather than a span.
      *

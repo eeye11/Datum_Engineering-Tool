@@ -53,12 +53,12 @@ function documentBody() {
     name: "Note 1"
   };
   const lone = { ...annotate.createAnnotate({ kind: "note", position: { x: 5, y: 5 }, text: "Alone" }), id: "note-2", name: "Note 2" };
+  /* A calibration left by an older build: retired, so it must change nothing. */
   const scale = { mmPerUnit: 10, unit: "m", reference: null };
 
   return {
     version: 2,
     units: "mm",
-    scale: null,
     objects: [],
     sheets: [
       sheet("sheet_a", "Beam & shapes", [beam, line, circle, note], scale),
@@ -99,11 +99,11 @@ test("each sheet lists its features, and each feature is described above its com
   const text = latex.writeLatexDocument(documentBody());
 
   assert.match(text, /% Sheet 1 of 3: "Beam & shapes"/);
-  assert.match(text, /% World Scale: 1 drawing unit = 10 mm; lengths are given in m\./);
+  assert.doesNotMatch(text, /World Scale/, "the retired world scale is not described");
   assert.match(text, /% Features \(\d+\):/);
-  assert.match(text, /Beam "Beam 1", from \(0, 0\) to \(200, 0\), length 2 m/);
-  assert.match(text, /Circle "Circle 1", centred at \(150, 60\), radius 0\.2 m/);
-  assert.match(text, /% Sheet 3 of 3: "Empty"\n% World Scale not set: lengths are in drawing units\.\n% This sheet is empty\./);
+  assert.match(text, /Beam "Beam 1", from \(0, 0\) to \(200, 0\), length 200 drawing units/);
+  assert.match(text, /Circle "Circle 1", centred at \(150, 60\), radius 20 drawing units/);
+  assert.match(text, /% Sheet 3 of 3: "Empty"\n% This sheet is empty\./);
 });
 
 test("the drawing is in drawing units, y up, with real commands", () => {
@@ -137,15 +137,34 @@ test("the file reopens as exactly the document that was saved", () => {
   assert.deepStrictEqual(back.document.sheets.map(s => s.objects), body.sheets.map(s => s.objects).map(o => JSON.parse(JSON.stringify(o))));
 });
 
-test("the open path gets the .enggdraw envelope itself, as a saved file holds it", () => {
+test("the open path gets the document envelope itself, as a saved file holds it", () => {
   const text = latex.writeLatexDocument(documentBody());
   const embedded = latex.readEmbeddedEnvelope(text);
 
   assert.strictEqual(latex.hasEmbeddedDocument(text), true);
   assert.strictEqual(latex.hasEmbeddedDocument("\documentclass{article}"), false);
   assert.strictEqual(embedded.ok, true);
-  assert.strictEqual(embedded.envelope.format, "enggdraw");
+  assert.strictEqual(embedded.envelope.format, "daetum-document");
   assert.strictEqual(embedded.envelope.document.sheets.length, 3);
+});
+
+test("a .tex saved before the .enggdraw format was retired still opens", () => {
+  /* The block an older build wrote: labelled "enggdraw", envelope format "enggdraw". */
+  const current = latex.readEmbeddedEnvelope(latex.writeLatexDocument(documentBody())).envelope;
+  const old = { ...current, format: "enggdraw", application: "EnggDraw" };
+  const encoded = Buffer.from(JSON.stringify(old), "utf8").toString("base64");
+  const text = [
+    "\\documentclass{standalone}",
+    "%% DAETUM-DOCUMENT-BEGIN enggdraw base64",
+    ...encoded.match(/.{1,76}/g).map((line) => `%% ${line}`),
+    "%% DAETUM-DOCUMENT-END"
+  ].join("\n");
+
+  const read = latex.readEmbeddedDocument(text);
+
+  assert.strictEqual(read.found, true);
+  assert.strictEqual(read.ok, true, read.detail);
+  assert.strictEqual(read.document.sheets.length, 3);
 });
 
 test("a .tex without DAETUM data is recognised as such, and damaged data is refused", () => {

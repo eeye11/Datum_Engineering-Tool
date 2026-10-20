@@ -1,11 +1,13 @@
 /*
  * ========================================================
- * THE FILENAME IS THE USER'S NAME PLUS .ENGGDRAW
+ * THE FILENAME IS THE USER'S NAME PLUS .TEX
  * ========================================================
  *
+ * A drawing is saved as a .tex (the retired .enggdraw is only ever opened).
+ *
  * The most damaging possible mistake here is subtle: a saved drawing named
- * `triangle` becoming `triangle.EnggDraw (.enggdraw)` or
- * `EnggDraw (.enggdraw)`. The file would still be written and would still open,
+ * `triangle` becoming `triangle.DAETUM drawing (.tex)` or
+ * `DAETUM drawing (*.tex)`. The file would still be written and would still open,
  * so nothing would obviously break - the user would simply have a file with a
  * nonsense name, and every later save would build on it.
  *
@@ -46,29 +48,31 @@ const save = require(modulePath("file-save.js")).default;
 
 const EXTENSION = file.EXTENSION;
 
-console.log("\n  the native extension is .enggdraw\n");
+console.log("\n  a drawing's extension is .tex\n");
 
 check(
-  "the format's extension is exactly .enggdraw",
-  EXTENSION === "enggdraw",
+  "the format's extension is exactly .tex",
+  EXTENSION === "tex",
   EXTENSION,
 );
 
 check(
-  "and the format identifier is enggdraw",
+  "and it is a bare identifier",
   /^[a-z]+$/.test(EXTENSION),
   "an identifier with punctuation or parentheses is not an extension",
 );
 
-console.log("\n  a user's name becomes name.enggdraw\n");
+console.log("\n  a user's name becomes name.tex\n");
 
 {
   const cases = [
-    ["triangle", "triangle.enggdraw"],
-    ["My Statics Assignment", "My Statics Assignment.enggdraw"],
-    ["triangle.enggdraw", "triangle.enggdraw"],
-    ["Beam Diagram", "Beam Diagram.enggdraw"],
-    ["", "drawing.enggdraw"],
+    ["triangle", "triangle.tex"],
+    ["My Statics Assignment", "My Statics Assignment.tex"],
+    ["triangle.tex", "triangle.tex"],
+    ["Beam Diagram", "Beam Diagram.tex"],
+    ["", "drawing.tex"],
+    /* An imported .enggdraw is saved beside itself as a .tex, never over it. */
+    ["triangle.enggdraw", "triangle.tex"],
   ];
 
   cases.forEach(([input, expected]) => {
@@ -89,7 +93,9 @@ console.log("\n  the picker LABEL never reaches a filename\n");
   const forbidden = [
     "EnggDraw (",
     "(*.enggdraw)",
-    "EnggDraw (*.enggdraw)",
+    "(*.tex)",
+    "DAETUM drawing (",
+    ".enggdraw",
     /*
      * The label names the FORMAT, never the product - both the former name and
      * the current one are forbidden in a filename, so a later edit cannot
@@ -103,7 +109,7 @@ console.log("\n  the picker LABEL never reaches a filename\n");
     "triangle",
     "My Statics Assignment",
     "triangle.enggdraw",
-    "Beam.enggdraw",
+    "Beam.tex",
     "",
   ].map((name) => file.withExtension(name));
 
@@ -121,24 +127,24 @@ console.log("\n  the picker LABEL never reaches a filename\n");
    */
   const normalised = [
     save.normaliseName("triangle", {
-      id: "enggdraw",
+      id: "tex",
       extensions: [`.${EXTENSION}`],
     }),
     save.normaliseName("My Statics Assignment", {
-      id: "enggdraw",
+      id: "tex",
       extensions: [`.${EXTENSION}`],
     }),
   ];
 
   check(
-    "the save module produces triangle.enggdraw",
-    normalised[0] === "triangle.enggdraw",
+    "the save module produces triangle.tex",
+    normalised[0] === "triangle.tex",
     normalised[0],
   );
 
   check(
     "and never a descriptive label",
-    !normalised.some((name) => /EnggDraw \(|\*\.enggdraw/.test(name)),
+    !normalised.some((name) => /drawing \(|\*\.tex/.test(name)),
     normalised.join(", "),
   );
 }
@@ -157,14 +163,14 @@ console.log("\n  the picker's TYPE label is a separate thing\n");
 
   check(
     "its description names the format and the extension",
-    /EnggDraw/.test(native.description) &&
-      /\.enggdraw/.test(native.description),
+    /DAETUM drawing/.test(native.description) &&
+      /\.tex/.test(native.description),
     native.description,
   );
 
   check(
     "but its ACCEPT list holds the real extension",
-    JSON.stringify(Object.values(native.accept).flat()).includes(".enggdraw"),
+    JSON.stringify(Object.values(native.accept).flat()).includes(".tex"),
     JSON.stringify(native.accept),
   );
 

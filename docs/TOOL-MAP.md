@@ -22,8 +22,9 @@ interaction ? model ? rendering ? panels.
 | Rendering | `src/shared/rendering/renderer.js` | `renderDrawing` |
 | Hit testing | `src/features/workspace/interaction/hit-testing.js` | `objectAtPoint` |
 | Handles | `src/shared/geometry/feature-handles.js` | `manipulationHandles` |
-| Feature panel (legacy editor UI) | `src/components/layout/panels/feature-panel.js` | `renderProperties` |
-| Property binding + updates | `src/components/layout/panels/property-binding.js` + `src/components/layout/panels/property-update.js` | `bindFeaturePropertyControls`, `updateFeatureProperty` |
+| Inspector (Objects / Features / Source) | `src/components/layout/panels/drawing-panel.js` | `objects-pane.js`, `features-pane.js`, `source-tab.js` |
+| Features tab (schema-driven editor) | `src/components/layout/panels/features-editor.js` + `feature-schema.js` | |
+| Statics analysis editor (Resultant, Components, SFD/BMD/AFD) | `src/features/workspace/statics/analysis-editor.js` | |
 
 ## Finding a specific tool
 

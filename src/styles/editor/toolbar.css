@@ -1,5 +1,5 @@
 /*
- * The toolset bar and tool buttons, the style strip (thickness, colour, line type, vector scale) and its toggles, and the workspace selector.
+ * The toolset bar and tool buttons, the style strip (thickness, colour, line type) and its toggles, and the workspace selector.
  *
  * Part of editor.css, which imports these files in order. The order is the
  * cascade: a later file wins where two rules are equally specific.
@@ -208,8 +208,8 @@
      * BAND 4: COMMAND SEARCH AND THE QUICK-ACCESS TOOLBAR
      * ========================================================
      *
-     * A COMPACT ROW. Everything on it is 22px tall - the search field, the icon
-     * buttons and the vector-scale readout alike - so the band reads as one
+     * A COMPACT ROW. Everything on it is 22px tall - the search field and the icon
+     * buttons alike - so the band reads as one
      * strip rather than a line of controls of assorted heights, and it takes as
      * little of the drawing's height as a legible row can. 22px is the floor
      * rather than a preference: below it the icons stop being comfortable to
@@ -599,129 +599,6 @@
 }
 
 /*
- * =========================================================
- * VECTOR SCALE: THE VALUE DROPDOWN AT THE FAR RIGHT
- * =========================================================
- *
- * It KEEPS ITS VALUE VISIBLE, and that is what separates it from the four
- * toggles before it. It is a value selector, and the selected scale is
- * information the student reads at a glance - requiring the dropdown to be
- * opened to learn the current scale would make the control useless as a readout.
- *
- * THE SELECT IS LAID OVER THE BOX, as with the property controls: the visible
- * box shows icon + value + chevron, and the real `<select>` sits transparent on
- * top so the platform's own dropdown, its options and the existing `change`
- * handler are exactly what they were. Nothing about the scaling logic changes.
- *
- * IT IS NOT A TOGGLE. There is deliberately no green background: the value
- * being set does not make this control "on".
- */
-.drawing-vector-scale {
-    align-items: center;
-    background: var(--datum-input);
-    border: 1px solid var(--datum-border-strong);
-    border-radius: var(--radius-sm);
-    box-sizing: border-box;
-    color: var(--cad-ink);
-    display: inline-flex;
-    flex: 0 0 auto;
-    gap: 5px;
-    height: 26px;
-    padding: 0 6px;
-    position: relative;
-    transition: background-color 120ms ease, border-color 120ms ease;
-}
-
-.drawing-vector-scale-icon {
-    color: var(--cad-muted);
-    display: inline-flex;
-    flex: 0 0 auto;
-}
-
-/*
- * THE VALUE. Tabular numerals so the number does not shuffle sideways as it
- * changes between 0.5x, 1x and 100x - a readout that jumps is hard to scan.
- */
-.drawing-vector-scale-value {
-    flex: 0 0 auto;
-    font-size: 11px;
-    font-variant-numeric: tabular-nums;
-    min-width: 34px;
-    text-align: right;
-    white-space: nowrap;
-}
-
-.drawing-vector-scale-chevron {
-    color: var(--datum-muted);
-    display: inline-flex;
-    flex: 0 0 auto;
-}
-
-/*
- * THE REAL SELECT, FILLING THE BOX INVISIBLY - the same technique the property
- * controls use, and for the same reason: the native list, its keyboard handling
- * and its existing handlers survive.
- */
-.drawing-vector-scale select {
-    appearance: none;
-    border: 0;
-    cursor: pointer;
-    height: 100%;
-    inset: 0;
-    margin: 0;
-    opacity: 0;
-    padding: 0;
-    position: absolute;
-    width: 100%;
-}
-
-.drawing-vector-scale:hover {
-    background: var(--datum-input-hover);
-    border-color: var(--datum-green);
-}
-
-.drawing-vector-scale:focus-within {
-    border-color: var(--datum-green);
-    outline: 2px solid var(--datum-focus);
-    outline-offset: -1px;
-}
-
-.drawing-vector-scale:has(select:open) {
-    background: var(--datum-input-hover);
-    border-color: var(--datum-green);
-}
-
-/*
- * THE CUSTOM FIELD, SHOWN ONLY WHILE CUSTOM IS CHOSEN.
- *
- * It appears beside the select for a value the list does not carry, and is
- * `hidden` the rest of the time - which is the one attribute the wiring toggles,
- * so there is no second piece of state deciding its visibility. The digits are
- * right-aligned and tabular so the number reads steadily as it changes.
- */
-.drawing-vector-scale .drawing-vector-scale-custom {
-    background: var(--datum-surface);
-    border: 1px solid var(--datum-border-strong);
-    border-radius: var(--radius-sm);
-    color: var(--cad-ink);
-    flex: 0 0 auto;
-    font: inherit;
-    font-size: 10.5px;
-    font-variant-numeric: tabular-nums;
-    height: 24px;
-    min-width: 60px;
-    padding: 0 4px;
-    position: relative;
-    text-align: right;
-    width: 60px;
-    z-index: 1;
-}
-
-.drawing-vector-scale .drawing-vector-scale-custom[hidden] {
-    display: none;
-}
-
-/*
  * The toggles are children of the strip in their own right, not wrapped in a
  * label, so they carry the same "own space, never shrink" rule as the controls
  * above - which keeps every control on this row in the same layout system
@@ -769,7 +646,7 @@
 /*
  * THE ROW IS NAMED BY ITS OWN LABELS.
  *
- * There is deliberately no "EnggDraw" caption at the head of the toolset row.
+ * There is deliberately no "DAETUM" caption at the head of the toolset row.
  * Eleven named toolsets say what the row is for more clearly than a product
  * name does, and the product name is already in the application bar above -
  * so the caption was a word the student had to read past to reach the first

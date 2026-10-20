@@ -35,7 +35,6 @@ global.window = {
   crypto: { randomUUID: () => "factory-uuid" }
 };
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 
 global.window.enggDrawingState = {
@@ -84,7 +83,6 @@ const line = {
 };
 
 const document_ = (objects) => ({
-  scale: { mmPerUnit: 1, unit: "mm" },
   objects
 });
 

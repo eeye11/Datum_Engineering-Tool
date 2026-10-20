@@ -1,5 +1,5 @@
 /*
- * Shared UI primitives for the parts of EnggDraw that float.
+ * Shared UI primitives for the parts of DAETUM that float.
  *
  * Three separate features - the sheet context menu, the sheet rename
  * dialog, and whatever opens next - all need the same two things:
@@ -278,7 +278,7 @@ function isDialogOpen() {
  *   options.onConfirm   ({ name: value }) -> false to stay open
  *
  * The dialog is a real element in the page, not a browser dialog.
- * That is the whole point: it is styled from EnggDraw's own palette,
+ * That is the whole point: it is styled from DAETUM's own palette,
  * it is positioned by this module's viewport logic so it can never
  * open off-screen, and it does not suspend the page or interrupt
  * anything outside it.

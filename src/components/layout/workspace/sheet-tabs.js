@@ -3,7 +3,7 @@
  *
  * The bar sits under the drawing area and is part of the workspace
  * rather than part of the drawing: it uses the same panel styling as
- * the rest of EnggDraw, but it never sits inside the canvas, never
+ * the rest of DAETUM, but it never sits inside the canvas, never
  * scales with the zoom, and never appears in an export or a reference.
  * That separation is the point of it being its own row - a worksheet
  * tab in Excel belongs to the workbook, not to the cell you are

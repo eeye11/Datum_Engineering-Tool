@@ -108,7 +108,7 @@ try {
         return { changes: window.__changes, format: file.format, version: file.version, types: sheet.objects.map(o => o.type) };
     });
     check("documentchange fired while drawing", drawn.changes > 0, `fired ${drawn.changes} times`);
-    check("getDocument returns a .enggdraw file", drawn.format === "enggdraw" && drawn.version === 2);
+    check("getDocument returns a DAETUM document", drawn.format === "daetum-document" && drawn.version === 2);
     check("and it contains the beam", drawn.types.includes("beam"), drawn.types.join(","));
 
     const figure = await page.evaluate(() => window.datum.renderSheetSvg(window.datum.listSheets()[0].id));
@@ -159,7 +159,7 @@ try {
     check("an unknown method is refused", unknown.ok === false && /Unknown method/.test(unknown.error));
 
     const file = await page.evaluate(() => window.call("getDocument"));
-    check("the whole document crosses the frame", file.ok && file.result.format === "enggdraw");
+    check("the whole document crosses the frame", file.ok && file.result.format === "daetum-document");
 
     // Without embedOrigin the bridge stays off: a request goes unanswered.
     const silent = await page.evaluate(async datumUrl => {

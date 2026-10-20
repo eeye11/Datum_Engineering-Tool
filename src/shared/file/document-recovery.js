@@ -9,7 +9,7 @@
  *
  * This is NOT the project's file. It has no name, it is never
  * downloaded, and it is deliberately of no consequence to anyone but
- * the person who made it. Sharing a drawing is the .enggdraw file's
+ * the person who made it. Sharing a drawing is the .tex file's
  * job and always will be; this exists only so that a mishap does
  * not destroy work outright.
  *
@@ -22,7 +22,14 @@
  * that mutates geometry continuously would otherwise write the
  * whole drawing to storage many times a second.
  */
-const STORAGE_KEY = "enggdraw:recovery";
+const STORAGE_KEY = "daetum:recovery";
+
+/*
+ * The key a build from before the .enggdraw format was retired wrote. A copy
+ * left there is still recovered (and then moved to the current key), so
+ * updating DAETUM never loses work that was waiting to be recovered.
+ */
+const LEGACY_STORAGE_KEY = "enggdraw:recovery";
 
 /*
  * How long after a change the recovery copy is written.
@@ -58,6 +65,15 @@ function read() {
 
   try {
     raw = window.localStorage.getItem(STORAGE_KEY);
+
+    if (!raw) {
+      raw = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+
+      if (raw) {
+        window.localStorage.setItem(STORAGE_KEY, raw);
+        window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+      }
+    }
   } catch (error) {
     /*
      * Storage can be unavailable - private browsing, a full
@@ -156,6 +172,7 @@ function discard() {
 
   try {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch (error) {
     /* Nothing to do: there is no copy to remove. */
   }

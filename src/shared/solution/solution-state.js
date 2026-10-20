@@ -19,7 +19,7 @@
  *
  * WHAT IS PERSISTED, AND WHERE.
  *
- * The source travels WITH THE DOCUMENT - it is saved into the `.enggdraw` file
+ * The source travels WITH THE DOCUMENT - it is saved into the drawing's `.tex` file
  * beside the drawings, so a written solution and its diagrams are one file and
  * opening one brings back the other. A draft is ALSO kept in `localStorage`
  * while the student types, so a closed tab does not lose an unsaved answer;

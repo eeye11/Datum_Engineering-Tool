@@ -3,7 +3,6 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import enggCreationDimension from "../model/dimensions/creation-dimension.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import { commitAnalysisAxis, commitAnalysisInput } from "../statics/analysis-tools.js";
@@ -1031,7 +1030,7 @@ export function finishActiveConstruction() {
         drawingState.interaction;
 
     /*
-     * SMART DIMENSION REFERENCE SELECTION. Enter is the commit point:
+     * DIMENSION REFERENCE SELECTION. Enter is the commit point:
      * it means "use what I picked" rather than "pick one more".
      *
      * It is checked BEFORE the phase test because the dimension tool
@@ -1204,8 +1203,7 @@ export function deselectIfJustCreated() {
      * belongs to the dialog's own confirm and cancel.
      */
     if (
-        enggPlotEditor?.isOpen?.() ||
-        enggCreationDimension?.isOpen?.()
+        enggPlotEditor?.isOpen?.()
     ) {
         return false;
     }

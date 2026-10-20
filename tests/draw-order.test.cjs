@@ -140,7 +140,7 @@ check(
   "a second implementation of the ordering rule would be a second answer",
 );
 
-const editorIndex = fs.readFileSync(locate("index.js"), "utf8");
+const editorIndex = fs.readFileSync(locate("features/workspace/index.js"), "utf8");
 
 check(
   "the draw-order controls are installed at start-up",

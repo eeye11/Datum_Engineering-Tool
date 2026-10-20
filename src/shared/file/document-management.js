@@ -10,7 +10,7 @@
  *
  * WHAT THE APPLICATION CAN AND CANNOT DO
  * --------------------------------------
- * A drawing lives in a `.enggdraw` file the USER owns, reached through the
+ * A drawing lives in a `.tex` file the USER owns, reached through the
  * browser's File System Access API (or, where that is absent, the download
  * folder). That constrains every command here, and the constraint is stated in
  * the interface rather than papered over:
@@ -38,6 +38,7 @@
  */
 
 import enggDocumentFile from "./document-file.js";
+import { writeLatexDocument } from "./latex/latex-document.js";
 import enggUi from "../ui/ui.js";
 
 /* ---------------------------------------------------------- */
@@ -52,9 +53,8 @@ import enggUi from "../ui/ui.js";
  */
 function serializedSize(serializeBody) {
     try {
-        const payload = enggDocumentFile.createDocument(serializeBody());
-
-        const text = JSON.stringify(payload, null, 2);
+        /* The .tex a Save writes - pictures and embedded document alike. */
+        const text = writeLatexDocument(serializeBody(), { title: "Drawing" });
 
         /*
          * Bytes, not characters. A drawing with a student's own units or

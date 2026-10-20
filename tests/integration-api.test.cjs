@@ -61,7 +61,7 @@ check("an edit raises documentchange", changes === 1, `raised ${changes}`);
 unsubscribe();
 
 const file = datum.getDocument();
-check("getDocument is a .enggdraw file", file.format === "enggdraw" && file.version === datum.documentVersion);
+check("getDocument is a DAETUM document envelope", file.format === "daetum-document" && file.version === datum.documentVersion);
 check("holding the edit", file.document.sheets[0].objects.some((o) => o.type === "beam"));
 check("as plain data", JSON.stringify(JSON.parse(JSON.stringify(file))) === JSON.stringify(file));
 

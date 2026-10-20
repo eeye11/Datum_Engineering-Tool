@@ -10,7 +10,7 @@
  *   empty             0 bytes: nothing to open, and a different problem from
  *                     "damaged" because the answer is different
  *   not-json          text that is not a drawing at all
- *   wrong-format      JSON that is not an EnggDraw file
+ *   wrong-format      JSON that is not a DAETUM document
  *   from-the-future   written by a newer build
  *   too-old           below the minimum this build supports
  *   no-document-body  a valid envelope with nothing in it
@@ -70,7 +70,7 @@ console.log("\n  every bad file is refused with a REASON\n");
     {
       name: "not a drawing at all",
       payload: { hello: "world" },
-      expect: /not an EnggDraw drawing/i
+      expect: /not a DAETUM drawing/i
     },
     {
       name: "an envelope with no document",
@@ -226,7 +226,7 @@ console.log("\n  the specific cases are all handled\n");
 
   check(
     "text that is not JSON is reported by name",
-    /is not an EnggDraw drawing/.test(written),
+    /is not a DAETUM drawing/.test(written),
   );
 
   check(

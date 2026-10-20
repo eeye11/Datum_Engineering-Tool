@@ -32,7 +32,7 @@
 import enggDrawingState from "../../model/drawing-state.js";
 import enggDocumentFile from "../document-file.js";
 import enggDrawingExport from "../document-export.js";
-import { describeFeature, describeScale } from "./feature-description.js";
+import { describeFeature } from "./feature-description.js";
 import { createPalette, num, svgToTikz, unmappedCharacters } from "./svg-to-tikz.js";
 
 export const LATEX_EXTENSION = "tex";
@@ -86,9 +86,9 @@ function embeddedBlock(documentBody) {
     return [
         "% ---------------------------------------------------------------------",
         "% DAETUM DOCUMENT DATA. Everything below is a comment: LaTeX ignores it.",
-        "% It is the full drawing (base64-encoded .enggdraw JSON), so DAETUM can",
+        "% It is the full drawing (base64-encoded DAETUM document JSON), so DAETUM can",
         "% reopen this file with every feature editable. Do not edit it by hand.",
-        `${DATA_BEGIN} enggdraw base64`,
+        `${DATA_BEGIN} daetum-document base64`,
         ...lines,
         DATA_END
     ].join("\n");
@@ -100,8 +100,9 @@ export function hasEmbeddedDocument(text) {
 }
 
 /*
- * The .enggdraw envelope a .tex written by DAETUM carries, exactly as an
- * .enggdraw file would hold it - for the open path, which reads envelopes.
+ * The document envelope a .tex written by DAETUM carries - for the open path,
+ * which reads envelopes. (The word after the BEGIN marker is a label only, so
+ * files written when it said "enggdraw" read exactly the same.)
  *
  * { found: false }                          no block (written by hand or elsewhere)
  * { found: true, ok: true, envelope }       the block, decoded
@@ -135,8 +136,8 @@ export function readEmbeddedEnvelope(text) {
 }
 
 /*
- * The document a .tex written by DAETUM carries, read and migrated as an
- * .enggdraw would be: { found: false }, or { found: true, ok, document } /
+ * The document a .tex written by DAETUM carries, read and migrated through the
+ * envelope's own reader: { found: false }, or { found: true, ok, document } /
  * { found: true, ok: false, failure, detail }.
  */
 export function readEmbeddedDocument(text) {
@@ -180,11 +181,9 @@ function comment(text, indent = "") {
  */
 function sheetPicture(documentBody, sheet, index, count, palette) {
     const objects = sheet.objects || [];
-    const scale = sheet.scale || null;
     const heading = [
         "---------------------------------------------------------------------",
-        `Sheet ${index + 1} of ${count}: "${sheet.name || `Sheet ${index + 1}`}"`,
-        describeScale(scale)
+        `Sheet ${index + 1} of ${count}: "${sheet.name || `Sheet ${index + 1}`}"`
     ];
 
     const rendered = objects.length
@@ -232,7 +231,7 @@ function sheetPicture(documentBody, sheet, index, count, palette) {
         .map(group => group.featureId && byId.get(group.featureId))
         .filter(Boolean);
     const unique = [...new Set(described)];
-    const sentence = object => describeFeature(object, { objects, scale, labels: labels.get(object.id) || [] });
+    const sentence = object => describeFeature(object, { objects, labels: labels.get(object.id) || [] });
 
     const summary = unique.length
         ? [`Features (${unique.length}):`, ...unique.map((object, i) => `  ${i + 1}. ${sentence(object)}`)]
@@ -282,7 +281,7 @@ function unicodeDeclarations(characters) {
 export function writeLatexDocument(documentBody, { title = "Drawing", exportedAt = new Date() } = {}) {
     const sheets = documentBody?.sheets?.length
         ? documentBody.sheets
-        : [{ id: "sheet", name: "Sheet 1", objects: documentBody?.objects || [], scale: documentBody?.scale || null }];
+        : [{ id: "sheet", name: "Sheet 1", objects: documentBody?.objects || [] }];
     const palette = createPalette();
     const pictures = sheets.map((sheet, index) => sheetPicture(documentBody, sheet, index, sheets.length, palette));
     const colours = palette.definitions();
@@ -297,8 +296,7 @@ export function writeLatexDocument(documentBody, { title = "Drawing", exportedAt
         "HOW TO READ THIS FILE",
         "  Each sheet is one tikzpicture (one page). Coordinates are DAETUM",
         "  drawing units, x to the right and y UP; on paper one unit is 1 mm",
-        "  times the picture's `scale`. Real-world lengths come from each sheet's",
-        "  World Scale and are stated in the comments.",
+        "  times the picture's `scale`. Lengths in the comments are drawing units.",
         "  Every feature's commands are preceded by a comment saying what it is",
         "  and where; each sheet starts with a list of its features.",
         "  Compile with pdflatex (or lualatex/xelatex): standalone class + TikZ.",

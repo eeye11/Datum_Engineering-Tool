@@ -201,8 +201,6 @@ const loadObject = (unit) => {
   const scene = (object) => ({
     objects: [object],
     display: { showMagnitudes: true, showUnits: true },
-    statics: { vectorScale: 1 },
-    scale: { mmPerUnit: 1, unit: "mm" },
     selection: {
       selectedObjectIds: [],
       boxSelectionIds: [],

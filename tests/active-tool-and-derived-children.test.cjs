@@ -208,13 +208,6 @@ check(
     /resolved\.parentId[\s\S]{0,120}force\.parentId/.test(analysis),
 );
 
-check(
-  "the panel says the values are derived",
-  /Derived from its source force/.test(
-    fs.readFileSync(locate("statics-panel.js"), "utf8"),
-  ),
-);
-
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 
 if (fail) {

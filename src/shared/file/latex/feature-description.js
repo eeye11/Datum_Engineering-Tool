@@ -9,9 +9,8 @@
  * the engineering meaning, not just the lines.
  *
  * Positions are written in the same drawing coordinates as the commands, so a
- * description can be matched to its code. Lengths and magnitudes are written
- * in real units: lengths through the sheet's World Scale, loads and moments in
- * the unit stored with them.
+ * description can be matched to its code. Lengths are written in drawing units
+ * (millimetres on the sheet); loads and moments in the unit stored with them.
  *
  * A type this module does not know is still described - by its name, its type
  * and its stored parameters - so a feature added later is never left out.
@@ -70,7 +69,7 @@ const THERMODYNAMICS_LABELS = {
     "constant-temp-pressure-lines": "Constant temperature/pressure line"
 };
 
-/* Geometry fields that are lengths, and are converted through the World Scale. */
+/* Geometry fields that are lengths, stated in drawing units (mm on the sheet). */
 const LENGTH_FIELDS = ["length", "width", "height", "radius", "depth", "diameter", "drawingHeight"];
 
 /* Other stored parameters worth stating, with their own unit field if any. */
@@ -87,8 +86,6 @@ const VALUE_FIELDS = [
     ["panels", null]
 ];
 
-const LENGTH_UNITS_MM = { mm: 1, cm: 10, m: 1000, in: 25.4, ft: 304.8 };
-
 /* A number for people: up to 3 decimals, no trailing zeros. */
 function figure(value) {
     return String(Number(Number(value).toFixed(3)));
@@ -98,14 +95,13 @@ function coordinate(point) {
     return `(${figure(point.x)}, ${figure(point.y)})`;
 }
 
-/* A length in drawing units, written in the sheet's real unit. */
-export function realLength(units, scale) {
-    if (!scale || !Number.isFinite(Number(scale.mmPerUnit))) {
-        return `${figure(units)} drawing units`;
-    }
-
-    const unit = LENGTH_UNITS_MM[scale.unit] ? scale.unit : "mm";
-    return `${figure((units * Number(scale.mmPerUnit)) / LENGTH_UNITS_MM[unit])} ${unit}`;
+/*
+ * A length as drawn, in drawing units. (A sheet's World Scale used to convert
+ * this to a "real" length; that system is retired, and the drawing states what
+ * it draws.)
+ */
+export function drawnLength(units) {
+    return `${figure(units)} drawing units`;
 }
 
 export function typeLabel(object) {
@@ -137,10 +133,9 @@ function isPoint(value) {
  * One sentence for one feature.
  *
  *   objects  every feature on the sheet (to name a parent)
- *   scale    the sheet's World Scale, or null
  *   labels   the text the feature shows on the drawing (magnitudes, names)
  */
-export function describeFeature(object, { objects = [], scale = null, labels = [] } = {}) {
+export function describeFeature(object, { objects = [], labels = [] } = {}) {
     const g = object.geometry || {};
     const parts = [];
     const label = typeLabel(object);
@@ -157,7 +152,7 @@ export function describeFeature(object, { objects = [], scale = null, labels = [
     /* Where it is. */
     if (isPoint(g.start) && isPoint(g.end)) {
         const length = Math.hypot(g.end.x - g.start.x, g.end.y - g.start.y);
-        parts.push(`from ${coordinate(g.start)} to ${coordinate(g.end)}, length ${realLength(length, scale)}`);
+        parts.push(`from ${coordinate(g.start)} to ${coordinate(g.end)}, length ${drawnLength(length)}`);
     } else if (Array.isArray(g.points) && g.points.every(isPoint) && g.points.length) {
         parts.push(`through ${g.points.map(coordinate).join(", ")}`);
     } else if (isPoint(g.center)) {
@@ -169,13 +164,13 @@ export function describeFeature(object, { objects = [], scale = null, labels = [
     }
 
     if (Number.isFinite(Number(g.distanceAlongBody)) && parent) {
-        parts.push(`${realLength(Number(g.distanceAlongBody), scale)} from its start`);
+        parts.push(`${drawnLength(Number(g.distanceAlongBody))} from its start`);
     }
 
     /* Sizes. */
     for (const field of LENGTH_FIELDS) {
         if (Number.isFinite(Number(g[field])) && g[field] !== null && g[field] !== "") {
-            parts.push(`${field.replace(/([A-Z])/g, " $1").toLowerCase()} ${realLength(Number(g[field]), scale)}`);
+            parts.push(`${field.replace(/([A-Z])/g, " $1").toLowerCase()} ${drawnLength(Number(g[field]))}`);
         }
     }
 
@@ -221,13 +216,3 @@ export function describeFeature(object, { objects = [], scale = null, labels = [
     return parts.join(", ") + ".";
 }
 
-/* The units line of a sheet's header. */
-export function describeScale(scale) {
-    if (!scale || !Number.isFinite(Number(scale.mmPerUnit))) {
-        return "World Scale not set: lengths are in drawing units.";
-    }
-
-    /* Significant figures, not decimals: a small scale must not round to 0. */
-    const mmPerUnit = Number(Number(scale.mmPerUnit).toPrecision(5));
-    return `World Scale: 1 drawing unit = ${mmPerUnit} mm; lengths are given in ${LENGTH_UNITS_MM[scale.unit] ? scale.unit : "mm"}.`;
-}

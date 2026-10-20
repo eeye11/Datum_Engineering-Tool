@@ -161,20 +161,27 @@ console.log("-----------");
 
 const force = write(
   objectOf("force", { start: { x: 20, y: 20 }, end: { x: 20, y: 80 }, position: { x: 20, y: 20 }, magnitude: 60, angle: 90 }),
-  { vectorScale: 1 },
 );
 
 check("a force is an arrow from its application point", has(force, "(20,20) -- (20,80)"), force);
 check("with an arrow head at the far end", has(force, "-{Latex}"), force);
 check("and its label plus its magnitude, kept apart", has(force, "{Point Force 1}") && has(force, "F = 60"), force);
 
-const scaledForce = write(
-  objectOf("force", { start: { x: 0, y: 0 }, magnitude: 60, angle: 0 }),
-  { vectorScale: 2 },
+/*
+ * THE VALUE IS THE LABEL, NOT THE LENGTH. A force drawn 30 long stating 500 N
+ * is written 30 long; a force with no drawn end (an old file) is written at its
+ * magnitude, which is how it looked before arrows kept their drawn length.
+ */
+const labelledForce = write(
+  objectOf("force", { start: { x: 0, y: 0 }, end: { x: 30, y: 0 }, magnitude: 500, angle: 0 }),
 );
 
-check("the display scale changes the drawn length", has(scaledForce, "(0,0) -- (120,0)"), scaledForce);
-check("but never the physical magnitude", has(scaledForce, "F = 60"), scaledForce);
+check("the drawn arrow is written at its drawn length", has(labelledForce, "(0,0) -- (30,0)"), labelledForce);
+check("and the value is only its label", has(labelledForce, "F = 500"), labelledForce);
+
+const legacyForce = write(objectOf("force", { start: { x: 0, y: 0 }, magnitude: 60, angle: 0 }));
+
+check("a force with no drawn end is drawn at its magnitude", has(legacyForce, "(0,0) -- (60,0)"), legacyForce);
 
 const hiddenValue = write(
   objectOf("force", { start: { x: 0, y: 0 }, magnitude: 60, angle: 0 }, {}, { annotationDisplay: { showMagnitude: false } }),

@@ -254,66 +254,23 @@ check(
 
 console.log("\n  a load's height is derived, never typed\n");
 
-const drawingSource = controllerSource();
-
-const code = drawingSource
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/\/\/[^\n]*/g, "");
-
 /*
- * SCOPED TO THE LOAD PANELS.
- *
- * "Start Y" and "End Y" are legitimate labels elsewhere - a truss's four
- * corner coordinates and a connection's two ends are genuinely positions
- * in space, not stations along a member. So the absence is checked in the
- * load panel and not across the file, or this would pass by deleting
- * something a student needs.
+ * THE FEATURES PANE OFFERS NO POSITION FIELDS FOR A LOAD. A load is placed by
+ * its two stations on the body it acts on; its outline height is derived from
+ * the body and the direction. So the pane's field table must not give a load
+ * a typed Start Y, End Y or offset.
  */
-const panelAt = code.indexOf(
-  "function distributedLoadPanelMarkup",
-);
+{
+  const schema = require(modulePath("feature-schema.js"));
+  const load = { type: "load", geometry: { start: { x: 0, y: 0 }, end: { x: 100, y: 0 }, intensity: 10 } };
+  const keys = schema.groupsFor(load).flatMap((group) => group.fields.map((field) => field.key || field));
 
-const loadPanel =
-  panelAt < 0 ? "" : code.slice(panelAt, panelAt + 6000);
-
-check(
-  "the load panel was found",
-  loadPanel.length > 0,
-);
-
-check(
-  "a load panel does not offer a Start Y",
-  !/"Start Y"/.test(loadPanel),
-  "the outline height is derived from the body and the direction",
-);
-
-check(
-  "a load panel does not offer an End Y",
-  !/"End Y"/.test(loadPanel),
-);
-
-check(
-  "the panel no longer offers Offset X",
-  !/"Offset X"/.test(code),
-);
-
-check(
-  "the panel no longer offers Offset Y",
-  !/"Offset Y"/.test(code),
-);
-
-check(
-  "a load is positioned by its two stations and nothing else",
-  /* Both helpers live in the relative-coordinates module since the
-   * Phase 2 reorganisation, so they are read from there rather than
-   * from the controller text. */
-  /function isLoadGeometry/.test(
-    fs.readFileSync(modulePath("relative-coordinates.js"), "utf8"),
-  ) &&
-    /function pointAtStation/.test(
-      fs.readFileSync(modulePath("relative-coordinates.js"), "utf8"),
-    ),
-);
+  check(
+    "a load's Features offer no typed position",
+    !keys.some((key) => /^(start|end|position|offset)/i.test(String(key))),
+    `fields: ${keys.join(", ")}`,
+  );
+}
 
 console.log(
   `\n${pass} passed, ${fail} failed\n`,

@@ -248,13 +248,13 @@ check(
 /*
  * THE NATIVE FORMAT IS NAMED AS THE FORMAT, NOT AS THE APPLICATION.
  */
-console.log("\n  the file type is named EnggDraw (*.enggdraw)\n");
+console.log("\n  the file type is named DAETUM drawing (*.tex)\n");
 
 const fileSave = fs.readFileSync(locate("file-save.js"), "utf8");
 
 check(
-  "the document type is labelled EnggDraw (*.enggdraw)",
-  fileSave.includes('label: "EnggDraw (*.enggdraw)"'),
+  "the document type is labelled DAETUM drawing (*.tex)",
+  fileSave.includes('label: "DAETUM drawing (*.tex)"'),
   "the native type must name the format and its extension",
 );
 

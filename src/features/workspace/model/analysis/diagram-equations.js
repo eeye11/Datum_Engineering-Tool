@@ -18,8 +18,8 @@
  * frozen at whatever the first sample happened to be, and changing the
  * range would move the vertices rather than re-derive them.
  *
- * NOTHING HERE READS THE RENDERER. The frame, the beam, the vector scale
- * and the arrow sizes are all irrelevant to the value of V(x) at some
+ * NOTHING HERE READS THE RENDERER. The frame, the beam and the arrow
+ * sizes are all irrelevant to the value of V(x) at some
  * distance, which is exactly why a diagram here can be trusted: the curve
  * is a function of x alone.
  *

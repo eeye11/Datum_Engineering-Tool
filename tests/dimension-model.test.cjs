@@ -23,7 +23,6 @@ global.window = {
 
 /* ---- the modules this one needs ---- */
 
-loadModule("dimensions.js");
 loadModule("measurement-core.js");
 
 global.window.enggDrawingState = {
@@ -77,14 +76,8 @@ const check = (name, actual, expected) => {
   }
 };
 
-/* A document at 1 unit = 1 mm, so drawing units read as millimetres. */
-const calibrated = () => ({ scale: { mmPerUnit: 1, unit: "mm" } });
-const uncalibrated = () => ({});
-
-const state = (...objects) => ({
-  objects,
-  scale: { mmPerUnit: 1, unit: "mm" }
-});
+/* A drawing: its objects, in drawing units (millimetres on the sheet). */
+const state = (...objects) => ({ objects });
 
 const line = (id, start, end) => ({
   id,
@@ -347,12 +340,18 @@ check(
   0
 );
 
-console.log("\nUnits");
-const metres = {
-  objects: [line("l1", { x: 0, y: 0 }, { x: 1500, y: 0 })],
-  scale: { mmPerUnit: 1, unit: "m" }
+console.log("\nDrawing units, never a world scale");
+/*
+ * THE WORLD-SCALE SYSTEM IS RETIRED. A dimension is a visual annotation of the
+ * drawing: it reads the geometry in drawing units (millimetres on the sheet)
+ * and nothing converts that to a "real" length. A `scale` left in a document
+ * saved by an older build - a calibration, a metre unit - must not change the
+ * number the dimension shows.
+ */
+const plain = {
+  objects: [line("l1", { x: 0, y: 0 }, { x: 1500, y: 0 })]
 };
-const metreDimension = model.createDimension({
+const spanDimension = model.createDimension({
   dimensionType: "horizontal",
   refs: [
     { featureId: "l1", anchor: "start" },
@@ -361,89 +360,36 @@ const metreDimension = model.createDimension({
   placement: { x: 750, y: 40 }
 });
 check(
-  "a dimension reads in the document's units",
-  model.formatMeasurement(metreDimension, metres),
-  "1.50 m"
+  "a dimension reads the geometry in drawing units",
+  model.formatMeasurement(spanDimension, plain),
+  "1500.00 mm"
+);
+check(
+  "an old file's metre unit does not convert it",
+  model.formatMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1, unit: "m" } }),
+  "1500.00 mm"
+);
+check(
+  "an old file's calibration does not rescale it",
+  model.formatMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1.25, unit: "mm" } }),
+  "1500.00 mm"
+);
+check(
+  "and it states the value plainly, with no approximation mark",
+  String(model.formatMeasurement(spanDimension, plain)).includes("~"),
+  false
 );
 
 console.log("\nZoom never changes a measurement");
-const zoomed = { ...metres, camera: { zoom: 2, panX: 0, panY: 0 } };
 check(
   "the same drawing at 200% reads the same",
-  model.formatMeasurement(metreDimension, zoomed),
-  model.formatMeasurement(metreDimension, metres)
+  model.formatMeasurement(spanDimension, { ...plain, camera: { zoom: 2, panX: 0, panY: 0 } }),
+  "1500.00 mm"
 );
 check(
   "and at 400%",
-  model.formatMeasurement(metreDimension, {
-    ...metres,
-    camera: { zoom: 4 }
-  }),
-  "1.50 m"
-);
-
-console.log("\nCalibration");
-const provisional = {
-  objects: [line("l1", { x: 0, y: 0 }, { x: 100, y: 0 })],
-  scale: null
-};
-const provisionalDimension = model.createDimension({
-  dimensionType: "horizontal",
-  refs: [
-    { featureId: "l1", anchor: "start" },
-    { featureId: "l1", anchor: "end" }
-  ],
-  placement: { x: 50, y: 30 }
-});
-check(
-  "an uncalibrated drawing still measures",
-  model.measurementFor(provisionalDimension, provisional).value,
-  100
-);
-/*
- * NO TILDE.
- *
- * This used to read "~100.00 mm". The tilde marked an uncalibrated
- * measurement as approximate, which reads as careful engineering caution and
- * is in fact the opposite of what happens: the document has NOT been told
- * what a unit is worth and is currently assuming one drawing unit is one
- * millimetre, and no quantity printed on the sheet can fix that.
- *
- * A dimension that ESTABLISHED the scale is the least approximate thing on
- * the drawing, and marking it uncertain argued against the very feature that
- * produced it. So the mark is gone from both states, and the uncalibrated
- * case is surfaced once - in the prompt where the student is asked what the
- * geometry really measures, and where they can act on the answer - rather
- * than repeated on every dimension where they cannot.
- */
-check(
-  "and states the value plainly, with no approximation mark",
-  model.formatMeasurement(provisionalDimension, provisional),
-  "100.00 mm"
-);
-
-check(
-  "and never carries a tilde",
-  String(
-    model.formatMeasurement(provisionalDimension, provisional)
-  ).includes("~"),
-  false,
-);
-
-const calibratedState = {
-  ...provisional,
-  scale: { mmPerUnit: 1.25, unit: "mm" }
-};
-
-check(
-  "and a calibrated dimension carries no tilde either",
-  model.formatMeasurement(provisionalDimension, calibratedState),
-  "125.00 mm"
-);
-check(
-  "and calibrating changes it for good",
-  model.formatMeasurement(provisionalDimension, calibratedState),
-  "125.00 mm"
+  model.formatMeasurement(spanDimension, { ...plain, camera: { zoom: 4 } }),
+  "1500.00 mm"
 );
 
 console.log("\nRedundancy");

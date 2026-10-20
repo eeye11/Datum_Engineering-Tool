@@ -129,6 +129,19 @@ function locate(name) {
     return name;
   }
 
+  /*
+   * A PATH UNDER src/ NAMES ONE FILE. A bare basename is resolved by scanning,
+   * which is ambiguous for a name more than one folder uses - there are two
+   * `index.js` files - so a caller that gives the folder gets exactly that file.
+   */
+  if (name.includes("/")) {
+    const underSource = path.join(SOURCE_ROOT, name.replace(/^src\//, ""));
+
+    if (fs.existsSync(underSource)) {
+      return underSource;
+    }
+  }
+
   return modulePath(path.basename(name));
 }
 

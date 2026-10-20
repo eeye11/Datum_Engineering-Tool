@@ -57,7 +57,7 @@ import { renderPreview } from "./preview-render.js";
     function renderDrawing(
         state,
         canvas,
-        { overlayOnly = false } = {}
+        { overlayOnly = false, liveObjectIds = null } = {}
     ) {
         if (!canvas) {
             return;
@@ -146,13 +146,23 @@ import { renderPreview } from "./preview-render.js";
 
         /*
          * THE COMMITTED DRAWING IS THE COMPILED SOURCE'S, so an overlay pass
-         * omits feature geometry and feature labels entirely. What it keeps is
-         * everything that is about INTERACTION: the grid, the live preview, the
-         * inference line, the snap marker, the box and the handles. Those are
-         * aids drawn over the picture, not a second drawing of it.
+         * omits the feature geometry and labels the picture already shows. What
+         * it keeps is everything that is about INTERACTION: the grid, the live
+         * preview, the inference line, the snap marker, the box and the handles.
+         *
+         * EXCEPT THE OBJECTS THE PICTURE DOES NOT SHOW YET. `liveObjectIds`
+         * names the objects whose model differs from the compiled picture on
+         * screen - one being moved, or just edited and still compiling - and the
+         * overlay draws those, so each object is seen where it really is.
          */
-        if (!overlayOnly) {
-            state.objects.forEach(
+        const drawn = overlayOnly
+            ? (liveObjectIds && liveObjectIds.size
+                ? state.objects.filter((entity) => entity && liveObjectIds.has(entity.id))
+                : [])
+            : state.objects;
+
+        if (drawn.length) {
+            drawn.forEach(
                 entity => {
                     try {
                         appendEntity(
@@ -188,8 +198,8 @@ import { renderPreview } from "./preview-render.js";
          * "every feature's label" one behaviour rather than a branch per type -
          * which is exactly the branch that was missing for Line and Point.
          */
-        if (!overlayOnly) {
-            state.objects.forEach((entity) => {
+        if (drawn.length) {
+            drawn.forEach((entity) => {
                 try {
                     appendFeatureLabel(svg, entity, state, bounds);
                 } catch (error) {

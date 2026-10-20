@@ -56,6 +56,7 @@
  * It also never edits the document. Saving is not a document change, so
  * nothing here touches the model, and the caller adds no history entry.
  */
+import { writeLatexDocument } from "./latex/latex-document.js";
 import enggDocumentFile from "./document-file.js";
 
 /*
@@ -82,7 +83,7 @@ function supportsOpenPicker() {
 }
 
 /*
- * Ask the user for an existing .enggdraw, and keep a handle to it.
+ * Ask the user for an existing drawing, and keep a handle to it.
  *
  * THIS IS WHAT MAKES SAVE WRITE BACK TO THE FILE YOU OPENED.
  *
@@ -104,15 +105,19 @@ async function openWithPicker() {
   const handle = await window.showOpenFilePicker({
     types: [
       {
-        description: "EnggDraw (*.enggdraw)",
+        description: "DAETUM drawing (*.tex)",
         accept: {
           [enggDocumentFile.MEDIA_TYPE]: [`.${enggDocumentFile.EXTENSION}`]
         }
       },
       {
-        description: "LaTeX drawing (*.tex)",
+        /*
+         * THE RETIRED FORMAT, OPENED AS AN IMPORT. An old .enggdraw still
+         * opens; it is never written, and its first save is a .tex.
+         */
+        description: "Older DAETUM drawing (*.enggdraw)",
         accept: {
-          "application/x-tex": [".tex"]
+          [enggDocumentFile.LEGACY_MEDIA_TYPE]: [`.${enggDocumentFile.LEGACY_EXTENSION}`]
         }
       }
     ],
@@ -158,25 +163,21 @@ async function openWithPicker() {
  * than through a file handle. So a `pdf` entry is an EXPORT ROUTE rather than a
  * writable blob, and `saveAs` sends it to the print-to-PDF path instead of
  * asking `contentFor` for bytes it cannot produce. That is what stops a Save As
- * to "Beam.pdf" from writing JSON into a file with a .pdf name.
+ * to "Beam.pdf" from writing the drawing's .tex into a file with a .pdf name.
  */
 function formatTable() {
   const file = enggDocumentFile;
 
   return [
     {
-      id: "enggdraw",
+      id: "tex",
 
       /*
-       * THE NATIVE FORMAT'S NAME.
-       *
-       * The software is DAETUM; the editable drawing format it reads and writes
-       * is EnggDraw, and the extension is .enggdraw. The type shown in the
-       * operating system's panel therefore reads "EnggDraw (*.enggdraw)" -
-       * naming the FORMAT, which is what the type control is for, rather than
-       * repeating the application's name.
+       * THE DRAWING ITSELF: a .tex file. It compiles in any LaTeX installation
+       * and carries the whole editable document in a comment block, so DAETUM
+       * reopens it with every feature editable.
        */
-      label: "EnggDraw (*.enggdraw)",
+      label: "DAETUM drawing (*.tex)",
       extensions: [`.${file.EXTENSION}`],
       mime: file.MEDIA_TYPE,
       image: false
@@ -270,7 +271,10 @@ function normaliseName(name, format) {
   }
 
   /* Strip a known extension, so the format's own is not doubled. */
-  const known = formatTable().flatMap((entry) => entry.extensions);
+  const known = [
+    ...formatTable().flatMap((entry) => entry.extensions),
+    `.${enggDocumentFile.LEGACY_EXTENSION}`
+  ];
 
   const lower = base.toLowerCase();
 
@@ -302,7 +306,7 @@ function normaliseName(name, format) {
  *
  * It is only ever set for a DOCUMENT save. Saving a PNG does not make
  * the document "be" a PNG, so an image save leaves this untouched -
- * which is what stops a later Save from writing JSON into a .png.
+ * which is what stops a later Save from writing the .tex into a .png.
  */
 let currentHandle = null;
 
@@ -334,17 +338,17 @@ function forgetFileHandle() {
 /* ---------------------------------------------------------- */
 
 /*
- * The document body, as the text that goes in a .enggdraw file.
- *
- * Built here, once, so the envelope is written by the format module
- * rather than assembled at each call site.
+ * The document body, as the text of a saved drawing: the .tex file with the
+ * document embedded (file/latex/latex-document.js). Built here, once, so every
+ * save writes the same thing.
  */
-function documentText(documentBody) {
-  const payload = enggDocumentFile.createDocument(
-    documentBody,
-  );
+function documentText(documentBody, name) {
+  const title =
+    String(name || "")
+      .replace(/\.(tex|enggdraw)$/i, "")
+      .trim() || "Drawing";
 
-  return JSON.stringify(payload, null, 2);
+  return writeLatexDocument(documentBody, { title });
 }
 
 /*
@@ -358,10 +362,10 @@ function documentText(documentBody) {
  * produce one - a drawing with nothing in it, or a canvas that
  * refused - which the caller reports rather than claiming a success.
  */
-async function contentFor(format, documentBody, renderImage) {
+async function contentFor(format, documentBody, renderImage, name) {
   if (!format.image) {
     return {
-      blob: new Blob([documentText(documentBody)], {
+      blob: new Blob([documentText(documentBody, name)], {
         type: format.mime
       }),
       mime: format.mime
@@ -400,11 +404,16 @@ async function contentFor(format, documentBody, renderImage) {
  * a location, so it is the thing Save writes.
  */
 async function save(documentBody) {
-  if (!currentHandle) {
+  /*
+   * AN IMPORTED .enggdraw IS NEVER WRITTEN OVER. Its handle is not a save
+   * target, so Save falls through to Save As and the drawing becomes a .tex
+   * beside the file it came from.
+   */
+  if (!currentHandle || enggDocumentFile.isLegacyName(currentHandle.name)) {
     return null;
   }
 
-  const text = documentText(documentBody);
+  const text = documentText(documentBody, currentHandle.name);
 
   /*
    * THE WRITE IS COMMITTED, OR IT IS NOT.
@@ -500,7 +509,7 @@ async function saveAs(documentBody, suggestedName, options = {}) {
    * It is handled BEFORE the picker, for two reasons. The native panel cannot
    * write a PDF, so offering it there would produce a file the application did
    * not really create; and a PDF must never adopt the document's file handle,
-   * or a later Save would write JSON into a .pdf. The editable document's
+   * or a later Save would write the .tex into a .pdf. The editable document's
    * identity is therefore left exactly as it was.
    */
   const wantsPdf = options.format
@@ -587,6 +596,7 @@ async function saveAs(documentBody, suggestedName, options = {}) {
       format,
       documentBody,
       renderImage,
+      handle.name,
     );
 
     if (!content) {
@@ -623,7 +633,7 @@ async function saveAs(documentBody, suggestedName, options = {}) {
 
     /*
      * Only a DOCUMENT save adopts the handle. An image save must not,
-     * or the next Save would write JSON into a .png.
+     * or the next Save would write the .tex into a .png.
      */
     if (!format.image) {
       currentHandle = handle;
@@ -647,17 +657,18 @@ async function saveAs(documentBody, suggestedName, options = {}) {
       fallbackFormat
     : formatForName(suggestedName || "");
 
+  const fileName = normaliseName(suggestedName || "drawing", format);
+
   const content = await contentFor(
     format,
     documentBody,
     renderImage,
+    fileName,
   );
 
   if (!content) {
     return { error: "could not render the drawing" };
   }
-
-  const fileName = normaliseName(suggestedName || "drawing", format);
 
   downloadBlob(content.blob, fileName);
 

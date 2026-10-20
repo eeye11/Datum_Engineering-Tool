@@ -245,7 +245,12 @@ function serializeProcessPath(object, options) {
    * student's own label offsets, through the model's `processLabelPoint`. A
    * state the student placed is numbered where they placed it.
    */
-  const scale = Number(options.vectorScale) || 1;
+  /*
+   * `processLabelPoint` takes a pixels-per-unit to turn its default 13 px
+   * offset into drawing units. The source is written in drawing units, so it
+   * is 1 - the value the retired Vector Scale used to pass here by default.
+   */
+  const scale = 1;
 
   points.forEach((at, index) => {
     if (index >= finite(object.metadata?.stateCount, points.length)) {

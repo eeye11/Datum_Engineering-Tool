@@ -4,11 +4,6 @@
 
 const dom = globalThis.document;
 
-const document = dom || {
-    getElementById: () => null,
-    querySelector: () => null
-};
-
 export const toolHeading = dom?.getElementById("drawingToolHeading");
 
 export const toolList = dom?.getElementById("drawingToolList");
@@ -60,27 +55,6 @@ export const drawingDisplayToggles = [
     button: dom?.getElementById(entry.id)
 }));
 
-/*
- * THE GLOBAL VECTOR SCALE.
- *
- * One setting that decides how large every force and load arrow is DRAWN. It
- * lives on the top toolbar beside Magnitudes, because both are display controls
- * for the same arrows - Magnitudes hides their values, this sizes their vectors.
- *
- * It is a property of the SHEET, not of any one force, so there is deliberately
- * no copy of it inside a feature's own panel: a feature that carried its own
- * scale would draw at a size the rest of the sheet did not share.
- *
- * The SELECT carries the decades and the practical multipliers, with a CUSTOM
- * entry at the end; the FIELD beside it is shown only while Custom is chosen,
- * for a value the list does not carry.
- */
-export const drawingVectorScale = document.getElementById("drawingVectorScale");
-
-export const drawingVectorScaleCustom = dom?.getElementById(
-    "drawingVectorScaleCustom"
-);
-
 export const drawingToolMessage = dom?.getElementById("drawingToolMessage");
 
 export const drawingUndo = dom?.getElementById("drawingUndo");
@@ -92,17 +66,6 @@ export const drawingThickness = dom?.getElementById("drawingThickness");
 export const drawingColor = dom?.getElementById("drawingColor");
 
 export const drawingLineType = dom?.getElementById("drawingLineType");
-
-/*
- * THE VECTOR SCALE'S VISIBLE VALUE.
- *
- * The scale is the one control in the row that keeps its number on screen - it
- * is a value selector and the current scale is information to read at a glance -
- * so this element is the readout, kept in step by the control's own sync.
- */
-export const drawingVectorScaleValue = dom?.getElementById(
-    "drawingVectorScaleValue"
-);
 
 export const drawingToolPanelToggle = dom?.getElementById("drawingToolPanelToggle");
 

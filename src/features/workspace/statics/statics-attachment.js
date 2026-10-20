@@ -13,7 +13,6 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { isStaticsBody, trussJointHandles } from "../interaction/handles.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
 import { beginMomentPlacement } from "../geometry/preview.js";
-import { moveRigidBodyTo, setRigidBodyRadius } from "../../../components/layout/panels/property-inputs.js";
 import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, isBodyAttachedTool, staticsAttachmentId, staticsBodyMessage, staticsInstruction, staticsToolPointCount } from "./statics-tools.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -51,6 +50,29 @@ export function isStaticsFeature(
  * from these, so dragging a handle updates the drawing
  * exactly as typing in the panel would.
  */
+/*
+ * A RIGID BODY'S TWO HANDLE EDITS. Its centre handle moves the whole body to
+ * the point (a translation, so every point keeps its place relative to the
+ * centre), and its radius handle sets the radius of a round body.
+ */
+function moveRigidBodyTo(object, axis, value) {
+    const current = enggFeatureGeometry.rigidBodyCenter(object.geometry);
+
+    if (!current) {
+        return;
+    }
+
+    enggFeatureGeometry.translateObject(
+        object,
+        axis === "x" ? value - current.x : 0,
+        axis === "y" ? value - current.y : 0
+    );
+}
+
+function setRigidBodyRadius(object, radius) {
+    object.geometry.radius = radius;
+}
+
 export function applyStaticsManipulation(
     object,
     drag,
@@ -70,14 +92,12 @@ export function applyStaticsManipulation(
         kind === "end"
     ) {
         /*
-         * A FORCE'S ARROWHEAD IS DRAGGED ON THE SCALED DRAWING.
+         * A FORCE'S ARROWHEAD IS DRAGGED: THE ARROW IS REDRAWN TO IT.
          *
-         * Its handle sits at the drawn tip, so the point released here is
-         * a point on a scaled arrow. The scale is taken back off before
-         * the value is stored - otherwise releasing the head exactly
-         * where it already sits would quietly quarter the force at a 4x
-         * display scale, and the arrow would jump to a quarter of its
-         * length while the user was holding it still.
+         * The head goes where it is released, so the arrow's direction and
+         * its drawn length both follow the drag. The magnitude - the label's
+         * value - is unchanged: a drag is drawing, not a statement about how
+         * large the force is.
          */
         if (
             object.type === "force" &&
@@ -93,7 +113,8 @@ export function applyStaticsManipulation(
             enggLoadProfile.setForceVector(
                 g,
                 drawn.magnitude,
-                drawn.angle
+                drawn.angle,
+                { length: drawn.length }
             );
 
             return;
@@ -122,9 +143,9 @@ export function applyStaticsManipulation(
     }
 
     /*
-     * A load's magnitude handle. Its distance from the span
-     * is the intensity, so dragging it out makes the load
-     * heavier and dragging it in makes it lighter.
+     * A load's arrow-tip handle. Dragging it changes how far the
+     * load's arrows are DRAWN; the intensities are its values and
+     * are edited in Features.
      */
     if (kind.startsWith("load-")) {
         const key =
@@ -135,14 +156,9 @@ export function applyStaticsManipulation(
         }
 
         /*
-         * A Distributed Load's magnitude point. Its distance from
-         * the body is measured ALONG the load's own direction,
-         * exactly as it is during construction, so dragging a
-         * point out along the load makes that part of the profile
-         * heavier and the rest of the field follows the shape.
-         *
-         * The other load handles are the varying load's end
-         * intensities, which are still plain fields.
+         * One defining arrow's tip, for a uniform or a varying load.
+         * Its distance from the body is measured ALONG the load's own
+         * direction, exactly as it is during construction.
          */
         if (key.startsWith("point")) {
             const index =
@@ -168,45 +184,31 @@ export function applyStaticsManipulation(
                     enggLoadProfile.loadDirection(g)
                 );
 
-            const dx =
-                point.x - along.x;
+            /*
+             * THE DRAG SETS THE DRAWN HEIGHT, NOT THE VALUE.
+             *
+             * The arrow tip is pulled to `point`: its reach along the load's
+             * direction becomes this arrow's drawn length, and the height is
+             * the one that gives it that length for its intensity (the arrow
+             * is `height x intensity / peak`). Every arrow follows in
+             * proportion; no intensity - no label - changes.
+             */
+            const reach =
+                (point.x - along.x) * direction.x +
+                (point.y - along.y) * direction.y;
 
-            const dy =
-                point.y - along.y;
+            const peak = enggLoadProfile.peakMagnitude(g);
+            const own = Math.abs(Number(points[index].magnitude) || 0);
 
-            points[index].magnitude =
-                Math.max(
-                    0,
-                    dx * direction.x + dy * direction.y
+            if (reach > 1e-6 && own > 0 && peak > 0) {
+                enggLoadProfile.setLoadArrowHeight(
+                    g,
+                    (reach * peak) / own
                 );
-
-            enggLoadProfile.setProfilePoints(
-                g,
-                points
-            );
+            }
 
             return;
         }
-
-        const from =
-            key === "startIntensity"
-                ? g.start
-                : g.end;
-
-        const scale =
-            enggDrawingState.BASE_PIXELS_PER_UNIT *
-            drawingState.camera.zoom;
-
-        const world =
-            Math.hypot(
-                point.x - from.x,
-                point.y - from.y
-            );
-
-        g[key] = Math.max(
-            (world * Math.max(scale, 1e-6)) / 6,
-            0
-        );
 
         return;
     }

@@ -16,9 +16,9 @@
  *   - editing one point's magnitude changes only that point's label,
  *     and never moves it;
  *   - a moved label stays where it was put across a source edit, a
- *     direction reversal, a Vector Scale change and a JSON round trip;
- *   - changing Vector Scale changes arrow appearance only and leaves the
- *     labels where they are;
+ *     direction reversal, an arrow-height change and a JSON round trip;
+ *   - redrawing the arrows taller changes their appearance only and leaves
+ *     the labels where they are;
  *   - a moved label participates in Fit, so it cannot be cropped.
  *
  * Run against the annotation model - the one place that decides what a
@@ -312,7 +312,7 @@ console.log("\n  editing one magnitude changes one label, and moves none\n");
   );
 }
 
-console.log("\n  direction and vector scale move no label\n");
+console.log("\n  direction and arrow height move no label\n");
 
 {
   const object = varyingLoad([
@@ -365,9 +365,9 @@ console.log("\n  direction and vector scale move no label\n");
   );
 
   /*
-   * VECTOR SCALE is consulted by the renderer when it draws the arrows.
-   * It is not an argument to the annotation model at all, so the labels
-   * are provably indifferent to it - this checks the drawn result too.
+   * THE ARROW HEIGHT is the drawn length the student gave the arrows. It is
+   * not an argument to the annotation model at all, so the labels are
+   * provably indifferent to it - this checks the drawn result too.
    */
   const drawnPositions = () => {
     renderer.renderDrawing(scene([object]), canvas);
@@ -382,12 +382,15 @@ console.log("\n  direction and vector scale move no label\n");
 
   const atOne = drawnPositions();
 
-  global.enggLoadProfile.CUSTOM_VECTOR_SCALE = 4;
+  global.enggLoadProfile.setLoadArrowHeight(
+    object.geometry,
+    4 * global.enggLoadProfile.loadArrowHeight(object.geometry),
+  );
 
   const atFour = drawnPositions();
 
   check(
-    "Vector Scale draws the same labels in the same places",
+    "taller arrows draw the same labels in the same places",
     atOne.length > 0 && JSON.stringify(atOne) === JSON.stringify(atFour),
     `1x ${JSON.stringify(atOne)} vs 4x ${JSON.stringify(atFour)}`,
   );

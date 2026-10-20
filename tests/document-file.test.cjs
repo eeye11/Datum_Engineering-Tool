@@ -49,7 +49,17 @@ const body = {
 
 console.log("\nThe envelope");
 const doc = f.createDocument(body);
-check("declares the format", doc.format, "enggdraw");
+check("declares the format", doc.format, "daetum-document");
+
+/*
+ * THE RETIRED FORMAT ID IS STILL READ. Files written as .enggdraw (and the .tex
+ * files whose embedded block said so) carry format "enggdraw"; they open.
+ */
+check(
+  "an envelope from an older build still reads",
+  f.readDocument({ ...doc, format: "enggdraw" }).ok,
+  true
+);
 check("declares the current version", doc.version, f.CURRENT_VERSION);
 check("carries the document", doc.document, body);
 check("records when it was saved", typeof doc.savedAt, "string");
@@ -169,7 +179,7 @@ check(
   true
 );
 check(
-  "a file that is not an EnggDraw is refused",
+  "a file that is not a DAETUM drawing is refused",
   f.readDocument({ format: "other", version: 1, document: body }).failure,
   "wrong-format"
 );
@@ -183,19 +193,24 @@ check("a string is refused", f.readDocument("hello").failure, "not-json");
 check("a number is refused", f.readDocument(7).failure, "not-json");
 
 console.log("\nFile names");
-check("adds the extension", f.withExtension("Report"), "Report.enggdraw");
+check("adds the extension", f.withExtension("Report"), "Report.tex");
 check(
   "does not double it",
-  f.withExtension("Report.enggdraw"),
-  "Report.enggdraw"
+  f.withExtension("Report.tex"),
+  "Report.tex"
 );
 check(
   "is case-insensitive",
-  f.withExtension("Report.EnggDraw"),
-  "Report.EnggDraw"
+  f.withExtension("Report.TEX"),
+  "Report.TEX"
 );
-check("falls back on empty", f.withExtension(""), "drawing.enggdraw");
-check("falls back on blank", f.withExtension("  "), "drawing.enggdraw");
+check("falls back on empty", f.withExtension(""), "drawing.tex");
+check("falls back on blank", f.withExtension("  "), "drawing.tex");
+check(
+  "an imported .enggdraw is saved as a .tex beside it, never over it",
+  f.withExtension("Report.enggdraw"),
+  "Report.tex"
+);
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

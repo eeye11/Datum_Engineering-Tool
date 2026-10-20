@@ -62,6 +62,11 @@ export const ARROW_STEP_MM = 5;
  * A drawing unit IS a millimetre, so the physical step and the drawing-space
  * step are the same number; there is no scale to derive it through.
  */
+/*
+ * One arrow-key step, in drawing units. (It used to be converted through the
+ * sheet's world scale; that system is retired, and a drawing unit is the
+ * millimetre on the sheet.)
+ */
 function stepWorld() {
     return ARROW_STEP_MM;
 }

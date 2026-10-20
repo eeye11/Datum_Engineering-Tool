@@ -578,6 +578,21 @@ function createGeometryObject(type, geometry, options = {}) {
     };
 }
 
+/*
+ * A LOAD'S DRAWN HEIGHT, when the gesture that made it supplied one.
+ *
+ * `arrowLength` is how far the load's longest arrow reaches, in drawing units;
+ * the intensities are its label values and only shape a varying load's taper
+ * (see `loadArrowHeight` in load-profile.js). A load made without one is drawn
+ * at its peak intensity, which is how every load looked before heights were
+ * stored - so a factory call that does not know the height changes nothing.
+ */
+function drawnArrowLength(options) {
+    const value = Math.abs(Number(options?.arrowLength));
+
+    return Number.isFinite(value) && value > 1e-9 ? { arrowLength: value } : {};
+}
+
 const geometryFactories = {
     line: (start, end, options) =>
         createGeometryObject(
@@ -969,7 +984,9 @@ const geometryFactories = {
                  */
                 loadUnit:
                     options?.loadUnit ??
-                    "kN/m"
+                    "kN/m",
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -1018,7 +1035,9 @@ const geometryFactories = {
                         t: 1,
                         magnitude: intensity
                     }
-                ]
+                ],
+
+                ...drawnArrowLength(options)
             },
             options
         ),
@@ -1290,7 +1309,7 @@ const geometryFactories = {
              * AXIAL FORCE DIAGRAM are each created here as ONE
              * semantic feature, not as a pile of lines and points.
              *
-             * They are TEMPLATES, and that is the whole point. EnggDraw
+             * They are TEMPLATES, and that is the whole point. DAETUM
              * draws the frame - a zero axis to measure against, a
              * region to draw in, and the source beam's span where there
              * is one - and the student draws the diagram itself with the
@@ -1887,16 +1906,6 @@ function removeObjectsAndDescendants(
 }
 
 /*
- * Automatic scale reset removed.
- *
- * DAETUM geometry is schematic: deleting or editing annotations must not
- * implicitly establish, reset, or erase a drawing scale.
- */
-function resetScaleIfSheetIsEmpty(state) {
-    return false;
-}
-
-/*
  * ========================================================
  * THE SHARED SELECTION AND TOOL EVENTS
  * ========================================================
@@ -1977,7 +1986,7 @@ function clearSelection(state) {
  *
  * WHAT THIS IS HANDED IS NOT ALWAYS AN ARRAY. It began as the feature list,
  * and it is now the DOCUMENT snapshot - an object carrying the objects, the
- * sheets, the scale and the camera - so a helper that assumed a list returned
+ * sheets and the camera - so a helper that assumed a list returned
  * an empty array and Undo restored an empty drawing.
  *
  * `deepClone` copies either shape, which is why it is the one used here. The
@@ -2230,9 +2239,6 @@ function restoreDocument(state, document) {
         state.units = document.units;
     }
 
-    if (document?.scale) {
-        state.scale = { ...document.scale };
-    }
 
     return state;
 }
@@ -2256,7 +2262,7 @@ function restoreDocument(state, document) {
  *
  *   - a sheet being added, removed, renamed or reordered,
  *   - a change to ANOTHER sheet's features,
- *   - a change to the document's units or scale.
+ *   - a change to the document's units.
  *
  * So the collection goes into the snapshot too. `sheets` is whatever
  * the caller supplies through `state.historySinks` - the editor is the
@@ -2344,23 +2350,6 @@ function snapshotDocument(state) {
         objects: entry,
         sheets: entry.sheets ?? null,
 
-        /*
-         * THE CALIBRATION TRAVELS WITH THE OBJECTS.
-         *
-         * A length only means something because of the scale, so a
-         * snapshot that restored the geometry but not the scale restored
-         * a drawing whose every dimension was wrong by a factor nobody
-         * could see - Undo of anything that followed a calibration gave
-         * back the numbers but not their meaning.
-         *
-         * `null` is the honest answer for a document that has never been
-         * calibrated, and it is distinct from a missing field for the same
-         * reason it is in the document: "never calibrated" and "calibration
-         * lost" must not look alike.
-         */
-        scale: state.scale
-            ? deepClone(state.scale)
-            : null
     };
 }
 
@@ -2407,18 +2396,6 @@ function restoreDocumentSnapshot(state, entry) {
         document.dispatchEvent(replaced);
     }
 
-    /*
-     * ...AND THE SCALE WITH IT, and from the entry rather than from
-     * whatever the document happens to hold now. The snapshot is the
-     * whole state at one moment, and restoring only part of it is how a
-     * drawing ends up self-inconsistent: real geometry paired with
-     * somebody else's scale.
-     */
-    if (entry && Object.prototype.hasOwnProperty.call(entry, "scale")) {
-        state.scale = entry.scale
-            ? deepClone(entry.scale)
-            : null;
-    }
     /*
      * A RESTORED SHEET'S VIEWPORT AND SETTINGS.
      *
@@ -2917,9 +2894,8 @@ function snapCoordinate(value, state) {
  *    move the lattice. The same pointer position converts to the same
  *    coordinate at every zoom, and lands on the same line.
  *
- *  - the engineering scale. The interval is a drawing aid: five units apart is
- *    five units apart whether or not the document has been calibrated, and the
- *    snapping never reads `state.scale`.
+ *  - the document's units. The interval is a drawing aid: five units apart is
+ *    five drawing units apart.
  *
  * `gridSnapPoint` is the two-dimensional form, so a caller cannot snap one axis
  * and forget the other. An intersection is the normal result for a free point;
@@ -3049,33 +3025,12 @@ function serializeDrawing(state) {
             version: state.version,
             units: state.units,
 
-            /*
-             * THE CALIBRATION IS PART OF THE DOCUMENT.
-             *
-             * It is what makes a length mean anything, so a drawing saved
-             * without it reopened with every dimension wrong - the numbers
-             * were still right, they were just no longer in the units they
-             * claimed. The whole shape travels together for that reason.
-             */
-            scale: state.scale
-                ? {
-                      ...state.scale,
-                      reference: state.scale.reference
-                          ? {
-                                ...state.scale.reference
-                            }
-                          : undefined
-                  }
-                : null,
 
             camera: {
                 ...state.camera
             },
             grid: {
                 ...state.grid
-            },
-            statics: {
-                ...state.statics
             },
             snap: {
                 ...state.snap
@@ -3114,7 +3069,6 @@ const enggDrawingState = {
     addObject,
     removeObject,
     removeObjectsAndDescendants,
-    resetScaleIfSheetIsEmpty,
     selectObjects,
     selectObject,
     clearSelection,

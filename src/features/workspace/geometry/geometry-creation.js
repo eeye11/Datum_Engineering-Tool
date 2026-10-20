@@ -12,7 +12,7 @@ import { analysisSourceBody, diagramPrerequisiteMessage } from "../statics/analy
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
-import { commitCreatedFeature } from "./creation-sizing.js";
+import { commitCreatedFeature } from "./creation-commit.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -357,7 +357,6 @@ export function commitFreeformPolygon(
 
     commitCreatedFeature(
         object,
-        false,
         previousObjects
     );
 
@@ -1548,10 +1547,7 @@ export function beginOrCompleteGeometry(
          * has been written, so "before" means the document the student
          * was looking at when they answered the popup.
          *
-         * That matters because answering it can CALIBRATE the drawing.
-         * A snapshot taken afterwards would already carry the new scale,
-         * and Undo would remove the member while leaving its calibration
-         * behind.
+         * Undo then returns to exactly that document in one step.
          */
         const previousObjects =
             enggDrawingState.snapshotDrawing(
@@ -1576,8 +1572,8 @@ export function beginOrCompleteGeometry(
          *
          * THE CURSOR-DRIVEN CREATION IS UNTOUCHED. The drag still defines the
          * application point, the direction and the initial drawn length; this
-         * only asks what the number IS. Vector Scale is not consulted here, so
-         * it cannot make the student drag further.
+         * only asks what the number IS, and the number is the label - it never
+         * resizes the arrow the drag drew.
          */
         if (
             drawingState.activeTool ===
@@ -1698,7 +1694,6 @@ export function beginOrCompleteGeometry(
 
                     commitCreatedFeature(
                         object,
-                        false,
                         previousObjects
                     );
 
@@ -1726,7 +1721,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 
@@ -2166,7 +2160,6 @@ export function beginOrCompleteGeometry(
 
         commitCreatedFeature(
             object,
-            false,
             previousObjects
         );
 

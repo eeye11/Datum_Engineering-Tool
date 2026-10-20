@@ -75,7 +75,6 @@ console.log("\n  the dimension's grab point is its text\n");
   const scene = {
     objects: [line, dimension],
     camera: { zoom: 1, panX: 0, panY: 0 },
-    scale: { mmPerUnit: 1, unit: "mm" },
     selection: { selectedObjectIds: [dimension.id] },
     interaction: { phase: "idle" },
   };
@@ -181,7 +180,6 @@ console.log("\n  moving a dimension does not change what it measures\n");
   const scene = {
     objects: [line, dimension],
     camera: { zoom: 1, panX: 0, panY: 0 },
-    scale: { mmPerUnit: 1, unit: "mm" },
     selection: { selectedObjectIds: [dimension.id] },
     interaction: { phase: "idle" },
   };

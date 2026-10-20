@@ -76,6 +76,16 @@ let lastCompiledSvg = null;
 let lastCompileError = null;
 
 /*
+ * WHAT EACH OBJECT LOOKED LIKE WHEN A SOURCE REVISION WAS WRITTEN.
+ *
+ * revision -> Map(object id -> serialised object). Recorded the first time a
+ * revision is drawn, which is straight after the commit that wrote it. Comparing
+ * the model with the record for the picture on screen says which objects the
+ * picture does not show yet - see `objectsThePictureDoesNotShow`.
+ */
+let modelAtRevision = new Map();
+
+/*
  * THE SCHEDULER'S STATE, ALL KEYED BY SOURCE REVISION.
  *
  *   scheduledRevision  the revision the debounce timer will compile
@@ -589,7 +599,18 @@ function positionPictureLayer(layer, bounds, state) {
 function showPicture(svg) {
     const layer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
 
+    /*
+     * THE SAME PICTURE IS NOT CLONED AGAIN. Every redraw - every pointer move of
+     * a drag - passes through here, and re-cloning an unchanged compiled picture
+     * each time was work the student felt as lag. Only a new picture is cloned;
+     * the camera is applied separately by `positionPictureLayer`.
+     */
+    if (svg && layer.__shownPicture === svg) {
+        return true;
+    }
+
     layer.replaceChildren();
+    layer.__shownPicture = null;
 
     if (!svg) {
         return false;
@@ -600,9 +621,110 @@ function showPicture(svg) {
 
     nodes.forEach((node) => layer.appendChild(node.cloneNode(true)));
 
+    showStrokesAtScreenWidth(layer);
+
+    layer.__shownPicture = svg;
     layer.dataset.rendered = "source";
 
     return true;
+}
+
+/*
+ * ============================================================
+ * AN OBJECT IS NEVER SHOWN ONLY WHERE IT USED TO BE
+ * ============================================================
+ *
+ * The Drawing Space is the compiled source, and a compile takes a moment. Until
+ * it lands, an object the student is moving - or has just drawn or edited -
+ * would be shown where it USED to be, or not at all, with only a dashed outline
+ * where it really is. With the render server not running, nothing would ever
+ * appear.
+ *
+ * So every object whose model differs from what the picture on screen was
+ * compiled from is drawn live by the overlay, and with no picture at all every
+ * object is. Once the new picture arrives the two agree and the live drawing
+ * steps aside.
+ */
+function serialiseObject(object) {
+    try {
+        return JSON.stringify(object);
+    } catch {
+        return null;
+    }
+}
+
+function rememberModelAt(revision) {
+    if (revision === null || revision === undefined || modelAtRevision.has(revision)) {
+        return;
+    }
+
+    modelAtRevision.set(
+        revision,
+        new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
+    );
+
+    while (modelAtRevision.size > CACHE_LIMIT) {
+        modelAtRevision.delete(modelAtRevision.keys().next().value);
+    }
+}
+
+function objectsThePictureDoesNotShow(pictureRevision) {
+    const objects = drawingState.objects || [];
+    const shown = pictureRevision === null || pictureRevision === undefined
+        ? null
+        : modelAtRevision.get(pictureRevision);
+
+    if (!shown) {
+        return new Set(objects.map((object) => object.id));
+    }
+
+    const live = new Set();
+
+    objects.forEach((object) => {
+        if (shown.get(object.id) !== serialiseObject(object)) {
+            live.add(object.id);
+        }
+    });
+
+    return live;
+}
+
+/*
+ * ============================================================
+ * STROKES ARE SHOWN AT SCREEN WIDTH, AS THE MODEL DREW THEM
+ * ============================================================
+ *
+ * The compiled picture carries PRINT line widths: a normal line is 0.28pt
+ * (`lineWidth` x 0.56). Scaled to the canvas that is about a quarter of a pixel,
+ * which the browser paints as a pale smear - a drawn line was close to
+ * invisible against the grid.
+ *
+ * On the canvas each stroke is therefore drawn at the width the model renderer
+ * always used for it (`lineWidth` x 2.4 px, never under 0.5 px), in screen pixels
+ * via `non-scaling-stroke`, so it does not thin out as the student zooms out.
+ * Only the copy in this layer is changed: the source, the saved `.tex` and every
+ * export keep their print widths.
+ */
+const PRINT_POINTS_PER_LINE_WIDTH = 0.56;
+const SCREEN_PIXELS_PER_LINE_WIDTH = 2.4;
+const MIN_SCREEN_STROKE_PX = 0.5;
+
+function showStrokesAtScreenWidth(layer) {
+    layer.querySelectorAll("[stroke-width]").forEach((element) => {
+        const printWidth = Number.parseFloat(element.getAttribute("stroke-width"));
+
+        if (!Number.isFinite(printWidth) || printWidth <= 0) {
+            return;
+        }
+
+        const screenWidth = Math.max(
+            MIN_SCREEN_STROKE_PX,
+            (printWidth / PRINT_POINTS_PER_LINE_WIDTH) * SCREEN_PIXELS_PER_LINE_WIDTH
+        );
+
+        element.setAttribute("stroke-width", String(Number(screenWidth.toFixed(3))));
+        element.setAttribute("vector-effect", "non-scaling-stroke");
+    });
 }
 
 /*
@@ -785,10 +907,27 @@ export function requestSourceRender({ immediately = false } = {}) {
         return;
     }
 
-    compileTimer = setTimeout(() => {
+    compileTimer = backgroundTimer(() => {
         compileTimer = null;
         compileCurrentSource();
     }, SOURCE_RENDER_DELAY_MS);
+}
+
+/*
+ * A COMPILE TIMER NEVER KEEPS A PROCESS ALIVE.
+ *
+ * With no reachable renderer the canvas keeps retrying - correct in a browser,
+ * where the server may come up in a moment. Under Node (the test harness) that
+ * pending retry was an open handle, so a test file that had finished every check
+ * never exited and `npm test` hung on it. `unref` exists only on Node's timers;
+ * in a browser this is an ordinary `setTimeout`.
+ */
+function backgroundTimer(callback, delay) {
+    const timer = setTimeout(callback, delay);
+
+    timer?.unref?.();
+
+    return timer;
 }
 
 /*
@@ -909,7 +1048,7 @@ async function compileCurrentSource() {
 
             transientRetryMs = Math.min(transientRetryMs * 2, TRANSIENT_RETRY_CAP_MS);
             scheduledRevision = revision;
-            compileTimer = setTimeout(() => {
+            compileTimer = backgroundTimer(() => {
                 compileTimer = null;
                 compileCurrentSource();
             }, delay);
@@ -967,6 +1106,7 @@ export function resetSourcePictureCache() {
     generation += 1;
 
     compiledCache = new Map();
+    modelAtRevision = new Map();
     compiledRevision = null;
     lastCompiledSvg = null;
     lastCompileError = null;
@@ -1066,6 +1206,10 @@ export function renderCurrentDrawing() {
 
     const picture = cachedPicture(revision) || (currentValid ? lastCompiledSvg : null);
 
+    rememberModelAt(revision);
+
+    const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
+
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
 
     if (picture) {
@@ -1088,7 +1232,10 @@ export function renderCurrentDrawing() {
     enggDrawingRenderer.renderDrawing(
         drawingState,
         overlay,
-        { overlayOnly: true }
+        {
+            overlayOnly: true,
+            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision)
+        }
     );
 
     /*

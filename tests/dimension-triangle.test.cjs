@@ -41,7 +41,6 @@ createHarness(projectRoot, JSDOM, require);
 const { modulePath, loadModule } = require("./helpers/source-path.cjs");
 
 loadModule("measurement-core.js");
-loadModule("dimensions.js");
 
 const inference = require(modulePath("dimension-inference.js"));
 const measurement = global.window.enggMeasurement;

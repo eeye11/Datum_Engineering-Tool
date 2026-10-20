@@ -1,16 +1,32 @@
-# The `.enggdraw` file format
+# The DAETUM document format
 
-A `.enggdraw` file is the **authoritative, editable** DAETUM document: every
-feature keeps its real type, geometry, parent and parameters, so opening a
-file gives back a drawing that can be selected, dragged, edited and saved
-again. It is JSON, UTF-8, with the media type
-`application/vnd.enggdraw+json`.
+A drawing is saved as a **`.tex` file**. It compiles anywhere as a normal
+LaTeX/TikZ document, and it carries the **authoritative, editable** DAETUM
+document inside it: every feature keeps its real type, geometry, parent and
+parameters, so opening the file gives back a drawing that can be selected,
+dragged, edited and saved again.
 
-The format is owned by [`src/shared/file/document-file.js`](../src/shared/file/document-file.js).
-A `.tex` saved by DAETUM carries the same envelope, base64-encoded in a
-comment block after `\end{document}` — see [LATEX.md](LATEX.md).
-That module is the only place that reads or writes the envelope, and the only
-place a migration from an older version may live.
+The document travels as a JSON **envelope**, base64-encoded in a comment block
+after `\end{document}` (between `%% DAETUM-DOCUMENT-BEGIN` and
+`%% DAETUM-DOCUMENT-END`) — see [LATEX.md](LATEX.md). LaTeX ignores it.
+
+The envelope is owned by [`src/shared/file/document-file.js`](../src/shared/file/document-file.js);
+the `.tex` around it by [`src/shared/file/latex/latex-document.js`](../src/shared/file/latex/latex-document.js).
+`document-file.js` is the only place that reads or writes the envelope, and the
+only place a migration from an older version may live.
+
+### The retired `.enggdraw` format
+
+Older builds saved a bare JSON envelope as `.enggdraw`
+(`application/vnd.enggdraw+json`). That format is **retired, and import-only**:
+
+- an `.enggdraw` file still **opens**, with every feature editable;
+- it is **never written**. Save on an imported `.enggdraw` runs Save As, and
+  the suggested name is the same name with `.tex` (`Beam.enggdraw` →
+  `Beam.tex`), so the old file is never overwritten;
+- envelopes whose `format` is `"enggdraw"` (or `"engg-drawing"`, from early
+  builds) are read as aliases, including inside a `.tex` written by an older
+  build.
 
 ---
 
@@ -18,17 +34,17 @@ place a migration from an older version may live.
 
 ```json
 {
-  "format": "enggdraw",
+  "format": "daetum-document",
   "version": 2,
-  "application": "EnggDraw",
-  "savedAt": "2026-10-05T14:03:12.000Z",
+  "application": "DAETUM",
+  "savedAt": "2026-10-19T14:03:12.000Z",
   "document": { … }
 }
 ```
 
 | Field         | Meaning                                                                 |
 | ------------- | ----------------------------------------------------------------------- |
-| `format`      | Always `"enggdraw"`. Checked first; anything else is refused. (`"engg-drawing"`, from early builds, is accepted as an alias.) |
+| `format`      | `"daetum-document"`. Checked first; anything else is refused, except the retired aliases `"enggdraw"` and `"engg-drawing"`, which are read. |
 | `version`     | The shape of `document`. This build writes **2** and reads **1–2**.     |
 | `application` | The writer. Informational.                                              |
 | `savedAt`     | ISO-8601 time of writing. Informational.                                |
@@ -50,8 +66,8 @@ misread; one older than the minimum supported version is refused
   "activeSheetId": "sheet_8f31a2c4",
 
   "version": 1, "units": "mm",
-  "objects": [ … ], "scale": { … }, "camera": { … }, "grid": { … },
-  "snap": { … }, "objectSnap": { … }, "styleDefaults": { … }, "statics": { … }
+  "objects": [ … ], "camera": { … }, "grid": { … },
+  "snap": { … }, "objectSnap": { … }, "styleDefaults": { … }
 }
 ```
 
@@ -72,8 +88,7 @@ kept so that such a file still opens.
   "grid": { "visible": true, "spacing": 7.5 },
   "snap": { "enabled": true, "spacing": 1 },
   "objectSnap": { "enabled": true, "tolerancePx": 10, "inferenceTolerancePx": 24 },
-  "styleDefaults": { "stroke": "#000000", "fill": "none", "lineWidth": 0.5, "lineType": "solid", "opacity": 1 },
-  "scale": { … }
+  "styleDefaults": { "stroke": "#000000", "fill": "none", "lineWidth": 0.5, "lineType": "solid", "opacity": 1 }
 }
 ```
 
@@ -81,8 +96,10 @@ kept so that such a file still opens.
   (`[DRAWING_REFERENCE:sheet_8f31a2c4]`). It never changes when the sheet is
   renamed or moved.
 - **`name`** is what the student sees and may change at any time.
-- **`scale`** is the sheet's *Universal Length Scale*: how drawing units map
-  to millimetres. It is established by the first real length on the sheet.
+
+A sheet no longer has a `scale`. The world-length scale (calibrating drawing
+units to real millimetres) is retired; a `scale` in an older file is ignored
+and not written back. Statics `vectorScale` settings are ignored the same way.
 
 ### A feature
 
@@ -110,9 +127,13 @@ Every feature has the same outer shape:
 | `engineering` | The Statics/engineering meaning (discipline, Statics type, magnitudes). |
 | `parentId`    | Present on features attached to a body (a load on a beam, a support).   |
 
-Drawing units become millimetres through the sheet's `scale`; a dimension
-stores *references* to geometry, not a number, so it stays correct when the
-geometry moves.
+Lengths are read in drawing units, as drawn. A dimension stores *references*
+to geometry, not a number, so it stays correct when the geometry moves.
+
+A force or load arrow is **as long as it was drawn**: a point force stores its
+drawn arrow length, and a distributed or varying load stores `arrowLength`, its
+drawn arrow height (a varying load tapers by intensity ratio). The magnitude or
+intensity is the label only and never resizes the arrow.
 
 ### Feature types
 

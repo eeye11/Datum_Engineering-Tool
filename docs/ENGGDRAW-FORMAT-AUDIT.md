@@ -1,5 +1,13 @@
 # DAETUM — `.enggdraw` File Format Audit
 
+> **Historical (retired format).** `.enggdraw` is no longer written: a drawing
+> saves as a `.tex` with the same envelope embedded, now labelled
+> `"daetum-document"`, and `.enggdraw` files are open-only imports. The
+> round-trip guarantees below still hold for the embedded envelope. The current
+> format is described in [FILE-FORMAT.md](FILE-FORMAT.md). References below to
+> the sheet `scale`, calibration or Vector Scale describe features that have
+> since been retired.
+
 **Scope.** The native `.enggdraw` format and the code that saves, loads,
 serializes, deserializes and migrates it. The question the audit answers:
 
