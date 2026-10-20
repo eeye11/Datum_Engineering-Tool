@@ -94,6 +94,35 @@ check(
   "the undo entry restores only `geometry`, leaving `placement` moved"
 );
 
+/*
+ * THE RELEASE IS THE COMMIT.
+ *
+ * A body drag once stayed live after release and waited for a "placing"
+ * click before it recorded anything. Ctrl+Z in that window undid the step
+ * BEFORE the move - usually the shape's creation - so the shape vanished
+ * (Geometry GEO-01). Checked in Chrome: drag, release, Ctrl+Z now returns
+ * the shape to where it was.
+ */
+console.log("\nReleasing a drag commits it - there is no placing click");
+
+check(
+  "finishManipulationDrag does not hold the drag open after release",
+  !/awaitingPlacement|holdForPlacement/.test(finish),
+  "a released drag that waits for a click has no undo entry yet"
+);
+
+check(
+  "and no other part of the editor waits for a placing click",
+  !/awaitingPlacement|placeAwaitingSelection/.test(source),
+  "the floating move is back somewhere else"
+);
+
+check(
+  "the trailing click after a moved drag is swallowed",
+  /selectionClickSuppressed\s*=\s*true/.test(finish),
+  "the release's click re-selects whatever is under it, dropping the edited feature"
+);
+
 console.log("\nCancelling a drag restores it too");
 
 const cancel = section("cancelManipulationDrag");

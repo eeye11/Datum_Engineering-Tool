@@ -33,8 +33,8 @@ export function beginManipulationDrag(
      * whole direct-manipulation path is closed to everything but Select. See
      * `direct-manipulation.js` for the rule and why it is asked in one place.
      *
-     * It is checked FIRST, ahead of placing a moved selection and of the
-     * Modify-session and in-progress guards below, so that no branch of this
+     * It is checked FIRST, ahead of the Modify-session and in-progress
+     * guards below, so that no branch of this
      * function can be reached by a press that the active tool should have
      * received. A press that lands here with a creation tool armed must not
      * move a handle, a body, a magnitude label or a dimension - the tool gets
@@ -42,11 +42,6 @@ export function beginManipulationDrag(
      */
     if (!allowsDirectManipulation()) {
         return false;
-    }
-
-    /* A moved selection waiting for its placing click takes this press. */
-    if (placeAwaitingSelection(event)) {
-        return true;
     }
 
     if (
@@ -553,45 +548,15 @@ export function updateManipulationDrag(
 
 /*
  * ================================================================
- * MOVE, THEN CLICK TO PLACE
+ * THE RELEASE ENDS THE DRAG, AND COMMITS IT
  * ================================================================
  *
- * A body drag does not end on release: the selection keeps following the
- * pointer, and the NEXT click places it (Esc cancels). Releasing marks the
- * drag as awaiting placement; the placing press replays the pointer once and
- * then finishes the drag normally, which is where it is committed and its
- * snap state cleared.
+ * A body drag used to stay live after release - the selection followed the
+ * pointer until a second "placing" click. Nothing was recorded until that
+ * click, so Ctrl+Z in between undid the step BEFORE the move (usually the
+ * shape's creation) and the shape vanished. The release is now the commit:
+ * one gesture, one undo entry. Click-move-click moving is the Move tool's job.
  */
-
-/* On release of a moved body drag: keep it live and wait for the click. */
-function holdForPlacement(drag, event) {
-    if (!(drag.kind === "body" && drag.moved && !drag.placing)) {
-        return false;
-    }
-
-    drag.awaitingPlacement = true;
-    if (drawingCanvas.hasPointerCapture(event.pointerId)) drawingCanvas.releasePointerCapture(event.pointerId);
-    editorState.selectionClickSuppressed = true;
-    setToolMessage("Move the selection, then click to place it. Esc cancels");
-    renderCurrentDrawing();
-    return true;
-}
-
-/* The placing click: move to it, then finish the drag. */
-function placeAwaitingSelection(event) {
-    if (!(editorState.manipulationDrag?.awaitingPlacement && event.button === 0)) {
-        return false;
-    }
-
-    editorState.manipulationDrag.pointerId = event.pointerId;
-    updateManipulationDrag(event);
-    editorState.manipulationDrag.awaitingPlacement = false;
-    editorState.manipulationDrag.placing = true;
-    finishManipulationDrag(event);
-    editorState.selectionClickSuppressed = true;
-    return true;
-}
-
 export function finishManipulationDrag(
     event
 ) {
@@ -605,10 +570,6 @@ export function finishManipulationDrag(
 
     const drag =
         editorState.manipulationDrag;
-
-    if (holdForPlacement(drag, event)) {
-        return;
-    }
 
     editorState.manipulationDrag =
         null;
@@ -729,6 +690,19 @@ export function finishManipulationDrag(
 
     drawingState.objects =
         dragged;
+
+    /*
+     * The browser's trailing `click` belongs to this gesture. Left alone it
+     * re-selects whatever is under the release point - empty space after a
+     * handle drag - and the feature just edited loses its selection.
+     */
+    editorState.selectionClickSuppressed =
+        true;
+
+    /* The drag's inference wording ("Vertical") describes nothing any more. */
+    if (drawingState.activeTool === "select") {
+        setToolMessage("Select geometry");
+    }
 
     renderProperties();
     renderCurrentDrawing();

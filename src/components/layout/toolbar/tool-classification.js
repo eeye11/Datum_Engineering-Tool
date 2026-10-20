@@ -179,12 +179,33 @@ export function isMultiStepTool(toolId) {
     );
 }
 
+/*
+ * The GEOMETRY tools that take click-move-click as well as press-drag-release.
+ *
+ * A bare click with one of these armed is the shape's FIRST POINT, exactly as in
+ * a CAD program - the second click completes it, and Esc or Select leaves the
+ * tool. Kept to the Geometry category on purpose: the Statics, Annotate and
+ * Thermodynamics path tools keep the exit-on-click rule until their owners
+ * choose otherwise.
+ */
+export const CLICK_CLICK_TOOLS = [
+    "line",
+    "rectangle",
+    "circle"
+];
+
+export function isClickClickTool(toolId) {
+    return CLICK_CLICK_TOOLS.includes(
+        toolId ?? null
+    );
+}
+
 export function shouldExitToSelectOnClick(toolId) {
     if (clickKeepsTool(toolId)) {
         return false;
     }
 
-    if (isMultiStepTool(toolId)) {
+    if (isMultiStepTool(toolId) || isClickClickTool(toolId)) {
         return false;
     }
 
@@ -195,10 +216,12 @@ const enggToolClassification = {
     POINT_TOOLS,
     REQUIRED_INPUT_TOOLS,
     MULTI_STEP_TOOLS,
+    CLICK_CLICK_TOOLS,
     clickKeepsTool,
     hasRequiredInput,
     isPointTool,
     isMultiStepTool,
+    isClickClickTool,
     shouldExitToSelectOnClick
 };
 
