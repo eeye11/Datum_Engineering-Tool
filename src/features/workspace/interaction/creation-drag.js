@@ -91,6 +91,12 @@ import {
 } from "./pipe-duct-tool.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
+import {
+    DYNAMICS_PLACEMENT_TOOLS,
+    DYNAMICS_SPAN_TOOLS,
+    DYNAMICS_ANGLE_TOOLS,
+    DYNAMICS_BOX_TOOLS
+} from "../dynamics/dynamics-tools.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
 
 /*
@@ -231,7 +237,19 @@ const DRAG_CONTINUE_PHASES = [
      * gesture later. In both, the release supplies the second end.
      */
     "distributed-load-span",
-    "distributed-load-end"
+    "distributed-load-end",
+
+    /*
+     * A DYNAMICS SPAN OR ANGLE, once it holds its first point.
+     *
+     * A spring, a damper, a vector, a trajectory or a pulley anchors on the
+     * press and takes its far end - or, for an angle tool, its radius - from
+     * the release, exactly as a Line does. A phase left off this list would
+     * strand the symbol half-built after the student let go, so both are
+     * listed beside the phases they mirror.
+     */
+    "dynamics-span",
+    "dynamics-angle"
 ];
 
 /*
@@ -328,6 +346,28 @@ export function isDragCreationTool(
     }
 
     if (SINGLE_POINT_DRAG_TOOLS.includes(toolId)) {
+        return true;
+    }
+
+    /*
+     * A DYNAMICS TOOL CREATES THROUGH THE SAME GESTURE IT DECLARES.
+     *
+     * Every Dynamics tool is a press-drag-release creation - a placement tool
+     * places on the press, a span takes its two terminals from the gesture, a
+     * box or an angle tool takes its second point from the release. Without
+     * this branch the press fell through to the selection path and no creation
+     * session was armed, so every Dynamics tool armed, previewed nothing and
+     * created nothing - the tool LOOKED dead even though its model, renderer
+     * and writer were all in place. Asked of the tool tables rather than of a
+     * second hand-written list, so a tool added to the library is covered here
+     * without another edit.
+     */
+    if (
+        DYNAMICS_PLACEMENT_TOOLS[toolId] ||
+        DYNAMICS_SPAN_TOOLS[toolId] ||
+        DYNAMICS_ANGLE_TOOLS[toolId] ||
+        DYNAMICS_BOX_TOOLS[toolId]
+    ) {
         return true;
     }
 
@@ -565,6 +605,40 @@ export function beginCreationDrag(
         return false;
     }
     if (SINGLE_POINT_DRAG_TOOLS.includes(drawingState.activeTool)) {
+        const onExisting =
+            idle && pressSelectsExistingObject(event);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false,
+            onExisting,
+            pressPoint: (() => {
+                const raw = resolvePointerEvent(event).rawPointerPoint;
+
+                return raw
+                    ? { x: raw.x, y: raw.y }
+                    : null;
+            })(),
+            singlePointTool: drawingState.activeTool,
+            pressResolution: null
+        };
+
+        return true;
+    }
+
+    /*
+     * A DYNAMICS PLACEMENT TOOL PLACES ON THE CLICK, NOT ON A DRAG.
+     *
+     * A Particle or a Reference Point is finished by one click; the release
+     * below supplies that click through `singlePointTool`, exactly as the
+     * shared Point tool does. Named here rather than added to that list so
+     * the Dynamics library keeps one source of its own tool kinds.
+     */
+    if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
         const onExisting =
             idle && pressSelectsExistingObject(event);
 

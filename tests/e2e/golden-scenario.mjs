@@ -56,7 +56,26 @@ const TOOLS = [
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
     ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc"],
-    ["DYNAMICS", "velocity"], ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
+    /*
+     * DYNAMICS. Each entry is family button -> child item -> the gesture the
+     * child's placement takes: a point click, a two-point drag, or a box drag.
+     * The families are the toolbar's submenus; the child ids are the real
+     * Dynamics tool ids, the same ones the unit suites exercise.
+     */
+    ["DYNAMICS", "dynamics-bodies", "dynamics-particle"],
+    ["DYNAMICS", "dynamics-bodies", "dynamics-rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
+    ["DYNAMICS", "dynamics-kinematics", "dynamics-trajectory", null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-kinematics", "dynamics-polar-vector", null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-kinematics", "dynamics-angular-vector", null, ["d:0.3,0.55,0.55,0.3"]],
+    ["DYNAMICS", "dynamics-mechanical", "dynamics-spring", null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-mechanical", "dynamics-damper", null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-mechanical", "dynamics-spring-damper", null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-mechanical", "dynamics-pulley", null, ["d:0.3,0.55,0.55,0.3"]],
+    ["DYNAMICS", "dynamics-coordinate-system", null, null, ["d:0.3,0.6,0.6,0.3"]],
+    ["DYNAMICS", "dynamics-reference-point"],
+    ["DYNAMICS", "dynamics-reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "dynamics-reference-arc", null, null, ["d:0.3,0.55,0.6,0.55"]],
+    ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];

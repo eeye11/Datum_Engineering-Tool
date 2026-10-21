@@ -548,7 +548,16 @@ function canvasBounds() {
     const bounds = drawingCanvas.getBoundingClientRect();
 
     if (!bounds.width || !bounds.height) {
+        /*
+         * THE SAME SHAPE THE MEASURED BOX HAS.
+         *
+         * `left` and `top` are carried here too, so a caller that reads the
+         * canvas's window position - `cameraKey` does - gets zeros rather
+         * than an undefined read when the canvas has not been laid out yet.
+         */
         return {
+            left: 0,
+            top: 0,
             width: drawingCanvas.clientWidth || 900,
             height: drawingCanvas.clientHeight || 600
         };
@@ -1552,16 +1561,27 @@ let announcedCamera = null;
 function cameraKey(state) {
     const camera = state?.camera || {};
 
+    /*
+     * THE CANVAS MAY NOT BE LAID OUT YET.
+     *
+     * `canvasBounds` returns a plain width/height pair when the canvas has no
+     * box — no `rect` — and that is a normal state during startup and in a
+     * headless viewport. Reading `rect.left` of it threw inside the camera
+     * listener loop, which killed the note/label entry prompts: the listener
+     * died mid-tick, the prompt never followed its node, and the entry was
+     * aborted with "Cannot read properties of undefined (reading 'left')".
+     * The missing part is simply absent, which is what "no box yet" means.
+     */
     const bounds = canvasBounds();
 
     return [
         Number(camera.zoom) || 1,
         Number(camera.panX) || 0,
         Number(camera.panY) || 0,
-        bounds ? bounds.rect.left : 0,
-        bounds ? bounds.rect.top : 0,
-        bounds ? bounds.width : 0,
-        bounds ? bounds.height : 0
+        Number(bounds?.left) || 0,
+        Number(bounds?.top) || 0,
+        Number(bounds?.width) || 0,
+        Number(bounds?.height) || 0
     ].join("|");
 }
 

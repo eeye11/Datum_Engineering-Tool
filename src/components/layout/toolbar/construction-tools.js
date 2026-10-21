@@ -7,6 +7,12 @@ import { drawingState } from "../../../features/workspace/editor-state.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
 import { isVaryingLoadTool } from "../../../features/workspace/statics/load-tool.js";
 import { STATICS_BODY_ATTACHED_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../../../features/workspace/statics/statics-tools.js";
+import {
+    DYNAMICS_PLACEMENT_TOOLS,
+    DYNAMICS_SPAN_TOOLS,
+    DYNAMICS_ANGLE_TOOLS,
+    DYNAMICS_BOX_TOOLS
+} from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { canvasPointFromEvent } from "./tool-activation.js";
 
 export function isConstructionTool(
@@ -65,7 +71,26 @@ export function isConstructionTool(
         toolId === "truss" ||
         toolId === "distributed-load" ||
         isVaryingLoadTool(toolId) ||
-        Boolean(STATICS_SPAN_TOOLS[toolId])
+        Boolean(STATICS_SPAN_TOOLS[toolId]) ||
+
+        /*
+         * EVERY DYNAMICS TOOL IS A CONSTRUCTION TOOL.
+         *
+         * The whole library takes its points through the shared click and
+         * drag pipelines - a placement tool commits on one aimed click, a
+         * span, a box and an angle tool anchor on the first point and finish
+         * on the second - and all of them pick up snapping and inference
+         * exactly as Statics does. Without this branch the click router never
+         * handed a Dynamics tool its clicks, so the placement tools created
+         * nothing and the others only worked when the gesture came through
+         * the drag path. Asked of the tool tables rather than of a hand-
+         * written list, so a tool added to the library is covered here
+         * without another edit.
+         */
+        Boolean(DYNAMICS_PLACEMENT_TOOLS[toolId]) ||
+        Boolean(DYNAMICS_SPAN_TOOLS[toolId]) ||
+        Boolean(DYNAMICS_ANGLE_TOOLS[toolId]) ||
+        Boolean(DYNAMICS_BOX_TOOLS[toolId])
     );
 }
 

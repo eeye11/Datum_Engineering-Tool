@@ -38,6 +38,11 @@
  */
 
 import { isDragCreationTool } from "../../../features/workspace/interaction/creation-drag.js";
+import {
+    DYNAMICS_SPAN_TOOLS,
+    DYNAMICS_ANGLE_TOOLS,
+    DYNAMICS_BOX_TOOLS
+} from "../../../features/workspace/dynamics/dynamics-tools.js";
 
 /*
  * The tools whose interaction is a SINGLE POINT.
@@ -57,6 +62,20 @@ export const POINT_TOOLS = [
     "point",
     "particle",
     "reference-point",
+
+    /*
+     * THE DYNAMICS PLACEMENT TOOLS PLACE ON ONE CLICK TOO.
+     *
+     * A Dynamics Particle and a Dynamics Reference Point are finished by a
+     * single aimed click, exactly as their Statics and Geometry twins are.
+     * Left out of this list, a bare click was read as "I am finished with
+     * this tool" and dropped the student into Select before anything could
+     * be placed - the tool armed, previewed its instruction and then ate its
+     * own first click. Asked beside the twins they mirror, so the three stay
+     * in step by construction.
+     */
+    "dynamics-particle",
+    "dynamics-reference-point",
 
     /*
      * The supports place at a single location on the member they are propped
@@ -194,10 +213,37 @@ export const MULTI_STEP_TOOLS = [
     "pipe-duct"
 ];
 
+/*
+ * THE DYNAMICS SPAN, BOX AND ANGLE TOOLS TAKE CLICK-MOVE-CLICK TOO.
+ *
+ * A spring, a vector, a pulley or a body anchors on its first point and is
+ * finished by the second - so a bare click is a REAL STEP of the tool's
+ * workflow, not a request to stop.
+ *
+ * READ LAZILY, NOT AT MODULE LOAD. The Dynamics tool tables live in a module
+ * that reaches back into the toolbar's menu code, and this module is part of
+ * that toolbar: importing the tables here closed a cycle that broke module
+ * initialisation for the whole application. Asked of the tables at call time
+ * instead, so a tool added to the Dynamics library is covered here without
+ * another edit and the cycle stays open.
+ */
+let dynamicsMenuToolIds = null;
+
+function dynamicsMultiStepIds() {
+    if (!dynamicsMenuToolIds) {
+        dynamicsMenuToolIds = [
+            ...Object.keys(DYNAMICS_SPAN_TOOLS),
+            ...Object.keys(DYNAMICS_ANGLE_TOOLS),
+            ...Object.keys(DYNAMICS_BOX_TOOLS)
+        ];
+    }
+
+    return dynamicsMenuToolIds;
+}
+
 export function isMultiStepTool(toolId) {
-    return MULTI_STEP_TOOLS.includes(
-        toolId ?? null
-    );
+    return dynamicsMultiStepIds().includes(toolId ?? null) ||
+    MULTI_STEP_TOOLS.includes(toolId ?? null);
 }
 
 /*

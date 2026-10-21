@@ -13,7 +13,7 @@ import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
-import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
 import { beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
@@ -405,6 +405,19 @@ export function initialToolMessage(
         return staticsInstruction(
             toolId
         );
+    }
+
+    /*
+     * A DYNAMICS TOOL CARRIES ITS OWN OPENING INSTRUCTION.
+     *
+     * The wording is built from the tool's declared placement, so a tool the
+     * library adds is described correctly here without this file ever
+     * learning the id. Without this branch every Dynamics tool opened with
+     * the leftover "Ready" - the student could not tell the tool had armed
+     * or what it wanted first.
+     */
+    if (isDynamicsTool(toolId)) {
+        return dynamicsInstruction(toolId);
     }
 
     return (

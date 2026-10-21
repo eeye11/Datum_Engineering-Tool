@@ -9,6 +9,7 @@ import { drawingToolMessage, toolHeading, toolList } from "../../../features/wor
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 
@@ -233,6 +234,27 @@ export function renderEngineeringTools(
                                 button,
                                 toolId
                             );
+
+                            return;
+                        }
+
+                        /*
+                         * A DYNAMICS FAMILY OPENS ITS SUBMENU, exactly as a
+                         * Statics one does. Without this branch the family
+                         * button fell through to `activateTool`, which armed
+                         * nothing: the Bodies, Kinematics and Mechanical
+                         * Elements entries looked like tools but opened no
+                         * menu, so no Dynamics tool could be reached from the
+                         * toolbar at all. The injected `onActivate` is the
+                         * module's own decoupling - see `openDynamicsMenu`.
+                         */
+                        if (DYNAMICS_TOOL_MENUS[toolId]) {
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            openDynamicsMenu(button, toolId, {
+                                onActivate: childId => activateTool(childId)
+                            });
 
                             return;
                         }
