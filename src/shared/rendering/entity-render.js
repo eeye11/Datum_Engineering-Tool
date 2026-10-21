@@ -13,6 +13,7 @@ import { drawDimension, drawAnnotate, drawAnnotation } from "./entities/draw-ann
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
+import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
@@ -30,6 +31,18 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
      * body. A new feature type adds its renderer to this table.
      */
     const ENTITY_RENDERERS = [
+        /*
+         * THE DYNAMICS SYMBOLS DRAW THEMSELVES.
+         *
+         * A spring, a damper, a vector, a trajectory or a pulley stores its own
+         * geometry and is not any of the generic feature kinds below - without
+         * this entry they matched nothing, so the tools created objects that
+         * were listed in Objects and drew no ink anywhere. A symbol whose
+         * renderer declines (the reference line, point and arc, which are
+         * ordinary construction features wearing a Dynamics label) falls
+         * through to the shared renderers below, which draw it as ever.
+         */
+        { matches: entity => Boolean(entity?.engineering?.dynamicsType), draw: drawDynamicsSymbol },
         /*
          * A resultant and a component analysis are vectors too, so they share
          * this pass rather than getting a symbol of their own. What says which

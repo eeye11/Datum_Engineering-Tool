@@ -13,6 +13,7 @@ import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
 import { beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
@@ -198,17 +199,18 @@ export function activateTool(
      * span tool added there is covered here without another edit.
      */
     const isPlacementTool =
-        Boolean(
-            STATICS_PLACEMENT_TOOLS[
-                requestedTool
-            ]
-        ) ||
-        Boolean(
-            STATICS_SPAN_TOOLS[
-                requestedTool
-            ]
-        ) ||
+        Boolean(STATICS_PLACEMENT_TOOLS[requestedTool]) ||
+        Boolean(STATICS_SPAN_TOOLS[requestedTool]) ||
         isBodyAttachedTool(requestedTool) ||
+        /*
+         * A DYNAMICS TOOL IS A PLACEMENT TOOL TOO, by the same reasoning:
+         * every Dynamics tool places a feature, whether the gesture ends on
+         * one click or two, and re-clicking it must keep it armed.
+         */
+        Boolean(DYNAMICS_PLACEMENT_TOOLS[requestedTool]) ||
+        Boolean(DYNAMICS_SPAN_TOOLS[requestedTool]) ||
+        Boolean(DYNAMICS_ANGLE_TOOLS[requestedTool]) ||
+        Boolean(DYNAMICS_BOX_TOOLS[requestedTool]) ||
         requestedTool === "truss" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||

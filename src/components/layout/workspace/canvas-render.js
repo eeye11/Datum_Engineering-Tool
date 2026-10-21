@@ -1186,6 +1186,30 @@ async function compileCurrentSource() {
             return false;
         }
 
+        /*
+         * A RECOVERED COMPILE IS STILL A DRAFT WITH A HOLE IN IT.
+         *
+         * The picture above is real - it is the drawing as far as it is
+         * complete - but statements were left out of it, and the student should
+         * know that what is on the sheet is not everything they typed. The
+         * report names the FIRST skipped statement, which is the one to fix
+         * first; a compile that arrives with nothing skipped clears this
+         * message like any other success.
+         */
+        const skipped = manager.skippedStatements();
+
+        if (skipped.length > 0) {
+            const first = skipped[0];
+            const message = first.unsupported
+                ? "A line of the source is kept but the renderer cannot draw it - the picture shows the rest."
+                : `The command on line ${first.startLine + 1} is unfinished - it was left out of the picture.`;
+
+            manager.markFailed(message, revision);
+            reportCompileError(revision, message, { kind: "draft", replaceable: true });
+
+            return false;
+        }
+
         adoptCachedPicture(revision);
 
         manager.markRendered(source, revision);

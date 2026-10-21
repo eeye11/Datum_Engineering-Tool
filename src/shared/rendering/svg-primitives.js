@@ -165,6 +165,20 @@ import enggCanvasPalette from "./canvas-palette.js";
 
         Object.entries(attributes).forEach(
             ([key, value]) => {
+                /*
+                 * AN UNRESOLVED COORDINATE IS OMITTED, NOT WRITTEN.
+                 *
+                 * `setAttribute(key, undefined)` stores the STRING 'undefined',
+                 * which a shape's cy then reads back as - a visible, wrong
+                 * coordinate drawn at the sheet's origin. A value that could
+                 * not be resolved leaves the attribute absent, which is both
+                 * honest (no attribute = no value) and what the test for this
+                 * regression asks for.
+                 */
+                if (value === undefined || value === null) {
+                    return;
+                }
+
                 element.setAttribute(
                     key,
                     value

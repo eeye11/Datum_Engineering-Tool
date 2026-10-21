@@ -17,6 +17,8 @@ import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
 import { translateObject } from "../geometry/transforms.js";
 import { selectionBounds } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
+import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
+import { DYNAMICS_SIZES } from "../dynamics/dynamics-tools.js";
 
 /*
  * Which view the Features panel is showing.
@@ -366,6 +368,158 @@ export function trussJointHandles(
     }));
 }
 
+/*
+ * THE DYNAMICS SYMBOL'S OWN GRIPS.
+ *
+ * Where the grips are, in one table keyed by the stored geometry rather than
+ * by a second type dispatch: every field named here is written by
+ * `dynamics-handles.js` when the grip is dragged and read by the renderer and
+ * the source writer, so a drag cannot leave a handle describing geometry the
+ * picture does not show.
+ */
+function dynamicsHandles(
+    object,
+    g
+) {
+    const handles = [];
+
+    /* The two terminals of a span symbol. */
+    if (g.start) {
+        handles.push({ kind: "start", point: g.start });
+    }
+
+    if (g.end) {
+        handles.push({ kind: "end", point: g.end });
+    }
+
+    /* A body drawn from its corners, or from a centre outwards. */
+    if (g.center) {
+        handles.push({ kind: "center", point: g.center });
+    }
+
+    if (g.position) {
+        handles.push({ kind: "position", point: g.position });
+    }
+
+    if (Number.isFinite(Number(g.radius)) && g.center) {
+        handles.push({
+            kind: "dynamics-radius",
+            point: {
+                x: g.center.x + Number(g.radius),
+                y: g.center.y
+            }
+        });
+    }
+
+    if (object.type === "particle" && g.position) {
+        /* The marker's own size grip, on the marker's rim. */
+        handles.push({
+            kind: "dynamics-radius",
+            point: {
+                x: g.position.x + Number(g.markerRadius || DYNAMICS_SIZES.particleRadius),
+                y: g.position.y
+            }
+        });
+    }
+
+    if (Number.isFinite(Number(g.amplitude)) && g.start && g.end) {
+        /*
+         * The coil height: at the span's midpoint, pushed out along its
+         * normal by the current amplitude.
+         */
+        const dx = g.end.x - g.start.x;
+        const dy = g.end.y - g.start.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const middle = {
+            x: (g.start.x + g.end.x) / 2,
+            y: (g.start.y + g.end.y) / 2
+        };
+
+        handles.push({
+            kind: "dynamics-amplitude",
+            point: {
+                x: middle.x - (dy / length) * Number(g.amplitude),
+                y: middle.y + (dx / length) * Number(g.amplitude)
+            }
+        });
+    }
+
+    if (Number.isFinite(Number(g.bodyWidth)) && g.start && g.end) {
+        /*
+         * The damper body's width, at the point where the body sits along
+         * the span (`bodyFrom`), so the grip sits ON the rectangle it
+         * resizes.
+         */
+        const from = Number(g.bodyFrom) || 0.42;
+        const along = {
+            x: g.start.x + (g.end.x - g.start.x) * from,
+            y: g.start.y + (g.end.y - g.start.y) * from
+        };
+        const dx = g.end.x - g.start.x;
+        const dy = g.end.y - g.start.y;
+        const length = Math.hypot(dx, dy) || 1;
+
+        handles.push({
+            kind: "dynamics-body-width",
+            point: {
+                x: along.x - (dy / length) * (Number(g.bodyWidth) / 2),
+                y: along.y + (dx / length) * (Number(g.bodyWidth) / 2)
+            }
+        });
+    }
+
+    if (Number.isFinite(Number(g.ropeAngle)) && g.center && Number(g.radius)) {
+        /* The rope's swing, at the point where the rope leaves the rim. */
+        const radians = ((Number(g.ropeAngle) - 90) * Math.PI) / 180;
+
+        handles.push({
+            kind: "dynamics-rope",
+            point: {
+                x: g.center.x + Number(g.radius) * Math.cos(radians),
+                y: g.center.y + Number(g.radius) * Math.sin(radians)
+            }
+        });
+    }
+
+    /*
+     * A REFERENCE ARC IS THE EDITOR'S OWN ARC: centre and two angle ends,
+     * in RADIANS, exactly as the ordinary arc's grips are placed.
+     */
+    if (
+        object.type === "arc" &&
+        g.center &&
+        Number.isFinite(Number(g.radius)) &&
+        Number.isFinite(Number(g.startAngle))
+    ) {
+        const centre = g.center;
+        const radius = Number(g.radius);
+
+        handles.push(
+            {
+                kind: "startAngle",
+                point: {
+                    x: centre.x + radius * Math.cos(Number(g.startAngle)),
+                    y: centre.y + radius * Math.sin(Number(g.startAngle))
+                }
+            },
+            {
+                kind: "endAngle",
+                point: {
+                    x: centre.x + radius * Math.cos(Number(g.endAngle)),
+                    y: centre.y + radius * Math.sin(Number(g.endAngle))
+                }
+            }
+        );
+    }
+
+    if (object.type === "rigid-body") {
+        /* A Dynamics rigid body keeps the body's own corner grips. */
+        handles.push(...rigidBodyHandles(object));
+    }
+
+    return handles;
+}
+
 function manipulationHandles(
     object
 ) {
@@ -534,6 +688,20 @@ function manipulationHandles(
                 point: anchor
             }
         ];
+    }
+
+    /*
+     * A DYNAMICS SYMBOL IS GRIPPED BY WHAT DEFINES IT.
+     *
+     * Every Dynamics feature carries its `dynamicsType`, and the handles are
+     * read from the geometry it stores - the two terminals of a span symbol,
+     * the centre of a pulley or a vector, the marker radius of a particle -
+     * plus the symbol's own parameters (coil height, body width, rope
+     * angle). The WHAT-a-drag-changes half lives in
+     * `dynamics/dynamics-handles.js`, which writes these same fields.
+     */
+    if (dynamicsTypeOf(object) && object.type !== COORDINATE_SYSTEM_TYPE) {
+        return dynamicsHandles(object, g);
     }
 
     if (object.type === "point") {

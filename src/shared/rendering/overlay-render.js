@@ -389,6 +389,20 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             return;
         }
 
+        /*
+         * A MALFORMED CANDIDATE IS SKIPPED, NOT FATAL.
+         *
+         * The snap marker is the least important thing on the overlay - grid,
+         * preview and the drawing itself are above it in importance - so a
+         * candidate with no point must not abort the whole render. It is
+         * dropped, the picture survives, and the next pointer move replaces it
+         * with a well-formed one.
+         */
+        if (!candidate.point || !Number.isFinite(Number(candidate.point.x)) ||
+            !Number.isFinite(Number(candidate.point.y))) {
+            return;
+        }
+
         const screenPoint =
             enggDrawingState
                 .engineeringToScreen(

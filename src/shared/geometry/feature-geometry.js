@@ -15,6 +15,8 @@
 import enggDrawingState from "../model/drawing-state.js";
 import enggBodyFrames from "./body-frames.js";
 import { isConnectionType, isSupportType } from "../model/feature-types.js";
+import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
+import { coordinateSystemArms } from "./feature-handles.js";
 
 /*
  * The centre of a feature, in world coordinates.
@@ -341,6 +343,42 @@ function definingPoints(
     }
 
     /*
+     * A DYNAMICS SYMBOL MOVES AS ONE PIECE.
+     *
+     * A spring, a damper, a vector or a pulley is defined by its stored
+     * fields, and the whole symbol moves when they all move. Everything it
+     * stores is a point (the terminals, the centre) or a scalar measured
+     * FROM one of those points (a coil height, a body width, a radius, a
+     * rope swing), so translating the points is enough - nothing here needs
+     * the scalars, because they travel with the points they hang from.
+     */
+    if (DYNAMICS_OWN_TYPES.has(type)) {
+        return valid([
+            g.start,
+            g.end,
+            g.center,
+            g.position
+        ]);
+    }
+
+    /*
+     * A COORDINATE SYSTEM IS DEFINED BY ITS ORIGIN AND ITS ARM ENDS.
+     *
+     * The arms are derived from the stored lengths and rotation, so they are
+     * expanded here like a rectangle's corners: moving or turning the system
+     * moves every arm end with it, and the bounds - and so the rotation
+     * handle - enclose the whole symbol rather than collapsing onto its
+     * single origin point.
+     */
+    if (type === "coordinate-system-2d") {
+        return valid(
+            coordinateSystemArms(g).map(arm => arm.end).concat(
+                g.origin ? [g.origin] : []
+            )
+        );
+    }
+
+    /*
      * Anything else that stores an explicit point list
      * (a Triangle or a Polyline) moves each of its
      * points, which is what keeps a triangle's vertices
@@ -559,6 +597,28 @@ function rotateObjectAbout(
     }
 
     /*
+     * A COORDINATE SYSTEM TURNS BY ITS OWN STORED ROTATION.
+     *
+     * The system keeps its origin and derives its four arms from the stored
+     * lengths and `rotation`, so there are no arm-end points to turn - the
+     * whole drawing follows the one angle. Advancing `rotation` by the turn
+     * (in degrees, like every other stored angle) rotates the axes about the
+     * pivot while the origin stays put when it IS the pivot, which is what the
+     * rotation handle promises.
+     */
+    if (type === "coordinate-system-2d") {
+        if (g.origin) {
+            turn(g.origin);
+        }
+
+        g.rotation =
+            (Number(g.rotation) || 0) +
+            (radians * 180) / Math.PI;
+
+        return;
+    }
+
+    /*
      * A truss the student built is defined by its own
      * members, so every member turns with the same pivot
      * and the same angle. The span end points that the
@@ -574,6 +634,28 @@ function rotateObjectAbout(
 
         if (g.start) turn(g.start);
         if (g.end) turn(g.end);
+
+        return;
+    }
+
+    /*
+     * A DYNAMICS SYMBOL TURNS WHOLE, AND ITS OWN ANGLES TURN WITH IT.
+     *
+     * The points turn through the shared path below; what a Dynamics symbol
+     * additionally stores are the angles its own drawing is measured in - a
+     * pulley's rope swing, a polar vector's direction, an angular vector's
+     * start and sweep. Advancing each stored angle by the turn is what keeps
+     * the symbol's drawing rotating WITH the shape rather than staying
+     * pinned to the sheet while its outline spins.
+     */
+    if (DYNAMICS_OWN_TYPES.has(type)) {
+        const degrees = (radians * 180) / Math.PI;
+
+        ["ropeAngle", "startAngle", "endAngle", "sweep", "angle", "direction"].forEach((key) => {
+            if (Number.isFinite(Number(g[key]))) {
+                g[key] = Number(g[key]) + degrees;
+            }
+        });
 
         return;
     }

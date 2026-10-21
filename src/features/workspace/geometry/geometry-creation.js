@@ -21,6 +21,11 @@ import { LOAD_BUILD_PHASES, beginDistributedLoadConstruction, continueDistribute
 import { commitMomentPlacement } from "./preview.js";
 import { beginStaticsAttachment, continueStaticsAttachment, staticsBodyAtPoint } from "../statics/statics-attachment.js";
 import { createStaticsFeature } from "../statics/statics-creation.js";
+import { createDynamicsFeature } from "./dynamics-creation.js";
+
+/* The one Dynamics creation entry point, shared with the span gesture. */
+export { createDynamicsFeature };
+import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../dynamics/dynamics-tools.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "../statics/statics-tools.js";
 import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -805,6 +810,83 @@ export function beginOrCompleteGeometry(
             return;
         }
 
+        /*
+         * ========================================================
+         * A DYNAMICS TOOL TAKES ITS POINTS THE WAY IT DECLARED
+         * ========================================================
+         *
+         * A placement tool (a Particle, a Reference Point) commits on the
+         * FIRST click and goes on offering the next one, like a Statics
+         * placement tool. Everything else - a span, a box or a centre-out
+         * angle tool - anchors on this click and is committed by the next
+         * one, through the `dynamics-*` phases handled further down.
+         */
+        if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
+            createDynamicsFeature(
+                drawingState.activeTool,
+                point,
+                point
+            );
+
+            renderCurrentDrawing();
+            return;
+        }
+
+        if (
+            DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool]
+        ) {
+            enggDrawingState.setInteraction(
+                drawingState,
+                {
+                    ...resolution,
+
+                    phase: "dynamics-span",
+
+                    toolId: drawingState.activeTool,
+
+                    startPoint: point,
+
+                    currentPoint: point,
+
+                    points: [
+                        point
+                    ]
+                }
+            );
+
+            setToolMessage("Specify second point");
+
+            renderCurrentDrawing();
+            return;
+        }
+
+        if (DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) {
+            enggDrawingState.setInteraction(
+                drawingState,
+                {
+                    ...resolution,
+
+                    phase: "dynamics-angle",
+
+                    toolId: drawingState.activeTool,
+
+                    startPoint: point,
+
+                    currentPoint: point,
+
+                    points: [
+                        point
+                    ]
+                }
+            );
+
+            setToolMessage("Specify the radius");
+
+            renderCurrentDrawing();
+            return;
+        }
+
         if (
             drawingState.activeTool ===
             "polygon"
@@ -1391,6 +1473,32 @@ export function beginOrCompleteGeometry(
             renderCurrentDrawing();
         }
 
+        return;
+    } else if (
+        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) &&
+        (interaction.phase === "dynamics-span" ||
+            interaction.phase === "dynamics-angle")
+    ) {
+        /*
+         * THE SECOND POINT COMMITS. The tool id the gesture armed with is
+         * the one that creates - not necessarily the tool armed NOW - so a
+         * student who switched tools mid-drag cannot commit a hybrid.
+         */
+        const gestureTool = interaction.toolId || drawingState.activeTool;
+
+        const object = createDynamicsFeature(
+            gestureTool,
+            interaction.points[0],
+            point
+        );
+
+        if (object) {
+            enggDrawingState.clearInteraction(drawingState);
+        }
+
+        renderCurrentDrawing();
         return;
     } else if (
         STATICS_SPAN_TOOLS[

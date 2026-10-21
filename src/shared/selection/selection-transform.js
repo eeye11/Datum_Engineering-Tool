@@ -1,6 +1,7 @@
 import geometry from "../geometry/feature-geometry.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
+import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 
 export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
@@ -12,6 +13,17 @@ export function selectionBounds(objects, selectedIds) {
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];
         }
         if (object.metadata?.thermodynamicsKind === "process-path") return processPathPoints(g);
+        if (DYNAMICS_OWN_TYPES.has(object.type)) {
+            return [g.start, g.end, g.center, g.position].filter(Boolean)
+                .concat(
+                    g.center && Number.isFinite(Number(g.radius))
+                        ? [
+                              { x: g.center.x - Number(g.radius), y: g.center.y - Number(g.radius) },
+                              { x: g.center.x + Number(g.radius), y: g.center.y + Number(g.radius) }
+                          ]
+                        : []
+                );
+        }
         return [...geometry.definingPoints(g, object.type), ...(object.placement ? [object.placement] : [])];
     }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
     if (!points.length) return null;

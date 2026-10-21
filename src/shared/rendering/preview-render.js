@@ -52,6 +52,31 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
+        /*
+         * A DYNAMICS PREVIEW IS DRAWN AS THE SYMBOL IT WILL BECOME.
+         *
+         * A spring, a damper or a vector forced through the generic preview
+         * wash below is drawn as a translucent green line between its two
+         * terminals - nothing like the coil the student is about to commit.
+         * Drawing it through the entity renderer keeps the preview and the
+         * committed feature the same drawing, and keeps the symbol's own
+         * colour; the 0.72 opacity of the wash stays, so it is still visibly
+         * a preview. The preview id keeps it out of selection and hit testing,
+         * exactly as for the Statics spans.
+         */
+        if (state.interaction.preview?.engineering?.dynamicsType) {
+            appendEntity(
+                svg,
+                {
+                    ...state.interaction.preview,
+                    isPreview: true
+                },
+                state,
+                bounds
+            );
+
+            return;
+        }
         const toScreenAll =
             point =>
                 enggDrawingState.engineeringToScreen(point, bounds, state);
