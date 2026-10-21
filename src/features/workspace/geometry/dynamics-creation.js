@@ -9,9 +9,7 @@
  * through here, so there is exactly one implementation of "place a spring".
  */
 
-import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { commitCreatedFeature } from "./creation-commit.js";
-import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import {
