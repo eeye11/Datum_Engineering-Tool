@@ -68,6 +68,8 @@ import {
   withExportTransform,
 } from "./statics-primitives.js";
 import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "../source-diagnostics.js";
+import { COMMENT_FIELDS, applyObjectComments, ensureObjectId, objectDisplayName } from "../object-comments.js";
+import { renderObjectBlock } from "../drawing-source.js";
 import { NOMINAL_ARROW_HEAD_PT } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
 import { sketchPointsOf as canvasSketchPointsOf } from "../../analysis-render.js";
@@ -567,7 +569,17 @@ function serializeBeam(entity, object) {
   const stored = finite(object.geometry?.depth);
   const halfDepth = stored !== null && stored > 0 ? stored / 2 : BEAM_HALF_DEPTH;
 
-  const outline = barOutline(ends.start, ends.end, symbolSize(halfDepth));
+  /*
+   * THE HALF-DEPTH IS A MODEL LENGTH, NOT AN EXPORT-SPACE ONE.
+   *
+   * `memberEnds` returns the object's stored MODEL coordinates, and the corners
+   * `barOutline` builds are written through `point()`, which applies the export
+   * transform. Scaling the depth first would therefore apply the factor TWICE -
+   * the bar came out a factor too thin (1.2 units deep at 31% instead of 3.75)
+   * while the canvas drew the full-depth bar. The model value is passed, and the
+   * conversion happens at the same place every other coordinate's does.
+   */
+  const outline = barOutline(ends.start, ends.end, halfDepth);
 
   return outline ? drawPath(outline, styleOptions(object.style), { cycle: true }) : null;
 }
@@ -2002,11 +2014,43 @@ function serializeStaticsObjectAtScale(object, options = {}) {
 
   clearSourceGenerationProblem(object.id);
 
-  return defineOncePerObject(combined);
-}
+  /*
+   * THE OBJECT'S IDENTITY IS MINTED HERE WHEN IT HAS NONE, then reused on every
+   * later write. It is the id the source block is keyed on, so it must not
+   * depend on how many times the object has been drawn.
+   */
+  const id = ensureObjectId(object, object.type);
 
-/*
- * THE CHEAP CHECKS THAT DECIDE WHETHER TEQ WILL ACCEPT THIS FRAGMENT.
+  const head = { ...object, id };
+
+  /*
+   * ============================================================
+   * ONE LOGICAL OBJECT, ONE BLOCK
+   * ============================================================
+   *
+   * An arrow and its magnitude are one editable feature; a load and its
+   * intensities are one load. The source pipeline is built on that: one object
+   * occupies one contiguous region, and a targeted update rewrites exactly that
+   * region - which is why the object's text is written inside its own block, not
+   * beside it.
+   *
+   * A COMPONENT HEADER INSIDE THAT BLOCK (`% DAETUM PART:` / `% DAETUM PARENT:`)
+   * was tried and removed. `parseDrawingSource` ends a block at the next header,
+   * so a child header SPLITS the object into two regions: the parent loses its
+   * text, a targeted edit can rewrite one half without the other, and the source
+   * map reports two objects for one feature. That is worse than the relationship
+   * it was meant to record.
+   *
+   * The format still supports PART and PARENT, and `renderObjectBlock` still
+   * writes them - a caller that truly has separate source components can use
+   * them. Recording the relationship for the writers that split an object this
+   * way is the open item (see docs/OBJECT-COMMENTS.md, "Limitations").
+   */
+    return applyObjectComments(head, defineOncePerObject(combined), { type: object.type });
+  }
+
+  /*
+   * THE CHEAP CHECKS THAT DECIDE WHETHER TEQ WILL ACCEPT THIS FRAGMENT.
  *
  * Deliberately conservative: this reports only things that ALWAYS fail to
  * compile, never a stylistic opinion. A false positive would drop an object
@@ -2136,17 +2180,27 @@ export function generateStaticsTikz(objects, options = {}) {
   return list
     .map((object) => {
       const source = serializeStaticsObject(object, options);
+      const id = ensureObjectId(object, object.type);
 
+      /*
+       * THE SERIALIZER WROTE THE OBJECT'S OWN HEADER. This only wraps a write
+       * that had none (a bare command list from a test or another caller) - and
+       * the test for "had none" is the OBJECT's id, not the mere presence of a
+       * comment, so a header naming this object is never written twice.
+       */
       return source
-        ? [
-            `% DAETUM_OBJECT_BEGIN id="${object.id}" type="${object.type}"`,
-            source,
-            `% DAETUM_OBJECT_END id="${object.id}"`,
-          ].join("\n")
+        ? source.includes(`% DAETUM ${COMMENT_FIELDS.id}: ${id}`)
+          ? source
+          : renderObjectBlock({
+              id,
+              type: object.type,
+              name: objectDisplayName(object, { type: object.type }),
+              source,
+            })
         : null;
     })
     .filter(Boolean)
-    .join("\n");
+    .join("\n\n");
 }
 
 /*

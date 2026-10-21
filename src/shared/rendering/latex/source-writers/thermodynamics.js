@@ -21,6 +21,7 @@
  */
 
 import { num, point, texText } from "./statics-primitives.js";
+import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import * as saturationCurve from "../../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import * as processLabels from "../../../../features/workspace/model/thermodynamics/process-labels.js";
@@ -417,23 +418,28 @@ export function thermodynamicsSourceWriter(object, options = {}) {
     return null;
   }
 
-  if (kind === "saturation-curve" || kind === "process-plot") {
-    return serializeSaturation(object);
+  const written =
+    kind === "saturation-curve" || kind === "process-plot"
+      ? serializeSaturation(object)
+      : kind === "piston-cylinder"
+        ? serializeCylinder(object)
+        : kind === "process-path"
+          ? serializeProcessPath(object, options)
+          : kind === "control-volume"
+            ? serializeControlVolume(object)
+            : null;
+
+  if (typeof written !== "string" || !written.trim()) {
+    return null;
   }
 
-  if (kind === "piston-cylinder") {
-    return serializeCylinder(object);
-  }
+  /*
+   * ONE HEADER PER FEATURE, above the several primitives a cylinder or a
+   * saturation curve is made of - so the whole symbol is one object's source.
+   */
+  const id = ensureObjectId(object, object.type);
 
-  if (kind === "process-path") {
-    return serializeProcessPath(object, options);
-  }
-
-  if (kind === "control-volume") {
-    return serializeControlVolume(object);
-  }
-
-  return null;
+  return applyObjectComments({ ...object, id }, written, { type: object.type });
 }
 
 export const THERMODYNAMICS_SOURCE_TYPES = Object.freeze([

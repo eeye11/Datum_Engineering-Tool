@@ -572,9 +572,19 @@ export function blockContents(source, map) {
     .slice()
     .sort((left, right) => left.beginLine - right.beginLine)
     .map((block) => {
-      const bodyStart = block.beginLine + 1;
-      const bodyEnd = block.unclosed ? lines.length : Math.max(bodyStart, block.endLine);
-
+      /*
+       * THE PARSER'S OWN BODY BOUNDS. They account for the header's length and
+       * for the blank lines that are not commands; computing them again here
+       * made the statements begin on the header's last line, so a readable
+       * block could not see the command beneath its own header.
+       */
+      const bodyStart = Number.isFinite(block.bodyStartLine) ? block.bodyStartLine : block.beginLine + 1;
+      const bodyEnd = block.unclosed
+        ? lines.length
+        : Math.max(
+            bodyStart,
+            (Number.isFinite(block.bodyEndLine) ? block.bodyEndLine : block.endLine) + 1
+          );
       const inside = statements.filter(
         (statement) => statement.startLine >= bodyStart && statement.startLine < bodyEnd
       );

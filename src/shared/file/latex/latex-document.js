@@ -709,6 +709,44 @@ function sheetSourcePicture(source, palette) {
     return body;
 }
 
+/*
+ * THE LATEX A DRAWING SHEET STANDS FOR, as one fragment.
+ *
+ * This is what a LINKED drawing renders from. The sheet's stored source is the
+ * canonical picture - the text the Source tab edits - so it is used as it
+ * stands; its inline colour definitions travel with it, because a fragment
+ * rendered on its own has no written-solution preamble to inherit them from.
+ *
+ * A sheet whose source has no commands (one saved before sources were stored,
+ * or one whose objects predate it) is written through the same fitted picture
+ * writer the export uses.
+ *
+ * Ordinary LaTeX comes back untouched: the drawing workspace's Source tab may
+ * hold a `tikzpicture` DAETUM did not generate, and a picture is a picture.
+ */
+export function readSheetLatex(sheet) {
+    if (!sheet) {
+        return "";
+    }
+
+    const stored =
+        sheet.source && typeof sheet.source.source === "string"
+            ? sheet.source.source
+            : "";
+
+    if (sourceHasCommands(stored)) {
+        return stored.trim();
+    }
+
+    return cleanSheetPicture(
+        { sheets: [sheet], activeSheetId: sheet.id },
+        sheet,
+        0,
+        1,
+        createPalette()
+    ).trim();
+}
+
 export function writeLatexPictureParts(documentBody, sheetId, getPalette = () => createPalette()) {
     const sheets = documentBody?.sheets || [];
     const index = Math.max(0, sheets.findIndex(sheet => sheet.id === sheetId));
@@ -821,6 +859,7 @@ export default {
     LATEX_MEDIA_TYPE,
     STANDALONE_LIBRARIES,
     readEmbeddedDocument,
+    readSheetLatex,
     writeLatexDocument,
     writeLatexPicture,
     writeLatexPictureParts,

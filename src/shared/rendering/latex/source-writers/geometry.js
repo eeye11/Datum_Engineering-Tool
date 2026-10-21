@@ -46,6 +46,7 @@ import {
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
 import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
+import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -645,8 +646,15 @@ export function geometrySourceWriter(object, context = {}) {
          * so the same drawing always writes the same text.
          */
         const definitions = colourDefinitionsIn(written);
+        const body = definitions.length ? `${definitions.join("\n")}\n${written}` : written;
 
-        return definitions.length ? `${definitions.join("\n")}\n${written}` : written;
+        /*
+         * THE OBJECT'S HEADER. Its id is minted once and reused, so moving or
+         * restyling the shape rewrites its region and never changes who it is.
+         */
+        const id = ensureObjectId(object, object.type);
+
+        return applyObjectComments({ ...object, id }, body, { type: object.type });
     });
 }
 

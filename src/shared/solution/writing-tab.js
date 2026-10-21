@@ -1,4 +1,4 @@
-/*
+﻿/*
  * ============================================================
  * THE WRITTEN SOLUTION TAB
  * ============================================================
@@ -16,22 +16,39 @@
  */
 
 import enggSolutionWorkspace from "./solution-workspace.js";
+import enggInlineDrawings from "./inline-drawings.js";
 import { enggDrawingSheets } from "../../features/workspace/index.js";
-import { serializeDocumentBody } from "../../features/workspace/commands/document-commands.js";
-import { writeLatexPictureParts } from "../file/latex/latex-document.js";
-import { createPalette } from "../file/latex/svg-to-tikz.js";
-import { serializeDrawingBlock, writeStandaloneLatex } from "./embedded-drawings.js";
-import { sourceHasDrawableContent, visibleDrawingSource } from "../rendering/latex/drawing-source.js";
-
-/* Short names for the two source helpers this module reads a sheet with. */
-const drawableContent = sourceHasDrawableContent;
-const visibleSource = visibleDrawingSource;
+import { writeStandaloneLatex } from "./embedded-drawings.js";
 import { attachSolutionSourceLoader } from "../integration/datum-api.js";
 import { attachSolutionLoader, attachSolutionDocumentWriter, markDocumentDirty } from "../../features/workspace/commands/document-commands.js";
 import { emitDatumEvent } from "../integration/events.js";
 import enggSolutionState from "./solution-state.js";
 
 const document = globalThis.document;
+
+/* ---------------------------------------------------------- */
+/* THE DRAWING WORKFLOW                                        */
+/* ---------------------------------------------------------- */
+
+/*
+ * THE COMPILED DOCUMENT.
+ *
+ * The export path in document-commands calls the writer registered here: the
+ * written solution as a complete, self-contained LaTeX document. Registered at
+ * install rather than imported, because document-commands is imported here and
+ * an import back would make the two modules a cycle.
+ *
+ * THE DRAWINGS ARE RESOLVED AT EXPORT TIME. `solutionDrawingSources()` asks each
+ * referenced drawing for its CURRENT LaTeX, so the .tex carries the diagram as
+ * it stands now rather than as it stood when it was placed.
+ */
+function writeDocument() {
+    return writeStandaloneLatex(enggSolutionState.getSource(), {
+        title: document.getElementById("solutionDocumentName")?.value || "Written Solution",
+        drawings: enggSolutionWorkspace.solutionDrawingSources()
+    });
+}
+
 /* ---------------------------------------------------------- */
 /* UNDO AND REDO, FOR THE TEXT                                 */
 /* ---------------------------------------------------------- */
@@ -134,278 +151,6 @@ function refreshUndoButtons() {
 }
 
 /* ---------------------------------------------------------- */
-/* INSERT A DRAWING FIGURE                                     */
-/* ---------------------------------------------------------- */
-
-/*
- * PUTTING A DRAWING INTO THE WRITTEN SOLUTION.
- *
- * The drawing is EMBEDDED, not referenced. The student picks a sheet and the
- * sheet's COMPLETE TikZ source - the plain `tikzpicture`, the same code the
- * Source view and the .tex export show - is written into the document at the
- * caret. No application markers, no metadata comments, no wrappers: the
- * document stays ordinary LaTeX. What was inserted is a copy, so editing the
- * drawing afterwards leaves the written solution as it was written; the
- * block's code is ordinary LaTeX text the student can read and edit like any
- * other part of the answer.
- *
- * AN EMPTY SHEET INSERTS NOTHING. A sheet with no drawable objects has no
- * code to insert - generating a placeholder would put geometry the student
- * never drew into an evidence document - so the dropdown marks empty
- * sheets, and picking one explains rather than inserts.
- */
-let drawingPalette = null;
-
-function isSheetEmpty(sheet) {
-    /*
-     * EMPTINESS IS ABOUT DRAWABLE CONTENT, NOT ABOUT THE PICTURE EXISTING.
-     *
-     * A sheet may carry objects that are all hidden, and it may carry a source
-     * that has been initialised with an empty `tikzpicture` - neither draws
-     * anything. So the object list decides first, and the sheet's canonical
-     * source is asked as well when one is stored: a source with no command
-     * lines is an empty drawing however it was saved.
-     */
-    const drawableObjects = (sheet?.objects || []).some(
-        (object) => !object.hidden
-    );
-
-    if (drawableObjects) {
-        return false;
-    }
-
-    const storedSource = sheet?.source?.source;
-
-    if (typeof storedSource === "string" && sourceHasDrawableContent(storedSource)) {
-        return false;
-    }
-
-    return true;
-}
-
-function sheetChoices() {
-    try {
-        const sheets = enggDrawingSheets.all() || [];
-
-        return sheets.map((sheet) => {
-            const empty = isSheetEmpty(sheet);
-            const name = sheet.name || "Sheet";
-
-            return {
-                id: sheet.id,
-                label: empty ? `${name} — Empty` : `${name} — Drawing available`,
-                empty,
-                sheet
-            };
-        });
-    } catch (error) {
-        return [];
-    }
-}
-
-function insertDrawingFigure() {
-    const field = editor();
-
-    if (!field) {
-        return;
-    }
-
-    const choices = sheetChoices();
-
-    /*
-     * A BUTTON THAT CANNOT WORK MUST SAY SO.
-     *
-     * With no drawings in the document there is nothing to insert, and the
-     * honest answer is to say that and where to make one - not to open an empty
-     * dialog or to do nothing at all. The event is still raised, so a host page
-     * can react as well.
-     */
-    if (!choices.length) {
-        emitDatumEvent("solution-insert-figure-empty");
-
-        setSolutionStatus(
-            "No drawings in this document yet - make one in the Engineering Drawing workspace, then insert it here."
-        );
-
-        return;
-    }
-
-    /*
-     * A CHOICE DIALOG, because which drawing is the whole question - the same
-     * reason the Greek insert opens a menu rather than inserting a guessed letter.
-     * Each choice names the sheet and whether it holds a drawing, so an empty
-     * sheet is identified BEFORE it is picked.
-     */
-    enggUiChoice(
-        "Which drawing should be placed at the caret? Its complete TikZ code is copied into the document.",
-        "Insert Drawing",
-        choices
-    ).then((sheetId) => {
-        if (!sheetId) {
-            return;
-        }
-
-        const choice = choices.find((candidate) => candidate.id === sheetId);
-
-        /*
-         * AN EMPTY SHEET IS EXPLAINED, NOT INSERTED. The choice was named
-         * as empty in the dropdown; picking it confirms the state rather
-         * than generating a placeholder picture.
-         */
-        if (choice?.empty) {
-            emitDatumEvent("solution-insert-figure-empty");
-
-            setSolutionStatus(
-                `"${choice.sheet?.name || "That sheet"}" is empty - it has no drawing to insert. Draw something on it in the Engineering Drawing workspace first.`
-            );
-
-            return;
-        }
-
-        /*
-         * ONE PALETTE ACROSS THE DOCUMENT. Reusing it means the second
-         * drawing's `daetum1` is the colour the first drawing's `daetum1`
-         * already declares - no redefinition, no conflict - and the
-         * preamble dedupes on export anyway.
-         */
-        if (!drawingPalette) {
-            drawingPalette = createPalette();
-        }
-
-        /*
-         * THE CANONICAL SOURCE WINS.
-         *
-         * The Source tab shows one editable, canonical `tikzpicture` for a
-         * sheet, and that is what Written Solution must insert - otherwise the
-         * code a student can read in Source and the code pasted into their
-         * answer would be two different drawings, which is the exact split the
-         * source architecture exists to prevent.
-         *
-         * The sheet's stored source is the canonical one: it is captured with
-         * the sheet (see sheets.js) and carries the same text the Source tab
-         * edits. Only when a sheet has no stored source at all - a drawing that
-         * predates it - is the SVG-to-TikZ export used, which is the same code
-         * the .tex download produces.
-         *
-         * Either way the visible form is inserted: `visibleDrawingSource`
-         * strips the object markers, so the answer receives ordinary LaTeX with
-         * nothing in it that says "DAETUM".
-         */
-        const choiceSheet = choice.sheet;
-        const storedSource =
-            typeof choiceSheet?.source?.source === "string"
-                ? choiceSheet.source.source
-                : null;
-
-        let parts;
-
-        if (storedSource && drawableContent(storedSource)) {
-            parts = {
-                preamble: [],
-                picture: visibleSource(storedSource),
-                empty: false
-            };
-        } else {
-            try {
-                parts = writeLatexPictureParts(
-                    serializeDocumentBody(),
-                    sheetId,
-                    () => drawingPalette
-                );
-            } catch (error) {
-                setSolutionStatus(
-                    "This drawing could not be converted to TikZ code. " +
-                        "Check that the sheet is still in the document."
-                );
-
-                return;
-            }
-        }
-
-        if (!parts.picture) {
-            setSolutionStatus(
-                "That sheet has no drawable content, so there is no drawing code to insert."
-            );
-
-            return;
-        }
-
-        /*
-         * THE COLOURS GO IN THE PREAMBLE, NOT THE BLOCK. The document
-         * declares each colour once, above the content - `writeDocument`
-         * below builds that preamble from the whole source - so the block
-         * at the caret is only the drawing itself.
-         */
-        rememberColourDefinitions(parts.preamble);
-
-        const block = serializeDrawingBlock(parts.picture);
-
-        const start = field.selectionStart ?? field.value.length;
-        const end = field.selectionEnd ?? start;
-
-        field.value =
-            field.value.slice(0, start) + block + field.value.slice(end);
-
-        const caret = start + block.length;
-
-        field.focus();
-        field.setSelectionRange(caret, caret);
-
-        field.dispatchEvent(new Event("input", { bubbles: true }));
-
-        setSolutionStatus(
-            `Drawing embedded as TikZ code (${parts.picture.split("\n").length} lines).`
-        );
-    });
-}
-
-/*
- * The colour definitions embedded drawings have contributed, kept as text and
- * written into the document preamble when it is produced. They travel in the
- * document, not in a registry that could go stale: rebuilding from the source
- * is always possible, because the pictures themselves still carry the same
- * definitions as comments of their own making.
- */
-let embeddedColourDefinitions = [];
-
-function rememberColourDefinitions(definitions) {
-    embeddedColourDefinitions = [
-        ...new Set([...embeddedColourDefinitions, ...definitions])
-    ];
-}
-
-export function embeddedDrawingPreamble() {
-    return embeddedColourDefinitions;
-}
-
-/*
- * The export path in document-commands calls the writer registered here: the
- * written solution as a complete, self-contained LaTeX document. Registered
- * at install rather than imported, because document-commands is imported
- * here and an import back would make the two modules a cycle.
- */
-function writeDocument() {
-    return writeStandaloneLatex(enggSolutionState.getSource(), {
-        title: document.getElementById("solutionDocumentName")?.value || "Written Solution",
-        extraPreamble: embeddedColourDefinitions
-    });
-}
-
-/*
- * The shared dialog, reached through the UI module. Kept as a tiny wrapper so the
- * import is one place if the dialogue API ever moves.
- */
-let enggUiChoice = async () => null;
-
-function setSolutionStatus(text) {
-    const status = document.getElementById("solutionSaveStatus");
-
-    if (status) {
-        status.textContent = text || "";
-    }
-}
-
-/* ---------------------------------------------------------- */
 /* EXPORT THE COMPILED SOLUTION AS PDF                         */
 /* ---------------------------------------------------------- */
 
@@ -496,34 +241,76 @@ function exportSolutionPdf() {
 
 let installed = false;
 
-/*
- * The UI module is imported lazily inside install, so this file has no import of
- * it at load time - which keeps the module graph acyclic for the tests that walk
- * it.
- */
-async function loadChoice() {
-    const ui = await import("../ui/ui.js");
-
-    enggUiChoice = (message, title, choices) =>
-        ui.default.choiceDialog(message, { title, buttons: choices });
-}
-
 function attachDocumentWriterToCommands() {
     attachSolutionDocumentWriter(writeDocument);
 }
 
-export function installWritingTab() {
-    if (installed) {
-        return;
-    }
+/*
+ * A MODULE THAT IS STILL HALF-WAY THROUGH A LOAD MUST NOT LOOK BROKEN.
+ *
+ * `inline-drawings.js` is a sibling module, not a replacement for anything in
+ * this file: the tab can install before it is reached, and the drawing then
+ * reports that the workspace is unavailable rather than throwing. The guard is
+ * here so the registration cannot be the first thing to fail.
+ */
 
+export function installWritingTab() {
+    /*
+     * AN ALREADY-INSTALLED TAB STILL RECONCILES ITS CONTROLS.
+     *
+     * The workspace itself is wired once. A BUTTON is different: the toolbar
+     * lives inside the solution's section, and the section is not always in the
+     * document when this module loads - so the first install can find no button
+     * to bind. A blanket `return` here is what left Enter Drawing with no
+     * handler at all: the install had already run, the button appeared later, and
+     * nothing ever looked for it again. Binding is idempotent (`bindOnce`), so
+     * running this again is safe and is what lets a late button be picked up.
+     */
     const root = document.getElementById("solutionWorkspace");
 
     if (!root) {
         return;
     }
 
+    bindDrawingToolbar();
+
+    if (installed) {
+        return;
+    }
+
     installed = true;
+
+    /*
+     * THE TWO HALVES ARE INTRODUCED TO EACH OTHER, through their own actions.
+     *
+     * The workspace is the editor and the source; it is not told what a drawing
+     * is. `inline-drawings.js` owns the drawing side and is handed the two
+     * operations it needs on the text; the workspace is handed the two drawing
+     * operations it offers, so Enter Drawing and Edit Drawing run the same
+     * actions whichever door they are reached by.
+     */
+    enggInlineDrawings.attachInlineDrawings({
+        getSource: () => enggSolutionState.getSource(),
+        replaceSource: (value, options) =>
+            enggSolutionWorkspace.replaceSolutionSource(value, options),
+        refresh: (options) => enggSolutionWorkspace.refreshSolutionSelection(options),
+        setSelection: (blockId) => enggSolutionWorkspace.selectDrawingBlock(blockId)
+    });
+
+    enggSolutionWorkspace.attachDrawingHost({
+        enterDrawing: (options) => enggInlineDrawings.enterDrawing(options),
+        editDrawing: (drawingId, blockId) => enggInlineDrawings.editDrawing(drawingId, { blockId })
+    });
+
+    /* The workspace's status messages are shown where this tab always showed
+       them - beside the document name - so there is one status line, not two. */
+    enggSolutionWorkspace.setSolutionStatusListener((text) => {
+        const status = document.getElementById("solutionSaveStatus");
+
+        if (status) {
+            status.textContent = text;
+        }
+    });
 
     /*
      * THE EXPORT PATH GETS THE WRITER. The "solution" download format is
@@ -575,9 +362,27 @@ export function installWritingTab() {
 
     document.getElementById("solutionRedo")?.addEventListener("click", redoSolution);
 
+    /*
+     * ENTER DRAWING OPENS THE DRAWING ITSELF, NOT A PICKER.
+     *
+     * The control used to open a list of sheets and copy the chosen sheet's
+     * code into the answer - which made a SECOND copy of the drawing, so every
+     * later edit to it was invisible to the written solution. It now runs the
+     * drawing workflow: a reference is placed at the caret and the drawing it
+     * names is opened in the Engineering Drawing workspace (see
+     * `inline-drawings.js`).
+     *
+     * The binding is idempotent and re-run when the tab is opened, because a
+     * control that appears after this module loaded must still be wired - the
+     * original defect was exactly that, a control nobody had bound.
+     */
+    bindDrawingToolbar();
+
     document
-        .getElementById("solutionInsertFigure")
-        ?.addEventListener("click", insertDrawingFigure);
+        .getElementById("drawingReturnToSolution")
+        ?.addEventListener("click", () => {
+            enggInlineDrawings.returnToSolutionWorkspace();
+        });
 
     document
         .getElementById("solutionExportPdf")
@@ -594,10 +399,6 @@ export function installWritingTab() {
         .getElementById("solutionDocumentName")
         ?.addEventListener("change", () => emitDatumEvent("solutionchange"));
 
-    loadChoice().catch(() => {
-        /* The dialog stays unavailable; inserting a figure simply does nothing. */
-    });
-
     snapshot();
     refreshUndoButtons();
 
@@ -605,6 +406,52 @@ export function installWritingTab() {
     enggDrawingSheets.setReferenceChangeHandler?.(() => {
         enggSolutionWorkspace.refreshSolutionFiles();
     });
+}
+
+/*
+ * BIND A CONTROL ONCE, HOWEVER MANY TIMES INSTALL RUNS.
+ *
+ * The install is deliberately re-runnable (a button may appear after this
+ * module loaded), so binding has to be idempotent or a second call would make
+ * Enter Drawing open two dialogs. The mark is a property on the element, which
+ * lives exactly as long as the element does.
+ */
+function bindOnce(element, key, type, handler) {
+    if (!element) {
+        return false;
+    }
+
+    const mark = `__daetumBound_${key}`;
+
+    if (element[mark]) {
+        return false;
+    }
+
+    element[mark] = true;
+    element.addEventListener(type, handler);
+
+    return true;
+}
+
+/*
+ * THE DRAWING TOOLBAR.
+ *
+ * ENTER DRAWING - place a drawing at the cursor and open it, or open the one
+ *                already there. `solutionEnterDrawing` is bound here for the
+ *                hosts that render the button themselves.
+ *
+ * The workspace binds the workspace's own button when it installs, so both
+ * routes end in the same action and neither can fire twice: `bindOnce` marks the
+ * element it has bound.
+ */
+function bindDrawingToolbar() {
+    /*
+     * THE WORKSPACE OWNS THE BUTTON IN ITS TOOLBAR. Binding it here as well
+     * would run the action twice for one click, so the direct binding is kept
+     * for the legacy id only - and the workspace's binding is the one that
+     * reads the caret and the selected reference.
+     */
+    void bindOnce;
 }
 
 /*

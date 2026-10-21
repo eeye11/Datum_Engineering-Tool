@@ -312,6 +312,16 @@ export function commitAnnotate(options) {
     object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
   }
 
+  /*
+   * WHERE THE WORDS GO, in drawing units. A note and a label are placed at a
+   * point; a leader or a callout writes at the far end of its pen. Both are the
+   * model's own positions, so the prompt and the committed text agree.
+   */
+  const nodePoint =
+    kind === "leader" || kind === "callout"
+      ? options.end || options.position
+      : options.position;
+
   enggDrawingState.addObject(drawingState, object);
 
   enggDrawingState.commitDrawingChange(
@@ -348,10 +358,16 @@ export function commitAnnotate(options) {
    * the (empty or defaulted) annotation in place rather than removing it - the
    * placement is its own act and the writing is another, exactly as the note
    * panel has always worked.
+   *
+   * THE CLICK IS THE NODE. The editor is the inline prompt, so it is handed the
+   * point the student placed the feature at (`nodePoint`) and opens beside that
+   * node - with the feature itself drawn on the sheet behind it. It is the same
+   * point the model stored, not a screen position, so a later zoom or pan cannot
+   * move where the text ends up.
    */
   if (isEditableAnnotate(object)) {
     void import("../interaction/canvas-click.js").then((module) => {
-      module.openNoteEditorFor?.(object);
+      module.openNoteEditorFor?.(object, nodePoint);
     });
   }
 

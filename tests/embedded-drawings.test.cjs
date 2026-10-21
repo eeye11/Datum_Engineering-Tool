@@ -165,23 +165,31 @@ check("a colour both drawings declare is defined once, in the preamble",
     standalone.indexOf("\\definecolor") < standalone.indexOf("\\begin{document}"),
   String(daetum1));
 
-console.log("\n  the insertion path: same source, empty handled in the dropdown\n");
+console.log("\n  the insertion path: one reference, and the drawing owns its code\n");
 
-check("insertion uses the picture writer, not a token or reference",
-  /writeLatexPictureParts\(/.test(writingTab) &&
-    !/createReference|DRAWING_REFERENCE/.test(
-      writingTab.slice(writingTab.indexOf("function insertDrawingFigure")),
-    ));
+const drawingBlocks = require("fs").readFileSync(
+  require("./helpers/source-path.cjs").locate("drawing-blocks.js"),
+  "utf8",
+);
 
-check("the dropdown marks empty sheets",
-  /— Empty/.test(writingTab) && /— Drawing available/.test(writingTab));
+check("the insertion path writes a reference command",
+  /DRAWING_COMMAND = "\\\\datumdrawing"/.test(drawingBlocks) &&
+    /serializeDrawingBlock/.test(drawingBlocks));
 
-check("emptiness is decided from drawable content, not the name",
-  /isSheetEmpty/.test(writingTab) && /object\.hidden/.test(writingTab));
+check("the picture writer is still what a LINKED drawing renders from",
+  /readSheetLatex/.test(latexDocument));
 
-check("picking an empty sheet explains and inserts nothing",
-  /no drawing to insert/.test(writingTab) &&
-    /if \(choice\?\.empty\) \{[\s\S]{0,300}return;/.test(writingTab));
+check("the old copy-the-whole-drawing insertion is gone",
+  !/writeLatexPictureParts/.test(writingTab) &&
+    !/function insertDrawingFigure/.test(writingTab));
+
+check("Enter Drawing is bound to the workflow, through the workspace",
+  /enterDrawingAtCaret/.test(
+    require("fs").readFileSync(
+      require("./helpers/source-path.cjs").locate("solution-workspace.js"),
+      "utf8",
+    ),
+  ));
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 

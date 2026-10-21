@@ -657,5 +657,12 @@ const setValue = (element, value) => {
    * alive after the last check, so `npm test` waits on a file that has already
    * finished. Closing the window releases them.
    */
-  window.close();
+  try {
+    window.close();
+  } catch {
+    /*
+     * A jsdom that refuses to close a window is not a test failure: the checks
+     * above have already run, and the harness's own after-hook exits anyway.
+     */
+  }
 })();

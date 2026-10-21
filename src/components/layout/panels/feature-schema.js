@@ -757,6 +757,28 @@ const FIELDS = {
         }
     },
 
+    /*
+     * SHOW THE OBJECT'S NAME.
+     *
+     * The feature's name ("Point Force 1") identifies the object in the Objects
+     * list and in the source's comment header. Printing it in the picture is a
+     * SEPARATE, explicit choice - which is why this is a switch of its own
+     * rather than something inferred from the name being present. Off is the
+     * default, so a drawing never gains a label nobody asked for.
+     */
+    showName: {
+        kind: "toggle",
+        applies: (object) =>
+            typeof object?.type === "string" && object.type !== "annotate" && Boolean(object.name),
+        read: (object) => object?.showName === true,
+        write: (object, value) => {
+            object.showName = Boolean(value);
+
+            return true;
+        },
+        label: "Show Name"
+    },
+
     text: {
         kind: "text",
         applies: (object) => object.type === "annotate",
@@ -848,7 +870,7 @@ export const GROUPS = [
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
-    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "text"] },
+    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text"] },
 
     /*
      * ========================================================

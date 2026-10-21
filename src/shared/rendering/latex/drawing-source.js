@@ -6,14 +6,20 @@
  * The one representation of the LaTeX/TikZ source that generates a drawing.
  *
  * A drawing source is a `\begin{tikzpicture} ... \end{tikzpicture}` picture in
- * which DAETUM's own drawing objects appear as BLOCKS, each one wrapped in a
- * pair of comment markers that name the object it belongs to:
+ * which DAETUM's own drawing objects appear as BLOCKS, each one headed by a
+ * readable comment naming the object it belongs to:
  *
  *     \begin{tikzpicture}
- *     % DAETUM_OBJECT_BEGIN id="line-001" type="line"
+ *     % DAETUM OBJECT: Line 1
+ *     % DAETUM ID: line-001
+ *     % DAETUM TYPE: line
  *     \draw[black] (0,0) -- (3,1);
- *     % DAETUM_OBJECT_END id="line-001"
  *     \end{tikzpicture}
+ *
+ * The header format is documented in object-comments.js; a legacy pair of
+ * `% DAETUM_OBJECT_BEGIN id="..."` / `% DAETUM_OBJECT_END id="..."` lines is
+ * still READ (a file saved by an older build must keep its objects) and is
+ * rewritten in the readable form on the next write.
  *
  * WHY THE MARKERS.
  *
@@ -46,19 +52,7 @@ export const PICTURE_BEGIN = "\\begin{tikzpicture}";
 export const PICTURE_END = "\\end{tikzpicture}";
 
 import { PICTURE_OPTIONS as UNIT_PICTURE_OPTIONS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
-
-const OBJECT_BEGIN =
-  /^[ \t]*%[ \t]*DAETUM_OBJECT_BEGIN[ \t]+id="([^"]+)"(?:[ \t]+type="([^"]*)")?[ \t]*$/;
-const OBJECT_END = /^[ \t]*%[ \t]*DAETUM_OBJECT_END[ \t]+id="([^"]+)"[ \t]*$/;
-
-/*
- * Whether ONE line is a marker comment. Exported so the Source tab can map an
- * editor offset in the visible text to the same place in the canonical text
- * without knowing how a marker is spelled.
- */
-export function isObjectMarkerLine(line) {
-  return OBJECT_BEGIN.test(String(line ?? "")) || OBJECT_END.test(String(line ?? ""));
-}
+import { COMMENT_FIELDS, COMMENT_PREFIX, objectCommentHeader } from "./object-comments.js";
 
 /*
  * The picture options DAETUM writes. Kept in one place so read and write agree,
@@ -75,6 +69,48 @@ const EMPTY_PICTURE = `${PICTURE_BEGIN}${PICTURE_OPTIONS}\n${PICTURE_END}`;
  */
 export function emptyDrawingSource() {
   return EMPTY_PICTURE;
+}
+
+/* The legacy markers, still read so an older saved file keeps its objects. */
+const OBJECT_BEGIN =
+  /^[ \t]*%[ \t]*DAETUM_OBJECT_BEGIN[ \t]+id="([^"]+)"(?:[ \t]+type="([^"]*)")?[ \t]*$/;
+const OBJECT_END = /^[ \t]*%[ \t]*DAETUM_OBJECT_END[ \t]+id="([^"]+)"[ \t]*$/;
+
+/* The readable markers written by object-comments.js. */
+const COMMENT_OBJECT = /^[ \t]*%[ \t]*DAETUM[ \t]+OBJECT[ \t]*:[ \t]*(.*?)[ \t]*$/;
+const COMMENT_FIELD = new RegExp(`^[ \\t]*%[ \\t]*${COMMENT_PREFIX}[ \\t]+([A-Z]+)[ \\t]*:[ \\t]*(.*?)[ \\t]*$`);
+
+/* The fields that START a block, in the order they are looked for. */
+const HEADER_FIELDS = new Set([COMMENT_FIELDS.object, COMMENT_FIELDS.id, COMMENT_FIELDS.type, COMMENT_FIELDS.part, COMMENT_FIELDS.parent]);
+
+/*
+ * Whether ONE line is a marker comment. Exported so the Source tab can map an
+ * editor offset in the visible text to the same place in the canonical text
+ * without knowing how a marker is spelled.
+ */
+export function isObjectMarkerLine(line) {
+  const text = String(line ?? "");
+
+  if (OBJECT_BEGIN.test(text) || OBJECT_END.test(text)) {
+    return true;
+  }
+
+  const field = COMMENT_FIELD.exec(text);
+
+  return Boolean(field && HEADER_FIELDS.has(field[1]));
+}
+
+/* The closing marker's id, and whether it was spelled the legacy way. */
+function endMarkerOf(line) {
+  const legacy = OBJECT_END.exec(String(line ?? ""));
+
+  if (legacy) {
+    return { id: legacy[1], legacy: true };
+  }
+
+  const field = COMMENT_FIELD.exec(String(line ?? ""));
+
+  return field && field[1] === COMMENT_FIELDS.end ? { id: field[2], legacy: false } : null;
 }
 
 /*
@@ -106,82 +142,253 @@ function linesOf(source) {
 export function parseDrawingSource(source) {
   const lines = linesOf(source);
   const blocks = [];
+
+  /*
+   * ONE ENTRY PER OPEN BLOCK, with the header fields gathered until the block's
+   * commands begin. The header is the run of metadata lines at the block's
+   * start; anything else - a `\\draw`, a blank line, a student's comment -
+   * closes the header, so a marker after it can only start a new block.
+   */
   const open = [];
 
-  lines.forEach((line, index) => {
+  const close = (entry, endLine, { unclosed = false } = {}) => {
+    blocks.push({
+      id: entry.id,
+      type: entry.type,
+      name: entry.name || "",
+      part: entry.part || "",
+      parent: entry.parent || "",
+      legacy: entry.legacy,
+      beginLine: entry.beginLine,
+      headerEndLine: entry.headerEndLine,
+      endLine,
+      /*
+       * THE BODY STARTS ON THE LINE AFTER THE HEADER'S LAST LINE. A readable
+       * header always has at least the ID line, so this is at least one line
+       * below the header - and a legacy block's BEGIN marker, whose `beginLine`
+       * and `headerEndLine` are the same, starts its body one line below that.
+       */
+      bodyStartLine: entry.headerEndLine + 1,
+      /*
+       * THE LAST LINE OF THE COMMANDS. A readable header has no closing marker,
+       * so the block ends at the line before whatever closed it; a legacy block
+       * ended at its END marker, which is not part of its body.
+       */
+      bodyEndLine: entry.legacy ? Math.max(entry.headerEndLine, endLine - 1) : endLine,
+      ...(unclosed ? { unclosed: true } : {}),
+      lines: lines.slice(entry.beginLine, endLine + 1),
+    });
+  };
+
+  /* Close the block on top of the stack. `endLine` is the last line it owns. */
+  const closeTop = (endLine) => {
+    if (!open.length) {
+      return;
+    }
+
+    close(open.pop(), endLine);
+  };
+
+  /*
+   * THE HEADER IS FINISHED BY THE FIRST NON-METADATA LINE, so the marker seen
+   * after it belongs to the NEXT block or to nobody - never to this one.
+   */
+  const headerOpen = () => {
+    const entry = open.length ? open[open.length - 1] : null;
+
+    return Boolean(entry && !entry.legacy && !entry.headerClosed);
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    /*
+     * THE PICTURE ENDS EVERY BLOCK. A block runs to the line before the
+     * closing environment, so the environment is never part of an object's
+     * body - and a header still open there is closed at the line above.
+     */
+    if (String(line).trim().startsWith(PICTURE_END)) {
+      while (open.length) {
+        close(open.pop(), index - 1);
+      }
+
+      continue;
+    }
+
+    /* ---------------- the legacy paired markers ---------------- */
     const begin = OBJECT_BEGIN.exec(line);
 
     if (begin) {
       open.push({
         id: begin[1],
         type: begin[2] || "",
+        name: "",
+        part: "",
+        parent: "",
         beginLine: index,
-        beginText: line,
+        headerEndLine: index,
+        headerClosed: true,
+        legacy: true,
       });
 
-      return;
+      continue;
     }
 
-    const end = OBJECT_END.exec(line);
+    const end = endMarkerOf(line);
 
-    if (!end) {
+    if (end) {
+      /*
+       * Find the most recent BEGIN carrying this id. Matching by id rather
+       * than by "the last BEGIN" keeps a stray end marker from stealing an
+       * unrelated block, and a malformed duplicate resolves to the nearest
+       * matching open, which is the least surprising choice.
+       */
+      let matchIndex = -1;
+
+      for (let index2 = open.length - 1; index2 >= 0; index2 -= 1) {
+        if (open[index2].id === end.id) {
+          matchIndex = index2;
+          break;
+        }
+      }
+
+      if (matchIndex < 0) {
+        continue;
+      }
+
+      const [entry] = open.splice(matchIndex, 1);
+
+      close(entry, index);
+
+      continue;
+    }
+
+    /* ---------------- the readable header ---------------- */
+    const field = COMMENT_FIELD.exec(line);
+
+    /*
+     * A LINE THAT IS NOT A DAETUM MARKER ENDS AN OPEN HEADER. Everything after
+     * it is the block's body, so a later marker can only start a new block.
+     */
+    if (!field) {
+      if (headerOpen()) {
+        open[open.length - 1].headerClosed = true;
+      }
+
+      continue;
+    }
+
+    const key = field[1];
+
+    if (key === COMMENT_FIELDS.object) {
+      /*
+       * A HEADER OPENS HERE. The block's id may come on the next line, so the
+       * entry is pushed before it is known - and an entry with no id at all is
+       * dropped at close time. A block left open by a new header ends on the
+       * line above it, which is the layout the writers produce.
+       */
+      closeTop(index - 1);
+
+      open.push({
+        id: null,
+        type: "",
+        name: String(field[2] || ""),
+        part: "",
+        parent: "",
+        beginLine: index,
+        headerEndLine: index,
+        headerClosed: false,
+        legacy: false,
+      });
+
+      continue;
+    }
+
+    if (!headerOpen()) {
+      continue;
+    }
+
+    const current = open[open.length - 1];
+
+    if (key === COMMENT_FIELDS.id) {
+      /*
+       * A SECOND ID IN THE SAME HEADER IS TWO OBJECTS WRITTEN WITH ONE HEADER.
+       * The second one opens a block of its own rather than silently replacing
+       * the first - a duplicate id is reported by the validator, never hidden.
+       */
+      if (current.id !== null) {
+        closeTop(index - 1);
+
+        open.push({
+          ...current,
+          id: null,
+          name: "",
+          type: "",
+          part: "",
+          parent: "",
+          beginLine: index,
+          headerEndLine: index,
+        });
+      }
+
+      current.id = String(field[2] || "");
+      current.headerEndLine = index;
+      continue;
+    }
+
+    if (key === COMMENT_FIELDS.type) {
+      current.type = String(field[2] || "");
+      current.headerEndLine = index;
+      continue;
+    }
+
+    if (key === COMMENT_FIELDS.part) {
+      current.part = String(field[2] || "");
+      current.headerEndLine = index;
+      continue;
+    }
+
+    if (key === COMMENT_FIELDS.parent) {
+      current.parent = String(field[2] || "");
+      current.headerEndLine = index;
+    }
+  }
+
+  /*
+   * A HEADER LEFT OPEN AT THE END OF THE TEXT. It is reported as a block
+   * running to the last line, so its object is still reachable from the source
+   * map while the student finishes typing - which is exactly when a rebuild
+   * would otherwise lose it. An entry with no id names no object and is
+   * dropped: it is a header somebody is still writing.
+   */
+  open.forEach((entry) => {
+    if (!entry.id) {
       return;
     }
 
     /*
-     * Find the most recent BEGIN carrying this id. Matching by id rather
-     * than by "the last BEGIN" keeps a stray end marker from stealing an
-     * unrelated block, and a malformed duplicate resolves to the nearest
-     * matching open, which is the least surprising choice.
+     * THE BLOCK STOPS BEFORE A TRAILING CLOSING ENVIRONMENT AND ITS BLANK
+     * LINES. Without a picture, the text's last line is the block's last
+     * command; with one, the environment that closes it is not the block's.
      */
-    let matchIndex = -1;
+    let endLine = lines.length - 1;
 
-    for (let index2 = open.length - 1; index2 >= 0; index2 -= 1) {
-      if (open[index2].id === end[1]) {
-        matchIndex = index2;
-        break;
-      }
+    while (endLine > entry.headerEndLine && String(lines[endLine]).trim() === "") {
+      endLine -= 1;
     }
 
-    if (matchIndex < 0) {
-      return;
+    if (String(lines[endLine]).trim().startsWith(PICTURE_END)) {
+      endLine -= 1;
     }
 
-    const [entry] = open.splice(matchIndex, 1);
+    while (endLine > entry.headerEndLine && String(lines[endLine]).trim() === "") {
+      endLine -= 1;
+    }
 
-    blocks.push({
-      id: entry.id,
-      type: entry.type,
-      beginLine: entry.beginLine,
-      endLine: index,
-      bodyStartLine: entry.beginLine + 1,
-      bodyEndLine: index - 1,
-      lines: lines.slice(entry.beginLine, index + 1),
-    });
+    close(entry, Math.max(entry.headerEndLine, endLine), { unclosed: true });
   });
 
-  /*
-   * A BEGIN left open at the end of the text. It is reported as a block
-   * running to the last line, so its object is still reachable from the
-   * source map while the student finishes typing the closing marker - which
-   * is exactly when a rebuild would otherwise lose it.
-   */
-  open.forEach((entry) => {
-    const endLine = lines.length - 1;
-
-    blocks.push({
-      id: entry.id,
-      type: entry.type,
-      beginLine: entry.beginLine,
-      endLine,
-      bodyStartLine: entry.beginLine + 1,
-      bodyEndLine: endLine,
-      unclosed: true,
-      lines: lines.slice(entry.beginLine),
-    });
-  });
-
-  return blocks;
+  return blocks.filter((block) => Boolean(block.id));
 }
 
 /*
@@ -204,20 +411,43 @@ export function pictureBlockOrder(source) {
  * commands for one object, without its markers - produce the drawing source.
  * This is the ONE place that knows how a block is written, so the BEGIN and
  * END spellings can never drift between the builder and the parser.
+ *
+ * `renderObjectBlock` is exported for the targeted-update path in
+ * source-mapping.js, which must write EXACTLY this form.
+ *
+ * A HEADER SITS DIRECTLY ON TOP OF ITS COMMANDS. There is no blank line between
+ * them: the header is a LABEL for the block, and a blank line there would leave
+ * a header that no longer says which commands it describes once a student
+ * reorders the text. Blocks are separated by their headers, which is what makes
+ * the block boundaries recoverable from the text alone.
  */
+/*
+ * ONE BLOCK OF SOURCE, READY TO WRITE.
+ *
+ * `source` may be BARE COMMANDS (a caller with a plain command list) or a
+ * writer's output, which already begins with the object's header. A header is
+ * never written twice: if the commands already name this object's id, they are
+ * returned as they are. That is what keeps a writer that emits its own header
+ * and a builder that adds one from producing two blocks for one object.
+ */
+export function renderObjectBlock({ id, type, name, part, parent, source }) {
+  const body = String(source ?? "").replace(/\s+$/, "");
+
+  if (id && body.split("\n").some((line) => isObjectMarkerLine(line))) {
+    return body;
+  }
+
+  const header = objectCommentHeader({ id, type, name }, { type, part, parent });
+
+  return [...header, body].join("\n");
+}
+
+/* Re-exported so a reader of the file sees the format's marker rules. */
+export { COMMENT_OBJECT, COMMENT_FIELD };
 export function buildDrawingSource(blocks) {
   const body = (blocks || [])
     .filter((block) => block && block.id)
-    .map((block) => {
-      const type = block.type ? ` type="${block.type}"` : "";
-      const commands = String(block.source ?? "").replace(/\s+$/, "");
-
-      return [
-        `% DAETUM_OBJECT_BEGIN id="${block.id}"${type}`,
-        commands,
-        `% DAETUM_OBJECT_END id="${block.id}"`,
-      ].join("\n");
-    })
+    .map((block) => renderObjectBlock(block))
     .join("\n");
 
   return `${PICTURE_BEGIN}${PICTURE_OPTIONS}\n${body}${body ? "\n" : ""}${PICTURE_END}`;
@@ -310,7 +540,8 @@ export function objectRegion(source, id) {
  * So the visible form is the stored form with the marker comments removed.
  * The commands are untouched, character for character, and so is the student's
  * own formatting between them - a stripped source is literally the same text
- * minus whole lines that only named an id.
+ * minus whole lines that only named an object. The blank line that separated a
+ * header from its commands goes with it, so no gap is left where a header was.
  *
  * WHEN THE VISIBLE FORM COMES BACK, its markers are re-attached by
  * `restoreObjectMarkersFrom`. The object ids can only be recovered from the
@@ -337,6 +568,10 @@ export function visibleDrawingSource(source) {
     const line = lines[index];
 
     if (OBJECT_BEGIN.test(line) || OBJECT_END.test(line)) {
+      continue;
+    }
+
+    if (isObjectMarkerLine(line)) {
       continue;
     }
 
@@ -370,7 +605,7 @@ export function sourceHasDrawableContent(source) {
       return false;
     }
 
-    if (OBJECT_BEGIN.test(text) || OBJECT_END.test(text)) {
+    if (isObjectMarkerLine(text)) {
       return false;
     }
 
@@ -424,6 +659,9 @@ export function restoreObjectMarkersFrom(visible, previous) {
     .map((block) => ({
       id: block.id,
       type: block.type,
+      name: block.name,
+      part: block.part,
+      parent: block.parent,
       body: linesOf(previous)
         .slice(block.bodyStartLine, block.bodyEndLine + 1)
         .join("\n")
@@ -442,27 +680,37 @@ export function restoreObjectMarkersFrom(visible, previous) {
     return text;
   }
 
-  const body = lines.slice(0, closing);
+  /*
+   * A TEXT THAT ALREADY CARRIES HEADERS IS NOT "VISIBLE". Its blocks are its
+   * own, and re-attaching ids over them would claim source the student owns.
+   */
+  if (lines.some((line) => isObjectMarkerLine(line))) {
+    return text;
+  }
+
+  /* The header a block had, written again when its id is re-attached. */
+  const headerFor = (block) =>
+    objectCommentHeader(
+      { id: block.id, type: block.type, name: block.name },
+      { type: block.type, part: block.part, parent: block.parent }
+    );
+
+  const raw = lines.slice(0, closing);
 
   /*
-   * SPLIT THE VISIBLE PICTURE INTO ITS BLOCKS AND ITS LOOSE LINES.
-   *
-   * A visible source has no markers, so its commands are one undivided run.
-   * The previous canonical source says where the boundaries used to be, and
-   * the boundaries are recovered by matching each previous block's body
-   * against that run, in order.
-   *
-   * WHEN A BLOCK'S BODY NO LONGER MATCHES - the student edited inside it, which
-   * is the ordinary case - the block still OWNS the region between its
-   * neighbours. So each block's search begins where the previous one ended and
-   * runs up to where the NEXT previous block is found. The region is whatever
-   * survived in that span: edited commands, or a block deleted entirely.
+   * THE PICTURE'S OPENING LINE. It is the first non-blank line and no object's
+   * header may be written above it; `firstCommand` is the line below it.
    */
+  const opening = raw.findIndex((line) => String(line).trim() !== "");
+  const firstCommand = opening < 0 ? 0 : opening + 1;
+  const leading = raw.slice(0, firstCommand).filter((line) => String(line).trim() !== "");
+
+  /* Locate one block's body in the visible text, from `from` onward. */
   const findBlock = (block, from) => {
     const bodyLines = block.body.split("\n");
 
-    for (let start = from; start + bodyLines.length <= body.length; start += 1) {
-      if (body.slice(start, start + bodyLines.length).join("\n").trim() === block.body) {
+    for (let start = Math.max(0, from); start + bodyLines.length <= raw.length; start += 1) {
+      if (raw.slice(start, start + bodyLines.length).join("\n").trim() === block.body) {
         return { start, end: start + bodyLines.length, exact: true };
       }
     }
@@ -471,18 +719,10 @@ export function restoreObjectMarkersFrom(visible, previous) {
   };
 
   /*
-   * FIRST, LOCATE EVERY BLOCK WHOSE BODY IS STILL INTACT. That is the only
-   * evidence strong enough to claim a region without guessing, and it also
-   * establishes the boundaries an edited block is measured between.
-   *
-   * EACH SEARCH STARTS WHERE THE PREVIOUS EXACT MATCH ENDED. The blocks are in
-   * document order, so a body can only be found at or after its predecessor's
-   * position. Searching each block from index 0 instead - which this used to
-   * do - let a LATER block's search run back over an EARLIER block's region, so
-   * one object's id could be attached to a region before another one, and the
-   * two blocks' regions then overlapped.
+   * FIRST, LOCATE EVERY BLOCK WHOSE BODY IS STILL INTACT - the only evidence
+   * strong enough to claim a region without guessing.
    */
-  let searchFrom = 0;
+  let searchFrom = firstCommand;
 
   const located = previousBlocks.map((block) => {
     const found = findBlock(block, searchFrom);
@@ -494,27 +734,18 @@ export function restoreObjectMarkersFrom(visible, previous) {
     return found;
   });
 
-  /*
-   * A DOCUMENT IN WHICH NOTHING MATCHES IS FOREIGN SOURCE.
-   *
-   * A `.tex` written by hand, or one exported without markers, has commands of
-   * its own. Claiming any part of it as a DAETUM object would put an id on
-   * code nobody drew with this tool - so when no block survives intact, the
-   * text is returned untouched and stays custom source.
-   *
-   * THE ONE EXCEPTION is an edit that keeps the picture's shape but rewrites
-   * every command - the student typing over a small sheet in Source. When the
-   * visible commands still number exactly what the previous blocks did, each
-   * block owns its own position, because there is nothing else they could be.
-   * A document with a different number of commands is still foreign.
-   */
-  const countCommands = (lines) =>
-    lines.filter((line) => {
+  const countCommands = (list) =>
+    list.filter((line) => {
       const trimmed = String(line).trim();
 
       return trimmed !== "" && !trimmed.startsWith("%");
     }).length;
 
+  /*
+   * A DOCUMENT IN WHICH NOTHING MATCHES IS FOREIGN SOURCE - with one exception:
+   * an edit that keeps the picture's shape but rewrites every command (typing
+   * over a small sheet), where the single block owns them.
+   */
   if (!located.some(Boolean)) {
     const previousCommands = countCommands(
       linesOf(previous)
@@ -522,29 +753,24 @@ export function restoreObjectMarkersFrom(visible, previous) {
         .filter((line) => !isObjectMarkerLine(line))
     );
 
-    if (previousBlocks.length !== 1 || countCommands(body) !== previousCommands) {
+    if (previousBlocks.length !== 1 || countCommands(raw) !== previousCommands) {
       return text;
     }
 
     return [
-      `% DAETUM_OBJECT_BEGIN id="${previousBlocks[0].id}"${previousBlocks[0].type ? ` type="${previousBlocks[0].type}"` : ""}`,
-      ...body,
-      `% DAETUM_OBJECT_END id="${previousBlocks[0].id}"`,
+      ...raw.slice(0, firstCommand),
+      ...headerFor(previousBlocks[0]),
+      ...raw.slice(firstCommand),
       ...lines.slice(closing),
     ].join("\n");
   }
 
   /*
-   * THE REGIONS ARE PARTITIONED BETWEEN THE LOCATED BLOCKS, never shared.
-   *
-   * Between two intact blocks, an edited block owns the lines between them -
-   * the span it has always occupied - and the intact block keeps exactly its
-   * own body. Loose lines before the first intact block belong to the first
-   * unmatched block before it, if there is one, and the rest stay custom
-   * source.
+   * THE REGIONS ARE PARTITIONED BETWEEN THE LOCATED BLOCKS, never shared: an
+   * edited block owns the span between its neighbours.
    */
   const regions = [];
-  let cursor = 0;
+  let cursor = firstCommand;
 
   for (let index = 0; index < previousBlocks.length; index += 1) {
     const block = previousBlocks[index];
@@ -552,11 +778,6 @@ export function restoreObjectMarkersFrom(visible, previous) {
 
     if (exact) {
       if (exact.start > cursor) {
-        /*
-         * Lines before this block that no earlier block claimed. They are
-         * the previous block's edited body when that block was not found;
-         * otherwise they are the student's own commands and stay custom.
-         */
         const previousBlock = previousBlocks[index - 1];
 
         if (previousBlock && !located[index - 1] && !regions.some((r) => r.block === previousBlock)) {
@@ -569,15 +790,8 @@ export function restoreObjectMarkersFrom(visible, previous) {
       continue;
     }
 
-    /*
-     * THIS BLOCK'S BODY WAS EDITED OR REMOVED. Its region runs from where the
-     * previous block ended to where the NEXT intact block begins. An edited
-     * body keeps its id there, which is what lets a property edit find the
-     * object again after a hand edit. A span with no commands in it is a
-     * deleted block and is not written back.
-     */
     const nextIndex = located.findIndex((entry, at) => at > index && entry);
-    const end = nextIndex >= 0 ? located[nextIndex].start : body.length;
+    const end = nextIndex >= 0 ? located[nextIndex].start : raw.length;
 
     if (end > cursor) {
       regions.push({ block, start: cursor, end });
@@ -585,33 +799,93 @@ export function restoreObjectMarkersFrom(visible, previous) {
     }
   }
 
+  /* They are written in document order, whatever order they were collected in. */
+  regions.sort((left, right) => left.start - right.start);
+
   const result = [];
-  let position = 0;
+  let position = firstCommand;
+
+  /*
+   * NO REGION BEGINS ABOVE THE PICTURE, and no marker from the student's text
+   * survives: a stale header left in a body would split the block it belongs to.
+   */
+  const emitRange = (from, to) => {
+    result.push(
+      ...raw.slice(Math.max(from, firstCommand), to).filter((line) => !isObjectMarkerLine(line))
+    );
+  };
 
   for (const region of regions) {
-    result.push(...body.slice(position, region.start));
+    const start = Math.max(region.start, firstCommand);
+
+    emitRange(position, start);
 
     /*
-     * AN EMPTY REGION IS A DELETED BLOCK. Its markers are not written back:
-     * re-attaching them to nothing would leave an object the source no longer
-     * draws, which is worse than reporting the region gone.
+     * AN EMPTY REGION IS A DELETED BLOCK. Its header is not written back: an
+     * object the source no longer draws is worse than reporting it gone - and
+     * the blank line that separated it from the text above goes with it, so no
+     * gap is left where the object used to be.
      */
-    if (region.end <= region.start) {
-      position = region.end;
+    if (region.end <= start) {
+      while (result.length && String(result[result.length - 1]).trim() === "") {
+        result.pop();
+      }
+
+      position = Math.max(region.end, firstCommand);
       continue;
     }
 
-    result.push(`% DAETUM_OBJECT_BEGIN id="${region.block.id}"${region.block.type ? ` type="${region.block.type}"` : ""}`);
-    result.push(...body.slice(region.start, region.end));
-    result.push(`% DAETUM_OBJECT_END id="${region.block.id}"`);
+    result.push(...headerFor(region.block));
+    result.push(...raw.slice(start, region.end).filter((line) => !isObjectMarkerLine(line)));
 
     position = region.end;
   }
 
-  result.push(...body.slice(position));
+  emitRange(position, raw.length);
+
+  /* The picture's opening goes first, and only if the body did not carry it. */
+  const alreadyOpen = result.length > 0 && String(result[0]).trim() === String(leading[0] ?? "").trim();
+
+  if (!alreadyOpen) {
+    result.unshift(...leading);
+  }
+
   result.push(...lines.slice(closing));
 
-  return result.join("\n");
+  /*
+   * NO GAP IS LEFT WHERE A HEADER WAS REMOVED, and no blank line directly after
+   * the picture's opening. Both are the bookkeeping's footprint, not the
+   * student's text.
+   */
+  const tidy = [];
+
+  result.forEach((line) => {
+    const blank = String(line).trim() === "";
+    const previousBlank = tidy.length > 0 && String(tidy[tidy.length - 1]).trim() === "";
+    const afterOpening = tidy.length === 1 && /^\s*\\begin\s*\{tikzpicture\}/.test(String(tidy[0]));
+
+    if (blank && (previousBlank || afterOpening)) {
+      return;
+    }
+
+    /*
+     * A HEADER IS NEVER PRECEDED BY A BLANK LINE. It labels the command below
+     * it, so the blank that separated an earlier object from it is the
+     * bookkeeping's footprint - not the student's text, and not something to
+     * keep once the earlier object is gone.
+     */
+    if (isObjectMarkerLine(line) && blank) {
+      return;
+    }
+
+    if (isObjectMarkerLine(line) && tidy.length && String(tidy[tidy.length - 1]).trim() === "") {
+      tidy.pop();
+    }
+
+    tidy.push(line);
+  });
+
+  return tidy.join("\n");
 }
 
 export default {

@@ -50,7 +50,7 @@
 
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { sourceGenerationProblems } from "../../../shared/rendering/latex/source-diagnostics.js";
-import { parseDrawingSource } from "../../../shared/rendering/latex/drawing-source.js";
+import { parseDrawingSource, isObjectMarkerLine } from "../../../shared/rendering/latex/drawing-source.js";
 import {
     adoptUnclaimedStatements,
     removeObjectBlock,
@@ -511,8 +511,20 @@ export function visibleRegionForObject(objectId) {
     }
 
     const canonicalLines = canonical.replace(/\r\n/g, "\n").split("\n");
-    const markerLines = (from, to) =>
-        canonicalLines.slice(from, to).filter((line) => /^\s*%\s*DAETUM_OBJECT_(BEGIN|END)\b/.test(line)).length;
+
+    /*
+     * EVERY HEADER LINE IS INVISIBLE IN THE EDITOR - not just the legacy pair.
+     *
+     * A block's header is a run of `% DAETUM OBJECT/ID/TYPE` comments (the
+     * READABLE form every writer emits now) and may also be a legacy
+     * BEGIN/END pair. Counting only the legacy markers left the highlight band
+     * shifted down by the header's height, so selecting an object lit the wrong
+     * commands - and with a three-line header it landed on the NEXT object.
+     *
+     * `isObjectMarkerLine` is the parser's own answer to "is this a header?", so
+     * the band and the block boundaries cannot disagree.
+     */
+    const markerLines = (from, to) => canonicalLines.slice(from, to).filter(isObjectMarkerLine).length;
 
     /* One-based visible line numbers. */
     const beginLine = block.beginLine + 1 - markerLines(0, block.beginLine);
@@ -626,6 +638,19 @@ function syncSelectionFromSource(info) {
  * NOTHING HERE RECORDS HISTORY. Typing in Source is one action; the undo entry
  * is the edit, recorded by the tab's own history entry, not one per object.
  */
+/*
+ * THE TEXT ADOPTION READS.
+ *
+ * Adoption sees WHAT THE STUDENT TYPED, not what the manager stored. The stored
+ * text is already the result of an earlier restore, so reading it back would
+ * re-wrap DAETUM's own previous output - which is how a picture acquired a
+ * blank line on every keystroke. A caller with no recorded edit (a reopened
+ * document) falls back to the stored source, which is then the student's text.
+ */
+function adoptionBasis(manager) {
+    return manager.getTypedSource() || manager.getSource();
+}
+
 function applySourceToObjects() {
     const manager = activeSourceManager();
 
@@ -664,9 +689,15 @@ function applySourceToObjects() {
             }))
             .filter((candidate) => typeof candidate.source === "string" && candidate.source.trim());
 
-        const adopted = adoptUnclaimedStatements(manager.getSource(), { candidates });
+        const adopted = adoptUnclaimedStatements(adoptionBasis(manager), { candidates });
 
-        if (adopted !== manager.getSource()) {
+        /*
+         * ADOPTION ONLY EVER ADDS BLOCKS. A draft DAETUM cannot improve on - one
+         * whose commands are all broken, or that has no commands at all - is
+         * returned unchanged, and the student's text is stored exactly as
+         * typed.
+         */
+        if (adopted !== manager.getSource() && parseDrawingSource(adopted).length > 0) {
             manager.setSource(adopted, { origin: "adopt" });
         }
     }
@@ -806,6 +837,22 @@ export function renderSourceTab() {
                  * the source now is.
                  */
                 applySourceToObjects();
+
+                /*
+                 * THE EDITOR SHOWS WHAT WAS STORED.
+                 *
+                 * Adoption turns hand-typed commands into blocks, so the stored
+                 * text is the student's code with its headers; the visible form
+                 * is that text without them, but its whitespace has changed. The
+                 * editor takes the stored form back, or it would keep showing a
+                 * draft that is no longer the document. The caret is preserved:
+                 * this is a refresh, not a reset.
+                 */
+                const stored = manager.getVisibleSource();
+
+                if (editor && stored !== editor.getValue()) {
+                    editor.setValue(stored, { preserveCaret: true });
+                }
 
                 const analysis = manager.analysis();
 
@@ -1043,7 +1090,7 @@ export function installSourceTab() {
                     const newline = canonicalText.indexOf("\n", lineStart);
                     const lineEnd = newline < 0 ? canonicalText.length : newline;
                     const line = canonicalText.slice(lineStart, lineEnd);
-                    const isMarker = /^\s*%\s*DAETUM_OBJECT_(BEGIN|END)\b/.test(line);
+                    const isMarker = isObjectMarkerLine(line);
 
                     if (!isMarker) {
                         if (canonical >= lineStart && canonical <= lineStart + line.length) {

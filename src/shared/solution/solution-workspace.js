@@ -21,8 +21,17 @@
  */
 
 import enggSolutionState from "./solution-state.js";
-import { render } from "./written-references.js";
-import { renderDrawingBlocks } from "./drawing-blocks-editor.js";
+import { render, setDrawingSelectionHandler } from "./written-references.js";
+import {
+    blockAtCaret,
+    guardEdit,
+    renderDrawingBlocks,
+    selectedDrawingBlock,
+    setSelectedDrawingBlock
+} from "./drawing-blocks-editor.js";
+import { drawingNumber, insertDrawingBlock, parseDrawingBlocks, removeDrawingBlock } from "./drawing-blocks.js";
+import enggUi from "../ui/ui.js";
+import { readSheetLatex } from "../file/latex/latex-document.js";
 
 /*
  * THE SHEET FACADE, from the editor barrel - NOT the sheets model.
@@ -50,6 +59,8 @@ const nodes = {
     undo: el("solutionUndo"),
     redo: el("solutionRedo"),
     compile: el("solutionCompile"),
+    enterDrawing: el("solutionEnterDrawing"),
+    editDrawing: el("solutionEditDrawing"),
     modes: el("solutionLayoutModes"),
     zoomOut: el("solutionZoomOut"),
     zoomIn: el("solutionZoomIn"),
@@ -68,6 +79,7 @@ const nodes = {
     // Preview
     preview: el("solutionPreview"),
     previewStage: el("solutionPreviewStage"),
+    previewScroll: el("solutionPreviewScroll"),
     previewState: el("solutionPreviewState"),
     // Resizers
     splitterNav: el("solutionSplitterNav"),
@@ -359,6 +371,8 @@ function renderFiles() {
 
 let compileTimer = null;
 let compiling = false;
+/* A compile asked for while one was running, run as soon as it finishes. */
+let compileAgain = false;
 
 /*
  * THE PREVIEW IS DEBOUNCED, and the delay is the point.
@@ -381,14 +395,25 @@ function setCompileState(state, message) {
     nodes.previewState.hidden = state === "idle" && !message;
 }
 
-async function compileNow() {
+async function compileNow({ keepScroll = false } = {}) {
     if (compiling) {
+        /*
+         * A COMPILE THAT IS RUNNING IS NOT A COMPILE THAT DOES NOT HAPPEN.
+         *
+         * Dropping the request would leave the preview showing a document from
+         * before the last edit - the stale preview this workflow must never
+         * show. The request is remembered and run when the current one ends.
+         */
+        compileAgain = true;
+
         return;
     }
 
     compiling = true;
 
     setCompileState("working", "Compiling…");
+
+    const anchor = keepScroll ? capturePreviewAnchor() : null;
 
     try {
         /*
@@ -397,6 +422,10 @@ async function compileNow() {
          * sheet figures in place. Nothing about that is reimplemented here.
          */
         await render();
+
+        if (anchor) {
+            restorePreviewAnchor(anchor);
+        }
 
         setCompileState("idle", "");
     } catch (error) {
@@ -408,10 +437,62 @@ async function compileNow() {
         setCompileState("error", "This solution could not be compiled. Check the last equation or command you edited.");
     } finally {
         compiling = false;
+
+        if (compileAgain) {
+            compileAgain = false;
+
+            compileNow({ keepScroll });
+        }
     }
 }
 
-function scheduleCompile() {
+/*
+ * A RE-RENDER MUST NOT MOVE THE PAGE.
+ *
+ * Replacing the preview's contents resets its scroll position, so re-rendering
+ * after a drawing edit - or after anything else that does not change the text -
+ * would throw the student back to the top. The offset is kept, and so is the
+ * distance from the viewport's top to the selected drawing, so the page settles
+ * where it was rather than where the browser puts an empty scroller.
+ */
+function capturePreviewAnchor() {
+    const scroller = nodes.previewScroll;
+
+    if (!scroller) {
+        return null;
+    }
+
+    const selected = nodes.preview?.querySelector(".linked-drawing-figure.is-selected");
+
+    return {
+        scrollTop: scroller.scrollTop,
+        selectedOffset: selected
+            ? selected.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+            : null
+    };
+}
+
+function restorePreviewAnchor(anchor) {
+    const scroller = nodes.previewScroll;
+
+    if (!scroller || !anchor) {
+        return;
+    }
+
+    const selected = nodes.preview?.querySelector(".linked-drawing-figure.is-selected");
+
+    if (anchor.selectedOffset === null || !selected) {
+        scroller.scrollTop = anchor.scrollTop;
+
+        return;
+    }
+
+    const offset = selected.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+
+    scroller.scrollTop += offset - anchor.selectedOffset;
+}
+
+function scheduleCompile({ keepScroll = false } = {}) {
     if (compileTimer) {
         clearTimeout(compileTimer);
     }
@@ -420,7 +501,7 @@ function scheduleCompile() {
 
     compileTimer = setTimeout(() => {
         compileTimer = null;
-        compileNow();
+        compileNow({ keepScroll });
     }, COMPILE_DELAY);
 }
 
@@ -667,24 +748,498 @@ function insertGreek(letter) {
  * path and not another.
  */
 export function handleInput() {
+    /*
+     * A DRAWING REFERENCE IS NOT TYPED INTO, AND NOT TYPED OVER.
+     *
+     * This is the ONE path an edit to the source passes through (typing,
+     * deleting, pasting, dragging, a snippet, a toolbar insert), so it is where
+     * the protected commands are checked. An edit that would reach inside a
+     * `\datumdrawing{...}` is refused and the editor is put back exactly as it
+     * was; the reference is selected instead, so the student sees what they
+     * touched and can use Edit Drawing or delete it deliberately.
+     */
+    const guard = guardEdit(lastSource, nodes.editor.value, parseDrawingBlocks);
+
+    if (!guard.ok) {
+        nodes.editor.value = lastSource;
+
+        setSolutionStatus(
+            "A drawing reference is protected. Select it in the source to edit or remove the drawing."
+        );
+
+        if (guard.block) {
+            selectDrawingBlock(guard.block.blockId, { scroll: false });
+        }
+
+        return;
+    }
+
     const changed = enggSolutionState.setSource(nodes.editor.value);
+
+    lastSource = nodes.editor.value;
 
     renderGutter();
 
     /*
-     * THE COLLAPSE LAYER FOLLOWS THE TEXT. A keystroke can add, remove or
-     * move a drawing block, so the chips are redrawn with the gutter - both
-     * are derived views of the same value, and one path keeps them from
-     * disagreeing.
+     * THE REFERENCE LAYER FOLLOWS THE TEXT. A keystroke can add, remove or move
+     * a drawing block, so the chips are redrawn with the gutter - both are
+     * derived views of the same value, and one path keeps them from disagreeing.
+     * A block that is no longer in the text is no longer selected.
      */
-    renderDrawingBlocks(nodes.editor);
+    syncDrawingSelection();
+
+    renderDrawingBlocks(nodes.editor, blockLayerOptions());
 
     if (changed) {
         renderOutline();
-        scheduleCompile();
+
+        /* A settled edit compiles, and the page stays where the student left it. */
+        scheduleCompile({ keepScroll: true });
     }
 
     emitSolutionChange();
+}
+
+/* ---------------------------------------------------------- */
+/* DRAWINGS IN THE SOURCE                                      */
+/* ---------------------------------------------------------- */
+
+/*
+ * THE SOURCE AS IT WAS BEFORE THE CURRENT EDIT.
+ *
+ * The edit guard compares the editor's new value with this one, so it is the
+ * document as the workspace last accepted it - not whatever the textarea held a
+ * moment ago. Undo and Redo restore text through the same path, so they are
+ * checked the same way: no history entry can cut a command either.
+ */
+let lastSource = "";
+
+function blockLayerOptions() {
+    return {
+        parse: parseDrawingBlocks,
+        onSelect: (block) => selectDrawingBlock(block.blockId, { reveal: true }),
+        onEdit: (block) => requestEditDrawing(block.drawingId, block.blockId),
+        onRemove: (block) => removeDrawingSelection(block.drawingId)
+    };
+}
+
+/* The drawing workflow's actions, registered by the writing tab. */
+let drawingHost = null;
+
+function host() {
+    return drawingHost && typeof drawingHost === "object" ? drawingHost : null;
+}
+
+export function attachDrawingHost(next) {
+    drawingHost = next || null;
+}
+
+function requestEditDrawing(drawingId, blockId) {
+    const target = host();
+
+    if (!target || typeof target.editDrawing !== "function") {
+        return;
+    }
+
+    target.editDrawing(drawingId, blockId);
+}
+
+/*
+ * SELECT A DRAWING REFERENCE.
+ *
+ * Selecting is a UI act only: it sets the selected block id, redraws the
+ * reference's own state, highlights the drawing in the preview and reveals it
+ * there - and it does not write the source, re-insert the block, regenerate
+ * anything or trigger a compile.
+ */
+export function selectDrawingBlock(blockId, { reveal = false, scroll = true } = {}) {
+    setSelectedDrawingBlock(blockId);
+
+    renderDrawingBlocks(nodes.editor, blockLayerOptions());
+
+    decoratePreview(blockId);
+
+    updateDrawingActions();
+
+    /* Moving the SOURCE to the reference, when asked to. */
+    if (reveal && blockId) {
+        const block = parseDrawingBlocks(lastSource).find(
+            (candidate) => candidate.blockId === blockId
+        );
+
+        if (block) {
+            nodes.editor.focus();
+            nodes.editor.setSelectionRange(block.index, block.index + block.length);
+            scrollEditorToBlock(block);
+        }
+    }
+
+    if (scroll) {
+        revealSelectedDrawingInPreview();
+    }
+}
+
+/*
+ * THE PREVIEW'S HIGHLIGHT, applied WITHOUT re-rendering.
+ *
+ * Selecting must not compile the document again - the page is already right,
+ * only the decoration changed - so the existing figures are told which one is
+ * selected rather than being rebuilt.
+ */
+function decoratePreview(blockId) {
+    nodes.preview?.querySelectorAll(".linked-drawing-figure").forEach((figure) => {
+        const selected = Boolean(blockId) && figure.dataset.blockId === blockId;
+
+        figure.classList.toggle("is-selected", selected);
+
+        if (selected) {
+            figure.setAttribute("aria-current", "true");
+        } else {
+            figure.removeAttribute("aria-current");
+        }
+    });
+}
+
+/* Selecting ordinary text clears a drawing selection - it is no longer chosen. */
+function clearDrawingSelectionIfTextSelected() {
+    const selected = selectedDrawingBlock();
+
+    if (!selected) {
+        return;
+    }
+
+    const start = nodes.editor.selectionStart;
+    const end = nodes.editor.selectionEnd;
+
+    if (start === end) {
+        return;
+    }
+
+    const block = parseDrawingBlocks(lastSource).find(
+        (candidate) => candidate.blockId === selected
+    );
+
+    const touchesBlock =
+        block && start >= block.index && end <= block.index + block.length;
+
+    if (!touchesBlock) {
+        selectDrawingBlock(null, { scroll: false });
+    }
+}
+
+/* A selection cannot outlive the block it names. */
+function syncDrawingSelection() {
+    const selected = selectedDrawingBlock();
+
+    if (!selected) {
+        return;
+    }
+
+    if (!parseDrawingBlocks(lastSource).some((block) => block.blockId === selected)) {
+        setSelectedDrawingBlock(null);
+        decoratePreview(null);
+        updateDrawingActions();
+    }
+}
+
+function scrollEditorToBlock(block) {
+    const lineHeight = parseFloat(getComputedStyle(nodes.editor).lineHeight) || 20;
+
+    nodes.editor.scrollTop = Math.max(0, block.line * lineHeight - nodes.editor.clientHeight / 2);
+
+    syncGutterScroll();
+}
+
+/*
+ * SCROLL THE PREVIEW ONLY WHEN NECESSARY.
+ *
+ * A drawing already in view is highlighted where it is - jumping the page for a
+ * figure the student can see is exactly the unhelpful movement this avoids. A
+ * drawing outside the scroller is brought into view, and only then.
+ */
+export function revealSelectedDrawingInPreview() {
+    const figure = nodes.preview?.querySelector(".linked-drawing-figure.is-selected");
+    const scroller = nodes.previewScroll;
+
+    if (!figure || !scroller) {
+        return;
+    }
+
+    const view = scroller.getBoundingClientRect();
+    const rect = figure.getBoundingClientRect();
+
+    const margin = 12;
+
+    if (rect.top >= view.top + margin && rect.bottom <= view.bottom - margin) {
+        return;
+    }
+
+    const top = Math.max(
+        0,
+        figure.offsetTop - scroller.clientHeight / 2 + figure.offsetHeight / 2
+    );
+
+    /*
+     * SMOOTH WHEN THE ENGINE CAN, ALWAYS WHEN IT CANNOT. An engine without
+     * `scrollTo` (or without its options) still scrolls, by the plainest route
+     * there is.
+     */
+    if (typeof scroller.scrollTo === "function") {
+        try {
+            scroller.scrollTo({ top, behavior: "smooth" });
+
+            return;
+        } catch (error) {
+            /* Fall through to the plain assignment. */
+        }
+    }
+
+    scroller.scrollTop = top;
+}
+
+/*
+ * A CLICK ON A DRAWING IN THE PREVIEW SELECTS ITS REFERENCE.
+ *
+ * The relationship runs both ways: the source reference selected the drawing,
+ * and the drawing selects the reference - the block is picked out in the source
+ * and moved into view, without the preview moving under the pointer.
+ */
+function selectDrawingFromPreview(block) {
+    selectDrawingBlock(block.blockId, { reveal: true, scroll: false });
+}
+
+/*
+ * REMOVE A DRAWING DELIBERATELY.
+ *
+ * The block goes, its reference goes with it, and the surrounding text stays
+ * character for character. The DRAWING itself is not deleted here: the written
+ * solution owns the include, not the sheet, and a sheet may still be wanted in
+ * the drawing workspace. Deleting the drawing is the drawing workspace's own
+ * command, against its own list.
+ */
+export function removeDrawingSelection(drawingId) {
+    const result = removeDrawingBlock(lastSource, drawingId);
+
+    if (!result.removed) {
+        return;
+    }
+
+    /* The block the removal took out cannot stay selected. */
+    setSelectedDrawingBlock(null);
+
+    writeSourceValue(result.value);
+
+    setSolutionStatus("The drawing reference was removed from the written solution.");
+
+    emitSolutionChange();
+}
+
+/* One write path, so the guard, the layer and the compile all see the change. */
+function writeSourceValue(value, { caret = null } = {}) {
+    nodes.editor.value = value;
+
+    if (caret !== null && caret !== undefined) {
+        nodes.editor.focus();
+        nodes.editor.setSelectionRange(caret, caret);
+    }
+
+    handleInput();
+}
+
+/*
+ * THE DRAWING ACTIONS IN THE TOOLBAR.
+ *
+ * `Enter Drawing` always means "the drawing at the caret": inside a reference
+ * that is the referenced drawing, elsewhere it is a new one. `Edit Drawing`
+ * appears only once a reference is selected - the compact contextual action,
+ * beside the reference and in the toolbar.
+ */
+function updateDrawingActions() {
+    const selected = selectedDrawingBlock();
+
+    const block = selected
+        ? parseDrawingBlocks(lastSource).find((candidate) => candidate.blockId === selected)
+        : null;
+
+    if (nodes.editDrawing) {
+        nodes.editDrawing.hidden = !block;
+        nodes.editDrawing.disabled = !block;
+    }
+
+    if (nodes.enterDrawing) {
+        nodes.enterDrawing.textContent = block
+            ? `Edit Drawing ${drawingNumber(lastSource, block.drawingId)}`
+            : "Enter Drawing";
+
+        nodes.enterDrawing.title = block
+            ? "Open the selected drawing in the Engineering Drawing workspace"
+            : "Draw a new diagram and place it at the cursor";
+    }
+}
+
+function enterDrawingAtCaret() {
+    const target = host();
+
+    /*
+     * A DRAWING REFERENCE IS OFFERED, NOT ASSUMED.
+     *
+     * Enter Drawing used to jump straight into the Engineering Drawing
+     * workspace: one click created a sheet, wrote a reference and left the
+     * written solution behind, with nothing on screen saying what had happened
+     * or how to get back. The student pressed a drawing button and was
+     * somewhere else.
+     *
+     * So the button now asks what they meant - draw a new figure, or drop in a
+     * drawing that already exists - and only then leaves this page. Each answer
+     * writes the protected reference into the line at the caret, which is what
+     * makes "the reference appears in the line like one of the texts" true:
+     * the source line IS the reference, and the chip over it is only its display.
+     */
+    if (!target || typeof target.enterDrawing !== "function") {
+        setSolutionStatus("The drawing workspace is not available on this page.");
+
+        return;
+    }
+
+    const existing = existingDrawings();
+
+    if (!existing.length) {
+        enterDrawingNow();
+
+        return;
+    }
+
+    enggUi.openDialog({
+        title: "Insert a drawing",
+        description: "The drawing is placed at the cursor as a reference, like a word in the text.",
+        buttons: [
+            { id: "new", label: "Draw a new figure", primary: true },
+            { id: "existing", label: "Insert an existing drawing" },
+            { id: "cancel", label: "Cancel" }
+        ],
+        onChoose: (choice) => {
+            if (choice === "new") {
+                enterDrawingNow();
+            }
+
+            if (choice === "existing") {
+                chooseExistingDrawing();
+            }
+        }
+    });
+}
+
+/* The drawings on this document that can be referred to. */
+function existingDrawings() {
+    try {
+        return (enggDrawingSheets.all() || []).filter((sheet) => sheet && sheet.id);
+    } catch (error) {
+        return [];
+    }
+}
+
+/*
+ * A LIST OF THE DRAWINGS ALREADY ON THE DOCUMENT.
+ *
+ * Choosing one writes a reference to THAT drawing - the same block Enter
+ * Drawing writes for a new one - so the solution holds one reference and the
+ * drawing itself stays in one place. It never copies the drawing's code into
+ * the answer.
+ */
+function chooseExistingDrawing() {
+    const drawings = existingDrawings();
+
+    enggUi.openDialog({
+        title: "Insert a drawing",
+        description: "Choose a drawing to place at the cursor.",
+        buttons: [
+            ...drawings.map((sheet, index) => ({
+                id: sheet.id,
+                label: sheet.name || `Drawing ${index + 1}`,
+                primary: false
+            })),
+            { id: "cancel", label: "Cancel" }
+        ],
+        onChoose: (choice) => {
+            if (choice === "cancel") {
+                return;
+            }
+
+            insertExistingDrawing(choice);
+        }
+    });
+}
+
+function insertExistingDrawing(drawingId) {
+    const editor = nodes.editor;
+
+    /*
+     * THE TEXT THE STUDENT IS LOOKING AT, not the last state sync's copy.
+     *
+     * `lastSource` is only written when the editor's input is handled, so a
+     * write made in the same tick as the previous one (two picks in a row) was
+     * measured against a stale buffer - and the reference landed at the end of
+     * the OLD text instead of at the caret. The textarea is the thing the
+     * student is editing, so it is the thing to read.
+     */
+    const source = editor ? editor.value : lastSource;
+    const position = editor?.selectionStart ?? source.length;
+
+    const existing = parseDrawingBlocks(source).find(
+        (block) => block.drawingId === drawingId
+    );
+
+    if (existing) {
+        setSolutionStatus("That drawing is already in the solution.");
+
+        selectDrawingBlock(existing.blockId);
+
+        return;
+    }
+
+    const inserted = insertDrawingBlock(source, drawingId, position);
+
+    /* The one write path, so the guard, the chip layer and the compile all see it. */
+    writeSourceValue(inserted.value, { caret: inserted.caret });
+
+    setSolutionStatus("Drawing inserted at the cursor.");
+}
+
+function enterDrawingNow() {
+    const target = host();
+
+    if (!target || typeof target.enterDrawing !== "function") {
+        setSolutionStatus("The drawing workspace is not available on this page.");
+
+        return;
+    }
+
+    const selected = selectedDrawingBlock();
+
+    const position = nodes.editor?.selectionStart ?? lastSource.length;
+
+    const atBlock = blockAtCaret(lastSource, position, parseDrawingBlocks);
+
+    const selectedBlock = selected
+        ? parseDrawingBlocks(lastSource).find((block) => block.blockId === selected)
+        : null;
+
+    const result = target.enterDrawing({
+        at: position,
+        select: selectedBlock?.drawingId || atBlock?.drawingId || null
+    });
+
+    if (result && result.ok === false) {
+        setSolutionStatus(result.message || "The drawing could not be opened.");
+    }
+
+    if (result && result.ok) {
+        setSolutionStatus(
+            result.created
+                ? "Drawing created and placed at the cursor."
+                : "Opened the selected drawing."
+        );
+    }
 }
 
 /* ---------------------------------------------------------- */
@@ -701,6 +1256,31 @@ function emitSolutionChange() {
 
 export function setSolutionChangeHandler(handler) {
     changeHandler = handler;
+}
+
+/*
+ * THE STATUS LINE, in the toolbar beside the document name.
+ *
+ * Used for answers that have nowhere else to go: a drawing could not be opened,
+ * a reference was removed, a protected command refused an edit. It is the same
+ * element the save state uses, because it is the same question - "what just
+ * happened to this document?".
+ */
+function setSolutionStatus(text) {
+    if (nodes.saveStatus) {
+        nodes.saveStatus.textContent = text || "";
+    }
+
+    if (typeof statusListener === "function") {
+        statusListener(text || "");
+    }
+}
+
+let statusListener = null;
+
+/* The host's own status surface (the writing tab's), when it has one. */
+export function setSolutionStatusListener(handler) {
+    statusListener = typeof handler === "function" ? handler : null;
 }
 
 /* Shown by the host, which owns the save state, not by the workspace. */
@@ -776,13 +1356,98 @@ export function installSolutionWorkspace() {
     renderFiles();
     renderDrawingBlocks(nodes.editor);
 
+    lastSource = nodes.editor.value;
+
     nodes.editor.addEventListener("input", handleInput);
     nodes.editor.addEventListener("scroll", () => {
         syncGutterScroll();
 
-        /* The chips are positioned against the text, so they scroll with it. */
-        renderDrawingBlocks(nodes.editor);
+        /* The references are positioned against the text, so they scroll with it. */
+        renderDrawingBlocks(nodes.editor, blockLayerOptions());
     });
+
+    /* Ordinary text selection clears a drawing selection, as it should. */
+    nodes.editor.addEventListener("select", clearDrawingSelectionIfTextSelected);
+
+    nodes.editor.addEventListener("keyup", () => {
+        clearDrawingSelectionIfTextSelected();
+
+        /* A caret moved INTO a reference selects it. */
+        const start = nodes.editor.selectionStart;
+
+        const block = blockAtCaret(lastSource, start, parseDrawingBlocks);
+
+        if (block && start === nodes.editor.selectionEnd) {
+            selectDrawingBlock(block.blockId);
+        } else if (!block) {
+            updateDrawingActions();
+        }
+    });
+
+    nodes.editor.addEventListener("mousedown", () => {
+        /* A click in the text is a click in the text - not on the reference. */
+        if (selectedDrawingBlock()) {
+            selectDrawingBlock(null, { scroll: false });
+        }
+    });
+
+    /*
+     * BACKSPACE AND DELETE AT A REFERENCE ROUTE THROUGH THE BLOCK, NOT THROUGH
+     * THE COMMAND'S CHARACTERS.
+     *
+     * A caret next to a reference can be placed there by the keyboard, and in a
+     * textarea Backspace would then eat one character of the command. The
+     * deletion is answered as the whole block, by the block's own removal - the
+     * same action the reference chip offers.
+     */
+    nodes.editor.addEventListener("keydown", (event) => {
+        if (event.key !== "Backspace" && event.key !== "Delete") {
+            return;
+        }
+
+        const start = nodes.editor.selectionStart;
+        const end = nodes.editor.selectionEnd;
+
+        const blocks = parseDrawingBlocks(lastSource);
+
+        const block =
+            (start !== end &&
+                blocks.find(
+                    (candidate) =>
+                        start === candidate.index &&
+                        end === candidate.index + candidate.length
+                )) ||
+            (start === end &&
+                blocks.find((candidate) => {
+                    const blockEnd = candidate.index + candidate.length;
+
+                    return event.key === "Backspace"
+                        ? start === blockEnd
+                        : start === candidate.index;
+                }));
+
+        if (!block) {
+            return;
+        }
+
+        event.preventDefault();
+
+        removeDrawingSelection(block.drawingId);
+    });
+
+    nodes.editDrawing?.addEventListener("click", () => {
+        const selected = selectedDrawingBlock();
+
+        const block = parseDrawingBlocks(lastSource).find(
+            (candidate) => candidate.blockId === selected
+        );
+
+        if (block) {
+            requestEditDrawing(block.drawingId, block.blockId);
+        }
+    });
+
+    nodes.enterDrawing?.addEventListener("click", enterDrawingAtCaret);
 
     /*
      * TAB INSERTS A TAB, IT DOES NOT LEAVE THE FIELD.
@@ -846,6 +1511,10 @@ export function installSolutionWorkspace() {
     wireZoom();
     wireCompile();
 
+    setDrawingSelectionHandler(selectDrawingFromPreview);
+
+    updateDrawingActions();
+
     applyZoom();
     setLayoutMode("split");
 
@@ -893,13 +1562,128 @@ export function loadSolutionSource(source) {
 
     nodes.editor.value = String(source ?? "");
 
+    lastSource = nodes.editor.value;
+
     enggSolutionState.setSource(nodes.editor.value);
+
+    setSelectedDrawingBlock(null);
 
     renderGutter();
     renderOutline();
     renderFiles();
-    renderDrawingBlocks(nodes.editor);
+    renderDrawingBlocks(nodes.editor, blockLayerOptions());
+    updateDrawingActions();
     scheduleCompile();
+}
+
+/*
+ * THE SOURCE, REPLACED FROM OUTSIDE (the drawing workflow).
+ *
+ * Same path as typing: the guard is not the point here - the caller is DAETUM
+ * itself, inserting a command it generated - but the outline, the gutter, the
+ * reference layer, the compile and the unsaved-change notification all have to
+ * happen, and they happen in `handleInput`.
+ */
+export function replaceSolutionSource(value, { caret = null, selectedBlockId = null } = {}) {
+    if (!nodes.editor) {
+        return;
+    }
+
+    nodes.editor.value = String(value ?? "");
+
+    if (caret !== null && caret !== undefined) {
+        nodes.editor.focus();
+        nodes.editor.setSelectionRange(caret, caret);
+    }
+
+    handleInput();
+
+    if (selectedBlockId !== null && selectedBlockId !== undefined) {
+        selectDrawingBlock(selectedBlockId);
+    }
+}
+
+/* Re-read the selected drawing after a return from the drawing workspace. */
+export function refreshSolutionSelection({ selectedBlockId: blockId } = {}) {
+    if (blockId !== undefined) {
+        setSelectedDrawingBlock(blockId);
+    }
+
+    renderDrawingBlocks(nodes.editor, blockLayerOptions());
+
+    syncDrawingSelection();
+
+    decoratePreview(selectedDrawingBlock());
+
+    updateDrawingActions();
+
+    /*
+     * THE DRAWING MAY HAVE CHANGED WHILE IT WAS OPEN.
+     *
+     * Returning is the moment the student expects the figure to show what they
+     * drew, so the preview is re-rendered now - keeping the page where it was,
+     * and keeping the selected drawing highlighted in it.
+     */
+    if (compileTimer) {
+        clearTimeout(compileTimer);
+        compileTimer = null;
+    }
+
+    compileNow({ keepScroll: true });
+}
+
+/*
+ * THE DOCUMENT'S DRAWINGS, FOR THE COMPILED .tex.
+ *
+ * Each block is resolved to the sheet it names: its number in the document, its
+ * name, and its current LaTeX. This is the ONE place the export learns what a
+ * `\datumdrawing{...}` command contains, so what is exported is the drawing as
+ * it stands at the moment of export - never a copy taken when it was placed.
+ */
+export function solutionDrawingSources() {
+    const drawings = {};
+
+    let blocks;
+
+    try {
+        blocks = parseDrawingBlocks(enggSolutionState.getSource());
+    } catch (error) {
+        blocks = [];
+    }
+
+    blocks.forEach((block, index) => {
+        if (drawings[block.drawingId]) {
+            return;
+        }
+
+        let sheet;
+
+        try {
+            sheet = enggDrawingSheets.sheetById(block.drawingId);
+        } catch (error) {
+            sheet = null;
+        }
+
+        if (!sheet) {
+            return;
+        }
+
+        let latex;
+
+        try {
+            latex = readSheetLatex(sheet);
+        } catch (error) {
+            latex = "";
+        }
+
+        drawings[block.drawingId] = {
+            number: index + 1,
+            name: sheet.name || "",
+            latex
+        };
+    });
+
+    return drawings;
 }
 
 export function refreshSolutionFiles() {
@@ -915,13 +1699,21 @@ export function solutionZoomOut() {
 }
 
 const enggSolutionWorkspace = {
+    attachDrawingHost,
     goToLine,
     installSolutionWorkspace,
     loadSolutionSource,
     refreshSolutionFiles,
+    refreshSolutionSelection,
+    removeDrawingSelection,
+    replaceSolutionSource,
+    revealSelectedDrawingInPreview,
+    selectDrawingBlock,
     setLayoutMode,
     setSolutionChangeHandler,
-    showSaveStatus
+    setSolutionStatusListener,
+    showSaveStatus,
+    solutionDrawingSources
 };
 
 export default enggSolutionWorkspace;

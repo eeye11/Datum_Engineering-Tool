@@ -156,16 +156,40 @@ function stripColourDeclarations(text) {
  * insert time, so a colour a drawing named stays the colour it was named
  * as, and a definition that appears twice is stated once.
  */
-export function writeStandaloneLatex(source, { title = "Written Solution", extraPreamble = [] } = {}) {
-    const text = String(source || "");
+export function writeStandaloneLatex(
+    source,
+    { title = "Written Solution", extraPreamble = [], drawings = {} } = {}
+) {
+    /*
+     * DRAWING BLOCKS ARE COMPOSED, NOT LEFT AS COMMANDS.
+     *
+     * The written solution stores `\datumdrawing{sheet_...}` - a reference, so
+     * the document never holds a second copy of a drawing's geometry. In the
+     * COMPILED document that command has to become the drawing: each block is
+     * replaced, in place, by a reference to a labelled picture rendered after
+     * the body from the drawing's own current LaTeX.
+     *
+     * The figures are numbered `Drawing 1`, `Drawing 2` ... in document order,
+     * and the pictures themselves are appended below the written text, before
+     * `\end{document}` - one document, one preamble, no nested document
+     * environments.
+     */
+    const composition = composeDrawingBlocks(String(source || ""), drawings || {});
+
+    const text = composition.body;
 
     /*
-     * COLLECT FIRST, THEN STRIP: the declarations are gathered from the
-     * body as it stands, and only then removed from it, so the preamble
-     * receives each one and the body keeps none.
+     * COLLECT FIRST, THEN STRIP: the declarations are gathered from the body as
+     * it stands, and only then removed from it, so the preamble receives each
+     * one and the body keeps none. A linked drawing's own definitions are in its
+     * picture, so they are collected too.
      */
     const colours = [
-        ...new Set([...(extraPreamble || []), ...collectColourDefinitions(text)])
+        ...new Set([
+            ...(extraPreamble || []),
+            ...collectColourDefinitions(text),
+            ...composition.pictures.flatMap((picture) => collectColourDefinitions(picture))
+        ])
     ];
     const stripped = stripColourDeclarations(text);
 
@@ -176,21 +200,113 @@ export function writeStandaloneLatex(source, { title = "Written Solution", extra
         "\\usepackage{amsmath}",
         "\\usepackage{amssymb}",
         "\\usepackage[T1]{fontenc}",
+        "\\usepackage{caption}",
         "\\usetikzlibrary{arrows.meta}",
         "\\usetikzlibrary{patterns}",
+        "\\usetikzlibrary{calc}",
+        "\\usetikzlibrary{decorations.pathmorphing}",
         ...colours,
         "",
         "\\begin{document}",
         "",
         stripped.trim(),
+        ...(composition.pictures.length ? ["", ...composition.pictures] : []),
         "",
         "\\end{document}",
         ""
     ].join("\n");
 }
 
+/*
+ * THE COMPILED FORM OF THE DOCUMENT'S DRAWING BLOCKS.
+ *
+ * `drawings` is the written solution's resolution of its blocks:
+ *
+ *     { "sheet_4f1c2a9b": { number: 1, name: "Free body diagram", latex: "..." } }
+ *
+ * A block whose drawing could not be resolved is LEFT AS IT IS and reported: an
+ * export that silently dropped a student's diagram would be worse than one that
+ * did not compile, because the missing figure is easy to miss and impossible to
+ * notice afterwards.
+ *
+ * Each picture is placed in a `minipage` of the text width, centred: standard
+ * LaTeX, no package of its own. The picture is already fitted to the page when
+ * DAETUM writes it, so nothing is asked to shrink here.
+ */
+function composeDrawingBlocks(body, drawings) {
+    const pictures = [];
+    const seen = new Set();
+    const unresolved = [];
+
+    const composed = body.replace(/\\datumdrawing\s*\{([A-Za-z0-9_-]+)\}/g, (match, drawingId) => {
+        const drawing = drawings[drawingId];
+
+        if (!drawing || typeof drawing.latex !== "string" || !drawing.latex.trim()) {
+            unresolved.push(drawingId);
+
+            return match;
+        }
+
+        const label = `datum-${drawingId}`;
+
+        if (seen.has(drawingId)) {
+            /* One drawing, one picture: a second inclusion points back at it. */
+            return `\n\\noindent\\ref{fig:${label}}\n`;
+        }
+
+        seen.add(drawingId);
+
+        const number = Number(drawing.number) || seen.size;
+        const title = drawing.name ? escapeLatexText(drawing.name) : "";
+        const name = title ? `: ${title}` : "";
+
+        pictures.push(
+            [
+                "% ---------------------------------------------------------------------",
+                `% Drawing ${number}${name ? ` - ${drawing.name}` : ""}`,
+                "% ---------------------------------------------------------------------",
+                "\\begin{center}",
+                "\\begin{minipage}{\\linewidth}",
+                "\\centering",
+                drawing.latex.trim(),
+                "\\par\\smallskip",
+                `\\captionof{figure}{Drawing ${number}${name}}%`,
+                `\\label{fig:${label}}`,
+                "\\end{minipage}",
+                "\\end{center}",
+                ""
+            ].join("\n")
+        );
+
+        return [
+            "",
+            "\\begin{center}",
+            `  \\refstepcounter{figure}\\label{fig:${label}}%`,
+            `  \\textbf{Drawing ${number}}${title ? ` \\textemdash{} ${title}` : ""}`,
+            "\\end{center}",
+            ""
+        ].join("\n");
+    });
+
+    if (unresolved.length) {
+        pictures.push(
+            `% A drawing block could not be resolved and was left in the text: ${unresolved.join(", ")}`
+        );
+    }
+
+    return { body: composed, pictures, unresolved };
+}
+
+function escapeLatexText(value) {
+    return String(value ?? "")
+        .replace(/[\\{}%$#&_]/g, (character) => `\\${character}`)
+        .replace(/~/g, "\\textasciitilde{}")
+        .replace(/\^/g, "\\textasciicircum{}");
+}
+
 const enggEmbeddedDrawings = {
     collectColourDefinitions,
+    composeDrawingBlocks,
     parseDrawingBlocks,
     serializeDrawingBlock,
     writeStandaloneLatex

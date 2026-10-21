@@ -87,6 +87,9 @@ const settle = async (ms = 500) => {
   const { locate } = require("./helpers/source-path.cjs");
   const src = (file) => require(locate(path.basename(file)));
 
+/* The source map, for reading one object's region out of the document. */
+const drawingSourceModule = src("drawing-source.js");
+
   const model = src("src/shared/model/drawing-state.js").default;
   const { drawingState } = src("features/workspace/editor-state.js");
   const { activeSourceManager } = src("drawing-source-manager.js");
@@ -257,7 +260,7 @@ const settle = async (ms = 500) => {
       return;
     }
 
-    if (!manager.getSource().includes(`DAETUM_OBJECT_BEGIN id="${object.id}"`)) {
+    if (!manager.getSource().includes(`% DAETUM ID: ${object.id}`)) {
       missing.push(`${label}: no source region (type ${object.type})`);
     }
   });
@@ -287,7 +290,7 @@ const settle = async (ms = 500) => {
   check("the tool committed a support", drawingState.objects.length === before + 1 && created?.type === "pin-support", String(created?.type));
   check(
     "its source is in the document",
-    Boolean(created) && manager.getSource().includes(`DAETUM_OBJECT_BEGIN id="${created.id}"`),
+    Boolean(created) && manager.getSource().includes(`% DAETUM ID: ${created.id}`),
     manager.getSource().slice(-500)
   );
   /*
@@ -295,8 +298,20 @@ const settle = async (ms = 500) => {
    * and they all sit inside the one object's region. That is the "one object,
    * many commands" case the source map must keep together.
    */
-  const supportRegion = created
-    ? manager.getSource().split(`id="${created.id}"`)[1]?.split("DAETUM_OBJECT_END")[0] || ""
+  /*
+   * THE SUPPORT'S WHOLE REGION, read through the source map rather than by
+   * slicing the text - so the header's lines are not part of the commands.
+   */
+  const supportBlock = created
+    ? drawingSourceModule.createSourceMap(manager.getSource()).block(created.id)
+    : null;
+
+  const supportRegion = supportBlock
+    ? manager
+        .getSource()
+        .split("\n")
+        .slice(supportBlock.bodyStartLine, supportBlock.bodyEndLine + 1)
+        .join("\n")
     : "";
 
   check(
@@ -354,8 +369,8 @@ const settle = async (ms = 500) => {
     requests[requests.length - 1].includes(`AA2233`),
     requests[requests.length - 1].slice(-400)
   );
-  check("the region is not duplicated", afterEdit.split(`DAETUM_OBJECT_BEGIN id="${created.id}"`).length === 2);
-  check("every other object's region survived", Boolean(region) && afterEdit.includes(`id="${line.id}"`));
+  check("the region is not duplicated", afterEdit.split(`% DAETUM ID: ${created.id}`).length === 2);
+  check("every other object's region survived", Boolean(region) && afterEdit.includes(`% DAETUM ID: ${line.id}`));
 
   /* ================================================== delete */
 
@@ -373,7 +388,7 @@ const settle = async (ms = 500) => {
   check("the object is gone from the model", !drawingState.objects.some((object) => object.id === created.id));
   check("its source region is gone", mapping.regionForObject(manager.getSource(), created.id) === null);
   check("and it is gone from the compiled drawing", !manager.getSource().includes(created.id));
-  check("the line is still there", manager.getSource().includes(`id="${line.id}"`));
+  check("the line is still there", manager.getSource().includes(`% DAETUM ID: ${line.id}`));
 
   /* ================================================== typing in Source */
 

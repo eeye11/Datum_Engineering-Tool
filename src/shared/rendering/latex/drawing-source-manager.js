@@ -119,6 +119,9 @@ export function createSourceManager(initialSource) {
     let dirty = false;
     let revision = 0;
 
+    /* The visible text of the latest editor edit; see `getTypedSource`. */
+    let typed = "";
+
     /*
      * THE ANALYSIS IS DERIVED ONCE PER REVISION, NOT PER READER.
      *
@@ -201,7 +204,24 @@ export function createSourceManager(initialSource) {
              * too, so the blocks are parsed once here and carried with the
              * analysis. A reader that wanted only ids can use `block.id`.
              */
-            blocks: blockContents(source, map).blocks,
+            blocks: blockContents(source, map).blocks.map((block) => {
+                /*
+                 * THE RANGES ARE THE PARSER'S, ALWAYS. A block's line bounds
+                 * decide which statements are its own, so a consumer must not
+                 * keep its own idea of them.
+                 */
+                const described = map?.block?.(block.id) || null;
+
+                return described
+                    ? {
+                          ...block,
+                          beginLine: described.beginLine,
+                          endLine: described.endLine,
+                          bodyStartLine: described.bodyStartLine,
+                          bodyEndLine: described.bodyEndLine
+                      }
+                    : block;
+            }),
             map,
             renderInput: prepared.text,
             skipped: prepared.skipped,
@@ -424,7 +444,23 @@ export function createSourceManager(initialSource) {
         setVisibleSource(text, options = {}) {
             const restored = restoreObjectMarkersFrom(String(text ?? ""), source);
 
+            /*
+             * THE TEXT THE STUDENT ACTUALLY TYPED.
+             *
+             * Markers are re-attached from the previous canonical source, so
+             * the restored text is what is STORED. The text this edit supplied
+             * is kept as typed, because adoption has to read the commands the
+             * student just wrote - not their earlier draft, and not a restored
+             * form that has already been rewritten.
+             */
+            typed = String(text ?? "");
+
             return manager.setSource(restored, options);
+        },
+
+        /** The visible text of the latest edit, exactly as the editor gave it. */
+        getTypedSource() {
+            return typed;
         },
 
         /*

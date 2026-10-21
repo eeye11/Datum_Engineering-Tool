@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Drawing References in the written solution.
  *
  * This exists to PROVE THE CHAIN, not to be a written-solution editor:
@@ -55,7 +55,9 @@
  */
 import { enggDrawingSheets } from "../../components/layout/workspace/sheet-controller.js";
 import enggDrawingReference from "../references/drawing-reference.js";
-import { parseDrawingBlocks } from "./embedded-drawings.js";
+import { parseDrawingBlocks } from "./drawing-blocks.js";
+import { selectedDrawingBlock } from "./drawing-blocks-editor.js";
+import { readSheetLatex } from "../file/latex/latex-document.js";
 import enggErrorLog from "../../app/error-log.js";
 
 const document = globalThis.document;
@@ -84,6 +86,29 @@ const document = globalThis.document;
 const DEFAULT_WIDTH = 760;
 const DEFAULT_HEIGHT = 460;
 
+/*
+ * THE LATEST RENDER WINS.
+ *
+ * A preview goes stale on every pause in typing, and a drawing can be edited
+ * while a render of it is still in flight. When two renders overlap, the older
+ * one's result must not be written over the newer one's - so each render takes a
+ * sequence number, and nothing is placed unless its number is still the newest
+ * when its work finishes.
+ */
+let renderSequence = 0;
+
+/*
+ * A CLICK ON A RENDERED DRAWING SELECTS ITS REFERENCE, which is the same act as
+ * clicking the reference in the source. The workspace owns the selection; this
+ * module only reports the request. Registered rather than imported, so the
+ * renderer stays usable on a page that has no written-solution workspace.
+ */
+let selectionHandler = null;
+
+export function setDrawingSelectionHandler(handler) {
+    selectionHandler = typeof handler === "function" ? handler : null;
+}
+
 async function renderTikzSvg(tikz) {
     const response = await fetch("/api/render-tikz", {
         body: JSON.stringify({ tikz }),
@@ -101,49 +126,82 @@ async function renderTikzSvg(tikz) {
 
     holder.innerHTML = payload.svg;
 
-    return holder.firstElementChild;
+    const svg = holder.firstElementChild;
+
+    return svg ? fitSvgToItsDrawing(svg) : null;
 }
 
 /*
- * One embedded drawing, as part of the solution: the code, drawn, in place.
+ * ============================================================
+ * A PICTURE IS PLACED BY ITS DRAWING, NOT BY ITS TELLING
+ * ============================================================
  *
- * The block is a <figure>, the same shape the reference figures took, so
- * the preview keeps its spacing treatment. There is no caption beyond what
- * the drawing itself carries - the source is plain LaTeX and holds no
- * application metadata.
+ * The service returns an SVG sized from the picture's declared box. That box can
+ * be ZERO - a `tikzpicture` whose bounding box was reset to a single point, a
+ * document compiled with `\pgfresetboundingbox`, a figure the compiler measured
+ * as empty even though it contains strokes. The paths are all there; the
+ * container is 0 x 0, so the page shows nothing at all.
+ *
+ * The student then sees a figure that is not there, next to a reference that
+ * plainly is - which reads as "this drawing failed to render".
+ *
+ * So the element's own contents decide its box: `getBBox()` is the union of
+ * everything actually drawn. Its numbers become the viewBox, a small margin is
+ * added for stroke width and arrow heads, and a width is chosen so the figure
+ * fits the written page.
+ *
+ * THIS ONLY EVER REPLACES A BOX THAT CANNOT SHOW ANYTHING. A picture that
+ * already declares a real size is returned untouched, so the ordinary case
+ * renders exactly as the service measured it.
  */
-async function appendEmbeddedFigure(target, block) {
-    const figure = document.createElement("figure");
+function fitSvgToItsDrawing(svg) {
+    const box = svg.viewBox?.baseVal;
+    const declared = {
+        width: parseFloat(svg.getAttribute("width")) || 0,
+        height: parseFloat(svg.getAttribute("height")) || 0,
+        box: box && Number.isFinite(box.width) && Number.isFinite(box.height)
+            ? { x: box.x, y: box.y, width: box.width, height: box.height }
+            : null
+    };
 
-    figure.className = "drawing-reference-figure embedded-drawing-figure";
+    const usable = (boxValue) => boxValue && boxValue.width > 0.5 && boxValue.height > 0.5;
 
-    try {
-        const svg = await renderTikzSvg(block.code);
-
-        const frame = document.createElement("div");
-
-        frame.className = "drawing-reference-frame";
-        frame.appendChild(svg);
-
-        figure.appendChild(frame);
-    } catch (error) {
-        enggErrorLog.reportError("render embedded drawing", error, {});
-
-        /*
-         * THE CODE IS STILL THERE. A failed figure reports the failure and
-         * shows where the code sits - which is the honest answer, and
-         * leaves the student something to fix in the source.
-         */
-        const failed = document.createElement("div");
-
-        failed.className = "drawing-reference-missing";
-        failed.textContent =
-            "This drawing could not be rendered. Its TikZ code is still in the source below.";
-
-        figure.appendChild(failed);
+    if ((declared.width > 0.5 && declared.height > 0.5) || usable(declared.box)) {
+        return svg;
     }
 
-    target.appendChild(figure);
+    let bounds = null;
+
+    try {
+        bounds = svg.getBBox();
+    } catch {
+        bounds = null;
+    }
+
+    if (!bounds || !usable(bounds)) {
+        /* Nothing measurable either: the box is collapsible for another reason. */
+        return svg;
+    }
+
+    /* A little air, so a stroke's width and an arrow head are not clipped. */
+    const margin = Math.max(4, Math.min(24, Math.max(bounds.width, bounds.height) * 0.04));
+
+    const x = bounds.x - margin;
+    const y = bounds.y - margin;
+    const width = bounds.width + margin * 2;
+    const height = bounds.height + margin * 2;
+
+    svg.setAttribute("viewBox", `${x} ${y} ${width} ${height}`);
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+
+    /*
+     * The figure is sized by its CSS container; `max-width` and the preserved
+     * aspect ratio keep it inside the page whatever the drawing's own shape is.
+     */
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+
+    return svg;
 }
 
 /*
@@ -285,6 +343,13 @@ function attach() {
   async function renderSolution() {
     const source = code.value;
 
+    /*
+     * EACH RENDER OWNS A NUMBER. The page is cleared and filled asynchronously,
+     * so a render that started earlier but finished later would otherwise paint
+     * an older document over a newer one - or, worse, over a newer drawing.
+     */
+    const sequence = (renderSequence += 1);
+
     mathJax()?.typesetClear([output]);
 
     /*
@@ -295,9 +360,7 @@ function attach() {
     const blocks = parseDrawingBlocks(source)
         .map((block) => ({
             ...block,
-            kind: "block",
-            /* The whole block, markers and all, is what is skipped in the text. */
-            length: block.raw.length
+            kind: "linked"
         }));
 
     const references = enggDrawingReference
@@ -327,7 +390,17 @@ function attach() {
 
     let cursor = 0;
 
+    /* The selection is read once, so every figure in the pass is judged alike. */
+    const selectedId = selectedDrawingBlock();
+
+    const blocksInOrder = found.filter((item) => item.kind === "linked");
+
     for (const item of found) {
+      /* A newer render has taken over; this one must not paint over it. */
+      if (sequence !== renderSequence) {
+        return;
+      }
+
       appendText(
         output,
         source.slice(cursor, item.index)
@@ -344,16 +417,20 @@ function attach() {
        * editor that stops responding.
        */
       try {
-        if (item.kind === "block") {
-          await appendEmbeddedFigure(output, item);
+        if (item.kind === "linked") {
+          await appendLinkedFigure(output, item, {
+            number: blocksInOrder.indexOf(item) + 1,
+            selected: item.blockId === selectedId,
+            sequence
+          });
         } else {
           appendReferenceFigure(output, item);
         }
       } catch (error) {
         enggErrorLog.reportError(
-          item.kind === "block" ? "render embedded drawing" : "render drawing reference",
+          item.kind === "linked" ? "render linked drawing" : "render drawing reference",
           error,
-          item.kind === "block" ? {} : { sheetId: item.sheetId }
+          item.kind === "linked" ? { drawingId: item.drawingId } : { sheetId: item.sheetId }
         );
 
         const failed = document.createElement("div");
@@ -368,6 +445,10 @@ function attach() {
       cursor = item.index + item.length;
     }
 
+    if (sequence !== renderSequence) {
+      return;
+    }
+
     appendText(
       output,
       source.slice(cursor)
@@ -379,6 +460,146 @@ function attach() {
      * is both faster and less likely to renumber anything.
      */
     await mathJax()?.typesetPromise([output]);
+  }
+
+  /*
+   * ONE LINKED DRAWING, DRAWN FROM ITS OWN DOCUMENT.
+   *
+   * The block names a drawing; the drawing is asked for its CURRENT picture - the
+   * sheet's own canonical source, rendered by the same TikZ service the drawing
+   * workspace uses. Nothing is copied into the written solution, so there is
+   * nothing here that can go stale, and editing the sheet is all it takes for the
+   * next render to show the change.
+   */
+  async function appendLinkedFigure(target, block, { number, selected, sequence }) {
+    const sheet = sheetByIdSafely(block.drawingId);
+
+    const figure = document.createElement("figure");
+
+    figure.className = "drawing-reference-figure linked-drawing-figure";
+    figure.dataset.blockId = block.blockId;
+    figure.dataset.drawingId = block.drawingId;
+    figure.tabIndex = 0;
+    figure.setAttribute("role", "button");
+    figure.setAttribute(
+      "aria-label",
+      `Drawing ${number}${sheet?.name ? `: ${sheet.name}` : ""}. Select to show its reference in the source.`
+    );
+
+    if (selected) {
+      figure.classList.add("is-selected");
+      figure.setAttribute("aria-current", "true");
+    }
+
+    /* A click on the drawing selects its reference - the relationship both ways. */
+    figure.addEventListener("click", (event) => {
+      event.preventDefault();
+
+      if (typeof selectionHandler === "function") {
+        selectionHandler(block);
+      }
+    });
+
+    figure.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+
+        if (typeof selectionHandler === "function") {
+          selectionHandler(block);
+        }
+      }
+    });
+
+    if (!sheet) {
+      const missing = document.createElement("p");
+
+      missing.className = "drawing-reference-missing";
+      missing.textContent = "The drawing this reference names is no longer in this document.";
+
+      figure.appendChild(missing);
+      target.appendChild(figure);
+
+      return;
+    }
+
+    const latex = readSheetLatex(sheet);
+
+    if (!latex.trim()) {
+      /*
+       * AN EMPTY DRAWING IS NOT A FAILED ONE. A drawing the student has only
+       * just created has nothing on it yet; the block says so in place rather
+       * than disappearing or pretending to show a picture.
+       */
+      const blank = document.createElement("div");
+
+      blank.className = "drawing-reference-blank";
+      blank.textContent = `Drawing ${number} \u2014 empty. Choose Edit Drawing to start drawing.`;
+
+      figure.appendChild(blank);
+      target.appendChild(figure);
+
+      return;
+    }
+
+    /*
+     * A PLACEHOLDER WHILE THE RENDER RUNS, so the page has its height and the
+     * student sees that a drawing belongs here. It is replaced by the picture,
+     * or by the failure - never left as if it were the picture.
+     */
+    const state = document.createElement("div");
+
+    state.className = "drawing-reference-loading";
+    state.textContent = `Drawing ${number} is rendering\u2026`;
+
+    figure.appendChild(state);
+    target.appendChild(figure);
+
+    try {
+      const svg = await renderTikzSvg(latex);
+
+      /* A newer render has taken over, or this figure was removed. */
+      if (sequence !== renderSequence || !figure.isConnected) {
+        return;
+      }
+
+      const frame = document.createElement("div");
+
+      frame.className = "drawing-reference-frame";
+      frame.appendChild(svg);
+
+      figure.replaceChildren(frame);
+
+      if (sheet.name) {
+        const caption = document.createElement("figcaption");
+
+        caption.textContent = sheet.name;
+
+        figure.appendChild(caption);
+      }
+    } catch (error) {
+      enggErrorLog.reportError("render linked drawing", error, { drawingId: block.drawingId });
+
+      if (!figure.isConnected) {
+        return;
+      }
+
+      const failed = document.createElement("div");
+
+      failed.className = "drawing-reference-missing";
+      failed.textContent =
+        `Drawing ${number}${sheet.name ? ` (${sheet.name})` : ""} could not be rendered. ` +
+        "Its geometry and source are unchanged; reopen it with Edit Drawing.";
+
+      figure.replaceChildren(failed);
+    }
+  }
+
+  function sheetByIdSafely(sheetId) {
+    try {
+      return enggDrawingSheets.sheetById(sheetId);
+    } catch (error) {
+      return null;
+    }
   }
 
   /*

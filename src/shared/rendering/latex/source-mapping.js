@@ -29,7 +29,9 @@ import {
   buildDrawingSource,
   createSourceMap,
   parseDrawingSource,
+  renderObjectBlock,
 } from "./drawing-source.js";
+import { objectDisplayName, COMMENT_FIELDS } from "./object-comments.js";
 
 /*
  * Every object id the source currently represents, in document order.
@@ -83,19 +85,38 @@ export function objectIdAtLine(source, line) {
  *
  * When the object is NOT yet in the source it is APPENDED as a new block, just
  * before the closing picture, rather than being spliced in at a guessed line.
+ *
+ * THE BLOCK IS WRITTEN IN THE ONE FORM THE BUILDER KNOWS (`renderObjectBlock`),
+ * so a region updated in place and a document built from scratch read back with
+ * the same header - and the object's readable name survives the update.
  */
-export function setObjectRegion(source, objectId, objectType, commands) {
+export function setObjectRegion(source, objectId, objectType, commands, { name = "" } = {}) {
   const text = String(source ?? "");
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const block = createSourceMap(text).block(objectId);
 
-  const replacement = [
-    `% DAETUM_OBJECT_BEGIN id="${objectId}"${
-      objectType ? ` type="${objectType}"` : ""
-    }`,
-    String(commands ?? "").replace(/\s+$/, ""),
-    `% DAETUM_OBJECT_END id="${objectId}"`,
-  ];
+  /*
+   * THE WRITER MAY HAVE WRITTEN THE HEADER ITSELF.
+   *
+   * A category writer returns the object's COMPLETE block - its readable header
+   * and its commands - because that is what a standalone export, a source map and
+   * the object's own name need. Wrapping it again here gave every object TWO
+   * headers: the second one named the raw type (`beam`) instead of the readable
+   * name (`Beam 1`), and the duplicated block was one more boundary than the map
+   * expected. So commands that already carry the object's id are written as they
+   * stand; the wrapper is only for a writer that returned bare commands.
+   */
+  const body = String(commands ?? "").replace(/\s+$/, "");
+  const carriesHeader = body.includes(`% DAETUM ${COMMENT_FIELDS.id}: ${objectId}`) || body.includes(`% DAETUM ID: ${objectId}`);
+
+  const replacement = carriesHeader
+    ? body.split("\n")
+    : renderObjectBlock({
+        id: objectId,
+        type: objectType,
+        name: name || block?.name || objectType || "Object",
+        source: body,
+      }).split("\n");
 
   if (block) {
     const next = [
@@ -112,7 +133,7 @@ export function setObjectRegion(source, objectId, objectType, commands) {
   if (closing < 0) {
     /* No picture at all: wrap the commands in a fresh one. */
     return buildDrawingSource([
-      { id: objectId, type: objectType, source: commands },
+      { id: objectId, type: objectType, name: name || objectType, source: commands },
     ]);
   }
 
@@ -188,7 +209,12 @@ export function rebuildDrawingSourceFromObjects(source, objects, { write = null 
       const generated = typeof write === "function" ? write(object) : object.source;
 
       return typeof generated === "string" && generated.trim() !== ""
-        ? { id: object.id, type: object.type, source: generated }
+        ? {
+            id: object.id,
+            type: object.type,
+            name: objectDisplayName(object, { type: object.type }),
+            source: generated,
+          }
         : null;
     })
     .filter(Boolean);
@@ -199,12 +225,18 @@ export function rebuildDrawingSourceFromObjects(source, objects, { write = null 
 
   const lines = text.replace(/\r\n/g, "\n").split("\n");
   const closing = lines.lastIndexOf("\\end{tikzpicture}");
+
+  /*
+   * A WRITER MAY HAVE RETURNED THE WHOLE BLOCK - its header and its commands -
+   * because that is what an object's source IS. Wrapping it again would emit the
+   * header twice and name the object twice. The test is the OBJECT's id in the
+   * text, so a block written elsewhere with a different id is still wrapped.
+   */
   const blockText = additions
-    .map(
-      (block) =>
-        `% DAETUM_OBJECT_BEGIN id="${block.id}"${
-          block.type ? ` type="${block.type}"` : ""
-        }\n${String(block.source ?? "").replace(/\s+$/, "")}\n% DAETUM_OBJECT_END id="${block.id}"`,
+    .map((block) =>
+      String(block.source ?? "").includes(`% DAETUM ${COMMENT_FIELDS.id}: ${block.id}`)
+        ? String(block.source).replace(/\s+$/, "")
+        : renderObjectBlock(block),
     )
     .join("\n");
 

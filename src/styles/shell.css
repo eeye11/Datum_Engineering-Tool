@@ -564,6 +564,41 @@ body {
     overflow: auto;
 }
 
+/*
+ * THE RETURN CONTROL, beside the sheet tabs on the Drawing tab.
+ *
+ * Quiet until it is wanted: a text-weight control on the sheet bar's own line,
+ * in the application's green on hover, so it reads as "go back" rather than as
+ * another sheet.
+ */
+.drawing-return-to-solution {
+    align-items: center;
+    background: transparent;
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-family: var(--datum-font);
+    font-size: 11px;
+    gap: 4px;
+    line-height: 1;
+    margin-left: auto;
+    padding: 5px 9px;
+    white-space: nowrap;
+}
+
+.drawing-return-to-solution:hover {
+    border-color: var(--datum-green);
+    color: var(--datum-green-ink);
+}
+
+.drawing-return-to-solution:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
 #drawing.review-content.active {
     display: flex;
     flex: 1 1 auto;
@@ -1053,6 +1088,35 @@ body.solution-resizing {
 }
 
 /* -------------------------------------------------------------------------
+   THE TOOLBAR'S DRAWING ACTIONS
+   ------------------------------------------------------------------------- */
+
+/*
+ * Enter Drawing is the one action in the writing toolbar that leaves for
+ * another workspace, so it is set apart a little - the green of the primary
+ * action, outlined rather than filled, so Compile stays the loudest control.
+ */
+.solution-drawing-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.solution-tool-drawing {
+    border-color: var(--datum-green);
+    color: var(--datum-green-ink);
+    font-weight: 600;
+}
+
+.solution-tool-drawing:hover {
+    background: var(--datum-green-tint);
+}
+
+/* A control that is offered only in context is not a gap when it is absent. */
+.solution-tool[hidden] {
+    display: none;
+}
+
+/* -------------------------------------------------------------------------
    CENTRE: THE EDITOR
    ------------------------------------------------------------------------- */
 
@@ -1133,6 +1197,15 @@ body.solution-resizing {
     min-height: 0;
 }
 
+/*
+   THE LAYER FLOATS OVER THE TEXT AND DOES NOT TAKE THE POINTER.
+
+   The mirror under the chips is the textarea's invisible twin: the same text, in
+   the same type, at the same place, purely so each reference can be positioned
+   on the pixels its command occupies. Only the chips are interactive, which is
+   what keeps typing, selection and scrolling working everywhere except on a
+   reference.
+ */
 .solution-drawing-chips {
     inset: 0;
     overflow: hidden;
@@ -1141,56 +1214,112 @@ body.solution-resizing {
     z-index: 2;
 }
 
+.solution-editor-mirror {
+    color: transparent;
+    left: 0;
+    overflow: hidden;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    user-select: none;
+    z-index: 0;
+}
+
+/*
+   ONE PROTECTED REFERENCE.
+
+   It stays INSIDE the source: monospaced, the command itself in the source's own
+   text colour, with a quiet label beside it. There is no icon: a padlock made
+   the reference look like a widget laid over the code rather than a line of it.
+   The gold accent
+   marks it as protected; the green marks the selected one. The layer sits on the
+   EDITOR's surface, so the chip uses the interface's own tokens - it is chrome
+   over the dark pane, and in Light Mode it must not become a light command on a
+   light background.
+ */
 .solution-drawing-chip {
     align-items: center;
-    background: var(--datum-surface);
-    border: 1px dashed var(--datum-border);
-    border-left: 3px solid var(--datum-green);
+    background: color-mix(in srgb, var(--datum-gold) 9%, var(--datum-surface));
+    border: 1px solid color-mix(in srgb, var(--datum-gold) 45%, transparent);
+    border-radius: 3px;
+    box-sizing: border-box;
     color: var(--datum-ink);
-    column-gap: 8px;
-    cursor: pointer;
+    column-gap: 6px;
+    cursor: default;
     display: flex;
-    font-family: var(--datum-font);
+    font-family: var(--datum-font-mono);
     font-size: 12px;
-    left: 0;
-    padding: 0 10px;
+    line-height: 1;
+    overflow: hidden;
+    padding: 0 6px;
     pointer-events: auto;
     position: absolute;
     text-align: left;
     white-space: nowrap;
+    z-index: 1;
 }
 
 .solution-drawing-chip:hover {
-    background: var(--datum-surface-raised, var(--datum-surface));
-    border-left-color: var(--datum-accent, var(--datum-green));
+    background: color-mix(in srgb, var(--datum-gold) 14%, var(--datum-surface));
+    border-color: var(--datum-gold);
 }
 
-.solution-drawing-chip-arrow {
-    color: var(--datum-subtle);
-    flex: 0 0 auto;
-    font-size: 10px;
+.solution-drawing-chip.selected {
+    background: color-mix(in srgb, var(--datum-green) 18%, var(--datum-surface));
+    border-color: var(--datum-gold);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--datum-gold) 40%, transparent);
 }
 
-.solution-drawing-chip-name {
+.solution-drawing-chip:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+.solution-drawing-chip-code {
+    color: var(--datum-ink);
     flex: 0 1 auto;
-    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.solution-drawing-chip-count {
-    color: var(--datum-subtle);
+.solution-drawing-chip-label {
+    color: color-mix(in srgb, var(--datum-ink) 55%, transparent);
     flex: 0 0 auto;
+    font-family: var(--datum-font);
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+}
+
+/* The compact contextual action, present only on the selected reference. */
+.solution-drawing-chip-edit {
+    background: var(--datum-green);
+    border: 0;
+    border-radius: 2px;
+    color: var(--datum-surface);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-family: var(--datum-font);
+    font-size: 10.5px;
+    font-weight: 600;
+    line-height: 1;
+    margin-left: 2px;
+    padding: 3px 7px;
+}
+
+.solution-drawing-chip-edit:hover {
+    background: var(--datum-green-hover);
+}
+
+.solution-drawing-chip-edit:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
 }
 
 /*
-   SPACING AROUND A BLOCK, in the source itself, comes from the block's own
-   blank lines on insert. What CSS adds here is the visual separation in the
-   PREVIEW: a figure drawn from embedded code must not run into the
-   paragraphs either side of it.
+   SPACING AROUND A FIGURE. What CSS adds here is the visual separation in the
+   PREVIEW: a drawing must not run into the paragraphs either side of it.
  */
-.solution-preview .drawing-reference-figure,
-.solution-preview .embedded-drawing-figure {
+.solution-preview .drawing-reference-figure {
     margin: 22px auto;
 }
 
@@ -1264,6 +1393,90 @@ body.solution-resizing {
 .solution-paper figure {
     margin: 16px 0;
     text-align: center;
+}
+
+/*
+   A DRAWING IN THE RENDERED SOLUTION.
+
+   On the paper's own white sheet: centred, with room around it, and - when its
+   reference is selected - a thin gold outline. The outline is a SCREEN
+   affordance: the print rule below removes it, and the PDF export prints the
+   typeset page, so nothing about the selection reaches the finished document.
+ */
+.solution-paper .linked-drawing-figure {
+    cursor: pointer;
+    display: block;
+    margin: 20px auto;
+    max-width: 100%;
+    padding: 6px 8px;
+    position: relative;
+}
+
+.solution-paper .linked-drawing-figure:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 2px;
+}
+
+.solution-paper .linked-drawing-figure.is-selected {
+    background: color-mix(in srgb, var(--datum-gold) 6%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--datum-gold) 70%, transparent);
+    outline-offset: 2px;
+}
+
+.solution-paper .linked-drawing-figure .drawing-reference-frame {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+}
+
+.solution-paper .linked-drawing-figure svg {
+    display: block;
+    height: auto;
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.solution-paper .linked-drawing-figure figcaption {
+    color: var(--datum-muted);
+    font-size: 11px;
+    font-style: italic;
+    margin-top: 4px;
+    text-align: center;
+}
+
+/*
+   THE STATES A DRAWING CAN BE IN, never disguised as a picture: rendering,
+   empty, and failed. Each says which it is; none is a blank box that could be
+   mistaken for a drawing that rendered.
+ */
+.solution-paper .drawing-reference-loading,
+.solution-paper .drawing-reference-blank,
+.solution-paper .drawing-reference-missing {
+    border: 1px dashed var(--datum-border);
+    border-radius: 4px;
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    margin: 0 auto;
+    max-width: 60%;
+    padding: 14px 16px;
+    text-align: center;
+}
+
+.solution-paper .drawing-reference-loading {
+    color: var(--datum-subtle);
+}
+
+.solution-paper .drawing-reference-missing {
+    border-color: color-mix(in srgb, var(--datum-error) 45%, transparent);
+    color: var(--datum-error);
+}
+
+/* A selection outline is a screen affordance; it never reaches paper. */
+@media print {
+    .solution-paper .linked-drawing-figure.is-selected {
+        background: transparent;
+        outline: 0;
+    }
 }
 
 .solution-paper figcaption {

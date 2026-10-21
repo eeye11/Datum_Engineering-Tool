@@ -381,7 +381,7 @@ const exportedBend = exportSpace.point(bend.x, bend.y);
 
 check(
   "every object of the drawing is in the source",
-  drawing.every((object) => source.includes(`DAETUM_OBJECT_BEGIN id="${object.id}"`)),
+  drawing.every((object) => source.includes(`% DAETUM ID: ${object.id}`)),
 );
 
 check(
@@ -428,7 +428,7 @@ check(
 
 check(
   "and carries no markers",
-  !manager.getVisibleSource().includes("DAETUM_OBJECT_BEGIN"),
+  !manager.getVisibleSource().includes("% DAETUM ID:"),
 );
 
 /* ======================================== large and negative coords */
@@ -519,3 +519,4 @@ console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) {
   process.exitCode = 1;
 }
+

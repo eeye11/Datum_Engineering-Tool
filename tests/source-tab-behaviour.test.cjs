@@ -141,7 +141,8 @@ async function until(predicate, message, ms = 4000) {
 
   check(
     "the complete source is in the editor",
-    textarea.value.includes(BS + "tikzpicture"),
+    textarea.value.includes(BS + "begin{tikzpicture}") &&
+      textarea.value.includes(BS + "end{tikzpicture}"),
     textarea.value,
   );
 

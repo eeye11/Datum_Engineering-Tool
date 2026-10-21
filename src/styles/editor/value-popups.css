@@ -232,10 +232,124 @@
 }
 
 /* ==========================================================================
+   INLINE NODE ENTRY
+
+   The prompt a drawing workflow opens where the text will go: a small field
+   beside the node, with the drawing left fully visible behind it. It is NOT
+   the modal below - nothing is dimmed, nothing is centred, and the field is
+   placed by `ui.js`'s placeFloating against the node's own canvas position.
+
+   IT IS PLACED, NOT LAID OUT: `left` and `top` are written by the editor on
+   every open (and on every camera change while it is up), so the prompt stays
+   on its node under any zoom or pan. Its width is capped so it cannot become
+   the dialog it replaced.
+   ========================================================================== */
+
+.drawing-inline-entry {
+    position: fixed;
+    z-index: 1000;
+
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    width: 260px;
+    max-width: calc(100vw - 16px);
+    padding: 5px 6px;
+    box-sizing: border-box;
+
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-green);
+    border-radius: var(--radius-sm);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    color: var(--datum-ink);
+}
+
+/*
+ * The kind of node being written - "Edit Note", "Edit Label". Small and
+ * muted: it is a caption, not a dialog title.
+ */
+.drawing-inline-entry-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--datum-muted);
+}
+
+/*
+ * THE FIELD. One line for an ordinary label; a two-row box for a note, so a
+ * line break can be seen while it is being typed. The shared input treatment
+ * supplies its colours (see features-panel.css), so it matches every other
+ * field in the application.
+ *
+ * THE HEIGHT IS STATED, NOT INHERITED. `base.css` gives every `textarea` a
+ * 300px document-editor height; without this rule a Note's box opened as a
+ * 300px column that hid the very node the prompt was anchored to. `!important`
+ * is not used - this selector is more specific than the element selector, so it
+ * wins on its own.
+ */
+.drawing-inline-entry .drawing-inline-entry-input {
+    width: 100%;
+    height: auto;
+    min-height: 22px;
+    max-height: 72px;
+    padding: 3px 5px;
+    box-sizing: border-box;
+    font-family: var(--datum-font);
+    font-size: 12px;
+    line-height: 16px;
+    resize: none;
+}
+
+.drawing-inline-entry textarea.drawing-inline-entry-input {
+    height: 38px;
+}
+
+.drawing-inline-entry .drawing-inline-entry-input:focus,
+.drawing-inline-entry .drawing-inline-entry-input:focus-visible {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-green-tint);
+    outline-offset: -1px;
+}
+
+/* The commit key, said once and quietly. */
+.drawing-inline-entry-hint {
+    font-size: 9px;
+    color: var(--datum-muted);
+    text-align: right;
+}
+
+/*
+ * THE LIVE PREVIEW, at the node's own place.
+ *
+ * It is the words the student is typing, shown where the drawing will show
+ * them - not a chip or a tooltip. No background and no border, so it reads as
+ * drawing rather than as interface; a faint outline only while it is empty, so
+ * the insertion point can be found.
+ */
+.drawing-inline-entry-preview {
+    position: fixed;
+    z-index: 999;
+    max-width: 40vw;
+    white-space: pre-wrap;
+    pointer-events: none;
+    font-family: Arial, sans-serif;
+    line-height: 1.2;
+}
+
+.drawing-inline-entry-preview[hidden] {
+    display: none;
+}
+
+/* ==========================================================================
    MODAL DIALOG SHELL
 
-   The full-screen shell, title and field label of the note editor. The class
-   names are left from the retired Edit Dimension dialog (a dimension now edits
+   The full-screen shell, title and field label of the note editor's FALLBACK
+   - a feature's text edited where there is no node to point at. The class names
+   are left from the retired Edit Dimension dialog (a dimension now edits
    through the value popup).
    ========================================================================== */
 
@@ -266,4 +380,21 @@
     margin-bottom: 3px;
     font-size: 11px;
     color: var(--datum-ink);
+}
+
+/*
+ * THE FALLBACK'S FIELD KEEPS ITS OWN SIZE.
+ *
+ * A note is multi-line, so its box is taller than a label's - but not the 300px
+ * a document `textarea` gets from base.css, which would make the dialog a full
+ * page for two lines of text.
+ */
+.drawing-dimension-dialog .drawing-note-dialog-text {
+    height: auto;
+    min-height: 64px;
+    max-height: 40vh;
+}
+
+.drawing-dimension-dialog input.drawing-property-input {
+    width: min(420px, 80vw);
 }

@@ -96,7 +96,7 @@ sync.addSourceWriter(statics.staticsSourceWriter);
 sheet.forEach((o) => sync.writeObjectIntoSource(manager, o, { allObjects: sheet }));
 
 const source = manager.getSource();
-check("every object reaches the source", sheet.every((o) => source.includes(`id="${o.id}"`)));
+check("every object reaches the source", sheet.every((o) => source.includes(`% DAETUM ID: ${o.id}`)));
 check("the coordinates are normalised", !source.includes("(-215,"), "");
 check("and no command carries two widths", source.split("\n").filter((l) => /^\\(draw|fill)/.test(l.trim())).every((l) => (l.match(/line width=/g) || []).length <= 1));
 
@@ -107,3 +107,4 @@ check("the model is never mutated", JSON.stringify(sheet) === before);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
+

@@ -44,6 +44,7 @@ import {
 import { blockContents, shapeFromStatement } from "./source-model.js";
 import { removeObjectRegion, setObjectRegion } from "./source-mapping.js";
 import { sourceForObject } from "./source-synchronization.js";
+import { objectDisplayName, objectTypeLabel } from "./object-comments.js";
 import { splitStatements } from "./source-statements.js";
 
 /* ============================================================
@@ -462,23 +463,107 @@ export function adoptUnclaimedStatements(source, { newId, candidates = [] } = {}
 
     used.add(id);
 
+    /*
+     * THE SAME READABLE HEADER THE WRITERS EMIT, so a block adopted from typed
+     * code is indistinguishable from one DAETUM generated - and the next edit
+     * of that object rewrites it in place instead of duplicating it.
+     */
     inserts.push({
       line: statement.startLine,
-      before: `% DAETUM_OBJECT_BEGIN id="${id}" type="${shape.type}"`
+      before: [
+        `% DAETUM OBJECT: ${objectTypeLabel(shape.type)}`,
+        `% DAETUM ID: ${id}`,
+        `% DAETUM TYPE: ${shape.type}`
+      ]
     });
-
-    inserts.push({ line: statement.endLine, after: `% DAETUM_OBJECT_END id="${id}"` });
   });
 
+  /*
+   * THE PICTURE'S OPENING STATEMENT IS PASSED THROUGH WHOLE. The header of the
+   * first command must sit INSIDE the picture, below `\\begin{tikzpicture}` -
+   * never above it, and never above a blank line the picture itself writes.
+   */
   const out = [];
+  let opening = true;
 
   lines.forEach((line, index) => {
-    inserts.filter((entry) => entry.line === index && entry.before).forEach((entry) => out.push(entry.before));
+    if (opening) {
+      const isBegin = /^\s*\\begin\s*\{tikzpicture\}/.test(line);
+      const isContinuation = /^\s*\[/.test(line) && !/\]\s*$/.test(line);
+
+      if (isBegin || isContinuation || !String(line).trim()) {
+        out.push(line);
+        return;
+      }
+
+      opening = false;
+    }
+
+    const before = inserts.filter((entry) => entry.line === index && entry.before);
+
+    /*
+     * NOTHING IS ADDED BETWEEN THE STUDENT'S LINES. The header is written above
+     * its command and the picture's own spacing already separates one object
+     * from the next, so adoption never invents a blank line of its own - which
+     * would show up as a change the student never made.
+     */
+
+    before.forEach((entry) => {
+      out.push(...entry.before);
+      entry.written = true;
+    });
+
     out.push(line);
-    inserts.filter((entry) => entry.line === index && entry.after).forEach((entry) => out.push(entry.after));
   });
 
-  return out.join("\n");
+  /*
+   * A HEADER WHOSE TARGET LINE THE OPENING TOOK. The first command's own line
+   * IS the opening line in a picture that was typed whole, so its header is
+   * written just above that command rather than above the picture.
+   */
+  const pending = inserts.filter((entry) => entry.before && !entry.written);
+
+  if (pending.length) {
+    const commandAt = out.findIndex(
+      (written, index) =>
+        index > 0 &&
+        /^\s*\\/.test(written) &&
+        !/^\s*\\(begin|end)\s*\{tikzpicture\}/.test(written)
+    );
+
+    const closingAt = out.findIndex((written) => /^\s*\\end\s*\{tikzpicture\}/.test(written));
+
+    const at = commandAt >= 0 ? commandAt : closingAt < 0 ? out.length : closingAt;
+
+    pending.forEach((entry) => {
+      out.splice(at, 0, ...entry.before);
+    });
+  }
+
+  return collapseBlankRuns(out).join("\n");
+}
+
+/*
+ * ONE BLANK LINE AT MOST, and none directly after the picture's opening line.
+ * A header is set directly above its command, so an empty line between the
+ * environment and the first header would separate the object from its picture.
+ */
+function collapseBlankRuns(list) {
+  const out = [];
+
+  list.forEach((line) => {
+    const blank = String(line).trim() === "";
+    const previousBlank = out.length > 0 && String(out[out.length - 1]).trim() === "";
+    const afterOpening = out.length === 1 && /^\s*\\begin\s*\{tikzpicture\}/.test(String(out[0]));
+
+    if (blank && (previousBlank || afterOpening)) {
+      return;
+    }
+
+    out.push(line);
+  });
+
+  return out;
 }
 
 /* Whether the source still holds the block's markers at all. */
@@ -506,7 +591,9 @@ export function sourceForObjectRegion(object, source, context = {}) {
     return String(source ?? "");
   }
 
-  return setObjectRegion(String(source ?? ""), object.id, object.type, commands);
+  return setObjectRegion(String(source ?? ""), object.id, object.type, commands, {
+    name: objectDisplayName(object, { type: object.type }),
+  });
 }
 
 /* Remove one object's block from the source. */

@@ -21,6 +21,7 @@
  * the code and the picture at different scales.
  */
 
+import { createSourceMap } from "../drawing-source.js";
 import {
   DEFAULT_STROKE,
   colourName as sharedColourName,
@@ -915,7 +916,24 @@ function unitOf(object) {
     return "";
 }
 
-function labelTextOf(object, fallback) {
+/*
+ * THE TEXT A LABEL SHOWS.
+ *
+ * THREE THINGS ARE NOT THE SAME, and this is where they are kept apart:
+ *
+ *   the object's NAME     "Point Force 1" - the Objects list's label for a
+ *                         feature. It is INTERNAL. It belongs in the source's
+ *                         `% DAETUM OBJECT:` header and nowhere in the picture.
+ *   the student's LABEL   (`object.label`) - text they typed in Features, which
+ *                         IS the drawing's content and is shown.
+ *   the VALUE             "F = 60 N" - controlled by the display settings.
+ *
+ * A default label is only written when the student explicitly asked for the
+ * object's name (`showName`), or when the tool's documented drawing needs a
+ * fixed default (a Resultant's "R"). A name is NEVER a default: that is what
+ * made every Point Force print "Point Force" at its arrowhead.
+ */
+function labelTextOf(object, fallback = "") {
     const explicit = typeof object?.label === "string" ? object.label.trim() : "";
 
     if (explicit) {
@@ -926,26 +944,19 @@ function labelTextOf(object, fallback) {
         return "";
     }
 
-    return texText(fallback);
+    const name = typeof object?.name === "string" ? object.name.trim() : "";
+
+    if (name && object?.showName === true) {
+        return texText(name);
+    }
+
+    return fallback ? texText(fallback) : "";
 }
 
 function nodeColourOf(object) {
     return colourOf(object?.style, "stroke");
 }
 
-/*
- * THE OBJECT'S DEFAULT NAME, derived from the model's own naming scheme.
- *
- * `addObject` already numbers a new feature ("Point Force 1", "Beam 2"), and
- * that name is the one the Objects list shows - so it is the one the label
- * carries. A custom name typed in Features replaces it, and a physical value
- * changing never touches either.
- */
-function defaultLabel(object) {
-    const name = typeof object?.name === "string" ? object.name.trim() : "";
-
-    return name || "";
-}
 
 /*
  * One label node beside an anchor, kept clear of the feature by `offset`.
@@ -997,7 +1008,7 @@ function forceNodes(object) {
 
     const nodes = [];
 
-    const label = labelTextOf(object, defaultLabel(object));
+    const label = labelTextOf(object);
 
     if (label) {
         nodes.push(labelNode({ at, text: label, colour, font, anchor: direction.x >= 0 ? "west" : "east" }));
@@ -1035,7 +1046,7 @@ function loadNodes(object) {
     const normal = bodyNormal(geometry);
     const nodes = [];
 
-    const label = labelTextOf(object, defaultLabel(object));
+    const label = labelTextOf(object);
 
     if (label) {
         nodes.push(
@@ -1113,7 +1124,7 @@ function momentNodes(object) {
 
     const nodes = [];
 
-    const label = labelTextOf(object, defaultLabel(object));
+    const label = labelTextOf(object);
 
     if (label) {
         nodes.push(labelNode({ at, text: label, colour, font, anchor: "south west" }));
@@ -1418,10 +1429,36 @@ export function staticsTextNodes(object) {
      * A LABEL THE STUDENT ASKED FOR, on a type that does not otherwise carry
      * text. It is placed at the object's own anchor, so it follows the feature
      * when the feature moves.
+     *
+     * THE NAME IS ONLY WRITTEN WHEN THE STUDENT ASKED FOR IT. `showName` is a
+     * separate decision from "has a name" - every object has a name, because the
+     * Objects list needs one - so coupling the two is what put "Point Force" on
+     * every force. A student who ticks Show Name still gets it; everybody else
+     * gets nothing.
+     *
+     * TYPES THAT WRITE THEIR OWN LABEL are skipped here: a force, a load, a
+     * moment and a diagram already place `object.label` beside their value, with
+     * the offset and anchor that suit their shape, and adding it a second time
+     * from this anchor would print it twice.
      */
     const explicit = typeof object.label === "string" ? object.label.trim() : "";
+    const shownName = object.showName === true && typeof object.name === "string" ? object.name.trim() : "";
+    const ownLabel = explicit || shownName;
 
-    if (explicit && !nodes.length) {
+    const carriesOwnLabel = new Set([
+        "force",
+        "load",
+        "varying-load",
+        "moment",
+        "resultant",
+        "force-components",
+        "analysis-diagram",
+        "shear-force-diagram",
+        "bending-moment-diagram",
+        "axial-force-diagram",
+    ]).has(object.type);
+
+    if (ownLabel && !carriesOwnLabel && labelsShown(object)) {
         const geometry = object.geometry || {};
         const colour = nodeColourOf(object);
         const font = fontFor(object.style);
@@ -1432,7 +1469,7 @@ export function staticsTextNodes(object) {
             nodes.push(
                 labelNode({
                     at: { x: Number(at.x) + 4, y: Number(at.y) + 4 },
-                    text: texText(explicit),
+                    text: texText(ownLabel),
                     colour,
                     font,
                     anchor: "south west",
@@ -1450,24 +1487,22 @@ export function staticsTextNodes(object) {
 export function sourceMapFor(lines, id) {
     const list = Array.isArray(lines) ? lines : [];
 
-    const begin = list.findIndex((line) =>
-        String(line).includes(`DAETUM_OBJECT_BEGIN id="${id}"`),
-    );
+    /*
+     * THE SAME PARSER THE SOURCE TAB USES, so a generator's line numbers and
+     * the editor's regions can never disagree about where a block begins. The
+     * parser understands the readable header as well as the legacy markers.
+     */
+    const block = createSourceMap(list.join("\n")).block(id);
 
-    if (begin < 0) {
+    if (!block) {
         return null;
     }
 
-    const end = list.findIndex(
-        (line, index) =>
-            index > begin && String(line).includes(`DAETUM_OBJECT_END id="${id}"`),
-    );
-
     return {
-        beginLine: begin,
-        endLine: end < 0 ? lines.length - 1 : end,
-        bodyStartLine: begin + 1,
-        bodyEndLine: end < 0 ? lines.length - 1 : end - 1,
+        beginLine: block.beginLine,
+        endLine: block.endLine,
+        bodyStartLine: block.bodyStartLine,
+        bodyEndLine: block.bodyEndLine,
     };
 }
 

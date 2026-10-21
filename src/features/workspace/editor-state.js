@@ -73,6 +73,22 @@ export const editorState = {
 
     polygonSidesPrompt: null,
 
+    /*
+     * ========================================================
+     * TEXT ENTRY
+     * ========================================================
+     *
+     * The id of the feature whose text is being typed right now, or null.
+     *
+     * The node-entry prompt is anchored to its feature and the feature must
+     * stay visible while it is open, so the overlay draws this one object even
+     * when the compiled picture already shows it (renderer.js). It is set and
+     * cleared by the same open/close that owns the prompt, so it can never be
+     * left behind: it holds no geometry, no text and no history, and nothing is
+     * written to the object until the entry is committed.
+     */
+    textEntryObjectId: null,
+
     selectionClickSuppressed: false,
 
     selectionDrag: null,

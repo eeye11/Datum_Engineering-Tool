@@ -169,7 +169,16 @@ const force = write(
 
 check("a force is an arrow from its application point", has(force, "(20,20) -- (20,80)"), force);
 check("with an arrow head at the far end", has(force, "-{Latex}"), force);
-check("and its label plus its magnitude, kept apart", has(force, "{Point Force 1}") && has(force, "F = 60"), force);
+check("and its magnitude, as its value annotation", has(force, "F = 60"), force);
+
+/*
+ * THE TOOL'S NAME IS NOT A LABEL. `Point Force 1` is the feature's name in the
+ * model and the Objects list; it belongs in the source's comment header, not in
+ * a `\node` in the picture. Only text the student chose is drawn.
+ */
+check("but never the internal feature name as visible text", !has(force, "{Point Force 1}"), force);
+check("while the header still names the object", has(force, "% DAETUM OBJECT: Point Force"), force);
+check("and states its stable id", has(force, "% DAETUM ID: force-test"), force);
 
 /*
  * THE VALUE IS THE LABEL, NOT THE LENGTH. A force drawn 30 long stating 500 N
@@ -192,7 +201,7 @@ const hiddenValue = write(
 );
 
 check("a hidden value leaves the annotation out", !has(hiddenValue, "F = 60"), hiddenValue);
-check("but keeps the force's own label", has(hiddenValue, "{Point Force 1}"), hiddenValue);
+check("and there is then no label text in the picture", !has(hiddenValue, "{Point Force 1}"), hiddenValue);
 
 const renamed = write(objectOf("force", { start: { x: 0, y: 0 }, magnitude: 60, angle: 0 }, {}, { label: "P" }));
 
@@ -226,7 +235,8 @@ const load = write(
 check("a load writes its loaded span", has(load, "(0,0) -- (100,0)"), load);
 check("a row of arrows standing off the body", count(load, /-{Latex}/g) >= 4, load);
 check("its envelope", has(load, "fill=daetumC193335") && has(load, "-- cycle"), load);
-check("its label and intensity", has(load, "{Distributed Load 1}") && has(load, "w = 5"), load);
+check("its intensity", has(load, "w = 5"), load);
+check("and not its internal name as text", !has(load, "{Distributed Load 1}"), load);
 
 const respaced = write(
   objectOf("load", {
@@ -317,7 +327,8 @@ const moment = write(objectOf("moment", { position: { x: 40, y: 40 }, magnitude:
 
 check("a moment is a curved arrow", has(moment, "arc[start angle=") && has(moment, "radius="), moment);
 check("at its application point", has(moment, "(40,40) circle[radius=0.6]"), moment);
-check("its label and magnitude", has(moment, "{Applied Moment 1}") && has(moment, "M = 10"), moment);
+check("its magnitude", has(moment, "M = 10"), moment);
+check("and not its internal name as text", !has(moment, "{Applied Moment 1}"), moment);
 
 const clockwise = write(objectOf("moment", { position: { x: 0, y: 0 }, magnitude: 10, direction: "CW" }));
 
@@ -665,7 +676,7 @@ check("it declares the colours it uses", has(standalone, "\\definecolor{daetumC1
 check("and it has document boundaries", has(standalone, "\\begin{document}") && has(standalone, "\\end{document}"));
 check(
   "with the picture unchanged inside",
-  has(standalone, "(0,106)") && has(standalone, "(120,106)") && has(standalone, "% DAETUM_OBJECT_BEGIN id=\"exported-beam\""),
+  has(standalone, "(0,106)") && has(standalone, "(120,106)") && has(standalone, "% DAETUM ID: exported-beam"),
   standalone.slice(0, 1200),
 );
 check(
@@ -689,3 +700,5 @@ console.log(`\n${pass} passed, ${fail} failed`);
 if (fail > 0) {
   process.exitCode = 1;
 }
+
+

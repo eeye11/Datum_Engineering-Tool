@@ -57,7 +57,11 @@ import { renderPreview } from "./preview-render.js";
     function renderDrawing(
         state,
         canvas,
-        { overlayOnly = false, liveObjectIds = null } = {}
+        {
+            overlayOnly = false,
+            liveObjectIds = null,
+            textEntryObjectId = state?.textEntryObjectId || null
+        } = {}
     ) {
         if (!canvas) {
             return;
@@ -154,10 +158,25 @@ import { renderPreview } from "./preview-render.js";
          * names the objects whose model differs from the compiled picture on
          * screen - one being moved, or just edited and still compiling - and the
          * overlay draws those, so each object is seen where it really is.
+         *
+         * AND THE OBJECT WHOSE TEXT IS BEING TYPED. A node-entry prompt is
+         * anchored to the object it writes into, and the whole point of the
+         * prompt is that the object stays visible while it is open - so that
+         * object is drawn by the overlay for as long as the entry lasts, whether
+         * or not the picture on screen already shows it. `textEntryObjectId` is
+         * set and cleared by the editor; nothing is written to the model.
          */
+        const textEntryId = state.textEntryObjectId || null;
+
+        const live = new Set(liveObjectIds || []);
+
+        if (textEntryId) {
+            live.add(textEntryId);
+        }
+
         const drawn = overlayOnly
-            ? (liveObjectIds && liveObjectIds.size
-                ? state.objects.filter((entity) => entity && liveObjectIds.has(entity.id))
+            ? (live.size
+                ? state.objects.filter((entity) => entity && live.has(entity.id))
                 : [])
             : state.objects;
 

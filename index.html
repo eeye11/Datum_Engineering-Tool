@@ -297,7 +297,39 @@
                         <button type="button" class="solution-tool" data-insert="insert-problem" title="Problem">Problem</button>
                         <button type="button" class="solution-tool" data-insert="insert-list" title="List">List</button>
                         <button type="button" class="solution-tool" data-insert="insert-table" title="Table">Table</button>
-                        <button type="button" class="solution-tool" data-insert="insert-figure" title="Insert a drawing from a sheet" id="solutionInsertFigure">Drawing</button>
+                    </div>
+
+                    <span class="solution-divider" aria-hidden="true"></span>
+
+                    <!--
+                        THE DRAWING ACTIONS.
+
+                        ENTER DRAWING places a diagram at the cursor and opens it
+                        in the Engineering Drawing workspace. When a drawing is
+                        already placed at the cursor (or a reference is selected)
+                        it opens THAT drawing - the same action the reference's
+                        own Edit Drawing offers, so there is one behaviour and
+                        two doors onto it.
+
+                        EDIT DRAWING appears only when a reference is selected:
+                        the compact contextual action, never a permanent button
+                        for a drawing that is not chosen.
+                    -->
+                    <div class="solution-toolbar-group solution-drawing-actions">
+                        <button
+                            type="button"
+                            class="solution-tool solution-tool-drawing"
+                            id="solutionEnterDrawing"
+                            title="Draw a new diagram and place it at the cursor"
+                        >Enter Drawing</button>
+
+                        <button
+                            type="button"
+                            class="solution-tool"
+                            id="solutionEditDrawing"
+                            title="Open the selected drawing in the Engineering Drawing workspace"
+                            hidden
+                        >Edit Drawing</button>
                     </div>
 
                     <span class="solution-divider" aria-hidden="true"></span>
@@ -405,7 +437,7 @@
                         <span class="solution-panel-title">Source</span>
 
                         <span class="solution-editor-hint">
-                            LaTeX \u2014 compile with the button, or let the preview catch up
+                            LaTeX &mdash; drawings appear as protected references
                         </span>
                     </div>
 
@@ -456,7 +488,7 @@
                         ></span>
                     </div>
 
-                    <div class="solution-preview-scroll">
+                    <div class="solution-preview-scroll" id="solutionPreviewScroll">
 
                         <div
                             class="solution-preview-stage"
@@ -949,6 +981,24 @@
 
                 <div class="drawing-sheet-bar-row">
                     <div class="drawing-sheet-bar" id="drawingSheetTabs" role="tablist" aria-label="Drawing sheets"></div>
+
+                    <!--
+                        BACK TO THE WRITTEN SOLUTION.
+
+                        Shown on this tab because it is where it means
+                        something, and it returns to the written solution the
+                        drawing was opened FROM: the same document, the same
+                        reference selected, the same caret. It is not a second
+                        tab switch - it is the return half of Enter Drawing.
+                    -->
+                    <button
+                        type="button"
+                        class="drawing-return-to-solution"
+                        id="drawingReturnToSolution"
+                        title="Return to the written solution, at the drawing you were editing"
+                    >
+                        <span aria-hidden="true">←</span> Written Solution
+                    </button>
                 </div>
 
                 <!--

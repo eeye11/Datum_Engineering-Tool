@@ -9,7 +9,7 @@ import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import { handleAnnotateClick, isAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
 import { commitAnalysisAxis, handleAnalysisInputClick } from "../statics/analysis-tools.js";
 import { handleAnnotationClick, isAnnotationTool } from "../annotate/annotation-tool.js";
-import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { cameraSignal, renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { pickColourFromFeature } from "../../../components/layout/panels/colour-picker.js";
 import { isConstructionTool, shouldClickSelectExistingObject } from "../../../components/layout/toolbar/construction-tools.js";
 import { handleDimensionClick } from "../annotate/dimension-placement.js";
@@ -617,7 +617,105 @@ export function openDimensionEditorFor(object) {
  * one. The guard is the model's own `isGenerated`, so a new generated
  * kind is refused automatically rather than by remembering to list it.
  */
-export function openNoteEditorFor(object) {
+/*
+ * ========================================================
+ * THE TEXT ENTRY IS ANCHORED TO THE OBJECT, NOT TO THE SCREEN
+ * ========================================================
+ *
+ * A written annotation's editor is the inline node-entry prompt, positioned at
+ * the place its text will occupy. Two things make that correct and are done
+ * here, once, for every route into the editor:
+ *
+ *   THE OBJECT STAYS VISIBLE. `editorState.textEntryObjectId` names it while
+ *   the prompt is open, and the overlay draws that object even when the
+ *   compiled picture already shows it - so the feature the student is
+ *   labelling is on the sheet, undimmed, for the whole interaction.
+ *
+ *   THE PROMPT FOLLOWS THE CAMERA. `cameraSignal` asks `renderCurrentDrawing`
+ *   to call back on every camera change, so a zoom or pan while typing moves
+ *   the prompt with its node instead of leaving it behind.
+ */
+function beginTextEntry(object) {
+    const previous = editorState.textEntryObjectId;
+
+    editorState.textEntryObjectId = object?.id || null;
+
+    if (previous !== editorState.textEntryObjectId) {
+        renderCurrentDrawing();
+    }
+}
+
+function endTextEntry() {
+    if (editorState.textEntryObjectId === null) {
+        return;
+    }
+
+    editorState.textEntryObjectId = null;
+
+    renderCurrentDrawing();
+}
+
+/*
+ * WHERE A TABLE CELL'S WORDS SIT.
+ *
+ * The table's own placement is the centre of its grid; a cell is right and
+ * down from there by whole rows and columns. The renderer sizes a cell to 12px
+ * text with tight padding, and this is the same rule, so the prompt appears
+ * over the cell the double-click landed in rather than at the table's corner.
+ *
+ * IT IS A POSITION, NOT A GEOMETRY WRITE - nothing about the table changes.
+ */
+const TABLE_CELL_WIDTH_PX = 56;
+const TABLE_CELL_HEIGHT_PX = 20;
+
+function tableCellPoint(table, cellIndex) {
+    const geometry = table?.geometry || {};
+    const placement = geometry.position;
+    const cells = geometry.cells;
+
+    if (
+        !placement ||
+        !Number.isFinite(Number(placement.x)) ||
+        !Number.isFinite(Number(placement.y)) ||
+        !Array.isArray(cells)
+    ) {
+        return null;
+    }
+
+    const columns = Math.max(1, Number(geometry.columns) || 1);
+    const rows = Math.max(1, Math.ceil(cells.length / columns));
+
+    const scale =
+        enggDrawingState.BASE_PIXELS_PER_UNIT *
+        (drawingState.camera?.zoom || 1);
+
+    const row = Math.floor(cellIndex / columns);
+    const column = cellIndex % columns;
+
+    const width = columns * TABLE_CELL_WIDTH_PX;
+    const height = rows * TABLE_CELL_HEIGHT_PX;
+
+    return {
+        x:
+            placement.x +
+            ((column + 0.5) * TABLE_CELL_WIDTH_PX - width / 2) / scale,
+        y:
+            placement.y -
+            ((row + 0.5) * TABLE_CELL_HEIGHT_PX - height / 2) / scale
+    };
+}
+
+/*
+ * OPEN THE NOTE EDITOR FOR A WRITTEN FEATURE.
+ *
+ * `atPoint` is the place on the sheet the student just clicked to put it, in
+ * drawing units. A note placed by one click is written where that click landed
+ * even before its text exists, so passing the point makes the prompt open
+ * exactly there rather than at a default the model guessed. Omitting it - a
+ * double-click on something already on the sheet - anchors to the feature's own
+ * text position, which is what the student is looking at.
+ */
+export function openNoteEditorFor(object, atPoint = null) {
     /*
      * AN ANNOTATE FEATURE'S TEXT IS ALSO THE STUDENT'S OWN.
      *
@@ -630,6 +728,8 @@ export function openNoteEditorFor(object) {
         if (!isEditableAnnotate(object)) {
             return false;
         }
+
+        beginTextEntry(object);
 
         enggNoteEditor?.open({
             text: object.text || "",
@@ -647,7 +747,15 @@ export function openNoteEditorFor(object) {
 
             title: `Edit ${enggAnnotate?.ANNOTATE_KINDS?.[object.annotateKind]?.label || "Annotation"}`,
 
+            /* The node the prompt hangs on, and the words shown while typing. */
+            object,
+            point: atPoint,
+            state: drawingState,
+            cameraSignal,
+
             onApply: (text) => {
+                endTextEntry();
+
                 const previousObjects =
                     enggDrawingState.snapshotDrawing(drawingState);
 
@@ -665,6 +773,8 @@ export function openNoteEditorFor(object) {
             },
 
             onCancel: () => {
+                endTextEntry();
+
                 setToolMessage("Annotation edit cancelled");
 
                 renderCurrentDrawing();
@@ -681,10 +791,19 @@ export function openNoteEditorFor(object) {
         return false;
     }
 
+    beginTextEntry(object);
+
     enggNoteEditor?.open({
         text: object.text || "",
 
+        object,
+        point: atPoint,
+        state: drawingState,
+        cameraSignal,
+
         onApply: (text) => {
+            endTextEntry();
+
             const previousObjects = enggDrawingState.snapshotDrawing(
                 drawingState
             );
@@ -703,6 +822,8 @@ export function openNoteEditorFor(object) {
         },
 
         onCancel: () => {
+            endTextEntry();
+
             setToolMessage("Note edit cancelled");
 
             renderCurrentDrawing();
@@ -741,13 +862,27 @@ export function openTableCellEditorFor(table, cellIndex) {
 
     const current = geometry.cells[cellIndex] ?? "";
 
+    beginTextEntry(table);
+
     enggNoteEditor?.open({
         text: current,
         multiline: false,
         placeholder: "Enter text",
         title: "Edit Cell",
 
+        object: table,
+        state: drawingState,
+        cameraSignal,
+
+        /*
+         * A CELL'S WORDS SIT IN THE CELL, not at the table's placement - so the
+         * prompt is anchored to the cell the double-click landed in.
+         */
+        point: tableCellPoint(table, cellIndex),
+
         onApply: (text) => {
+            endTextEntry();
+
             const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
 
             /*
@@ -769,6 +904,8 @@ export function openTableCellEditorFor(table, cellIndex) {
         },
 
         onCancel: () => {
+            endTextEntry();
+
             setToolMessage("Cell edit cancelled");
 
             renderCurrentDrawing();

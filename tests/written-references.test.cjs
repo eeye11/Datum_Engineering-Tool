@@ -1,16 +1,21 @@
 /*
  * ========================================================
- * WRITTEN SOLUTION EMBEDDED DRAWINGS (the insertion path)
+ * DRAWINGS IN THE WRITTEN SOLUTION: ONE REFERENCE, ONE DRAWING
  * ========================================================
  *
- * A drawing inserted into the written solution is EMBEDDED: its complete
- * TikZ source is written into the document at the caret. The document is
- * the only thing needed to reconstruct the drawing - no sheet id to
- * resolve, no token to substitute, no second file to fetch.
+ * A drawing placed in the written solution is a REFERENCE:
  *
- * The old mechanism was a reference token (`[DRAWING_REFERENCE:<id>]`)
- * resolved at render time; these checks pin the replacement: the code that
- * lands in the source is the drawing itself.
+ *     \datumdrawing{sheet_4f1c2a9b}
+ *
+ * The written solution holds the position of the drawing and the id of the
+ * drawing document; the geometry and the LaTeX live in that drawing and nowhere
+ * else. So editing the drawing cannot leave a stale copy in the answer, and the
+ * answer cannot hold a second, independently edited picture.
+ *
+ * This replaces the previous mechanism, which wrote the drawing's COMPLETE TikZ
+ * into the document at the caret. That worked, and it was wrong in one way that
+ * matters: the answer then contained a copy, and every later edit to the drawing
+ * was invisible to it.
  */
 
 const fs = require("fs");
@@ -30,104 +35,156 @@ const check = (name, ok, detail) => {
   }
 };
 
-const written = fs.readFileSync(locate("written-references.js"), "utf8");
-const writingTab = fs.readFileSync(locate("writing-tab.js"), "utf8");
-const embedded = fs.readFileSync(locate("embedded-drawings.js"), "utf8");
-const blocksEditor = fs.readFileSync(locate("drawing-blocks-editor.js"), "utf8");
-const latexDocument = fs.readFileSync(locate("latex-document.js"), "utf8");
+const read = (name) => fs.readFileSync(locate(name), "utf8");
 
-console.log("\n  the document is the source of truth\n");
+const written = read("written-references.js");
+const writingTab = read("writing-tab.js");
+const inline = read("inline-drawings.js");
+const blocksEditor = read("drawing-blocks-editor.js");
+const blocksModel = read("drawing-blocks.js");
+const workspace = read("solution-workspace.js");
+const embedded = read("embedded-drawings.js");
+
+console.log("\n  the solution holds a reference, not a copy\n");
 
 check(
-  "Insert Drawing writes the TikZ code into the LaTeX source",
-  /writeLatexPictureParts\(/.test(writingTab) &&
-    /serializeDrawingBlock\(/.test(writingTab) &&
-    /field\.value\s*=\s*\n?\s*field\.value\.slice\(0, start\) \+/.test(writingTab),
-  "the drawing's code must become real text in the editor",
+  "the block is a command naming the drawing",
+  /DRAWING_COMMAND = "\\\\datumdrawing"/.test(blocksModel) &&
+    /serializeDrawingBlock/.test(blocksModel),
 );
 
 check(
-  "and inserts AT THE CURSOR, not at the end",
-  /field\.selectionStart/.test(writingTab) &&
-    /field\.selectionEnd/.test(writingTab) &&
-    !/field\.value\s*\+=/.test(writingTab),
-  "appending would ignore where the student was typing",
-);
-
-const insertBody = writingTab.slice(writingTab.indexOf("function insertDrawingFigure"));
-
-check(
-  "the inserted code is the complete drawing, not a token",
-  !/\[DRAWING_REFERENCE:/.test(insertBody) && !/createReference/.test(insertBody),
-  "insertion must not depend on a reference token",
-);
-
-check(
-  "the insert pipeline is the export pipeline",
-  /writeLatexPictureParts\(\s*serializeDocumentBody\(\)/.test(writingTab),
-  "the same writer the .tex export uses",
-);
-
-console.log("\n  the embedded form is plain LaTeX\n");
-
-check(
-  "blocks are plain tikzpicture environments, no application markers",
-  !/DAETUM-DRAWING/.test(embedded) && !/DAETUM-DRAWING/.test(latexDocument.slice(
-    latexDocument.indexOf("function cleanSheetPicture"),
-  )),
-  "nothing may wrap the drawing in application metadata",
-);
-
-check(
-  "the picture writer generates no comments, labels or placeholder paths",
-  !/comment\(/.test(
-    latexDocument.slice(
-      latexDocument.indexOf("function cleanSheetPicture"),
-      latexDocument.indexOf("export function writeLatexPictureParts"),
+  "and it carries no drawing code of its own",
+  !/tikzpicture/.test(
+    blocksModel.slice(
+      blocksModel.indexOf("export function serializeDrawingBlock"),
+      blocksModel.indexOf("export function parseDrawingBlocks"),
     ),
   ),
 );
 
 check(
-  "an empty sheet produces no code, and the dropdown explains it",
-  /if \(!objects\.length\) \{[\s\S]{0,300}return "";/.test(latexDocument) &&
-    /— Empty/.test(writingTab) &&
-    /no drawing to insert/.test(writingTab),
-);
-
-console.log("\n  collapse is a display, not a rewrite\n");
-
-check(
-  "the collapse layer never writes to the editor's value",
-  /renderDrawingBlocks/.test(blocksEditor) && !/editor\.value\s*=/.test(blocksEditor),
-  "collapsing must not modify source",
-);
-
-console.log("\n  compile and export use the code, not the markers\n");
-
-check(
-  "the compiled document uses the code as it stands",
-  /writeStandaloneLatex\(/.test(written) || /writeStandaloneLatex\(/.test(
-    fs.readFileSync(locate("writing-tab.js"), "utf8"),
-  ),
+  "the old insert-the-whole-drawing picker is gone",
+  !/function insertDrawingFigure/.test(writingTab) &&
+    !/writeLatexPictureParts/.test(writingTab),
+  "the answer must not receive a second copy of the geometry",
 );
 
 check(
-  "the standalone document declares shared packages once, in the preamble",
-  /\\usepackage\{tikz\}/.test(embedded) &&
-    /\\usetikzlibrary\{arrows\.meta\}/.test(embedded),
+  "Enter Drawing goes through the workflow that creates the drawing",
+  /solutionEnterDrawing/.test(workspace) &&
+    /enterDrawing/.test(workspace) &&
+    /enggDrawingSheets\.createSheet/.test(inline),
 );
 
-console.log("\n  the legacy reference mechanism still renders, but nothing new depends on it\n");
+console.log("\n  Enter Drawing creates the drawing and opens it\n");
 
 check(
-  "legacy tokens are still rendered for old documents",
-  /appendReferenceFigure/.test(written) && /renderReference\(/.test(written),
+  "a drawing id is minted BEFORE the block that names it is written",
+  inline.indexOf("newDrawingId()") < inline.indexOf("insertDrawingBlock("),
 );
 
 check(
-  "embedded drawings are rendered from their own code, via the TikZ service",
-  /appendEmbeddedFigure/.test(written) && /renderTikzSvg/.test(written),
+  "and the sheet keeps that id, so the reference resolves",
+  /id: drawingId/.test(inline) && /sheet\.id !== drawingId/.test(inline),
+);
+
+check(
+  "a failure takes the block back out again",
+  /function rollback/.test(inline) &&
+    /rollback\(source, inserted/.test(inline) &&
+    /writeSource\(previousSource/.test(inline),
+  "a reference to a drawing that was never created must not survive",
+);
+
+check(
+  "the drawing is opened through the existing sheet controller",
+  /enggDrawingSheets\.activateSheet/.test(inline) &&
+    /tab\[data-tab="drawing"\]/.test(inline),
+);
+
+check(
+  "no second drawing editor is introduced",
+  !/getElementById\("(drawingCanvas|drawingTools|featureList)/.test(inline) &&
+    !/createElement\("canvas"\)/.test(inline),
+  "the existing workspace is opened, not rebuilt",
+);
+
+console.log("\n  the reference is protected, and only the reference\n");
+
+check(
+  "edits are checked against the block's own range",
+  /export function guardEdit/.test(blocksEditor) &&
+    /guardEdit\(lastSource/.test(workspace),
+);
+
+check(
+  "and a refused edit puts the source back exactly as it was",
+  /if \(!guard\.ok\) \{[\s\S]{0,200}nodes\.editor\.value = lastSource/.test(workspace),
+);
+
+check(
+  "the command is drawn as an element the keyboard cannot enter",
+  /solution-editor-mirror/.test(blocksEditor) &&
+    /createRange\(\)/.test(blocksEditor) &&
+    !/editor\.value\s*=/.test(blocksEditor),
+);
+
+check(
+  "the panel is not made read-only to achieve it",
+  !/readOnly\s*=\s*true/.test(workspace) && !/contenteditable/i.test(workspace),
+);
+
+check(
+  "selecting is separate from editing - a click never opens the editor",
+  /function selectDrawingBlock/.test(workspace) &&
+    /requestEditDrawing/.test(workspace) &&
+    !/onSelect:[\s\S]{0,80}requestEditDrawing/.test(workspace),
+);
+
+check(
+  "the preview scrolls only when the drawing is outside the visible area",
+  /revealSelectedDrawingInPreview/.test(workspace) &&
+    /rect\.top >= view\.top \+ margin && rect\.bottom <= view\.bottom - margin/.test(workspace),
+);
+
+console.log("\n  rendering draws the linked drawing, live\n");
+
+check(
+  "the preview renders the referenced drawing's own current source",
+  /appendLinkedFigure/.test(written) && /readSheetLatex/.test(written),
+);
+
+check(
+  "a newer render cannot be overwritten by an older one",
+  /renderSequence/.test(written) && /sequence !== renderSequence/.test(written),
+);
+
+check(
+  "a failed render keeps the drawing and says so",
+  /could not be rendered/.test(written) &&
+    /Its geometry and source are unchanged/.test(written),
+);
+
+check(
+  "an empty drawing is shown as empty, not as a broken one",
+  /drawing-reference-blank/.test(written),
+);
+
+check(
+  "the compiled document has ONE preamble and one document environment",
+  /composeDrawingBlocks/.test(embedded) &&
+    !/\\documentclass/.test(
+      embedded.slice(
+        embedded.indexOf("function composeDrawingBlocks"),
+        embedded.indexOf("function escapeLatexText"),
+      ),
+    ),
+);
+
+check(
+  "a drawing that cannot be resolved is reported, never silently dropped",
+  /could not be resolved/.test(embedded),
 );
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

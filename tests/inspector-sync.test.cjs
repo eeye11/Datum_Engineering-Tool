@@ -233,11 +233,16 @@ if (error) {
     .filter((row) => row !== null);
 
   /*
-   * The visible editor has no marker lines, so an object's rows are its
-   * commands - the block's own lines less the two marker comments above and
-   * below them.
+   * The visible editor has no header comments, so an object's rows are its
+   * COMMANDS. The first command line is taken from the block's body, whatever
+   * the header's height - it was hard-coded at bodyStartLine, which is right
+   * only for a one-line header.
    */
-  const circleCommand = source.split("\n")[circleBlock.bodyStartLine];
+  const circleCommand = source
+    .split("\n")
+    .slice(circleBlock.bodyStartLine, circleBlock.bodyEndLine + 1)
+    .find((line) => line.trim() && !line.trim().startsWith("%"));
+
   const circleRow = visibleLines.indexOf(circleCommand) + 1;
 
   check(
@@ -390,8 +395,7 @@ if (error) {
 
   check(
     "one object still has exactly one source region",
-    countOf(afterEdit, `DAETUM_OBJECT_BEGIN id="${surviving.id}"`) === 1 &&
-      countOf(afterEdit, `DAETUM_OBJECT_END id="${surviving.id}"`) === 1,
+    countOf(afterEdit, `% DAETUM ID: ${surviving.id}`) === 1,
     afterEdit,
   );
   check(

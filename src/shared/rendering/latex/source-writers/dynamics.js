@@ -40,6 +40,8 @@ import {
   styleOptions,
   texText
 } from "./statics-primitives.js";
+import { applyObjectComments, ensureObjectId, objectDisplayName } from "../object-comments.js";
+import { renderObjectBlock } from "../drawing-source.js";
 
 /* ============================================================
  * HELPERS
@@ -819,9 +821,13 @@ export function dynamicsSourceWriter(object) {
     return null;
   }
 
-  return [commands, labelFor(object), secondaryLabels(object)]
+  const body = [commands, labelFor(object), secondaryLabels(object)]
     .filter((part) => typeof part === "string" && part.trim() !== "")
     .join("\n");
+
+  const id = ensureObjectId(object, object.type);
+
+  return applyObjectComments({ ...object, id }, body, { type: object.type });
 }
 
 /* Every Dynamics type this writer answers for. */
@@ -835,17 +841,21 @@ export function generateDynamicsTikz(objects) {
     .filter(Boolean)
     .map((object) => {
       const source = dynamicsSourceWriter(object);
+      const id = ensureObjectId(object, object.type);
 
       return source
-        ? [
-            `% DAETUM_OBJECT_BEGIN id="${object.id}" type="${object.type}"`,
-            source,
-            `% DAETUM_OBJECT_END id="${object.id}"`,
-          ].join("\n")
+        ? source.includes("% DAETUM ID:")
+          ? source
+          : renderObjectBlock({
+              id,
+              type: object.type,
+              name: objectDisplayName(object, { type: object.type }),
+              source,
+            })
         : null;
     })
     .filter(Boolean)
-    .join("\n");
+    .join("\n\n");
 }
 
 export function generateDynamicsTikzWithSourceMap(objects) {

@@ -33,6 +33,7 @@
  */
 
 import { num, point, texText } from "./statics-primitives.js";
+import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
@@ -714,6 +715,24 @@ export function annotationSourceWriter(object, options = {}) {
     return null;
   }
 
+  const written = annotationCommands(object, options);
+
+  if (typeof written !== "string" || !written.trim()) {
+    return null;
+  }
+
+  /*
+   * THE HEADER NAMES THE OBJECT AND ITS STABLE ID. A dimension or a callout is
+   * several commands - witnesses, the line, the text - and they are ONE object;
+   * the header says which, and the commands below it are that object's source.
+   */
+  const id = ensureObjectId(object, object.type);
+
+  return applyObjectComments({ ...object, id }, written, { type: object.type });
+}
+
+/* The commands of one annotation object, without its header. */
+function annotationCommands(object, options = {}) {
   if (object.type === "annotate") {
     return annotateCommands(object);
   }

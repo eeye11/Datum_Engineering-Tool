@@ -347,7 +347,19 @@ function createCollection(input) {
       objectSnap: content.objectSnap,
       styleDefaults: content.styleDefaults,
       viewport: content.viewport,
-        grid: content.grid
+      grid: content.grid,
+      /*
+       * THE SHEET'S SOURCE, CARRIED THROUGH THE LOAD.
+       *
+       * It was omitted here when a saved document was read back, so every
+       * reopened sheet arrived without its canonical picture - and the loader
+       * then reconciled an empty manager from the objects. A drawing whose
+       * source was edited in the Source tab, or one saved before the object
+       * writers could reproduce it, came back as something other than what was
+       * saved. The sheet's source is part of the sheet, so it is read with the
+       * rest of it.
+       */
+      source: content.source ? { ...content.source } : null
       };
   });
 
@@ -811,7 +823,25 @@ function loadSheet(state, sheet) {
    */
   const manager = activeSourceManager();
 
-  manager.restore(content.source || null);
+  /*
+   * A PERSISTED SOURCE IS THE PICTURE, AND THE LOAD SAYS SO.
+   *
+   * The source statement travels with `origin: "load"`, which is the signal the
+   * object synchroniser uses to tell a document ARRIVING from the student
+   * editing it - restoring a sheet must never be mistaken for an edit to it.
+   *
+   * A drawing being STARTED is the other case. A sheet with nothing on it and
+   * no source - the sheet an Enter Drawing creates - is given the usual empty
+   * picture, so its Source tab opens on something writable rather than nothing.
+   */
+  const stored = content.source;
+
+  manager.restore(
+    stored && typeof stored.source === "string"
+      ? stored
+      : { source: "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}" },
+    { origin: "load" }
+  );
 
   /*
    * A SHEET IS A DIFFERENT PICTURE. The compiled results for the sheet the
@@ -827,8 +857,15 @@ function loadSheet(state, sheet) {
   globalThis.enggDrawingPictureCache?.reset?.();
 
   /*
-   * AND THE NEW SHEET'S SOURCE IS MADE TO REPRESENT ITS OBJECTS, from the
-   * writers that know each one's type - never from an empty `object.source`.
+   * AND THE SHEET'S SOURCE IS MADE TO REPRESENT ITS OBJECTS, from the writers
+   * that know each one's type - never from an empty `object.source`.
+   *
+   * THIS RUNS FOR EVERY SHEET, stored source or not, because reconciling is
+   * ADDITIVE: every region the stored picture already has is kept character for
+   * character, and only a MISSING one is written. That answers both failures at
+   * once - a sheet saved before sources were stored, and an object whose region
+   * the picture does not hold - so neither can arrive with a feature that has
+   * nowhere to be edited.
    */
   reconcileSourceWithObjects(manager, state.objects, { state });
 

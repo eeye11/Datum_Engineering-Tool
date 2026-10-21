@@ -35,6 +35,7 @@ import {
 import { validateDrawingSource } from "./source-validation.js";
 import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "./source-diagnostics.js";
 import { drawingBounds } from "./model-bounds.js";
+import { objectDisplayName } from "./object-comments.js";
 import { createExportContext, IDENTITY_EXPORT } from "./export-transform.js";
 
 /*
@@ -182,11 +183,17 @@ export function writeObjectIntoSource(manager, object, context = {}) {
     return false;
   }
 
+  /*
+   * THE HEADER'S READABLE NAME COMES FROM THE OBJECT. `setObjectRegion`
+   * rewrites the whole block, header included, so the name the Objects list
+   * shows is the name the source states - changed in Features, changed here.
+   */
   const next = setObjectRegion(
     manager.getSource(),
     object.id,
     object.type,
     commands,
+    { name: objectDisplayName(object, { type: object.type }) },
   );
 
   return manager.setSource(next, { origin: "object" });

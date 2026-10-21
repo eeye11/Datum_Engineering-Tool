@@ -162,6 +162,18 @@ const DEFAULT_EXPORT = /^export default (\w+);/m;
 
 function loadModule(name) {
   const file = locate(name);
+
+  /*
+   * A MODULE IS SHARED WITH THE CODE THAT ASKS FOR IT BY NAME.
+   *
+   * Application modules reach each other THROUGH THE GLOBAL (a script booted
+   * from `index.html` assigns `window.engg…`), so a module loaded directly here
+   * must be published under that name - otherwise the code loaded by the test
+   * and the code the app is already holding are two instances, with two sets of
+   * state, and an object written to one is invisible to the other. That is what
+   * made a test's direct write fail to reach the application's source manager
+   * when the file had been hoisted into the shared registry first.
+   */
   const exported = require(file);
   const declared = fs.readFileSync(file, "utf8").match(DEFAULT_EXPORT);
   const target = globalThis.window || globalThis;

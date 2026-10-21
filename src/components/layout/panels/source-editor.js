@@ -50,6 +50,8 @@
  * uses - so a wrapped line, a tab and an emoji all measure the same in all four.
  */
 
+import { isObjectMarkerLine } from "../../../shared/rendering/latex/drawing-source.js";
+
 const CLASS = {
     root: "drawing-source-editor-root",
     gutter: "drawing-source-gutter",
@@ -107,7 +109,13 @@ function highlightLine(line) {
     const commentAt = commentStart(line);
 
     if (commentAt === 0) {
-        if (/DAETUM_OBJECT_(BEGIN|END)/.test(line)) {
+        /*
+         * A MARKER GETS ITS OWN, MUTED CLASS. The test is the source module's,
+         * so a readable `% DAETUM OBJECT:` header is highlighted like the legacy
+         * markers rather than as ordinary prose - and a student's own comment
+         * that merely mentions DAETUM is not.
+         */
+        if (isObjectMarkerLine(line)) {
             return `<span class="ds-marker">${escaped}</span>`;
         }
 

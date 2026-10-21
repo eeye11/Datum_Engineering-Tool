@@ -12,6 +12,7 @@
  */
 
 import { point, splitPrelude, styleOptions } from "./statics-primitives.js";
+import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import enggPipeDuct from "../../../../features/workspace/model/fluids/pipe-duct.js";
 
 function finitePoint(at) {
@@ -112,15 +113,25 @@ export function fluidsSourceWriter(object) {
     return null;
   }
 
-  if (object.type === "pipe-duct") {
-    return serializeRun(object);
+  /*
+   * A RUN IS TWO WALLS AND AN ELBOW IS FOUR PRIMITIVES. Each is ONE object, and
+   * the header above its commands says so - so the whole run or fitting is one
+   * region of source with one identity.
+   */
+  const written =
+    object.type === "pipe-duct"
+      ? serializeRun(object)
+      : object.type === "elbow"
+        ? serializeElbow(object)
+        : null;
+
+  if (typeof written !== "string" || !written.trim()) {
+    return null;
   }
 
-  if (object.type === "elbow") {
-    return serializeElbow(object);
-  }
+  const id = ensureObjectId(object, object.type);
 
-  return null;
+  return applyObjectComments({ ...object, id }, written, { type: object.type });
 }
 
 export const FLUIDS_SOURCE_TYPES = Object.freeze(["pipe-duct", "elbow"]);

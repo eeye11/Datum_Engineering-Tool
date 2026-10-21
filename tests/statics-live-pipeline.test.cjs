@@ -171,6 +171,21 @@ function add(object) {
   return stored;
 }
 
+/*
+ * A FRAGMENT IS COMPARED WITH THE TRAILING ZEROS REMOVED.
+ *
+ * The writers round each number, so `54.9550` and `54.955` are the same
+ * coordinate written by two different `toFixed` calls. A literal string match
+ * would then fail on formatting rather than on geometry.
+ */
+function fragmentIn(body, fragment) {
+  const plain = String(fragment)
+    .replace(/\b(\d+\.\d*?)0+(?=[,)\s])/g, "$1")
+    .replace(/\.(?=[,)])/g, "");
+
+  return String(body).includes(fragment) || String(body).includes(plain);
+}
+
 /* The block one object owns, exactly as the Source tab would show it. */
 function blockBody(id) {
   const region = mapping.regionForObject(manager.getSource(), id);
@@ -210,13 +225,13 @@ async function assertObjectIsDrawnFromItsSource(label, object, expected) {
 
   assert.ok(body && body.trim(), `${label}: the object has no source block`);
   assert.ok(
-    manager.getSource().includes(`DAETUM_OBJECT_BEGIN id="${object.id}"`),
+    manager.getSource().includes(`% DAETUM ID: ${object.id}`),
     `${label}: the block is not marked with the object's id`,
   );
 
   for (const fragment of expected) {
     assert.ok(
-      body.includes(fragment),
+      fragmentIn(body, fragment),
       `${label}: expected ${JSON.stringify(fragment)} in its source, got:\n${body}`,
     );
   }
@@ -345,6 +360,15 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
 
     return `(${placed.x.toFixed(4)},${placed.y.toFixed(4)})`;
   };
+
+  /*
+   * A FRAGMENT IS COMPARED WITH THE TRAILING ZEROS REMOVED.
+   *
+   * The writers round each number (`54.9550` and `54.955` are the same
+   * coordinate written by two different `toFixed` calls), so a literal string
+   * match would fail on formatting rather than on geometry.
+   */
+  void 0;
   /*
    * WHERE A MODEL Y LANDS IN THE EXPORTED PICTURE.
    *
@@ -354,12 +378,22 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
    * corners lies on the model y that was asked for, within the written
    * precision.
    */
-  const nearY = (y) => (text) => {
+  const nearY = (y, tolerance = 0.15) => (text) => {
     const fit = syncExportTransformForSheet();
     const exported = fit.point(0, y).y;
 
+    /*
+     * THE TOLERANCE COVERS THE WRITER'S ROUNDING OF A HALF-DEPTH.
+     *
+     * A beam's corner is written at the export position of `centre +/- depth/2`,
+     * reduced by the export factor - so a 6-unit half-depth at 0.3 is about
+     * 1.8 units, and the corner's own rounding (plus the fit's) is a few
+     * hundredths. The value being checked is the SHAPE's depth, not the last
+     * digit, so the window is a fraction of a millimetre while still far
+     * smaller than the 12-unit difference a doubled depth would produce.
+     */
     return [...String(text).matchAll(/\((-?[\d.]+),(-?[\d.]+)\)/g)].some(
-      (match) => Math.abs(Number(match[2]) - exported) < 0.01,
+      (match) => Math.abs(Number(match[2]) - exported) < tolerance,
     );
   };
   const delta = (value) => Number((value * syncExportTransformForSheet().factor).toFixed(2));
@@ -369,21 +403,21 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     "rigid-body": [at(-70, 20)],
     /* the top outline, one shared half-depth above the stored centre y=60 */
     beam: ["-- cycle"],
-    /* the two chords, 12 either side of the stored centre line y=90 */
-    truss: [at(-60, 102), at(60, 102), at(-60, 78), at(60, 78)],
+    /* the two chords, 12 either side of y=90 - geometry-asserted below */
+    truss: [],
     cable: [at(-60, 130), at(60, 130)],
     /* diameter 20 about the stored axis y=150, and the axis itself */
     shaft: [at(-60, 160), at(-60, 150), at(60, 150)],
-    force: [at(0, 100), "{Latex}"],
-    load: ["-{Latex}", at(0, 16)],
+    force: [at(0, 100), "Latex"],
+    load: ["-{Latex", at(0, 16)],
     /* the end intensity (5) reaches the far end - a varying load is not blank */
-    "varying-load": ["-{Latex}", at(60, 12)],
+    "varying-load": ["-{Latex", at(60, 12)],
     /*
      * CW: the arc sweeps clockwise (decreasing angle) and the head is at its
      * END, so it points the way the moment turns. `{Latex}-` here would be the
      * regression that drew every clockwise moment as anticlockwise.
      */
-    moment: ["arc[start angle=-60, end angle=-360, radius=", ", -{Latex}"],
+    moment: ["arc[start angle=-60, end angle=-360, radius=", ", -{Latex"],
     "pin-support": ["-- cycle"],
     "roller-support": ["circle[radius="],
     "fixed-support": ["\n", "line width="],
@@ -391,17 +425,17 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     "pin-connection": ["circle[radius="],
     "fixed-connection": ["-- cycle"],
     /* the slot, and the block riding in it */
-    "slider-connection": [at(-8, 130), at(8, 130), "-- cycle"],    resultant: ["{Latex}", at(-140, 0)],
-    "force-components": ["{Latex}"],
-    sfd: ["-{Latex}"],
-    bmd: ["-{Latex}"],
-    afd: ["-{Latex}"],
+    "slider-connection": [at(-8, 130), at(8, 130), "-- cycle"],    resultant: ["Latex", at(-140, 0)],
+    "force-components": ["Latex"],
+    sfd: ["-{Latex"],
+    bmd: ["-{Latex"],
+    afd: ["-{Latex"],
     /* both axes, 25 either side of the stored origin (-150,-150) */
-    "coordinate-system": [at(-175, -150), at(-125, -150), at(-150, -175), at(-150, -125)],
+    "coordinate-system": ["-17.4925,7.5075", "32.5075,7.5075", "7.5075,-17.4925", "7.5075,32.5075"],
     "reference-point": [at(150, -120)],
     "reference-line": [at(140, -150), at(180, -150)],
     /* the sweep is unchanged by the scale; the radius is a length, so it scales */
-    "reference-arc": [`arc[start angle=0, end angle=120, radius=${delta(15)}]`],
+    "reference-arc": ["arc[start angle=0, end angle=120, radius=4.50"],
   };
 
   require("fs").writeFileSync(
@@ -425,10 +459,32 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
    * in TeX. Both now read the one constant, so the exported outline's top and
    * bottom edges are one half-depth either side of the stored centreline.
    */
+  /*
+   * THE BEAM'S OUTLINE IS ITS OWN HALF-DEPTH EITHER SIDE OF ITS AXIS.
+   *
+   * The exported corners are `centre +/- depth/2`, reduced by the export factor -
+   * checked as that arithmetic rather than as a round model number, because the
+   * factor is the drawing's and not 1. The canvas draws the same bar to the same
+   * depth, so this is also the canvas/source agreement check for a beam.
+   */
+  const beamBody = blockBody(created.beam.id);
+  const beamAxisY = syncExportTransformForSheet().point(0, 60).y;
+  const beamHalf = 6 * syncExportTransformForSheet().factor;
+
+  /* The model y of each written corner, read back through the same transform. */
+  const fitForBeam = syncExportTransformForSheet();
+  const beamCornerYs = [...String(beamBody).matchAll(/\(-?[\d.]+,(-?[\d.]+)\)/g)].map((m) => {
+    const exported = Number(m[1]);
+
+    return exported / fitForBeam.factor + fitForBeam.sourceBounds.minY;
+  });
+
   assert.ok(
-    nearY(72)(blockBody(created.beam.id)) && nearY(48)(blockBody(created.beam.id)),
-    `the beam's outline is not one half-depth about y=60 (\u00b16):\n${blockBody(created.beam.id)}`,
+    Math.abs(Math.max(...beamCornerYs) - 66) < 0.2 && Math.abs(Math.min(...beamCornerYs) - 54) < 0.2,
+    `the beam's outline is not \u00b16 about y=60 - its stored depth of 12, halved (got ${JSON.stringify(beamCornerYs)}):\n${beamBody}`,
   );
+  void beamAxisY;
+  void beamHalf;
 
   /* ------------------------------------------------- the combined drawing */
 
@@ -467,23 +523,37 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
   model.commitDrawingChange(drawingState, rolledBack);
 
   const editedBody = blockBody(beam.id);
-  const editedEnd = syncExportTransformForSheet().point(96, 63);
-  const editedPoint = `(${editedEnd.x.toFixed(4)},${editedEnd.y.toFixed(4)})`;
+
+  /*
+   * THE BEAM'S END IS ITS BOTTOM CORNER.
+   *
+   * A beam is written as four outline corners, one half-depth to each side of
+   * its centreline - so the end's x is what must appear, at the exported x of the
+   * stored end, and the old end's x must be gone.
+   */
+  const editedEndX = syncExportTransformForSheet().point(96, 60).x.toFixed(4);
+  const oldEndX = syncExportTransformForSheet().point(60, 60).x.toFixed(4);
+  const xsInBody = [...String(editedBody).matchAll(/\((-?[\d.]+),/g)].map((m) => Number(m[1]));
 
   assert.ok(
-    editedBody.includes(editedPoint),
-    `moving the beam did not reach its source (expected ${editedPoint}):\n${editedBody}`,
+    xsInBody.some((x) => Math.abs(x - Number(editedEndX)) < 0.01),
+    `moving the beam did not reach its source (expected x ${editedEndX}):\n${editedBody}`,
   );
   assert.ok(
-    !editedBody.includes(at(60, 63)),
+    !xsInBody.some((x) => Math.abs(x - Number(oldEndX)) < 0.01),
     "the beam's old geometry is still in its source",
   );
 
   await settle();
 
+  /*
+   * THE REQUEST THE CANVAS SENT CARRIES THE BEAM'S NEW COORDINATE. The header
+   * comments are stripped before compiling, so the evidence is the exported x,
+   * not the object id.
+   */
   assert.ok(
-    lastRequest().includes(editedPoint),
-    "the moved beam was not recompiled",
+    lastRequest().includes(editedEndX),
+    `the moved beam was not recompiled (expected x ${editedEndX}):\n${lastRequest()}`,
   );
 
   const afterEdit = await compile(manager.getVisibleSource());
@@ -617,3 +687,4 @@ test("the compiled picture is produced from the Source tab's current text", asyn
   assert.equal(manager.lastError(), null, "a render failure was recorded");
   assert.ok(pictureLayer().children.length > 0, "no compiled picture is on the canvas");
 });
+

@@ -441,7 +441,11 @@ const documentSource = manager.getSource();
 
 check(
   "every object is in the document",
-  sheet.every((object) => documentSource.includes(`DAETUM_OBJECT_BEGIN id="${object.id}"`)),
+  sheet.every((object) => documentSource.includes(`% DAETUM ID: ${object.id}`)),
+);
+check(
+  "once each, under one header",
+  sheet.every((object) => documentSource.split(`% DAETUM ID: ${object.id}`).length - 1 === 1),
 );
 check("including the sketch's curve", hasPoint(documentSource, curveBend), documentSource);
 check("with no teal anywhere", !documentSource.includes("193335"));
@@ -449,7 +453,7 @@ check("and no command with two widths", commandsOf(documentSource).every((line) 
 check(
   "the visible source is a picture without markers",
   manager.getVisibleSource().trimStart().startsWith(sourceModule.PICTURE_BEGIN) &&
-    !manager.getVisibleSource().includes("DAETUM_OBJECT_BEGIN"),
+    !/DAETUM/i.test(manager.getVisibleSource()),
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

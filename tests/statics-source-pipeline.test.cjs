@@ -173,7 +173,8 @@ writeInto(manager, beam("beam-1", { x: 0, y: 100 }, { x: 80, y: 100 }));
 check("a created beam gets one block", Boolean(blockOf(manager, "beam-1")));
 check(
   "under the stable id",
-  manager.getSource().includes('% DAETUM_OBJECT_BEGIN id="beam-1" type="beam"'),
+  manager.getSource().includes("% DAETUM ID: beam-1") &&
+    manager.getSource().includes("% DAETUM TYPE: beam"),
 );
 
 /*
@@ -355,9 +356,7 @@ console.log("----------------------");
 const custom = `% my own note\r\n\\draw[dashed] (0,0) -- (5,5);`;
 
 manager.setSource(
-  manager
-    .getSource()
-    .replace("% DAETUM_OBJECT_BEGIN", `${custom}\n% DAETUM_OBJECT_BEGIN`),
+  manager.getSource().replace("% DAETUM OBJECT:", `${custom}\n\n% DAETUM OBJECT:`),
 );
 
 check(
@@ -468,7 +467,7 @@ sync.reconcileSourceWithObjects(reopened, objects);
 
 check(
   "reconciling twice adds nothing",
-  reopened.getSource().split("DAETUM_OBJECT_BEGIN").length - 1 === 2,
+  reopened.getSource().split("% DAETUM ID:").length - 1 === 2,
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

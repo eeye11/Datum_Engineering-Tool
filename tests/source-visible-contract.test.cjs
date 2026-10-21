@@ -116,9 +116,16 @@ check(
   restored,
 );
 check(
-  "and the object ids are re-attached",
-  restored.includes('DAETUM_OBJECT_BEGIN id="line-1"') &&
-    restored.includes('DAETUM_OBJECT_BEGIN id="circle-1"'),
+  "and the object ids are re-attached, under readable headers",
+  restored.includes("% DAETUM ID: line-1") &&
+    restored.includes("% DAETUM ID: circle-1") &&
+    restored.includes("% DAETUM OBJECT: Line"),
+  restored,
+);
+check(
+  "inside the picture, not above its opening line",
+  restored.indexOf("% DAETUM ID: line-1") > restored.indexOf("\\begin{tikzpicture}") &&
+    restored.indexOf("% DAETUM ID: line-1") < restored.indexOf("\\draw[black] (0,0) -- (40,10);"),
   restored,
 );
 
@@ -127,7 +134,7 @@ manager.setVisibleSource(editedVisible);
 
 check(
   "the manager stores the restored canonical form",
-  manager.getSource().includes('DAETUM_OBJECT_BEGIN id="line-1"'),
+  manager.getSource().includes("% DAETUM ID: line-1"),
   manager.getSource(),
 );
 check(

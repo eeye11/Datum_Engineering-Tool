@@ -1500,4 +1500,88 @@ disappeared while I typed" failure.
         drawingZoomValue.value =
             `${Math.round(editorState.drawingZoom)}%`;
     }
+
+    /*
+     * ================================================================
+     * A CAMERA CHANGE IS ANNOUNCED HERE
+     * ================================================================
+     *
+     * The inline node-entry prompt is anchored to a point on the sheet, so it
+     * has to move when the sheet is zoomed or panned under it. The camera is
+     * plain numbers, not an observable, but EVERY change to it ends in a
+     * redraw - so the redraw is the one honest announcement there is, and this
+     * is where it is made.
+     *
+     * The comparison is against what was announced last, so a redraw caused by
+     * an edit does not move anything: the prompt is only re-placed when the
+     * view actually changed. `cameraSignal(listener)` returns the unsubscribe,
+     * and a listener that throws is dropped rather than allowed to break the
+     * draw it was called from.
+     */
+    announceCamera();
+}
+
+const cameraListeners = new Set();
+
+let announcedCamera = null;
+
+function cameraKey(state) {
+    const camera = state?.camera || {};
+
+    const bounds = canvasBounds();
+
+    return [
+        Number(camera.zoom) || 1,
+        Number(camera.panX) || 0,
+        Number(camera.panY) || 0,
+        bounds ? bounds.rect.left : 0,
+        bounds ? bounds.rect.top : 0,
+        bounds ? bounds.width : 0,
+        bounds ? bounds.height : 0
+    ].join("|");
+}
+
+function announceCamera() {
+    if (!cameraListeners.size) {
+        return;
+    }
+
+    const key = cameraKey(drawingState);
+
+    if (key === announcedCamera) {
+        return;
+    }
+
+    announcedCamera = key;
+
+    [...cameraListeners].forEach((listener) => {
+        try {
+            listener();
+        } catch {
+            cameraListeners.delete(listener);
+        }
+    });
+}
+
+/*
+ * Be told when the camera the canvas is drawn with changes.
+ *
+ * Returns the unsubscribe. A caller that subscribes is responsible for
+ * unsubscribing - the node-entry prompt does it in the same `close()` that
+ * removes the prompt.
+ */
+export function cameraSignal(listener) {
+    if (typeof listener !== "function") {
+        return () => {};
+    }
+
+    cameraListeners.add(listener);
+
+    return () => {
+        cameraListeners.delete(listener);
+    };
+}
+
+export function cameraListenerCount() {
+    return cameraListeners.size;
 }
