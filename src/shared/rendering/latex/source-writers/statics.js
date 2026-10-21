@@ -907,7 +907,7 @@ function serializeLoadArrows(entity, object) {
     return null;
   }
 
-  const { samples, start, end, direction, normal, reversed } = profile;
+  const { samples, start, end, direction, reversed } = profile;
   const style = object.style || {};
 
   const arrowOptions = styleOptions(style);

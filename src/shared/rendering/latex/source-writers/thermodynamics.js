@@ -295,7 +295,7 @@ function serializeProcessPath(object, options) {
 
     commands.push(`\\fill[${colour}] ${point(finite(at.x), finite(at.y))} circle[radius=0.5];`);
 
-    let labelAt = null;
+    let labelAt;
 
     try {
       const labels = processLabelsModule();

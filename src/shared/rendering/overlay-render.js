@@ -1000,7 +1000,7 @@ export {
         state.objects
             .filter(object => selected.has(object?.id))
             .forEach(object => {
-                let frame = null;
+                let frame;
 
                 try {
                     frame = selectionBounds([object], [object.id]);

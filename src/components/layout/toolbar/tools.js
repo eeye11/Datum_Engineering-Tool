@@ -1,4 +1,5 @@
 import { fluidsToolGroups } from "../../../features/workspace/model/fluids/fluids-tools.js";
+import { DYNAMICS_TOOL_GROUPS as dynamicsToolGroups } from "../../../features/workspace/dynamics/dynamics-hierarchy.js";
 
 const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">${content}</svg>`;
 const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"';
@@ -18,6 +19,18 @@ export const toolIcons = {
     "Process Plot": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M3 3l-2 3m2-3 2 3m12 11-3-2m3 2-3 2"/>`),
     "Saturation Curve": drawingIcon(`<path ${iconStroke} d="M3 3v14h14M6 14C7.2 9.2 7.8 5.5 10 5.5C12.4 5.5 14.4 11.5 17 14"/>`),
 	Select: drawingIcon(`<path ${iconStroke} d="M4 3l3 12 3-4 4 4 1-1-4-4 5-1z"/>`),
+	"Dynamics Bodies": drawingIcon(`<circle ${iconStroke} cx="7" cy="8" r="2.6"/><path ${iconStroke} d="M3 16c0-2.4 1.8-4 4-4s4 1.6 4 4"/><rect ${iconStroke} x="11.5" y="6" width="5.5" height="5.5"/>`),
+	"Dynamics Particle": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
+	"Dynamics Rigid Body": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Trajectory: drawingIcon(`<path ${iconStroke} d="M3 16C6 16 6 6 10 6s4 10 7 10"/><circle fill="currentColor" cx="3" cy="16" r="1.3"/>`),
+	Kinematics: drawingIcon(`<path ${iconStroke} d="M4 17L16 4m-4 0h4v4"/><path ${iconStroke} stroke-dasharray="2 2" d="M4 9a8 8 0 0 1 5-5"/>`),
+	"Polar Vector": drawingIcon(`<path ${iconStroke} d="M5 15L15 6m-5 0h5v5"/><path ${iconStroke} d="M5 15a10 10 0 0 1 3-6"/>`),
+	"Angular Vector": drawingIcon(`<path ${iconStroke} d="M10 10l5-4m-5 4a6 6 0 1 0 5 2.6"/><path ${iconStroke} d="M12 11l3-1 .5 3"/>`),
+	Spring: drawingIcon(`<path ${iconStroke} d="M3 10h2l1.5-4 2 8 2-8 2 8 2-8 1.5 4h2"/>`),
+	"Mechanical Elements": drawingIcon(`<path ${iconStroke} d="M3 7h3l1.5-3 2 6 2-6 2 6 1.5-3h2"/><path ${iconStroke} d="M3 14h3m8 0h3M7 14h6"/>`),
+	"Viscous Damper": drawingIcon(`<path ${iconStroke} d="M3 10h3m8 0h3M6 10h2m2 0h2M8 6v8"/><rect ${iconStroke} x="10" y="6" width="4" height="8"/>`),
+	"Spring–Damper Element": drawingIcon(`<path ${iconStroke} d="M3 6h3l1-2 1.5 4L10 4l1.5 4 1 2H17"/><path ${iconStroke} d="M3 15h4M13 15h4"/><path ${iconStroke} d="M7 13h6M10 13v4"/>`),
+	Pulley: drawingIcon(`<circle ${iconStroke} cx="10" cy="7" r="3.2"/><path ${iconStroke} d="M6.8 7v2h6.4V7M7 9v6M13 9v6"/><circle fill="currentColor" cx="10" cy="7" r="1"/>`),
 	Line: drawingIcon(`<path ${iconStroke} d="M4 16L16 4"/>`),
 	Polyline: drawingIcon(`<path ${iconStroke} d="M3 14l4-8 5 5 5-7"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="7" cy="6" r="1"/><circle ${iconStroke} cx="12" cy="11" r="1"/>`),
 	Triangle: drawingIcon(`<path ${iconStroke} d="M10 3l7 13H3z"/><circle ${iconStroke} cx="10" cy="3" r="1"/>`),
@@ -569,6 +582,17 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
+
+	/*
+	 * ========================================================
+	 * DYNAMICS: THE TOOLSET, IMPORTED FROM ITS OWN MODULE
+	 * ========================================================
+	 *
+	 * The same arrangement FLUIDS uses below: the groups are declared in
+	 * features/workspace/dynamics/dynamics-hierarchy.js, beside the tools
+	 * and the model that read them, so a Dynamics tool is registered once.
+	 */
+	DYNAMICS: dynamicsToolGroups,
 
 	/*
 	 * ========================================================

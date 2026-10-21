@@ -170,7 +170,7 @@ function fitSvgToItsDrawing(svg) {
         return svg;
     }
 
-    let bounds = null;
+    let bounds;
 
     try {
         bounds = svg.getBBox();

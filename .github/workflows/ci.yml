@@ -26,7 +26,14 @@ jobs:
         run: npm run lint
 
       - name: Unit and integration tests
-        run: npm test
+        run: |
+          # Node runs each test file in its own process, so a file that dies
+          # without a summary leaves a single line saying nothing about which
+          # check failed. Splitting the reporter's output makes that visible
+          # in the run's log and its annotations.
+          node --test --test-reporter=spec --test-reporter-destination=stdout \
+            --test-reporter=github --test-reporter-destination=github \
+            tests/ 2>&1 | tee test-report.log
 
       - name: Build
         run: npm run build

@@ -6,7 +6,7 @@ import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { drawingState, editorState } from "../editor-state.js";
+import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { distanceToSegment, isRectangleLike, objectPoints } from "../interaction/hit-testing.js";
 import { cancelInteraction } from "../interaction/selection.js";
