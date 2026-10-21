@@ -227,7 +227,7 @@ async function builtObjects() {
     const first = { x: 20 + index * 12, y: 25 };
     const second = { x: 45 + index * 12, y: 40 };
 
-    m.creation.createDynamicsFeature(id, first, second, { ...STYLE });
+    await m.creation.createDynamicsFeature(id, first, second, { ...STYLE });
 
     const created = state.objects[state.objects.length - 1];
 
