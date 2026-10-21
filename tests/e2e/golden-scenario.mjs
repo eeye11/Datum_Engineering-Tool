@@ -89,7 +89,12 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 });
     await context.addInitScript(DETERMINISM);
     const page = await context.newPage();
-    page.setDefaultTimeout(2500);
+    /*
+     * Above the longest explicit pause below (3000 ms): a default shorter than
+     * a deliberate wait makes any step that follows one flaky, and a failed
+     * action is then swallowed by the .catch(() => {}) calls around it.
+     */
+    page.setDefaultTimeout(10000);
     const debug = process.env.GOLDEN_DEBUG
         ? (...a) => fs.appendFileSync(process.env.GOLDEN_DEBUG, a.join(" ") + "\n")
         : () => {};
@@ -310,6 +315,12 @@ async function main() {
         await escape();
         results[key] = { steps, ...snap, panels, errors: [...errors] };
         process.stdout.write(`${key}: ${created.length} new, ${errors.length} errors\n`);
+        /*
+         * Flush as we go: the recording is only written at the very end, so a
+         * stall used to leave no file at all and say nothing about where it
+         * stopped. A partial recording makes the last printed key the culprit.
+         */
+        fs.writeFileSync(outFile, JSON.stringify(results, null, 1));
     }
 
     /*
@@ -354,6 +365,7 @@ async function main() {
         const snap = await snapshot();
         results[key] = { ...snap, camera: await page.evaluate(() => ({ ...window.enggDrawing.state.camera })), errors: [...errors] };
         process.stdout.write(`${key}: ${snap.objects.length} objects, ${errors.length} errors\n`);
+        fs.writeFileSync(outFile, JSON.stringify(results, null, 1));
     }
 
     /* Export: the clean SVG render of the active sheet, and a file round-trip. */
