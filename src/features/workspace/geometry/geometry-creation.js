@@ -360,6 +360,16 @@ export function commitFreeformPolygon(
             drawingState
         );
 
+    /*
+     * The construction ends with the commit, as every other tool's does.
+     * Left running, the finished polygon's vertices stayed in progress: the
+     * preview kept drawing them and the next click extended the old shape
+     * instead of starting a new one.
+     */
+    enggDrawingState.clearInteraction(
+        drawingState
+    );
+
     commitCreatedFeature(
         object,
         previousObjects

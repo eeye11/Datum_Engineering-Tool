@@ -1023,11 +1023,18 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             preview.type ===
             "polygon"
         ) {
+            /*
+             * A Freeform Polygon previews its OWN vertices. `polygonVertices`
+             * builds a regular polygon from centre, radius and sides, which a
+             * freeform preview does not have - so it drew a zero-size shape
+             * and the outline never appeared while the student drew.
+             */
             const polygonPoints =
-                enggDrawingState
-                    .polygonVertices(
-                        geometry
-                    )
+                (
+                    Array.isArray(geometry.points)
+                        ? geometry.points.filter(Boolean)
+                        : enggDrawingState.polygonVertices(geometry)
+                )
                     .map(toScreen)
                     .map(
                         point =>
@@ -1059,6 +1066,47 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
                     polygon
                 );
             }
+
+            /*
+             * A Freeform Polygon's placed vertices: a dot on each, and a
+             * ring on the first (the close target), filled when the pointer
+             * would close the shape.
+             */
+            const markers =
+                preview.metadata?.vertexMarkers || [];
+
+            markers.forEach((vertex, index) => {
+                const screen =
+                    toScreen(vertex);
+
+                if (index === 0) {
+                    svg.appendChild(
+                        createSvgElement("circle", {
+                            cx: screen.x,
+                            cy: screen.y,
+                            r: preview.metadata.closingVertex ? 7 : 6,
+                            fill: preview.metadata.closingVertex
+                                ? style.stroke
+                                : "none",
+                            "fill-opacity": 0.25,
+                            stroke: style.stroke,
+                            "stroke-width": 1.5,
+                            "data-freeform-vertex": "first"
+                        })
+                    );
+                }
+
+                svg.appendChild(
+                    createSvgElement("circle", {
+                        cx: screen.x,
+                        cy: screen.y,
+                        r: 3,
+                        fill: style.stroke,
+                        stroke: "none",
+                        "data-freeform-vertex": String(index)
+                    })
+                );
+            });
 
             return;
         }

@@ -710,6 +710,21 @@ export function updatePreview(
                 }
             );
 
+        /*
+         * THE PLACED VERTICES ARE MARKED, not only found by hovering.
+         *
+         * Every vertex already committed to the construction gets a dot, and
+         * the first one a ring - it is the close target - which lights up
+         * when the pointer is close enough to close the polygon.
+         */
+        interaction.preview.metadata = {
+            ...(interaction.preview.metadata || {}),
+            vertexMarkers: interaction.points.map(vertex => ({ ...vertex })),
+            closingVertex:
+                interaction.points.length >= 3 &&
+                closingFreeformPolygon(point)
+        };
+
         setToolMessage(
             closingFreeformPolygon(point)
                 ? "Release to close the polygon"
