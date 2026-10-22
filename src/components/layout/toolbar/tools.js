@@ -6,6 +6,7 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
+    "Boundary Stress": drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="9"/><path ${iconStroke} d="M6 5V1m4 4V1m4 4V1M4 8H1m3 4H1m15-4h3m-3 4h3M6 16v3m4-3v3m4-3v3"/>`),
     "Stress Element": drawingIcon(`<path ${iconStroke} d="M10 2l8 8-8 8-8-8z"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
@@ -784,7 +785,7 @@ export const engineeringTools = {
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
+	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Shaft", "Load", "Stress", "Strain", "Coordinate System"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
 	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]

@@ -52,6 +52,7 @@ export function cancelManipulationDrag() {
 
     editorState.manipulationDrag =
         null;
+    drawingCanvas.classList.remove("drawing-object-moving");
 
     /*
      * A CANCELLED DRAG LEAVES NO SNAP STATE BEHIND.

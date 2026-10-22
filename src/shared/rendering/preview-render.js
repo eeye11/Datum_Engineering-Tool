@@ -1192,7 +1192,8 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
                 style,
                 state,
                 bounds,
-                true
+                true,
+                -(Number(geometry.rotation) || 0)
             );
             return;
         }

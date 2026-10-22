@@ -12,6 +12,7 @@ import enggDrawingState from "../../model/drawing-state.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import { stressArrows, stressAngleMark } from "../../geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
 
 
     export function drawPoint({ svg, parentSvg, geometry, style, toScreen }) {
@@ -131,6 +132,20 @@ import { stressArrows, stressAngleMark } from "../../geometry/stress-element.js"
          * feature rather than four separate lines.
          */
     export function drawRectangleOutline({ svg, scale, geometry, style, toScreen, entity }) {
+            if (entity.metadata?.boundaryStress) {
+                const drawing = boundaryStressDrawing(geometry);
+                for (const { points, colour } of drawing.paths) {
+                    const path = createSvgElement("polyline", { points: points.map(toScreen).map(p => `${p.x},${p.y}`).join(" ") });
+                    applyStyle(path, { ...style, stroke: colour, fill: "none" });
+                    svg.appendChild(path);
+                }
+                for (const item of drawing.labels) {
+                    const p = toScreen(item.point);
+                    const label = createSvgElement("text", { x: p.x, y: p.y, fill: item.colour, "font-size": 12, "text-anchor": "middle", "dominant-baseline": "middle" });
+                    label.textContent = item.text;
+                    svg.appendChild(label);
+                }
+            }
             if (entity.metadata?.stressElement) {
                 const mark = stressAngleMark(geometry);
                 if (mark) {
@@ -441,6 +456,6 @@ import { stressArrows, stressAngleMark } from "../../geometry/stress-element.js"
                 state,
                 bounds,
                 entity.isPreview,
-                Number(entity.rotation) || 0
+                -(Number(geometry.rotation) || Number(entity.rotation) || 0)
             );
         }

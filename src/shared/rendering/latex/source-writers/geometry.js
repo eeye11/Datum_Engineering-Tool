@@ -47,6 +47,7 @@ import {
 import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
 import { stressArrows, stressAngleMark } from "../../../geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../geometry/boundary-stress.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 
 function finite(value, fallback = 0) {
@@ -329,6 +330,13 @@ const SHAPES = {    line(object) {
     },
 
     rectangle(object) {
+        if (object.metadata?.boundaryStress) {
+            const drawing = boundaryStressDrawing(object.geometry);
+            const escape = text => text.replace(/[\\{}$&#%_^~]/g, char => ({ "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" }[char] || `\\${char}`));
+            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), renderStyle(object.style)),
+                ...drawing.paths.map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" }))),
+                ...drawing.labels.map(item => textNode({ at: pointOf(item.point), text: escape(item.text), style: { stroke: item.colour } }))].join("\n");
+        }
         if (object.metadata?.stressElement) {
             const style = renderStyle(object.style);
             const mark = stressAngleMark(object.geometry);
@@ -476,9 +484,7 @@ const SHAPES = {    line(object) {
         };
 
         const xPositive = arm(geometry.xPositiveLength);
-        const xNegative = arm(geometry.xNegativeLength);
         const yPositive = arm(geometry.yPositiveLength);
-        const yNegative = arm(geometry.yNegativeLength);
 
         const fallback = arm(geometry.axisLength) || 25;
 
@@ -507,30 +513,28 @@ const SHAPES = {    line(object) {
             y: origin.y + dx * sin + dy * cos
         });
 
-        if (showX && (xPositive > 0 || xNegative > 0)) {
+        if (showX) {
             const posX = xPositive > 0 ? xPositive : fallback;
-            const negX = xNegative > 0 ? xNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(-negX, 0),
+                    rotate(0, 0),
                     rotate(posX, 0),
                     style,
-                    { arrow: "both" }
+                    { arrow: "end" }
                 )
             );
         }
 
-        if (showY && (yPositive > 0 || yNegative > 0)) {
+        if (showY) {
             const posY = yPositive > 0 ? yPositive : fallback;
-            const negY = yNegative > 0 ? yNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(0, -negY),
+                    rotate(0, 0),
                     rotate(0, posY),
                     style,
-                    { arrow: "both" }
+                    { arrow: "end" }
                 )
             );
         }
@@ -556,11 +560,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x + 3 * cos + 3 * sin,
-                            y: tip.y + 3 * sin - 3 * cos
+                            x: tip.x + 7 * sin,
+                            y: tip.y - 7 * cos
                         },
                         text: xText,
-                        anchor: "west",
+                        anchor: "center",
                         style: { stroke: style.stroke }
                     })
                 );
@@ -575,11 +579,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x - 3 * sin + 3 * cos,
-                            y: tip.y + 3 * cos + 3 * sin
+                            x: tip.x - 7 * cos,
+                            y: tip.y - 7 * sin
                         },
                         text: yText,
-                        anchor: "south west",
+                        anchor: "center",
                         style: { stroke: style.stroke }
                     })
                 );

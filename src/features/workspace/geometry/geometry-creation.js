@@ -13,6 +13,7 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { commitCreatedFeature } from "./creation-commit.js";
+import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -1015,7 +1016,7 @@ export function beginOrCompleteGeometry(
                         "circle"
                         ? "Specify radius"
 
-                    : (["rectangle", "stress-element"].includes(drawingState.activeTool) ||
+                    : (["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
                         drawingState.activeTool === "control-volume" ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
@@ -1939,57 +1940,19 @@ export function beginOrCompleteGeometry(
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        /*
-         * ========================================================
-         * THE COORDINATE SYSTEM IS DRAWN BY ONE GESTURE
-         * ========================================================
-         *
-         * The press is the origin and the release is the positive X
-         * direction. The Y axis is derived from the X axis - it is drawn
-         * perpendicular to it - so the student gets square axes from a
-         * single drag and never has to place a third point or type an
-         * angle. The angle is taken from the two committed points, not
-         * from the pointer's snapped position on its own, so grid snapping
-         * cannot skew the axes out of square: whatever direction the
-         * release lands in, Y is exactly 90 degrees from X.
-         *
-         * The arm length is the distance the student dragged. Both the
-         * positive and negative arms use it, so the origin sits in the
-         * middle of the cross the way a coordinate system is drawn on
-         * paper. There are no ticks, units or scale factors here - this
-         * places the AXES, nothing else.
-         */
-        const arm = Math.hypot(
-            point.x - first.x,
-            point.y - first.y
-        );
-
-        if (arm <= 1e-9) {
-            setToolMessage(
-                "Drag from the origin to set the X axis"
-            );
-
+        const axes = coordinateSystemFromDrag(first, point);
+        if (!axes) {
+            setToolMessage("Drag to set the coordinate system size");
             return;
         }
 
         object =
             enggDrawingState.geometryFactories.coordinateSystem2D(
+                axes.origin,
                 {
-                    x: first.x,
-                    y: first.y
-                },
-                {
-                    rotation: Math.atan2(
-                        point.y - first.y,
-                        point.x - first.x
-                    ),
-
-                    xAxisLength: arm,
-                    yAxisLength: arm,
-                    xPositiveLength: arm,
-                    xNegativeLength: arm,
-                    yPositiveLength: arm,
-                    yNegativeLength: arm,
+                    ...axes,
+                    xAxisLength: axes.xPositiveLength,
+                    yAxisLength: axes.yPositiveLength,
 
                     name: "Coordinate System",
 
@@ -2029,7 +1992,7 @@ export function beginOrCompleteGeometry(
                 }
             );
     } else if (
-        ["rectangle", "stress-element"].includes(drawingState.activeTool) ||
+        ["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
         drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
@@ -2056,9 +2019,10 @@ export function beginOrCompleteGeometry(
 
         const isControlVolume = drawingState.activeTool === "control-volume";
         const isStressElement = drawingState.activeTool === "stress-element";
+        const isBoundaryStress = drawingState.activeTool === "boundary-stress";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isStressElement || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isBoundaryStress || isStressElement || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -2099,6 +2063,12 @@ export function beginOrCompleteGeometry(
         if (isStressElement) {
             object.name = "Stress Element";
             object.metadata = { ...object.metadata, stressElement: true };
+        }
+        if (isBoundaryStress) {
+            object.name = "Boundary Stress";
+            object.metadata = { ...object.metadata, boundaryStress: true };
+            Object.assign(object.geometry, { top_normalStart: 1, top_normalEnd: 1 });
+            object.style = { ...object.style, fill: "none", lineType: "solid" };
         }
     } else if (
         ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
@@ -2268,6 +2238,14 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
+        if (object.metadata?.boundaryStress) {
+            commitCreatedFeature(object);
+            activateTool("select");
+            setToolMessage("Boundary stress plate created - edit the top, right, bottom and left edge distributions in Features");
+            renderProperties();
+            renderCurrentDrawing();
+            return;
+        }
         if (object.metadata?.stressElement) {
             commitCreatedFeature(object);
             activateTool("select");
@@ -2314,7 +2292,12 @@ export function beginOrCompleteGeometry(
             previousObjects
         );
 
-        setToolMessage("Ready");
+        if (object.type === COORDINATE_SYSTEM_TYPE) {
+            activateTool("select");
+            setToolMessage("Coordinate system created - drag either axis or the origin to move it");
+        } else {
+            setToolMessage("Ready");
+        }
 
         renderProperties();
         renderCurrentDrawing();
@@ -2467,13 +2450,13 @@ export function add2DCoordinateSystem(
                     COORDINATE_SYSTEM_LENGTH,
 
                 xNegativeLength:
-                    COORDINATE_SYSTEM_LENGTH,
+                    0,
 
                 yPositiveLength:
                     COORDINATE_SYSTEM_LENGTH,
 
                 yNegativeLength:
-                    COORDINATE_SYSTEM_LENGTH,
+                    0,
 
                 /*
                  * THE AXIS LABELS ARE STORED VALUES, NOT PLACEHOLDERS.
@@ -2527,13 +2510,9 @@ export function add2DCoordinateSystem(
         previousObjects
     );
 
-    enggDrawingState.clearSelection(
-        drawingState
-    );
-
-    setToolMessage(
-        "Specify origin"
-    );
+    enggDrawingState.selectObject(drawingState, coordinateSystem.id);
+    activateTool("select");
+    setToolMessage("Coordinate system created - drag either axis or the origin to move it");
 
     renderProperties();
     renderCurrentDrawing();

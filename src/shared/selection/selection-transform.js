@@ -1,4 +1,5 @@
 import geometry from "../geometry/feature-geometry.js";
+import { boundaryStressDrawing } from "../geometry/boundary-stress.js";
 import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
@@ -8,6 +9,10 @@ export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.metadata?.boundaryStress) {
+            const drawing = boundaryStressDrawing(g);
+            return geometry.rectangleCorners(g).concat(drawing.paths.flatMap(path => path.points), drawing.labels.map(label => label.point));
+        }
         if (object.metadata?.stressElement) return geometry.rectangleCorners(g).concat(stressArrowPaths(g).flat());
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (["circle", "arc"].includes(object.type) && g.center) {

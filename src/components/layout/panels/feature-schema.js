@@ -29,6 +29,7 @@
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { STRESS_COLOURS } from "../../../shared/geometry/stress-element.js";
+import { BOUNDARY_EDGES } from "../../../shared/geometry/boundary-stress.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
@@ -414,6 +415,34 @@ const ARROW_OPTIONS = [
 ];
 
 const FIELDS = {
+    ...Object.fromEntries(BOUNDARY_EDGES.flatMap(edge => {
+        const applies = object => object.metadata?.boundaryStress === true;
+        const field = (key, definition) => [`boundary.${edge}_${key}`, {
+            applies, read: object => object.geometry[`${edge}_${key}`] ?? (definition.kind === "number" ? 0 : definition.kind === "choice" ? "linear" : ""),
+            write: (object, value) => {
+                if (definition.kind === "number" && (String(value).trim() === "" || !Number.isFinite(Number(value)))) return false;
+                if (definition.kind === "choice" && !["linear", "quadratic"].includes(value)) return false;
+                object.geometry[`${edge}_${key}`] = definition.kind === "number" ? Number(value) : String(value);
+                return true;
+            }, ...definition
+        }];
+        return [field("profile", { kind: "choice", label: "Variation", options: [{ value: "linear", label: "Linear / Uniform" }, { value: "quadratic", label: "Quadratic" }] }),
+            ...["normal", "shear"].flatMap(kind => [
+                field(`${kind}Start`, { kind: "number", step: 0.1, label: `${kind === "normal" ? "Normal" : "Shear"} (${edge === "top" || edge === "bottom" ? "left" : "bottom"})` }),
+                field(`${kind}End`, { kind: "number", step: 0.1, label: `${kind === "normal" ? "Normal" : "Shear"} (${edge === "top" || edge === "bottom" ? "right" : "top"})` }),
+                field(`${kind}Label`, { kind: "text", label: `${kind === "normal" ? "Normal" : "Shear"} Label` })
+            ])];
+    })),
+    ...Object.fromEntries(["normal", "shear"].map(kind => [`boundary.${kind}Colour`, {
+        kind: "colour", label: `${kind === "normal" ? "Normal" : "Shear"} Colour`,
+        applies: object => object.metadata?.boundaryStress === true,
+        read: object => object.geometry[`${kind}Colour`] || (kind === "normal" ? "#db2777" : "#2563eb"),
+        write: (object, value) => {
+            if (!/^#[0-9a-f]{6}$/i.test(String(value))) return false;
+            object.geometry[`${kind}Colour`] = value;
+            return true;
+        }
+    }])),
     "stressElement.showAngle": {
         kind: "toggle", label: "Show Angle",
         applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
@@ -1000,6 +1029,8 @@ export const GROUPS = [
     },
 
     { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
+    { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
+    ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
     { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
     { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }

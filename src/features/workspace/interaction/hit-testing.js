@@ -12,6 +12,7 @@ import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import { stressArrowPaths } from "../../../shared/geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
@@ -937,6 +938,10 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.boundaryStress && boundaryStressDrawing(geometry).paths.some(({ points }) =>
+                    points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance))) {
+                    return true;
+                }
                 if (object.metadata?.stressElement && stressArrowPaths(geometry).some(path =>
                     path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance))) {
                     return true;

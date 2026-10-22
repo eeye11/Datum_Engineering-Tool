@@ -671,6 +671,7 @@ export function resolvePointerEvent(
  */
 function freeThermodynamicsMove(drag, rawPoint) {
     if (
+        drag?.object?.type === "coordinate-system-2d" ||
         drag?.kind?.startsWith("process-label-") ||
         drag?.kind?.startsWith("process-bend-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||

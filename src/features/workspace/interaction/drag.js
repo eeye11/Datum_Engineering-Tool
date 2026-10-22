@@ -346,16 +346,18 @@ export function beginManipulationDrag(
 
     if (
         object &&
-        drawingState.selection
+        (object.type === COORDINATE_SYSTEM_TYPE || drawingState.selection
             .selectedObjectIds
             .includes(
                 object.id
-            )
+            ))
     ) {
+        const coordinateNeedsSelection = object.type === COORDINATE_SYSTEM_TYPE && !selectedIds.includes(object.id);
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,
             kind: "body",
+            pending: coordinateNeedsSelection,
             moved: false,
             start: { ...point },
 
@@ -372,8 +374,7 @@ export function beginManipulationDrag(
             anchor: { ...point },
             originals: Object.fromEntries(
                 selectionMembers(drawingState.objects,
-                    drawingState.selection
-                        .selectedObjectIds
+                    coordinateNeedsSelection ? [object.id] : drawingState.selection.selectedObjectIds
                 ).map(
                     item => [
                         item.id,
@@ -535,6 +536,8 @@ export function updateManipulationDrag(
 
     editorState.manipulationDrag.moved =
         true;
+    drawingCanvas.classList.toggle("drawing-object-moving",
+        ["body", "origin", "position", "center", "annotation-offset"].includes(editorState.manipulationDrag.kind));
 
     applyManipulation(
         editorState.manipulationDrag,
@@ -575,6 +578,7 @@ export function finishManipulationDrag(
 
     editorState.manipulationDrag =
         null;
+    drawingCanvas.classList.remove("drawing-object-moving");
 
     /*
      * THE DRAG'S TRANSIENT SNAP STATE IS CLEARED WITH IT.
@@ -1289,10 +1293,12 @@ function applyManipulation(
             return;
         }
 
-        const measured =
-            drag.kind.startsWith("x")
-                ? Math.abs(point.x - g.origin.x)
-                : Math.abs(point.y - g.origin.y);
+        const angle = Number(g.rotation) || 0;
+        const dx = point.x - g.origin.x;
+        const dy = point.y - g.origin.y;
+        const measured = Math.abs(drag.kind.startsWith("x")
+            ? dx * Math.cos(angle) + dy * Math.sin(angle)
+            : -dx * Math.sin(angle) + dy * Math.cos(angle));
 
         g[key] = Math.max(measured, 1e-6);
 

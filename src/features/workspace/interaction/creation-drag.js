@@ -122,6 +122,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "line",
     "rectangle",
     "stress-element",
+    "boundary-stress",
     "control-volume",
     "saturation-curve",
     "process-plot",

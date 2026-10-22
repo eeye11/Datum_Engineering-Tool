@@ -22,7 +22,7 @@
  * It matches the renderer's own floor, so a coordinate system saved before the
  * axis was given an explicit length still has its labels in the right place.
  */
-const MINIMUM_AXIS_LENGTH = 15;
+const MINIMUM_AXIS_LENGTH = 1;
 
 function axisLength(geometry, key) {
   const stored = Number(geometry?.[key] ?? geometry?.axisLength);
@@ -56,6 +56,11 @@ function axisLabelPositions(object) {
 
   const x = String(geometry.xLabel ?? "X");
   const y = String(geometry.yLabel ?? "Y");
+  const angle = Number(geometry.rotation) || 0;
+  const at = (dx, dy) => ({
+    x: geometry.origin.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+    y: geometry.origin.y + dx * Math.sin(angle) + dy * Math.cos(angle)
+  });
 
   if (x.trim()) {
     labels.push({
@@ -64,10 +69,7 @@ function axisLabelPositions(object) {
       axis: "x",
       sourceFeatureId: object.id,
       text: x,
-      position: geometry.xLabelPosition || {
-        x: geometry.origin.x + axisLength(geometry, "xPositiveLength") + 5,
-        y: geometry.origin.y - 6,
-      },
+      position: geometry.xLabelPosition || at(axisLength(geometry, "xPositiveLength"), -7),
     });
   }
 
@@ -78,10 +80,7 @@ function axisLabelPositions(object) {
       axis: "y",
       sourceFeatureId: object.id,
       text: y,
-      position: geometry.yLabelPosition || {
-        x: geometry.origin.x + 6,
-        y: geometry.origin.y - axisLength(geometry, "yPositiveLength") - 5,
-      },
+      position: geometry.yLabelPosition || at(-7, axisLength(geometry, "yPositiveLength")),
     });
   }
 
