@@ -34,7 +34,7 @@ function renderToolbarTool(tool) {
 
     const expanded = expandedToolbarSections[tool.id];
     const sectionId = `statics-${tool.id}-tools`;
-    const button = renderToolButton(tool.id === "coordinate-system" ? { ...tool, submenu: true } : tool)
+    const button = renderToolButton({ ...tool, submenu: true })
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
