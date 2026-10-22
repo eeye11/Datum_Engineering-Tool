@@ -430,8 +430,13 @@ export const drawingToolGroups = [
 			{ id: "triangle", label: "Triangle", shortcut: "T" },
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
-			{ id: "arc", label: "Arc", shortcut: "A" },
-			{ id: "polygon", label: "Polygon", shortcut: "G" },
+			/*
+			 * Arc and Polygon each have two construction methods, shown as an
+			 * expandable list under the tool - the same layout Statics uses for
+			 * its grouped tools (see expandedToolbarSections).
+			 */
+			{ id: "arc", label: "Arc", shortcut: "A", submenu: true },
+			{ id: "polygon", label: "Polygon", shortcut: "G", submenu: true },
 			{ id: "freeform-polygon", label: "Freeform Polygon", shortcut: "F" }
 		]
 	},

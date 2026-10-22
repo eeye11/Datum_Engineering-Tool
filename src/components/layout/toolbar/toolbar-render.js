@@ -11,7 +11,7 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
-import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
+import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 
 // Keep inline sections open independently across toolbar redraws.
 const expandedToolbarSections = {
@@ -20,6 +20,8 @@ const expandedToolbarSections = {
     support: false,
     connection: false,
     "reference-arc": false,
+    arc: false,
+    polygon: false,
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
@@ -59,6 +61,16 @@ function renderToolbarTool(tool) {
             { id: "piston-cylinder", label: "Without Stoppers", iconLabel: "Piston Cylinder" },
             { id: "piston-cylinder-stoppers", label: "With Stoppers", iconLabel: "Piston Cylinder With Stoppers" }
         ].map(option => renderToolButton(option).replace('data-tool-id=', 'data-piston-cylinder-option="true" data-tool-id=')).join("")
+        : tool.id === "arc"
+        ? ARC_CREATION_MODES.map(mode => {
+            const active = drawingState.activeTool === "arc" && drawingState.interaction.arcMode === mode.id;
+            return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-arc-mode="${mode.id}">${mode.label}</button>`;
+        }).join("")
+        : tool.id === "polygon"
+        ? POLYGON_CREATION_MODES.map(mode => {
+            const active = drawingState.activeTool === "polygon" && (drawingState.interaction.polygonMode || "sides") === mode.id;
+            return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-polygon-mode="${mode.id}">${mode.label}</button>`;
+        }).join("")
         : tool.id === "reference-arc"
         ? ARC_CREATION_MODES.map(mode => {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
@@ -176,6 +188,26 @@ export function renderEngineeringTools(
                         if (button.dataset.referenceArcMode) {
                             event.preventDefault();
                             activateArcMode("reference-arc", button.dataset.referenceArcMode);
+                            return;
+                        }
+
+                        /*
+                         * A Geometry Arc or Polygon method, from its inline
+                         * list. The method is written after the tool is armed
+                         * (see armCreationMode), so the list is redrawn once it
+                         * is - otherwise the highlight shows the previous method.
+                         */
+                        if (button.dataset.arcMode) {
+                            event.preventDefault();
+                            activateArcMode("arc", button.dataset.arcMode)
+                                .then(() => renderEngineeringTools(activeCategory()));
+                            return;
+                        }
+
+                        if (button.dataset.polygonMode) {
+                            event.preventDefault();
+                            activatePolygonMode(button.dataset.polygonMode)
+                                .then(() => renderEngineeringTools(activeCategory()));
                             return;
                         }
 

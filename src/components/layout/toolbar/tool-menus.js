@@ -538,7 +538,7 @@ export const ARC_CREATION_MODES = [
 ];
 
 export function activateArcMode(toolId, mode) {
-    armCreationMode(toolId, "arcMode", mode);
+    return armCreationMode(toolId, "arcMode", mode);
 }
 
 /*
@@ -563,7 +563,7 @@ function armCreationMode(toolId, key, mode) {
         }
     );
 
-    import("./tool-activation.js").then(
+    return import("./tool-activation.js").then(
         ({ activateTool }) => {
             activateTool(toolId);
 
@@ -588,8 +588,13 @@ function armCreationMode(toolId, key, mode) {
  * records the method and arms the Polygon tool, exactly as the Arc
  * modes do.
  */
-function activatePolygonMode(mode) {
-    armCreationMode("polygon", "polygonMode", mode);
+export const POLYGON_CREATION_MODES = [
+    { id: "sides", label: "By Sides" },
+    { id: "centre", label: "By Centre" }
+];
+
+export function activatePolygonMode(mode) {
+    return armCreationMode("polygon", "polygonMode", mode);
 }
 
 export function openArcMenu(button) {
