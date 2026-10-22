@@ -751,7 +751,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
 	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
-	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*
 	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,
@@ -785,8 +785,8 @@ export const engineeringTools = {
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Shaft", "Load", "Stress", "Strain", "Coordinate System"],
-	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
+	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Load", "Stress", "Strain", "Coordinate System"],
+	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
 	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

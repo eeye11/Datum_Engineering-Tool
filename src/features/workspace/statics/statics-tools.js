@@ -19,7 +19,6 @@ export const STATICS_TOOL_MENUS = {
         { id: "beam", label: "Beam" },
         { id: "truss", label: "Truss" },
         { id: "cable", label: "Cable" },
-        { id: "shaft", label: "Shaft" }
     ],
 
     /*
