@@ -36,9 +36,21 @@ import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { setPipeWidth } from "./feature-schema.js";
+import { propagatePipeWidth } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 
 /* The increment every arrow applies, and the precision the fields are read at. */
 export const TRANSFORM_STEP = 0.1;
+
+/*
+ * THE PIPE WIDTH INCREMENT.
+ *
+ * One click of Pipe Width opens or closes the two walls by the default
+ * separation - one whole pipe width - because a tenth of that would be an
+ * invisible nudge on a line a few units apart. Typed values are applied as
+ * given, so a student who wants a precise width still has it.
+ */
+export const PIPE_WIDTH_STEP = 4;
 
 /* Floating-point noise is a display problem, not a geometry problem. */
 export function tidy(value) {
@@ -268,7 +280,78 @@ export function applyTransform(axis, amount) {
         return rotateSelection(value);
     }
 
+    /*
+     * PIPE WIDTH IS A TRANSFORM, NOT A MEASUREMENT.
+     *
+     * Like the three above it is a CHANGE applied to the selection, and it is
+     * the same operation the Features field performs - one arithmetic, in
+     * `setPipeWidth`. Non-pipe objects answer zero, so a mixed selection moves
+     * its pipes and leaves everything else alone.
+     */
+    if (axis === "width") {
+        return adjustPipeWidth(value);
+    }
+
     return 0;
+}
+
+/* ============================================================
+ * PIPE WIDTH
+ * ============================================================ */
+
+/*
+ * Open or close every selected run by `change`, as ONE undoable operation.
+ *
+ * The centreline is never touched: the run keeps its two endpoints, so its
+ * length and orientation are exactly what they were and only the distance
+ * between the walls moves. Fixed runs are refused with the rest of the
+ * transformable set - Fix is absolute, so it holds the width too.
+ */
+export function adjustPipeWidth(change) {
+    const state = drawingState;
+    const amount = Number(change);
+
+    if (!state || !Number.isFinite(amount) || amount === 0) {
+        return 0;
+    }
+
+    const targets = transformableObjects().filter((object) => object.type === "pipe-duct");
+
+    if (!targets.length) {
+        return 0;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(state);
+
+    detachSourceSync();
+
+    let changed = 0;
+
+    targets.forEach((object) => {
+        const current = Number(object.engineering?.separation) || 0;
+
+        if (setPipeWidth(object, current + amount)) {
+            changed += 1;
+
+            /*
+             * THE CHANGE SPREADS ALONG THE DIRECTLY CONNECTED RUN, because a
+             * pipe is one piece of pipework however many segments it was drawn
+             * with. The walk stops at an elbow, so the run on the far side of a
+             * fitting keeps its own width - see `propagatePipeWidth`.
+             */
+            propagatePipeWidth(object, state.objects);
+        }
+    });
+
+    if (!changed) {
+        return 0;
+    }
+
+    enggDrawingState.commitDrawingChange(state, previous);
+
+    renderCurrentDrawing();
+
+    return changed;
 }
 
 export default {
@@ -276,6 +359,7 @@ export default {
     tidy,
     transformableObjects,
     shiftSelection,
-    rotateSelection,
-    applyTransform
-};
+    	rotateSelection,
+    	applyTransform,
+    	adjustPipeWidth
+    };

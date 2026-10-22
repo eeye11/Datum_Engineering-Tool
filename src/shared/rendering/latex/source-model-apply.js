@@ -45,6 +45,8 @@ function geometryOf(shape) {
   switch (shape.type) {
     case "line":
       return { start: { ...shape.from }, end: { ...shape.to } };
+    case "pipe-duct":
+      return { start: { ...shape.start }, end: { ...shape.end } };
     case "circle":
       return { center: { ...shape.centre }, radius: shape.radius };
     case "rectangle":
@@ -100,7 +102,11 @@ function mergeShapeIntoObject(object, shape) {
     return false;
   }
 
-  const before = JSON.stringify({ geometry: object.geometry, style: object.style });
+  const before = JSON.stringify({
+    geometry: object.geometry,
+    style: object.style,
+    separation: object.engineering?.separation
+  });
 
   const next = { ...object.geometry };
 
@@ -116,7 +122,37 @@ function mergeShapeIntoObject(object, shape) {
     object.style = { ...(object.style || {}), ...style };
   }
 
-  return JSON.stringify({ geometry: object.geometry, style: object.style }) !== before;
+  /*
+   * A PIPE'S WIDTH COMES FROM ITS TWO WALLS.
+   *
+   * The separation the source shows is read back into the run's Pipe Width
+   * Change, so editing the gap between the walls in the Source tab widens the
+   * pipe on the canvas. A block whose walls are exactly the default separation
+   * stores no change at all, so the run keeps tracking the drawing default.
+   */
+  if (shape.type === "pipe-duct" && Number.isFinite(shape.separation)) {
+    object.engineering = { ...(object.engineering || {}) };
+
+    if (Math.abs(shape.separation) < 1e-9) {
+      delete object.engineering.separation;
+    } else {
+      object.engineering.separation = Number(shape.separation.toFixed(6));
+    }
+  }
+
+  /*
+   * THE CHANGE IS THE WHOLE OBJECT'S, NOT JUST ITS GEOMETRY. A run whose walls
+   * were moved only further apart or closer together has an unchanged
+   * centreline but a changed width, and that is a real edit the caller must
+   * hear about.
+   */
+  return (
+    JSON.stringify({
+      geometry: object.geometry,
+      style: object.style,
+      separation: object.engineering?.separation
+    }) !== before
+  );
 }
 
 /* ============================================================

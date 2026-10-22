@@ -109,6 +109,13 @@ export const CONTINUATION_TOLERANCE = 1e-6;
  * click router believe a construction was running when it was not.
  */
 export function beginRouteConstruction() {
+  /*
+   * THE RUN TOOL IS THE ACTIVE TOOL, so the sidebar button that started it is
+   * the one that lights. Without this the message said "Press and drag…" while
+   * no button was marked, and Escape had no active tool to return from.
+   */
+  enggDrawingState.setActiveTool(drawingState, "pipe-duct");
+
   enggDrawingState.setInteraction(drawingState, {
     fluidsTool: "pipe-duct"
   });
@@ -320,6 +327,13 @@ export function commitRouteSegment(start, end, interaction = {}) {
   let elbow = null;
 
   if (previousRun) {
+    /*
+     * DIRECTLY JOINED RUNS ARE ONE WIDTH, whether the join is straight or
+     * angled. This runs BEFORE the elbow is decided, so the two runs already
+     * agree by the time a fitting reads their widths.
+     */
+    adoptPipeWidth(previousRun, run);
+
     elbow = generateElbowFor(previousRun, run, engineering);
 
     if (elbow) {
@@ -331,6 +345,24 @@ export function commitRouteSegment(start, end, interaction = {}) {
   enggDrawingState.commitDrawingChange(drawingState, previousObjects);
 
   /*
+   * THE DOCUMENT OWNS THE OBJECTS FROM HERE.
+   *
+   * Committing a change replaces the objects with the drawn copies - the ones
+   * Undo and the source are keyed on - so the trim must be applied to THOSE, and
+   * the caller is handed the run as the document now holds it. Using the
+   * pre-commit instance afterwards would edit an object the sheet no longer has.
+   */
+  if (elbow) {
+    applyTrimTo(elbow, drawingState.objects);
+  }
+
+  const committedRun = drawingState.objects.find((object) => object.id === run.id) || run;
+
+  const committedElbow = elbow
+    ? drawingState.objects.find((object) => object.id === elbow.id) || elbow
+    : null;
+
+  /*
    * THE PATH CONTINUES FROM THIS RUN's FAR END. Held on the interaction so the
    * next drag from that point joins on; a drag from anywhere else starts a new
    * path (see resolveRouteStart).
@@ -338,7 +370,7 @@ export function commitRouteSegment(start, end, interaction = {}) {
   enggDrawingState.setInteraction(drawingState, {
     fluidsTool: "pipe-duct",
     phase: "idle",
-    previousRun: run,
+    previousRun: committedRun,
     routeEngineering: engineering,
     routeCommittedCount:
       (Number(interaction.routeCommittedCount) || 0) + 1,
@@ -350,14 +382,14 @@ export function commitRouteSegment(start, end, interaction = {}) {
 
   setToolMessage(
     elbow
-      ? `${run.name} and ${elbow.name} created - drag to continue, or Enter to finish`
-      : `${run.name} created - drag to continue, or Enter to finish`
+      ? `${committedRun.name} and ${committedElbow.name} created - drag to continue, or Enter to finish`
+      : `${committedRun.name} created - drag to continue, or Enter to finish`
   );
 
   renderProperties();
   renderCurrentDrawing();
 
-  return { run, elbow, created };
+  return { run: committedRun, elbow: committedElbow, created };
 }
 
 /*
@@ -395,6 +427,28 @@ export function generateElbowFor(previousRun, run, engineering) {
     return null;
   }
 
+  /*
+   * ONE ELBOW PER PAIR OF RUNS. If these two are already joined - the student
+   * snapped the same pipes together twice - the fitting is refreshed by
+   * `refreshFluidConnections` rather than a second one being added on top of
+   * the first.
+   */
+  const existing = (drawingState.objects || []).find(
+    (object) =>
+      enggPipeDuct.isElbowType(object.type) &&
+      Array.isArray(object.engineering?.connections) &&
+      previousRun.id &&
+      run.id &&
+      object.engineering.connections.includes(previousRun.id) &&
+      object.engineering.connections.includes(run.id)
+  );
+
+  if (existing) {
+    refreshFluidConnections(run, drawingState.objects);
+
+    return null;
+  }
+
   const before = previousRun.geometry?.start;
   const vertex = previousRun.geometry?.end;
   const after = run.geometry?.end;
@@ -426,37 +480,47 @@ export function generateElbowFor(previousRun, run, engineering) {
   }
 
   /*
-   * THE ELBOW CARRIES ITS OWN CROSS-SECTION. Initialised, when compatible,
-   * from the adjoining run; a mismatch is left for the panel to report rather
-   * than silently resolved into a reducer.
+   * THE FITTING RECORDS THE TWO RUNS IT JOINS, by ID. That is the connection:
+   * the elbow's geometry is derived from those runs' ACTUAL endpoints, so when
+   * either is moved or deleted the fitting is rebuilt or removed from the
+   * relationship rather than guessed at from proximity.
    */
-  const compatible = enggPipeDuct.compatibilityIssue(previousRun, run) === null;
-
   const elbowEngineering = {
     angle,
     angleDegrees,
-    bendRadius: enggPipeDuct.readDefaultBendRadius(),
-    shape: engineering?.shape || enggPipeDuct.PIPE_SHAPES.circular,
-    material: engineering?.material ?? "",
-    roughness: engineering?.roughness
+    bendRadius: fittingRadiusFor(previousRun, run),
+    connections: [previousRun.id, run.id],
+
+    /*
+     * HOW FAR THE BEND EATS INTO EACH RUN. The tangent distance, so the runs
+     * can be shortened by exactly the length the arcs take over.
+     */
+    bendTrim: fittingTrimFor(
+      previousRun,
+      run,
+      fittingRadiusFor(previousRun, run)
+    )
   };
 
-  if (compatible) {
-    enggPipeDuct.dimensionalKeysFor(engineering).forEach((key) => {
-      const value = Number(engineering[key]);
-
-      if (Number.isFinite(value)) {
-        elbowEngineering[key] = value;
-      }
-    });
-  }
-
   /*
-   * THE CORNER IS STORED AS THREE POINTS, so the elbow's curved geometry is
-   * derived from the ACTUAL runs it joins rather than from a stored angle that
-   * could drift from them. `position` is the corner itself; `previous` and
-   * `next` are the far ends of the two runs.
+   * ========================================================
+   * THE FITTING INHERITS ITS APPEARANCE - ONCE
+   * ========================================================
+   *
+   * A bend generated at a corner is part of the same line of pipework, so it
+   * STARTS with the appearance of the run it was joined to: the same line
+   * style, outline colour, thickness and fill. The values are COPIED here, at
+   * the moment of creation, and are the elbow's own from then on - nothing
+   * reads the runs again, so a later edit to either side cannot silently
+   * overwrite an appearance the student has changed on the fitting, and vice
+   * versa.
+   *
+   * The FIRST run is the source when the two disagree. It is the run already on
+   * the sheet - the one the new leg was drawn from - so the fitting looks like
+   * the pipework it continues rather than like the segment just added.
    */
+  const inheritedStyle = { ...(previousRun.style || drawingState.styleDefaults) };
+
   const elbow = enggDrawingState.createGeometryObject(
     "elbow",
     {
@@ -465,12 +529,436 @@ export function generateElbowFor(previousRun, run, engineering) {
       next: { x: after.x, y: after.y }
     },
     {
-      style: { ...drawingState.styleDefaults },
+      style: inheritedStyle,
       engineering: elbowEngineering
     }
   );
 
+  if (elbow) {
+    /*
+     * THE RUNS STOP WHERE THE BEND BEGINS. Applied the moment the fitting exists,
+     * so the straight walls and the arcs meet at the tangent points rather than
+     * running over the corner.
+     */
+    applyTrimTo(elbow, [...(drawingState.objects || []), elbow]);
+  }
+
   return elbow;
+}
+
+/*
+ * ========================================================
+ * PIPE WIDTH ACROSS A DIRECT CONNECTION
+ * ========================================================
+ *
+ * Pipes joined end-to-end are ONE run of pipework, so they share one width:
+ * the second adopts the first's, and the separation between its walls changes
+ * while its centreline does not. An elbow (or a junction) is the boundary at
+ * which two runs may legitimately differ, so this is never applied ACROSS a
+ * fitting - only between the two runs that meet at a direct join.
+ */
+export function adoptPipeWidth(source, target) {
+  if (!source || !target) {
+    return false;
+  }
+
+  const width = Number(source.engineering?.separation) || 0;
+  const current = Number(target.engineering?.separation) || 0;
+
+  if (width === current) {
+    return false;
+  }
+
+  target.engineering = { ...(target.engineering || {}) };
+
+  if (width === 0) {
+    delete target.engineering.separation;
+  } else {
+    target.engineering.separation = width;
+  }
+
+  return true;
+}
+
+/*
+ * ========================================================
+ * THE RADIUS A GENERATED FITTING STARTS WITH
+ * ========================================================
+ *
+ * A bend radius is a distance along the two runs, and an elbow whose tangent
+ * points would fall past either run's far end cannot be drawn at all - the
+ * shared `elbowGeometry` refuses it. So the default is CLAMPED to what the
+ * corner can hold: a proportion of the shorter adjoining run.
+ *
+ * A scale-relative default (twice the schematic separation) is tried first;
+ * when the runs are shorter than that, the bend shrinks to fit. A very short
+ * leg therefore gets a small bend instead of no fitting, which is the honest
+ * drawing: something bends at that corner, and the panel can change it.
+ */
+export const FITTING_RADIUS_RUN_FRACTION = 0.25;
+
+function fittingTrimFor(previousRun, run, radius) {
+  const start = previousRun?.geometry?.start;
+  const vertex = previousRun?.geometry?.end;
+  const end = run?.geometry?.end;
+
+  if (!start || !vertex || !end || !Number.isFinite(radius)) {
+    return 0;
+  }
+
+  const angle = enggPipeDuct.cornerAngleDegrees(start, vertex, end);
+
+  return angle === null ? 0 : radius * Math.tan((angle * Math.PI) / 360);
+}
+
+function fittingRadiusFor(previousRun, run) {
+  const start = previousRun?.geometry?.start;
+  const vertex = previousRun?.geometry?.end;
+  const end = run?.geometry?.end;
+
+  if (!start || !vertex || !end) {
+    return enggPipeDuct.readDefaultBendRadius();
+  }
+
+  const shorter = Math.min(
+    Math.hypot(vertex.x - start.x, vertex.y - start.y),
+    Math.hypot(end.x - vertex.x, end.y - vertex.y)
+  );
+
+  const preferred =
+    enggPipeDuct.readDefaultBendRadius() ??
+    enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION * 2;
+
+  /*
+   * The catch: `elbowGeometry` trims `radius * tan(angle / 2)` from each run,
+   * which for a 45 degree turn is about 0.414 of the radius. Scaling by the
+   * shorter run keeps the tangent points well inside both.
+   */
+  const limited = Math.max(shorter * FITTING_RADIUS_RUN_FRACTION, 1e-6);
+
+  return Math.min(preferred, limited);
+}
+
+/*
+ * ========================================================
+ * KEEPING THE FITTINGS IN STEP WITH THE RUNS
+ * ========================================================
+ *
+ * An elbow is generated once, when the second run of a corner is committed.
+ * After that it is its own feature - but it must never be left behind when the
+ * geometry it joins changes underneath it. Three edits can break a fitting:
+ *
+ *   AN ENDPOINT MOVES   the corner angle changes (a 90 becomes a 45, or an
+ *                       arbitrary angle), or the runs no longer meet.
+ *   A RUN MOVES         its body drag keeps its shape, so the corner simply
+ *                       follows; the elbow's stored points must follow too.
+ *   A RUN IS DELETED     the fitting has nothing left to join.
+ *
+ * `refreshFluidConnections` answers all three the same way: it rebuilds the
+ * elbow from the CURRENT geometry of the two runs it joins, and removes it when
+ * the corner is no longer a real, supported one. Rebuilding rather than
+ * patching means there is one statement of the connection - the two runs -
+ * and no second copy of it on the fitting to drift.
+ *
+ * IT NEVER DUPLICATES. An existing elbow is found by the pair of runs it
+ * records, not by its position, so snapping the same two pipes together again
+ * refreshes the one elbow that is there instead of adding another.
+ */
+
+/* The run an elbow joins at one of its ends, from the elbow's own record. */
+export function connectedRunsOf(elbow, objects = drawingState.objects) {
+  const ids = elbow?.engineering?.connections;
+
+  if (!Array.isArray(ids) || ids.length !== 2) {
+    return [];
+  }
+
+  return ids.map((id) => (objects || []).find((object) => object.id === id) || null);
+}
+
+/* The corner an elbow fits, or null when the runs no longer make one. */
+export function cornerOf(elbow, objects = drawingState.objects) {
+  const [first, second] = connectedRunsOf(elbow, objects);
+
+  if (!first || !second) {
+    return null;
+  }
+
+  const before = first.geometry?.start;
+  const vertex = first.geometry?.end;
+  const after = second.geometry?.end;
+
+  if (!before || !vertex || !after) {
+    return null;
+  }
+
+  /*
+   * THE RUNS MUST STILL MEET. An endpoint dragged away from the joint leaves two
+   * runs that only happen to be near each other, and two runs that do not meet
+   * are not a corner however close their angles are.
+   */
+  const gap = Math.hypot(vertex.x - second.geometry.start.x, vertex.y - second.geometry.start.y);
+
+  if (gap > CONTINUATION_TOLERANCE) {
+    return null;
+  }
+
+  const angleDegrees = enggPipeDuct.cornerAngleDegrees(before, vertex, after);
+  const angle = enggPipeDuct.supportedElbowAngle(angleDegrees);
+
+  return angle === null ? null : { before, vertex, after, angle, angleDegrees };
+}
+
+/*
+ * ========================================================
+ * ONE WIDTH ALONG A DIRECTLY CONNECTED RUN
+ * ========================================================
+ *
+ * A student widens a pipe and expects the pipe to get wider - not one segment
+ * of it. So a width change spreads along everything DIRECTLY joined to it:
+ *
+ *     A ---- B           A and B are one run: they share a width.
+ *     A --(elbow)-- B    the elbow is the boundary: A and B may differ.
+ *
+ * THE WALK STOPS AT AN ELBOW. That is the whole rule, and it is enforced by
+ * following only ENDS THAT MEET ANOTHER END with no fitting between them. An
+ * elbow is not followed through, so the runs on its far side keep whatever
+ * width they had - which is what lets a fitting divide two widths.
+ *
+ * It never changes appearance and never moves a centreline: only
+ * `engineering.separation` is written, so the walls open around the same line.
+ */
+export function propagatePipeWidth(run, objects = drawingState.objects) {
+  if (!run?.id || !Array.isArray(objects)) {
+    return [];
+  }
+
+  const runs = objects.filter((object) => enggPipeDuct.isPipeDuctType(object.type));
+  const elbows = objects.filter(
+    (object) => enggPipeDuct.isElbowType(object.type) && Array.isArray(object.engineering?.connections)
+  );
+
+  /* An end that carries a fitting stops the walk there. */
+  const joinedAt = (candidate, end) =>
+    elbows.some((elbow) => {
+      const ids = elbow.engineering.connections;
+
+      if (!ids.includes(run.id) || !ids.includes(candidate.id)) {
+        return false;
+      }
+
+      const shared = elbow.geometry?.position;
+      const point = candidate.geometry?.[end];
+
+      return (
+        shared &&
+        point &&
+        Math.hypot(shared.x - point.x, shared.y - point.y) <= CONTINUATION_TOLERANCE
+      );
+    });
+
+  const visited = new Set([run.id]);
+  const queue = [run];
+  const width = Number(run.engineering?.separation) || 0;
+
+  while (queue.length) {
+    const current = queue.pop();
+
+    ["start", "end"].forEach((end) => {
+      if (joinedAt(current, end)) {
+        return;
+      }
+
+      const point = current.geometry?.[end];
+
+      if (!point) {
+        return;
+      }
+
+      runs.forEach((candidate) => {
+        if (visited.has(candidate.id)) {
+          return;
+        }
+
+        const other = ["start", "end"].find(
+          (candidateEnd) =>
+            candidate.geometry?.[candidateEnd] &&
+            Math.hypot(
+              candidate.geometry[candidateEnd].x - point.x,
+              candidate.geometry[candidateEnd].y - point.y
+            ) <= CONTINUATION_TOLERANCE
+        );
+
+        if (!other) {
+          return;
+        }
+
+        visited.add(candidate.id);
+        queue.push(candidate);
+
+        if ((Number(candidate.engineering?.separation) || 0) !== width) {
+          candidate.engineering = { ...(candidate.engineering || {}) };
+
+          if (width === 0) {
+            delete candidate.engineering.separation;
+          } else {
+            candidate.engineering.separation = width;
+          }
+        }
+      });
+    });
+  }
+
+  return [...visited].filter((id) => id !== run.id);
+}
+
+/*
+ * Rebuild every elbow that joins this run, and drop the ones whose corner no
+ * longer exists.
+ *
+ * Answers the fittings that were updated and the ones that were removed, so a
+ * caller can report what happened rather than guessing.
+ */
+export function refreshFluidConnections(run, objects = drawingState.objects) {
+  if (!run?.id || !Array.isArray(objects)) {
+    return { updated: [], removed: [] };
+  }
+
+  const elbows = objects.filter(
+    (object) =>
+      enggPipeDuct.isElbowType(object.type) &&
+      Array.isArray(object.engineering?.connections) &&
+      object.engineering.connections.includes(run.id)
+  );
+
+  const updated = [];
+  const removed = [];
+
+  elbows.forEach((elbow) => {
+    const corner = cornerOf(elbow, objects);
+
+    if (!corner) {
+      /*
+       * THE BEND IS GOING, SO ITS TRIMS GO WITH IT - before the elbow is
+       * removed, while the runs it names can still be found.
+       */
+      clearTrimFrom(elbow, objects);
+
+      if (removeObjectIfPresent(elbow)) {
+        removed.push(elbow.id);
+      }
+
+      return;
+    }
+
+    elbow.geometry = {
+      ...(elbow.geometry || {}),
+      position: { x: corner.vertex.x, y: corner.vertex.y },
+      previous: { x: corner.before.x, y: corner.before.y },
+      next: { x: corner.after.x, y: corner.after.y }
+    };
+
+    elbow.engineering = {
+      ...(elbow.engineering || {}),
+      angle: corner.angle,
+      angleDegrees: corner.angleDegrees
+    };
+
+    applyTrimTo(elbow, objects);
+
+    updated.push(elbow.id);
+  });
+
+  return { updated, removed };
+}
+
+/*
+ * ========================================================
+ * WITHDRAWING A FITTING GIVES THE RUNS THEIR STRAIGHT LENGTH BACK
+ * ========================================================
+ *
+ * A run stores how far each end is trimmed back for the bend that end carries.
+ * When the bend is removed - the corner stopped being supported, the runs came
+ * apart, the pipe was deleted - the trim must go with it, or the run would be
+ * left ending short in mid-air for a fitting that is no longer there.
+ */
+function clearTrimFrom(elbow, objects = drawingState.objects) {
+  connectedRunsOf(elbow, objects).forEach((run) => {
+    if (run?.geometry?.trims) {
+      delete run.geometry.trims;
+    }
+  });
+}
+
+/*
+ * ========================================================
+ * TRIMMING THE RUNS BACK TO THE BEND
+ * ========================================================
+ *
+ * The elbow's `trim` is how far its tangent point sits from the corner along
+ * each run. Each run is shortened by exactly that at the end the elbow joins,
+ * so the straight walls stop where the arcs begin.
+ *
+ * WHICH END OF WHICH RUN. The elbow joins the FIRST run at that run's `end`
+ * (the corner is its far end) and the SECOND run at that run's `start` (it was
+ * drawn out of the corner). That is the direction the path was drawn, and it is
+ * recorded here rather than guessed from which end is nearer the corner - a run
+ * may pass through the corner's neighbourhood and still be joined at one
+ * specific end.
+ */
+function applyTrimTo(elbow, objects = drawingState.objects) {
+  const [first, second] = connectedRunsOf(elbow, objects);
+  const trim = Number(elbow?.engineering?.bendTrim);
+
+  if (!first || !second) {
+    return;
+  }
+
+  /*
+   * THE BEND IS DRAWN AT THE WIDTH OF THE RUN AT EACH OF ITS ENDS.
+   *
+   * An elbow may join two runs of different widths - that is the only place
+   * they may differ - so the fitting's two ends take their spacing from the
+   * runs they meet. The renderer interpolates between them around the arc, so
+   * each border stays continuous with the straight wall it joins instead of
+   * stepping at the tangent point.
+   */
+  elbow.engineering = {
+    ...(elbow.engineering || {}),
+    startSeparation: enggPipeDuct.boundarySeparation(first.engineering || {}),
+    endSeparation: enggPipeDuct.boundarySeparation(second.engineering || {})
+  };
+
+  if (!Number.isFinite(trim) || trim <= 0) {
+    return;
+  }
+
+  first.geometry = {
+    ...(first.geometry || {}),
+    trims: { ...(first.geometry?.trims || {}), end: trim }
+  };
+
+  second.geometry = {
+    ...(second.geometry || {}),
+    trims: { ...(second.geometry?.trims || {}), start: trim }
+  };
+}
+
+function removeObjectIfPresent(object) {
+  const objects = drawingState.objects || [];
+  const index = objects.findIndex((candidate) => candidate.id === object.id);
+
+  if (index < 0) {
+    return false;
+  }
+
+  /*
+   * REMOVED THROUGH THE DOCUMENT'S OWN PATH, so undo, the source and the
+   * Features list all see one coherent deletion - not a splice on a copy.
+   */
+  enggDrawingState.removeObject(drawingState, object.id);
+
+  return true;
 }
 
 /*
@@ -568,6 +1056,11 @@ const enggPipeDuctTool = {
   routeSnapGeometry,
   commitRouteSegment,
   generateElbowFor,
+  cornerOf,
+  connectedRunsOf,
+  refreshFluidConnections,
+  adoptPipeWidth,
+  propagatePipeWidth,
   beginRouteConstruction,
   finishRouteConstruction,
   cancelRouteConstruction,

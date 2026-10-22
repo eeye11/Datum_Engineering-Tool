@@ -11,6 +11,7 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
+import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 
 // Keep inline sections open independently across toolbar redraws.
@@ -23,8 +24,49 @@ const expandedToolbarSections = {
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
-    work: false
+    work: false,
+
+    /*
+     * THE FLUIDS GROUPS expand IN PLACE, exactly as Bodies or Loads does -
+     * the tools open under the heading, inside the sidebar, with no popup. They
+     * are listed here in the same table as the Statics sections because that
+     * table IS the inline mechanism: a key here is what makes
+     * `renderToolbarTool` wrap the button with a `.drawing-inline-tools`
+     * subsection and what makes the click handler toggle it.
+     */
+    "fluids-flow-paths": false,
+    "fluids-flow-indicators": false
 };
+
+function renderToolGroup(group) {
+    /*
+     * A SECTION IS A HEADING OVER ITS TOOLS.
+     *
+     * Selection, Create, Analysis and Reference are all the same shape - the
+     * heading, then the tools - which is what lets Fluids read like Statics. A
+     * group entry (Flow Paths, Flow Indicators) is drawn by the same button
+     * renderer as everything else and expands inline underneath itself; it is
+     * listed in its proper place among the direct tools, so the order the
+     * registry declares is the order the student sees.
+     */
+    const body = group.tools.map(renderToolbarTool).join("");
+
+    return `
+        <section
+            class="drawing-tool-group"
+            aria-labelledby="drawing-group-${group.id}"
+        >
+            <h3
+                class="drawing-tool-group-label"
+                id="drawing-group-${group.id}"
+            >
+                ${group.label}
+            </h3>
+
+            ${body}
+        </section>
+    `;
+}
 
 function renderToolbarTool(tool) {
     if (!Object.hasOwn(expandedToolbarSections, tool.id)) {
@@ -33,11 +75,31 @@ function renderToolbarTool(tool) {
 
     const expanded = expandedToolbarSections[tool.id];
     const sectionId = `statics-${tool.id}-tools`;
-    const button = renderToolButton(tool)
-        .replace(' aria-haspopup="menu"', '')
-        .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "work"
+    /*
+     * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
+     *
+     * It is not a menu, so `aria-haspopup` goes; and it gets `aria-expanded`
+     * and `aria-controls` whatever the button renderer happened to emit. A
+     * Fluids group deliberately emits neither (it must not promise a popup),
+     * so the attributes are SET here rather than string-replaced - which is
+     * what keeps a group that emits no `aria-expanded` at all from silently
+     * losing its accessible expanded state.
+     */
+    const button =
+        renderToolButton(tool)
+            .replace(' aria-haspopup="menu"', '')
+            .replace('aria-expanded="false"', '')
+            .replace('aria-pressed="', `aria-expanded="${expanded}" aria-controls="${sectionId}" aria-pressed="`);
+
+    /*
+     * A FLUIDS GROUP'S CHILDREN COME FROM ITS OWN REGISTRY, so the tools that
+     * open under Flow Paths are the SAME entries the activation layer reads -
+     * there is no second list here to fall out of step.
+     */
+    const children = FLUIDS_TOOL_MENUS[tool.id]
+        ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : tool.id === "work"
         ? [
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }
@@ -100,27 +162,7 @@ export function renderEngineeringTools(
 
         toolList.innerHTML =
             groups
-                .map(
-                    group => `
-                        <section
-                            class="drawing-tool-group"
-                            aria-labelledby="drawing-group-${group.id}"
-                        >
-                            <h3
-                                class="drawing-tool-group-label"
-                                id="drawing-group-${group.id}"
-                            >
-                                ${group.label}
-                            </h3>
-
-                            ${group.tools
-                                .map(
-                                    renderToolbarTool
-                                )
-                                .join("")}
-                        </section>
-                    `
-                )
+                .map(renderToolGroup)
                 .join("");
     } else {
         /*

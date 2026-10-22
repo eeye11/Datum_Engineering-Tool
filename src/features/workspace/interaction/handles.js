@@ -734,12 +734,29 @@ function manipulationHandles(
         object.type === "truss" ||
         object.type === "cable" ||
         object.type === "shaft" ||
-        object.type === "connection"
+        object.type === "connection" ||
+
+        /*
+         * A PIPE / DUCT RUN IS A STRAIGHT SPAN TOO. Its two handles are the
+         * ends of its CENTRELINE, which is the run's authoritative geometry -
+         * the two walls are generated from it, so a drag on either end
+         * recalculates both walls and the spacing is preserved by construction.
+         */
+        object.type === "pipe-duct"
     ) {
         return [
                 { kind: "start", point: g.start },
                 { kind: "end", point: g.end }
             ];
+    }
+
+    /*
+     * AN ELBOW IS GRABBED BY ITS CORNER. Its two wall arcs are derived from
+     * that corner and the directions of the runs it joins, so moving the corner
+     * moves the whole fitting and no arc can be left behind.
+     */
+    if (object.type === "elbow" && g.position) {
+        return [{ kind: "position", point: g.position }];
     }
 
     /*

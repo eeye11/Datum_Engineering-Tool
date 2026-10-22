@@ -11,7 +11,7 @@
  * (entity-render.js) builds, and returns true only to stop the feature being
  * drawn at all.
  */
-import { createSvgElement, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
+import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 
@@ -26,7 +26,53 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
 
     const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
 
-    enggPipeDuct.boundaryLines(geometry.start, geometry.end, entity.engineering || {}).forEach((boundary) => {
+    /*
+     * A RUN WITH A BEND FITTED IS DRAWN SHORT: its walls stop at the elbow's
+     * tangent points, so the arcs take over exactly where the straight wall
+     * ends and the two do not overlap. `trimmedCentreline` is the one place
+     * that arithmetic lives, so the canvas, the source and the mesh all shorten
+     * the run the same way.
+     */
+    const centreline = enggPipeDuct.trimmedCentreline(entity) || geometry;
+
+    const walls = enggPipeDuct.boundaryLines(centreline.start, centreline.end, entity.engineering || {});
+
+    if (!walls.length) {
+        return true;
+    }
+
+    /*
+     * THE BORE IS A CLOSED REGION.
+     *
+     * Two walls and the two end caps enclose it, so a filled pipe is ONE
+     * shape rather than two lines with a colour between them. The caps are
+     * drawn as part of the outline only when the walls are not filled - a filled
+     * run is already closed, and doubling its end edge would print it darker.
+     */
+    const filled = style.fillMode === "solid";
+
+    const [first, second] = walls;
+
+    if (filled) {
+        const points = [first.start, first.end, second.end, second.start]
+            .map(toScreen)
+            .map((point) => `${point.x},${point.y}`)
+            .join(" ");
+
+        svg.appendChild(createSvgElement("polygon", {
+            points,
+            fill: paintColour(style.fill || stroke),
+            stroke,
+            "stroke-width": scaledStrokeWidth(style.lineWidth),
+            "stroke-linejoin": "round"
+        }));
+
+        return false;
+    }
+
+    const dash = dashPatternFor(style.lineType);
+
+    walls.forEach((boundary) => {
         const from = toScreen(boundary.start);
         const to = toScreen(boundary.end);
 
@@ -37,17 +83,22 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
             y2: to.y,
             stroke,
             "stroke-width": scaledStrokeWidth(style.lineWidth),
-            "stroke-linecap": "round"
+            "stroke-linecap": "round",
+            ...(dash ? { "stroke-dasharray": dash } : {})
         }));
     });
+
+    return false;
 }
 
 export function drawElbow({ svg, entity, geometry, style, toScreen }) {
+    const engineering = entity.engineering || {};
+
     const curves = enggPipeDuct.elbowGeometry(
         geometry.previous,
         geometry.position,
         geometry.next,
-        (entity.engineering || {}).bendRadius
+        engineering.bendRadius
     );
 
     if (!curves) {
@@ -55,32 +106,44 @@ export function drawElbow({ svg, entity, geometry, style, toScreen }) {
     }
 
     const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
-    const separation = enggPipeDuct.boundarySeparation(entity.engineering || {});
-
-    const radii = separation === null
-        ? [curves.radius, curves.radius]
-        : [curves.radius - separation / 2, curves.radius + separation / 2];
-
+    const separation = enggPipeDuct.boundarySeparation(engineering);
     const sweep = ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 
-    radii.forEach((radius) => {
-        if (!Number.isFinite(radius) || radius <= 0) {
-            return;
-        }
+    /*
+     * THE BEND HAS TWO ENDS, AND THEY MAY BE DRAWN AT DIFFERENT WIDTHS.
+     *
+     * An elbow is the boundary at which two runs are allowed to differ, so the
+     * fitting runs `startSeparation` on the incoming side and `endSeparation` on
+     * the outgoing one - the same numbers those runs' own walls use. The two
+     * wall radii therefore interpolate around the arc, which is what keeps each
+     * border CONTINUOUS with the straight wall it meets. A bend drawn at one
+     * width would leave a step wherever the far run is wider or narrower.
+     */
+    const startSeparation = Number(engineering.startSeparation) > 0
+        ? Number(engineering.startSeparation)
+        : separation;
 
-        /*
-         * The arc is built in world space and mapped point by point, so the
-         * screen's y flip is applied the same way as for every other feature.
-         */
-        const steps = 24;
-        const points = Array.from({ length: steps + 1 }, (_, index) => {
-            const angle = curves.startAngle + (sweep * index) / steps;
+    const endSeparation = Number(engineering.endSeparation) > 0
+        ? Number(engineering.endSeparation)
+        : separation;
+
+    const steps = 24;
+
+    const wallPoints = (side) =>
+        Array.from({ length: steps + 1 }, (_, index) => {
+            const t = index / steps;
+            const angle = curves.startAngle + sweep * t;
+            const half = (startSeparation + (endSeparation - startSeparation) * t) / 2;
+            const radius = curves.radius + side * half;
 
             return toScreen({
                 x: curves.centre.x + radius * Math.cos(angle),
                 y: curves.centre.y + radius * Math.sin(angle)
             });
         });
+
+    [1, -1].forEach((side) => {
+        const points = wallPoints(side);
 
         svg.appendChild(createSvgElement("path", {
             d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
@@ -91,24 +154,13 @@ export function drawElbow({ svg, entity, geometry, style, toScreen }) {
         }));
     });
 
-    const markLength = separation === null ? 0 : separation / 2;
-
-    [[curves.inDirection, curves.start], [curves.outDirection, curves.end]].forEach(([direction, point]) => {
-        if (!direction || !point || markLength <= 0) {
-            return;
-        }
-
-        const normal = { x: -direction.y, y: direction.x };
-        const a = toScreen({ x: point.x - normal.x * markLength, y: point.y - normal.y * markLength });
-        const b = toScreen({ x: point.x + normal.x * markLength, y: point.y + normal.y * markLength });
-
-        svg.appendChild(createSvgElement("line", {
-            x1: a.x,
-            y1: a.y,
-            x2: b.x,
-            y2: b.y,
-            stroke,
-            "stroke-width": Math.max(0.5, scaledStrokeWidth(style.lineWidth))
-        }));
-    });
+    /*
+     * NO END MARKS.
+     *
+     * The bend used to draw a short cross-mark across each tangent point. That
+     * was a stand-in for a corner closure: with the runs TRIMMED back to
+     * those points, the arcs are already tangent to the walls, so a mark would
+     * draw a stroke across the bore of the pipe - which is not what a fitting
+     * looks like.
+     */
 }

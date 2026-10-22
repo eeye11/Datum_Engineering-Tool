@@ -23,6 +23,7 @@ import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { refreshFluidConnections } from "./pipe-duct-tool.js";
 
 export function beginManipulationDrag(
     event
@@ -1090,6 +1091,43 @@ function applyManipulation(
             g.start = { x: point.x, y: point.y };
         } else {
             g.end = { x: point.x, y: point.y };
+        }
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * A PIPE / DUCT RUN IS DRAGGED BY ITS CENTRELINE ENDS
+     * ========================================================
+     *
+     * The run stores ONE centreline. Both walls are derived from it plus the
+     * run's own spacing, so writing the dragged end is the whole edit: the
+     * length and orientation change, the two walls are recalculated, and the
+     * spacing is untouched - which is what "preserve the intended width during
+     * endpoint movement" comes down to.
+     *
+     * The elbow fitted to this end is refreshed afterwards, so a bend that can
+     * no longer exist at the new angle is removed rather than left orphaned.
+     */
+    if (object.type === "pipe-duct") {
+        if (drag.kind === "start" || drag.kind === "end") {
+            g[drag.kind] = { x: point.x, y: point.y };
+
+            refreshFluidConnections(object);
+        }
+
+        return;
+    }
+
+    /*
+     * AN ELBOW IS DRAGGED BY ITS CORNER. The curved walls are derived from the
+     * corner and the two adjoining directions, so moving the corner carries the
+     * whole fitting.
+     */
+    if (object.type === "elbow") {
+        if (drag.kind === "position" || drag.kind === "body") {
+            g.position = { x: point.x, y: point.y };
         }
 
         return;

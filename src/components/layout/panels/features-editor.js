@@ -48,7 +48,7 @@ import {
     typeLabelOf,
     writeField
 } from "./feature-schema.js";
-import { TRANSFORM_STEP, applyTransform } from "./transform-session.js";
+import { PIPE_WIDTH_STEP, TRANSFORM_STEP, applyTransform } from "./transform-session.js";
 import { settingsFor } from "./tool-settings-store.js";
 import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pane.js";
 import { openColourPicker } from "../../../shared/ui/colour-picker.js";
@@ -321,17 +321,25 @@ function fieldMarkup(key, definition, objects) {
  */
 
 function transformRowMarkup(axis, label) {
+    /*
+     * PIPE WIDTH HAS ITS OWN INCREMENT. It is a distance between two walls, not
+     * a coordinate nudge, so one click moves it by a whole pipe width rather
+     * than by a tenth of a unit. The box still starts at zero, and a typed
+     * value is still applied exactly as given.
+     */
+    const step = axis === "width" ? PIPE_WIDTH_STEP : TRANSFORM_STEP;
+
     return (
         `<div class="dfp-row dfp-transform-row">` +
         `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
         `<span class="dfp-row-control">` +
         `<input type="number" class="dfp-number dfp-transform-input" data-transform-input="${axis}" ` +
-        `aria-label="${escapeHtml(label)}" step="${TRANSFORM_STEP}" value="${transformOffsetFor(axis)}">` +
+        `aria-label="${escapeHtml(label)}" step="${step}" value="${transformOffsetFor(axis)}">` +
         `<span class="dfp-steppers">` +
-        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="1" aria-label="Increase ${escapeHtml(label)} by ${TRANSFORM_STEP}">` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="1" aria-label="Increase ${escapeHtml(label)} by ${step}">` +
         stepIcon("up") +
         `</button>` +
-        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="-1" aria-label="Decrease ${escapeHtml(label)} by ${TRANSFORM_STEP}">` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="-1" aria-label="Decrease ${escapeHtml(label)} by ${step}">` +
         stepIcon("down") +
         `</button>` +
         `</span>` +
@@ -459,6 +467,15 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
                 transformRowMarkup("x", "X Shift") +
                 transformRowMarkup("y", "Y Shift") +
                 transformRowMarkup("rotate", "Rotate") +
+                /*
+                 * PIPE WIDTH IS A RELATIVE ADJUSTMENT, like the three above - so
+                 * it is a Transform row, not a measured field. It appears only
+                 * when a run is selected, and `applyTransform` refuses the axis
+                 * for anything else, so a stale click cannot alter a line.
+                 */
+                (objects.some((object) => object.type === "pipe-duct")
+                    ? transformRowMarkup("width", "Pipe Width")
+                    : "") +
                 `</div>`
         );
     }
@@ -584,7 +601,7 @@ export function renderFeatures() {
  * describes nothing on the sheet.
  */
 export function resetTransformForSelection() {
-    transformOffsets = { x: 0, y: 0, rotate: 0 };
+    transformOffsets = { x: 0, y: 0, rotate: 0, width: 0 };
     transformOffsetsFor = transformSelectionKey();
 }
 
@@ -743,7 +760,7 @@ function applySegmentedChoice(button) {
  * asks for - and it is expressed here, once, rather than by any one control
  * trying to remember.
  */
-let transformOffsets = { x: 0, y: 0, rotate: 0 };
+let transformOffsets = { x: 0, y: 0, rotate: 0, width: 0 };
 let transformOffsetsFor = "";
 
 function transformSelectionKey() {
@@ -751,7 +768,7 @@ function transformSelectionKey() {
 }
 
 function resetTransformOffsets() {
-    transformOffsets = { x: 0, y: 0, rotate: 0 };
+    transformOffsets = { x: 0, y: 0, rotate: 0, width: 0 };
     transformOffsetsFor = transformSelectionKey();
 }
 
@@ -780,6 +797,7 @@ function transformOffsetFor(axis) {
 function stepTransformValue(button) {
     const axis = button?.dataset?.transformStep;
     const direction = Number(button?.dataset?.direction) || 0;
+    const step = axis === "width" ? PIPE_WIDTH_STEP : TRANSFORM_STEP;
 
     if (!axis || !direction) {
         return;
@@ -794,11 +812,11 @@ function stepTransformValue(button) {
      * reads the new total and the box shows what the arrows have really done.
      */
     transformOffsets[axis] =
-        Math.round((transformOffsetFor(axis) + direction * TRANSFORM_STEP) * 1e9) / 1e9;
+        Math.round((transformOffsetFor(axis) + direction * step) * 1e9) / 1e9;
 
-    if (!applyTransform(axis, direction * TRANSFORM_STEP)) {
+    if (!applyTransform(axis, direction * step)) {
         /* The move was refused, so the total did not move either. */
-        transformOffsets[axis] = Math.round((transformOffsets[axis] - direction * TRANSFORM_STEP) * 1e9) / 1e9;
+        transformOffsets[axis] = Math.round((transformOffsets[axis] - direction * step) * 1e9) / 1e9;
 
         return;
     }

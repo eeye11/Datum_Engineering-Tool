@@ -1918,20 +1918,42 @@ function removeObjectsAndDescendants(
      */
     const childrenOf = new Map();
 
-    state.objects.forEach(object => {
-        if (!object.parentId) {
-            return;
-        }
-
+    const addChild = (parentId, childId) => {
         const siblings =
-            childrenOf.get(object.parentId) || [];
+            childrenOf.get(parentId) || [];
 
-        siblings.push(object.id);
+        siblings.push(childId);
 
         childrenOf.set(
-            object.parentId,
+            parentId,
             siblings
         );
+    };
+
+    state.objects.forEach(object => {
+        if (object.parentId) {
+            addChild(object.parentId, object.id);
+        }
+
+        /*
+         * AN ELBOW BELONGS TO THE RUNS IT JOINS.
+         *
+         * A fitting has no `parentId`, because it is not a child of either run
+         * - the two runs are peers and the elbow sits between them. But it has
+         * no meaning without them, so it is removed with the FIRST of the pair
+         * to go. Without this a deleted pipe left its bend drawn in mid-air,
+         * joining one run to nothing.
+         *
+         * A shared connection is not a hierarchy: the elbow lists the pair it
+         * joins, and either one's deletion takes it.
+         */
+        if (object.type === "elbow" && Array.isArray(object.engineering?.connections)) {
+            object.engineering.connections.forEach(runId => {
+                if (runId) {
+                    addChild(runId, object.id);
+                }
+            });
+        }
     });
 
     const doomed = new Set(roots);

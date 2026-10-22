@@ -213,7 +213,7 @@ export const DEFAULT_HEIGHT = 120;
  * professional schematic representation across every straight run, live preview,
  * and curved elbow, derived from ONE shared constant.
  */
-export const DEFAULT_SCHEMATIC_SEPARATION = 2;
+export const DEFAULT_SCHEMATIC_SEPARATION = 4;
 export const DEFAULT_SCHEMATIC_SPACING = DEFAULT_SCHEMATIC_SEPARATION;
 
 export function defaultPipeEngineering(shape = PIPE_SHAPES.circular) {
@@ -290,13 +290,27 @@ export function dimensionsOf(engineering = {}) {
  * in the Features tab, and changing them cannot move the drawn lines - the
  * boundaries never scale with the physical bore.
  *
- * The `engineering` argument is accepted so every call site - renderer,
- * preview, hit-testing, elbow arcs - keeps one signature, and so a future
- * drawing-style setting can be threaded through the same door. Today it is
- * deliberately not read for the value itself.
+ * A RUN MAY WIDEN ITSELF. `engineering.separation` records how far the student
+ * has widened this run from the default (the Features tab's Pipe Width Change),
+ * and the spacing is the default plus that change. It is a CHANGE rather than an
+ * absolute width, so a value of zero - or no value at all - is the default, and
+ * widening a run cannot accidentally pin it to today's default if the default
+ * is ever changed.
+ *
+ * A change that would collapse the walls to nothing is refused here as well as
+ * in the panel: geometry is the last line of defence, and a negative or zero
+ * separation would draw the two walls on top of each other.
  */
-export function boundarySeparation(_engineering = {}) {
-	return DEFAULT_SCHEMATIC_SEPARATION;
+export function boundarySeparation(engineering = {}) {
+	const change = Number(engineering?.separation);
+
+	if (!Number.isFinite(change) || change === 0) {
+		return DEFAULT_SCHEMATIC_SEPARATION;
+	}
+
+	const separation = DEFAULT_SCHEMATIC_SEPARATION + change;
+
+	return separation > 0 ? separation : DEFAULT_SCHEMATIC_SEPARATION;
 }
 
 /*
@@ -363,9 +377,15 @@ function finitePoint(point) {
  * THE PIPE / DUCT FEATURE
  * ========================================================
  *
- * Build ONE straight run from two endpoints and a cross-section. The run is an
- * ordinary feature with no parent: it is created, selected, edited, saved and
- * deleted like any other top-level feature.
+ * Build ONE straight run from two endpoints. The run is an ordinary feature
+ * with no parent: it is created, selected, edited, saved and deleted like any
+ * other top-level feature.
+ *
+ * A NEW RUN HAS NO CROSS-SECTION DIMENSIONS. Pipe / Duct is a 2D drawing tool,
+ * and the finalized design removed Diameter, Width, Height, Material and
+ * Roughness from it - so none of them is stamped onto a new object. An older
+ * file's values are kept exactly as they were when it is opened, because they
+ * are simply carried through `options.engineering` and nothing reads them.
  */
 export function createPipeDuct(start, end, options = {}) {
 	if (!finitePoint(start) || !finitePoint(end)) {
@@ -376,10 +396,7 @@ export function createPipeDuct(start, end, options = {}) {
 		return null;
 	}
 
-	const engineering = {
-		...defaultPipeEngineering(options.shape),
-		...(options.engineering || {})
-	};
+	const engineering = { ...(options.engineering || {}) };
 
 	const geometry = {
 		start: { x: start.x, y: start.y },
@@ -552,11 +569,6 @@ export function elbowGeometry(previous, vertex, next, radius) {
 		(vertex.x - previous.x) * (next.y - vertex.y) -
 		(vertex.y - previous.y) * (next.x - vertex.x);
 
-	/*
-	 * THE ARC CENTRE. It lies `radius` from the vertex along the bisector of
-	 * the two runs, on the inside of the turn. Found as the point `radius`
-	 * perpendicular from each tangent point.
-	 */
 	const inDirection = {
 		x: (vertex.x - previous.x) / incomingLength,
 		y: (vertex.y - previous.y) / incomingLength
@@ -567,10 +579,47 @@ export function elbowGeometry(previous, vertex, next, radius) {
 		y: (next.y - vertex.y) / outgoingLength
 	};
 
+	/*
+	 * THE ARC CENTRE, FROM THE TANGENT POINTS.
+	 *
+	 * The centre lies `radius` from EACH tangent point, perpendicular to the run
+	 * that meets it - because a tangent is perpendicular to the radius that
+	 * touches it. The inbound run's direction is `inDirection`, so `radius`
+	 * along the normal that points INTO the turn puts the centre where both
+	 * tangents meet.
+	 *
+	 * WHICH NORMAL POINTS INWARD IS THE SIGN OF THE TURN, and nothing else:
+	 * `cross` is positive when the run turns left, so the inward normal of the
+	 * inbound direction `d` is exactly `(-d.y, d.x)`. That is why the sign here
+	 * is `cross`: getting it from the turn rather than from an axis means a
+	 * turn in either direction, at either supported angle, is centred the same
+	 * way.
+	 *
+	 * THE TWO CONSTRUCTIONS MUST AGREE. Taking the centre from the inbound
+	 * tangent and checking it against the outbound one is what makes a wrong
+	 * sign visible here rather than as an arc drawn round the outside of the
+	 * corner.
+	 */
+	const inward = cross >= 0 ? 1 : -1;
+
 	const centre = {
-		x: start.x + inDirection.y * (cross >= 0 ? bendRadius : -bendRadius),
-		y: start.y - inDirection.x * (cross >= 0 ? bendRadius : -bendRadius)
+		x: start.x - inDirection.y * bendRadius * inward,
+		y: start.y + inDirection.x * bendRadius * inward
 	};
+
+	/*
+	 * The outbound tangent must lie the same radius from that centre. Both are
+	 * exact by construction for a true 45 or 90 turn; anything further apart
+	 * than a rounding error is not a corner this fitting can join, so it is
+	 * refused rather than drawn with a gap at one end.
+	 */
+	const outboundError = Math.abs(
+		Math.hypot(end.x - centre.x, end.y - centre.y) - bendRadius
+	);
+
+	if (outboundError > 1e-6 * Math.max(1, bendRadius)) {
+		return null;
+	}
 
 	const a0 = Math.atan2(start.y - centre.y, start.x - centre.x);
 	const a1 = Math.atan2(end.y - centre.y, end.x - centre.x);
@@ -710,6 +759,68 @@ export function isFluidRunType(type) {
 	return type === "pipe-duct" || type === "elbow";
 }
 
+/*
+ * ========================================================
+ * A RUN TRIMMED BACK WHERE AN ELBOW TAKES OVER
+ * ========================================================
+ *
+ * Where a bend is fitted, the STRAIGHT walls must stop where the bend begins -
+ * at the elbow's tangent points - or the two walls would run on into the corner
+ * and be drawn over each other. That is what makes a bend look like a fitting
+ * rather than two pipes crossing at right angles.
+ *
+ * `trims` is the record of that, held on the run itself:
+ *
+ *     { start: distance, end: distance }
+ *
+ * Each distance is trimmed off the corresponding end of the CENTRELINE, so the
+ * walls stop at the tangent point and the elbow's arcs carry on from there.
+ * It is stored on the geometry rather than derived from the elbow at draw time,
+ * because a run can be joined at both ends and each end's trim belongs to the
+ * fitting that end is joined to - the run does not have to know what a bend is
+ * to be drawn short.
+ *
+ * Returns `{ start, end }`, the trimmed centreline. A run with no trims is its
+ * own centreline. A trim long enough to consume the run is refused rather than
+ * turned inside out: the walls stop where they would have met.
+ */
+export function trimmedCentreline(feature) {
+	const start = feature?.geometry?.start;
+	const end = feature?.geometry?.end;
+
+	if (!finitePoint(start) || !finitePoint(end)) {
+		return null;
+	}
+
+	const length = Math.hypot(end.x - start.x, end.y - start.y);
+
+	if (length < 1e-12) {
+		return null;
+	}
+
+	const trims = feature.geometry.trims || {};
+
+	const startTrim = Math.max(0, Number(trims.start) || 0);
+	const endTrim = Math.max(0, Number(trims.end) || 0);
+
+	/*
+	 * BOTH TRIMS CANNOT EAT THE WHOLE RUN. If they would, they are scaled back
+	 * together, so the run keeps a real (if tiny) straight length rather than
+	 * inverting. A run shorter than its two bends already has both walls
+	 * meeting inside the elbows, which is the honest drawing.
+	 */
+	const total = startTrim + endTrim;
+	const scale = total > length ? length / total : 1;
+
+	const from = pointAlong(start, end, startTrim * scale);
+	const to = pointAlong(end, start, endTrim * scale);
+
+	return {
+		start: { x: from.x, y: from.y },
+		end: { x: to.x, y: to.y }
+	};
+}
+
 const enggPipeDuct = {
 	PIPE_SHAPES,
 	PIPE_SHAPE_LABELS,
@@ -742,7 +853,8 @@ const enggPipeDuct = {
 
 	isPipeDuctType,
 	isElbowType,
-	isFluidRunType
+	isFluidRunType,
+	trimmedCentreline
 };
 
 export default enggPipeDuct;

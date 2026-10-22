@@ -46,6 +46,7 @@ import { removeObjectRegion, setObjectRegion } from "./source-mapping.js";
 import { sourceForObject } from "./source-synchronization.js";
 import { objectDisplayName, objectTypeLabel } from "./object-comments.js";
 import { splitStatements } from "./source-statements.js";
+import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 
 /* ============================================================
  * A STABLE ID FOR A BLOCK THAT HAS NONE
@@ -164,12 +165,127 @@ function createObjectFromShape(type, shape, previous) {
         return table.point(shape.position, options);
       case "polyline":
         return table.polyline(shape.points, options);
+
+      /*
+       * A PIPE FROM ITS TWO WALLS. Recovered through the model's own factory, so
+       * a run typed into the Source tab is the same feature a drag creates -
+       * not a second kind of pipe that only source editing knows about.
+       */
+      case "pipe-duct": {
+        const engineering = {
+          ...enggPipeDuct.defaultPipeEngineering(),
+          ...(Number.isFinite(shape.separation) && Math.abs(shape.separation) > 1e-9
+            ? { separation: Number(shape.separation.toFixed(6)) }
+            : {})
+        };
+
+        return enggPipeDuct.createPipeDuct(shape.start, shape.end, {
+          ...options,
+          engineering
+        });
+      }
+
       default:
         return null;
     }
   } catch {
     return null;
   }
+}
+
+/*
+ * ============================================================
+ * A PIPE / DUCT AS TWO WALLS
+ * ============================================================
+ *
+ * A run is written as TWO `\draw` statements - its two walls - because that is
+ * what it looks like, and because each wall is an ordinary straight line whose
+ * colour and width a student can find and change. Reading it back therefore
+ * cannot go through the one-shape rule: a two-statement block is a PIPE, not
+ * "two lines DAETUM cannot edit".
+ *
+ * The two walls are recognised as a pair by their geometry, not by their text:
+ * they must be equal in length, parallel, and exactly the schematic separation
+ * apart. The run's centreline is the midpoint between them, so it is recovered
+ * exactly - and a widened run is recovered too, because the separation it is
+ * read at becomes the run's own Pipe Width Change.
+ *
+ * ANYTHING ELSE IS REPORTED, NOT GUESSED AT. Two lines that do not make a pair
+ * leave the block in `unsupported`, so the student is told their edit could not
+ * be read rather than having a wrong pipe invented from it.
+ */
+function pipeFromWalls(shapes) {
+  if (!Array.isArray(shapes) || shapes.length !== 2) {
+    return null;
+  }
+
+  const [a, b] = shapes;
+
+  if (a?.type !== "line" || b?.type !== "line") {
+    return null;
+  }
+
+  const points = [a.from, a.to, b.from, b.to];
+
+  if (
+    points.some(
+      (at) => !at || !Number.isFinite(Number(at.x)) || !Number.isFinite(Number(at.y))
+    )
+  ) {
+    return null;
+  }
+
+  const lengthOf = (line) => Math.hypot(line.to.x - line.from.x, line.to.y - line.from.y);
+  const lengthA = lengthOf(a);
+  const lengthB = lengthOf(b);
+
+  if (lengthA < 1e-9 || Math.abs(lengthA - lengthB) > 1e-6 * Math.max(1, lengthA)) {
+    return null;
+  }
+
+  const ua = { x: (a.to.x - a.from.x) / lengthA, y: (a.to.y - a.from.y) / lengthA };
+  const ub = { x: (b.to.x - b.from.x) / lengthB, y: (b.to.y - b.from.y) / lengthB };
+
+  /* Parallel means the same direction or exactly opposite - both draw a pair. */
+  if (Math.abs(Math.abs(ua.x * ub.x + ua.y * ub.y) - 1) > 1e-6) {
+    return null;
+  }
+
+  /* The offset from the first wall to the second, taken at their starts. */
+  const offset = { x: b.from.x - a.from.x, y: b.from.y - a.from.y };
+  const separation = Math.abs(offset.x * ua.y - offset.y * ua.x);
+
+  if (!(separation > 0)) {
+    return null;
+  }
+
+  /*
+   * THE CENTRELINE. Both walls sit half the separation from it, so their starts'
+   * midpoint and their ends' midpoint are its two ends - in whichever order the
+   * two lines happened to be written.
+   */
+  const start = {
+    x: (a.from.x + b.from.x) / 2,
+    y: (a.from.y + b.from.y) / 2
+  };
+
+  const end = {
+    x: (a.to.x + b.to.x) / 2,
+    y: (a.to.y + b.to.y) / 2
+  };
+
+  return {
+    start,
+    end,
+
+    /* The change from the drawing default, which is what the model stores. */
+    separation: separation - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION
+  };
+}
+
+/* An object of `type` from the two walls of a pipe, or null. */
+function createPipeFromWalls(walls) {
+  return createObjectFromShape("pipe-duct", { ...walls, type: "pipe-duct" }, null) || null;
 }
 
 /* The type an object must have for `shape`, when it can have it. */
@@ -248,6 +364,41 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
     }
 
     const shapes = block.statements.map((statement) => statement.shape);
+
+    /*
+     * A PIPE / DUCT: TWO PARALLEL WALLS, ONE RUN.
+     *
+     * Recognised BEFORE the one-shape rule, because a pipe is never a single
+     * statement. Its two walls are the supported syntax for the tool - see
+     * `pipeFromWalls` - and a pair that does not make a pipe falls through to
+     * the ordinary report rather than being silently taken as two lines.
+     */
+    const walls = previous === null || previous?.type === "pipe-duct"
+      ? pipeFromWalls(shapes)
+      : null;
+
+    if (walls) {
+      if (!previous) {
+        const object = createPipeFromWalls(walls);
+
+        if (object) {
+          created.push({ id: block.id, object, block });
+        }
+
+        return;
+      }
+
+      updates.push({
+        id: block.id,
+        object: previous,
+        shape: walls,
+        type: "pipe-duct",
+        block
+      });
+
+      return;
+    }
+
     const single = shapes.length === 1;
     const shape = single ? shapes[0] : null;
     const type = single ? convertedTypeFor(shape, previous) : null;

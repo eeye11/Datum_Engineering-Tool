@@ -1,35 +1,38 @@
-/*
+﻿/*
  * ========================================================
  * FLUIDS: THE TOOLSET
  * ========================================================
  *
- * The Fluids section is organised EXACTLY the way Statics and Annotate are: a
- * short list of CATEGORY headings, each with its commands listed DIRECTLY
- * underneath. The three are deliberately the same shape, because a student who
- * has learned where a Statics tool lives should not have to learn a second
- * arrangement for a Fluids one.
+ * The Fluids section is organised EXACTLY the way Statics is: the same FOUR
+ * category headings, each with its commands listed DIRECTLY underneath.
  *
  *     SELECTION            the shared selection system, offered first
- *     FLOW PATHS           the pipework and the vessels it runs between
- *     EQUIPMENT            the machines on the line
- *     FLOW REPRESENTATION  how the flow is shown
- *     MEASUREMENTS         the quantities taken off the drawing
- *     FLUID ANNOTATIONS    the written labels a fluids drawing carries
+ *     CREATE               the flow paths, the fittings and the equipment
+ *     ANALYSIS             the two diagrams the student draws
+ *     REFERENCE            the shared reference geometry
  *
- * THERE IS NO SUB-CATEGORY LEVEL, AND THAT IS THE WHOLE POINT.
+ * THE FOUR SECTIONS ARE INDEPENDENT, AND STAY THAT WAY.
  *
- * A tool is a COMMAND. A command behind another command is a command the
- * student has to go looking for, so every entry below is visible and clickable
- * the moment Fluids is selected: no caret, no flyout, no hover menu. The
- * `submenu` flag is therefore absent from every entry - it is the flag
- * Geometry and Statics use for the tools that DO open a menu (Arc, Bodies,
- * Loads), and leaving it off is what makes each of these activate immediately.
+ * Analysis and Reference are SECTIONS OF THEIR OWN at the top level - they are
+ * not headings buried inside Create. A student who has learned where a Statics
+ * tool lives should find the Fluids map already familiar.
+ *
+ * CREATE HAS TWO DROPDOWNS, AND NOTHING ELSE HIDDEN.
+ *
+ * Flow Paths and Flow Indicators open the SAME shared submenu a Statics
+ * Bodies / Loads / Supports entry opens (`submenu: true`), so the caret, the
+ * popup, the positioning, the click-outside dismissal and the keyboard
+ * handling are the shared ones and not a second implementation. Everything
+ * else under Create - Reducer / Expander, Reservoir / Tank, Pump, Valve and
+ * Flow Meter - is an INDIVIDUAL TOOL listed directly under the heading. There
+ * is no Equipment dropdown and no Fluid Annotations group: a tool behind a
+ * menu has to be gone looking for, and one that stands on its own does not.
  *
  * ========================================================
  * WHAT THIS RELEASE ESTABLISHES, AND WHAT IT DELIBERATELY DOES NOT
  * ========================================================
  *
- * This is the STRUCTURE release. It establishes the six subcategories, the
+ * This is the STRUCTURE release. It establishes the four sections, the
  * seventeen entries, the icons and the place each tool takes in the toolbar -
  * and it binds every entry to an EXISTING DAETUM system through the
  * `capability` field below. It does NOT implement per-tool engineering
@@ -45,7 +48,7 @@
  * is a registry of entries, and the behaviour behind an entry is one field.
  *
  *     capability     the shared system it uses                status
- *     ───────────    ──────────────────────────────────────   ─────────────────
+ *     â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€   â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  *     select         the ordinary selection system            working
  *     shape          the geometry creation pipeline           working
  *     dimension      the Smart Dimension engine               working
@@ -91,12 +94,22 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 
 /*
  * ========================================================
- * THE SIX SUBCATEGORIES AND THEIR SEVENTEEN ENTRIES
+ * THE FOUR SECTIONS AND THEIR ENTRIES
  * ========================================================
  *
- * The order of the categories is the order the requirement gives them, and the
- * order of the entries within each is the order the requirement lists them -
- * so the toolbar reads the way the specification does.
+ * Fluids is laid out the way Statics is: the SAME FOUR SECTIONS, in the SAME
+ * ORDER - Selection, Create, Analysis, Reference. A student who has learned
+ * where a Statics tool lives already knows where to look here, and the two
+ * sections sit side by side in the toolset bar, so a different arrangement
+ * would be a second map of the same building.
+ *
+ * CREATE IS A MIX OF GROUPS AND DIRECT TOOLS, exactly as the Statics Create
+ * section is. A group entry carries `submenu: true` - the same flag a Statics
+ * Bodies or Loads entry carries - and expands IN PLACE underneath its own
+ * button, inside the sidebar, through the toolbar's existing inline-section
+ * mechanism. It opens no popup. Every entry without the flag arms immediately.
+ * The CONTENTS of a group live in `FLUIDS_TOOL_MENUS` below, one list per
+ * parent, so the button and the tools it reveals cannot disagree.
  *
  * EVERY ENTRY CARRIES FOUR THINGS AND NOTHING ELSE:
  *
@@ -111,7 +124,14 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
  * until its behaviour exists, and inventing one now would be a guess stored in
  * the wrong place.
  */
-export const fluidsToolGroups = [
+	export const fluidsToolGroups = [
+	/*
+	 * SELECTION IS THE SHARED SELECT.
+	 *
+	 * `select` is the universal DAETUM tool - the same id Statics, Dynamics and
+	 * Annotate arm - so this section is a second DOOR to it, not a second copy.
+	 * It is listed here so the section reads like every other discipline's.
+	 */
 	{
 		id: "fluids-selection",
 		label: "Selection",
@@ -126,175 +146,164 @@ export const fluidsToolGroups = [
 	},
 
 	/*
-	 * ========================================================
-	 * FLOW PATHS
-	 * ========================================================
+	 * CREATE: TWO EXPANDABLE GROUPS AND FIVE INDIVIDUAL TOOLS.
 	 *
-	 * The pipework itself and the vessels it runs between. A run of pipe, the
-	 * bend that turns it, the point where two runs meet, the change of bore,
-	 * and the tank it all ends in.
-	 *
-	 * These are SHAPE tools: they are drawn through the ordinary geometry
-	 * creation pipeline, so they snap, preview, commit, select, move, save and
-	 * undo exactly as a Line or a Rectangle does. Giving them real fluid
-	 * behaviour later means implementing that capability against this entry,
-	 * not re-drawing them.
+	 * Flow Paths is the pipework itself and Flow Indicators is how the flow is
+	 * SHOWN; both expand inline, and both come FIRST - the two groups head the
+	 * section, then the individual equipment tools. Reducer / Expander,
+	 * Reservoir / Tank, Pump, Valve and Flow Meter sit directly under Create as
+	 * tools of their own.
 	 */
 	{
-		id: "fluids-flow-paths",
-		label: "Flow Paths",
+		id: "fluids-create",
+		label: "Create",
 		tools: [
-			{ id: "pipe-duct", label: "Pipe / Duct", capability: FLUIDS_CAPABILITIES.ROUTE },
-			{ id: "elbow", label: "Elbow", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "line" },
-			{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
-			{ id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "line" },
-			{ id: "reservoir-tank", label: "Reservoir / Tank", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "rectangle" }
+			/*
+			 * FLOW PATHS: an expandable group, because its three entries are the
+			 * parts of one run - the straight length, the turn and the tee.
+			 * `submenu: true` is the flag Statics' Bodies and Loads carry, so it
+			 * expands in place through the shared inline mechanism and needs no
+			 * Fluids-specific branch of its own.
+			 */
+			{ id: "fluids-flow-paths", label: "Flow Paths", submenu: true },
+
+			/*
+			 * FLOW INDICATORS: the second group, immediately after the first. How
+			 * the flow is SHOWN belongs with the run it is shown on, not at the
+			 * end of a list of equipment.
+			 */
+			{ id: "fluids-flow-indicators", label: "Flow Indicators", submenu: true },
+
+			/*
+			 * THE INDIVIDUAL TOOLS OF CREATE. Each stands directly under the
+			 * heading and arms on the press - there is no Equipment dropdown
+			 * between the student and a Pump.
+			 */
+			{ id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.PLANNED },
+			{ id: "reservoir-tank", label: "Reservoir / Tank", capability: FLUIDS_CAPABILITIES.PLANNED },
+			{ id: "pump", label: "Pump", capability: FLUIDS_CAPABILITIES.PLANNED },
+			{ id: "valve", label: "Valve", capability: FLUIDS_CAPABILITIES.PLANNED },
+			{ id: "flow-meter", label: "Flow Meter", capability: FLUIDS_CAPABILITIES.PLANNED }
 		]
 	},
 
 	/*
-	 * ========================================================
-	 * EQUIPMENT
-	 * ========================================================
+	 * ANALYSIS: TWO DIAGRAMS, AND NOT A SOLVER.
 	 *
-	 * The machines on the line: the pump that drives it, the valve that
-	 * controls it, the meter that reads it. Each is placed as a symbol on the
-	 * drawing.
-	 *
-	 * A valve and a flow meter are genuinely a single point on a line, and a
-	 * pump is a symbol too - so they are SHAPE tools placed through the shared
-	 * pipeline, not a new placement system.
+	 * Both are DRAWING tools: the student places a diagram and draws it
+	 * themselves, exactly as they place a Shear Force Diagram in Statics. Neither
+	 * reads the drawing and reports a result, and neither will: a flow direction
+	 * diagram and a pressure profile are the student's own reasoning, drawn.
 	 */
 	{
-		id: "fluids-equipment",
-		label: "Equipment",
+		id: "fluids-analysis",
+		label: "Analysis",
 		tools: [
-			{ id: "pump", label: "Pump", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
-			{ id: "valve", label: "Valve", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
-			{ id: "flow-meter", label: "Flow Meter", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" }
+			{ id: "flow-direction-diagram", label: "Flow Direction Diagram", capability: FLUIDS_CAPABILITIES.PLANNED },
+			{ id: "pressure-profile", label: "Pressure Profile", capability: FLUIDS_CAPABILITIES.PLANNED }
 		]
 	},
 
 	/*
-	 * ========================================================
-	 * FLOW REPRESENTATION
-	 * ========================================================
+	 * REFERENCE: THE SHARED REFERENCE TOOLS, PLUS ONE FLUIDS-SPECIFIC ONE.
 	 *
-	 * HOW THE FLOW IS SHOWN rather than what it runs through.
+	 * Coordinate System, Reference Point and Reference Line are the SAME ids
+	 * Statics lists, so they arm the same tools - reference geometry is
+	 * reference geometry, whichever discipline asked for it. They therefore keep
+	 * their normal `shape` entries: marking a working tool `planned` would make
+	 * its button say "not available yet" about a tool that is.
 	 *
-	 * Both entries are Annotate features, not new types:
-	 *     Flow Arrow   the existing `arrow` kind - a start and an end
-	 *     Fluid Level  the existing `label` kind - a marker that attaches
-	 *
-	 * They are listed under Fluids because that is where a student looks for
-	 * them, and they create the same features the Annotate section does, so
-	 * selection, moving, the panel, undo and saving are already handled.
+	 * Section Plane is the one Fluids needs that the shared set does not have:
+	 * a cutting plane drawn through a run, which is how a section is marked. It
+	 * is planned, because its construction is not built yet.
 	 */
 	{
-		id: "fluids-flow-representation",
-		label: "Flow Representation",
+		id: "fluids-reference",
+		label: "Reference",
 		tools: [
-			{
-				id: "flow-arrow",
-				label: "Flow Arrow",
-				capability: FLUIDS_CAPABILITIES.ANNOTATE,
-				annotateKind: "arrow"
-			},
-			{
-				id: "fluid-level",
-				label: "Fluid Level",
-				capability: FLUIDS_CAPABILITIES.ANNOTATE,
-				annotateKind: "label"
-			}
-		]
-	},
-
-	/*
-	 * ========================================================
-	 * MEASUREMENTS
-	 * ========================================================
-	 *
-	 * The quantities taken off a fluids drawing. Each is a measurement of
-	 * something already drawn, which is exactly what the Smart Dimension
-	 * engine does - it reads the geometry it is pointed at rather than storing
-	 * a number that can go stale.
-	 *
-	 * They are DIMENSION tools, so they reuse the shared reference selection,
-	 * inference, placement, panel and value editor. A Pressure Tap and a Pipe
-	 * Diameter differ in WHAT they will read when their own behaviour is
-	 * built; the machinery that reads a measurement is already here.
-	 */
-	{
-		id: "fluids-measurements",
-		label: "Measurements",
-		tools: [
-			{ id: "pressure-tap", label: "Pressure Tap", capability: FLUIDS_CAPABILITIES.DIMENSION },
-			{ id: "pipe-diameter", label: "Pipe Diameter", capability: FLUIDS_CAPABILITIES.DIMENSION },
-			{ id: "section-plane", label: "Section Plane", capability: FLUIDS_CAPABILITIES.DIMENSION }
-		]
-	},
-
-	/*
-	 * ========================================================
-	 * FLUID ANNOTATIONS
-	 * ========================================================
-	 *
-	 * The written labels a fluids drawing carries - a fluid's properties, the
-	 * flow rate through a run, and the elevation of a point.
-	 *
-	 * All three are Annotate features:
-	 *
-	 *     Fluid Property Label   the `note` kind - free text about a fluid
-	 *     Flow Rate Label        the `label` kind - a short identifier
-	 *     Elevation Marker       the `leader` kind - a mark pointing at a level
-	 *
-	 * Reusing the Annotate kinds is the point: a Note, a Label and a Leader
-	 * already select, move, edit, undo and save, so a Fluids label is the same
-	 * thing with a different name on the toolbar. There is no second
-	 * annotation system to keep in step.
-	 */
-	{
-		id: "fluids-annotations",
-		label: "Fluid Annotations",
-		tools: [
-			{
-				id: "fluid-property-label",
-				label: "Fluid Property Label",
-				capability: FLUIDS_CAPABILITIES.ANNOTATE,
-				annotateKind: "note"
-			},
-			{
-				id: "flow-rate-label",
-				label: "Flow Rate Label",
-				capability: FLUIDS_CAPABILITIES.ANNOTATE,
-				annotateKind: "label"
-			},
-			{
-				id: "elevation-marker",
-				label: "Elevation Marker",
-				capability: FLUIDS_CAPABILITIES.ANNOTATE,
-				annotateKind: "leader"
-			}
+			{ id: "coordinate-system", label: "Coordinate System", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
+			{ id: "reference-point", label: "Reference Point", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
+			{ id: "reference-line", label: "Reference Line", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "line" },
+			{ id: "section-plane", label: "Section Plane", capability: FLUIDS_CAPABILITIES.PLANNED }
 		]
 	}
 ];
 
 /*
  * ========================================================
+ * THE GROUP CONTENTS
+ * ========================================================
+ *
+ * One list per `submenu: true` entry above, keyed by that entry's id. This is
+ * the SAME shape as `STATICS_TOOL_MENUS`, so the toolbar renders it with the
+ * SAME inline subsection - the tools open underneath the heading, in the
+ * sidebar - and a tool arms through the normal activation path.
+ *
+ * THE PARENT IS NOT A TOOL. Pressing Flow Paths or Flow Indicators expands or
+ * collapses the group and creates nothing; the child is what arms. The
+ * children are declared HERE, once, and the flat registry below is built from
+ * this table - so the tools the sidebar shows and the registry the activation
+ * layer reads are the same statement of fact.
+ *
+ * The contents are exactly the requirement's:
+ *
+ *     Flow Paths       Pipe / Duct, Elbow, Junction
+ *     Flow Indicators  Flow Arrow, Fluid Level, Pressure Tap
+ *
+ * Pipe Diameter is deliberately absent: it is a measurement, not one of the
+ * three indicators the requirement names.
+ */
+export const FLUIDS_TOOL_MENUS = {
+	"fluids-flow-paths": [
+		/*
+		 * PIPE / DUCT IS IMPLEMENTED. It travels the FLUIDS `route` capability:
+		 * `activateTool` arms the route session in `pipe-duct-tool.js`, which owns
+		 * the press-drag-release gesture, the run feature, the elbow generated at a
+		 * supported corner and the TikZ each of them writes. It is deliberately
+		 * NOT `planned` - that state refuses activation before arming, which is
+		 * exactly the "not available yet" the tool used to report.
+		 */
+		{ id: "pipe-duct", label: "Pipe / Duct", capability: FLUIDS_CAPABILITIES.ROUTE },
+		{ id: "elbow", label: "Elbow", capability: FLUIDS_CAPABILITIES.PLANNED },
+		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.PLANNED }
+	],
+
+	"fluids-flow-indicators": [
+		{ id: "flow-arrow", label: "Flow Arrow", capability: FLUIDS_CAPABILITIES.PLANNED },
+		{ id: "fluid-level", label: "Fluid Level", capability: FLUIDS_CAPABILITIES.PLANNED },
+		{ id: "pressure-tap", label: "Pressure Tap", capability: FLUIDS_CAPABILITIES.PLANNED }
+	]
+};
+
+/*
+ * ========================================================
  * THE FLAT REGISTRY, DERIVED FROM THE GROUPS ABOVE
  * ========================================================
  *
- * One entry per tool, keyed by id, built FROM the groups rather than written
- * out a second time. Everything that needs to ask "what is this Fluids tool?"
- * asks here, so the toolbar, the activation layer and any future behaviour
- * module read the SAME table - a tool cannot be added to the toolbar and
- * forgotten by the layer that has to handle it.
+ * One entry per tool, keyed by id, built FROM the groups and the menus rather
+ * than written out a second time. Everything that needs to ask "what is this
+ * Fluids tool?" asks here, so the toolbar, the activation layer and any future
+ * behaviour module read the SAME table - a tool cannot be added to a dropdown
+ * and forgotten by the layer that has to handle it.
+ *
+ * A submenu parent is NOT a tool and has no entry: a student clicking an Elbow
+ * needs it in this table, and a student clicking Flow Paths is opening a menu.
+ * Each tool records WHERE the student found it as its `group` - the dropdown's
+ * label for a menu child, the section's label otherwise - so the status line
+ * and the Features panel can name the place they looked.
  */
+const toolsOfGroup = group =>
+	(group.tools || []).flatMap(tool => {
+		const children = tool.submenu ? FLUIDS_TOOL_MENUS[tool.id] : null;
+
+		return children
+			? children.map(child => [child.id, { ...child, group: tool.label }])
+			: [[tool.id, { ...tool, group: group.label }]];
+	});
+
 export const FLUIDS_TOOLS = Object.freeze(
 	Object.fromEntries(
-		fluidsToolGroups.flatMap(group =>
-			group.tools.map(tool => [tool.id, { ...tool, group: group.label }])
-		)
+		fluidsToolGroups.flatMap(toolsOfGroup)
 	)
 );
 
@@ -367,6 +376,7 @@ export function isPlannedFluidsTool(toolId) {
 const enggFluidsTools = {
 	FLUIDS_CAPABILITIES,
 	fluidsToolGroups,
+	FLUIDS_TOOL_MENUS,
 	FLUIDS_TOOLS,
 	FLUIDS_TOOL_IDS,
 	isFluidsTool,

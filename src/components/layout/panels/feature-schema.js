@@ -57,7 +57,17 @@ export const GEOMETRY_TYPES = new Set([
 const CLOSED_SHAPES = new Set(["triangle", "rectangle", "circle", "polygon", "freeform-polygon"]);
 
 /* The types a fill (and therefore a fill colour) means anything for. */
-const FILLABLE = CLOSED_SHAPES;
+const FILLABLE = new Set([
+    ...CLOSED_SHAPES,
+
+    /*
+     * A PIPE / DUCT IS A CLOSED REGION TOO. Its two walls enclose the bore, and
+     * that area can be filled - the drawing convention for a solid or insulated
+     * run. Fill is OFF by default (the fill mode starts at none), so a pipe is
+     * drawn as two open lines unless the student asks for more.
+     */
+    "pipe-duct"
+]);
 
 /*
  * The types whose stroke can be dashed, dotted or otherwise styled.
@@ -80,11 +90,20 @@ const STROKE_TYPES = new Set([
     "dynamics-trajectory",
     "dynamics-polar-vector",
     "dynamics-angular-vector",
-    "dynamics-spring",
-    "dynamics-damper",
-    "dynamics-spring-damper",
-    "dynamics-pulley"
-]);
+    	"dynamics-spring",
+    	"dynamics-damper",
+    	"dynamics-spring-damper",
+    	"dynamics-pulley",
+
+    	/*
+    	 * A PIPE / DUCT AND AN ELBOW ARE DRAWN WITH A PEN TOO, so they get the same
+    	 * Appearance section as a Line: one colour and one thickness for BOTH
+    	 * boundary walls. The two edges are generated from one style, so there is
+    	 * deliberately no way to give them different colours.
+    	 */
+    	"pipe-duct",
+    	"elbow"
+    ]);
 
 /*
  * ============================================================
@@ -768,8 +787,19 @@ const FIELDS = {
      */
     showName: {
         kind: "toggle",
+        /*
+         * A PIPE'S NAME IS NOT A DRAWING LABEL.
+         *
+         * The finalized design gives a run a Name in the Object section and
+         * nothing else - there is no separate "show the name on the sheet"
+         * property. Excluding the pipe here is what removes that control
+         * without taking it from the features that legitimately have it.
+         */
         applies: (object) =>
-            typeof object?.type === "string" && object.type !== "annotate" && Boolean(object.name),
+            typeof object?.type === "string" &&
+            object.type !== "annotate" &&
+            object.type !== "pipe-duct" &&
+            Boolean(object.name),
         read: (object) => object?.showName === true,
         write: (object, value) => {
             object.showName = Boolean(value);
@@ -828,8 +858,21 @@ const LOCKABLE_TYPES = new Set([
 ]);
 
 function isLockable(object) {
-    /*
-     * EVERY DYNAMICS TOOL CAN BE FIXED.
+	/*
+	 * A PIPE / DUCT AND THE ELBOW FITTED TO IT ARE LOCKABLE.
+	 *
+	 * They are stroke geometry with a transform the lock can hold: a fixed run
+	 * keeps its selection highlight but loses its handles, and its endpoints,
+	 * its Transform arrows and its Pipe Width Change all refuse to move it. An
+	 * elbow is a fitting rather than a run, not a dynamics symbol, so it is
+	 * named here rather than inferred.
+	 */
+	if (object && (object.type === "pipe-duct" || object.type === "elbow")) {
+		return true;
+	}
+
+	/*
+	 * EVERY DYNAMICS TOOL CAN BE FIXED.
      *
      * Fix is the editor's existing editing lock: a fixed object can still be
      * selected and inspected, but its handles are withdrawn and its geometry
@@ -862,11 +905,6 @@ export const GROUPS = [
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
-    {
-        id: "cross-section",
-        heading: "Cross Section",
-        fields: ["pipeShape", "pipeDiameter", "pipeWidth", "pipeHeight", "pipeBendRadius", "pipeMaterial", "pipeRoughness"]
-    },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
@@ -950,10 +988,10 @@ export const GROUPS = [
         fields: ["dynamics.referenceMarker"]
     },
 
-    { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
-    { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
-    { id: "transform", heading: "Transform", fields: [], transform: true }
-];
+    	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+    	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
+    	{ id: "transform", heading: "Transform", fields: [], transform: true }
+    ];
 
 /*
  * ============================================================
@@ -967,20 +1005,30 @@ export const GROUPS = [
  */
 /*
  * ============================================================
- * A PIPE / DUCT RUN AND AN ELBOW: THE CROSS SECTION
+ * THE PIPE / DUCT CONTROLS
  * ============================================================
  *
- * Ported from the fluids toolset's panel. Everything is on `object.engineering`:
- * the Shape decides which sizes exist (circular: Diameter; rectangular: Width
- * and Height, through the model's `dimensionalKeysFor`), so only those are
- * shown. Sizes and an elbow's Bend Radius must be positive - each decides
- * geometry that cannot exist at zero - while Surface Roughness may be zero (a
- * smooth bore). Lengths are drawing units, which are millimetres on the sheet.
+ * Pipe / Duct is a 2D DRAWING tool. It has no cross-section dimensions, no
+ * material and no roughness, and its Features tab has exactly three sections:
+ * Object, Appearance and Transform. Everything the run's drawing needs comes
+ * from the four shared Appearance controls (Line Style, Outline Colour,
+ * Thickness, Fill) and the four Transform rows (X Shift, Y Shift, Rotate and
+ * Pipe Width).
+ *
+ * WHAT IS HERE, AND WHY IT IS ALL THAT IS.
+ *
+ *   name          the object's own name, editable in the Object section
+ *   fixed         the shared Fix lock - already declared at the top of FIELDS
+ *   appearance    the four STROKE_TYPES fields, which the pipe shares with a
+ *                 Line so the two are styled with the same vocabulary
+ *   pipeWidth     the relative spacing change, spoken by the Transform row
+ *
+ * SAVED OBJECTS STILL READ. An older file may carry `engineering.shape`,
+ * `diameter`, `width`, `height`, `material` or `roughness`. Those values are
+ * simply ignored now - they never decided the drawing, and the walls are still
+ * derived from the centreline and the spacing - so an old pipe opens looking
+ * exactly as it did, with no migration step and no data thrown away.
  */
-function isFluidRun(object) {
-    return object?.type === "pipe-duct" || object?.type === "elbow";
-}
-
 function engineeringOf(object) {
     if (!object.engineering || typeof object.engineering !== "object") {
         object.engineering = {};
@@ -989,116 +1037,84 @@ function engineeringOf(object) {
     return object.engineering;
 }
 
-const PIPE_DEFAULT_SIZES = {
-    diameter: () => enggPipeDuct.DEFAULT_DIAMETER,
-    width: () => enggPipeDuct.DEFAULT_WIDTH,
-    height: () => enggPipeDuct.DEFAULT_HEIGHT
-};
-
-function pipeSizeField(key) {
-    return {
-        kind: "number",
-        min: 0,
-        step: 1,
-        applies: (object) => isFluidRun(object) && enggPipeDuct.dimensionalKeysFor(object.engineering || {}).includes(key),
-        read: (object) => Number(object.engineering?.[key]) || PIPE_DEFAULT_SIZES[key](),
-        write: (object, value) => {
-            const size = Number(value);
-
-            if (!Number.isFinite(size) || size <= 0) {
-                return false;
-            }
-
-            engineeringOf(object)[key] = size;
-
-            return true;
-        }
-    };
-}
-
 Object.assign(FIELDS, {
-    pipeShape: {
-        kind: "choice",
-        applies: isFluidRun,
-        read: (object) => object.engineering?.shape === enggPipeDuct.PIPE_SHAPES.rectangular
-            ? enggPipeDuct.PIPE_SHAPES.rectangular
-            : enggPipeDuct.PIPE_SHAPES.circular,
-        write: (object, value) => {
-            const engineering = engineeringOf(object);
-
-            engineering.shape = value === enggPipeDuct.PIPE_SHAPES.rectangular
-                ? enggPipeDuct.PIPE_SHAPES.rectangular
-                : enggPipeDuct.PIPE_SHAPES.circular;
-
-            enggPipeDuct.dimensionalKeysFor(engineering).forEach((size) => {
-                if (!Number.isFinite(Number(engineering[size]))) {
-                    engineering[size] = PIPE_DEFAULT_SIZES[size]();
-                }
-            });
-
-            return true;
-        },
-        options: [
-            { value: enggPipeDuct.PIPE_SHAPES.circular, label: "Circular" },
-            { value: enggPipeDuct.PIPE_SHAPES.rectangular, label: "Rectangular" }
-        ]
-    },
-    pipeDiameter: pipeSizeField("diameter"),
-    pipeWidth: pipeSizeField("width"),
-    pipeHeight: pipeSizeField("height"),
-    pipeBendRadius: {
-        kind: "number",
-        min: 0,
-        step: 1,
-        applies: (object) => object?.type === "elbow",
-        read: (object) => Number(object.engineering?.bendRadius) || 0,
-        write: (object, value) => {
-            const radius = Number(value);
-            const geometry = object.geometry || {};
-
-            /* A radius the corner cannot hold has no drawable bend, so it is refused. */
-            if (
-                !Number.isFinite(radius) ||
-                radius <= 0 ||
-                !enggPipeDuct.elbowGeometry(geometry.previous, geometry.position, geometry.next, radius)
-            ) {
-                return false;
-            }
-
-            engineeringOf(object).bendRadius = radius;
-
-            return true;
-        }
-    },
-    pipeMaterial: {
+    /*
+     * NAME.
+     *
+     * The label the Objects list and the source comment show. It is the
+     * object's DISPLAY name, never its identity: `object.id` is untouched, so
+     * renaming cannot break a selection, a source block or a connection.
+     */
+    name: {
         kind: "text",
-        applies: isFluidRun,
-        read: (object) => String(object.engineering?.material ?? ""),
+        applies: (object) => Boolean(object),
+        read: (object) => String(object.name ?? ""),
         write: (object, value) => {
-            engineeringOf(object).material = String(value ?? "");
+            const name = String(value ?? "").trim();
+
+            if (!name) {
+                return false;
+            }
+
+            object.name = name;
 
             return true;
         }
     },
-    pipeRoughness: {
+
+    /*
+     * PIPE WIDTH.
+     *
+     * The separation between the two boundary walls, as a CHANGE from the
+     * run's default spacing - which is why 0 means "unchanged". It is stored on
+     * `engineering.separation` (the same field older files use, so the source
+     * and saved-object formats are unchanged) and only when it is non-zero.
+     *
+     * It changes NOTHING ELSE. Both walls are derived from the stored
+     * centreline plus this spacing, so a width change cannot move the
+     * centreline, alter the run's length or turn it - those belong to the
+     * endpoints and Rotate.
+     */
+    pipeWidth: {
         kind: "number",
-        min: 0,
-        step: 0.001,
-        applies: isFluidRun,
-        read: (object) => Number(object.engineering?.roughness) || 0,
+        step: 1,
+        applies: (object) => object?.type === "pipe-duct",
+        read: (object) => Number(object.engineering?.separation) || 0,
         write: (object, value) => {
-            const roughness = Number(value);
+            const change = Number(value);
 
-            if (!Number.isFinite(roughness) || roughness < 0) {
-                return false;
-            }
-
-            engineeringOf(object).roughness = roughness;
-
-            return true;
+            return setPipeWidth(object, change);
         }
     }
 });
+
+/*
+ * Set a run's Pipe Width, refusing a change that would collapse the walls.
+ * Exported because the Transform row and the connection rules must use the
+ * SAME arithmetic - one to type it, the other to keep a connected run equal.
+ */
+export function setPipeWidth(object, change) {
+    if (!object || object.type !== "pipe-duct") {
+        return false;
+    }
+
+    const width = Number(change);
+    const engineering = engineeringOf(object);
+
+    if (!Number.isFinite(width) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + width <= 0) {
+        return false;
+    }
+
+    if (width === 0) {
+        delete engineering.separation;
+
+        return true;
+    }
+
+    engineering.separation = width;
+
+    return true;
+}
 
 const PROCESS_BEND_PREFIX = "processBend:";
 
@@ -1909,24 +1925,18 @@ export function fieldLabel(field, key) {
     return field.label || {
         markerStyle: "Style",
         markerSize: "Size",
-        lineType: "Style",
+        lineType: "Line Style",
         arrowStart: "Begin Arrow",
         arrowEnd: "End Arrow",
         arrowhead: "Arrowhead",
-        pipeShape: "Shape",
-        pipeDiameter: "Diameter (mm)",
-        pipeWidth: "Width (mm)",
-        pipeHeight: "Height (mm)",
-        pipeBendRadius: "Bend Radius (mm)",
-        pipeMaterial: "Material",
-        pipeRoughness: "Surface Roughness (mm)",
         sides: "Number of Sides",
-        fillMode: "Mode",
+        fillMode: "Fill",
         fill: "Fill Colour",
         stroke: "Outline Colour",
         lineWidth: "Thickness",
         customWidth: "Width",
         fixed: "Fix",
+        name: "Name",
         showXAxis: "Show X-axis",
         showYAxis: "Show Y-axis",
         showLabels: "Show Labels",
@@ -1972,10 +1982,29 @@ export function groupsFor(object) {
         ? DYNAMICS_GROUPS
         : [];
 
+    /*
+     * A PIPE / DUCT HAS EXACTLY THREE SECTIONS: Object, Appearance, Transform.
+     *
+     * The shared table is ordered for the drawing shapes - Line, Shape, Fill,
+     * then the common sections - which would put a stray "Line" and "Fill"
+     * heading above Appearance on a pipe. A pipe is a DRAWING STYLE, not a
+     * shape: its line type, colour, thickness and fill all belong together
+     * under Appearance, so the per-shape groups are dropped for it and the
+     * three sections it does have are put in the order they are specified in.
+     */
+    const isPipe = object.type === "pipe-duct";
+
     const groups = [
         ...dynamics,
         ...GROUPS
     ]
+        .filter(
+            (group) =>
+                !isPipe ||
+                ["object", "appearance", "transform"].includes(
+                    group.id
+                )
+        )
         .map((group) => {
             const fields = group.fields
                 .map((key) => ({ key, definition: definitionOf(key) }))
@@ -1984,6 +2013,15 @@ export function groupsFor(object) {
             return { ...group, fields };
         })
         .filter((group) => group.transform || group.fields.length);
+
+    if (isPipe) {
+        const order = ["object", "appearance", "transform"];
+
+        groups.sort(
+            (left, right) =>
+                order.indexOf(left.id) - order.indexOf(right.id)
+        );
+    }
 
     /* A process path's bends, one per segment, ahead of its appearance. */
     if (isProcessPath(object) && object.geometry.points.length > 1) {

@@ -22,7 +22,7 @@ import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-pa
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
 import { resolvePointerEvent } from "./pointer.js";
-import { shouldExitToSelectOnClick } from "../../../components/layout/toolbar/tool-classification.js";
+import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../components/layout/toolbar/tool-classification.js";
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
@@ -277,6 +277,86 @@ export function handleCanvasClick(
         return;
     }
 
+    /*
+     * ========================================================
+     * AN EXISTING OBJECT UNDER THE POINTER IS SELECTED, WHATEVER TOOL IS ARMED
+     * ========================================================
+     *
+     * Answered BEFORE the construction branch, because a construction tool takes
+     * every click it is offered - including one on a feature that already exists.
+     * With a Line armed, clicking an existing run started a new line through it
+     * instead of selecting it.
+     *
+     * IT IS THE SAME RULE SELECT USES: the hit test is `objectAtPoint` and the
+     * selection goes through `selectFromCanvasClick`, so clicking an object
+     * means the same thing whichever tool is armed.
+     *
+     * A RUNNING CONSTRUCTION IS EXEMPT. `shouldClickSelectExistingObject` asks
+     * the interaction state, not a tool list, so a half-built shape keeps the
+     * click it is waiting for - and a click on EMPTY space fails the hit test
+     * here and falls through to the tool below.
+     */
+    if (
+        shouldClickSelectExistingObject(
+            event
+        )
+    ) {
+        if (
+            drawingState.activeTool !==
+            "select"
+        ) {
+            activateTool("select");
+        }
+
+        selectFromCanvasClick(
+            event
+        );
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * EMPTY CANVAS WITH NOTHING STARTED RETURNS TO SELECT
+     * ========================================================
+     *
+     * Every other handler above has had its turn, and the click is on empty
+     * canvas - no object was under the pointer, no dimension or annotation was
+     * taking references, and the interaction is idle. That gesture means one
+     * thing in every category: clear the selection and go back to Select.
+     *
+     * ASKED OF THE INTERACTION, NOT OF A TOOL LIST. A tool added tomorrow gets
+     * this without being named, and a tool that DOES want the click - a
+     * dimension collecting references, a construction part-way through its
+     * points, a press-drag-release - has already consumed it above.
+     *
+     * THE ONE EXCEPTION IS A CLICK-CLICK SHAPE'S FIRST CORNER. A Line,
+     * Rectangle or Circle is drawn click-move-click, so with nothing started an
+     * empty click is the point the student is aiming at and goes to the
+     * construction branch below. Those tools are named in CLICK_CLICK_TOOLS, so
+     * the distinction is stated once, beside the classification that owns it.
+     */
+    if (
+        drawingState.activeTool !==
+            "select" &&
+        drawingState.interaction.phase ===
+            "idle" &&
+        !(
+            CLICK_CLICK_TOOLS.includes(
+                drawingState.activeTool
+            ) &&
+            !drawingState.interaction.startPoint
+        )
+    ) {
+        activateTool("select");
+
+        selectFromCanvasClick(
+            event
+        );
+
+        return;
+    }
+
     if (
         isConstructionTool(
             drawingState.activeTool
@@ -435,6 +515,47 @@ export function handleCanvasClick(
         if (drawingState.activeTool !== "select") {
             activateTool("select");
         }
+        selectFromCanvasClick(
+            event
+        );
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * EMPTY CANVAS CLEARS THE SELECTION AND RETURNS TO SELECT
+     * ========================================================
+     *
+     * The rule is one line long and it applies to EVERY tool, because it is
+     * reached only after every tool has had its turn above: a dimension asking
+     * for a reference, a Beam taking its first point, an annotation placing its
+     * anchor and a construction mid-flight have all already consumed the click
+     * and returned. What is left is a click on empty space that no tool wanted.
+     *
+     * Clicking away is the application's "I am finished here": the selection
+     * empties, the Features tab goes back to nothing, and the tool returns to
+     * Select. Before this, only the Select tool answered an empty click that
+     * way - with any other tool active the click went to the tool, which either
+     * started a stray feature or did nothing at all, and the student was left
+     * in a mode they had not asked for.
+     *
+     * AN ACTIVE GESTURE IS NOT INTERRUPTED, and that is structural rather than
+     * something this branch checks: a press-drag-release reaches its tool
+     * through the DRAG path (`creation-drag.js`), not through this router, and
+     * a construction, dimension or annotation that is part-way through its own
+     * steps has consumed the click in the branches above.
+     *
+     * This last branch is therefore the CATCH-ALL for a tool that had no meaning
+     * for the click at all - which is what makes the rule hold for every
+     * category, including one added tomorrow.
+     */
+    if (
+        drawingState.activeTool !==
+        "select"
+    ) {
+        activateTool("select");
+
         selectFromCanvasClick(
             event
         );

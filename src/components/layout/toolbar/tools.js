@@ -250,6 +250,20 @@ export const toolIcons = {
 	"Pipe / Duct": drawingIcon(`<path ${iconStroke} d="M3 7h14M3 13h14M3 7v6M17 7v6M7 7v6M13 7v6"/>`),
 
 	/*
+	 * FLOW PATHS. The GROUP heading's icon: a run of pipe turning one corner,
+	 * drawn as the same double wall as its children so the closed group reads as
+	 * "the parts of a run". The elbow in the middle is what distinguishes it from
+	 * the Pipe / Duct entry beneath it.
+	 */
+	"Flow Paths": drawingIcon(`<path ${iconStroke} d="M3 6h9a2 2 0 0 1 2 2v8M3 12h7a2 2 0 0 0 2-2V6M3 6v6M14 11v5"/>`),
+
+	/*
+	 * FLOW INDICATORS. The GROUP heading's icon: a run with the direction arrow
+	 * drawn on it - how the flow is SHOWN, which is exactly what the group holds.
+	 */
+	"Flow Indicators": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M6 10h8M11 7l3 3-3 3"/>`),
+
+	/*
 	 * ELBOW. A pipe that turns a corner, drawn as the corner itself: two legs
 	 * meeting at a right angle with a rounded bend between them.
 	 */
@@ -303,6 +317,22 @@ export const toolIcons = {
 	 * cut arrows, which is how a section is marked.
 	 */
 	"Section Plane": drawingIcon(`<path ${iconStroke} d="M4 4v12M4 10h12M4 4h3M4 16h3M16 10l-3-2M16 10l-3 2"/>`),
+
+	/*
+	 * FLOW DIRECTION DIAGRAM. A run with its direction marked along it: the two
+	 * walls, and the arrow drawn between them. It is the Flow Arrow ON A PIPE,
+	 * which is the whole content of the diagram - the student draws the arrows,
+	 * the tool does not work them out.
+	 */
+	"Flow Direction Diagram": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M5 10h9M11 7l3 3-3 3"/>`),
+
+	/*
+	 * PRESSURE PROFILE. A plot against a run: the pipe beneath, and the curve
+	 * that falls along it. Drawn as a CURVE rather than a series of bars so it
+	 * is told apart from the Statics stepped shear diagram at a glance - the same
+	 * distinction the real diagrams have.
+	 */
+	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M3 17h14M3 5c3 0 4 4 6 4s3-4 6-4"/>`),
 
 	/*
 	 * FLUID PROPERTY LABEL. A written note about a fluid: the note's corner and
@@ -599,10 +629,9 @@ export const disciplineToolGroups = {
 	 * FLUIDS: THE TOOLSET, IMPORTED FROM ITS OWN MODULE
 	 * ========================================================
 	 *
-	 * Fluids is organised the way Statics and Annotate are - category
-	 * headings with their commands listed directly underneath - and its
-	 * groups live in features/fluids/fluids-tools.js rather than in this
-	 * file.
+	 * Fluids is organised the way Statics is - the same four sections, with
+	 * their commands listed directly underneath, and its groups live in
+	 * features/workspace/model/fluids/fluids-tools.js rather than in this file.
 	 *
 	 * The reason is MODULARITY, and it is the requirement's own: a Fluid
 	 * tool is registered ONCE, beside the capability it travels, so
@@ -759,27 +788,27 @@ export const engineeringTools = {
 	 * documentation and the inventory QA quote, and a stale copy here would
 	 * describe a section that no longer exists.
 	 *
-	 * The names are the LABELS from the registry, in the same order, with
-	 * Select omitted: the flat branch prepends Select itself, exactly as it
-	 * does for every other discipline.
+	 * The names are the LABELS from the registry, in the order the sidebar
+	 * shows them, with Select omitted: the flat branch prepends Select itself,
+	 * exactly as it does for every other discipline. The two dropdown PARENTS
+	 * are named here and their children are not, because that is what the
+	 * section lists - the children are behind the menu, and this list would
+	 * describe an arrangement nobody sees if it flattened them in.
 	 */
 	FLUIDS: [
-		"Pipe / Duct",
-		"Elbow",
-		"Junction",
+		"Flow Paths",
 		"Reducer / Expander",
 		"Reservoir / Tank",
 		"Pump",
 		"Valve",
 		"Flow Meter",
-		"Flow Arrow",
-		"Fluid Level",
-		"Pressure Tap",
-		"Pipe Diameter",
-		"Section Plane",
-		"Fluid Property Label",
-		"Flow Rate Label",
-		"Elevation Marker"
+		"Flow Indicators",
+		"Flow Direction Diagram",
+		"Pressure Profile",
+		"Coordinate System",
+		"Reference Point",
+		"Reference Line",
+		"Section Plane"
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
