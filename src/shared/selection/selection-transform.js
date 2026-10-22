@@ -1,4 +1,5 @@
 import geometry from "../geometry/feature-geometry.js";
+import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
@@ -7,6 +8,7 @@ export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.metadata?.stressElement) return geometry.rectangleCorners(g).concat(stressArrowPaths(g).flat());
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },

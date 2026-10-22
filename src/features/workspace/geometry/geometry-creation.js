@@ -1015,7 +1015,7 @@ export function beginOrCompleteGeometry(
                         "circle"
                         ? "Specify radius"
 
-                    : (drawingState.activeTool === "rectangle" ||
+                    : (["rectangle", "stress-element"].includes(drawingState.activeTool) ||
                         drawingState.activeTool === "control-volume" ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
@@ -2029,7 +2029,7 @@ export function beginOrCompleteGeometry(
                 }
             );
     } else if (
-        drawingState.activeTool === "rectangle" ||
+        ["rectangle", "stress-element"].includes(drawingState.activeTool) ||
         drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
@@ -2044,8 +2044,8 @@ export function beginOrCompleteGeometry(
          * constrain.
          */
         const square =
-            drawingState.activeTool === "rectangle" &&
-            interaction.squareConstrained === true;
+            drawingState.activeTool === "stress-element" ||
+            (drawingState.activeTool === "rectangle" && interaction.squareConstrained === true);
 
         const rectangle =
             rectangleGeometry(
@@ -2055,9 +2055,10 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
+        const isStressElement = drawingState.activeTool === "stress-element";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isStressElement || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -2080,7 +2081,7 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
+                        ...(isStressElement || isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
@@ -2094,6 +2095,10 @@ export function beginOrCompleteGeometry(
         if (isDiagram) {
             object.name = drawingState.activeTool === "process-plot" ? "Process Plot" : "Saturation Curve";
             object.metadata = { thermodynamicsKind: drawingState.activeTool };
+        }
+        if (isStressElement) {
+            object.name = "Stress Element";
+            object.metadata = { ...object.metadata, stressElement: true };
         }
     } else if (
         ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
@@ -2263,6 +2268,14 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
+        if (object.metadata?.stressElement) {
+            commitCreatedFeature(object);
+            activateTool("select");
+            setToolMessage("Stress element created - drag its rotation handle or enter Angle in the Features panel");
+            renderProperties();
+            renderCurrentDrawing();
+            return;
+        }
         if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
             if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {

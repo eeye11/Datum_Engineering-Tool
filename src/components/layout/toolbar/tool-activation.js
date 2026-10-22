@@ -434,6 +434,7 @@ export function initialToolMessage(
             "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
             "coordinate-system-2d": "Specify origin",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
+            "stress-element": "Drag opposite corners to draw a square stress element; use its rotation handle or enter Angle in the Features panel",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { resizeStressElement } from "../../../shared/geometry/stress-element.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { renderCurrentDrawing, requestRender } from "../../../components/layout/workspace/canvas-render.js";
@@ -1201,6 +1202,10 @@ function applyManipulation(
     }
 
     if (isRectangleLike(object)) {
+        if (object.metadata?.stressElement && drag.kind.startsWith("corner")) {
+            Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
+            return;
+        }
         /*
          * Resize by moving one corner while the opposite
          * corner stays put. A fixed width or height is

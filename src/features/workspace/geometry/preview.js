@@ -611,7 +611,7 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        drawingState.activeTool === "rectangle" ||
+        ["rectangle", "stress-element"].includes(drawingState.activeTool) ||
         drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
@@ -628,7 +628,7 @@ export function updatePreview(
          * press decided where the shape begins, and Shift only says the two
          * extents are equal.
          */
-        const square = Boolean(resolution.modifiers?.shift);
+        const square = drawingState.activeTool === "stress-element" || Boolean(resolution.modifiers?.shift);
 
         interaction.squareConstrained = square;
 

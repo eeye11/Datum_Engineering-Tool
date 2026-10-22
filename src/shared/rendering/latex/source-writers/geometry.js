@@ -46,6 +46,7 @@ import {
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
 import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
+import { stressArrows, stressAngleMark } from "../../../geometry/stress-element.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 
 function finite(value, fallback = 0) {
@@ -328,6 +329,22 @@ const SHAPES = {    line(object) {
     },
 
     rectangle(object) {
+        if (object.metadata?.stressElement) {
+            const style = renderStyle(object.style);
+            const mark = stressAngleMark(object.geometry);
+            const referenceStyle = renderStyle({ ...object.style, stroke: "#909090", fill: "none", lineType: "solid" });
+            const angleCommands = mark ? [
+                polyline(mark.reference.map(pointOf), referenceStyle),
+                polyline(mark.face.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
+                polyline(mark.perpendicular.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
+                polyline(mark.arc.map(pointOf), referenceStyle),
+                ...mark.axes.map((axis, index) => textNode({ at: pointOf(axis.point), text: ["$x$", "$x'$", "$y'$"][index], style: { stroke: "#909090" } })),
+                textNode({ at: pointOf(mark.labelPoint), text: `$${mark.text.replace("°", "^{\\circ}")}$`, style: { stroke: style.stroke } })
+            ] : [];
+            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), style),
+                ...angleCommands,
+                ...stressArrows(object.geometry).map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" })))].join("\n");
+        }
         /*
          * THE CORNER IS COMPUTED IN MODEL SPACE, THEN TRANSFORMED ONCE.
          *

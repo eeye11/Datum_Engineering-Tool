@@ -121,6 +121,7 @@ import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-rese
 const DRAG_GEOMETRY_TOOLS = [
     "line",
     "rectangle",
+    "stress-element",
     "control-volume",
     "saturation-curve",
     "process-plot",

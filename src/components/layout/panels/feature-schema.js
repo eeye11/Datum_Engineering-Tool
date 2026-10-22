@@ -28,6 +28,7 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { STRESS_COLOURS } from "../../../shared/geometry/stress-element.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
@@ -413,6 +414,54 @@ const ARROW_OPTIONS = [
 ];
 
 const FIELDS = {
+    "stressElement.showAngle": {
+        kind: "toggle", label: "Show Angle",
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => object.geometry.showAngle !== false,
+        write: (object, value) => { object.geometry.showAngle = Boolean(value); return true; }
+    },
+    ...Object.fromEntries(Object.entries(STRESS_COLOURS).map(([key, colour]) => [`stressElement.${key}Colour`, {
+        kind: "colour",
+        label: `${{ normalStressX: "Normal X", normalStressY: "Normal Y", shearStress: "Shear" }[key]} Colour`,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => object.geometry[`${key}Colour`] || colour,
+        write: (object, value) => {
+            if (!/^#[0-9a-f]{6}$/i.test(String(value))) return false;
+            object.geometry[`${key}Colour`] = value;
+            return true;
+        }
+    }])),
+    ...Object.fromEntries([
+        ["normalStressX", "Normal Stress X", false],
+        ["normalStressY", "Normal Stress Y", false],
+        ["shearStress", "Shear Stress", true]
+    ].map(([key, label, shear]) => [`stressElement.${key}`, {
+        kind: "segmented", label,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => String(Number(object.geometry[key]) || 0),
+        write: (object, value) => {
+            if (!["0", "1", "-1"].includes(String(value))) return false;
+            object.geometry[key] = Number(value);
+            return true;
+        },
+        options: [
+            { value: "0", label: "None" },
+            { value: "1", label: shear ? "Positive" : "Tension" },
+            { value: "-1", label: shear ? "Negative" : "Compression" }
+        ]
+    }])),
+    "stressElement.angle": {
+        kind: "number",
+        label: "Angle (degrees)",
+        step: 1,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => Number(object.geometry.rotation) || 0,
+        write: (object, value) => {
+            if (String(value).trim() === "" || !Number.isFinite(Number(value))) return false;
+            object.geometry.rotation = Number(value);
+            return true;
+        }
+    },
     /* ---------------------------------------------------------- Geometry */
 
     markerStyle: {
@@ -950,6 +999,7 @@ export const GROUPS = [
         fields: ["dynamics.referenceMarker"]
     },
 
+    { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
     { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
     { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }
