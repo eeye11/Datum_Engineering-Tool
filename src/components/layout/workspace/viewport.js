@@ -9,6 +9,7 @@ import enggLoadProfile from "../../../features/workspace/model/analysis/load-pro
 import enggAnnotationModel from "../../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../../features/workspace/model/annotations/annotate-model.js";
 import { resistorPoints } from "../../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../../features/workspace/model/thermodynamics/fan.js";
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
@@ -532,6 +533,9 @@ function dimensionBoundsPoints(object) {
  * Fit and the renderer cannot disagree about how much room a mark takes.
  */
 function annotateBoundsPoints(object) {
+    if (object?.metadata?.thermodynamicsKind === "mechanical-work" && object.visible !== false) {
+        return fanPaths(object.geometry).flat();
+    }
     if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
         return resistorPoints(object.geometry);
     }

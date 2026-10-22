@@ -1016,7 +1016,7 @@ export function beginOrCompleteGeometry(
                         ? "Specify radius"
 
                     : (drawingState.activeTool === "rectangle" ||
-                        drawingState.activeTool === "control-volume" ||
+                        ["control-volume", "tank"].includes(drawingState.activeTool) ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -2030,7 +2030,7 @@ export function beginOrCompleteGeometry(
             );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        drawingState.activeTool === "control-volume" ||
+        ["control-volume", "tank"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2055,9 +2055,10 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
+        const isTank = drawingState.activeTool === "tank";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isTank || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -2080,13 +2081,17 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
+                        ...(isTank || isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
                         currentEngineeringMetadata()
                 }
             );
+        if (isTank) {
+            object.name = "Tank";
+            object.metadata = { thermodynamicsKind: "tank" };
+        }
         if (isPiston && drawingState.activeTool === "piston-cylinder-stoppers") {
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
@@ -2263,14 +2268,16 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["tank", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["tank", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
             }
-            setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
+            setToolMessage(object.metadata.thermodynamicsKind === "tank"
+                ? "Tank created - drag a corner to resize, or drag the tank to move"
+                : object.metadata.thermodynamicsKind === "piston-cylinder"
                 ? (object.geometry.hasStoppers
                     ? "Drag the centre dot to move the piston above or below the stops, a stopper dot to adjust the stops, or a corner to resize"
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")

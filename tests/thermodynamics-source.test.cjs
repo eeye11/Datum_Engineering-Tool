@@ -40,6 +40,30 @@ after(() => window.close());
 
 const box = { position: { x: 0, y: 0 }, width: 10, height: 5, rotation: 0 };
 
+test("a tank with valve exports its vessel, outlet, valve and handle", () => {
+  const source = sourceFor({
+    id: "tank-valve-1", type: "rectangle",
+    geometry: { ...box, hasValve: true }, style: {},
+    metadata: { thermodynamicsKind: "tank" }
+  });
+  assert.ok(source);
+  assert.doesNotMatch(source, / rectangle /);
+  assert.equal((source.match(/\\draw/g) || []).length, 6);
+});
+
+test("open and closed tank valves export distinct handle positions", () => {
+  const tank = {
+    id: "valve-state", type: "rectangle", style: {},
+    metadata: { thermodynamicsKind: "tank" }
+  };
+  const closed = sourceFor({ ...tank, geometry: { ...box, hasValve: true, valveOpen: false } });
+  const open = sourceFor({ ...tank, geometry: { ...box, hasValve: true, valveOpen: true } });
+  assert.ok(closed && open);
+  assert.notEqual(open, closed);
+  assert.equal((open.match(/\\draw/g) || []).length, 6);
+  assert.equal((closed.match(/\\draw/g) || []).length, 6);
+});
+
 /* The y values of every coordinate pair in a block of TikZ. */
 function ys(text) {
   return [...String(text).matchAll(/\((-?[\d.]+),(-?[\d.]+)\)/g)].map((match) => Number(match[2]));
@@ -60,7 +84,7 @@ test("a rotated rectangle is written through the model's own corners", () => {
   assert.ok(Math.abs(Math.max(...values) - Math.min(...values) - 10) < 1e-3, source);
 });
 
-for (const kind of ["saturation-curve", "process-plot", "piston-cylinder", "control-volume"]) {
+for (const kind of ["tank", "saturation-curve", "process-plot", "piston-cylinder", "control-volume"]) {
   test(`a ${kind} is the thermodynamics writer's, inside its own box`, () => {
     const source = sourceFor({
       id: `${kind}-1`,
@@ -120,4 +144,16 @@ test("electric work is written as its resistor, not as an arrow", () => {
   assert.ok(source, "electric work wrote no source");
   assert.doesNotMatch(source, /Latex/, "no arrowhead");
   assert.ok((source.match(/--/g) || []).length >= 10, "the zigzag's vertices are written");
+});
+
+test("mechanical work exports a side-view shaft, hub and two blades without an arrowhead", () => {
+  const source = sourceFor({
+    id: "fan-1", type: "annotate", annotateKind: "arrow",
+    geometry: { start: { x: 0, y: 0 }, end: { x: 20, y: 0 } },
+    style: { stroke: "#000000" },
+    metadata: { thermodynamicsKind: "mechanical-work" }
+  });
+  assert.ok(source);
+  assert.doesNotMatch(source, /Latex/);
+  assert.equal((source.match(/\\draw/g) || []).length, 4);
 });

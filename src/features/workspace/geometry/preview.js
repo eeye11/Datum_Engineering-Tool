@@ -612,7 +612,7 @@ export function updatePreview(
         );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        drawingState.activeTool === "control-volume" ||
+        ["control-volume", "tank"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -642,7 +642,7 @@ export function updatePreview(
                 )
             );
 
-        if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (["tank", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
         }
 

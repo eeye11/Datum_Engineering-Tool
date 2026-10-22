@@ -151,6 +151,7 @@ export function isGeometricAnnotateTool(toolId) {
  * to do next rather than leaving the previous tool's wording in place.
  */
 export function annotateInstruction(toolId) {
+  if (toolId === "mechanical-work") return "Drag from the shaft end to the fan blades to set size and direction";
   if (toolId === "electric-work") return "Drag diagonally from the lead entry to size the resistor; or click two corners";
   if (workToolLabels[toolId]) {
     return `${workToolLabels[toolId]}: drag from the arrow tail to where the work flows`;
@@ -307,7 +308,7 @@ export function commitAnnotate(options) {
     if (drawingState.activeTool === "electric-work" && options.start && options.end) {
       Object.assign(object.geometry, resistorGeometryFromDrag(options.start, options.end));
     }
-    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : workLabel;
+    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : "Fan";
     object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
   }
   if (heat) {
@@ -649,6 +650,8 @@ export function beginAnnotateAnchor({ kind, point, targetFeatureId }) {
   setToolMessage(
     drawingState.activeTool === "electric-work"
       ? "Move to set resistor width and height, click to place; Esc cancels"
+      : drawingState.activeTool === "mechanical-work"
+      ? "Move to size the fan, click to place; Esc cancels"
       : kind === "arrow"
       ? "Specify arrow endpoint"
       : "Move to place the text, click to confirm, Esc to cancel"

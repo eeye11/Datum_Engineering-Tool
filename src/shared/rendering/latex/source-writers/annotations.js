@@ -35,6 +35,7 @@
 import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
 
@@ -227,6 +228,7 @@ function serializeLabel(object) {
   const commands = [];
   const definitions = colourPrelude([object.style?.stroke]);
 
+
   if (valid(geometry.start)) {
     commands.push(
       `\\fill[${colour}] ${point(finite(geometry.start.x), finite(geometry.start.y))} circle[radius=0.35];`
@@ -279,6 +281,11 @@ function serializePen(object) {
   const kind = object.annotateKind;
   const colour = strokeOf(object);
   const definitions = colourPrelude([object.style?.stroke]);
+
+  if (object.metadata?.thermodynamicsKind === "mechanical-work") {
+    const paths = fanPaths(geometry);
+    return paths.length ? join(definitions, paths.map(points => pathThrough(points, colour, [])).join("\n")) : null;
+  }
 
   /*
    * ELECTRIC WORK IS A RESISTOR, not an arrow: two leads and the zigzag between

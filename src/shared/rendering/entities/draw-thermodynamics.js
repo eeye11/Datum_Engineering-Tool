@@ -13,6 +13,18 @@ import { processLabelPoint } from "../../../features/workspace/model/thermodynam
 import { processSegmentPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import { processDiagramPaths } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { cylinderPoint, pistonFraction, stopperPaths } from "../../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import { tankPaths } from "../../../features/workspace/model/thermodynamics/tank.js";
+
+export function drawTank({ svg, geometry, style, toScreen }) {
+    for (const outline of tankPaths(geometry)) {
+        const points = outline.map(toScreen);
+        const path = createSvgElement("path", {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+        });
+        applyStyle(path, { ...style, fill: "none" });
+        svg.appendChild(path);
+    }
+}
 
     /*
      * A PROCESS PATH'S STATES AND DIRECTION.

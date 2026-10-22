@@ -11,6 +11,7 @@ import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
+import { fanPaths } from "../model/thermodynamics/fan.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
@@ -272,6 +273,10 @@ function annotateContainsPoint(object, point) {
     if (object.metadata?.thermodynamicsKind === "electric-work") {
         const points = resistorPoints(geometry);
         return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
+    if (object.metadata?.thermodynamicsKind === "mechanical-work") {
+        return fanPaths(geometry).some(points => points.some((end, index) =>
+            index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance));
     }
 
     /*

@@ -6,9 +6,10 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
+    "Tank": drawingIcon(`<rect ${iconStroke} x="4" y="2" width="12" height="16" rx="3"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
-    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
+    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M2 10h11m0-1h2v2h-2zM13 9C12 6 10 2 13 2S16 6 15 9ZM15 11C16 14 18 18 15 18S12 14 13 11Z"/>`),
     "Heat Transfer": drawingIcon(`<path ${iconStroke} d="M3 7h13m-4-4 4 4-4 4M17 14H4m4-4-4 4 4 4"/>`),
     "Heat Entering": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
     "Heat Leaving": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -781,7 +782,7 @@ export const engineeringTools = {
 		"Flow Rate Label",
 		"Elevation Marker"
 	],
-	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
+	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],

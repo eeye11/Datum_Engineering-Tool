@@ -1,5 +1,6 @@
 import geometry from "../geometry/feature-geometry.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 
@@ -8,6 +9,7 @@ export function selectionBounds(objects, selectedIds) {
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
+        if (object.metadata?.thermodynamicsKind === "mechanical-work") return fanPaths(g).flat();
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];

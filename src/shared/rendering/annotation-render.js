@@ -8,6 +8,7 @@ import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 
@@ -256,6 +257,17 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         const kind = entity.annotateKind;
         const geometry = entity.geometry || {};
+
+        if (entity.metadata?.thermodynamicsKind === "mechanical-work") {
+            for (const points of fanPaths(geometry)) {
+                svg.appendChild(createSvgElement("polyline", {
+                    points: points.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                    fill: "none", stroke: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                    "stroke-width": 1.5, "stroke-linejoin": "round"
+                }));
+            }
+            return;
+        }
 
         if (entity.metadata?.thermodynamicsKind === "electric-work") {
             svg.appendChild(createSvgElement("polyline", {
