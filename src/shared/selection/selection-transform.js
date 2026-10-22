@@ -56,20 +56,21 @@ export function selectionMembers(objects, selectedIds) {
 }
 
 const lengthKeys = new Set(["width", "height", "radius", "length", "depth", "xPositiveLength", "xNegativeLength", "yPositiveLength", "yNegativeLength"]);
+const relativeOffsetKeys = new Set(["magnitudeOffset", "pointOffsets", "supportValueOffsets"]);
 
 // Apply one uniform transform to the original snapshot on every frame.
 // Fractions (piston and stopper positions), angles and engineering values stay intact.
 export function transformSelectionObject(original, anchor, scale = 1, dx = 0, dy = 0) {
     const object = structuredClone(original);
-    const transform = value => {
+    const transform = (value, relative = false) => {
         if (!value || typeof value !== "object") return;
         if (Number.isFinite(value.x) && Number.isFinite(value.y)) {
-            value.x = anchor.x + (value.x - anchor.x) * scale + dx;
-            value.y = anchor.y + (value.y - anchor.y) * scale + dy;
+            value.x = relative ? value.x * scale : anchor.x + (value.x - anchor.x) * scale + dx;
+            value.y = relative ? value.y * scale : anchor.y + (value.y - anchor.y) * scale + dy;
         }
         for (const [key, child] of Object.entries(value)) {
             if (lengthKeys.has(key) && Number.isFinite(child)) value[key] = child * scale;
-            else if (child && typeof child === "object") transform(child);
+            else if (child && typeof child === "object") transform(child, relative || relativeOffsetKeys.has(key));
         }
     };
     transform(object.geometry);
