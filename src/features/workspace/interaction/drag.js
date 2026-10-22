@@ -24,6 +24,12 @@ import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
+/* How near the pivot (screen px) a rotation drag stops reading an angle. */
+const ROTATION_DEAD_ZONE_PX = 8;
+
+/* The rotation step while Shift is held: 15 degrees. */
+const ROTATION_STEP = Math.PI / 12;
+
 export function beginManipulationDrag(
     event
 ) {
@@ -210,6 +216,19 @@ export function beginManipulationDrag(
                                 )
                               : null;
                       })()
+                    : undefined,
+
+            /*
+             * AND IT TURNS ABOUT THE PIVOT OF THE GRAB, FOR THE WHOLE DRAG.
+             *
+             * Captured once from the untouched object. Re-deriving it every
+             * frame from the half-turned live shape let any change in how
+             * that shape's centre is computed move the pivot under the
+             * student's hand, so the feature wandered off as it turned.
+             */
+            rotationPivot:
+                hit.handle.kind === "rotate"
+                    ? rotationPivotFor(hit.object)
                     : undefined,
 
             /*
@@ -455,8 +474,24 @@ export function updateManipulationDrag(
      * they write is a DRAWING position rather than a measurement - see the
      * two comments above.
      */
+    /*
+     * A ROTATION IS AN ANGLE, NOT A POSITION, so it reads the RAW pointer.
+     *
+     * Through the snap pipeline the cursor was pulled onto grid points, onto
+     * the feature's own corners and centre, and onto horizontal/vertical
+     * guides - each a jump in angle that had nothing to do with where the
+     * hand was, and a snap onto the pivot itself left the angle undefined and
+     * spun the shape to a random orientation. Angle steps are offered instead
+     * by holding Shift (see applyManipulation).
+     */
+    const rotating =
+        editorState.manipulationDrag.kind === "rotate";
+
+    editorState.manipulationDrag.shiftKey =
+        Boolean(event.shiftKey);
+
     const resolution =
-        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
+        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body" || rotating
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
             : draggingDimension || draggingAnnotate
             ? resolvePointerEvent(event)
@@ -765,6 +800,7 @@ function applyManipulation(
             drag.originals?.[object.id];
 
         const pivot =
+            drag.rotationPivot ||
             rotationPivotFor(object);
 
         if (
@@ -773,6 +809,27 @@ function applyManipulation(
             !point ||
             !Number.isFinite(point.x) ||
             !Number.isFinite(point.y)
+        ) {
+            return;
+        }
+
+        /*
+         * TOO CLOSE TO THE PIVOT TO HAVE A DIRECTION.
+         *
+         * Within a few screen pixels of the pivot the angle swings wildly
+         * for a tiny movement (and is undefined on it), so the last good
+         * rotation is kept until the pointer is far enough out to mean one.
+         */
+        const pixelsPerUnit =
+            enggDrawingState.BASE_PIXELS_PER_UNIT *
+            (drawingState.camera?.zoom || 1);
+
+        if (
+            Math.hypot(
+                point.x - pivot.x,
+                point.y - pivot.y
+            ) * pixelsPerUnit <
+            ROTATION_DEAD_ZONE_PX
         ) {
             return;
         }
@@ -790,8 +847,15 @@ function applyManipulation(
                 drag.start.x - pivot.x
             );
 
+        /*
+         * SHIFT TURNS IN 15 DEGREE STEPS, counted from where the drag
+         * began, so a shape drawn square lands on 15, 30, 45 ... exactly.
+         */
         const radians =
-            angle - startAngle;
+            drag.shiftKey
+                ? Math.round((angle - startAngle) / ROTATION_STEP) *
+                  ROTATION_STEP
+                : angle - startAngle;
 
         /* Rebuild from the snapshot so the newest angle is applied once. */
         object.geometry = JSON.parse(
