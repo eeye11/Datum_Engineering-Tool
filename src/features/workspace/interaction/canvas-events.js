@@ -410,7 +410,7 @@ export function installCanvasEvents() {
                 if (!editorState.manipulationDrag && !editorState.creationDrag) {
                     const target = drawingState.activeTool === "select" ? objectAtPoint(canvasPointFromEvent(event, false)) : null;
                     drawingCanvas.classList.toggle("drawing-can-move", Boolean(target && !target.locked &&
-                        (target.type === "coordinate-system-2d" || drawingState.selection.selectedObjectIds.includes(target.id))));
+                        (["coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
                 }
                 /*
                  * A DRAG-TO-CREATE KEEPS ITS PREVIEW LIVE.

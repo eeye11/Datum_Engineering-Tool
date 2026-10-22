@@ -1812,6 +1812,8 @@ export function pickDerivedMagnitude(
         const object =
             drawingState.objects[i];
 
+        if (object.visible === false) continue;
+
         const annotations =
             model.derivedAnnotations(
                 object,
@@ -1839,7 +1841,7 @@ export function pickDerivedMagnitude(
                 !model.textBoundsContainPoint(
                     bounds,
                     point,
-                    padding
+                    padding + (object.type === "force" ? 4 / Math.max(drawingState.camera.zoom, 0.25) : 0)
                 )
             ) {
                 continue;

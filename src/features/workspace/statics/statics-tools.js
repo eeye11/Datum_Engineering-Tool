@@ -27,6 +27,7 @@ export const STATICS_TOOL_MENUS = {
      * Moment layer to pass through and no Couple variant to choose.
      */
     load: [
+        { id: "point-force", label: "Point Load", iconLabel: "Point Force" },
         { id: "distributed-load", label: "Distributed Load" },
         {
             id: "varying-distributed-load",
@@ -52,11 +53,8 @@ export const STATICS_TOOL_MENUS = {
  * Every Statics feature tool, with the label shown in the
  * status line and the authoritative feature type it creates.
  *
- * A Point Force is listed here as a direct tool rather than
- * behind a submenu, and the type it records is `force`, which
- * is the Point Force feature. Force Pair, Point Load and the
- * old generic Force/Moment/Support entries are gone: there is
- * exactly one tool and one feature type per real feature.
+ * Point Force and the Load menu's Point Load entry share the
+ * `point-force` tool and its `force` feature type.
  */
 export const STATICS_CHILD_TOOLS = {
     particle: { label: "Particle", type: "particle" },
