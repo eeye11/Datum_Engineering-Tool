@@ -15,6 +15,8 @@ const assert = require("node:assert/strict");
 
 const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 const { locate } = require("./helpers/source-path.cjs");
+const POINTS_PER_UNIT = 72.27 / 25.4;
+const PICTURE_ORIGIN = -72.27;
 
 const { window, document, error } = bootApp();
 
@@ -48,6 +50,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let model;
 let drawingState;
 let canvasRender;
+let exportTransformFor;
 let canvas;
 
 before(async () => {
@@ -56,6 +59,7 @@ before(async () => {
   model = require(locate("drawing-state.js")).default;
   ({ drawingState } = require(locate("editor-state.js")));
   canvasRender = require(locate("canvas-render.js"));
+  ({ exportTransformFor } = require(locate("source-synchronization.js")));
   canvas = document.querySelector(".drawing-canvas");
 
   await wait(300);
@@ -99,6 +103,30 @@ test("once the picture shows it, the overlay steps aside", async () => {
   canvasRender.renderCurrentDrawing();
 
   assert.deepEqual(liveIds(), []);
+});
+
+test("the compiled picture maps export coordinates back through the model camera", () => {
+  const layer = canvas.querySelector(":scope > svg.drawing-source-layer");
+  const transform = exportTransformFor(drawingState.objects);
+  const [left, top, viewWidth, viewHeight] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
+  const width = Number(layer.getAttribute("width"));
+  const height = Number(layer.getAttribute("height"));
+  const modelBounds = { width, height };
+
+  const pictureX = PICTURE_ORIGIN + 10 * POINTS_PER_UNIT;
+  const pictureY = PICTURE_ORIGIN;
+  const projectedPoint = {
+    x: (pictureX - left) * width / viewWidth,
+    y: (pictureY - top) * height / viewHeight
+  };
+  const modelPoint = {
+    x: transform.sourceBounds.minX + 10 / transform.factor,
+    y: transform.sourceBounds.minY
+  };
+  const expectedPoint = model.engineeringToScreen(modelPoint, modelBounds, drawingState);
+
+  assert.ok(Math.abs(projectedPoint.x - expectedPoint.x) < 1);
+  assert.ok(Math.abs(projectedPoint.y - expectedPoint.y) < 1);
 });
 
 test("an object being moved is drawn where it is, not where the picture last saw it", () => {

@@ -12,6 +12,7 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { updateHistoryControls } from "../toolbar/tool-activation.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
+import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
 
@@ -104,6 +105,7 @@ let lastCompileErrorIsReplaceable = false;
  * picture does not show yet - see `objectsThePictureDoesNotShow`.
  */
 let modelAtRevision = new Map();
+let exportTransformAtRevision = new Map();
 
 /* The current source's object regions, parsed once per revision. */
 let regionsRevision = null;
@@ -578,19 +580,20 @@ function canvasBounds() {
  * so a world point (panX, panY) belongs at the canvas centre, and one drawing
  * unit is `k` screen pixels.
  *
- * THE COMPILED SVG IS NOT IN DRAWING UNITS. TeX writes TeX points, y downward,
- * and places the page one inch in - so with the picture anchored at its (0,0)
- * (the canvas asks for that; see server/tikz.js) a world point lands at
+ * SOURCE WRITERS NORMALISE MODEL COORDINATES before TeX sees them:
  *
- *     svg.x = PICTURE_ORIGIN + x * POINTS_PER_UNIT
- *     svg.y = PICTURE_ORIGIN - y * POINTS_PER_UNIT
+ *     source.x = (world.x - exportOriginX) * exportFactor
+ *     source.y = (world.y - exportOriginY) * exportFactor
  *
- * The visible world rectangle is converted with exactly that map, so the
- * compiled drawing sits on the same world coordinates as the snapping, the
- * handles and every other piece of interaction code. Reading the SVG as if it
- * were millimetres from the origin - as this used to - drew the picture about
- * 2.8 times too large and shifted by its bounding box, away from the objects
- * the student was clicking.
+ * TeX writes those coordinates in points, y downward, and places the page one
+ * inch in - so with the picture anchored at its (0,0) (the canvas asks for that;
+ * see server/tikz.js) a source point lands at
+ *
+ *     svg.x = PICTURE_ORIGIN + source.x * POINTS_PER_UNIT
+ *     svg.y = PICTURE_ORIGIN - source.y * POINTS_PER_UNIT
+ *
+ * The picture layer inverts the same export transform for the visible world
+ * rectangle, so compiled geometry and the model overlay share one camera.
  *
  * It is written as a viewBox rather than an SVG transform so the renderer's own
  * coordinates are never rewritten.
@@ -598,21 +601,34 @@ function canvasBounds() {
 const POINTS_PER_UNIT = 72.27 / 25.4;
 const PICTURE_ORIGIN = -72.27;
 
-function positionPictureLayer(layer, bounds, state) {
+function positionPictureLayer(layer, bounds, state, transform) {
     const zoom = Number(state?.camera?.zoom) || 1;
     const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
     const panX = Number(state?.camera?.panX) || 0;
     const panY = Number(state?.camera?.panY) || 0;
+    const factor = Number.isFinite(transform?.factor) && transform.factor > 0
+        ? transform.factor
+        : 1;
+    const originX = Number.isFinite(transform?.sourceBounds?.minX)
+        ? transform.sourceBounds.minX
+        : 0;
+    const originY = Number.isFinite(transform?.sourceBounds?.minY)
+        ? transform.sourceBounds.minY
+        : 0;
 
     const viewWidth = Math.max(1, bounds.width / k);
     const viewHeight = Math.max(1, bounds.height / k);
 
-    const left = PICTURE_ORIGIN + (panX - viewWidth / 2) * POINTS_PER_UNIT;
-    const top = PICTURE_ORIGIN - (panY + viewHeight / 2) * POINTS_PER_UNIT;
+    const left =
+        PICTURE_ORIGIN +
+        (panX - viewWidth / 2 - originX) * factor * POINTS_PER_UNIT;
+    const top =
+        PICTURE_ORIGIN -
+        (panY + viewHeight / 2 - originY) * factor * POINTS_PER_UNIT;
 
     layer.setAttribute(
         "viewBox",
-        `${left} ${top} ${viewWidth * POINTS_PER_UNIT} ${viewHeight * POINTS_PER_UNIT}`
+        `${left} ${top} ${viewWidth * factor * POINTS_PER_UNIT} ${viewHeight * factor * POINTS_PER_UNIT}`
     );
     layer.setAttribute("x", "0");
     layer.setAttribute("y", "0");
@@ -691,13 +707,18 @@ function rememberModelAt(revision) {
         return;
     }
 
+    const objects = drawingState.objects || [];
+
     modelAtRevision.set(
         revision,
-        new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
+        new Map(objects.map((object) => [object.id, serialiseObject(object)]))
     );
+    exportTransformAtRevision.set(revision, exportTransformFor(objects));
 
     while (modelAtRevision.size > CACHE_LIMIT) {
-        modelAtRevision.delete(modelAtRevision.keys().next().value);
+        const oldestRevision = modelAtRevision.keys().next().value;
+        modelAtRevision.delete(oldestRevision);
+        exportTransformAtRevision.delete(oldestRevision);
     }
 }
 
@@ -1349,6 +1370,7 @@ export function resetSourcePictureCache() {
 
     compiledCache = new Map();
     modelAtRevision = new Map();
+    exportTransformAtRevision = new Map();
     regionsRevision = null;
     regionsMap = null;
     compiledRevision = null;
@@ -1465,12 +1487,13 @@ disappeared while I typed" failure.
     rememberModelAt(revision);
 
     const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
+    const pictureTransform = exportTransformAtRevision.get(pictureRevision);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
 
     if (picture) {
         showPicture(picture);
-        positionPictureLayer(pictureLayer, bounds, drawingState);
+        positionPictureLayer(pictureLayer, bounds, drawingState, pictureTransform);
     }
 
     if (!cachedPicture(revision)) {
