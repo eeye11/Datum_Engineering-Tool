@@ -597,6 +597,12 @@
     cursor: grab;
 }
 
+/* Override tool and handle cursors for the duration of an object move. */
+.drawing-canvas.drawing-object-moving,
+.drawing-canvas.drawing-object-moving * {
+    cursor: move !important;
+}
+
 .drawing-renderer {
     height: 100%;
     inset: 0;

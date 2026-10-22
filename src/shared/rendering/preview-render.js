@@ -15,6 +15,7 @@ import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
+import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 
 
@@ -455,7 +456,9 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
-                geometry: {
+                geometry: state.activeTool === "electric-work" && state.interaction.annotateEnd
+                    ? resistorGeometryFromDrag(state.interaction.annotateStart, state.interaction.annotateEnd)
+                    : {
                     start: state.interaction.annotateStart,
                     end: state.interaction.annotateEnd
                 },

@@ -1383,6 +1383,14 @@ export function renderCurrentDrawing() {
         )
     );
 
+    const manipulation = editorState.manipulationDrag;
+    drawingCanvas.classList.toggle(
+        "drawing-object-moving",
+        Boolean(manipulation?.moved && [
+            "body", "annotation-offset", "position", "center", "origin"
+        ].includes(manipulation.kind))
+    );
+
     /*
      * ================================================================
      * DERIVED FEATURES ARE DERIVED ON THE WAY TO THE CANVAS
