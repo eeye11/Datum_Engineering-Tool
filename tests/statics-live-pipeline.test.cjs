@@ -624,11 +624,19 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
   assert.ok(Math.abs(Number(start[2]) - (origin - 10 * k)) < 0.05, `y=10 compiled to ${start[2]}`);
   assert.ok(Math.abs(Number(start[3]) - 10 * k) < 0.05, `10 units compiled to ${start[3]}`);
 
-  /* The canvas's view of the world, in the same units: centred on the camera. */
+  /*
+   * The canvas's view of the world, in the source's normalised units: centred
+   * on the camera after applying the same export transform as its objects.
+   */
   const previous = { ...drawingState.camera };
 
   drawingState.camera.panX = 25;
   drawingState.camera.panY = 10;
+  const transform = syncExportTransformForSheet();
+  const cameraPoint = transform.point(
+    drawingState.camera.panX,
+    drawingState.camera.panY,
+  );
 
   try {
     const { renderCurrentDrawing } = require(require("./helpers/source-path.cjs").locate("canvas-render.js"));
@@ -650,11 +658,11 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
     const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
 
     assert.ok(
-      Math.abs(left + width / 2 - (origin + 25 * k)) < 0.05,
+      Math.abs(left + width / 2 - (origin + cameraPoint.x * k)) < 0.05,
       "the canvas centre is not world x = panX in the compiled picture's units",
     );
     assert.ok(
-      Math.abs(top + height / 2 - (origin - 10 * k)) < 0.05,
+      Math.abs(top + height / 2 - (origin - cameraPoint.y * k)) < 0.05,
       "the canvas centre is not world y = panY in the compiled picture's units",
     );
   } finally {
@@ -687,4 +695,3 @@ test("the compiled picture is produced from the Source tab's current text", asyn
   assert.equal(manager.lastError(), null, "a render failure was recorded");
   assert.ok(pictureLayer().children.length > 0, "no compiled picture is on the canvas");
 });
-
