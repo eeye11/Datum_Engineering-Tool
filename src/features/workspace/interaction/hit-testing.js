@@ -588,6 +588,23 @@ export function objectAtPoint(
                     object.geometry;
 
                 /*
+                 * A HIDDEN OBJECT CANNOT BE CLICKED.
+                 *
+                 * It is not drawn, so a click where it would have been must
+                 * reach whatever is behind it - or nothing, which then means
+                 * "empty canvas". Selecting something invisible would be the
+                 * worst of both: the student cannot see what they grabbed, and
+                 * the thing they meant to click was blocked by it.
+                 *
+                 * The object stays in the Objects list, where it can be
+                 * selected, inspected and shown again - this only stops the
+                 * CANVAS from picking it.
+                 */
+                if (object.visible === false) {
+                    return false;
+                }
+
+                /*
                  * AN ANNOTATION IS HIT BY ITS TEXT, not by geometry.
                  *
                  * Every other feature is found by how close the pointer

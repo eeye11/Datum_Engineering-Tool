@@ -23,6 +23,7 @@
 
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { displayNameOf, iconForObject, typeLabelOf } from "./feature-schema.js";
 
 let host = null;
@@ -50,6 +51,50 @@ function escapeHtml(text) {
 }
 
 /*
+ * ============================================================
+ * THE VISIBILITY EYE
+ * ============================================================
+ *
+ * One compact button at the far right of every row. It is drawn from the same
+ * 20x20 / `currentColor` conventions as every other DAEMON icon, so it picks up
+ * the row's colour and hover state rather than needing a palette of its own.
+ *
+ * VISIBLE -> an open eye; HIDDEN -> the eye with a stroke through it. Both are
+ * inline SVG rather than a font glyph, so the button cannot shift the row's
+ * height or fall back to a box on a machine without the icon font.
+ */
+const EYE_ICON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+    '<path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '</svg>';
+
+const EYE_OFF_ICON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+    '<path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M4 4l12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+    '</svg>';
+
+/* The eye button for one row, or "" when the list is only identifying rows. */
+export function visibilityButtonMarkup(object) {
+    const visible = object.visible !== false;
+    const name = displayNameOf(object);
+    const action = visible ? `Hide ${name}` : `Show ${name}`;
+
+    return (
+        `<button type="button" class="drawing-objects-visibility" ` +
+        `data-visibility-for="${escapeHtml(object.id)}" ` +
+        `data-visible="${visible ? "true" : "false"}" ` +
+        `aria-pressed="${visible ? "true" : "false"}" ` +
+        `aria-label="${escapeHtml(action)}" ` +
+        `title="${escapeHtml(action)}">` +
+        `${visible ? EYE_ICON : EYE_OFF_ICON}` +
+        `</button>`
+    );
+}
+
+/*
  * The row list's markup. Exported so a test can assert the rows without a DOM
  * event, and so the render below stays a one-liner.
  */
@@ -66,16 +111,19 @@ export function objectsListMarkup(
     const rows = objects
         .map((object) => {
             const isSelected = selected.has(object.id);
+            const isVisible = object.visible !== false;
             const name = displayNameOf(object);
             const type = typeLabelOf(object);
 
             return (
-                `<li class="drawing-objects-item" role="option" aria-selected="${isSelected ? "true" : "false"}" ` +
+                `<li class="drawing-objects-item${isVisible ? "" : " drawing-objects-item-hidden"}" role="option" ` +
+                `aria-selected="${isSelected ? "true" : "false"}" ` +
                 `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
                 `tabindex="${isSelected ? "0" : "-1"}" ` +
                 `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
                 `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
                 `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
+                visibilityButtonMarkup(object) +
                 `</li>`
             );
         })
@@ -171,6 +219,39 @@ export function installObjectsPane() {
     }
 
     host.addEventListener("click", (event) => {
+        /*
+         * THE EYE IS ITS OWN ACTION, NOT A ROW CLICK.
+         *
+         * The button sits inside the row, so without this the browser would
+         * bubble the click to the row handler and SELECT the object as well as
+         * hiding it - the student would hide a pipe and find it selected and
+         * open in Features, which is not what they asked for. The handler stops
+         * here and toggles only the one object's visibility.
+         *
+         * `stopPropagation` alone would still let a parent listener react, so
+         * the row is checked for first and the event is consumed either way.
+         */
+        const eye = event.target.closest?.("[data-visibility-for]");
+
+        if (eye) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            enggDrawingState.toggleObjectVisible(
+                drawingState,
+                eye.dataset.visibilityFor
+            );
+
+            /*
+             * A CHANGE THAT WAS REFUSED STILL REPAINTS THE ROW, so the button
+             * can never be left showing a state the model does not have.
+             */
+            renderObjects();
+            renderCurrentDrawing();
+
+            return;
+        }
+
         const row = event.target.closest?.("[data-object-id]");
 
         if (!row) {
@@ -238,5 +319,6 @@ export function installObjectsPane() {
 export default {
     renderObjects,
     installObjectsPane,
-    objectsListMarkup
+    objectsListMarkup,
+    visibilityButtonMarkup
 };

@@ -224,6 +224,78 @@
 }
 
 /* ============================================================
+ * THE VISIBILITY EYE
+ * ============================================================
+ *
+ * The button is the row's LAST child and never shrinks (`flex: 0 0 auto`), while
+ * the name beside it is `flex: 1 1 auto` with `min-width: 0` - so a long name is
+ * the thing that gives way, and the eye keeps its place at the far right instead
+ * of being pushed off the row.
+ *
+ * It is a quiet control until the row is hovered or the button is focused: an
+ * eye on every row at full strength would make the list look like a toolbar.
+ */
+.drawing-objects-visibility {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 18px;
+    justify-content: center;
+    margin-left: auto;
+    opacity: 0.55;
+    padding: 0;
+    transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+    width: 18px;
+}
+
+.drawing-objects-visibility svg {
+    height: 14px;
+    width: 14px;
+}
+
+/*
+ * A VISIBLE TARGET ON A SMALL ROW.
+ *
+ * The artwork is 14px because the row is 24px tall, but the clickable area is
+ * enlarged to the row's full height by the negative margins - so the button is
+ * easy to hit without making the row taller or the glyph bigger.
+ */
+.drawing-objects-item:hover .drawing-objects-visibility,
+.drawing-objects-visibility:focus-visible,
+.drawing-objects-visibility[data-visible="false"] {
+    opacity: 1;
+}
+
+.drawing-objects-visibility:hover {
+    background: var(--datum-green-wash);
+    color: var(--datum-ink);
+}
+
+.drawing-objects-visibility:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * A HIDDEN ROW SAYS SO QUIETLY. The row stays fully usable - it can be selected,
+ * inspected in Features and shown again - so it is dimmed rather than struck
+ * through, which is what a deleted or disabled row would look like.
+ */
+.drawing-objects-item-hidden .drawing-objects-icon,
+.drawing-objects-item-hidden .drawing-objects-name {
+    opacity: 0.5;
+}
+
+.drawing-objects-item-hidden .drawing-objects-visibility {
+    color: var(--datum-muted);
+}
+
+/* ============================================================
  * THE SOURCE TAB
  * ============================================================
  *

@@ -2134,6 +2134,18 @@ export function supportsTransform(object) {
 const TYPE_LABELS = {
     "pipe-duct": "Pipe / Duct",
     elbow: "Elbow",
+    junction: "Junction",
+    "reducer-expander": "Reducer / Expander",
+    "reservoir-tank": "Reservoir / Tank",
+    pump: "Pump",
+    valve: "Valve",
+    "flow-meter": "Flow Meter",
+    "flow-arrow": "Flow Arrow",
+    "fluid-level": "Fluid Level",
+    "pressure-tap": "Pressure Tap",
+    "flow-direction-diagram": "Flow Direction Diagram",
+    "pressure-profile": "Pressure Profile",
+    "section-plane": "Section Plane",
     point: "Point",
     line: "Line",
     polyline: "Polyline",
@@ -2287,7 +2299,41 @@ const TYPE_ICON_KEYS = {
     "bending-moment-diagram": "Process Diagrams",
     "axial-force-diagram": "Process Diagrams",
     annotation: "Annotation",
-    annotate: "Annotation"
+    annotate: "Annotation",
+
+    /*
+     * ========================================================
+     * THE FLUIDS OBJECTS
+     * ========================================================
+     *
+     * Every Fluids type maps to the icon of the TOOL that makes it, so a Pipe /
+     * Duct in the Objects list wears the Pipe / Duct artwork, an Elbow the Elbow
+     * artwork, and so on. Without these entries every Fluids object fell through
+     * to the neutral "object" mark - which is why a pipe, a pump and a section
+     * plane all looked alike in the list.
+     *
+     * A TYPE, NOT A TOOL. This table is keyed by the STORED type, so an Elbow the
+     * student draws and an Elbow generated automatically at a corner are the same
+     * row with the same icon - there is no separate "auto" identity to map.
+     *
+     * The shared reference types reuse the same artwork their Statics counterparts
+     * do, because they are the same objects: a Reference Line in Fluids IS a
+     * reference line, and the icon table already has one.
+     */
+    "pipe-duct": "Pipe / Duct",
+    elbow: "Elbow",
+    junction: "Junction",
+    "reducer-expander": "Reducer / Expander",
+    "reservoir-tank": "Reservoir / Tank",
+    pump: "Pump",
+    valve: "Valve",
+    "flow-meter": "Flow Meter",
+    "flow-arrow": "Flow Arrow",
+    "fluid-level": "Fluid Level",
+    "pressure-tap": "Pressure Tap",
+    "flow-direction-diagram": "Flow Direction Diagram",
+    "pressure-profile": "Pressure Profile",
+    "section-plane": "Section Plane"
 };
 
 const ANNOTATE_ICON_KEYS = {

@@ -2079,6 +2079,82 @@ function clearSelection(state) {
 }
 
 /*
+ * ========================================================
+ * SHOWING AND HIDING ONE OBJECT
+ * ========================================================
+ *
+ * `visible: false` is already the model's convention for a hidden object - the
+ * renderer's bounds and the canvas hit test both skip such an object - and
+ * every other type already writes it. This is the ONE setter, so a row's eye
+ * button, a script and a future caller all mean the same thing by "hidden".
+ *
+ * WHAT IT DOES NOT DO is as important as what it does:
+ *
+ *   - it does not touch any OTHER object, so hiding an Elbow leaves the runs
+ *     it joins on the sheet and keeps the connection;
+ *   - it does not touch the object's own geometry, name, id, style or
+ *     engineering, so a hidden object is exactly the object it was;
+ *   - it does not clear the selection, so a hidden object can still be
+ *     inspected in the Features tab after it vanishes from the canvas - which
+ *     is the only way back for a student who has hidden the thing they are
+ *     looking at;
+ *   - it does not fight Fix. `locked` governs EDITING, this governs DRAWING.
+ *
+ * It answers whether the object's visibility actually changed, so the caller
+ * can decide whether the change is worth an undo entry.
+ */
+function setObjectVisible(state, objectId, visible) {
+    const object = (state.objects || []).find(
+        (candidate) => candidate.id === objectId
+    );
+
+    if (!object) {
+        return false;
+    }
+
+    const next = visible !== false;
+
+    /* The default is visible, so absence of the flag and `true` are one state. */
+    if ((object.visible !== false) === next) {
+        return false;
+    }
+
+    /*
+     * ONE UNDO ENTRY, ONE SOURCE REWRITE.
+     *
+     * Hiding is an edit like any other, so it takes the same snapshot every
+     * other committed edit takes and goes through the same commit - which is
+     * what makes Ctrl+Z restore the object to the sheet, keeps the source in
+     * step, marks the document dirty and announces `datum:drawing-changed` (the
+     * event the canvas and the Objects rows both listen to).
+     */
+    const previous = snapshotDrawing(state);
+
+    object.visible = next;
+
+    commitDrawingChange(state, previous);
+
+    return true;
+}
+
+function toggleObjectVisible(state, objectId) {
+    const object = (state.objects || []).find(
+        (candidate) => candidate.id === objectId
+    );
+
+    if (!object) {
+        return false;
+    }
+
+    return setObjectVisible(state, objectId, object.visible === false);
+}
+
+/* Whether an object is drawn. Absence of the flag means visible. */
+function isObjectVisible(object) {
+    return Boolean(object) && object.visible !== false;
+}
+
+/*
  * A DEEP COPY OF WHATEVER THE HISTORY STORES, through the shared helper.
  *
  * WHAT THIS IS HANDED IS NOT ALWAYS AN ARRAY. It began as the feature list,
@@ -3201,6 +3277,9 @@ const enggDrawingState = {
     selectObjects,
     selectObject,
     clearSelection,
+    setObjectVisible,
+    toggleObjectVisible,
+    isObjectVisible,
     setHistorySinks,
     HISTORY_LIMIT,
     snapshotDocument,
