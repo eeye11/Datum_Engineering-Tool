@@ -173,14 +173,14 @@ console.log("\n  the tool inventory: which tools take part\n");
 
 check(
   "one-gesture span tools exit a bare click",
-  ["beam", "cable", "shaft", "point-force", "coordinate-system-2d"].every(
+  ["beam", "cable", "shaft", "point-force"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === true,
   ),
 );
 
 check(
   "click-move-click geometry does not",
-  ["line", "rectangle", "circle"].every(
+  ["line", "rectangle", "circle", "triangle", "arc", "polygon", "coordinate-system-2d"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === false,
   ),
 );

@@ -1029,6 +1029,10 @@ export function beginOrCompleteGeometry(
                         "triangle"
                         ? "Specify second point"
 
+                    : drawingState.activeTool ===
+                        "coordinate-system-2d"
+                        ? "Specify X axis direction"
+
                     : "Specify second point"
             );
         }

@@ -261,6 +261,24 @@ export const CLICK_CLICK_TOOLS = [
     "circle",
 
     /*
+     * THE MULTI-POINT GEOMETRY TOOLS START ON A CLICK TOO.
+     *
+     * A Triangle, an Arc and a Polygon already kept every click AFTER their
+     * first point (they are multi-step tools), but their very first bare
+     * click reached `finishCreationClick` with the phase still idle and was
+     * read as "leave the tool". So they could be dragged but never clicked.
+     * Listing them here makes the first click their first point, exactly as
+     * for a Line - and a drag still works as before.
+     *
+     * The Coordinate System is the same two points (origin, then X
+     * direction), so a click places its origin and a second click its axis.
+     */
+    "triangle",
+    "arc",
+    "polygon",
+    "coordinate-system-2d",
+
+    /*
      * PIPE / DUCT KEEPS ITS CLICK TOO.
      *
      * A run is drawn by press-drag-release, so its TRAILING click has always to

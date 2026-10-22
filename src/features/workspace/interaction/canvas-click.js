@@ -17,7 +17,7 @@ import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
-import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
@@ -129,8 +129,17 @@ export function handleCanvasClick(
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        add2DCoordinateSystem(
-            resolution.effectiveConstructionPoint
+        /*
+         * CLICK-MOVE-CLICK, LIKE THE DRAG.
+         *
+         * The first click is the origin and the second the positive X
+         * direction - the same two points the press and release of a drag
+         * supply - so both workflows go through the one construction path
+         * and produce the same axes. This used to place a fixed-length cross
+         * on a single click, with no way to say which way the axes ran.
+         */
+        beginOrCompleteGeometry(
+            resolution
         );
 
         return;
