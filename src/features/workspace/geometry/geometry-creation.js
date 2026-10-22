@@ -2272,7 +2272,7 @@ export function beginOrCompleteGeometry(
             }
             setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
                 ? (object.geometry.hasStoppers
-                    ? "Drag a stopper dot to adjust the stops, the centre dot to move the piston, or a corner to resize"
+                    ? "Drag the centre dot to move the piston above or below the stops, a stopper dot to adjust the stops, or a corner to resize"
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : object.metadata.thermodynamicsKind === "saturation-curve"
                     ? "Saturation curve created - drag the corner dots to resize"
