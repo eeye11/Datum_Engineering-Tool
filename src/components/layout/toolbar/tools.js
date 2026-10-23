@@ -616,6 +616,34 @@ export const disciplineToolGroups = {
 	 */
 	FLUIDS: fluidsToolGroups,
 
+	THERMODYNAMICS: [
+		{
+			id: "thermodynamics-selection",
+			label: "Selection",
+			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+		},
+		{
+			id: "thermodynamics-create",
+			label: "Create",
+			tools: [
+				{ id: "tank", label: "Tank" },
+				{ id: "control-volume", label: "Control Volume" },
+				{ id: "piston-cylinder", label: "Piston Cylinder", submenu: true },
+				{ id: "process-diagrams", label: "Process Diagrams", submenu: true },
+				{ id: "heat-transfer", label: "Heat Transfer", submenu: true },
+				{ id: "work", label: "Work", submenu: true }
+			]
+		},
+		{
+			id: "thermodynamics-reference",
+			label: "Reference",
+			tools: [
+				{ id: "state-point", label: "State Point" },
+				{ id: "coordinate-system", label: "Coordinate System", submenu: true }
+			]
+		}
+	],
+
 	STATICS: [
 		{
 			id: "statics-selection",
