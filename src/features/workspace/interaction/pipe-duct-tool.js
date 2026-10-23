@@ -1070,7 +1070,7 @@ export function cornerOf(elbow, objects = drawingState.objects) {
      * join fails it; a pipe whose FREE end moved passes it, which is what keeps a
      * bend attached while the rest of its pipe is reshaped.
      */
-    const corner = lineCorner(first, firstPort, second, secondPort, elbow?.geometry?.position);
+    const corner = lineCorner(first, firstPort, second, secondPort, elbow, elbow?.geometry?.position);
 
     if (!corner) {
       return cornerFromRails(elbow, [first, second]);
@@ -1183,7 +1183,7 @@ export function cornerOf(elbow, objects = drawingState.objects) {
  * Returns the corner (`before`/`after` being each run's far end) and the two
  * lines, or null.
  */
-export function lineCorner(first, firstEnd, second, secondEnd, known = null) {
+export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = null) {
   const lineThrough = (run, end) => {
     const geometry = run?.geometry || {};
 
@@ -1822,16 +1822,7 @@ export function refreshFluidConnections(run, objects = drawingState.objects) {
  * fitting that is created and one that is refreshed can therefore never disagree
  * about which way round the corner turns, at any angle.
  */
-function armsOfJoint(joint) {
-  if (!joint?.before || !joint?.vertex || !joint?.after) {
-    return null;
-  }
 
-  return {
-    previous: joint.before,
-    next: joint.after
-  };
-}
 
 /*
  * THE TWO RUNS IN THE FITTING'S ORDER: the one the bend ARRIVES from, then the one
@@ -2066,20 +2057,6 @@ export function updateElbowForPair(elbow, first = null, second = null, joint = n
    * simply the stored end opposite the one the fitting holds - read from the
    * fitting's own `ports`, so it is right for every end combination.
    */
-  const armOf = (run) => {
-    const held = elbow?.engineering?.ports?.[run.id];
-
-    const far = farEndOfRun(run, held);
-
-    const fallback = run === pair[0] ? corner.before : corner.after;
-
-    if (far && Number.isFinite(far.x) && Number.isFinite(far.y)) {
-      return { x: far.x, y: far.y };
-    }
-
-    return { x: fallback.x, y: fallback.y };
-  };
-
   /*
    * THE RUNS' OWN FAR ENDS, in the pair's order.
    *
