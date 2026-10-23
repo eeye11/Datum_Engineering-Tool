@@ -5,6 +5,7 @@
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { coordinateSystemArms, rigidBodyHandles, rotationHandleFor } from "../../../shared/geometry/feature-handles.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
@@ -520,6 +521,54 @@ function dynamicsHandles(
     return handles;
 }
 
+/*
+ * ========================================================
+ * THE ELBOW'S OWN HANDLES
+ * ========================================================
+ *
+ * The radius handle sits at the middle angle of the bend, out on the OUTER
+ * wall, so it is visually on the curve's belly - the conventional grip for a
+ * bend. The angle handle sits on the corner itself, offset along the bend's
+ * bisector, and is offered only while a free end can still define the angle.
+ */
+function elbowRadiusHandlePoint(object) {
+    const curves = enggPipeDuct.elbowCurvesFor(object);
+
+    if (!curves) {
+        return null;
+    }
+
+    /*
+     * THE CENTRE OF CURVATURE ITSELF - not the middle of the arc, not the
+     * midpoint between the tangent points, and not a point on the wall. It is
+     * the centre of the circle the bend's arc is drawn on, so dragging it
+     * along the bisector IS the radius, and the dot always shows where the
+     * circle is centred after the change.
+     */
+    return { x: curves.centre.x, y: curves.centre.y };
+}
+
+function elbowAngleHandle(object) {
+    if (elbowConnectionState(object) === "connected") {
+        return [];
+    }
+
+    return [{ kind: "elbow-angle", point: { ...object.geometry.position } }];
+}
+
+/* How an elbow's ends are attached, from the pair of ids it records. */
+function elbowConnectionState(object) {
+    const ids = object?.engineering?.connections;
+
+    const attached = Array.isArray(ids) ? ids.filter(Boolean).length : 0;
+
+    if (attached >= 2) {
+        return "connected";
+    }
+
+    return attached === 1 ? "partial" : "standalone";
+}
+
 function manipulationHandles(
     object
 ) {
@@ -751,12 +800,45 @@ function manipulationHandles(
     }
 
     /*
-     * AN ELBOW IS GRABBED BY ITS CORNER. Its two wall arcs are derived from
-     * that corner and the directions of the runs it joins, so moving the corner
-     * moves the whole fitting and no arc can be left behind.
+     * AN ELBOW IS GRABBED BY WHAT DEFINES ITS BEND.
+     *
+     * The corner moves the fitting; each end is a point the student can drag
+     * (and reconnect); and the BEND RADIUS gets a handle of its own, placed
+     * between the corner and the outer wall at the MIDDLE of the arc, so it is
+     * grabbed where the curve is rather than on an axis that means nothing to a
+     * bend. There is deliberately NO rotation handle: orientation is decided by
+     * the pipes, and the specification calls for no Rotate control.
+     *
+     * A FITTING WITH NO ENDS - one written by an older file as three points - keeps
+     * the corner handle it always had.
      */
     if (object.type === "elbow" && g.position) {
-        return [{ kind: "position", point: g.position }];
+        const ends = g.ends?.a && g.ends?.b ? [g.ends.a, g.ends.b] : null;
+
+        /*
+         * THE RADIUS HANDLE BELONGS TO EVERY ELBOW, MANUAL OR GENERATED.
+         *
+         * Its position comes from the fitting's own arc, not from its ends, so a
+         * generated elbow - whose arms are its pipes and which stores no `ends` -
+         * gets one too. Without it a radius could only be changed by typing, and
+         * the student would have no grip on the bend at all.
+         */
+        const radiusHandle = elbowRadiusHandlePoint(object);
+
+        if (!ends) {
+            return [
+                { kind: "position", point: g.position },
+                ...(radiusHandle ? [{ kind: "elbow-radius", point: radiusHandle }] : [])
+            ];
+        }
+
+        return [
+            { kind: "start", point: ends[0] },
+            { kind: "end", point: ends[1] },
+            { kind: "position", point: g.position },
+            ...(radiusHandle ? [{ kind: "elbow-radius", point: radiusHandle }] : []),
+            ...elbowAngleHandle(object)
+        ];
     }
 
     /*
@@ -1080,7 +1162,15 @@ function supportsRotationHandle(
         "annotation",
         "annotate",
         "resultant",
-        "force-components"
+        "force-components",
+
+        /*
+         * AN ELBOW HAS NO ROTATION HANDLE. Its orientation is decided by the
+         * pipes it joins, and the specification gives it exactly four Transform
+         * parameters - X Shift, Y Shift, Bend Radius and Bend Angle - none of
+         * which is a rotation.
+         */
+        "elbow"
     ].includes(object.type);
 }
 
@@ -1314,6 +1404,13 @@ const CONSTRUCTION_ACTIVE_PHASES = [
      * `ROUTE_PHASE` in pipe-duct-tool.js.
      */
     "pipe-duct-construct",
+
+    /*
+     * AN ELBOW BEING DRAGGED. A running construction like the run's own: the
+     * press has fixed the first end, so the pointer belongs to the fitting and
+     * Escape drops it rather than deselecting something else.
+     */
+    "elbow-construct",
 
     "polygon-centre",
     "polygon-first",

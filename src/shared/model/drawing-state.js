@@ -589,7 +589,14 @@ function createGeometryObject(type, geometry, options = {}) {
          * disagree about.
          */
         "pipe-duct": "Pipe / Duct",
-        elbow: "Elbow"
+        elbow: "Elbow",
+
+        /*
+         * A JUNCTION IS NAMED FOR WHAT IT IS - a fitting joining three or more
+         * branches. It sits in the same flat list as the runs and bends it joins,
+         * so the Features list reads "Pipe / Duct 1", "Elbow 1", "Junction 1".
+         */
+        junction: "Junction"
     }[type] || type;
 
     return {

@@ -16,7 +16,7 @@ import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBod
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
-import { beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+import { beginElbowConstruction, beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -286,6 +286,23 @@ export function activateTool(
      */
     if (requestedTool === "pipe-duct") {
         beginRouteConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * THE ELBOW IS THE SAME KIND OF TOOL - a press, a drag and a release.
+     * Arming it begins no construction: there is nothing until the student
+     * presses, exactly as for a run.
+     */
+    if (requestedTool === "elbow") {
+        beginElbowConstruction();
 
         renderEngineeringTools(
             activeCategory()

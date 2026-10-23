@@ -618,6 +618,64 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             return;
         }
 
+        /*
+         * AN ELBOW BEING DRAWN: its TWO CURVED BOUNDARIES, dashed, from the same
+         * `elbowGeometry` the committed fitting draws with. It is not a plain
+         * line preview - what the student sees has to be the bend they get.
+         */
+        if (preview.type === "elbow") {
+            const legs = geometry.ends && geometry.position
+                ? {
+                      incoming: Math.hypot(
+                          geometry.ends.a.x - geometry.position.x,
+                          geometry.ends.a.y - geometry.position.y
+                      ),
+                      outgoing: Math.hypot(
+                          geometry.ends.b.x - geometry.position.x,
+                          geometry.ends.b.y - geometry.position.y
+                      )
+                  }
+                : null;
+
+            const curves = enggPipeDuct.elbowGeometry(
+                geometry.previous,
+                geometry.position,
+                geometry.next,
+                geometry.engineering?.bendRadius,
+                legs
+            );
+
+            if (curves) {
+                const separation = enggPipeDuct.boundarySeparation(geometry.engineering || {});
+                const sweep = ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+                const steps = 24;
+
+                [1, -1].forEach((side) => {
+                    const points = Array.from({ length: steps + 1 }, (_, index) => {
+                        const t = index / steps;
+                        const angle = curves.startAngle + sweep * t;
+                        const radius = curves.radius + side * (separation / 2);
+
+                        return toScreen({
+                            x: curves.centre.x + radius * Math.cos(angle),
+                            y: curves.centre.y + radius * Math.sin(angle)
+                        });
+                    });
+
+                    svg.appendChild(createSvgElement("path", {
+                        d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
+                        fill: "none",
+                        stroke: style.stroke,
+                        "stroke-width": 1.5,
+                        "stroke-dasharray": "6 4",
+                        opacity: style.opacity
+                    }));
+                });
+
+                return;
+            }
+        }
+
         if (preview.type === "point") {
             const position = geometry.position || geometry.point || geometry;
             const screen = toScreen(position);

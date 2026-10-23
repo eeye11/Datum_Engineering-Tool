@@ -41,21 +41,30 @@ function flowPathPoints(object) {
 
     if (object.type === "elbow") {
         const engineering = object.engineering || {};
+
         const curves = enggPipeDuct.elbowGeometry(
             g.previous,
             g.position,
             g.next,
-            engineering.bendRadius
+            engineering.bendRadius,
+            enggPipeDuct.elbowLegs(object)
         );
 
+        const ends = enggPipeDuct.elbowEnds(object).map((end) => end.point);
+
         if (!curves) {
-            return [g.previous, g.position, g.next].filter(Boolean);
+            return [
+                ...(g.previous && g.next ? [g.previous, g.position, g.next] : [g.position]),
+                ...ends
+            ].filter(Boolean);
         }
 
         /*
-         * Both wall arcs, sampled at the corners of their sweep - centre and
-         * radius are enough to state the extent, and the two ends pin it to
-         * the runs the fitting joins.
+         * THE BOX HOLDS BOTH WALL ARCS - the sampled points of each, plus the
+         * fitting's own ends. Sampling the ARCS rather than expanding a bounding
+         * circle keeps the box around the ink: a circle's corners can sit a long
+         * way from the quarter of it actually drawn, which made a fitting look
+         * selected along its whole square.
          */
         const half =
             Math.max(
@@ -64,14 +73,27 @@ function flowPathPoints(object) {
                 Number(engineering.endSeparation) || 0
             ) / 2;
 
-        const outer = curves.radius + half;
+        const sweep =
+            ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 
-        return [
-            curves.start,
-            curves.end,
-            { x: curves.centre.x - outer, y: curves.centre.y - outer },
-            { x: curves.centre.x + outer, y: curves.centre.y + outer }
-        ].filter((point) => point && Number.isFinite(point.x) && Number.isFinite(point.y));
+        const steps = 12;
+
+        const sampled = Array.from({ length: steps + 1 }, (_, index) => {
+            const angle = curves.startAngle + (sweep * index) / steps;
+
+            return [1, -1].map((side) => {
+                const radius = curves.radius + side * half;
+
+                return {
+                    x: curves.centre.x + radius * Math.cos(angle),
+                    y: curves.centre.y + radius * Math.sin(angle)
+                };
+            });
+        }).flat();
+
+        return [...sampled, ...ends].filter(
+            (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y)
+        );
     }
 
     return null;

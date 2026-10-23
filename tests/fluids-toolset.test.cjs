@@ -293,6 +293,13 @@ const BUILT = [
    * this list is no longer four shared tools.
    */
   "pipe-duct",
+
+  /*
+   * ELBOW IS IMPLEMENTED: the same press-drag-release gesture, its own
+   * one-object fitting, and the same connection record an automatically
+   * generated fitting uses.
+   */
+  "elbow",
   "coordinate-system",
   "reference-point",
   "reference-line",

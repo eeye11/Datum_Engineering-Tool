@@ -14,6 +14,7 @@
 import { point, splitPrelude, styleOptions } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import enggPipeDuct from "../../../../features/workspace/model/fluids/pipe-duct.js";
+import { drawingState } from "../../../../features/workspace/editor-state.js";
 
 function finitePoint(at) {
   return Boolean(at) && Number.isFinite(Number(at.x)) && Number.isFinite(Number(at.y));
@@ -21,6 +22,35 @@ function finitePoint(at) {
 
 function line(from, to, options) {
   return `\\draw[${options.join(", ")}] ${point(Number(from.x), Number(from.y))} -- ${point(Number(to.x), Number(to.y))};`;
+}
+
+/*
+ * THE RUN'S WALLS, WITH THE END THAT MEETS A BEND CUT TO THE BEND'S SEAM.
+ *
+ * The seam is the point the bend's matching arc starts at, recorded on the run
+ * when the fitting was settled - so the written wall and the written arc end on
+ * one coordinate and the compiled picture has neither an overlap nor a gap at
+ * the fitting. Nothing else about a wall changes: same line, same offset, same
+ * direction.
+ */
+function seamWalls(walls, run) {
+  const joints = run?.geometry?.bendJoints && typeof run.geometry.bendJoints === "object"
+    ? run.geometry.bendJoints
+    : null;
+
+  if (!joints) {
+    return walls;
+  }
+
+  return walls.map((boundary, index) => {
+    const seams = ["start", "end"]
+      .filter((end) => finitePoint(joints?.[end]?.[index]))
+      .map((end) => ({ end, point: joints[end][index] }));
+
+    return seams.length
+      ? { ...boundary, ...Object.fromEntries(seams.map((seam) => [seam.end, seam.point])) }
+      : boundary;
+  });
 }
 
 /* Degrees for a TikZ angle, rounded where the float noise shows and not before. */
@@ -69,13 +99,14 @@ function serializeRun(object) {
   const { definitions, options } = styleOf(object);
 
   /*
-   * A RUN WITH A BEND IS WRITTEN SHORT, from the SAME trimmed centreline the
-   * canvas draws. Otherwise the source would run its walls into the corner and
-   * the compiled picture would disagree with the sheet.
+   * A RUN'S ENDPOINTS ARE ALREADY THE WALLS' ENDS. A joined run has had its
+   * `start`/`end` moved onto the elbow's tangent points, so the centreline as
+   * stored IS the visible one - trimming it again by `geometry.trims` would
+   * shorten it a second time and put the written walls a trim short of the
+   * drawn bend.
    */
-  const centreline = enggPipeDuct.trimmedCentreline(object) || geometry;
-  const walls = enggPipeDuct
-    .boundaryLines(centreline.start, centreline.end, object.engineering || {})
+  /* THE END THAT MEETS A BEND IS WRITTEN TO THE BEND'S SEAM - see `seamWalls`. */
+  const walls = seamWalls(enggPipeDuct.boundaryLinesOf(object), object)
     .filter((boundary) => finitePoint(boundary.start) && finitePoint(boundary.end));
 
   if (walls.length !== 2) {
@@ -105,41 +136,40 @@ function serializeRun(object) {
 }
 
 function serializeElbow(object) {
-  const geometry = object.geometry || {};
-  const engineering = object.engineering || {};
-  const curves = enggPipeDuct.elbowGeometry(geometry.previous, geometry.position, geometry.next, engineering.bendRadius);
+  const { definitions, options } = styleOf(object);
 
-  if (!curves) {
+  /*
+   * THE TWO WALLS COME FROM THE MODEL, WHICH KNOWS WHICH IS WHICH.
+   *
+   * `elbowWallArcsFor` builds each wall on its own radius about the bend's
+   * centre, so a bend whose two runs are drawn at different widths still meets
+   * both of them exactly - and it is the SAME statement of the bend the canvas
+   * draws, so the compiled picture and the sheet cannot disagree.
+   */
+  /*
+   * THE PAIR THE BEND JOINS, in the fitting's own order - arriving run first.
+   * The model reads each run's drawn direction from it to decide which of the
+   * fitting's two lines that run's walls continue, so the written arcs join the
+   * written walls on the same side the canvas joins them.
+   */
+  const ids = Array.isArray(object?.engineering?.connections) ? object.engineering.connections : [];
+  const objects = drawingState.objects || [];
+  const at = (id) => (id ? objects.find((candidate) => candidate.id === id) || null : null);
+
+  const walls = enggPipeDuct.elbowJunctionsFor(object, {
+    incoming: at(ids[0]),
+    outgoing: at(ids[1])
+  });
+
+  if (!walls) {
     return null;
   }
 
-  const { definitions, options } = styleOf(object);
-  const separation = enggPipeDuct.boundarySeparation(engineering);
-
-  /*
-   * THE BEND'S TWO ENDS MAY BE DRAWN AT DIFFERENT WIDTHS - an elbow is the
-   * boundary at which two runs may differ. The wall radii interpolate between
-   * the two separations, exactly as the canvas draws them, so each border stays
-   * continuous with the straight wall it meets.
-   */
-  const startSeparation = Number(engineering.startSeparation) > 0
-    ? Number(engineering.startSeparation)
-    : separation;
-
-  const endSeparation = Number(engineering.endSeparation) > 0
-    ? Number(engineering.endSeparation)
-    : separation;
-
-  const sweep = ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   const commands = [];
 
-  const from = degrees(curves.startAngle);
-  const delta = degrees(sweep);
-
-  [1, -1].forEach((side) => {
-    const halfStart = startSeparation / 2;
-    const halfEnd = endSeparation / 2;
-
+  [walls.outer, walls.inner].forEach((wall) => {
+    const from = degrees(wall.from);
+    const delta = degrees(wall.sweep);
     /*
      * EQUAL WIDTHS ARE ONE ARC. When both ends are drawn at the same spacing
      * - the ordinary case - the wall is a single circular arc and is written
@@ -149,40 +179,50 @@ function serializeElbow(object) {
      * written as a short chain of points - the same interpolation the renderer
      * uses - so the compiled picture still meets both runs exactly.
      */
-    if (Math.abs(startSeparation - endSeparation) < 1e-9) {
-      const radius = curves.radius + side * halfStart;
-
-      if (!Number.isFinite(radius) || radius <= 0) {
-        return;
-      }
-
+    if (Math.abs(wall.startRadius - wall.endRadius) < 1e-9) {
       commands.push(
-        `\\draw[${options.join(", ")}] ${point(curves.centre.x, curves.centre.y)} ++(${from}:${number(radius)}) arc[start angle=${from}, delta angle=${number(delta)}, radius=${number(radius)}];`
+        `\\draw[${options.join(", ")}] ${point(walls.bend.centre.x, walls.bend.centre.y)} ++(${from}:${number(wall.startRadius)}) arc[start angle=${from}, delta angle=${number(delta)}, radius=${number(wall.startRadius)}];`
       );
 
       return;
     }
 
-    const steps = 24;
-    const path = Array.from({ length: steps + 1 }, (_, index) => {
-      const t = index / steps;
-      const angle = curves.startAngle + sweep * t;
-      const radius = curves.radius + side * (halfStart + (halfEnd - halfStart) * t);
-
-      return point(
-        curves.centre.x + radius * Math.cos(angle),
-        curves.centre.y + radius * Math.sin(angle)
-      );
-    });
-
-    commands.push(`\\draw[${options.join(", ")}] ${path.join(" -- ")};`);
+    commands.push(
+      `\\draw[${options.join(", ")}] ${pathPointsOf(wall).join(" -- ")};`
+    );
   });
 
   /*
-   * NO END MARKS. The runs meet the arcs at their tangent points now, so a
+   * A FILLED ELBOW IS ONE CLOSED PATH - the outer wall, the end edge, the inner
+   * wall and the other end edge - drawn instead of, not on top of, the two open
+   * walls. That is the same closure a filled run uses, and the only way TikZ
+   * fills the region between two boundaries.
+   */
+  if (object.style?.fillMode === "solid") {
+    const outer = pathPointsOf(walls.outer);
+    const inner = pathPointsOf(walls.inner).reverse();
+
+    return withDefinitions(definitions, [
+      `\\draw[${options.join(", ")}] ${[...outer, ...inner].join(" -- ")} -- cycle;`
+    ]);
+  }
+
+  /*
+   * NO END MARKS. The runs meet the arcs at their tangent points, so a
    * cross-mark would draw across the bore rather than close a corner.
    */
   return withDefinitions(definitions, commands);
+}
+
+/* One wall of an elbow, sampled exactly as the canvas samples it. */
+function pathPointsOf(wall) {
+  const steps = 32;
+
+  return Array.from({ length: steps + 1 }, (_, index) => {
+    const at = wall.pointAt(index / steps);
+
+    return point(at.x, at.y);
+  });
 }
 
 export function fluidsSourceWriter(object) {

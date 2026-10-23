@@ -264,7 +264,15 @@ export const FLUIDS_TOOL_MENUS = {
 		 * exactly the "not available yet" the tool used to report.
 		 */
 		{ id: "pipe-duct", label: "Pipe / Duct", capability: FLUIDS_CAPABILITIES.ROUTE },
-		{ id: "elbow", label: "Elbow", capability: FLUIDS_CAPABILITIES.PLANNED },
+		/*
+		 * ELBOW IS IMPLEMENTED TOO. It travels the same `route` capability as
+		 * Pipe / Duct, because it is drawn with the same press-drag-release
+		 * gesture and commits its own one-object fitting (see
+		 * `pipe-duct-tool.js` -> `commitElbowGesture`). The two share the
+		 * connection record, so an elbow drawn by hand and one generated at a
+		 * corner are the same feature type with the same lifecycle.
+		 */
+		{ id: "elbow", label: "Elbow", capability: FLUIDS_CAPABILITIES.ROUTE },
 		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.PLANNED }
 	],
 

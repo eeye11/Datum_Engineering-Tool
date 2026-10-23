@@ -43,11 +43,54 @@ import {
     fieldLabel,
     groupsFor,
     iconForObject,
+    isFullyConnectedElbow,
     readField,
+    setElbowRunLookup,
+    setElbowReseat,
+    setFluidReconciler,
+    reconcileFluidGeometry,
     supportsTransform,
     typeLabelOf,
+    writeElbowAngle,
     writeField
 } from "./feature-schema.js";
+import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
+import { reseatElbowPipes, reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+
+/*
+ * THE ELBOW PANEL EDITS FIND THEIR PIPES THROUGH THE LIVE DOCUMENT.
+ *
+ * `feature-schema.js` declares fields and must not import the drawing state, so
+ * the run lookup is injected ONE TIME here - the pane is the module that actually
+ * edits fields, and it needs no cycle of its own to do it.
+ */
+setElbowRunLookup(
+    (id) => (drawingState.objects || []).find((object) => object.id === id) || null
+);
+
+/*
+ * AND THE OPERATION THAT KEEPS ITS PIPES JOINED WHEN THE RADIUS CHANGES.
+ *
+ * A radius change moves the tangent points, and every joined pipe must be cut
+ * back or extended to meet them. `reseatElbowPipes` does that, and is handed in
+ * here for the same reason the lookup is: the field module owns the VALUE, the
+ * interaction layer owns the PIPES.
+ */
+setElbowReseat((elbow) => {
+    reseatElbowPipes(elbow, drawingState.objects);
+
+    renderCurrentDrawing();
+});
+
+/*
+ * AND THE RULE THAT SETTLES A PIPE'S JOINTS AFTER ANY FIELD EDIT.
+ *
+ * Typing a Pipe Width, moving a run, or changing a bend is an edit like any
+ * other: the fittings involved are brought up to date by the SAME reconciler a
+ * drag uses, so a typed change and a dragged one cannot leave the drawing in
+ * different states.
+ */
+setFluidReconciler((run, other) => reconcileFluidConnections(run, other || drawingState.objects));
 import { PIPE_WIDTH_STEP, TRANSFORM_STEP, applyTransform } from "./transform-session.js";
 import { settingsFor } from "./tool-settings-store.js";
 import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pane.js";
@@ -347,6 +390,47 @@ function transformRowMarkup(axis, label) {
     );
 }
 
+/*
+ * AN ABSOLUTE-VALUE TRANSFORM ROW: the elbow's Bend Angle.
+ *
+ * It differs from `transformRowMarkup` in the one way that matters: the box
+ * shows the object's ACTUAL value rather than a pending change, because Bend
+ * Angle is the only elbow parameter that IS a value. When the elbow's two ends
+ * are held by pipes the value is still shown - it is what the pipes make - but
+ * the box and its steppers are disabled, so it cannot be typed into.
+ */
+function transformValueRowMarkup(axis, label, value, readonly) {
+    return (
+        `<div class="dfp-row dfp-transform-row">` +
+        `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
+        `<span class="dfp-row-control">` +
+        `<input type="number" class="dfp-number dfp-transform-input" data-transform-value="${axis}" ` +
+        `aria-label="${escapeHtml(label)}" step="1" min="1" max="180" value="${escapeHtml(String(value))}"` +
+        (readonly ? ` disabled title="Set by the connected pipes"` : "") +
+        `>` +
+        `<span class="dfp-steppers">` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="1" aria-label="Increase ${escapeHtml(label)}"` +
+        (readonly ? " disabled" : "") +
+        `>` +
+        stepIcon("up") +
+        `</button>` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="-1" aria-label="Decrease ${escapeHtml(label)}"` +
+        (readonly ? " disabled" : "") +
+        `>` +
+        stepIcon("down") +
+        `</button>` +
+        `</span>` +
+        `</div>`
+    );
+}
+
+/* The Bend Angle the selection's first elbow currently has, in degrees. */
+function elbowAngleValue(objects) {
+    const elbow = objects.find((object) => object.type === "elbow");
+
+    return elbow ? Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90) : 90;
+}
+
 function stepIcon(direction) {
     const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
 
@@ -461,12 +545,25 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
      * never act.
      */
     if (objects.some((object) => supportsTransform(object))) {
+        const hasElbow = objects.some((object) => object.type === "elbow");
+        const elbowReadonly = objects.some(
+            (object) => object.type === "elbow" && isFullyConnectedElbow(object)
+        );
+
         markup.push(
             `<div class="dfp-section" data-feature-group="transform">` +
                 `<div class="dfp-section-heading">Transform</div>` +
                 transformRowMarkup("x", "X Shift") +
                 transformRowMarkup("y", "Y Shift") +
-                transformRowMarkup("rotate", "Rotate") +
+                /*
+                 * ROTATE IS NOT AN ELBOW'S CONTROL. The specification defines
+                 * exactly four Transform parameters for it, and a fitting's
+                 * orientation is decided by the pipes it joins, so the rotation
+                 * row is omitted for an elbow-only selection.
+                 */
+                (objects.every((object) => object.type === "elbow")
+                    ? ""
+                    : transformRowMarkup("rotate", "Rotate")) +
                 /*
                  * PIPE WIDTH IS A RELATIVE ADJUSTMENT, like the three above - so
                  * it is a Transform row, not a measured field. It appears only
@@ -475,6 +572,26 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
                  */
                 (objects.some((object) => object.type === "pipe-duct")
                     ? transformRowMarkup("width", "Pipe Width")
+                    : "") +
+                /*
+                 * THE ELBOW'S OWN TWO PARAMETERS, in the order the
+                 * specification gives them: Bend Radius, then Bend Angle.
+                 *
+                 * BEND RADIUS is a relative adjustment and uses the same row
+                 * shape as X Shift. BEND ANGLE is the one ABSOLUTE value, so it
+                 * starts at the elbow's actual angle and is disabled - not
+                 * hidden - when both its ends are held by pipes.
+                 */
+                (hasElbow
+                    ? transformRowMarkup("bendRadius", "Bend Radius")
+                    : "") +
+                (hasElbow
+                    ? transformValueRowMarkup(
+                          "bendAngle",
+                          "Bend Angle",
+                          elbowAngleValue(objects),
+                          elbowReadonly
+                      )
                     : "") +
                 `</div>`
         );
@@ -654,6 +771,13 @@ function commitField(key, value) {
         return false;
     }
 
+    /*
+     * THE SELECTION'S PIPEWORK IS SETTLED BEFORE THE CHANGE IS COMMITTED, so the
+     * undo entry holds the whole edit - the value typed AND the connections it
+     * moved - as one step.
+     */
+    reconcileFluidGeometry(applicable);
+
     enggDrawingState.commitDrawingChange(drawingState, previous);
     renderCurrentDrawing();
 
@@ -804,6 +928,27 @@ function stepTransformValue(button) {
     }
 
     /*
+     * BEND ANGLE IS AN ABSOLUTE VALUE, NOT AN OFFSET. Its arrows move the
+     * elbow's actual angle by one degree, so there is no running total to keep:
+     * the box is re-read from the object on the redraw that follows.
+     */
+    if (axis === "bendAngle") {
+        const elbow = selectedObjects().find((object) => object.type === "elbow");
+
+        if (!elbow || isFullyConnectedElbow(elbow)) {
+            return;
+        }
+
+        const current = Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90);
+
+        writeElbowAngle(elbow, current + direction);
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
      * THE OFFSET IS RECORDED BEFORE THE MOVE, NOT AFTER.
      *
      * `applyTransform` redraws the canvas, and the redraw re-renders this pane -
@@ -835,6 +980,14 @@ function stepTransformValue(button) {
  */
 function commitTransformInput(input) {
     const axis = input?.dataset?.transformInput;
+
+    const absolute = input?.dataset?.transformValue;
+
+    if (absolute === "bendAngle") {
+        commitBendAngle(input);
+
+        return;
+    }
 
     if (!axis) {
         return;
@@ -869,6 +1022,37 @@ function commitTransformInput(input) {
     host?.querySelectorAll("[data-transform-input]").forEach((field) => {
         field.value = "0";
     });
+}
+
+function showElbowValue(elbow) {
+    const field = host?.querySelector('[data-transform-value="bendAngle"]');
+
+    if (field && elbow) {
+        field.value = String(Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90));
+    }
+}
+
+/*
+ * A TYPED BEND ANGLE: an ABSOLUTE value, applied once.
+ *
+ * It is refused for a fully connected elbow - the value there is the pipes' - and
+ * the box is put back to the angle the elbow really has, so a refused entry
+ * cannot leave a number on screen that the fitting does not have.
+ */
+function commitBendAngle(input) {
+    const elbow = selectedObjects().find((object) => object.type === "elbow");
+
+    const degrees = Number(input.value);
+
+    if (!elbow || !Number.isFinite(degrees) || degrees <= 0 || degrees > 180) {
+        showElbowValue(elbow);
+
+        return;
+    }
+
+    writeElbowAngle(elbow, degrees);
+
+    renderCurrentDrawing();
 }
 
 /* ============================================================
@@ -922,7 +1106,7 @@ export function installFeaturesPane() {
     host.addEventListener("change", (event) => {
         const target = event.target;
 
-        if (target.matches?.("[data-transform-input]")) {
+        if (target.matches?.("[data-transform-input]") || target.matches?.("[data-transform-value]")) {
             commitTransformInput(target);
 
             return;

@@ -37,6 +37,33 @@ import { isDynamicsObject, dynamicsTypeOf } from "../../../features/workspace/dy
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
 /*
+ * THE RUN LOOKUP A PANEL EDIT USES TO RE-ANCHOR AN ELBOW.
+ *
+ * INITIALISED LAZILY, FROM INSIDE THE ACCESSOR ITSELF, because this module takes
+ * part in an import cycle: the editor pane (which wires the lookup) is loaded
+ * WHILE this module is still evaluating, so ANY module-scope binding - a `let` or
+ * a `const` object alike - is still in its temporal dead zone when the setter
+ * runs. A FUNCTION DECLARATION is hoisted with its body, so the accessors are
+ * callable immediately and the storage they share is created on first use.
+ *
+ * See `keepConnectedEndOnPipe` for why a field module takes a lookup rather than
+ * importing the live document.
+ */
+function elbowLookupStore() {
+    if (!elbowLookupStore.store) {
+        elbowLookupStore.store = { run: null };
+    }
+
+    return elbowLookupStore.store;
+}
+
+function elbowLookupOf() {
+    const run = elbowLookupStore().run;
+
+    return typeof run === "function" ? run : null;
+}
+
+/*
  * The nine Geometry types the Features tab specifies in detail. They are the
  * `appearance`, `object` and `transform` core of a Geometry selection; every
  * other type keeps its own values and gains the same core only where its
@@ -66,8 +93,18 @@ const FILLABLE = new Set([
      * run. Fill is OFF by default (the fill mode starts at none), so a pipe is
      * drawn as two open lines unless the student asks for more.
      */
-    "pipe-duct"
+    "pipe-duct",
+    "elbow"
 ]);
+
+/*
+ * THE TYPES WHOSE FILL IS A REGION BETWEEN TWO BOUNDARIES.
+ *
+ * A run's fill closes its two walls and its two end edges; an elbow's closes its
+ * two arcs and the two end edges. They are filled shapes in the same sense as a
+ * closed polygon - one region, filled behind its own outline.
+ */
+const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow"]);
 
 /*
  * The types whose stroke can be dashed, dotted or otherwise styled.
@@ -589,7 +626,7 @@ const FIELDS = {
 
     fillMode: {
         kind: "segmented",
-        applies: (object) => FILLABLE.has(object.type),
+        applies: (object) => FILLABLE.has(object.type) || FLOW_PATH_FILLABLE.has(object.type),
         read: fillModeOf,
         write: setFillMode,
         options: [
@@ -600,7 +637,9 @@ const FIELDS = {
 
     fill: {
         kind: "colour",
-        applies: (object) => FILLABLE.has(object.type) && fillModeOf(object) === "solid",
+        applies: (object) =>
+            (FILLABLE.has(object.type) || FLOW_PATH_FILLABLE.has(object.type)) &&
+            fillModeOf(object) === "solid",
         read: fillColourOf,
         write: setFillColour
     },
@@ -799,6 +838,7 @@ const FIELDS = {
             typeof object?.type === "string" &&
             object.type !== "annotate" &&
             object.type !== "pipe-duct" &&
+            object.type !== "elbow" &&
             Boolean(object.name),
         read: (object) => object?.showName === true,
         write: (object, value) => {
@@ -1085,8 +1125,311 @@ Object.assign(FIELDS, {
 
             return setPipeWidth(object, change);
         }
+    },
+
+    /*
+     * ============================================================
+     * THE ELBOW'S TWO TRANSFORM PARAMETERS
+     * ============================================================
+     *
+     * BEND ANGLE IS THE ONLY ABSOLUTE-VALUE CONTROL an elbow has. It is the bend
+     * the fitting has, in degrees, and it is EDITABLE only while a free end
+     * defines the bend:
+     *
+     *   standalone   editable - there is nothing else to decide it
+     *   partial      editable - the free end sets it
+     *   connected    read-only - the two pipes' directions are the bend, and
+     *                the value shown is what those pipes currently make
+     *
+     * BEND RADIUS IS A RELATIVE ADJUSTMENT, like X Shift and Y Shift: a typed
+     * value opens or closes the current radius by that much, clamped to what
+     * the bend's arms can hold. It is deliberately not an absolute radius, and
+     * it is deliberately not labelled "change" - the row is "Bend Radius".
+     */
+    bendAngle: {
+        kind: "number",
+        min: 1,
+        max: 180,
+        step: 1,
+        unit: "\u00B0",
+        applies: (object) => object?.type === "elbow",
+        read: (object) => Math.round(enggPipeDuct.elbowAngleDegrees(object) ?? 90),
+        write: (object, value) => {
+            const degrees = Number(value);
+
+            if (!Number.isFinite(degrees) || degrees <= 0 || degrees > 180) {
+                return false;
+            }
+
+            if (object?.type === "elbow" && elbowConnectionState(object) === "connected") {
+                return false;
+            }
+
+            return writeElbowAngle(object, degrees);        },
+        readonly: (object) =>
+            object?.type === "elbow" &&
+            elbowConnectionState(object) === "connected"
+    },
+
+    bendRadius: {
+        kind: "number",
+        step: 1,
+        applies: (object) => object?.type === "elbow",
+        read: () => 0,
+        write: (object, value) => {
+            const change = Number(value);
+
+            if (!Number.isFinite(change) || change === 0) {
+                return false;
+            }
+
+            return adjustElbowRadius(object, change) !== false;
+        }
     }
 });
+
+/*
+ * HOW AN ELBOW'S ENDS ARE ATTACHED: "connected", "partial" or "standalone".
+ *
+ * A GENERATED elbow is always fully connected - it exists because two runs meet
+ * - and a MANUAL one is classified from the pair of ids it records. This is the
+ * ONE place the three states are decided, so the panel, the handles and the
+ * source all agree about which controls may act.
+ */
+export function elbowConnectionState(object) {
+    if (object?.type !== "elbow") {
+        return null;
+    }
+
+    const ids = object.engineering?.connections;
+
+    const attached = Array.isArray(ids) ? ids.filter(Boolean).length : 0;
+
+    if (attached >= 2) {
+        return "connected";
+    }
+
+    return attached === 1 ? "partial" : "standalone";
+}
+
+/* Whether an elbow's BOTH ends are held by pipes - its angle is then read-only. */
+export function isFullyConnectedElbow(object) {
+    return elbowConnectionState(object) === "connected";
+}
+
+/*
+ * WRITE AN ELBOW'S BEND ANGLE, at whichever end is free.
+ *
+ * The two ENDS stay where they are, so an attached end remains on its pipe.
+ * A GENERATED fully connected elbow refuses: its angle is its pipes' angle, and
+ * typing a different one would describe a bend the pipework does not have.
+ */
+export function writeElbowAngle(object, degrees) {
+    if (object?.type !== "elbow" || isFullyConnectedElbow(object)) {
+        return false;
+    }
+
+    const previous = object.geometry ? JSON.parse(JSON.stringify(object.geometry)) : null;
+    const previousEngineering = { ...(object.engineering || {}) };
+
+    if (!enggPipeDuct.setElbowAngle(object, degrees)) {
+        return false;
+    }
+
+    if (!keepConnectedEndOnPipe(object)) {
+        object.geometry = previous || object.geometry;
+        object.engineering = previousEngineering;
+        return false;
+    }
+
+    return true;
+}
+
+/*
+ * APPLY A BEND RADIUS CHANGE, clamped to what the bend can hold.
+ *
+ * The current radius is moved by the change and the result is bounded by the
+ * bend's arms, so an overshoot stops at the largest valid radius rather than
+ * placing a tangent point past the end of a leg. When not even the smallest
+ * bend fits, nothing is written and false is returned, so the caller leaves
+ * the last valid geometry in place.
+ */
+export function adjustElbowRadius(object, change) {
+    if (object?.type !== "elbow") {
+        return false;
+    }
+
+    /*
+     * ZERO IS NOT A RADIUS, IT IS NO CHANGE. Bend Radius is a RELATIVE value, so
+     * a zero entry is the same as an empty box and writes nothing.
+     */
+    if (!Number.isFinite(Number(change)) || Number(change) === 0) {
+        return false;
+    }
+
+    const adjusted = enggPipeDuct.adjustedBendRadius(object, change);
+
+    if (!adjusted) {
+        return false;
+    }
+
+    if (!enggPipeDuct.setBendRadius(object, adjusted.radius, { user: true })) {
+        return false;
+    }
+
+    /*
+     * THE PIPES FOLLOW THE NEW TANGENT POINTS.
+     *
+     * A radius change slides each tangent point along its pipe's centreline. The
+     * pipes must move with it, or the straight sections stop short of the arcs;
+     * `reseatElbowPipes` re-cuts them at the new tangents, keeping their outer
+     * endpoints where the student left them.
+     *
+     * IT NEVER DETACHES. If the operation is unavailable, the geometry is left
+     * exactly as the clamp made it - the fitting may be smaller than asked for,
+     * but it is never separated from the pipework it joins.
+     */
+    const reseat = elbowReseatOf();
+
+    if (reseat) {
+        reseat(object);
+    }
+
+    return adjusted;
+}
+
+/*
+ * RE-ANCHOR A CONNECTED ELBOW ON THE PIPES IT RECORDS.
+ *
+ * Only the ends that carry a connection move: a free end stays where the
+ * student put it. Returns false only when the re-anchoring produced no usable
+ * geometry, so a caller can restore the previous state.
+ *
+ * The run lookup is injected by the panel layer rather than imported here: this
+ * module declares FIELDS and must not depend on the live document. Without an
+ * injected lookup the ends are left alone, which is the honest answer for a
+ * caller that has no drawing to consult.
+ *
+ * The binding itself is declared at the top of the module - see `connectedRunsLookup`.
+ */
+export function setElbowRunLookup(lookup) {
+    elbowLookupStore().run = typeof lookup === "function" ? lookup : null;
+}
+
+/*
+ * THE OPERATION THAT RE-SEATS A FITTING'S PIPES, injected the same way.
+ *
+ * Changing a radius moves the tangent points, and the pipes have to follow them.
+ * That work belongs to the interaction layer (it needs the drawing, and it edits
+ * the pipes), so it is handed in rather than imported - exactly as the run
+ * lookup is.
+ */
+export function setElbowReseat(reseat) {
+    elbowLookupStore().reseat = typeof reseat === "function" ? reseat : null;
+}
+
+function elbowReseatOf() {
+    const reseat = elbowLookupStore().reseat;
+
+    return typeof reseat === "function" ? reseat : null;
+}
+
+/* The run lookup currently injected, or null. */
+export function elbowRunLookup() {
+    return elbowLookupOf();
+}
+
+function keepConnectedEndOnPipe(object) {
+    const ids = object?.engineering?.connections;
+
+    const lookup = elbowLookupOf();
+
+    if (!Array.isArray(ids) || !ids.some(Boolean) || typeof lookup !== "function") {
+        return true;
+    }
+
+    const runs = ids.map((id) => (id ? lookup(id) : null));
+
+    /* A run recorded as connected has gone: leave the geometry as it is. */
+    if (ids.some((id, index) => Boolean(id) && !runs[index])) {
+        return true;
+    }
+
+    return anchorElbowEnds(object, runs);
+}
+
+/*
+ * PUT AN ELBOW'S CONNECTED ENDS BACK ON THEIR PIPES.
+ *
+ * Each attached end becomes the nearest endpoint of its run, and the bend is
+ * re-solved from the two ends at the angle the fitting has. That is what keeps
+ * a connected fitting attached through a radius change, an angle change or a
+ * pipe move: the ends are the pipe's, so nothing can drift off it.
+ */
+export function anchorElbowEnds(object, runs = []) {
+    const geometry = object?.geometry || {};
+
+    const ends = {
+        a: geometry.ends?.a ? { ...geometry.ends.a } : null,
+        b: geometry.ends?.b ? { ...geometry.ends.b } : null
+    };
+
+    if (!ends.a || !ends.b) {
+        return true;
+    }
+
+    const nearestPort = (run, reference) => {
+        const ports = enggPipeDuct.portsOf(run);
+
+        if (!ports.length) {
+            return null;
+        }
+
+        return ports.reduce((best, port) => {
+            const distance = Math.hypot(port.point.x - reference.x, port.point.y - reference.y);
+
+            return !best || distance < best.distance ? { ...port.point, distance } : best;
+        }, null);
+    };
+
+    if (runs[0]) {
+        const at = nearestPort(runs[0], ends.a);
+
+        if (at) {
+            ends.a = { x: at.x, y: at.y };
+        }
+    }
+
+    if (runs[1]) {
+        const at = nearestPort(runs[1], ends.b);
+
+        if (at) {
+            ends.b = { x: at.x, y: at.y };
+        }
+    }
+
+    const angle = enggPipeDuct.elbowAngleDegrees(object);
+
+    if (angle === null) {
+        return false;
+    }
+
+    const solved = enggPipeDuct.solveElbowCorner(ends.a, ends.b, angle, geometry.position);
+
+    if (!solved) {
+        return false;
+    }
+
+    object.geometry = {
+        ...geometry,
+        position: solved.position,
+        ends,
+        previous: { ...ends.a },
+        next: { ...ends.b }
+    };
+
+    return true;
+}
 
 /*
  * Set a run's Pipe Width, refusing a change that would collapse the walls.
@@ -1994,13 +2337,24 @@ export function groupsFor(object) {
      */
     const isPipe = object.type === "pipe-duct";
 
+    /*
+     * AN ELBOW HAS THE SAME THREE SECTIONS AS A RUN - Object, Appearance and
+     * Transform - and nothing else. Its Line Style, Outline Colour, Thickness
+     * and Fill belong together under Appearance, and its own Bend Radius and
+     * Bend Angle are Transform rows. There is no Rotate row and no Visibility
+     * control: a fitting is placed by its pipes, so neither is specified.
+     */
+    const isElbow = object.type === "elbow";
+
+    const flowPath = isPipe || isElbow;
+
     const groups = [
         ...dynamics,
         ...GROUPS
     ]
         .filter(
             (group) =>
-                !isPipe ||
+                !flowPath ||
                 ["object", "appearance", "transform"].includes(
                     group.id
                 )
@@ -2014,7 +2368,7 @@ export function groupsFor(object) {
         })
         .filter((group) => group.transform || group.fields.length);
 
-    if (isPipe) {
+    if (flowPath) {
         const order = ["object", "appearance", "transform"];
 
         groups.sort(
@@ -2069,6 +2423,56 @@ export function writeField(object, key, value) {
     }
 
     return definition.write(object, value) !== false;
+}
+
+/*
+ * ============================================================
+ * THE JOINTS OF EVERY FLUID OBJECT THAT WAS JUST EDITED
+ * ============================================================
+ *
+ * Injected, exactly like the elbow's run lookup: this module declares FIELDS and
+ * must not depend on the live document or on the interaction layer. The panel
+ * layer supplies the reconciler and calls this after an edit, so a typed value
+ * and a dragged handle settle their connections through ONE implementation.
+ */
+export function setFluidReconciler(reconcile) {
+    elbowLookupStore().reconcile = typeof reconcile === "function" ? reconcile : null;
+}
+
+export function reconcileFluidGeometry(objects) {
+    const { reconcile, run } = elbowLookupStore();
+
+    if (typeof reconcile !== "function" || !Array.isArray(objects)) {
+        return;
+    }
+
+    objects.forEach((object) => {
+        if (object?.type === "pipe-duct") {
+            reconcile(object);
+            return;
+        }
+
+        /*
+         * AN ELBOW THAT IS JOINED AT BOTH ENDS IS PART OF THE PIPES' CORNER, so
+         * the pipes around it are what has to settle - not the fitting on its
+         * own.
+         */
+        if (object?.type !== "elbow" || typeof run !== "function") {
+            return;
+        }
+
+        const pipes = (Array.isArray(object.engineering?.connections)
+            ? object.engineering.connections
+            : []
+        )
+            .filter(Boolean)
+            .map(run)
+            .filter(Boolean);
+
+        if (pipes.length === 2) {
+            reconcile(pipes[0], pipes[1]);
+        }
+    });
 }
 
 /* ============================================================

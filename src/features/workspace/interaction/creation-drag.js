@@ -86,9 +86,15 @@ import { objectAtPoint, hitTestAnnotateTarget } from "./hit-testing.js";
 import { isClickClickTool, isMultiStepTool } from "../../../components/layout/toolbar/tool-classification.js";
 import {
     ROUTE_PHASE,
+    ELBOW_PHASE,
     commitRouteSegment,
-    resolveRouteStart
+    resolveRouteStart,
+    elbowGesturePreview,
+    elbowInstruction,
+    pipeEndAt,
+    commitElbowGesture
 } from "./pipe-duct-tool.js";
+import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
 import {
@@ -324,6 +330,14 @@ export function isDragCreationTool(
      * the answer to "is this a drag tool" must still be yes.
      */
     if (toolId === "pipe-duct") {
+        return true;
+    }
+
+    /*
+     * THE ELBOW IS A DRAG TOOL BY THE SAME ARGUMENT: its two ends are where the
+     * student pressed and where they let go.
+     */
+    if (toolId === "elbow") {
         return true;
     }
 
@@ -587,6 +601,46 @@ export function beginCreationDrag(
                 : null,
             committedCount:
                 Number(drawingState.interaction.routeCommittedCount) || 0
+        };
+
+        return true;
+    }
+
+    /*
+     * THE ELBOW TAKES ITS WHOLE FITTING FROM THE ONE GESTURE TOO.
+     *
+     * The press is the first end - already snapped, so a press the snap pulled
+     * onto a pipe endpoint starts ON that endpoint and will connect - and the
+     * run, if there is one, is remembered so the release can attach to it. The
+     * second end is resolved on the release, through the same snapping.
+     */
+    if (drawingState.activeTool === "elbow") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        const startMatch = pipeEndAt(pressPoint);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            elbow: true,
+            start: startMatch
+                ? { ...startMatch.point }
+                : pressPoint
+                  ? { x: pressPoint.x, y: pressPoint.y }
+                  : null,
+            startMatch,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
         };
 
         return true;
@@ -995,6 +1049,57 @@ export function moveCreationDrag(event) {
         return;
     }
 
+    /*
+     * THE ELBOW PREVIEWS ITS OWN TWO BOUNDARIES while it is dragged.
+     *
+     * The preview is published on the interaction, so the shared preview
+     * renderer draws it - and it is built by the SAME function the commit uses,
+     * so the curved walls do not move on release. The moving end is snapped by
+     * the shared resolver before it is published, which is what lets a dragged
+     * elbow land exactly on a pipe endpoint and connect.
+     */
+    if (session.elbow) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.start;
+
+        session.currentPoint = point;
+
+        const interaction = {
+            fluidsTool: "elbow",
+            phase: ELBOW_PHASE,
+            startPoint: session.start,
+            elbowStart: session.start,
+            elbowStartMatch: session.startMatch || null,
+            elbowAngle:
+                Number(drawingState.interaction.elbowAngle) || undefined,
+            elbowBendRadius:
+                Number(drawingState.interaction.elbowBendRadius) || undefined,
+            snapGeometry: session.start
+                ? [{ start: session.start, end: point }]
+                : [],
+            snapToolId: "elbow"
+        };
+
+        interaction.preview = elbowGesturePreview(interaction, point);
+
+        enggDrawingState.setInteraction(drawingState, interaction);
+
+        setToolMessage(elbowInstruction());
+
+        return;
+    }
+
     if (!session.moved) {
         const dx = event.clientX - session.startScreen.x;
         const dy = event.clientY - session.startScreen.y;
@@ -1150,6 +1255,15 @@ export function finishCreationDrag(
         renderCurrentDrawing();
     }
 
+    if (session.elbow && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: "elbow",
+            preview: null,
+            phase: "idle"
+        });
+        renderCurrentDrawing();
+    }
+
     if (!session.moved) {
         return false;
     }
@@ -1161,8 +1275,8 @@ export function finishCreationDrag(
      *
      * The release is the run's far end. The leg is committed as a real
      * Pipe / Duct feature, an Elbow is generated at the corner when this leg
-     * continues a previous run through a supported 45 or 90, and the whole
-     * thing is one undoable operation (see pipe-duct-tool.js).
+     * continues a previous run through a genuine turn - at ANY angle - and the
+     * whole thing is one undoable operation (see pipe-duct-tool.js).
      *
      * The tool STAYS ARMED and keeps the run's far endpoint as the next leg's
      * start, so dragging on from there carries the path - which is the
@@ -1194,6 +1308,42 @@ export function finishCreationDrag(
                 phase: "idle",
                 snapGeometry: []
             });
+            renderCurrentDrawing();
+        }
+
+        return true;
+    }
+
+    /*
+     * THE ELBOW COMMITS AT THE RELEASE.
+     *
+     * The release is the fitting's second end, resolved through the same
+     * snapping a click would use - so a release beside a pipe's end attaches
+     * exactly where the indicator showed it would. The tool stays armed, so a
+     * student can place another elbow straight away.
+     */
+    if (session.elbow) {
+        const resolution = resolvePointerEvent(event);
+
+        const end =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.currentPoint;
+
+        const created = commitElbowGesture(session.start, end, {
+            elbowStartMatch: session.startMatch || null,
+            elbowAngle: drawingState.interaction.elbowAngle,
+            elbowBendRadius: drawingState.interaction.elbowBendRadius
+        });
+
+        if (!created) {
+            enggDrawingState.setInteraction(drawingState, {
+                fluidsTool: "elbow",
+                preview: null,
+                phase: "idle",
+                snapGeometry: []
+            });
+
             renderCurrentDrawing();
         }
 

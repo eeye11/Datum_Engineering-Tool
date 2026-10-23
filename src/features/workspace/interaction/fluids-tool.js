@@ -104,7 +104,9 @@ export function fluidsInstruction(toolId) {
 	 * this only names the opening step.
 	 */
 	if (tool.capability === FLUIDS_CAPABILITIES.ROUTE) {
-		return "Specify route start point";
+		return toolId === "elbow"
+			? "Press and drag to draw an Elbow between two ends"
+			: "Specify route start point";
 	}
 
 	if (tool.capability === FLUIDS_CAPABILITIES.SHAPE) {

@@ -14,9 +14,87 @@
 import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
+import { drawingState } from "../../../features/workspace/editor-state.js";
 
 function finitePoint(point) {
     return Boolean(point) && Number.isFinite(point.x) && Number.isFinite(point.y);
+}
+
+/*
+ * ============================================================
+ * THE RUNS A BEND JOINS, FROM THE RECORD IT CARRIES
+ * ============================================================
+ *
+ * `elbowWallArcsFor` needs to know WHICH STRAIGHT WALL each arc continues, and
+ * that depends on the direction each run was actually drawn in. The fitting
+ * records the pair (and, by run id, the end of each it holds), so the runs are
+ * looked up here rather than guessed from the bend's geometry.
+ *
+ * `connections` is positional in the fitting's own order - the run the bend
+ * ARRIVES from first, the one it LEAVES along second - so the lookup is by
+ * position, not by id, and a missing run leaves that side to the default.
+ */
+function joinedRunsOf(elbow) {
+    const ids = elbow?.engineering?.connections;
+
+    if (!Array.isArray(ids) || ids.length !== 2) {
+        return {};
+    }
+
+    const objects = drawingState.objects || [];
+    const find = (id) => (id ? objects.find((object) => object.id === id) || null : null);
+
+    return {
+        incoming: find(ids[0]),
+        outgoing: find(ids[1])
+    };
+}
+
+/*
+ * A RUN'S WALLS, WITH THE END THAT MEETS A BEND CUT TO THE BEND'S SEAM.
+ *
+ * Each run end that carries a bend's trim is moved onto the point the bend's
+ * matching arc starts at - `elbowJunctionsFor`'s seam - so wall and arc share one
+ * coordinate. Everything else about the wall is untouched: same line, same
+ * offset, same direction; only the reach of the joining end is made exact, and
+ * it is flagged `capped` so it is drawn with a butt cap (the other ends keep
+ * their round ones).
+ */
+function seamPipeWalls(walls, run) {
+    const trims = run?.geometry?.trims || {};
+
+    const joints = (run?.geometry?.bendJoints && typeof run.geometry.bendJoints === "object")
+        ? run.geometry.bendJoints
+        : null;
+
+    if (!joints || !Array.isArray(walls) || walls.length !== 2) {
+        return walls;
+    }
+
+    const seamSide = (end) => (["start", "end"].includes(end) && Number(trims[end]) > 0 ? joints[end] : null);
+
+    return walls.map((wall, index) => {
+        const held = ["start", "end"].filter((end) => seamSide(end));
+
+        if (!held.length) {
+            return wall;
+        }
+
+        /* The wall drawn on side `index` at that end meets that seam. */
+        let result = { ...wall };
+        let seamed = false;
+
+        held.forEach((end) => {
+            const seam = joints[end]?.[index];
+
+            if (finitePoint(seam)) {
+                result = { ...result, [end]: { x: seam.x, y: seam.y } };
+                seamed = true;
+            }
+        });
+
+        return seamed ? { ...result, seams: true } : result;
+    });
 }
 
 export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
@@ -27,15 +105,16 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
     const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
 
     /*
-     * A RUN WITH A BEND FITTED IS DRAWN SHORT: its walls stop at the elbow's
-     * tangent points, so the arcs take over exactly where the straight wall
-     * ends and the two do not overlap. `trimmedCentreline` is the one place
-     * that arithmetic lives, so the canvas, the source and the mesh all shorten
-     * the run the same way.
+     * A RUN'S ENDPOINTS ARE ALREADY THE WALLS' ENDS. A joined run has had its
+     * `start`/`end` moved onto the elbow's tangent points, so the centreline as
+     * stored IS the visible one - trimming it again by `geometry.trims` would
+     * shorten it a second time and leave the bend a trim short of its pipe.
+     *
+     * THE END THAT MEETS A BEND IS CUT TO THE BEND'S OWN SEAM - the point
+     * `elbowJunctionsFor` hands the arc - so a wall can never run a fraction past
+     * the arc, or stop just short of it, however the run was re-seated.
      */
-    const centreline = enggPipeDuct.trimmedCentreline(entity) || geometry;
-
-    const walls = enggPipeDuct.boundaryLines(centreline.start, centreline.end, entity.engineering || {});
+    const walls = seamPipeWalls(enggPipeDuct.boundaryLinesOf(entity), entity);
 
     if (!walls.length) {
         return true;
@@ -76,6 +155,21 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
         const from = toScreen(boundary.start);
         const to = toScreen(boundary.end);
 
+        /*
+         * A WALL STOPS ON ITS END POINT.
+         *
+         * A ROUND cap paints a half-line-width semicircle BEYOND the end point.
+         * At a bend that semicircle is drawn into the arc, which begins on that
+         * very point - the small bulge that reads as an overlap at every joint.
+         *
+         * So the cap follows the END, not the wall: a line has one cap for both
+         * ends in SVG, and a wall joined to a bend must therefore be BUTT. A wall
+         * with no seam at either end keeps the round caps the drawing convention
+         * uses elsewhere.
+         *
+         * `capped` is set by `seamPipeWalls` on the wall that has NO seam, so it
+         * is read the other way round: an UNcapped wall is the one at a bend.
+         */
         svg.appendChild(createSvgElement("line", {
             x1: from.x,
             y1: from.y,
@@ -83,7 +177,7 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
             y2: to.y,
             stroke,
             "stroke-width": scaledStrokeWidth(style.lineWidth),
-            "stroke-linecap": "round",
+            "stroke-linecap": boundary.seams ? "butt" : "round",
             ...(dash ? { "stroke-dasharray": dash } : {})
         }));
     });
@@ -92,67 +186,81 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
 }
 
 export function drawElbow({ svg, entity, geometry, style, toScreen }) {
-    const engineering = entity.engineering || {};
+    const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+    const dash = dashPatternFor(style.lineType);
 
-    const curves = enggPipeDuct.elbowGeometry(
-        geometry.previous,
-        geometry.position,
-        geometry.next,
-        engineering.bendRadius
-    );
+    /*
+     * THE TWO WALLS COME FROM THE MODEL, NOT FROM A SIGN GUESSED HERE.
+     *
+     * `elbowWallArcsFor` builds each wall's arc on its own radius about the
+     * bend's centre, so a bend whose two runs are drawn at different widths
+     * still meets both of them exactly - and it names the arc each RUN's line
+     * continues, so a left turn and a right turn are drawn with the same code.
+     *
+     * It also decides whether the bend is drawable at all: a radius the arms
+     * cannot hold, or a corner that does not turn, produces no walls and
+     * nothing is drawn, exactly as before.
+     */
+    const walls = enggPipeDuct.elbowJunctionsFor(entity, joinedRunsOf(entity));
 
-    if (!curves) {
+    if (!walls) {
         return true;
     }
 
-    const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
-    const separation = enggPipeDuct.boundarySeparation(engineering);
-    const sweep = ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const steps = 32;
 
-    /*
-     * THE BEND HAS TWO ENDS, AND THEY MAY BE DRAWN AT DIFFERENT WIDTHS.
-     *
-     * An elbow is the boundary at which two runs are allowed to differ, so the
-     * fitting runs `startSeparation` on the incoming side and `endSeparation` on
-     * the outgoing one - the same numbers those runs' own walls use. The two
-     * wall radii therefore interpolate around the arc, which is what keeps each
-     * border CONTINUOUS with the straight wall it meets. A bend drawn at one
-     * width would leave a step wherever the far run is wider or narrower.
-     */
-    const startSeparation = Number(engineering.startSeparation) > 0
-        ? Number(engineering.startSeparation)
-        : separation;
+    const wallPoints = (wall) =>
+        Array.from({ length: steps + 1 }, (_, index) => toScreen(wall.pointAt(index / steps)));
 
-    const endSeparation = Number(engineering.endSeparation) > 0
-        ? Number(engineering.endSeparation)
-        : separation;
+    [walls.outer, walls.inner].forEach((wall) => {
+        const points = wallPoints(wall);
 
-    const steps = 24;
-
-    const wallPoints = (side) =>
-        Array.from({ length: steps + 1 }, (_, index) => {
-            const t = index / steps;
-            const angle = curves.startAngle + sweep * t;
-            const half = (startSeparation + (endSeparation - startSeparation) * t) / 2;
-            const radius = curves.radius + side * half;
-
-            return toScreen({
-                x: curves.centre.x + radius * Math.cos(angle),
-                y: curves.centre.y + radius * Math.sin(angle)
-            });
-        });
-
-    [1, -1].forEach((side) => {
-        const points = wallPoints(side);
-
+        /*
+         * THE ARC MEETS ITS STRAIGHT WALL SQUARELY.
+         *
+         * A round cap would push the stroke half a line-width PAST the arc's end
+         * point - which, at a junction where the straight wall already ends, is a
+         * stub drawn over the pipe. A butt cap stops exactly on the end point, so
+         * the arc begins at the very pixel the wall stops at. The same cap on both
+         * is what makes the junction invisible.
+         */
         svg.appendChild(createSvgElement("path", {
             d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
             fill: "none",
             stroke,
             "stroke-width": scaledStrokeWidth(style.lineWidth),
-            "stroke-linecap": "round"
+            "stroke-linecap": "butt",
+            "stroke-linejoin": "miter",
+            ...(dash ? { "stroke-dasharray": dash } : {})
         }));
     });
+
+    /*
+     * A FILLED ELBOW FILLS THE REGION BETWEEN ITS TWO BOUNDARIES - the same
+     * closure a filled run uses, made of the outer wall, the end edge, the
+     * inner wall and the other end edge. It is inserted UNDER the walls as one
+     * shape, so the filling introduces no extra selectable object and no
+     * visible end caps: the walls themselves are the boundary.
+     */
+    if (style.fillMode === "solid") {
+        const region = [...wallPoints(walls.outer), ...wallPoints(walls.inner).reverse()];
+
+        const first = svg.firstChild;
+
+        const fillPath = createSvgElement("path", {
+            d:
+                region.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ") +
+                " Z",
+            fill: paintColour(style.fill || stroke),
+            stroke: "none"
+        });
+
+        if (first) {
+            svg.insertBefore(fillPath, first);
+        } else {
+            svg.appendChild(fillPath);
+        }
+    }
 
     /*
      * NO END MARKS.

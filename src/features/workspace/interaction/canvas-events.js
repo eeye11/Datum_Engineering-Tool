@@ -25,7 +25,7 @@ import { closeCoordinateSystemMenu } from "../../../components/layout/toolbar/to
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport.js";
-import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
+import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruction } from "./pipe-duct-tool.js";
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -277,6 +277,22 @@ export function installCanvasEvents() {
                     event.preventDefault();
 
                     finishRouteConstruction();
+                    return;
+                }
+
+                /*
+                 * THE ELBOW TOOL IS FINISHED THE SAME WAY, and for the same
+                 * reason: it commits on release, so a double-click between
+                 * fittings is the student saying they are done.
+                 */
+                if (
+                    drawingState.activeTool === "elbow" ||
+                    drawingState.interaction.fluidsTool === "elbow" ||
+                    drawingState.interaction.phase === ELBOW_PHASE
+                ) {
+                    event.preventDefault();
+
+                    finishElbowConstruction();
                     return;
                 }
 

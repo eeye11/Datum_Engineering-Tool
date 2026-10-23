@@ -5,6 +5,7 @@
 import enggDrawingState from "../../shared/model/drawing-state.js";
 import enggDrawingSnap from "../../shared/snapping/object-snap.js";
 import enggSheets from "../../components/layout/workspace/sheets.js";
+import enggPipeDuct from "./model/fluids/pipe-duct.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
 
@@ -197,3 +198,30 @@ export const editorState = {
      */
     activeGlobalTool: null
 };
+
+/*
+ * ========================================================
+ * THE FLUIDS MODEL MAY LOOK AN OBJECT UP - BUT NOT IMPORT ONE
+ * ========================================================
+ *
+ * The pipe / duct model has to measure a bend's arms from the runs it joins, and
+ * the Feature schema has to re-seat a fitting on its pipes. Both live in modules
+ * the interaction layer IMPORTS, so neither may import the live document back:
+ * that is an import cycle, and a cycle around a state object is how a module ends
+ * up reading `undefined` at load time.
+ *
+ * So the document is published once, here - the one module that owns it. Every
+ * Fluids reader asks through this lookup, which is the same pattern the Features
+ * pane already uses for its elbow run lookup (`setElbowRunLookup`).
+ *
+ * IT IS A FUNCTION, NOT A COPY. It reads `drawingState.objects` when it is
+ * called, so a caller always sees the sheet as it is now rather than the sheet as
+ * it was when the module loaded - and Undo, a sheet switch or a reopened file
+ * needs no re-wiring.
+ */
+const lookupEditorObject = (id) =>
+    (id ? (drawingState.objects || []).find((object) => object.id === id) || null : null);
+
+enggPipeDuct.setObjectLookup(lookupEditorObject);
+
+export const objectOnSheet = lookupEditorObject;

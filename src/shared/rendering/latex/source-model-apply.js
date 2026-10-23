@@ -32,6 +32,7 @@
 import { createSourceMap } from "./drawing-source.js";
 import { readSourceIntoModel } from "./source-object-sync.js";
 import { shapeFromStatement } from "./source-model.js";
+import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 
 /* ============================================================
  * GEOMETRY AND STYLE FROM ONE SHAPE
@@ -47,6 +48,20 @@ function geometryOf(shape) {
       return { start: { ...shape.from }, end: { ...shape.to } };
     case "pipe-duct":
       return { start: { ...shape.start }, end: { ...shape.end } };
+
+    /*
+     * AN ELBOW'S GEOMETRY IS ITS CORNER AND ITS TWO ENDS. Both walls of the block
+     * become THIS one geometry - which is what keeps the two paths linked to one
+     * object - and the connection record is left alone by this merge, so a source
+     * edit cannot silently orphan a fitting from the pipes it joins.
+     */
+    case "elbow":
+      return {
+        position: { ...shape.position },
+        ends: { a: { ...shape.ends.a }, b: { ...shape.ends.b } },
+        previous: { ...shape.previous },
+        next: { ...shape.next }
+      };
     case "circle":
       return { center: { ...shape.centre }, radius: shape.radius };
     case "rectangle":
@@ -102,11 +117,7 @@ function mergeShapeIntoObject(object, shape) {
     return false;
   }
 
-  const before = JSON.stringify({
-    geometry: object.geometry,
-    style: object.style,
-    separation: object.engineering?.separation
-  });
+  const before = signatureOf(object);
 
   const next = { ...object.geometry };
 
@@ -141,18 +152,43 @@ function mergeShapeIntoObject(object, shape) {
   }
 
   /*
+   * AN ELBOW'S BEND RADIUS AND ANGLE COME FROM ITS ARCS.
+   *
+   * A retyped radius changes the fitting's bend; a retyped sweep changes its
+   * angle. A NEGATIVE `delta angle` states a bend in the other direction, so the
+   * angle is taken as its magnitude - the bend a fitting has is positive on either
+   * side, and the side itself lives in the geometry.
+   */
+  if (shape.type === "elbow") {
+    const angle = Math.abs(Number(shape.angleDegrees));
+
+    object.engineering = {
+      ...(object.engineering || {}),
+      bendRadius: shape.bendRadius,
+      angleDegrees: Number.isFinite(angle) ? angle : object.engineering?.angleDegrees,
+      angle: Number.isFinite(angle) ? angle : object.engineering?.angle
+    };
+  }
+
+  /*
    * THE CHANGE IS THE WHOLE OBJECT'S, NOT JUST ITS GEOMETRY. A run whose walls
    * were moved only further apart or closer together has an unchanged
-   * centreline but a changed width, and that is a real edit the caller must
+   * centreline but a changed width; an elbow whose arcs were retuned has an
+   * unchanged corner but a changed radius. Both are real edits the caller must
    * hear about.
    */
-  return (
-    JSON.stringify({
-      geometry: object.geometry,
-      style: object.style,
-      separation: object.engineering?.separation
-    }) !== before
-  );
+  return signatureOf(object) !== before;
+}
+
+/* The properties one shape edit can change, as one comparable string. */
+function signatureOf(object) {
+  return JSON.stringify({
+    geometry: object.geometry,
+    style: object.style,
+    separation: object.engineering?.separation,
+    bendRadius: object.engineering?.bendRadius,
+    angle: object.engineering?.angleDegrees
+  });
 }
 
 /* ============================================================
@@ -185,6 +221,9 @@ export function applyParsedSourceToDrawing({
   const updated = [];
   const removed = [];
 
+  /* The objects that existed before the edit, for the elbow report below. */
+  const before = new Set(state.objects.map((object) => object.id));
+
   parsed.updates.forEach((entry) => {
     if (mergeShapeIntoObject(entry.object, entry.shape)) {
       updated.push(entry.object.id);
@@ -215,6 +254,36 @@ export function applyParsedSourceToDrawing({
       removed.push(id);
     });
   }
+
+  /*
+   * A RETYPED PIPE JOINS ITS JOINTS THE SAME WAY A DRAGGED ONE DOES.
+   *
+   * Source editing is a supported way to move geometry, so a coordinate typed into
+   * the Source tab must earn the fitting a drag would have earned - and a pipe
+   * retyped away from its neighbour must lose the one it had. Only the pipes that
+   * were created or changed are visited, so an unrelated connection is never
+   * touched by an edit somewhere else.
+   */
+  [...new Set([...created, ...updated])]
+    .map((id) => state.objects.find((object) => object.id === id))
+    .filter((object) => object?.type === "pipe-duct")
+    .forEach((run) => {
+      reconcileFluidConnections(run, state.objects);
+    });
+
+  /*
+   * AND THE SETTLEMENT ITSELF MAY HAVE ADDED OR REMOVED A FITTING, so the report
+   * the caller acts on includes those objects too.
+   */
+  state.objects.forEach((object) => {
+    if (object.type === "elbow" && !created.includes(object.id) && !updated.includes(object.id)) {
+      if (!before.has(object.id)) {
+        created.push(object.id);
+      } else {
+        updated.push(object.id);
+      }
+    }
+  });
 
   return {
     created,

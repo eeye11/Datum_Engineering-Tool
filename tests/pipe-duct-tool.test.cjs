@@ -537,7 +537,7 @@ test("the bend takes over from the run walls, which stop at its tangent points",
   assert.deepEqual(trimmed.start, first.run.geometry.start, "the far end is untouched");
 });
 
-test("dragging an endpoint to an unsupported angle removes the elbow", () => {
+test("dragging an endpoint to a non-right angle KEEPS the elbow", () => {
   const m = modules();
 
   reset(m.state);
@@ -548,13 +548,18 @@ test("dragging an endpoint to an unsupported angle removes the elbow", () => {
     routeCommittedCount: 1
   });
 
-  /* 30 degrees is not a supported elbow. */
+  /*
+   * 30 degrees is an ordinary bend. Automatic fitting is NOT restricted to right
+   * angles, so the elbow follows the new corner rather than being removed.
+   */
   second.run.geometry.end = { x: 100 + 100 * Math.cos(Math.PI / 6), y: 100 * Math.sin(Math.PI / 6) };
 
   m.tool.refreshFluidConnections(second.run, m.state.objects);
 
-  assert.equal(m.state.objects.filter((object) => object.type === "elbow").length, 0);
-  assert.equal(first.run.geometry.trims, undefined, "the run gets its straight length back");
+  const elbows = m.state.objects.filter((object) => object.type === "elbow");
+
+  assert.equal(elbows.length, 1, "a 30 degree bend keeps its elbow");
+  assert.ok(Math.abs(m.pipe.elbowAngleDegrees(elbows[0]) - 30) < 0.5);
 });
 
 test("disconnecting the runs removes the elbow", () => {

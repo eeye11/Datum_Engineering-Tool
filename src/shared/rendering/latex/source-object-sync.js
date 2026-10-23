@@ -288,6 +288,287 @@ function createPipeFromWalls(walls) {
   return createObjectFromShape("pipe-duct", { ...walls, type: "pipe-duct" }, null) || null;
 }
 
+/* ============================================================
+ * AN ELBOW AS TWO CURVED WALLS
+ * ============================================================
+ *
+ * A fitting is written as the two `\draw` paths its walls are, and comes back in
+ * as its CORNER, its two ENDS and its bend radius - never as two lines. The
+ * reconstruction is a FIT, not a reading of arbitrary TikZ: the two paths must be
+ * concentric circular arcs of the same sweep, their centre is the bend centre, and
+ * the radial gap between them is the bend's width at that point.
+ *
+ * TWO WRITTEN FORMS ARE UNDERSTOOD, because the writer emits both: a SINGLE ARC
+ * and a SAMPLED POLYLINE that follows one (the tapered form). Either is fitted
+ * to its circle first, so the fitting comes back as the same object whichever
+ * form its walls were written in.
+ *
+ * WHAT CAN BE RECOVERED AND WHAT IS REPORTED.
+ *
+ *   radius        the middle radius of the two arcs
+ *   corner        where the two arms meet, from the arc's two tangent ends
+ *   ends          the two tangent points (the student's own ends, for a free arm)
+ *   angle         the arc's own sweep, so any bend angle round-trips
+ *   width         the radial gap, at the arc's middle
+ *
+ * TWO PATHS THAT ARE NOT TWO WALLS OF ONE BEND - a taper whose walls diverge, a
+ * mixed path, two unrelated arcs - return null, and the block is REPORTED as
+ * unsupported by the existing machinery. It is never split into two independent
+ * objects.
+ */
+function elbowShapeFromPaths(shapes) {
+  if (!Array.isArray(shapes) || shapes.length !== 2) {
+    return null;
+  }
+
+  const walls = [shapeAsArc(shapes[0]), shapeAsArc(shapes[1])];
+
+  if (!walls[0] || !walls[1]) {
+    return null;
+  }
+
+  const [a, b] = walls;
+
+  const near = (left, right) => Math.abs(left - right) <= 1e-3;
+
+  if (!near(a.centre.x, b.centre.x) || !near(a.centre.y, b.centre.y)) {
+    return null;
+  }
+
+  const start = a.startAngle;
+  const sweep = a.endAngle - start;
+  const otherSweep = b.endAngle - b.startAngle;
+
+  const sameSweep =
+    Math.abs(sweep - otherSweep) <= 1e-3 ||
+    Math.abs(normalisedDelta(sweep) - normalisedDelta(otherSweep)) <= 1e-3;
+
+  /*
+   * BOTH WALLS MUST HAVE THE WALL'S SIGNED SWEEP, whether or not their written
+   * start angles happen to be the same angle. The renderer draws both from the
+   * SAME start angle, so that is the ordinary case - but a hand-edited pair may
+   * start elsewhere, and `normalisedDelta` compares the turns rather than the
+   * numbers.
+   */
+  if (!sameSweep || Math.abs(normalisedDelta(sweep)) < 1e-3) {
+    return null;
+  }
+
+  const signedSweep = normalisedDelta(sweep);
+
+  const radii = [a.radius, b.radius].sort((left, right) => left - right);
+
+  const separation = radii[1] - radii[0];
+
+  if (!(separation > 0)) {
+    return null;
+  }
+
+  const radius = (radii[0] + radii[1]) / 2;
+
+  /* Mid-arc points on the centre circle, and their half-radius, give the chord. */
+  const radians = (start * Math.PI) / 180;
+  const radiansEnd = ((start + signedSweep) * Math.PI) / 180;
+
+  const centre = { x: a.centre.x, y: a.centre.y };
+
+  const tangentStart = {
+    x: centre.x + radius * Math.cos(radians),
+    y: centre.y + radius * Math.sin(radians)
+  };
+
+  const tangentEnd = {
+    x: centre.x + radius * Math.cos(radiansEnd),
+    y: centre.y + radius * Math.sin(radiansEnd)
+  };
+
+  /*
+   * THE CORNER IS THE ARMS' INTERSECTION.
+   *
+   * Each arm leaves its tangent point IN THE DIRECTION THE BEND RUNS: through
+   * the corner, out to that end. Taking the circle's tangent there and pointing
+   * it so the two arms approach each other is what puts them on the outer side
+   * of the bend, where the corner of a fitting physically is - for a 90 degree
+   * bend they meet at a square corner `radius * tan(45)` from each tangent point,
+   * which is the shape the student reads.
+   *
+   * THE TWO CONSTRUCTIONS MUST AGREE. Building the corner from each tangent point
+   * independently, and requiring the two to land on the SAME point, is what
+   * refuses a pair of arcs that is not one bend rather than drawing a fitting
+   * with a kink in it.
+   */
+  const bend = Math.abs(signedSweep);
+
+  const reach = radius * Math.tan((bend * Math.PI) / 360);
+
+  const cornerFromStart = {
+    x: tangentStart.x + Math.sin(radians) * reach,
+    y: tangentStart.y - Math.cos(radians) * reach
+  };
+
+  const cornerFromEnd = {
+    x: tangentEnd.x - Math.sin(radiansEnd) * reach,
+    y: tangentEnd.y + Math.cos(radiansEnd) * reach
+  };
+
+  /*
+   * The two constructions must agree: a pair of arcs whose arms do not meet is
+   * not one bend, and is refused rather than drawn as a fitting with a kink.
+   */
+  const error = Math.hypot(cornerFromStart.x - cornerFromEnd.x, cornerFromStart.y - cornerFromEnd.y);
+
+  if (error > 1e-3 * Math.max(1, radius)) {
+    return null;
+  }
+
+  return {
+    position: cornerFromStart,
+    ends: { a: tangentStart, b: tangentEnd },
+    previous: tangentStart,
+    next: tangentEnd,
+    bendRadius: radius,
+    angleDegrees: bend,
+    separation: separation - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION
+  };
+}
+
+/*
+ * ONE WRITTEN WALL AS A CIRCULAR ARC.
+ *
+ * An `arc` statement is already one. A SAMPLED path - the polyline the writer
+ * emits for a taper - is fitted to the circle through its two ends and its middle
+ * point, which is exact for the arc it was sampled from. Anything else (a line, a
+ * mix of chords and arcs) is not a wall and answers null.
+ */
+function shapeAsArc(shape) {
+  if (shape?.type === "arc") {
+    /*
+     * A SIGNED SWEEP. TikZ's `delta angle` carries the direction the arc turns;
+     * without it a bend written with a negative delta would come back mirrored,
+     * because `endAngle` alone does not say which way round it ran.
+     */
+    const delta = Number(shape.deltaAngle);
+
+    return {
+      centre: { x: shape.centre.x, y: shape.centre.y },
+      radius: shape.radius,
+      startAngle: shape.startAngle,
+      endAngle: shape.startAngle + (Number.isFinite(delta) ? delta : shape.endAngle - shape.startAngle)
+    };
+  }
+
+  if (shape?.type !== "polyline" || !Array.isArray(shape.points) || shape.points.length < 3) {
+    return null;
+  }
+
+  const points = shape.points;
+
+  const first = points[0];
+  const middle = points[Math.floor((points.length - 1) / 2)];
+  const last = points[points.length - 1];
+
+  const circle = circleThrough(first, middle, last);
+
+  if (!circle) {
+    return null;
+  }
+
+  /* A wall must be a curve, not a straight chord between two collinear ends. */
+  const sagitta = Math.abs(Math.hypot(middle.x - circle.centre.x, middle.y - circle.centre.y) - circle.radius);
+
+  if (sagitta > 1e-3) {
+    return null;
+  }
+
+  const startAngle = (Math.atan2(first.y - circle.centre.y, first.x - circle.centre.x) * 180) / Math.PI;
+  const endAngle = (Math.atan2(last.y - circle.centre.y, last.x - circle.centre.x) * 180) / Math.PI;
+
+  return {
+    centre: circle.centre,
+    radius: circle.radius,
+    startAngle,
+    endAngle
+  };
+}
+
+/* The shortest signed turn from one angle to another, in degrees. */
+function normalisedDelta(degrees) {
+  let value = degrees;
+
+  while (value > 180) value -= 360;
+  while (value < -180) value += 360;
+
+  return value;
+}
+
+void normalisedDelta;
+
+/* The `++(from:r)` a TikZ arc is drawn from, when the statement carries one. */
+function polarOffsetOf(arc) {
+  if (!arc) {
+    return null;
+  }
+
+  const from = Number(arc.polarAngle);
+  const delta = Number(arc.deltaAngle);
+
+  if (!Number.isFinite(from) || !Number.isFinite(delta)) {
+    return null;
+  }
+
+  return { angle: from, delta };
+}
+
+void polarOffsetOf;
+
+/* The circle through three points, or null when they are collinear. */
+function circleThrough(a, b, c) {
+  const d = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y));
+
+  if (Math.abs(d) < 1e-12) {
+    return null;
+  }
+
+  const aSq = a.x * a.x + a.y * a.y;
+  const bSq = b.x * b.x + b.y * b.y;
+  const cSq = c.x * c.x + c.y * c.y;
+
+  const centre = {
+    x: (aSq * (b.y - c.y) + bSq * (c.y - a.y) + cSq * (a.y - b.y)) / d,
+    y: (aSq * (c.x - b.x) + bSq * (a.x - c.x) + cSq * (b.x - a.x)) / d
+  };
+
+  return { centre, radius: Math.hypot(a.x - centre.x, a.y - centre.y) };
+}
+
+/* An elbow object from the two walls of a fitting, or null. */
+function createElbowFromPaths(shape, previous) {
+  const created = enggPipeDuct.createElbow({
+    geometry: {
+      position: shape.position,
+      ends: shape.ends,
+      previous: shape.previous,
+      next: shape.next
+    },
+    angleDegrees: shape.angleDegrees,
+    engineering: {
+      bendRadius: shape.bendRadius,
+      angleDegrees: shape.angleDegrees,
+      generated: false,
+      connections: [null, null]
+    },
+    id: previous ? previous.id : undefined,
+    name: previous ? previous.name : undefined,
+    style: previous ? { ...(previous.style || {}) } : {}
+  });
+
+  if (!created) {
+    return null;
+  }
+
+  return created;
+}
+
 /* The type an object must have for `shape`, when it can have it. */
 function convertedTypeFor(shape, previous) {
   if (!shape || !CONVERTIBLE.has(shape.type)) {
@@ -393,6 +674,41 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
         object: previous,
         shape: walls,
         type: "pipe-duct",
+        block
+      });
+
+      return;
+    }
+
+    /*
+     * AN ELBOW: TWO CURVED WALLS, ONE FITTING.
+     *
+     * Recognised the same way a pipe's two walls are - before the one-shape rule,
+     * because a fitting is never a single statement - and kept as ONE object.
+     * Two paths that are not the two walls of one bend fall through to the
+     * ordinary report, so an unsupported edit is explained rather than silently
+     * splitting the fitting into two lines.
+     */
+    const elbowShape = previous == null || previous?.type === "elbow"
+      ? elbowShapeFromPaths(shapes)
+      : null;
+
+    if (elbowShape) {
+      if (!previous) {
+        const object = createElbowFromPaths(elbowShape, null);
+
+        if (object) {
+          created.push({ id: block.id, object, block });
+        }
+
+        return;
+      }
+
+      updates.push({
+        id: block.id,
+        object: previous,
+        shape: elbowShape,
+        type: "elbow",
         block
       });
 

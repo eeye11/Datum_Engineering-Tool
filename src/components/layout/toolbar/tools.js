@@ -264,10 +264,13 @@ export const toolIcons = {
 	"Flow Indicators": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M6 10h8M11 7l3 3-3 3"/>`),
 
 	/*
-	 * ELBOW. A pipe that turns a corner, drawn as the corner itself: two legs
-	 * meeting at a right angle with a rounded bend between them.
+	 * ELBOW. TWO PARALLEL CURVED LINES forming a rounded 90 degree bend, with the
+	 * two open ends visible - the fitting as it is drawn on the sheet, rather
+	 * than a single centreline with corner ticks.
 	 */
-	Elbow: drawingIcon(`<path ${iconStroke} d="M4 4v7a5 5 0 0 0 5 5h7M4 4h3M4 4v3M16 16v-3M16 16h-3"/>`),
+	Elbow: drawingIcon(
+		`<path ${iconStroke} d="M3 4v5.5a7.5 7.5 0 0 0 7.5 7.5H16M6.5 4v4.5a4 4 0 0 0 4 4H16"/>`
+	),
 
 	/*
 	 * JUNCTION. Three runs meeting: one in from the left, one out to the right,
