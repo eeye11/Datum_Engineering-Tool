@@ -638,7 +638,6 @@ export const disciplineToolGroups = {
 			id: "thermodynamics-reference",
 			label: "Reference",
 			tools: [
-				{ id: "state-point", label: "State Point" },
 				{ id: "coordinate-system", label: "Coordinate System", submenu: true }
 			]
 		}
@@ -810,7 +809,7 @@ export const engineeringTools = {
 		"Flow Rate Label",
 		"Elevation Marker"
 	],
-	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
+	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
