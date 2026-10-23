@@ -84,7 +84,7 @@ test("a rotated rectangle is written through the model's own corners", () => {
   assert.ok(Math.abs(Math.max(...values) - Math.min(...values) - 10) < 1e-3, source);
 });
 
-for (const kind of ["tank", "saturation-curve", "process-plot", "piston-cylinder", "control-volume"]) {
+for (const kind of ["turbine-compressor", "tank", "saturation-curve", "process-plot", "piston-cylinder", "control-volume"]) {
   test(`a ${kind} is the thermodynamics writer's, inside its own box`, () => {
     const source = sourceFor({
       id: `${kind}-1`,

@@ -6,6 +6,7 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
+    "Turbine / Compressor": drawingIcon(`<path ${iconStroke} d="M3 3l14 5v4L3 17z"/>`),
     "Tank": drawingIcon(`<rect ${iconStroke} x="4" y="2" width="12" height="16" rx="3"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
@@ -627,6 +628,7 @@ export const disciplineToolGroups = {
 			label: "Create",
 			tools: [
 				{ id: "tank", label: "Tank" },
+				{ id: "steady-state-devices", label: "Steady-State Devices", iconLabel: "Turbine / Compressor", submenu: true },
 				{ id: "control-volume", label: "Control Volume" },
 				{ id: "piston-cylinder", label: "Piston Cylinder", submenu: true },
 				{ id: "process-diagrams", label: "Process Diagrams", submenu: true },

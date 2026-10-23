@@ -429,6 +429,7 @@ export function initialToolMessage(
             "coordinate-system-2d": "Specify origin",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "tank": "Drag between opposite corners to draw a closed tank",
+            "turbine-compressor": "Drag opposite corners to draw a turbine/compressor casing; select it to move, resize or rotate",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

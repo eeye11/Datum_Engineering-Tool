@@ -23,6 +23,7 @@ const expandedToolbarSections = {
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
+    "steady-state-devices": false,
     work: false
 };
 
@@ -37,7 +38,13 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "work"
+    const children = tool.id === "steady-state-devices"
+        ? [
+            { id: "turbine-compressor", label: "Turbine / Compressor" },
+            { id: "steady-pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct", disabled: true },
+            { id: "steady-nozzle-diffuser", label: "Nozzle / Diffuser", disabled: true }
+        ].map(renderToolButton).join("")
+        : tool.id === "work"
         ? [
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }

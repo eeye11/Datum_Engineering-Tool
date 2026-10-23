@@ -11,6 +11,7 @@ import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
+import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
 import { fanPaths } from "../model/thermodynamics/fan.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
@@ -957,6 +958,10 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
+                    const points = turbineCompressorPoints(geometry);
+                    return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+                }
                 if (isPistonCylinder(object)) {
                     const level = pistonFraction(geometry);
                     const local = (x, y) => cylinderPoint(geometry, x, y);

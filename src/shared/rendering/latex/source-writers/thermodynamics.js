@@ -24,6 +24,7 @@ import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { tankPaths } from "../../../../features/workspace/model/thermodynamics/tank.js";
+import { turbineCompressorPoints } from "../../../../features/workspace/model/thermodynamics/turbine-compressor.js";
 import * as saturationCurve from "../../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import * as processLabels from "../../../../features/workspace/model/thermodynamics/process-labels.js";
 import * as processCurves from "../../../../features/workspace/model/thermodynamics/process-curves.js";
@@ -397,7 +398,7 @@ export function thermodynamicsKindOf(object) {
  * `thermodynamicsKind`, so this writer must claim it before the geometry writer
  * draws it as a bare box.
  */
-const RECTANGLE_KINDS = new Set(["tank", "control-volume", "saturation-curve", "process-plot", "piston-cylinder"]);
+const RECTANGLE_KINDS = new Set(["turbine-compressor", "tank", "control-volume", "saturation-curve", "process-plot", "piston-cylinder"]);
 
 export function thermodynamicsSourceWriter(object, options = {}) {
   if (!object || typeof object !== "object") {
@@ -420,7 +421,8 @@ export function thermodynamicsSourceWriter(object, options = {}) {
   }
 
   const written =
-    kind === "tank" ? withPrelude(object, tankPaths(object.geometry).map(path => polyline(path, colourOf(object))).join("\n"))
+    kind === "turbine-compressor" ? withPrelude(object, polyline(turbineCompressorPoints(object.geometry), colourOf(object)))
+    : kind === "tank" ? withPrelude(object, tankPaths(object.geometry).map(path => polyline(path, colourOf(object))).join("\n"))
     : kind === "saturation-curve" || kind === "process-plot"
       ? serializeSaturation(object)
       : kind === "piston-cylinder"

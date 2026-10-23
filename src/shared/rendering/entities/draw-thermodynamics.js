@@ -14,6 +14,16 @@ import { processSegmentPoints } from "../../../features/workspace/model/thermody
 import { processDiagramPaths } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { cylinderPoint, pistonFraction, stopperPaths } from "../../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { tankPaths } from "../../../features/workspace/model/thermodynamics/tank.js";
+import { turbineCompressorPoints } from "../../../features/workspace/model/thermodynamics/turbine-compressor.js";
+
+export function drawTurbineCompressor({ svg, geometry, style, toScreen }) {
+    const points = turbineCompressorPoints(geometry).map(toScreen);
+    const path = createSvgElement("path", {
+        d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ") + " Z"
+    });
+    applyStyle(path, { ...style, fill: "none" });
+    svg.appendChild(path);
+}
 
 export function drawTank({ svg, geometry, style, toScreen }) {
     for (const outline of tankPaths(geometry)) {
