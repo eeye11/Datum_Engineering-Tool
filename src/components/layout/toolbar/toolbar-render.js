@@ -8,7 +8,7 @@ import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
@@ -33,7 +33,7 @@ function renderToolbarTool(tool) {
 
     const expanded = expandedToolbarSections[tool.id];
     const sectionId = `statics-${tool.id}-tools`;
-    const button = renderToolButton(tool)
+    const button = renderToolButton({ ...tool, submenu: true })
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
@@ -186,20 +186,6 @@ export function renderEngineeringTools(
                             expandedToolbarSections[toolId] = expanded;
                             button.setAttribute("aria-expanded", String(expanded));
                             toolList.querySelector(`#statics-${toolId}-tools`).hidden = !expanded;
-                            return;
-                        }
-
-                        if (
-                            toolId ===
-                            "coordinate-system"
-                        ) {
-                            event.preventDefault();
-                            event.stopPropagation();
-
-                            openCoordinateSystemMenu(
-                                button
-                            );
-
                             return;
                         }
 

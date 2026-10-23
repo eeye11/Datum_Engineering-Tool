@@ -638,7 +638,7 @@ export const disciplineToolGroups = {
 			id: "thermodynamics-reference",
 			label: "Reference",
 			tools: [
-				{ id: "coordinate-system", label: "Coordinate System", submenu: true }
+				{ id: "coordinate-system", label: "Coordinate System" }
 			]
 		}
 	],

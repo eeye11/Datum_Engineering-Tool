@@ -8,11 +8,11 @@ import { annotateInstruction, isAnnotateTool } from "../../../features/workspace
 import { analysisInputMessage, isAnalysisInputTool } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { isDimensionTool } from "../../../features/workspace/annotate/dimension-tool.js";
-import { drawingCanvas, drawingRedo, drawingUndo, toolList } from "../../../features/workspace/dom.js";
+import { drawingCanvas, drawingRedo, drawingUndo } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
-import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
@@ -60,13 +60,7 @@ export function activateTool(
         toolId ===
         "coordinate-system"
     ) {
-        openCoordinateSystemMenu(
-            toolList.querySelector(
-                '[data-tool-id="coordinate-system"]'
-            )
-        );
-
-        return;
+        toolId = "coordinate-system-2d";
     }
 
     /*

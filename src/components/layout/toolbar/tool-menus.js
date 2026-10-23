@@ -104,8 +104,6 @@ export function renderToolButton(tool) {
      * and polygon buttons.
      */
     const coordinateAttributes =
-        tool.id ===
-            "coordinate-system" ||
         tool.submenu
             ? ' aria-haspopup="menu" aria-expanded="false"'
             : "";
