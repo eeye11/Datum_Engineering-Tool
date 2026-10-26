@@ -9,6 +9,19 @@ export function rankineCycleDiagram(geometry) {
     const label = (x, y, text, latex = text) => labels.push({ point: at(x, y), text, latex });
     const box = (x, y, w, h) => path([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]);
     const circle = (x, y, radius) => path(Array.from({ length: 49 }, (_, i) => [x + radius * Math.cos(i * Math.PI / 24), y + radius * Math.sin(i * Math.PI / 24)]));
+    const stateCircle = (x, y) => {
+        const centre = at(x, y);
+        const origin = at(0, 0), horizontal = at(1, 0), vertical = at(0, 1);
+        const radius = 0.028 * Math.min(
+            Math.hypot(horizontal.x - origin.x, horizontal.y - origin.y),
+            Math.hypot(vertical.x - origin.x, vertical.y - origin.y)
+        );
+        // Draw in world coordinates so nonuniform resizing cannot make ovals.
+        paths.push({ colour: "black", points: Array.from({ length: 49 }, (_, i) => ({
+            x: centre.x + radius * Math.cos(i * Math.PI / 24),
+            y: centre.y + radius * Math.sin(i * Math.PI / 24)
+        })) });
+    };
     const pipe = (vertices, colour, startBoundary = null, endBoundary = null) => {
         const centreline = [vertices[0]];
         for (let i = 1; i < vertices.length - 1; i++) {
@@ -60,9 +73,11 @@ export function rankineCycleDiagram(geometry) {
     };
     const arrow = (x, y, dx, dy, colour = "blue") => {
         path([[x, y], [x + dx, y + dy]], colour);
+        paths[paths.length - 1].bold = true;
         const length = Math.hypot(dx, dy);
         const ux = dx / length, uy = dy / length;
         path([[x + dx - ux * 0.018 - uy * 0.009, y + dy - uy * 0.018 + ux * 0.009], [x + dx, y + dy], [x + dx - ux * 0.018 + uy * 0.009, y + dy - uy * 0.018 - ux * 0.009]], colour);
+        paths[paths.length - 1].bold = true;
     };
 
     // Smooth casing, a single hub and a side inlet, like the reference.
@@ -92,7 +107,7 @@ export function rankineCycleDiagram(geometry) {
     label(0.30, 0.49, "Pump");
     label(0.775, 0.50, "Turbine");
     for (const [x, y, number] of [[0.06, 0.29, "1"], [0.12, 0.69, "2"], [0.84, 0.69, "3"], [0.84, 0.25, "4"]]) {
-        circle(x, y, 0.028);
+        stateCircle(x, y);
         label(x, y, number);
     }
     arrow(0.17, 0.28, 0, 0.07);
