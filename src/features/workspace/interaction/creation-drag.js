@@ -126,6 +126,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "turbine-compressor",
     "nozzle-diffuser",
     "rankine-cycle",
+    "reheat-rankine-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",

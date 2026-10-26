@@ -1,4 +1,5 @@
 import { cylinderPoint } from "./piston-cylinder.js";
+import { appendReheatRankineCycle } from "./reheat-rankine-cycle.js";
 
 // One resizable schematic; all paths and labels share its local frame.
 export function rankineCycleDiagram(geometry, problemData = {}) {
@@ -6,7 +7,7 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
     const labels = [];
     const at = (x, y) => cylinderPoint(geometry, x, y);
     const path = (points, colour = "black") => paths.push({ points: points.map(([x, y]) => at(x, y)), colour });
-    const label = (x, y, text, latex = text) => labels.push({ point: at(x, y), text, latex });
+    const label = (x, y, text, latex = text, plainText = false) => labels.push({ point: at(x, y), text, latex, plainText });
     const box = (x, y, w, h) => path([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]);
     const circle = (x, y, radius) => path(Array.from({ length: 49 }, (_, i) => [x + radius * Math.cos(i * Math.PI / 24), y + radius * Math.sin(i * Math.PI / 24)]));
     const stateCircle = (x, y) => {
@@ -82,12 +83,13 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
             path(points, colour);
         }
     };
-    const arrow = (x, y, dx, dy, colour = "blue") => {
+    const arrow = (x, y, dx, dy, colour = "blue", headScale = 1) => {
         path([[x, y], [x + dx, y + dy]], colour);
         paths[paths.length - 1].bold = true;
         const length = Math.hypot(dx, dy);
         const ux = dx / length, uy = dy / length;
-        path([[x + dx - ux * 0.018 - uy * 0.009, y + dy - uy * 0.018 + ux * 0.009], [x + dx, y + dy], [x + dx - ux * 0.018 + uy * 0.009, y + dy - uy * 0.018 - ux * 0.009]], colour);
+        const headLength = 0.018 * headScale, headWidth = 0.009 * headScale;
+        path([[x + dx - ux * headLength - uy * headWidth, y + dy - uy * headLength + ux * headWidth], [x + dx, y + dy], [x + dx - ux * headLength + uy * headWidth, y + dy - uy * headLength - ux * headWidth]], colour);
         paths[paths.length - 1].bold = true;
     };
 
@@ -103,6 +105,10 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
         [0.165, 0.57]
     ];
     const turbineCasing = [[0.68, 0.56], [0.87, 0.64], [0.87, 0.36], [0.68, 0.44], [0.68, 0.56]];
+    if (geometry.reheat) {
+        appendReheatRankineCycle({ pipe, path, box, circle, stateCircle, label, arrow, pumpCasing }, problemData);
+        return { paths, labels };
+    }
     // Clockwise flow: pump -> boiler -> turbine -> condenser -> pump.
     pipe([[0.18, 0.57], [0.18, 0.84], [0.34, 0.84]], "blue", pumpCasing);
     pipe([[0.64, 0.84], [0.78, 0.84], [0.78, 0.60]], "red", null, turbineCasing);
