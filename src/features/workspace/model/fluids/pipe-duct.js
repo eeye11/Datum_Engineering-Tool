@@ -294,8 +294,9 @@ export function dimensionsOf(engineering = {}) {
  * drawing-style setting can be threaded through the same door. Today it is
  * deliberately not read for the value itself.
  */
-export function boundarySeparation(_engineering = {}) {
-	return DEFAULT_SCHEMATIC_SEPARATION;
+export function boundarySeparation(engineering = {}) {
+	const width = Number(engineering.schematicWidth);
+	return Number.isFinite(width) && width > 0 ? width : DEFAULT_SCHEMATIC_SEPARATION;
 }
 
 /*

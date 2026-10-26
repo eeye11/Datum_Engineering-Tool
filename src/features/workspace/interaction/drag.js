@@ -23,6 +23,7 @@ import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { boundarySeparation } from "../model/fluids/pipe-duct.js";
 
 export function beginManipulationDrag(
     event
@@ -442,6 +443,9 @@ export function updateManipulationDrag(
         editorState.manipulationDrag.object
             ?.type === "annotate";
 
+    const resizingPipe = editorState.manipulationDrag.object?.type === "pipe-duct" &&
+        /^corner[0-3]$/.test(editorState.manipulationDrag.kind);
+
     /*
      * GEOMETRY IS RESOLVED THROUGH THE SHARED SNAP PIPELINE.
      *
@@ -456,7 +460,7 @@ export function updateManipulationDrag(
      * two comments above.
      */
     const resolution =
-        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
+        resizingPipe || editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
             : draggingDimension || draggingAnnotate
             ? resolvePointerEvent(event)
@@ -721,6 +725,35 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    if (object.type === "pipe-duct" && /^corner[0-3]$/.test(drag.kind)) {
+        const original = drag.originals[object.id];
+        const bounds = selectionBounds([original], [original.id]);
+        if (!bounds) return;
+        const corners = selectionCorners(bounds);
+        const index = Number(drag.kind.slice(-1));
+        const anchor = corners[(index + 2) % 4];
+        const corner = corners[index];
+        // Keep the initial grab offset: pressing near a dot must not make
+        // the corner jump to the pointer on the first frame.
+        const target = {
+            x: corner.x + point.x - drag.start.x,
+            y: corner.y + point.y - drag.start.y
+        };
+        const sx = Math.max(0.01, (target.x - anchor.x) / (corner.x - anchor.x));
+        const sy = Math.max(0.01, (target.y - anchor.y) / (corner.y - anchor.y));
+        const transform = value => ({ x: anchor.x + (value.x - anchor.x) * sx, y: anchor.y + (value.y - anchor.y) * sy });
+        g.start = transform(original.geometry.start);
+        g.end = transform(original.geometry.end);
+        const dx = original.geometry.end.x - original.geometry.start.x;
+        const dy = original.geometry.end.y - original.geometry.start.y;
+        const lengthScale = Math.hypot(dx * sx, dy * sy) / Math.hypot(dx, dy);
+        object.engineering = {
+            ...original.engineering,
+            schematicWidth: boundarySeparation(original.engineering) * sx * sy / lengthScale
+        };
+        return;
+    }
 
     if (drag.kind.startsWith("process-bend-")) {
         const index = Number(drag.kind.slice("process-bend-".length));
