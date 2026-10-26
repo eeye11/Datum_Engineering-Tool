@@ -207,6 +207,7 @@ export function activateTool(
         Boolean(DYNAMICS_BOX_TOOLS[requestedTool]) ||
         requestedTool === "truss" ||
         requestedTool === "pipe-duct" ||
+        requestedTool === "nozzle-diffuser" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
@@ -431,6 +432,7 @@ export function initialToolMessage(
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "tank": "Drag between opposite corners to draw a closed tank",
             "turbine-compressor": "Drag opposite corners to draw a turbine/compressor casing; select it to move, resize or rotate",
+            "nozzle-diffuser": "Drag opposite corners to draw a nozzle/diffuser; select it to move, resize or rotate",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

@@ -612,7 +612,7 @@ export function updatePreview(
         );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        ["control-volume", "tank", "turbine-compressor"].includes(drawingState.activeTool) ||
+        ["control-volume", "tank", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -642,7 +642,7 @@ export function updatePreview(
                 )
             );
 
-        if (["tank", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (["tank", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
         }
 

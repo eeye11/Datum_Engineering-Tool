@@ -42,7 +42,7 @@ function renderToolbarTool(tool) {
         ? [
             { id: "turbine-compressor", label: "Turbine / Compressor" },
             { id: "pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct" },
-            { id: "steady-nozzle-diffuser", label: "Nozzle / Diffuser", disabled: true }
+            { id: "nozzle-diffuser", label: "Nozzle / Diffuser" }
         ].map(renderToolButton).join("")
         : tool.id === "work"
         ? [

@@ -12,6 +12,7 @@ import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
+import { nozzleDiffuserPaths } from "../model/thermodynamics/nozzle-diffuser.js";
 import { fanPaths } from "../model/thermodynamics/fan.js";
 import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
@@ -963,6 +964,9 @@ export function objectAtPoint(
                 if (object.metadata?.thermodynamicsKind === "tank") {
                     return tankPaths(geometry).some(path => path.some((end, index) =>
                         index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance));
+                }
+                if (object.metadata?.thermodynamicsKind === "nozzle-diffuser") {
+                    return nozzleDiffuserPaths(geometry).some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
                 if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
                     const points = turbineCompressorPoints(geometry);

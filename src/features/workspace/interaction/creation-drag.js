@@ -124,6 +124,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "control-volume",
     "tank",
     "turbine-compressor",
+    "nozzle-diffuser",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",

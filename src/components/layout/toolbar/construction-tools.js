@@ -65,6 +65,7 @@ export function isConstructionTool(
              * Fluids-specific snap of its own.
              */
             toolId === "pipe-duct" ||
+            toolId === "nozzle-diffuser" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

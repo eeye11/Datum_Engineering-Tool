@@ -54,7 +54,7 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
-        (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct"].includes(drawingState.activeTool)) ||
+        (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct", "nozzle-diffuser"].includes(drawingState.activeTool)) ||
         (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
