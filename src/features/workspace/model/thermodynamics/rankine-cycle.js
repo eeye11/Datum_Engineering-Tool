@@ -110,10 +110,11 @@ export function rankineCycleDiagram(geometry) {
         stateCircle(x, y);
         label(x, y, number);
     }
-    arrow(0.17, 0.28, 0, 0.07);
-    arrow(0.23, 0.65, 0, 0.07);
-    arrow(0.73, 0.73, 0, -0.07);
-    arrow(0.73, 0.27, 0, -0.07);
+    // Follow the working-fluid loop, separate from heat and shaft work.
+    arrow(0.17, 0.27, 0, 0.09, "gray");
+    arrow(0.23, 0.64, 0, 0.09, "gray");
+    arrow(0.73, 0.74, 0, -0.09, "gray");
+    arrow(0.73, 0.30, 0, -0.09, "gray");
     arrow(0.49, 0.98, 0, -0.065, "red");
     arrow(0.49, 0.085, 0, -0.065, "red");
     arrow(0.025, 0.50, 0.065, 0, "red");
