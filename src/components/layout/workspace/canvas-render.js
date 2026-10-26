@@ -15,7 +15,6 @@ import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.
 import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
-import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
 import { pictureViewBox } from "../../../shared/rendering/picture-viewport.js";
 
 /*
@@ -1441,7 +1440,6 @@ disappeared while I typed" failure.
     rememberModelAt(revision);
 
     const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
-    const pictureTransform = exportTransformAtRevision.get(pictureRevision);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
     const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
