@@ -16,6 +16,26 @@ import { cylinderPoint, pistonFraction, stopperPaths } from "../../../features/w
 import { tankPaths } from "../../../features/workspace/model/thermodynamics/tank.js";
 import { turbineCompressorPoints } from "../../../features/workspace/model/thermodynamics/turbine-compressor.js";
 import { nozzleDiffuserPaths } from "../../../features/workspace/model/thermodynamics/nozzle-diffuser.js";
+import { rankineCycleDiagram } from "../../../features/workspace/model/thermodynamics/rankine-cycle.js";
+
+export function drawRankineCycle({ svg, geometry, style, toScreen }) {
+    const diagram = rankineCycleDiagram(geometry);
+    for (const wall of diagram.paths) {
+        const points = wall.points.map(toScreen);
+        const path = createSvgElement("path", { d: points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ") });
+        applyStyle(path, { ...style, stroke: wall.colour, fill: "none" });
+        svg.appendChild(path);
+    }
+    const origin = toScreen(cylinderPoint(geometry, 0, 0));
+    const top = toScreen(cylinderPoint(geometry, 0, 1));
+    const fontSize = Math.max(5, Math.hypot(top.x - origin.x, top.y - origin.y) * 0.027);
+    for (const label of diagram.labels) {
+        const p = toScreen(label.point);
+        const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": fontSize, fill: "black" });
+        text.textContent = label.text;
+        svg.appendChild(text);
+    }
+}
 
 export function drawNozzleDiffuser({ svg, geometry, style, toScreen }) {
     for (const wall of nozzleDiffuserPaths(geometry)) {

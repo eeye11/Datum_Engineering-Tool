@@ -14,7 +14,7 @@ import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
-import { drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
+import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
@@ -70,9 +70,10 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
         { matches: entity => entity.metadata?.thermodynamicsKind === "tank", draw: drawTank },
+        { matches: entity => entity.metadata?.thermodynamicsKind === "rankine-cycle", draw: drawRankineCycle },
         { matches: entity => entity.metadata?.thermodynamicsKind === "nozzle-diffuser", draw: drawNozzleDiffuser },
         { matches: entity => entity.metadata?.thermodynamicsKind === "turbine-compressor", draw: drawTurbineCompressor },
-        { matches: entity => (entity.type === "rectangle" && !["tank", "nozzle-diffuser", "turbine-compressor"].includes(entity.metadata?.thermodynamicsKind) && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
+        { matches: entity => (entity.type === "rectangle" && !["tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(entity.metadata?.thermodynamicsKind) && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },

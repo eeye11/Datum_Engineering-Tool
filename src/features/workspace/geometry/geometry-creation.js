@@ -1016,7 +1016,7 @@ export function beginOrCompleteGeometry(
                         ? "Specify radius"
 
                     : (drawingState.activeTool === "rectangle" ||
-                        ["control-volume", "tank", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+                        ["control-volume", "tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -2030,7 +2030,7 @@ export function beginOrCompleteGeometry(
             );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        ["control-volume", "tank", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        ["control-volume", "tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2056,7 +2056,8 @@ export function beginOrCompleteGeometry(
 
         const isControlVolume = drawingState.activeTool === "control-volume";
         const isTank = drawingState.activeTool === "tank";
-        const isNozzle = drawingState.activeTool === "nozzle-diffuser";
+        const isRankine = drawingState.activeTool === "rankine-cycle";
+        const isNozzle = drawingState.activeTool === "nozzle-diffuser" || isRankine;
         const isTurbineCompressor = drawingState.activeTool === "turbine-compressor";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
@@ -2095,8 +2096,8 @@ export function beginOrCompleteGeometry(
             object.metadata = { thermodynamicsKind: "tank" };
         }
         if (isNozzle) {
-            object.name = "Nozzle / Diffuser";
-            object.metadata = { thermodynamicsKind: "nozzle-diffuser" };
+            object.name = isRankine ? "Rankine Cycle" : "Nozzle / Diffuser";
+            object.metadata = { thermodynamicsKind: isRankine ? "rankine-cycle" : "nozzle-diffuser" };
         }
         if (isTurbineCompressor) {
             object.name = "Turbine / Compressor";
@@ -2278,14 +2279,16 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["tank", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["tank", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
             }
-            setToolMessage(object.metadata.thermodynamicsKind === "nozzle-diffuser"
+            setToolMessage(object.metadata.thermodynamicsKind === "rankine-cycle"
+                ? "Rankine cycle created - drag to move or use corner dots to resize"
+                : object.metadata.thermodynamicsKind === "nozzle-diffuser"
                 ? "Nozzle/diffuser created - drag to move, use corner dots to resize or the rotation handle to turn"
                 : object.metadata.thermodynamicsKind === "turbine-compressor"
                 ? "Turbine/compressor created - drag to move, use corner dots to resize or the rotation handle to turn"

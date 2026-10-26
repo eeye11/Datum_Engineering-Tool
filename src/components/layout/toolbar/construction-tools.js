@@ -66,6 +66,7 @@ export function isConstructionTool(
              */
             toolId === "pipe-duct" ||
             toolId === "nozzle-diffuser" ||
+            toolId === "rankine-cycle" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

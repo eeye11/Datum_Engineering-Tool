@@ -47,7 +47,7 @@ function renderToolbarTool(tool) {
             { id: "diesel-cycle", label: "Diesel Cycle" },
             { id: "carnot-cycle", label: "Carnot Cycle" },
             { id: "vapor-compression-cycle", label: "Vapor-Compression Cycle" }
-        ].map(cycle => renderToolButton({ ...cycle, disabled: true }).replace(/<span class="drawing-tool-icon"[^>]*>[\s\S]*?<\/span>/, "")).join("")
+        ].map(cycle => renderToolButton({ ...cycle, disabled: cycle.id !== "rankine-cycle" }).replace(/<span class="drawing-tool-icon"[^>]*>[\s\S]*?<\/span>/, "")).join("")
         : tool.id === "steady-state-devices"
         ? [
             { id: "turbine-compressor", label: "Turbine / Compressor" },
