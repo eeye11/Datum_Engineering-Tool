@@ -26,6 +26,46 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
+import { allowsDirectManipulation } from "./direct-manipulation.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
+import { isDerivedFeature } from "../../../shared/model/feature-types.js";
+import { selectionBounds, selectionCorners, selectionMembers } from "../../../shared/selection/selection-transform.js";
+
+// Use the same unsnapped hit targets as dragging, so the cursor shows
+// exactly where a press can move the selection.
+function updateManipulationCursor(event) {
+    let cursor = "";
+    if (allowsDirectManipulation() && !editorState.modifySession && !isConstructionInProgress() && !event.shiftKey) {
+        const drag = editorState.manipulationDrag;
+        const point = canvasPointFromEvent(event, false);
+        const selectedIds = drawingState.selection.selectedObjectIds;
+        const hit = handleAtPoint(point);
+        const object = objectAtPoint(point);
+        const movable = item => item && !item.locked && !isDerivedFeature(item);
+        const bounds = selectedIds.length > 1 && selectionBounds(drawingState.objects, selectedIds);
+        const specialHandle = hit && /^(piston-height|stopper-height|process-label-|process-bend-)/.test(hit.handle.kind);
+        if (drag) {
+            cursor = drag.kind === "body" ? "move" : "crosshair";
+        } else if (bounds && !specialHandle && selectionMembers(drawingState.objects, selectedIds).every(movable)) {
+            const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+            const corner = selectionCorners(bounds).findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
+            if (corner >= 0) cursor = corner % 2 === 0 ? "nesw-resize" : "nwse-resize";
+            else if (point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY) cursor = "move";
+        }
+        if (!cursor && !isDerivedFeature(object) && !object?.locked) {
+            if (hit && movable(hit.object)) {
+                const kind = hit.handle.kind;
+                if (/^corner[0-3]$/.test(kind)) cursor = Number(kind.slice(-1)) % 2 === 0 ? "nwse-resize" : "nesw-resize";
+                else if (["piston-height", "stopper-height"].includes(kind)) cursor = "ns-resize";
+                else if (["position", "center", "origin"].includes(kind) || kind.startsWith("process-label-")) cursor = "move";
+                else cursor = "crosshair";
+            } else if (movable(object)) {
+                cursor = selectedIds.includes(object.id) || ["dimension", "annotate"].includes(object.type) ? "move" : "pointer";
+            }
+        }
+    }
+    drawingCanvas.style.cursor = cursor;
+}
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -45,6 +85,14 @@ export function installCanvasEvents() {
             "click",
             handleCanvasClick
         );
+        drawingCanvas.addEventListener("click", updateManipulationCursor);
+        drawingCanvas.addEventListener("pointermove", updateManipulationCursor);
+        drawingCanvas.addEventListener("pointerup", event => {
+            queueMicrotask(() => updateManipulationCursor(event));
+        });
+        drawingCanvas.addEventListener("pointerleave", () => {
+            drawingCanvas.style.cursor = "";
+        });
 
         drawingCanvas.addEventListener(
             "dblclick",

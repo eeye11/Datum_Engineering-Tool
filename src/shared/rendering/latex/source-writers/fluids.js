@@ -51,9 +51,8 @@ function serializeRun(object) {
   return withDefinitions(
     definitions,
     enggPipeDuct
-      .boundaryLines(geometry.start, geometry.end, object.engineering || {})
-      .filter((boundary) => finitePoint(boundary.start) && finitePoint(boundary.end))
-      .map((boundary) => line(boundary.start, boundary.end, options))
+      .pipeDuctPaths(geometry.start, geometry.end, object.engineering || {})
+      .map(path => `\\draw[${options.join(", ")}] ${path.map(at => point(at.x, at.y)).join(" -- ")};`)
   );
 }
 

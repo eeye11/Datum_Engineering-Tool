@@ -204,16 +204,15 @@ export const DEFAULT_HEIGHT = 120;
  *
  * The value is in WORLD units, so it pans and zooms with the drawing through
  * the ordinary camera transform (BASE_PIXELS_PER_UNIT * zoom pixels per
- * world unit). At 2.4 px per unit at zoom 1, 2 world units draw the two
- * boundaries about 4.8 px apart - a clearly readable, slim double line,
+ * world unit). At 2.4 px per unit at zoom 1, 20 world units draw the two
+ * boundaries about 48 px apart, leaving room for the curved end breaks,
  * noticeably tighter than the wider schematic the tool used to draw, and
  * identical no matter what those dimensions are changed to.
  *
- * Reduced substantially from earlier defaults to provide a noticeably narrower,
- * professional schematic representation across every straight run, live preview,
- * and curved elbow, derived from ONE shared constant.
+ * Shared by straight runs, their live preview and curved elbows so joined
+ * walls use the same spacing throughout.
  */
-export const DEFAULT_SCHEMATIC_SEPARATION = 2;
+export const DEFAULT_SCHEMATIC_SEPARATION = 20;
 export const DEFAULT_SCHEMATIC_SPACING = DEFAULT_SCHEMATIC_SEPARATION;
 
 export function defaultPipeEngineering(shape = PIPE_SHAPES.circular) {
@@ -348,6 +347,45 @@ export function boundaryLines(start, end, engineering = {}) {
 			end: { x: end.x - nx, y: end.y - ny }
 		}
 	];
+}
+
+// Parallel walls and an S-shaped break with a return lip at each end.
+// Construct in the run's local frame so vertical and diagonal pipes match.
+export function pipeDuctPaths(start, end, engineering = {}) {
+	const walls = boundaryLines(start, end, engineering);
+	if (!walls.length) return [];
+	const length = Math.hypot(end.x - start.x, end.y - start.y);
+	const ux = (end.x - start.x) / length;
+	const uy = (end.y - start.y) / length;
+	const half = boundarySeparation(engineering) / 2;
+	const amplitude = Math.min(half, length * 0.2);
+	const paths = walls.map(wall => [wall.start, wall.end]);
+	const cubic = (a, b, c, d, t) => {
+		const s = 1 - t;
+		return a.map((value, index) => s ** 3 * value + 3 * s ** 2 * t * b[index] + 3 * s * t ** 2 * c[index] + t ** 3 * d[index]);
+	};
+	for (const [origin, sign] of [[start, 1], [end, -1]]) {
+		const at = (across, along) => ({
+			x: origin.x - uy * across + ux * along * sign,
+			y: origin.y + ux * across + uy * along * sign
+		});
+		const left = sign === 1;
+		const controls = left
+			? [[1, 0], [0.8, -0.55], [-0.35, 0.75], [-1, 0]]
+			: [[1, 0], [0.4, 0.75], [-0.4, -0.35], [-1, 0]];
+		const sample = (values, steps = 48) => Array.from({ length: steps + 1 }, (_, index) => {
+			const [across, along] = cubic(...values, index / steps);
+			return at(across * half, along * amplitude);
+		});
+		paths.push(sample(controls));
+		// The sketch has a lower return on the left and an upper return on
+		// the right, rather than identical half-ellipses on both ends.
+		const join = cubic(...controls, 0.45);
+		paths.push(sample(left
+			? [[-1, 0], [-0.5, -0.28], [-0.02, -0.12], join]
+			: [[1, 0], [0.7, -0.28], [0.15, -0.2], [-0.2, 0.055]]));
+	}
+	return paths;
 }
 
 function finitePoint(point) {
@@ -729,6 +767,7 @@ const enggPipeDuct = {
 	dimensionsOf,
 	boundarySeparation,
 	boundaryLines,
+	pipeDuctPaths,
 
 	createPipeDuct,
 	runLength,

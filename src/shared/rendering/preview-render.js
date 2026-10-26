@@ -598,19 +598,15 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
          * same `boundaryLines` the committed run is drawn with.
          */
         if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
-            enggPipeDuct.boundaryLines(
+            enggPipeDuct.pipeDuctPaths(
                 geometry.start,
                 geometry.end,
                 geometry.engineering || preview.engineering || {}
-            ).forEach((boundary) => {
-                const from = toScreen(boundary.start);
-                const to = toScreen(boundary.end);
-
-                svg.appendChild(createSvgElement("line", {
-                    x1: from.x,
-                    y1: from.y,
-                    x2: to.x,
-                    y2: to.y,
+            ).forEach((path) => {
+                const points = path.map(toScreen);
+                svg.appendChild(createSvgElement("path", {
+                    d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
+                    fill: "none",
                     stroke: style.stroke,
                     "stroke-width": 1.5,
                     "stroke-dasharray": "6 4",

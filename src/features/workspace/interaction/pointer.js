@@ -654,12 +654,35 @@ function resolvePointerPoint(
 export function resolvePointerEvent(
     event
 ) {
-    return resolvePointerPoint(
+    const resolution = resolvePointerPoint(
         canvasPointFromEvent(
             event,
             false
         )
     );
+
+    const pipeStart = drawingState.activeTool === "pipe-duct" &&
+        (editorState.creationDrag?.pipeDuct
+            ? editorState.creationDrag.start
+            : drawingState.interaction.routeSegmentStart);
+    if (!pipeStart) return resolution;
+
+    // Lock the run to the start's horizontal axis in both the preview and
+    // the release. This is a drawing constraint, independent of snap settings.
+    const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+    const constrained = { x: point.x, y: pipeStart.y };
+    if (point.y !== constrained.y) {
+        return {
+            ...resolution,
+            effectiveConstructionPoint: constrained,
+            snappedPoint: null,
+            inferredPoint: null,
+            snapCandidate: null,
+            inference: null,
+            guideline: null
+        };
+    }
+    return { ...resolution, effectiveConstructionPoint: constrained };
 }
 
 /*

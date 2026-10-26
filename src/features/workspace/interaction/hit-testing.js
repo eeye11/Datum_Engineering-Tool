@@ -13,6 +13,7 @@ import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
 import { fanPaths } from "../model/thermodynamics/fan.js";
+import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
@@ -698,7 +699,8 @@ export function objectAtPoint(
                  * feature, and one thing to hit.
                  */
                 if (object.type === "pipe-duct") {
-                    return Boolean(
+                    return enggPipeDuct.pipeDuctPaths(geometry.start, geometry.end, object.engineering || {})
+                        .some(path => path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance)) || Boolean(
                         geometry.start &&
                             geometry.end &&
                             distanceToSegment(
@@ -958,6 +960,10 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.thermodynamicsKind === "tank") {
+                    return tankPaths(geometry).some(path => path.some((end, index) =>
+                        index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance));
+                }
                 if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
                     const points = turbineCompressorPoints(geometry);
                     return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);

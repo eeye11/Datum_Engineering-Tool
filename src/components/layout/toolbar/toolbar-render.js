@@ -41,7 +41,7 @@ function renderToolbarTool(tool) {
     const children = tool.id === "steady-state-devices"
         ? [
             { id: "turbine-compressor", label: "Turbine / Compressor" },
-            { id: "steady-pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct", disabled: true },
+            { id: "pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct" },
             { id: "steady-nozzle-diffuser", label: "Nozzle / Diffuser", disabled: true }
         ].map(renderToolButton).join("")
         : tool.id === "work"

@@ -26,15 +26,11 @@ export function drawPipeDuct({ svg, entity, geometry, style, toScreen }) {
 
     const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
 
-    enggPipeDuct.boundaryLines(geometry.start, geometry.end, entity.engineering || {}).forEach((boundary) => {
-        const from = toScreen(boundary.start);
-        const to = toScreen(boundary.end);
-
-        svg.appendChild(createSvgElement("line", {
-            x1: from.x,
-            y1: from.y,
-            x2: to.x,
-            y2: to.y,
+    enggPipeDuct.pipeDuctPaths(geometry.start, geometry.end, entity.engineering || {}).forEach((path) => {
+        const points = path.map(toScreen);
+        svg.appendChild(createSvgElement("path", {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
+            fill: "none",
             stroke,
             "stroke-width": scaledStrokeWidth(style.lineWidth),
             "stroke-linecap": "round"

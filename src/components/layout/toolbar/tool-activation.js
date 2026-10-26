@@ -206,6 +206,7 @@ export function activateTool(
         Boolean(DYNAMICS_ANGLE_TOOLS[requestedTool]) ||
         Boolean(DYNAMICS_BOX_TOOLS[requestedTool]) ||
         requestedTool === "truss" ||
+        requestedTool === "pipe-duct" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||

@@ -571,6 +571,13 @@ export function beginCreationDrag(
 
         const { start, previous } = resolveRouteStart(pressPoint);
 
+        // Publish the anchor immediately, including for a fast gesture whose
+        // release arrives before the first pointermove is delivered.
+        enggDrawingState.setInteraction(drawingState, {
+            routeSegmentStart: start,
+            startPoint: start
+        });
+
         editorState.creationDrag = {
             pointerId: event.pointerId,
             pipeDuct: true,
@@ -1110,6 +1117,15 @@ export function finishCreationDrag(
 
     if (!session) {
         return false;
+    }
+
+    // A pipe's release is authoritative: coalesced or missing move events
+    // must not turn a real drag into a click that silently draws nothing.
+    if (session.pipeDuct && !session.moved) {
+        session.moved = Math.hypot(
+            event.clientX - session.startScreen.x,
+            event.clientY - session.startScreen.y
+        ) >= DRAG_THRESHOLD_PX;
     }
 
     /*
