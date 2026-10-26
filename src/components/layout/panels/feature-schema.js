@@ -1898,7 +1898,28 @@ function processBendField(key) {
 }
 
 function definitionOf(key) {
-    return FIELDS[key] || dynamicField(key) || processBendField(key);
+    return FIELDS[key] || rankineDataField(key) || dynamicField(key) || processBendField(key);
+}
+
+const RANKINE_DATA_LABELS = {
+    state1: "State 1", state2: "State 2", state3: "State 3", state4: "State 4",
+    massFlow: "Mass Flow Rate", boiler: "Boiler", turbine: "Turbine", condenser: "Condenser", pump: "Pump"
+};
+
+function rankineDataField(key) {
+    if (typeof key !== "string" || !key.startsWith("rankineData.")) return null;
+    const name = key.slice("rankineData.".length);
+    if (!RANKINE_DATA_LABELS[name]) return null;
+    return {
+        kind: "text", label: RANKINE_DATA_LABELS[name],
+        placeholder: name.startsWith("state") ? "P = 100 kPa; T = 20 C" : "Value and units",
+        applies: object => object.metadata?.thermodynamicsKind === "rankine-cycle",
+        read: object => object.metadata?.problemData?.[name] || "",
+        write: (object, value) => {
+            object.metadata = { ...object.metadata, problemData: { ...object.metadata?.problemData, [name]: String(value ?? "").trim() } };
+            return true;
+        }
+    };
 }
 
 export function fieldDefinition(key) {
@@ -1973,6 +1994,7 @@ export function groupsFor(object) {
         : [];
 
     const groups = [
+        { id: "rankine-problem-data", heading: "Problem Data", fields: Object.keys(RANKINE_DATA_LABELS).map(key => `rankineData.${key}`) },
         ...dynamics,
         ...GROUPS
     ]

@@ -424,13 +424,13 @@ export function thermodynamicsSourceWriter(object, options = {}) {
 
   const written =
     kind === "rankine-cycle" ? (() => {
-      const diagram = rankineCycleDiagram(object.geometry);
+      const diagram = rankineCycleDiagram(object.geometry, object.metadata?.problemData);
       return [
         ...diagram.paths.map(path => polyline(path.points, path.colour, [
           ...(path.fill ? [`fill=${path.fill}`] : []),
           ...(path.bold ? ["line width=1.4pt", "line cap=round", "line join=round"] : [])
         ])),
-        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt] at ${point(label.point.x, label.point.y)} {${label.latex.startsWith("$") ? label.latex : texText(label.text)}};`)
+        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : texText(label.text)}};`)
       ].join("\n");
     })()
     : kind === "turbine-compressor" ? withPrelude(object, polyline(turbineCompressorPoints(object.geometry), colourOf(object)))

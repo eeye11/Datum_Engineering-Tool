@@ -1,7 +1,7 @@
 import { cylinderPoint } from "./piston-cylinder.js";
 
 // One resizable schematic; all paths and labels share its local frame.
-export function rankineCycleDiagram(geometry) {
+export function rankineCycleDiagram(geometry, problemData = {}) {
     const paths = [];
     const labels = [];
     const at = (x, y) => cylinderPoint(geometry, x, y);
@@ -123,5 +123,24 @@ export function rankineCycleDiagram(geometry) {
     label(0.535, 0.05, "qₒᵤₜ", "$q_{out}$");
     label(0.065, 0.56, "w pump,in", "$w_{pump,in}$");
     label(0.92, 0.57, "w turb,out", "$w_{turb,out}$");
+    // User-entered givens are annotations, carried with the cycle on resize.
+    const annotate = (x, y, value, prefix = "") => {
+        const lines = String(value || "").split(/[;\n]/).map(line => line.trim()).filter(Boolean);
+        lines.forEach((line, index) => {
+            const text = prefix ? `${prefix}: ${line}` : line;
+            label(x, y - index * 0.032, text);
+            // User input is always plain text, including a leading dollar sign.
+            labels[labels.length - 1].plainText = true;
+        });
+        return lines.length;
+    };
+    annotate(0.28, 0.27, problemData.state1);
+    annotate(0.35, 0.70, problemData.state2);
+    annotate(0.60, 0.70, problemData.state3);
+    annotate(0.59, 0.29, problemData.state4);
+    let notesY = 0.57;
+    for (const [key, title] of [["massFlow", "Mass flow"], ["boiler", "Boiler"], ["turbine", "Turbine"], ["condenser", "Condenser"], ["pump", "Pump"]]) {
+        notesY -= annotate(0.49, notesY, problemData[key], title) * 0.032;
+    }
     return { paths, labels };
 }

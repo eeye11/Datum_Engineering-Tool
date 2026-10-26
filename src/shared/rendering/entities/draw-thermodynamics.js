@@ -18,8 +18,8 @@ import { turbineCompressorPoints } from "../../../features/workspace/model/therm
 import { nozzleDiffuserPaths } from "../../../features/workspace/model/thermodynamics/nozzle-diffuser.js";
 import { rankineCycleDiagram } from "../../../features/workspace/model/thermodynamics/rankine-cycle.js";
 
-export function drawRankineCycle({ svg, geometry, style, toScreen }) {
-    const diagram = rankineCycleDiagram(geometry);
+export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
+    const diagram = rankineCycleDiagram(geometry, entity?.metadata?.problemData);
     for (const wall of diagram.paths) {
         const points = wall.points.map(toScreen);
         const path = createSvgElement("path", { d: points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ") });

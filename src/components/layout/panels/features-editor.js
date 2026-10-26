@@ -262,12 +262,12 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
-function textMarkup(key, label, state) {
+function textMarkup(key, label, state, definition = {}) {
     return (
         `<input type="text" class="dfp-text" data-feature-field="${escapeHtml(key)}" ` +
         `aria-label="${escapeHtml(label)}" ` +
         `value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
-        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : definition.placeholder ? ` placeholder="${escapeHtml(definition.placeholder)}"` : "") +
         ` autocomplete="off" spellcheck="false">`
     );
 }
@@ -303,7 +303,7 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "text") {
-        return rowMarkup(label, textMarkup(key, label, state), options);
+        return rowMarkup(label, textMarkup(key, label, state, definition), options);
     }
 
     return "";

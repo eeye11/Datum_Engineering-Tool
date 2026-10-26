@@ -970,7 +970,7 @@ export function objectAtPoint(
                     return nozzleDiffuserPaths(geometry).some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
                 }
                 if (object.metadata?.thermodynamicsKind === "rankine-cycle") {
-                    const diagram = rankineCycleDiagram(geometry);
+                    const diagram = rankineCycleDiagram(geometry, object.metadata?.problemData);
                     return diagram.paths.some(path => path.points.some((end, index) => index > 0 && distanceToSegment(point, path.points[index - 1], end) <= tolerance)) ||
                         diagram.labels.some(label => distance(point, label.point) <= tolerance * 3);
                 }
