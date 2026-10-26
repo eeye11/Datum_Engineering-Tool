@@ -1182,10 +1182,8 @@ export function finishCreationDrag(
      * continues a previous run through a supported 45 or 90, and the whole
      * thing is one undoable operation (see pipe-duct-tool.js).
      *
-     * The tool STAYS ARMED and keeps the run's far endpoint as the next leg's
-     * start, so dragging on from there carries the path - which is the
-     * continuous drawing the task asks for, expressed as an operation sequence
-     * rather than a container.
+     * A completed pipe returns to Select so the next gesture can select or
+     * move it. A failed, zero-length run leaves the drawing tool armed.
      */
     if (session.pipeDuct) {
         const resolution = resolvePointerEvent(event);
@@ -1213,6 +1211,8 @@ export function finishCreationDrag(
                 snapGeometry: []
             });
             renderCurrentDrawing();
+        } else {
+            activateTool("select");
         }
 
         return true;

@@ -2067,13 +2067,13 @@ export function objectPoints(
         ];
 
         enggPipeDuct
-            .boundaryLines(
+            .pipeDuctPaths(
                 geometry.start,
                 geometry.end,
                 object.engineering || {}
             )
-            .forEach((boundary) => {
-                points.push(boundary.start, boundary.end);
+            .forEach((path) => {
+                points.push(...path);
             });
 
         return points.filter(Boolean);
