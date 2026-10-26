@@ -39,10 +39,8 @@ export function appendVaporCompressionCycle({ pipe, path, box, stateCircle, labe
     };
     cloud(0.50, 0.94, "red");
     cloud(0.50, 0.06, "blue");
-    label(0.50, 0.953, "Warm");
-    label(0.50, 0.927, "environment");
-    label(0.50, 0.073, "Cold refrigerated");
-    label(0.50, 0.047, "space");
+    label(0.50, 0.94, "Warm\nenvironment");
+    label(0.50, 0.06, "Cold refrigerated\nspace");
     const states = [[0.80, 0.32], [0.80, 0.68], [0.16, 0.68], [0.16, 0.32]];
     states.forEach(([x, y], index) => {
         stateCircle(x, y);

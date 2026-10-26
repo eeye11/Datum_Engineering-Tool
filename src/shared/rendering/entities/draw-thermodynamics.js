@@ -33,18 +33,34 @@ export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
     }
     const origin = toScreen(cylinderPoint(geometry, 0, 0));
     const top = toScreen(cylinderPoint(geometry, 0, 1));
-    const fontSize = Math.max(5, Math.hypot(top.x - origin.x, top.y - origin.y) * 0.027);
+    const fontSize = Math.max(12, Math.hypot(top.x - origin.x, top.y - origin.y) * 0.036);
     for (const label of diagram.labels) {
+        const labelFontSize = fontSize * (label.fontScale || 1);
         const p = toScreen(label.point);
-        const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": fontSize, fill: "black" });
-        const quantitySubscript = !label.plainText && /^\$([QW])_(?:\{(in)\}|([HL]))\$$/.exec(label.latex || "");
-        if (quantitySubscript) {
+        const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": labelFontSize, fill: "black" });
+        const quantitySubscript = !label.plainText && /^\$([QWqw])_(?:\{([^}]+)\}|([HL]))\$$/.exec(label.latex || "");
+        if (!label.plainText && label.latex === "$P_4=P_5=P_{reheat}$") {
+            for (const [index, value] of ["4", "5", "reheat"].entries()) {
+                const base = createSvgElement("tspan", {});
+                base.textContent = index === 0 ? "P" : " = P";
+                text.appendChild(base);
+                const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                subscript.textContent = value;
+                text.appendChild(subscript);
+            }
+        } else if (quantitySubscript) {
             text.textContent = quantitySubscript[1];
             const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
             subscript.textContent = quantitySubscript[2] || quantitySubscript[3];
             text.appendChild(subscript);
         } else {
-            text.textContent = label.text;
+            const lines = label.lines || [label.text];
+            if (lines.length === 1) text.textContent = lines[0];
+            else lines.forEach((line, index) => {
+                const span = createSvgElement("tspan", { x: p.x, dy: index === 0 ? -(lines.length - 1) * labelFontSize * 0.6 : labelFontSize * 1.2 });
+                span.textContent = line;
+                text.appendChild(span);
+            });
         }
         svg.appendChild(text);
     }

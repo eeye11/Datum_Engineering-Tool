@@ -430,7 +430,7 @@ export function thermodynamicsSourceWriter(object, options = {}) {
           ...(path.fill ? [`fill=${path.fill}`] : []),
           ...(path.bold ? ["line width=1.4pt", "line cap=round", "line join=round"] : [])
         ])),
-        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : texText(label.text)}};`)
+        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt, align=center, font=\\fontsize{${num(14.4 * (label.fontScale || 1))}}{${num(17.28 * (label.fontScale || 1))}}\\selectfont] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : (label.lines || [label.text]).map(texText).join("\\\\")}};`)
       ].join("\n");
     })()
     : kind === "turbine-compressor" ? withPrelude(object, polyline(turbineCompressorPoints(object.geometry), colourOf(object)))

@@ -1,6 +1,7 @@
 import { cylinderPoint } from "./piston-cylinder.js";
 import { appendReheatRankineCycle } from "./reheat-rankine-cycle.js";
 import { appendVaporCompressionCycle } from "./vapor-compression-cycle.js";
+import { layoutCycleLabels } from "./cycle-label-layout.js";
 
 // One resizable schematic; all paths and labels share its local frame.
 export function rankineCycleDiagram(geometry, problemData = {}) {
@@ -108,11 +109,11 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
     const turbineCasing = [[0.68, 0.56], [0.87, 0.64], [0.87, 0.36], [0.68, 0.44], [0.68, 0.56]];
     if (geometry.refrigeration) {
         appendVaporCompressionCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
-        return { paths, labels };
+        return layoutCycleLabels(paths, labels, geometry);
     }
     if (geometry.reheat) {
         appendReheatRankineCycle({ pipe, path, box, circle, stateCircle, label, arrow, pumpCasing }, problemData);
-        return { paths, labels };
+        return layoutCycleLabels(paths, labels, geometry);
     }
     // Clockwise flow: pump -> boiler -> turbine -> condenser -> pump.
     pipe([[0.18, 0.57], [0.18, 0.84], [0.34, 0.84]], "blue", pumpCasing);
@@ -141,8 +142,8 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
     arrow(0.49, 0.085, 0, -0.065, "red");
     arrow(0.025, 0.50, 0.065, 0, "red");
     arrow(0.89, 0.50, 0.065, 0, "red");
-    label(0.45, 0.95, "qᵢₙ", "$q_{in}$");
-    label(0.535, 0.05, "qₒᵤₜ", "$q_{out}$");
+    label(0.45, 0.95, "q in", "$q_{in}$");
+    label(0.535, 0.05, "q out", "$q_{out}$");
     label(0.065, 0.56, "w pump,in", "$w_{pump,in}$");
     label(0.92, 0.57, "w turb,out", "$w_{turb,out}$");
     // User-entered givens are annotations, carried with the cycle on resize.
@@ -164,5 +165,5 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
     for (const [key, title] of [["massFlow", "Mass flow"], ["boiler", "Boiler"], ["turbine", "Turbine"], ["condenser", "Condenser"], ["pump", "Pump"]]) {
         notesY -= annotate(0.49, notesY, problemData[key], title) * 0.032;
     }
-    return { paths, labels };
+    return layoutCycleLabels(paths, labels, geometry);
 }
