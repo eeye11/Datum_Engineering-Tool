@@ -76,13 +76,16 @@ async function answerEveryCompile() {
 
     await wait(50);
 
-    if (!pending.length && canvas.querySelector(":scope > svg.drawing-source-layer path")) {
+    const { activeSourceManager } = require(locate("drawing-source-manager.js"));
+    if (!pending.length && canvas.querySelector(":scope > svg.drawing-source-layer path") &&
+        canvasRender.renderedSourceRevision() === activeSourceManager().revision()) {
       return;
     }
   }
 }
 
 let line;
+let compiledViewBox;
 
 test("a just-drawn object is on screen before its compile arrives", () => {
   const snapshot = model.snapshotDrawing(drawingState);
@@ -101,12 +104,29 @@ test("once the picture shows it, the overlay steps aside", async () => {
   assert.deepEqual(liveIds(), []);
 });
 
+test("the compiled endpoint sits on its model selection handle", () => {
+  const { exportTransformFor } = require(locate("source-synchronization.js"));
+  const layer = canvas.querySelector(":scope > svg.drawing-source-layer");
+  const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
+  const viewport = { width: Number(layer.getAttribute("width")), height: Number(layer.getAttribute("height")) };
+  const exported = exportTransformFor(drawingState.objects).point(line.geometry.start.x, line.geometry.start.y);
+  const pt = 72.27 / 25.4;
+  const expected = model.engineeringToScreen(line.geometry.start, viewport, drawingState);
+  assert.ok(Math.abs((exported.x * pt - left) / width * viewport.width - expected.x) < 1e-8);
+  assert.ok(Math.abs((-exported.y * pt - top) / height * viewport.height - expected.y) < 1e-8);
+  compiledViewBox = layer.getAttribute("viewBox");
+});
+
 test("an object being moved is drawn where it is, not where the picture last saw it", () => {
   line.geometry.start = { x: -20, y: 30 };
   line.geometry.end = { x: 20, y: 30 };
   canvasRender.renderCurrentDrawing();
 
   assert.deepEqual(liveIds(), [line.id]);
+  assert.equal(canvas.querySelector(":scope > svg.drawing-source-layer").style.visibility, "hidden",
+    "old compiled ink must not appear underneath the moved feature");
+  assert.equal(canvas.querySelector(":scope > svg.drawing-source-layer").getAttribute("viewBox"), compiledViewBox,
+    "moving the model must not reframe an older compiled picture");
 });
 
 /*
@@ -159,4 +179,26 @@ test("and every declared width is a nominal preset at the drawing's one factor",
       `a declared width of ${width}pt is ${nominal.toFixed(3)}pt nominal at factor ${factor.toFixed(4)}`,
     );
   }
+});
+
+test('while an old picture is hidden, unchanged neighbours stay visible and compilation restores the picture', async () => {
+  const snapshot = model.snapshotDrawing(drawingState);
+  const neighbour = model.addObject(drawingState, model.geometryFactories.line({x:60,y:0},{x:100,y:0},{}));
+  model.commitDrawingChange(drawingState,snapshot);
+  canvasRender.renderCurrentDrawing();
+  await answerEveryCompile();
+  canvasRender.renderCurrentDrawing();
+  const current = drawingState.objects.find(object=>object.id===line.id);
+  const beforeMove=model.snapshotDrawing(drawingState);
+  current.geometry.start.y+=20;
+  current.geometry.end.y+=20;
+  canvasRender.renderCurrentDrawing();
+  assert.equal(canvas.querySelector(':scope > svg.drawing-source-layer').style.visibility,'hidden');
+  assert.ok(liveIds().includes(neighbour.id),'unchanged neighbour remains visible during the drag');
+  model.commitDrawingChange(drawingState,beforeMove);
+  canvasRender.renderCurrentDrawing();
+  await answerEveryCompile();
+  canvasRender.renderCurrentDrawing();
+  assert.equal(canvas.querySelector(':scope > svg.drawing-source-layer').style.visibility,'');
+  assert.deepEqual(liveIds(),[],'the updated compiled picture takes over without duplicate ink');
 });

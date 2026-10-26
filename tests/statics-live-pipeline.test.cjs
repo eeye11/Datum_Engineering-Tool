@@ -610,7 +610,6 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
    * behaviour - is ~2.8x too large and offset, and fails here.
    */
   const k = 72.27 / 25.4;
-  const origin = -72.27;
 
   const svg = await (await engine()).renderTikz(
     "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\draw (20,10) -- (30,10);\n\\end{tikzpicture}",
@@ -618,10 +617,12 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
   );
 
   const start = /d="M(-?[\d.]+)\s*(-?[\d.]+)h([\d.]+)"/.exec(svg);
+  const seat = /translate\(([-\d.]+)\s+([-\d.]+)\)/.exec(svg);
 
   assert.ok(start, `no horizontal path in the compiled picture:\n${svg}`);
-  assert.ok(Math.abs(Number(start[1]) - (origin + 20 * k)) < 0.05, `x=20 compiled to ${start[1]}`);
-  assert.ok(Math.abs(Number(start[2]) - (origin - 10 * k)) < 0.05, `y=10 compiled to ${start[2]}`);
+  assert.ok(seat, "the backend must seat the picture at zero");
+  assert.ok(Math.abs(Number(start[1]) + Number(seat[1]) - 20 * k) < 0.05, `x=20 compiled to ${start[1]}`);
+  assert.ok(Math.abs(Number(start[2]) + Number(seat[2]) + 10 * k) < 0.05, `y=10 compiled to ${start[2]}`);
   assert.ok(Math.abs(Number(start[3]) - 10 * k) < 0.05, `10 units compiled to ${start[3]}`);
 
   /* The canvas's view of the world, in the same units: centred on the camera. */
@@ -648,13 +649,15 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
     assert.ok(layer, "the canvas has no compiled picture layer to seat");
 
     const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
+    const { exportTransformFor } = require(require("./helpers/source-path.cjs").locate("source-synchronization.js"));
+    const centre = exportTransformFor(drawingState.objects).point(25, 10);
 
     assert.ok(
-      Math.abs(left + width / 2 - (origin + 25 * k)) < 0.05,
+      Math.abs(left + width / 2 - centre.x * k) < 0.05,
       "the canvas centre is not world x = panX in the compiled picture's units",
     );
     assert.ok(
-      Math.abs(top + height / 2 - (origin - 10 * k)) < 0.05,
+      Math.abs(top + height / 2 + centre.y * k) < 0.05,
       "the canvas centre is not world y = panY in the compiled picture's units",
     );
   } finally {

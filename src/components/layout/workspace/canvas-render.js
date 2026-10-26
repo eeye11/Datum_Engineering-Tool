@@ -14,6 +14,8 @@ import { activeSourceManager } from "../../../shared/rendering/latex/drawing-sou
 import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
+import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
+import { pictureViewBox } from "../../../shared/rendering/picture-viewport.js";
 
 /*
  * ============================================================
@@ -40,11 +42,11 @@ import { validateDrawingSource } from "../../../shared/rendering/latex/source-va
  * not part of the drawing and must never reach an export. Two stacked layers
  * give exactly that, and the lower one is literally the renderer's output.
  *
- * WHEN COMPILATION IS NOT AVAILABLE. The source is still authoritative. The
- * cache keeps the last successfully compiled picture, and a source that fails
- * to compile keeps the previous picture visible while the error is reported -
- * it is never silently replaced by a model-drawn sheet pretending to be the
- * source's output.
+ * WHILE GEOMETRY IS AHEAD OF THE COMPILER. The live model supplies immediate
+ * feedback. If a cached picture contains a moved or deleted feature, that
+ * picture is hidden and the complete live sheet is drawn until the new render
+ * arrives. This prevents stale ink from appearing as a duplicate. An unchanged
+ * model can still show its last good picture during source-only edits/errors.
  */
 
 const PICTURE_LAYER_CLASS = "drawing-source-layer";
@@ -104,6 +106,7 @@ let lastCompileErrorIsReplaceable = false;
  * picture does not show yet - see `objectsThePictureDoesNotShow`.
  */
 let modelAtRevision = new Map();
+let transformAtRevision = new Map();
 
 /* The current source's object regions, parsed once per revision. */
 let regionsRevision = null;
@@ -567,52 +570,16 @@ function canvasBounds() {
 }
 
 /*
- * WHERE THE WORLD APPEARS IN THE PICTURE.
- *
- * The source is written in drawing units (`x=1mm, y=1mm`). The canvas shows
- * world points through the camera:
- *
- *     screen.x = width / 2 + (x - panX) * k
- *     screen.y = height / 2 - (y - panY) * k
- *
- * so a world point (panX, panY) belongs at the canvas centre, and one drawing
- * unit is `k` screen pixels.
- *
- * THE COMPILED SVG IS NOT IN DRAWING UNITS. TeX writes TeX points, y downward,
- * and places the page one inch in - so with the picture anchored at its (0,0)
- * (the canvas asks for that; see server/tikz.js) a world point lands at
- *
- *     svg.x = PICTURE_ORIGIN + x * POINTS_PER_UNIT
- *     svg.y = PICTURE_ORIGIN - y * POINTS_PER_UNIT
- *
- * The visible world rectangle is converted with exactly that map, so the
- * compiled drawing sits on the same world coordinates as the snapping, the
- * handles and every other piece of interaction code. Reading the SVG as if it
- * were millimetres from the origin - as this used to - drew the picture about
- * 2.8 times too large and shifted by its bounding box, away from the objects
- * the student was clicking.
- *
- * It is written as a viewBox rather than an SVG transform so the renderer's own
- * coordinates are never rewritten.
+ * Position the compiled source in the same model frame as selection and snaps.
+ * Source coordinates are export-normalised; the backend seats their SVG origin
+ * at zero. The viewport uses the source revision's captured export transform,
+ * not the live geometry (which may already be mid-drag or awaiting a compile).
  */
-const POINTS_PER_UNIT = 72.27 / 25.4;
-const PICTURE_ORIGIN = -72.27;
-
-function positionPictureLayer(layer, bounds, state) {
-    const zoom = Number(state?.camera?.zoom) || 1;
-    const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
-    const panX = Number(state?.camera?.panX) || 0;
-    const panY = Number(state?.camera?.panY) || 0;
-
-    const viewWidth = Math.max(1, bounds.width / k);
-    const viewHeight = Math.max(1, bounds.height / k);
-
-    const left = PICTURE_ORIGIN + (panX - viewWidth / 2) * POINTS_PER_UNIT;
-    const top = PICTURE_ORIGIN - (panY + viewHeight / 2) * POINTS_PER_UNIT;
-
+function positionPictureLayer(layer, bounds, state, revision) {
     layer.setAttribute(
         "viewBox",
-        `${left} ${top} ${viewWidth * POINTS_PER_UNIT} ${viewHeight * POINTS_PER_UNIT}`
+        pictureViewBox(bounds, state.camera, enggDrawingState.BASE_PIXELS_PER_UNIT,
+            transformAtRevision.get(revision)).join(" ")
     );
     layer.setAttribute("x", "0");
     layer.setAttribute("y", "0");
@@ -695,9 +662,14 @@ function rememberModelAt(revision) {
         revision,
         new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
     );
+    // Capture the same transform the source writers used, before a drag changes
+    // the model. An older compiled picture must retain its original frame.
+    transformAtRevision.set(revision, exportTransformFor(drawingState.objects || []));
 
     while (modelAtRevision.size > CACHE_LIMIT) {
-        modelAtRevision.delete(modelAtRevision.keys().next().value);
+        const oldest = modelAtRevision.keys().next().value;
+        modelAtRevision.delete(oldest);
+        transformAtRevision.delete(oldest);
     }
 }
 
@@ -1349,6 +1321,7 @@ export function resetSourcePictureCache() {
 
     compiledCache = new Map();
     modelAtRevision = new Map();
+    transformAtRevision = new Map();
     regionsRevision = null;
     regionsMap = null;
     compiledRevision = null;
@@ -1467,10 +1440,19 @@ disappeared while I typed" failure.
     const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
+    const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
+    const shownObjects = modelAtRevision.get(pictureRevision);
+    // A compiled SVG has no per-feature boundaries. If it contains an old
+    // version of a moved/deleted object, temporarily draw the complete live
+    // model instead of painting both the old ink and its new position.
+    const staleGeometry = Boolean(picture && shownObjects &&
+        [...shownObjects.keys()].some(id => liveIds.has(id) ||
+            !drawingState.objects.some(object => object.id === id)));
+    pictureLayer.style.visibility = staleGeometry ? "hidden" : "";
 
     if (picture) {
         showPicture(picture);
-        positionPictureLayer(pictureLayer, bounds, drawingState);
+        positionPictureLayer(pictureLayer, bounds, drawingState, pictureRevision);
     }
 
     if (!cachedPicture(revision)) {
@@ -1490,7 +1472,8 @@ disappeared while I typed" failure.
         overlay,
         {
             overlayOnly: true,
-            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision, revision)
+            liveObjectIds: staleGeometry
+                ? new Set(drawingState.objects.map(object => object.id)) : liveIds
         }
     );
 
