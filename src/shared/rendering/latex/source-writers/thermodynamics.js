@@ -426,7 +426,7 @@ export function thermodynamicsSourceWriter(object, options = {}) {
     kind === "rankine-cycle" ? (() => {
       const diagram = rankineCycleDiagram(object.geometry);
       return [
-        ...diagram.paths.map(path => polyline(path.points, path.colour)),
+        ...diagram.paths.map(path => polyline(path.points, path.colour, path.fill ? [`fill=${path.fill}`] : [])),
         ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt] at ${point(label.point.x, label.point.y)} {${label.latex.startsWith("$") ? label.latex : texText(label.text)}};`)
       ].join("\n");
     })()

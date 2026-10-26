@@ -23,7 +23,7 @@ export function drawRankineCycle({ svg, geometry, style, toScreen }) {
     for (const wall of diagram.paths) {
         const points = wall.points.map(toScreen);
         const path = createSvgElement("path", { d: points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ") });
-        applyStyle(path, { ...style, stroke: wall.colour, fill: "none" });
+        applyStyle(path, { ...style, stroke: wall.colour, fill: wall.fill ? (wall.colour === "blue" ? "#d1d1ff" : "#ffd1d1") : "none", fillMode: wall.fill ? "solid" : "none" });
         svg.appendChild(path);
     }
     const origin = toScreen(cylinderPoint(geometry, 0, 0));
