@@ -1,7 +1,8 @@
 // Ideal vapor-compression cycle, arranged like the equipment schematic:
 // compressor on the right, expansion valve on the left.
 export function appendVaporCompressionCycle({ pipe, path, box, stateCircle, label, arrow }, problemData = {}) {
-    const compressor = [[0.66, 0.43], [0.78, 0.43], [0.745, 0.57], [0.695, 0.57], [0.66, 0.43]];
+    const compressor = [[0.66, 0.43], [0.78, 0.43], [0.745, 0.57], [0.695, 0.57], [0.66, 0.43]]
+        .map(([x, y]) => [0.72 + (y - 0.50), 0.50 - (x - 0.72)]);
     const valve = [[0.215, 0.54], [0.265, 0.54], [0.215, 0.46], [0.265, 0.46], [0.215, 0.54]];
     pipe([[0.64, 0.24], [0.72, 0.24], [0.72, 0.43]], "blue", null, compressor);
     pipe([[0.72, 0.57], [0.72, 0.76], [0.64, 0.76]], "red", compressor);

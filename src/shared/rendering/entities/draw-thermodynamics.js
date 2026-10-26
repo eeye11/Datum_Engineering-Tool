@@ -37,7 +37,15 @@ export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
     for (const label of diagram.labels) {
         const p = toScreen(label.point);
         const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": fontSize, fill: "black" });
-        text.textContent = label.text;
+        const quantitySubscript = !label.plainText && /^\$([QW])_(?:\{(in)\}|([HL]))\$$/.exec(label.latex || "");
+        if (quantitySubscript) {
+            text.textContent = quantitySubscript[1];
+            const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+            subscript.textContent = quantitySubscript[2] || quantitySubscript[3];
+            text.appendChild(subscript);
+        } else {
+            text.textContent = label.text;
+        }
         svg.appendChild(text);
     }
 }
