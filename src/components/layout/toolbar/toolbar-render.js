@@ -24,6 +24,7 @@ const expandedToolbarSections = {
     "process-diagrams": false,
     "heat-transfer": false,
     "steady-state-devices": false,
+    "thermodynamic-cycles": false,
     work: false
 };
 
@@ -38,7 +39,16 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "steady-state-devices"
+    const children = tool.id === "thermodynamic-cycles"
+        ? [
+            { id: "rankine-cycle", label: "Rankine Cycle" },
+            { id: "brayton-cycle", label: "Brayton Cycle" },
+            { id: "otto-cycle", label: "Otto Cycle" },
+            { id: "diesel-cycle", label: "Diesel Cycle" },
+            { id: "carnot-cycle", label: "Carnot Cycle" },
+            { id: "vapor-compression-cycle", label: "Vapor-Compression Cycle" }
+        ].map(cycle => renderToolButton({ ...cycle, disabled: true }).replace(/<span class="drawing-tool-icon"[^>]*>[\s\S]*?<\/span>/, "")).join("")
+        : tool.id === "steady-state-devices"
         ? [
             { id: "turbine-compressor", label: "Turbine / Compressor" },
             { id: "pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct" },
