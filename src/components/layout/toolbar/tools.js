@@ -6,7 +6,7 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
-    "Thermodynamic Cycles": drawingIcon(`<path ${iconStroke} d="M5 5h10v10H5zM8 3l-3 2 3 2M12 13l3 2-3 2"/>`),
+    "Thermodynamic Cycles": drawingIcon(`<path ${iconStroke} d="M16.1 7A6.8 6.8 0 0 0 4.3 5.9L2.5 8M2.5 4v4h4M3.9 13a6.8 6.8 0 0 0 11.8 1.1l1.8-2.1M17.5 16v-4h-4"/>`),
     "Turbine / Compressor": drawingIcon(`<path ${iconStroke} d="M3 3l14 5v4L3 17z"/>`),
     "Nozzle / Diffuser": drawingIcon(`<path ${iconStroke} d="M3 3l14 5M3 17l14-5"/>`),
     "Tank": drawingIcon(`<rect ${iconStroke} x="4" y="2" width="12" height="16" rx="3"/>`),
