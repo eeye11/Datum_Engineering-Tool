@@ -2201,8 +2201,47 @@ export function fittingRuns(elbow) {
 	return runsForFitting(elbow);
 }
 
+/*
+ * THE LARGEST RADIUS THAT ACTUALLY DRAWS.
+ *
+ * `elbowArmLimit` answers the largest radius the ARMS can hold. For a bend
+ * whose ends are its own (a manual fitting) that is the radius at which the
+ * tangent points sit exactly ON the ends - and at exactly that value the arc is
+ * degenerate, so nothing is drawn. The limit a caller must clamp to is therefore
+ * the largest one that still BUILDS, a hair inside the arm limit.
+ *
+ * For a GENERATED fitting the two coincide: its arms are the runs, re-cut to the
+ * tangents, so the arm limit already draws.
+ */
 export function elbowFitRadius(elbow, legs = null) {
-	return elbowArmLimit(elbow, legs);
+	const limit = elbowArmLimit(elbow, legs);
+
+	if (limit === null) {
+	return null;
+	}
+
+	const draws = (candidate) =>
+	Boolean(
+	elbowCurvesFor({
+	...elbow,
+	engineering: { ...(elbow.engineering || {}), bendRadius: candidate }
+	})
+	);
+
+	if (draws(limit)) {
+	return limit;
+	}
+
+	/* The nearest drawable radius just inside the limit. */
+	for (let step = 1; step <= 6; step += 1) {
+	const candidate = limit * (1 - 10 ** -step);
+
+	if (draws(candidate)) {
+	return candidate;
+	}
+	}
+
+	return limit;
 }
 
 /*

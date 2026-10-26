@@ -108,25 +108,70 @@ export function objectsListMarkup(
 
     const selected = new Set(selectedIds);
 
-    const rows = objects
-        .map((object) => {
-            const isSelected = selected.has(object.id);
-            const isVisible = object.visible !== false;
-            const name = displayNameOf(object);
-            const type = typeLabelOf(object);
+    /*
+     * ============================================================
+     * ONE ROW PER OBJECT, AND CHILDREN UNDER THEIR PARENT
+     * ============================================================
+     *
+     * A CHILD is an object whose `parentId` names another object on this sheet -
+     * a Pipe Assembly's members, for instance. Children follow their parent's row
+     * instead of appearing again in the top-level list, so the tree shows the
+     * system as one group with its components inside it.
+     *
+     * THE ROW ITSELF IS UNCHANGED. A child keeps its own icon, name, selection, id
+     * and eye; the only difference is indentation and the row it sits beneath. A
+     * parent row is still just a row, so selecting it selects the assembly, and
+     * selecting a child selects only that component.
+     */
+    const ids = new Set(objects.map((object) => object.id));
 
-            return (
-                `<li class="drawing-objects-item${isVisible ? "" : " drawing-objects-item-hidden"}" role="option" ` +
-                `aria-selected="${isSelected ? "true" : "false"}" ` +
-                `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
-                `tabindex="${isSelected ? "0" : "-1"}" ` +
-                `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
-                `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
-                `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
-                visibilityButtonMarkup(object) +
-                `</li>`
-            );
-        })
+    const childrenOf = new Map();
+
+    objects.forEach((object) => {
+        if (!object.parentId || !ids.has(object.parentId) || object.parentId === object.id) {
+            return;
+        }
+
+        const siblings = childrenOf.get(object.parentId) || [];
+
+        siblings.push(object);
+        childrenOf.set(object.parentId, siblings);
+    });
+
+    const isChild = (object) => Boolean(object.parentId) && ids.has(object.parentId) && object.parentId !== object.id;
+
+    const rowMarkup = (object, depth = 0) => {
+        const isSelected = selected.has(object.id);
+        const isVisible = object.visible !== false;
+        const name = displayNameOf(object);
+        const type = typeLabelOf(object);
+        const children = childrenOf.get(object.id) || [];
+
+        const indented = depth > 0 ? ` drawing-objects-item-child` : "";
+
+        return (
+            `<li class="drawing-objects-item${indented}${isVisible ? "" : " drawing-objects-item-hidden"}" role="option" ` +
+            `aria-selected="${isSelected ? "true" : "false"}" ` +
+            `aria-level="${depth + 1}" ` +
+            `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
+            `data-object-depth="${depth}" ` +
+            `tabindex="${isSelected ? "0" : "-1"}" ` +
+            `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
+            `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
+            `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
+            visibilityButtonMarkup(object) +
+            (children.length
+                ? `<ul class="drawing-objects-children" role="group" aria-label="${escapeHtml(name)} members">` +
+                  children.map((child) => rowMarkup(child, depth + 1)).join("") +
+                  `</ul>`
+                : "") +
+            `</li>`
+        );
+    };
+
+    const rows = objects
+        .filter((object) => !isChild(object))
+        .map((object) => rowMarkup(object, 0))
         .join("");
 
     return `<ul class="drawing-objects-list" role="listbox" aria-label="Objects" aria-multiselectable="true">${rows}</ul>`;

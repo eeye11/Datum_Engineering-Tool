@@ -436,14 +436,14 @@ test("a hidden object cannot be picked on the canvas", async () => {
 test("a hidden object is left out of the compiled picture", async () => {
   await ready();
 
-  const { ds, sync, elbow, first } = twoRunSystem();
+  const { state, ds, sync, elbow, first } = twoRunSystem();
 
   assert.ok(
     sync.sourceForObject(elbow),
     "the elbow writes source while visible",
   );
 
-  ds.toggleObjectVisible(elbow.id);
+  ds.toggleObjectVisible(state, elbow.id);
 
   assert.equal(
     sync.sourceForObject(elbow),
@@ -455,7 +455,7 @@ test("a hidden object is left out of the compiled picture", async () => {
     "the visible pipes must still be written",
   );
 
-  ds.toggleObjectVisible(elbow.id);
+  ds.toggleObjectVisible(state, elbow.id);
 
   assert.ok(sync.sourceForObject(elbow), "showing it again restores the block");
 });

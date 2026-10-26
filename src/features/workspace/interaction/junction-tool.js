@@ -50,10 +50,31 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggJunction from "../model/fluids/junction.js";
+import { reconcilePipeAssemblies } from "../model/fluids/pipe-assembly.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+
+/*
+ * THE ELBOW BUILDER, KEPT WHERE BOTH MODULES CAN SEE IT.
+ *
+ * `pipe-duct-tool.js` and this module import each other, so a plain module
+ * binding is not reliable across every entry point: a registration can run
+ * while this module is only half-evaluated. The slot lives on the GLOBAL
+ * object, which exists before either module is evaluated.
+ */
+export function setJunctionElbowBuilder(builder) {
+	if (typeof builder === "function") {
+		globalThis.__datumJunctionElbowBuilder = builder;
+	}
+}
+
+function builderOf() {
+	const published = globalThis.__datumJunctionElbowBuilder;
+
+	return typeof published === "function" ? published : null;
+}
 
 /* The interaction phase a junction under construction uses. */
 export const JUNCTION_PHASE = "junction-construct";
@@ -121,38 +142,78 @@ export function pipeEndpointAt(point, objects = drawingState.objects) {
  * here: the nearest is taken, and the caller decides. Automatic junctions are
  * never formed from two interiors meeting - see `createJunctionAtConnections`.
  */
-export function runInteriorAt(point, objects = drawingState.objects, tolerance = INTERIOR_CONNECTION_TOLERANCE) {
+export function runInteriorAt(
+	point,
+	objects = drawingState.objects,
+	tolerance = INTERIOR_CONNECTION_TOLERANCE,
+	options = {}
+) {
 	if (!point) {
-		return null;
+	return null;
 	}
+
+	const excludeId = options.exclude || null;
 
 	let best = null;
 
 	pipesIn(objects).forEach((run) => {
-		const start = run.geometry?.start;
-		const end = run.geometry?.end;
+	const start = run.geometry?.start;
+	const end = run.geometry?.end;
 
-		if (!start || !end) {
+	if (!start || !end) {
+	return;
+	}
+
+		if (run.id === excludeId) {
+	return;
+	}
+
+	/*
+	 * A RUN THIS ONE IS ALREADY JOINED TO IS NOT A BRANCH. Its endpoint runs
+	 * THROUGH that joint; meeting the neighbour's interior there is the joint
+	 * itself, not a second connection, and splitting it would break the
+	 * connection the fitting already records.
+	 */
+	if (excludeId && runsAreConnected(excludeId, run.id, objects)) {
+	return;
+	}
+
+	const direction = enggJunction.directionOf(start, end);
+
+		if (!direction) {
 			return;
 		}
 
-		const dx = end.x - start.x;
-		const dy = end.y - start.y;
+		/*
+		 * THE RUN'S CENTRELINE IS ITS SPAN LINE, NOT ITS TWO STORED POINTS.
+		 *
+		 * A run that sits on a fitting has been CUT BACK at that end - its stored
+		 * point is the bend's tangent, a trim short of the corner - so the stored
+		 * pair is a shorter line than the pipe the student drew. Projecting onto it
+		 * puts the split a trim off, and the half the fitting holds would be
+		 * shorter than the pipe it belongs to. `runSpan` is the line the run was
+		 * drawn along and survives being seated (see `pipe-duct.js`), so the
+		 * projection lands on the real centreline.
+		 */
+		const line = enggPipeDuct.runSpan(run) || { start, end };
+
+		const dx = line.end.x - line.start.x;
+		const dy = line.end.y - line.start.y;
+
 		const lengthSquared = dx * dx + dy * dy;
 
 		if (lengthSquared < 1e-12) {
 			return;
 		}
 
-		/* The projection of the point onto the run's centreline. */
-		const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared;
+		const t = ((point.x - line.start.x) * dx + (point.y - line.start.y) * dy) / lengthSquared;
 
 		/* Strictly interior: an end is an ENDPOINT connection, not a cut. */
 		if (t <= 1e-6 || t >= 1 - 1e-6) {
 			return;
 		}
 
-		const foot = { x: start.x + dx * t, y: start.y + dy * t };
+		const foot = { x: line.start.x + dx * t, y: line.start.y + dy * t };
 		const distance = Math.hypot(point.x - foot.x, point.y - foot.y);
 
 		if (distance > tolerance) {
@@ -612,13 +673,13 @@ export function applyJunctionConnections(junction, objects = drawingState.object
 			return;
 		}
 
-		branch.width = widthOf(run);
+				branch.width = widthOf(run);
 
-		const port = enggJunction.branchPort(junction, branch);
+			const port = enggJunction.branchPort(junction, branch);
 
-		if (!port) {
+			if (!port) {
 			return;
-		}
+			}
 
 		/* The pipe's end that is nearest the port is the end held there. */
 		const start = run.geometry?.start;
@@ -740,6 +801,23 @@ export function connectPipeToJunction(run, objects = drawingState.objects) {
  * A junction is FOUND by its hub and its participating runs before one is made,
  * so a drag that runs this on every frame cannot accumulate fittings - and the
  * preview never commits one at all: it only draws.
+ *
+ * ============================================================
+ * A TRANSIENT OVERRUN IS NOT A BRANCH
+ * ============================================================
+ *
+ * An elbow-connected route re-cuts its pipes on every frame, so during a drag
+ * one of them can briefly be longer than its bend and cross a pipe it is
+ * CONNECTED to. Read naively, that crossing looks like an endpoint landing on a
+ * neighbour's interior - and a Junction appeared out of an ordinary change of
+ * direction.
+ *
+ * The answer is the CONNECTION RECORD, not a global suppression. A run that is
+ * already joined to another (by an Elbow, or as part of one Junction) runs
+ * THROUGH that joint, and a joint is not a branch - so `runInteriorAt` skips
+ * runs the querying run is already connected to. A genuine endpoint-to-segment
+ * connection - a FREE end reaching a pipe it is not joined to - still earns its
+ * Junction.
  */
 
 /*
@@ -753,25 +831,129 @@ export function connectPipeToJunction(run, objects = drawingState.objects) {
  */
 export function interiorConnectionFor(run, objects = drawingState.objects) {
 	if (!run || !enggPipeDuct.isPipeDuctType(run.type)) {
-		return null;
+	return null;
 	}
 
 	const others = (objects || []).filter((object) => object.id !== run.id);
 
+	/*
+	 * A RUN THAT IS ALREADY FITTED IS NOT A NEW BRANCH.
+	 *
+	 * A joined run has been SEATED on its fitting: its stored end is the bend's
+	 * tangent point, or the junction's port - and that point can lie over another
+	 * run's centreline quite innocently (a host half whose port is near the pipe
+	 * it was cut from, for instance). Asking again then reads the settling of an
+	 * EXISTING connection as a brand-new endpoint-to-interior one, and splits the
+	 * fitting's own pipe a second and third time.
+	 *
+	 * So an end already held by a fitting is not offered - the same rule
+	 * `connectPipeEndpoints` applies to an end held by a bend. Only a genuine
+	 * free end can make a new connection.
+	 */
 	for (const port of enggPipeDuct.portsOf(run)) {
 	/* A point that is another run's END is an endpoint connection. */
-		if (pipeEndpointAt(port.point, others)) {
-			continue;
+	if (pipeEndpointAt(port.point, others)) {
+	continue;
 	}
 
-		const interior = runInteriorAt(port.point, others);
+		/*
+	 * A SEATED END IS NOT A NEW BRANCH, BUT A FREE END STILL IS.
+	 *
+	 * An end a fitting holds sits on that fitting's mouth, which can lie over
+	 * another run's centreline quite innocently - a host half whose port is near
+	 * the pipe it was cut from, for instance. Reading that as a fresh
+	 * endpoint-to-interior connection split the fitting's own pipe a second and
+	 * third time.
+	 *
+	 * The test is therefore PER END, from the fitting's own record, and not
+	 * `runIsFitted(run)`: a branch joined at one end still has its OTHER end free
+	 * to make a second connection, and refusing the whole run made a genuine new
+	 * branch impossible on any pipe that already had a fitting.
+	 */
+	if (endIsHeldByFitting(run, port.id, objects)) {
+	continue;
+	}
 
-		if (interior) {
-			return { ...interior, incoming: run, incomingPort: port.id };
+	const interior = runInteriorAt(port.point, others, INTERIOR_CONNECTION_TOLERANCE, {
+		exclude: run.id
+	});
+
+
+
+	if (interior) {
+	return { ...interior, incoming: run, incomingPort: port.id };
 	}
 	}
 
 	return null;
+}
+
+/*
+ * WHETHER A RUN IS ALREADY JOINED TO A JUNCTION.
+ *
+ * `engineering.connections` is the junction's branch record, and it is the one
+ * statement of the connection - so a run named there has already had its
+ * endpoint-to-interior relationship made, and has nothing left to earn.
+ */
+function endIsHeldByFitting(run, end, objects = drawingState.objects) {
+	return (objects || []).some((object) => {
+		if (enggPipeDuct.isElbowType(object.type)) {
+			const ports = object.engineering?.ports;
+
+			if (!ports || Array.isArray(ports)) {
+				return false;
+			}
+
+			return ports[run.id] === end && (end === "start" || end === "end");
+		}
+
+		if (enggJunction.isJunctionType(object.type)) {
+			return (object.geometry?.branches || []).some(
+				(branch) => branch.connected === run.id && branch.connectedPort === end
+			);
+		}
+
+		return false;
+	});
+}
+
+/*
+ * WHETHER TWO RUNS ARE ALREADY JOINED - by an Elbow, or as two branches of one
+ * Junction. This is the CONNECTION record, not proximity: it says nothing about
+ * where the pipes happen to be drawn.
+ */
+export function runsAreConnected(firstId, secondId, objects = drawingState.objects) {
+	if (!firstId || !secondId || firstId === secondId) {
+	return false;
+	}
+
+	const joinedByElbow = (objects || []).some(
+	(object) =>
+	enggPipeDuct.isElbowType(object.type) &&
+	Array.isArray(object.engineering?.connections) &&
+	object.engineering.connections.includes(firstId) &&
+	object.engineering.connections.includes(secondId)
+	);
+
+	if (joinedByElbow) {
+	return true;
+	}
+
+	return junctionsIn(objects).some((junction) => {
+	const ids = junctionIds(junction);
+
+	return ids.includes(firstId) && ids.includes(secondId);
+	});
+}
+
+function junctionIds(junction) {
+	const fromBranches = (junction.geometry?.branches || [])
+	.map((branch) => branch.connected)
+	.filter(Boolean);
+
+	const fromRecord = (junction.engineering?.connections || []).filter(Boolean);
+
+	return [...new Set([...fromBranches, ...fromRecord])];
 }
 
 /*
@@ -902,7 +1084,20 @@ export function interiorIntersectionFor(first, second) {
 	const b = second.geometry || {};
 
 	if (!a.start || !a.end || !b.start || !b.end) {
-		return null;
+	return null;
+	}
+
+	/*
+	 * TWO RUNS THAT ARE ALREADY JOINED ARE NOT A NEW CROSSING.
+	 *
+	 * A connected route re-cuts its pipes on every frame, so one of them can
+	 * briefly be longer than its bend and appear to cross the pipe on the other
+	 * side of it. That is the same joint seen through a transient overrun, not a
+	 * branch - and splicing it would replace a valid Elbow connection with a
+	 * Junction nobody asked for.
+	 */
+	if (runsAreConnected(first.id, second.id)) {
+	return null;
 	}
 
 	const rx = a.end.x - a.start.x;
@@ -1207,47 +1402,15 @@ export function reconcileJunctionsFor(changed, objects = drawingState.objects, o
 
 	const sheet = () => (Array.isArray(objects) ? objects : drawingState.objects);
 
-	const pipes = pipesIn(sheet());
-
-	/*
-	 * 1. A CROSSING IS THE FIRST THING TO SETTLE, because it consumes two runs
-	 * at once - and it is only looked for when the change brought two runs'
-	 * interiors together, which every caller expresses by naming `changed`.
+		/*
+	 * 1. A CROSSING IS NOT A CONNECTION.
+	 *
+	 * Two runs whose interiors happen to cross are two runs that happen to
+	 * cross: nothing was joined, no endpoint moved, and the student drew no
+	 * fitting. Creating a junction there would splice two unrelated runs
+	 * wherever the picture happened to overlap them.
 	 */
-	const changedRuns = (Array.isArray(changed) ? changed : [changed]).filter(
-	(run) => enggPipeDuct.isPipeDuctType(run?.type)
-	);
 
-	for (const run of changedRuns) {
-		for (const other of pipes) {
-			if (other.id === run.id) {
-				continue;
-			}
-
-			const crossing = interiorIntersectionFor(run, other);
-
-			if (!crossing) {
-				continue;
-			}
-
-			/* A crossing already fitted is the two runs meeting at a junction. */
-			if (junctionHubAt(crossing.point, sheet())) {
-				continue;
-			}
-
-			const junction = commitJunctionAtIntersection(crossing, sheet());
-
-			if (junction) {
-				result.push(junction);
-			}
-	}
-	}
-
-	/*
-	 * 2. AN END ON AN INTERIOR. Every pipe on the sheet is asked, because the
-	 * END may belong to a pipe that did not move - the run that just crossed it
-	 * is what made the connection.
-	 */
 	for (const run of pipesIn(sheet())) {
 		const interior = interiorConnectionFor(run, sheet());
 
@@ -1293,7 +1456,17 @@ export function reconcileJunctionsFor(changed, objects = drawingState.objects, o
 	}
 	});
 
-	void options;
+	/*
+	 * AND THE ASSEMBLY GROUPING, FROM THE TOPOLOGY JUST SETTLED.
+	 *
+	 * An assembly is a view of which objects are joined; it holds no connection of
+	 * its own. Regrouping HERE - at the end of the one reconcile, once every split,
+	 * fitting and removal has happened - is what keeps the Objects tree in step with
+	 * the pipework without a second update path of its own.
+	 */
+	if (options.reconcileAssemblies !== false) {
+		reconcilePipeAssemblies(sheet());
+	}
 
 	return result;
 }
@@ -1349,6 +1522,259 @@ export function junctionsForRun(runId, objects = drawingState.objects) {
 	return junctionsIn(objects).filter((junction) =>
 		enggJunction.junctionConnections(junction).includes(runId)
 	);
+}
+
+/* ============================================================
+ * THE LIFECYCLE: WHEN A JUNCTION STOPS BEING ONE
+ * ============================================================
+ *
+ * An AUTOMATIC junction exists because three or more branches met. When that
+ * stops being true the fitting is obsolete, and what is left is either a
+ * CONTINUATION (two collinear runs, which should be one pipe) or a CORNER
+ * (two angled runs, where an Elbow belongs).
+ *
+ * A MANUAL junction is the student own object. Losing a branch leaves it
+ * standing with fewer arms, and nothing here removes it.
+ */
+function runsAreCollinear(first, second) {
+	const a = first?.geometry;
+	const b = second?.geometry;
+
+	if (!a?.start || !a?.end || !b?.start || !b?.end) {
+		return false;
+	}
+
+	const directionA = enggPipeDuct.directionOf(a.start, a.end);
+	const directionB = enggPipeDuct.directionOf(b.start, b.end);
+
+	if (!directionA || !directionB) {
+		return false;
+	}
+
+	/* Parallel, in either sense: the runs are one line through the fitting. */
+	return Math.abs(directionA.x * directionB.y - directionA.y * directionB.x) < 1e-6;
+}
+
+/*
+ * WHETHER TWO RUNS CAN BE MERGED WITHOUT LOSING ANYTHING.
+ *
+ * Geometry alone is not enough: each half may have been restyled or re-sized
+ * since the split, and merging them would silently keep one of the two. A
+ * merge is offered only when the pair AGREES about everything the student
+ * could have changed - appearance and width.
+ */
+function runsCanMerge(first, second) {
+	if (!runsAreCollinear(first, second)) {
+		return false;
+	}
+
+	const signature = (run) => JSON.stringify({
+		style: run?.style || {},
+		engineering: run?.engineering || {},
+		visible: run?.visible !== false,
+		fixed: run?.fixed === true,
+		locked: run?.locked === true
+	});
+
+	return signature(first) === signature(second);
+}
+
+/*
+ * THE MERGED RUN: the pair as ONE line, keeping the first run identity.
+ *
+ * Each half was cut back to its PORT when the junction was made, and the SPAN
+ * is the line it was drawn along - both ends of it. The merged pipe is those
+ * two spans end to end, so the result runs from one OUTER end to the other.
+ */
+function mergedRun(first, second) {
+	const spanOf = (run) =>
+		run?.geometry?.span?.start && run?.geometry?.span?.end
+		? run.geometry.span
+		: { start: run.geometry.start, end: run.geometry.end };
+
+	const a = spanOf(first);
+	const b = spanOf(second);
+
+	const distance = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+
+	const pairs = [
+		{ first: a.start, second: b.end, gap: distance(a.end, b.start) },
+		{ first: a.start, second: b.start, gap: distance(a.end, b.end) },
+		{ first: a.end, second: b.end, gap: distance(a.start, b.start) },
+		{ first: a.end, second: b.start, gap: distance(a.start, b.end) }
+	];
+
+	const best = pairs.reduce((winner, candidate) =>
+		candidate.gap < winner.gap ? candidate : winner
+	);
+
+	return {
+		...first,
+		geometry: {
+		...first.geometry,
+		start: { x: best.first.x, y: best.first.y },
+		end: { x: best.second.x, y: best.second.y },
+		span: {
+		start: { x: best.first.x, y: best.first.y },
+		end: { x: best.second.x, y: best.second.y }
+		},
+		trims: undefined,
+		bendJoints: undefined
+		}
+	};
+}
+
+/* The corner two seated runs share: where their drawn lines meet. */
+function sharedCornerOf(pair) {
+	const lineOf = (run) => {
+		const span = run?.geometry?.span;
+		const from = span?.start || run?.geometry?.start;
+		const to = span?.end || run?.geometry?.end;
+		const direction = from && to ? enggPipeDuct.directionOf(from, to) : null;
+
+		return direction ? { from, direction } : null;
+	};
+
+	const a = lineOf(pair[0]);
+	const b = lineOf(pair[1]);
+
+	if (!a || !b) {
+		return null;
+	}
+
+	const denominator = a.direction.x * b.direction.y - a.direction.y * b.direction.x;
+
+	if (Math.abs(denominator) < 1e-9) {
+		return null;
+	}
+
+	const t =
+		((b.from.x - a.from.x) * b.direction.y - (b.from.y - a.from.y) * b.direction.x) /
+		denominator;
+
+	return { x: a.from.x + a.direction.x * t, y: a.from.y + a.direction.y * t };
+}
+
+/* The end of a run FURTHEST from the shared corner. */
+function outerEndOf(run, corner) {
+	const span = run?.geometry?.span;
+
+	const from = span?.start || run?.geometry?.start;
+	const to = span?.end || run?.geometry?.end;
+
+	if (!from || !to || !corner) {
+		return null;
+	}
+
+	const fromStart = Math.hypot(from.x - corner.x, from.y - corner.y);
+	const fromEnd = Math.hypot(to.x - corner.x, to.y - corner.y);
+
+	return fromStart >= fromEnd ? { ...from } : { ...to };
+}
+
+/*
+ * NORMALISE WHAT IS LEFT WHEN A JUNCTION GOES.
+ *
+ * The junction is gone; the runs its branch records still name are considered,
+ * and only when there are exactly two - a continuation or a corner is a
+ * two-run question.
+ *
+ *   COLLINEAR AND ALIKE   merge into one run, keeping the first id and name
+ *   ANGLED                build an Elbow at the corner they now make
+ *   ANYTHING ELSE         left exactly as they are
+ */
+export function normaliseJunctionRemoval(junction, objects = drawingState.objects, options = {}) {
+	const record = { merged: null, elbow: null, kept: null };
+
+	if (!junction) {
+		return record;
+	}
+
+	/*
+	 * THE PIPES THE FITTING STILL HAS, not every id it ever recorded: a removed
+	 * branch keeps its id in the record until a later settle prunes it.
+	 */
+	const joined = (junction.geometry?.branches || [])
+		.filter((branch) => branch.connected)
+		.map((branch) => (objects || []).find((object) => object.id === branch.connected))
+		.filter((run) => Boolean(run?.id));
+
+	const runs = joined.filter((run, index) => joined.findIndex((other) => other.id === run.id) === index);
+
+	if (runs.length !== 2) {
+		record.kept = runs;
+		return record;
+	}
+
+	if (runsCanMerge(runs[0], runs[1])) {
+		const merged = mergedRun(runs[0], runs[1]);
+		const at = objects.findIndex((object) => object.id === runs[0].id);
+
+		if (at < 0) {
+			record.kept = runs;
+		return record;
+		}
+
+		objects.splice(at, 1, merged);
+
+		const other = objects.findIndex((object) => object.id === runs[1].id);
+
+		if (other >= 0) {
+		objects.splice(other, 1);
+		}
+
+		record.merged = merged;
+		return record;
+	}
+
+	/*
+	 * ANGLED PAIR EARNS AN ELBOW. The builder reads the runs FROM THE SHEET, so
+	 * it is the SHEET that is unseated: each run is put back on the line it was
+	 * drawn along, from its outer end to the shared corner, and put back again if
+	 * no bend is returned.
+	 */
+	const corner = sharedCornerOf(runs);
+
+	const saved = runs.map((run) => ({ id: run.id, geometry: JSON.parse(JSON.stringify(run.geometry || {})) }));
+
+	const restore = () => {
+		saved.forEach((entry) => {
+		const run = (objects || []).find((object) => object.id === entry.id);
+
+		if (run) {
+			run.geometry = entry.geometry;
+		}
+		});
+	};
+
+	if (corner) {
+		runs.forEach((run) => {
+		const outer = outerEndOf(run, corner);
+
+		if (outer) {
+			run.geometry = { ...run.geometry, start: { ...outer }, end: { ...corner } };
+		}
+		});
+	}
+
+	const build = builderOf();
+	const elbow = build && corner
+		? build(runs[0], runs[1], enggPipeDuct.defaultPipeEngineering())
+		: null;
+
+	if (!elbow) {
+		restore();
+		record.kept = runs;
+		return record;
+	}
+
+	if (!options.dryRun) {
+		enggDrawingState.addObject(drawingState, elbow);
+	}
+
+	record.elbow = elbow;
+
+	return record;
 }
 
 /* ============================================================

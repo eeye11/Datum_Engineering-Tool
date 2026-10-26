@@ -62,7 +62,7 @@ function reset(state) {
 }
 
 /* A pipe whose `end` is joined to an elbow; its `start` is free. */
-function joinedPair(m, { freeEnd = { x: 300, y: 150 }, otherEnd = { x: 100, y: 0 } = {}) {
+function joinedPair(m, { freeEnd = { x: 300, y: 150 }, otherEnd = { x: 100, y: 0 } } = {}) {
   reset(m.state);
 
   const host = m.pipe.createPipeDuct({ x: 0, y: 0 }, { x: 100, y: 0 });
@@ -83,6 +83,24 @@ function joinedPair(m, { freeEnd = { x: 300, y: 150 }, otherEnd = { x: 100, y: 0
 /* The end of `run` the fitting holds, from the fitting's own record. */
 function heldEnd(elbow, run) {
   return elbow?.engineering?.ports?.[run.id] || null;
+}
+
+/*
+ * THE OUTER END OF THE OTHER RUN the fitting holds - the end the bend does NOT
+ * place, and therefore the one an edit must leave exactly where it was.
+ */
+function liveOuter(m, elbow, heldOfEdited) {
+  const other = (elbow.engineering.connections || [])
+    .map((id) => (id ? m.state.objects.find((object) => object.id === id) : null))
+    .find((run) => run && heldEnd(elbow, run) !== heldOfEdited);
+
+  if (!other) {
+    return null;
+  }
+
+  const held = heldEnd(elbow, other);
+
+  return held ? { ...other.geometry[held === "end" ? "start" : "end"] } : null;
 }
 
 /* Drive the pipe-duct branch of the drag exactly as `applyManipulation` does. */
@@ -153,36 +171,59 @@ test("Case A: dragging the elbow-side endpoint keeps the pipe attached", () => {
  * CASE B — THE FREE END RESHAPES THE PIPE ONLY
  * ============================================================ */
 
-test("Case B: dragging the free endpoint leaves the elbow untouched", () => {
+test("Case B: dragging the free endpoint keeps the elbow and follows the new direction", () => {
   const m = modules();
   const { host, elbow } = joinedPair(m);
 
   const held = heldEnd(elbow, host);
   const free = held === "end" ? "start" : "end";
 
-  const elbowPosition = { ...elbow.geometry.position };
   const radius = Number(elbow.engineering.bendRadius);
   const angle = m.pipe.elbowAngleDegrees(elbow);
-  const joinedPoint = { ...host.geometry[held] };
+  const outerEnd = liveOuter(m, elbow, held);
 
   dragEndpoint(m, host, free, { x: -80, y: 60 });
 
-  assert.ok(
-    m.state.objects.some((object) => object.id === elbow.id),
-    "the elbow is still on the sheet"
+  const settled = m.state.objects.find((object) => object.id === elbow.id);
+
+  /*
+   * THE JOIN SURVIVES THE RESHAPE. Swinging a pipe's free end changes the
+   * DIRECTION it arrives at the corner from, not whether it is joined - so the
+   * fitting must still be there, still holding both runs.
+   */
+  assert.ok(settled, "the elbow is still on the sheet");
+  assert.equal(
+    (settled.engineering.connections || []).filter(Boolean).length,
+    2,
+    "and still joins both runs"
   );
 
   assert.deepEqual(host.geometry[free], { x: -80, y: 60 }, "the free end followed the drag");
 
-  assert.deepEqual(
-    host.geometry[held],
-    joinedPoint,
-    "the joined end stayed on its seat"
+  /*
+   * THE OUTER END OF THE OTHER PIPE IS UNTOUCHED. Only the gesture's own endpoint
+   * moved; the pipe on the far side of the bend keeps the end the student set.
+   */
+  assert.deepEqual(liveOuter(m, elbow, held), outerEnd, "the unedited pipe's outer end is fixed");
+
+  assert.equal(Number(settled.engineering.bendRadius), radius, "the radius did not drift");
+
+  /*
+   * AND THE BEND FOLLOWS. The two arms now meet at 55.3 degrees, so the fitting
+   * is re-derived at that angle, from the pipes' current lines.
+   */
+  const expected = m.pipe.cornerAngleFromArms(
+    host.geometry[free],
+    { x: 100, y: 0 },
+    { x: 300, y: 150 }
   );
 
-  assert.deepEqual(elbow.geometry.position, elbowPosition, "the corner did not move");
-  assert.equal(Number(elbow.engineering.bendRadius), radius, "the radius did not drift");
-  assert.equal(m.pipe.elbowAngleDegrees(elbow), angle, "the bend angle did not change");
+  assert.ok(
+    Math.abs(m.pipe.elbowAngleDegrees(settled) - expected) < 1e-6,
+    `the bend follows the pipes' new direction (${m.pipe.elbowAngleDegrees(settled)} against ${expected})`
+  );
+
+  assert.notEqual(m.pipe.elbowAngleDegrees(settled), angle, "which is not the angle it had");
 });
 
 test("Case B: the pipe keeps its width and both walls follow the new free end", () => {
@@ -237,20 +278,39 @@ test("both cases work with the pipe drawn in the opposite direction", () => {
 
   const free = held === "end" ? "start" : "end";
 
-  const elbowBefore = JSON.stringify(elbow.geometry);
+  const angleBefore = m.pipe.elbowAngleDegrees(elbow);
+
   const joinedBefore = { ...host.geometry[held] };
 
   dragEndpoint(m, host, free, { x: -60, y: 90 });
 
+  const settled = m.state.objects.find((object) => object.id === elbow.id);
+
+  assert.ok(settled, "the elbow survives, whichever way the host was drawn");
+
+  /*
+   * THE RUN IS STILL HELD BY THE BEND. Its joined end sits on the bend's tangent
+   * point for that arm - which moves when the bend is re-derived at the new angle,
+   * so the test is that the end IS the tangent, not that it never moved.
+   */
+  const curve = settled && m.pipe.elbowCurvesFor(settled, m.pipe.fittingRuns(settled));
+  const tangent = held === "end" ? curve?.end : curve?.start;
+
   assert.ok(
-    m.state.objects.some((object) => object.id === elbow.id),
-    "the elbow survives, whichever way the host was drawn"
+    tangent && Math.hypot(host.geometry[held].x - tangent.x, host.geometry[held].y - tangent.y) < 1e-6,
+    "the joined end is the bend's tangent point"
   );
 
-  assert.deepEqual(host.geometry[held], joinedBefore, "the joined end is still its seat");
-  assert.equal(
-    JSON.stringify(elbow.geometry),
-    elbowBefore,
-    "the elbow is untouched by a free-end edit"
+  void joinedBefore;
+
+  /*
+   * AND IT HAS FOLLOWED THE PIPE. Its arms are the two runs' own far ends, so the
+   * fitting is rebuilt around the corner the student now has - not left at the
+   * geometry it was drawn with.
+   */
+  assert.deepEqual(settled.geometry.previous, { x: -60, y: 90 }, "the swung arm is the host's far end");
+  assert.ok(
+    Math.abs(m.pipe.elbowAngleDegrees(settled) - angleBefore) > 1e-3,
+    "the bend angle followed the new direction"
   );
 });

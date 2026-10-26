@@ -23,8 +23,9 @@ import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { CONTINUATION_TOLERANCE, pipeEndAt, applyManualElbowConnections, refreshManualElbow, reconcileFluidConnections, updateElbowForPair, joiningCornerOf, reseatElbowPipes } from "./pipe-duct-tool.js";
+import { CONTINUATION_TOLERANCE, pipeEndAt, applyManualElbowConnections, applyElbowRadius, elbowMaxBendRadius, refreshManualElbow, reconcileFluidConnections, updateElbowForPair, joiningCornerOf, reseatElbowPipes } from "./pipe-duct-tool.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
+import { createJunctionForInteriorConnection } from "./junction-tool.js";
 
 export function beginManipulationDrag(
     event
@@ -683,6 +684,27 @@ export function finishManipulationDrag(
                         id: object.id,
                         style: object.style
                     }
+                    : drag.elbowRuns?.[object.id]
+                    ? {
+                        /*
+                         * A PIPE THE DRAG RE-CUT IS RESTORED WITH THE FITTING.
+                         *
+                         * A radius drag moves each joined pipe's tangent end,
+                         * its trim, its seam and its span. An undo entry holding
+                         * only the fitting would put the old arc back over pipes
+                         * still cut for the new one - the "partial geometry" an
+                         * undone edit must never leave.
+                         */
+                        ...JSON.parse(
+                            JSON.stringify(
+                                drag.elbowRuns[
+                                    object.id
+                                ]
+                            )
+                        ),
+                        id: object.id,
+                        style: object.style
+                    }
                     : object
         );
 
@@ -723,6 +745,42 @@ export function finishManipulationDrag(
     renderProperties();
     renderCurrentDrawing();
 }
+
+/*
+ * APPLY ONE DRAG FRAME TO THE MODEL, WITHOUT A POINTER.
+ *
+ * The canvas path resolves a screen point through snapping and then calls
+ * `applyManipulation`. That is the only part a test cannot easily drive - the
+ * resolver needs a camera, a canvas rect and a real pointer event - and it is not
+ * the part any feature's semantics live in. So the frame below is the one
+ * `updateManipulationDrag` makes, applied straight to the model, which lets a
+ * test assert on what a drag WRITES rather than on what a pointer happened to
+ * resolve to.
+ *
+ * It is a seam, not a second implementation: `applyManipulation` is the same
+ * function the canvas calls.
+ */
+export function applyManipulationFrame(drag, point) {
+    if (!drag?.object || !point) {
+        return false;
+    }
+
+    /* The same bookkeeping `updateManipulationDrag` does for a live frame. */
+    if (!drag.originals) {
+        drag.originals = {
+            [drag.object.id]: JSON.parse(JSON.stringify(drag.object))
+        };
+    }
+
+    drag.moved = true;
+
+    applyManipulation(drag, point);
+
+    return drag.object;
+}
+
+/* The name the endpoint tests drive; the same frame, stated once. */
+export const applyManipulationForTest = applyManipulationFrame;
 
 /*
  * Apply the drag to the real feature data.
@@ -1179,6 +1237,20 @@ function applyManipulation(
      */
     if (object.type === "pipe-duct") {
         if (drag.kind === "start" || drag.kind === "end") {
+            /*
+             * THE PIPES THIS ENDPOINT EDIT WILL RE-CUT ARE SNAPSHOTTED FIRST -
+             * before the dragged end is written.
+             *
+             * Settling the run's bends moves the OTHER pipe's tangent end, its
+             * trim, its wall seam and its span - writes to objects the drag is
+             * not holding. Without this record the undo entry put only the
+             * dragged pipe back, so undoing an endpoint edit left the pipe on the
+             * far side of the elbow permanently re-cut. Taking the snapshot after
+             * the write would capture an already-changed pipe, so it is taken
+             * here, on the way in.
+             */
+            captureElbowPipes(drag, drawingState.objects);
+
             g[drag.kind] = { x: point.x, y: point.y };
 
             /*
@@ -1244,6 +1316,20 @@ function applyManipulation(
              * same reconciliation runs that runs when the drag is released.
              */
             reconcileFluidConnections(object);
+
+            /*
+             * AND THE JUNCTION THIS END EARNS BY LANDING ON A PIPE'S INTERIOR.
+             *
+             * A branch dragged to the middle of another run is the same
+             * endpoint-to-segment connection as one drawn there, and the drawing
+             * tool asks the question on commit - so the drag must ask it too, or
+             * the two ways of making the same connection behave differently.
+             * `createJunctionForInteriorConnection` leaves an existing junction
+             * alone, so running it on every frame cannot accumulate fittings.
+             */
+            createJunctionForInteriorConnection(
+                (drawingState.objects || []).find((candidate) => candidate.id === object.id) || object
+            );
         }
 
         return;
@@ -1329,50 +1415,21 @@ function applyManipulation(
         if (drag.kind === "position" || drag.kind === "body") {
             /*
              * A STANDALONE ELBOW MOVES WHOLE: its corner and both ends shift by
-             * the same delta, so the angle and the radius are untouched. A
-             * CONNECTED one keeps its attached ends on their pipes and re-solves
-             * the bend from them.
+             * the same delta, so the angle and the radius are untouched.
+             *
+             * A CONNECTED ONE IS A JOINT IN A ROUTE. Moving it moves the JOINT -
+             * see `moveConnectedElbow`, which moves the two connected pipe ends
+             * with it and leaves their outer ends where the student put them.
              */
             const hasConnection = Array.isArray(object.engineering?.connections)
                 && object.engineering.connections.some(Boolean);
 
             if (hasConnection) {
-                const original = drag.originals?.[object.id]?.geometry || null;
-                const start = drag.start || null;
+                captureElbowPipes(drag, drawingState.objects);
 
-                if (original && start) {
-                    const dx = point.x - start.x;
-                    const dy = point.y - start.y;
+                moveConnectedElbow(drag, object, point);
 
-                    /* A free end travels with the corner; an attached one does not. */
-                    const ends = {
-                        a: { x: original.ends.a.x + dx, y: original.ends.a.y + dy },
-                        b: { x: original.ends.b.x + dx, y: original.ends.b.y + dy }
-                    };
-
-                    const connections = object.engineering.connections;
-
-                    [0, 1].forEach((index) => {
-                        if (!connections[index]) {
-                            return;
-                        }
-
-                        const run = (drawingState.objects || []).find(
-                            (candidate) => candidate.id === connections[index]
-                        );
-
-                        const port = run && nearestPort(run, ends[index === 0 ? "a" : "b"]);
-
-                        if (port) {
-                            ends[index === 0 ? "a" : "b"] = { ...port };
-                        }
-                    });
-
-                    object.geometry.position = { x: point.x, y: point.y };
-                    object.geometry.ends = ends;
-
-                    return;
-                }
+                return;
             }
 
             enggPipeDuct.moveElbowCorner(object, point);
@@ -1639,27 +1696,13 @@ function applyManipulation(
  * so a drag and a typed value cannot disagree:
  *
  *   applyElbowAngleDrag    the ANGLE handle, snapped to the common angles
- *   applyElbowRadiusDrag   the RADIUS handle, as a relative change
- *   nearestPort            the pipe end a connected end is re-anchored to
+    *   applyElbowRadiusDrag   the RADIUS handle, read absolutely
  *
  * The angle is measured from the pointer about the FIXED end opposite the
  * handle, turned back into a leg direction, and assembled from the two ends
  * with `solveElbowCorner` - the same construction a typed angle uses.
  */
 
-function nearestPort(run, reference) {
-    const ports = enggPipeDuct.portsOf(run);
-
-    if (!ports.length || !reference) {
-        return null;
-    }
-
-    return ports.reduce((best, port) => {
-        const distance = Math.hypot(port.point.x - reference.x, port.point.y - reference.y);
-
-        return !best || distance < best.distance ? { ...port.point, distance } : best;
-    }, null);
-}
 
 /*
  * WHETHER A FITTING HOLDS THIS RUN AT THIS END.
@@ -1895,45 +1938,26 @@ function applyElbowAngleDrag(object, drag, point) {    const geometry = object.g
 }
 
 function applyElbowRadiusDrag(object, drag, point) {
-    const curves = enggPipeDuct.elbowCurvesFor(object);
-
-    if (!curves) {
-        return;
-    }
-
     /*
-     * THE HANDLE IS THE CENTRE OF CURVATURE ITSELF.
+     * THE RADIUS HANDLE, READ ABSOLUTELY.
      *
-     * A circular bend's centre sits on the bisector, `R / sin(A / 2)` from the
-     * corner, so the RADIUS the student is pointing at is that distance times
-     * `sin(A / 2)` - see `bendRadiusFromCentreDistance`. The distance is taken
-     * to the THEORETICAL SHARP CORNER, not to the centre the fitting already
-     * has: dragging away from the corner opens the bend and dragging toward it
-     * closes it, and the bend angle is untouched because only the distance
-     * along the bisector is read.
-     *
-     * The change is then the difference from the radius the fitting has, and it
-     * is clamped by the same `adjustedBendRadius` a typed value uses - so a
-     * drag can never leave the bend smaller than the walls allow or larger than
-     * its pipes can hold.
+     * The point is already in DRAWING coordinates - the shared resolver applies
+     * the camera's pan and scale - and the distance from the corner along the
+     * bisector IS the radius, not a delta from where the drag began. It is
+     * handed to the SAME operation the Features tab calls, so the two cannot
+     * disagree.
      */
-    const corner = object.geometry?.position;
+    const corner = object?.geometry?.position;
 
     if (!corner) {
         return;
     }
 
-    const separation = Number(object.engineering?.startSeparation) > 0
-        ? Number(object.engineering.startSeparation)
-        : enggPipeDuct.boundarySeparation(object.engineering || {});
-
-    const minimum = Math.max(enggPipeDuct.MINIMUM_BEND_RADIUS, separation / 2 + 1e-6);
-
-    /*
-     * A BEND TOO TIGHT FOR ITS WALLS IS ALREADY DRAWN AT ITS WALLS' LIMIT, not
-     * at the radius stored, so the reading starts from the arc on the sheet.
-     */
-    const current = Math.max(Number(object.engineering?.bendRadius) || curves.radius, minimum);
+    /* The drag's backup of the pipes, taken once, for the undo entry. */
+    if (drag) {
+        drag.object = drag.object || object;
+        captureElbowPipes(drag, drawingState.objects);
+    }
 
     const distance = Math.hypot(point.x - corner.x, point.y - corner.y);
 
@@ -1943,48 +1967,214 @@ function applyElbowRadiusDrag(object, drag, point) {
         return;
     }
 
-    const adjusted = enggPipeDuct.adjustedBendRadius(object, Math.max(minimum, wanted) - current);
+    /* Bounded first, so the handle stops at the largest valid radius. */
+    const limit = elbowMaxBendRadius(object);
 
-    if (!adjusted) {
+    const target =
+        limit === null
+            ? wanted
+            : Math.max(enggPipeDuct.MINIMUM_BEND_RADIUS, Math.min(limit, wanted));
+
+    applyElbowRadius(object, target, { objects: drawingState.objects });
+}
+
+/*
+ * SNAPSHOT THE PIPES AN ELBOW OPERATION IS ABOUT TO RE-CUT.
+ *
+ * A drag's `originals` holds the feature being dragged, and for an elbow that is
+ * not enough: re-seating a bend moves each joined pipe's tangent end, its trim,
+ * its wall seam and its span - writes to OTHER objects. The undo entry and
+ * Escape both restore from this record, so an elbow edit can never be undone
+ * into a half-updated sheet.
+ */
+function captureElbowPipes(drag, objects) {
+    if (!drag || drag.elbowRuns || !Array.isArray(objects)) {
         return;
     }
 
     /*
-     * ONLY A RADIUS THE BEND ACTUALLY HAS IS WRITTEN.
+     * AN ELBOW DRAG RE-CUTS THE PIPES IT JOINS; AN ENDPOINT DRAG RE-CUTS THEM
+     * TOO, AND ALSO THE PIPES ON THE FAR SIDE of any bend the edit reaches.
      *
-     * `adjustedBendRadius` has already clamped to what the bend's legs can hold;
-     * if even that would not draw - a fitting whose pipes were shortened under it
-     * - nothing is written, so the LAST VALID geometry stays exactly as it was.
-     * That is the "never resolve an invalid radius by detaching the pipes" rule,
-     * applied before anything else moves.
+     * Settling a run's joints re-seats BOTH pipes of every fitting that run
+     * belongs to, and those re-seats move tangent ends, trims, seams and spans.
+     * A chain therefore changes three or four objects for a drag that names one,
+     * so the set is every pipe joined to any fitting that touches the dragged
+     * object - not only the fittings recorded on the object itself.
      */
-    if (!enggPipeDuct.isBendRadiusDrawable(object, adjusted.radius)) {
-        return;
+    const dragged = drag.object;
+
+    const touched = new Set(
+        Array.isArray(dragged?.engineering?.connections)
+            ? dragged.engineering.connections.filter(Boolean)
+            : []
+    );
+
+    if (dragged?.id) {
+        touched.add(dragged.id);
     }
 
-    const previousRadius = object.engineering?.bendRadius;
-
-    enggPipeDuct.setBendRadius(object, adjusted.radius, { user: true });
-
-    /* The legs are re-measured from the pipes after the radius is written. */
-    if (!enggPipeDuct.elbowCurvesFor(object)) {
-        if (Number.isFinite(Number(previousRadius))) {
-            enggPipeDuct.setBendRadius(object, previousRadius, { user: true });
+    /*
+     * AND THE ELBOWS THEMSELVES. Settling re-reads each affected fitting's
+     * corner, angle, radius, trims, ports and seams - so the fitting is written
+     * as well as the pipes. An undo that restored only the pipes left the bend
+     * sitting at the angle and place the edit gave it, over pipes put back where
+     * they were.
+     */
+    objects.forEach((candidate) => {
+        if (!enggPipeDuct.isElbowType(candidate.type)) {
+            return;
         }
 
+        const joined = Array.isArray(candidate.engineering?.connections)
+            ? candidate.engineering.connections.filter(Boolean)
+            : [];
+
+        if (joined.includes(dragged?.id) || joined.some((id) => touched.has(id))) {
+            joined.forEach((id) => touched.add(id));
+            touched.add(candidate.id);
+        }
+    });
+
+    /* The dragged object is restored from `originals`; it is not duplicated here. */
+    touched.delete(dragged?.id);
+
+    drag.elbowRuns = Object.fromEntries(
+        [...touched]
+            .map((id) => objects.find((entry) => entry.id === id))
+            .filter(Boolean)
+            .map((run) => [run.id, JSON.parse(JSON.stringify(run))])
+    );
+}
+
+/*
+ * MOVING A CONNECTED ELBOW IS MOVING A JOINT.
+ *
+ * An elbow between two pipes is not a shape sitting on top of them: it IS their
+ * corner. So a body drag moves the JOINT - the point the two runs meet at - and
+ * everything else follows, exactly as when a student drags either pipe's
+ * connected endpoint.
+ *
+ * IN THREE STEPS:
+ *
+ *   1. THE JOINT MOVES. The drag delta is applied to the corner as it was when
+ *      the drag began, so every frame states a position instead of accumulating
+ *      one.
+ *   2. EACH PIPE CONNECTED END FOLLOWS. Both runs are re-aimed at the new joint,
+ *      keeping their OUTER ends exactly where they are - so the pipes are
+ *      lengthened, shortened or swung about those fixed ends, and never travel
+ *      as rigid objects.
+ *   3. THE BEND IS RE-DERIVED FROM THE RESULT. Its angle is what the two new
+ *      directions make; its radius is re-fitted to the room they leave.
+ */
+function moveConnectedElbow(drag, object, point) {
+    const original = drag.originals?.[object.id]?.geometry || null;
+    const start = drag.start || null;
+
+    if (!original || !start || !original.position) {
         return;
     }
 
+    /* The joint, from the press - never from the live corner. */
+    const joint = {
+        x: original.position.x + (point.x - start.x),
+        y: original.position.y + (point.y - start.y)
+    };
+
+    const connections = Array.isArray(object.engineering?.connections)
+        ? object.engineering.connections
+        : [];
+
+    /* Each run re-aimed at the joint, its outer end untouched. */
+    connections.forEach((runId, index) => {
+        if (!runId) {
+            return;
+        }
+
+        const run = (drawingState.objects || []).find((candidate) => candidate.id === runId);
+
+        if (!run?.geometry) {
+            return;
+        }
+
+        const held = object.engineering?.ports?.[runId] || (index === 0 ? "end" : "start");
+        const free = held === "end" ? "start" : "end";
+        const fixed = run.geometry[free];
+
+        if (!fixed) {
+            return;
+        }
+
+        run.geometry = {
+            ...run.geometry,
+            [held]: { x: joint.x, y: joint.y },
+            span: {
+                start: held === "start" ? { x: joint.x, y: joint.y } : { x: fixed.x, y: fixed.y },
+                end: held === "end" ? { x: joint.x, y: joint.y } : { x: fixed.x, y: fixed.y }
+            }
+        };
+    });
+
+    const previousRadius = Number(object.engineering?.bendRadius);
+    const userSet = enggPipeDuct.isBendRadiusUserSet(object);
+
     /*
-     * THE PIPES FOLLOW THE HANDLE, FRAME BY FRAME.
-     *
-     * The tangent points slide along the pipes as the radius changes, so the
-     * joined pipes are re-cut to meet them on every move - which is what keeps
-     * the fitting attached DURING the drag rather than only when it ends.
-     *
-     * `reseatElbowPipes` keeps each pipe's outer endpoint and changes only its
-     * inner end, so the drag never moves the pipework the student did not touch.
+     * THE BEND FROM THE NEW GEOMETRY. `updateElbowForPair` would re-solve the
+     * corner from the fitting's own records - which still describe the joint
+     * where it was - and pull it back, so the fitting is built here from the two
+     * pipes as they now run: its arms are each pipe's FIXED far end.
      */
+    const runs = [0, 1].map((index) => {
+        const id = connections[index];
+
+        return id ? (drawingState.objects || []).find((candidate) => candidate.id === id) || null : null;
+    });
+
+    const farOf = (run, index) => {
+        if (!run?.geometry) {
+            return null;
+        }
+
+        const held = object.engineering?.ports?.[run.id] || (index === 0 ? "end" : "start");
+
+        return held === "end" ? run.geometry.start : run.geometry.end;
+    };
+
+    const farA = farOf(runs[0], 0);
+    const farB = farOf(runs[1], 1);
+
+    object.geometry = {
+        ...(object.geometry || {}),
+        position: { x: joint.x, y: joint.y }
+    };
+
+    if (farA && farB) {
+        /*
+         * THE ANGLE IS WHATEVER THE TWO NEW LINES MAKE. No stored value is
+         * consulted, so a move that swings either pipe changes the bend.
+         */
+        const angleDegrees = enggPipeDuct.cornerAngleDegrees(farA, joint, farB);
+
+        object.geometry = {
+            ...object.geometry,
+            previous: { x: farA.x, y: farA.y },
+            next: { x: farB.x, y: farB.y }
+        };
+
+        if (Number.isFinite(angleDegrees)) {
+            object.engineering = {
+                ...(object.engineering || {}),
+                angleDegrees,
+                angle: angleDegrees
+            };
+        }
+    }
+
+    if (Number.isFinite(previousRadius) && previousRadius > 0) {
+        enggPipeDuct.setBendRadius(object, previousRadius, { user: userSet });
+    }
+
+    /* And the pipes are seated on what the bend became. */
     reseatElbowPipes(object, drawingState.objects);
 }
 

@@ -379,6 +379,12 @@ test("B5: an oversized radius is clamped to what the bend can hold", () => {
 
   const { elbow } = m.tool.commitElbowGesture({ x: 0, y: 0 }, { x: 100, y: 0 });
 
+  /*
+   * A MANUAL FITTING'S ARMS ARE ITS OWN ENDS, and those do not move when the
+   * radius does - so the largest radius it can DRAW is a hair inside the arm
+   * limit, which is what `elbowFitRadius` reports. The clamp is measured
+   * against that number.
+   */
   const fit = m.pipe.elbowFitRadius(elbow);
 
   assert.ok(Number.isFinite(fit) && fit > 0, "the bend has a maximum radius");
@@ -390,7 +396,7 @@ test("B5: an oversized radius is clamped to what the bend can hold", () => {
   assert.ok(m.pipe.elbowCurvesFor(elbow), "and the geometry is still valid");
 });
 
-test("B6: the features Transform has X Shift, Y Shift, Bend Radius and Bend Angle - and no Rotate", () => {
+test("B6: the features Transform has X Shift, Y Shift and Bend Radius - no angle and no Rotate", () => {
   const m = modules();
 
   reset(m.state);
@@ -400,9 +406,17 @@ test("B6: the features Transform has X Shift, Y Shift, Bend Radius and Bend Angl
   const html = m.editor.featuresMarkupForSelection([elbow]);
   const transform = html.slice(html.indexOf('data-feature-group="transform"'));
 
-  ["X Shift", "Y Shift", "Bend Radius", "Bend Angle"].forEach((label) => {
+  ["X Shift", "Y Shift", "Bend Radius"].forEach((label) => {
     assert.ok(transform.includes(`>${label}<`), `Transform must have ${label}`);
   });
+
+  /*
+   * NO BEND ANGLE CONTROL. The bend is the direction change its pipes make,
+   * so it is DERIVED - a field that could set a different one would describe
+   * a bend the pipework does not have.
+   */
+  assert.ok(!/Bend Angle/.test(html), "an elbow has no Bend Angle control");
+  assert.ok(!/Angle/.test(html), "and no angle control of any kind");
 
   assert.ok(!transform.includes(">Rotate<"), "an elbow has no Rotate");
   assert.ok(!/Rotate/.test(html), "and no Rotate anywhere in its panel");

@@ -6,6 +6,7 @@ import enggDrawingState from "../../shared/model/drawing-state.js";
 import enggDrawingSnap from "../../shared/snapping/object-snap.js";
 import enggSheets from "../../components/layout/workspace/sheets.js";
 import enggPipeDuct from "./model/fluids/pipe-duct.js";
+import enggPipeAssembly from "./model/fluids/pipe-assembly.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
 
@@ -223,5 +224,14 @@ const lookupEditorObject = (id) =>
     (id ? (drawingState.objects || []).find((object) => object.id === id) || null : null);
 
 enggPipeDuct.setObjectLookup(lookupEditorObject);
+
+/*
+ * AND THE WHOLE SHEET, FOR THE ASSEMBLY GROUPING.
+ *
+ * A connection graph is read from EVERY object at once, so a per-id lookup is not
+ * enough: the assembly reconciler needs the list. It is published the same way and
+ * for the same reason, and it too reads the live document at call time.
+ */
+enggPipeAssembly.setObjectListLookup(() => drawingState.objects || []);
 
 export const objectOnSheet = lookupEditorObject;

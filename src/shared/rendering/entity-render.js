@@ -15,7 +15,7 @@ import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, dr
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
-import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
+import { drawElbow, drawJunction, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 
@@ -78,7 +78,10 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.type === "arc", draw: drawArc },
         { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d },
         { matches: entity => entity.type === "pipe-duct", draw: drawPipeDuct },
-        { matches: entity => entity.type === "elbow", draw: drawElbow }
+        { matches: entity => entity.type === "elbow", draw: drawElbow },
+
+        /* A junction is one fitting: its contour, and any free branch ticks. */
+        { matches: entity => entity.type === "junction", draw: drawJunction }
     ];
 
 

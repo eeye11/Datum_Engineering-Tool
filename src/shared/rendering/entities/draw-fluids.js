@@ -13,6 +13,7 @@
  */
 import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
+import enggJunction from "../../../features/workspace/model/fluids/junction.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 
@@ -271,4 +272,91 @@ export function drawElbow({ svg, entity, geometry, style, toScreen }) {
      * draw a stroke across the bore of the pipe - which is not what a fitting
      * looks like.
      */
+}
+
+/*
+ * ============================================================
+ * A JUNCTION - ONE CONTINUOUS CONTOUR ROUND THE HUB
+ * ============================================================
+ *
+ * The shape is `enggJunction.junctionOutline` and nothing else, for the same
+ * reason the elbow reads its walls from the model: the canvas, the source
+ * writer and the selection bounds then describe ONE loop.
+ *
+ * The contour already carries every branch's mouth at the port its pipe
+ * meets, at that pipe's OWN width - so a junction joining a wide run to two
+ * narrow ones is drawn as one blended fitting. The connected pipes draw
+ * their own walls up to those mouths; this draws only what belongs to the
+ * fitting.
+ */
+export function drawJunction({ svg, entity, toScreen }) {
+    const style = entity?.style || {};
+
+    const outline = enggJunction.junctionOutline(entity);
+
+    if (!outline.length) {
+        return true;
+    }
+
+    const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+    const dash = dashPatternFor(style.lineType);
+
+    const points = outline.map(toScreen);
+
+    const d = points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ") + " Z";
+
+    /* THE FILL GOES UNDER THE OUTLINE: the outline IS the boundary. */
+    if (style.fillMode === "solid") {
+        svg.appendChild(createSvgElement("path", {
+            d,
+            fill: paintColour(style.fill || stroke),
+            stroke: "none"
+        }));
+    }
+
+    /*
+     * A ROUND JOIN, unlike the elbow's miter: the contour is sampled, so its
+     * shoulders are many short chords and a miter would spike at each one.
+     */
+    svg.appendChild(createSvgElement("path", {
+        d,
+        fill: "none",
+        stroke,
+        "stroke-width": scaledStrokeWidth(style.lineWidth),
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        ...(dash ? { "stroke-dasharray": dash } : {})
+    }));
+
+    /*
+     * THE TICK FOR AN UNCONNECTED BRANCH. A port is a place a pipe can be
+     * snapped to, so it must be visible - but it is not pipework, and it goes
+     * as soon as a pipe is joined there.
+     */
+    (entity?.geometry?.branches || []).forEach((branch) => {
+        if (branch?.connected) {
+            return;
+        }
+
+        const port = enggJunction.branchPort(entity, branch);
+        const hub = entity?.geometry?.position;
+
+        if (!finitePoint(port) || !finitePoint(hub)) {
+            return;
+        }
+
+        const from = toScreen(port);
+        const to = toScreen({ x: port.x + (port.x - hub.x) * 0.18, y: port.y + (port.y - hub.y) * 0.18 });
+
+        svg.appendChild(createSvgElement("line", {
+            x1: from.x,
+            y1: from.y,
+            x2: to.x,
+            y2: to.y,
+            stroke,
+            "stroke-width": scaledStrokeWidth(style.lineWidth),
+            "stroke-linecap": "round",
+            ...(dash ? { "stroke-dasharray": dash } : {})
+        }));
+    });
 }

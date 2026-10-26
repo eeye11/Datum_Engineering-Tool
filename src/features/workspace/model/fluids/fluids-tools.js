@@ -273,7 +273,12 @@ export const FLUIDS_TOOL_MENUS = {
 		 * corner are the same feature type with the same lifecycle.
 		 */
 		{ id: "elbow", label: "Elbow", capability: FLUIDS_CAPABILITIES.ROUTE },
-		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.PLANNED }
+		/*
+		 * JUNCTION IS IMPLEMENTED WITH THE SAME GESTURE: the press places the hub
+		 * and the drag sets the main run - the distance is never stored - and it
+		 * commits one fitting owning three or more branches.
+		 */
+		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.ROUTE }
 	],
 
 	"fluids-flow-indicators": [

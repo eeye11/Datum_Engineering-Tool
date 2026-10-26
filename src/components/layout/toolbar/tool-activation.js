@@ -17,6 +17,7 @@ import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYN
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
 import { beginElbowConstruction, beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+import { beginJunctionConstruction } from "../../../features/workspace/interaction/junction-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -301,6 +302,22 @@ export function activateTool(
      * Arming it begins no construction: there is nothing until the student
      * presses, exactly as for a run.
      */
+    /*
+     * THE JUNCTION IS THE THIRD OF THE SAME KIND. Press, drag, release: the
+     * press is the hub and the drag its main run.
+     */
+    if (requestedTool === "junction") {
+        beginJunctionConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
     if (requestedTool === "elbow") {
         beginElbowConstruction();
 

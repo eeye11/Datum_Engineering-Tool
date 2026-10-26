@@ -300,6 +300,12 @@ const BUILT = [
    * generated fitting uses.
    */
   "elbow",
+
+  /*
+   * JUNCTION IS IMPLEMENTED TOO: the same gesture, one fitting owning three or
+   * more branches, and the same connection record.
+   */
+  "junction",
   "coordinate-system",
   "reference-point",
   "reference-line",

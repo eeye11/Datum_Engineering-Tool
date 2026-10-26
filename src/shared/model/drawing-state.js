@@ -492,6 +492,15 @@ function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
     return object;
 }
 
+/*
+ * THE TYPE NAME OF A PIPE ASSEMBLY, STATED HERE RATHER THAN IMPORTED.
+ *
+ * This module sits UNDER the fluids model - `pipe-assembly.js` imports it - so
+ * importing the constant back would close a cycle. It is one string, and naming
+ * it here keeps the label table self-contained.
+ */
+const PIPE_ASSEMBLY_TYPE_NAME = "pipe-assembly";
+
 function createGeometryObject(type, geometry, options = {}) {
     const generatedId = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
         ? globalThis.crypto.randomUUID()
@@ -596,7 +605,14 @@ function createGeometryObject(type, geometry, options = {}) {
          * branches. It sits in the same flat list as the runs and bends it joins,
          * so the Features list reads "Pipe / Duct 1", "Elbow 1", "Junction 1".
          */
-        junction: "Junction"
+        junction: "Junction",
+
+        /*
+         * AN ASSEMBLY IS A CONTAINER, NOT A DRAWN OBJECT. It is named here so
+         * the Objects tab can label its parent row; it has no geometry, so
+         * nothing draws or hit-tests it.
+         */
+        [PIPE_ASSEMBLY_TYPE_NAME]: "Pipe Assembly"
     }[type] || type;
 
     return {
@@ -1958,6 +1974,20 @@ function removeObjectsAndDescendants(
             object.engineering.connections.forEach(runId => {
                 if (runId) {
                     addChild(runId, object.id);
+                }
+            });
+        }
+
+        /*
+         * A JUNCTION BELONGS TO ITS PIPES FOR THE SAME REASON. Its branches are
+         * the runs it joins, and with one gone it no longer describes the
+         * pipework. The RUNS are not removed with it - deleting a junction
+         * leaves its pipes exactly where they are.
+         */
+        if (object.type === "junction") {
+            (object.geometry?.branches || []).forEach(branch => {
+                if (branch?.connected) {
+                    addChild(branch.connected, object.id);
                 }
             });
         }

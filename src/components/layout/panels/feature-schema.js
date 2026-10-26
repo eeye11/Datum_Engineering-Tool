@@ -104,7 +104,7 @@ const FILLABLE = new Set([
  * two arcs and the two end edges. They are filled shapes in the same sense as a
  * closed polygon - one region, filled behind its own outline.
  */
-const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow"]);
+const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow", "junction"]);
 
 /*
  * The types whose stroke can be dashed, dotted or otherwise styled.
@@ -839,6 +839,7 @@ const FIELDS = {
             object.type !== "annotate" &&
             object.type !== "pipe-duct" &&
             object.type !== "elbow" &&
+            object.type !== "junction" &&
             Boolean(object.name),
         read: (object) => object?.showName === true,
         write: (object, value) => {
@@ -907,7 +908,7 @@ function isLockable(object) {
 	 * elbow is a fitting rather than a run, not a dynamics symbol, so it is
 	 * named here rather than inferred.
 	 */
-	if (object && (object.type === "pipe-duct" || object.type === "elbow")) {
+	if (object && (object.type === "pipe-duct" || object.type === "elbow" || object.type === "junction")) {
 		return true;
 	}
 
@@ -1030,7 +1031,7 @@ export const GROUPS = [
 
     	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
     	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
-    	{ id: "transform", heading: "Transform", fields: [], transform: true }
+    	{ id: "transform", heading: "Transform", fields: ["bendRadius"], transform: true }
     ];
 
 /*
@@ -1129,48 +1130,19 @@ Object.assign(FIELDS, {
 
     /*
      * ============================================================
-     * THE ELBOW'S TWO TRANSFORM PARAMETERS
+     * THE ELBOW'S ONE TRANSFORM PARAMETER
      * ============================================================
-     *
-     * BEND ANGLE IS THE ONLY ABSOLUTE-VALUE CONTROL an elbow has. It is the bend
-     * the fitting has, in degrees, and it is EDITABLE only while a free end
-     * defines the bend:
-     *
-     *   standalone   editable - there is nothing else to decide it
-     *   partial      editable - the free end sets it
-     *   connected    read-only - the two pipes' directions are the bend, and
-     *                the value shown is what those pipes currently make
      *
      * BEND RADIUS IS A RELATIVE ADJUSTMENT, like X Shift and Y Shift: a typed
      * value opens or closes the current radius by that much, clamped to what
-     * the bend's arms can hold. It is deliberately not an absolute radius, and
-     * it is deliberately not labelled "change" - the row is "Bend Radius".
+     * the bend's arms can hold.
+     *
+     * THERE IS NO BEND ANGLE ROW. An elbow's angle is the direction change its
+     * PIPES make - the fitting exists at a corner, so the corner decides it -
+     * and a field that could set a different one would describe a bend the
+     * pipework does not have. The angle is still DERIVED on every settle; it is
+     * simply not a property the student edits.
      */
-    bendAngle: {
-        kind: "number",
-        min: 1,
-        max: 180,
-        step: 1,
-        unit: "\u00B0",
-        applies: (object) => object?.type === "elbow",
-        read: (object) => Math.round(enggPipeDuct.elbowAngleDegrees(object) ?? 90),
-        write: (object, value) => {
-            const degrees = Number(value);
-
-            if (!Number.isFinite(degrees) || degrees <= 0 || degrees > 180) {
-                return false;
-            }
-
-            if (object?.type === "elbow" && elbowConnectionState(object) === "connected") {
-                return false;
-            }
-
-            return writeElbowAngle(object, degrees);        },
-        readonly: (object) =>
-            object?.type === "elbow" &&
-            elbowConnectionState(object) === "connected"
-    },
-
     bendRadius: {
         kind: "number",
         step: 1,
@@ -1267,35 +1239,27 @@ export function adjustElbowRadius(object, change) {
         return false;
     }
 
-    const adjusted = enggPipeDuct.adjustedBendRadius(object, change);
-
-    if (!adjusted) {
-        return false;
-    }
-
-    if (!enggPipeDuct.setBendRadius(object, adjusted.radius, { user: true })) {
-        return false;
-    }
-
     /*
-     * THE PIPES FOLLOW THE NEW TANGENT POINTS.
-     *
-     * A radius change slides each tangent point along its pipe's centreline. The
-     * pipes must move with it, or the straight sections stop short of the arcs;
-     * `reseatElbowPipes` re-cuts them at the new tangents, keeping their outer
-     * endpoints where the student left them.
-     *
-     * IT NEVER DETACHES. If the operation is unavailable, the geometry is left
-     * exactly as the clamp made it - the fitting may be smaller than asked for,
-     * but it is never separated from the pipework it joins.
+     * THE CHANGE IS TURNED INTO AN ABSOLUTE RADIUS HERE AND NOWHERE ELSE, and
+     * the absolute value is handed to the ONE operation that applies a radius.
+     * That operation clamps it against the bend's live arms, regenerates the
+     * fitting's tangents and every joined pipe's seat, trim and seam, and
+     * restores everything if the result cannot be drawn - so a typed value and
+     * a dragged handle cannot produce two different bends.
      */
-    const reseat = elbowReseatOf();
+    const apply = elbowRadiusApplyOf();
 
-    if (reseat) {
-        reseat(object);
+    if (!apply) {
+        return false;
     }
 
-    return adjusted;
+    const current = Number(object.engineering?.bendRadius);
+
+    if (!Number.isFinite(current)) {
+        return false;
+    }
+
+    return apply(object, current + Number(change));
 }
 
 /*
@@ -1317,21 +1281,21 @@ export function setElbowRunLookup(lookup) {
 }
 
 /*
- * THE OPERATION THAT RE-SEATS A FITTING'S PIPES, injected the same way.
+ * THE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS, injected the same way.
  *
- * Changing a radius moves the tangent points, and the pipes have to follow them.
- * That work belongs to the interaction layer (it needs the drawing, and it edits
- * the pipes), so it is handed in rather than imported - exactly as the run
- * lookup is.
+ * The Features tab must not have a radius calculation of its own: the canvas
+ * handle and the panel have to write the SAME geometry for the same radius.
+ * Seating the pipes on the new tangents is part of that one operation, which is
+ * why there is no separate reseat hook beside it.
  */
-export function setElbowReseat(reseat) {
-    elbowLookupStore().reseat = typeof reseat === "function" ? reseat : null;
+export function setElbowRadiusApply(apply) {
+    elbowLookupStore().applyRadius = typeof apply === "function" ? apply : null;
 }
 
-function elbowReseatOf() {
-    const reseat = elbowLookupStore().reseat;
+function elbowRadiusApplyOf() {
+    const apply = elbowLookupStore().applyRadius;
 
-    return typeof reseat === "function" ? reseat : null;
+    return typeof apply === "function" ? apply : null;
 }
 
 /* The run lookup currently injected, or null. */
@@ -2346,7 +2310,14 @@ export function groupsFor(object) {
      */
     const isElbow = object.type === "elbow";
 
-    const flowPath = isPipe || isElbow;
+    /*
+     * A JUNCTION HAS THE SAME THREE SECTIONS AGAIN - Object, Appearance and
+     * Transform - with no branch angle rows and no branch length. An arm is a
+     * connection stub, and the fitting is placed by its pipes.
+     */
+    const isJunction = object.type === "junction";
+
+    const flowPath = isPipe || isElbow || isJunction;
 
     const groups = [
         ...dynamics,

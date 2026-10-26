@@ -289,6 +289,18 @@ function objectFor(id, type) {
         end: point(60, 0),
         position: point(10, 10),
         points: [point(0, 0), point(60, 0)],
+        /*
+         * A JUNCTION IS THREE ARMS MEETING AT A HUB. The writer needs them to
+         * build the contour; without them it correctly declines.
+         */
+        mainDirection: { x: 1, y: 0 },
+        mainBranchId: "a",
+        branches: [
+          { id: "a", direction: { x: -1, y: 0 }, angle: 180, connected: null },
+          { id: "b", direction: { x: 1, y: 0 }, angle: 0, connected: null },
+          { id: "c", direction: { x: 0, y: 1 }, angle: 90, connected: null }
+        ],
+      engineering: { diameter: 12, wallThickness: 1 },
       },
       engineering: { diameter: 12, wallThickness: 1 },
     };

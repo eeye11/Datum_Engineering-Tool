@@ -445,7 +445,13 @@ export const featureIcons = {
 	     * from the tool that drew it.
 	     */
 	    "pipe-duct": toolIcons["Pipe / Duct"],
-	    elbow: toolIcons.Elbow
+	    elbow: toolIcons.Elbow,
+
+	    /*
+	     * A JUNCTION USES THE SAME ART AS ITS TOOL BUTTON, so a generated and a
+	     * hand-placed junction file under one glyph.
+	     */
+	    junction: toolIcons.Junction
 	};
 
 export const drawingToolGroups = [

@@ -8,6 +8,7 @@ import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
+import enggJunction from "../model/fluids/junction.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
@@ -605,6 +606,19 @@ export function objectAtPoint(
                 }
 
                 /*
+                 * A PIPE ASSEMBLY IS A CONTAINER, AND IS NEVER PICKED.
+                 *
+                 * It draws nothing, so there is no ink to aim at - and picking it
+                 * by proximity would put an invisible box round the system that
+                 * swallows clicks meant for the pipes inside it. It is selected
+                 * from its ROW in the Objects tab instead, which is where a
+                 * container belongs.
+                 */
+                if (object.type === "pipe-assembly") {
+                    return false;
+                }
+
+                /*
                  * AN ANNOTATION IS HIT BY ITS TEXT, not by geometry.
                  *
                  * Every other feature is found by how close the pointer
@@ -729,6 +743,15 @@ export function objectAtPoint(
                  */
                 if (object.type === "elbow") {
                     return elbowContainsPoint(object, point, tolerance);
+                }
+
+                /*
+                 * A JUNCTION IS PICKED AGAINST ITS OWN CONTOUR - the same loop
+                 * the canvas draws and the source writes, so what a student can
+                 * click is exactly the fitting they can see.
+                 */
+                if (object.type === "junction") {
+                    return enggJunction.junctionContainsPoint(object, point, tolerance);
                 }
 
                 /*

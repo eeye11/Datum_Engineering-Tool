@@ -94,6 +94,7 @@ import {
     pipeEndAt,
     commitElbowGesture
 } from "./pipe-duct-tool.js";
+import { JUNCTION_PHASE, commitJunctionGesture, junctionGesturePreview } from "./junction-tool.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
@@ -338,6 +339,15 @@ export function isDragCreationTool(
      * student pressed and where they let go.
      */
     if (toolId === "elbow") {
+        return true;
+    }
+
+    /*
+     * AND THE JUNCTION IS ONE TOO: the press places its hub and the drag sets
+     * its main-run direction. Without this it is armed but inert - the press
+     * never reaches its session below, so nothing is created.
+     */
+    if (toolId === "junction") {
         return true;
     }
 
@@ -614,6 +624,38 @@ export function beginCreationDrag(
      * run, if there is one, is remembered so the release can attach to it. The
      * second end is resolved on the release, through the same snapping.
      */
+    /*
+     * A JUNCTION IS PLACED THE SAME WAY, AND MEASURES THE SAME WAY: the press
+     * is the HUB and the drag DIRECTION is the main run. The DISTANCE means
+     * nothing and is deliberately never stored.
+     */
+    if (drawingState.activeTool === "junction") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            junction: true,
+            start: pressPoint
+                ? { x: pressPoint.x, y: pressPoint.y }
+                : null,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
+        };
+
+        return true;
+    }
+
     if (drawingState.activeTool === "elbow") {
         if (event.button !== 0) {
             return false;
@@ -1058,6 +1100,43 @@ export function moveCreationDrag(event) {
      * the shared resolver before it is published, which is what lets a dragged
      * elbow land exactly on a pipe endpoint and connect.
      */
+    /* A junction previews its contour while the drag sets its main run. */
+    if (session.junction) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.start;
+
+        session.currentPoint = point;
+
+        const main = enggPipeDuct.directionOf(session.start, point) || { x: 1, y: 0 };
+
+        const interaction = {
+            fluidsTool: "junction",
+            phase: JUNCTION_PHASE,
+            junctionStart: session.start,
+            junctionMainDirection: main,
+            junctionEngineering: drawingState.interaction.junctionEngineering,
+            snapGeometry: session.start ? [{ start: session.start, end: point }] : [],
+            snapToolId: "junction"
+        };
+
+        interaction.preview = junctionGesturePreview(interaction, point);
+
+        enggDrawingState.setInteraction(drawingState, interaction);
+
+        return;
+    }
+
     if (session.elbow) {
         if (!session.moved) {
             const dx = event.clientX - session.startScreen.x;
@@ -1322,6 +1401,37 @@ export function finishCreationDrag(
      * exactly where the indicator showed it would. The tool stays armed, so a
      * student can place another elbow straight away.
      */
+    /*
+     * THE JUNCTION COMMITS AT THE RELEASE. The hub is the press; the MAIN RUN
+     * is the direction the pointer travelled. The distance is never stored.
+     */
+    if (session.junction) {
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.currentPoint ||
+            session.start;
+
+        const created = commitJunctionGesture(session.start, point, {
+            junctionEngineering: drawingState.interaction.junctionEngineering
+        });
+
+        if (!created) {
+            enggDrawingState.setInteraction(drawingState, {
+                fluidsTool: "junction",
+                preview: null,
+                phase: "idle",
+                snapGeometry: []
+            });
+
+            renderCurrentDrawing();
+        }
+
+        return true;
+    }
+
     if (session.elbow) {
         const resolution = resolvePointerEvent(event);
 

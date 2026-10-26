@@ -7,6 +7,7 @@ import { coordinateSystemArms, rigidBodyHandles, rotationHandleFor } from "../..
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
+import enggJunction from "../model/fluids/junction.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { drawingCanvas } from "../dom.js";
@@ -112,6 +113,13 @@ export function cancelManipulationDrag() {
                          * a stale id would detach the object from
                          * everything that points at it.
                          */
+                        id: object.id,
+                        style: object.style
+                    }
+                    : drag.elbowRuns?.[object.id]
+                    ? {
+                        /* A pipe the drag re-cut is restored with the fitting. */
+                        ...JSON.parse(JSON.stringify(drag.elbowRuns[object.id])),
                         id: object.id,
                         style: object.style
                     }
@@ -553,7 +561,53 @@ function elbowAngleHandle(object) {
         return [];
     }
 
-    return [{ kind: "elbow-angle", point: { ...object.geometry.position } }];
+    const corner = object?.geometry?.position;
+
+    if (!corner) {
+        return [];
+    }
+
+    const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * (drawingState.camera?.zoom || 1);
+
+    const reach = 10 / Math.max(scale, 1e-6);
+
+    const bisector = elbowBisectorOf(object);
+
+    const curves = enggPipeDuct.elbowCurvesFor(object);
+
+    const centreDistance = curves
+        ? Math.hypot(curves.centre.x - corner.x, curves.centre.y - corner.y)
+        : Infinity;
+
+    const offset = bisector ? Math.min(reach, centreDistance * 0.5) : 0;
+
+    const point = {
+        x: corner.x + (bisector ? bisector.x * offset : 0),
+        y: corner.y + (bisector ? bisector.y * offset : 0)
+    };
+
+    return [{ kind: "elbow-angle", point }];
+}
+
+/* The inward bisector of an elbow's two arms, or null. */
+function elbowBisectorOf(object) {
+    const geometry = object?.geometry || {};
+
+    if (typeof enggPipeDuct.elbowBisector === "function") {
+        return enggPipeDuct.elbowBisector(object);
+    }
+
+    const inArm = enggPipeDuct.directionOf(geometry.position, geometry.previous);
+    const outArm = enggPipeDuct.directionOf(geometry.position, geometry.next);
+
+    if (!inArm || !outArm) {
+        return null;
+    }
+
+    const sum = { x: inArm.x + outArm.x, y: inArm.y + outArm.y };
+    const length = Math.hypot(sum.x, sum.y);
+
+    return length < 1e-9 ? null : { x: sum.x / length, y: sum.y / length };
 }
 
 /* How an elbow's ends are attached, from the pair of ids it records. */
@@ -797,6 +851,36 @@ function manipulationHandles(
                 { kind: "start", point: g.start },
                 { kind: "end", point: g.end }
             ];
+    }
+
+    /*
+     * A JUNCTION IS GRABBED BY ITS HUB AND BY EACH BRANCH'S PORT.
+     *
+     * The hub moves the whole fitting. Each port is BOTH the point a pipe
+     * connects to AND the point that sets that branch's angle: dragging it
+     * around the hub turns the branch. There is deliberately no handle that
+     * changes a branch's LENGTH - the arms are connection stubs.
+     *
+     * The main run's two ports turn the FITTING, because their direction IS
+     * the reference every branch angle is measured from.
+     */
+    if (object.type === "junction" && g.position) {
+        const handles = [{ kind: "position", point: g.position }];
+
+        (g.branches || []).forEach((branch) => {
+            const port = enggJunction.branchPort(object, branch);
+
+            if (!port) {
+                return;
+            }
+
+            handles.push({
+                kind: branch.id === g.mainBranchId ? "junction-main" : "junction-branch-" + branch.id,
+                point: port
+            });
+        });
+
+        return handles;
     }
 
     /*
@@ -1170,7 +1254,13 @@ function supportsRotationHandle(
          * parameters - X Shift, Y Shift, Bend Radius and Bend Angle - none of
          * which is a rotation.
          */
-        "elbow"
+        "elbow",
+
+        /*
+         * A JUNCTION HAS NO ROTATION HANDLE EITHER: its orientation is its
+         * MAIN RUN, which the branches are measured from.
+         */
+        "junction"
     ].includes(object.type);
 }
 

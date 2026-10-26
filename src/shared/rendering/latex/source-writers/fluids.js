@@ -14,6 +14,7 @@
 import { point, splitPrelude, styleOptions } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import enggPipeDuct from "../../../../features/workspace/model/fluids/pipe-duct.js";
+import enggJunction from "../../../../features/workspace/model/fluids/junction.js";
 import { drawingState } from "../../../../features/workspace/editor-state.js";
 
 function finitePoint(at) {
@@ -225,6 +226,31 @@ function pathPointsOf(wall) {
   });
 }
 
+/*
+ * A JUNCTION IS ONE CLOSED PATH.
+ *
+ * The contour comes from `junctionOutline` - the very loop the canvas draws -
+ * so the compiled picture and the sheet describe the same fitting, and every
+ * branch mouth is at the port its pipe meets, at that pipe's own width. The
+ * source needs no fitting macro of its own: one native TikZ path, in the
+ * junction's own appearance, IS the whole junction.
+ */
+function serializeJunction(object) {
+  const { definitions, options } = styleOf(object);
+
+  const outline = enggJunction.junctionOutline(object);
+
+  if (outline.length < 3) {
+    return null;
+  }
+
+  const path = outline.map((corner) => point(corner.x, corner.y)).join(" -- ");
+
+  return withDefinitions(definitions, [
+    `\\draw[${options.join(", ")}] ${path} -- cycle;`
+  ]);
+}
+
 export function fluidsSourceWriter(object) {
   if (!object || typeof object !== "object") {
     return null;
@@ -240,7 +266,9 @@ export function fluidsSourceWriter(object) {
       ? serializeRun(object)
       : object.type === "elbow"
         ? serializeElbow(object)
-        : null;
+        : object.type === "junction"
+          ? serializeJunction(object)
+          : null;
 
   if (typeof written !== "string" || !written.trim()) {
     return null;
@@ -251,7 +279,7 @@ export function fluidsSourceWriter(object) {
   return applyObjectComments({ ...object, id }, written, { type: object.type });
 }
 
-export const FLUIDS_SOURCE_TYPES = Object.freeze(["pipe-duct", "elbow"]);
+export const FLUIDS_SOURCE_TYPES = Object.freeze(["pipe-duct", "elbow", "junction"]);
 
 export default {
   FLUIDS_SOURCE_TYPES,
