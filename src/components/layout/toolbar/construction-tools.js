@@ -68,6 +68,7 @@ export function isConstructionTool(
             toolId === "nozzle-diffuser" ||
             toolId === "rankine-cycle" ||
             toolId === "reheat-rankine-cycle" ||
+            toolId === "vapor-compression-cycle" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

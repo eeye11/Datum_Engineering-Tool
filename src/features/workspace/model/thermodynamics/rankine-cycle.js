@@ -1,5 +1,6 @@
 import { cylinderPoint } from "./piston-cylinder.js";
 import { appendReheatRankineCycle } from "./reheat-rankine-cycle.js";
+import { appendVaporCompressionCycle } from "./vapor-compression-cycle.js";
 
 // One resizable schematic; all paths and labels share its local frame.
 export function rankineCycleDiagram(geometry, problemData = {}) {
@@ -105,6 +106,10 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
         [0.165, 0.57]
     ];
     const turbineCasing = [[0.68, 0.56], [0.87, 0.64], [0.87, 0.36], [0.68, 0.44], [0.68, 0.56]];
+    if (geometry.refrigeration) {
+        appendVaporCompressionCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
+        return { paths, labels };
+    }
     if (geometry.reheat) {
         appendReheatRankineCycle({ pipe, path, box, circle, stateCircle, label, arrow, pumpCasing }, problemData);
         return { paths, labels };

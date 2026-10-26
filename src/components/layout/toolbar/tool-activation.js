@@ -210,6 +210,7 @@ export function activateTool(
         requestedTool === "nozzle-diffuser" ||
         requestedTool === "rankine-cycle" ||
         requestedTool === "reheat-rankine-cycle" ||
+        requestedTool === "vapor-compression-cycle" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
@@ -437,6 +438,7 @@ export function initialToolMessage(
             "nozzle-diffuser": "Drag opposite corners to draw a nozzle/diffuser; select it to move, resize or rotate",
             "rankine-cycle": "Drag opposite corners to place a Rankine cycle schematic",
             "reheat-rankine-cycle": "Drag opposite corners to place an ideal reheat Rankine cycle",
+            "vapor-compression-cycle": "Drag opposite corners to place an ideal vapor-compression refrigeration cycle",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

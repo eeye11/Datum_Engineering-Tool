@@ -1904,6 +1904,7 @@ function definitionOf(key) {
 const RANKINE_DATA_LABELS = {
     state1: "State 1", state2: "State 2", state3: "State 3", state4: "State 4",
     state5: "State 5", state6: "State 6", reheater: "Reheater", highTurbine: "HP Turbine", lowTurbine: "LP Turbine",
+    compressor: "Compressor", expansionValve: "Expansion Valve", evaporator: "Evaporator",
     massFlow: "Mass Flow Rate", boiler: "Boiler", turbine: "Turbine", condenser: "Condenser", pump: "Pump"
 };
 
@@ -1915,7 +1916,9 @@ function rankineDataField(key) {
         kind: "text", label: RANKINE_DATA_LABELS[name],
         placeholder: name.startsWith("state") ? "P = 100 kPa; T = 20 C" : "Value and units",
         applies: object => object.metadata?.thermodynamicsKind === "rankine-cycle" &&
-            (!["state5", "state6", "reheater", "highTurbine", "lowTurbine"].includes(name) || object.geometry?.reheat === true),
+            (!["state5", "state6", "reheater", "highTurbine", "lowTurbine"].includes(name) || object.geometry?.reheat === true) &&
+            (!["compressor", "expansionValve", "evaporator"].includes(name) || object.geometry?.refrigeration === true) &&
+            (!["boiler", "pump", "turbine"].includes(name) || !object.geometry?.refrigeration),
         read: object => object.metadata?.problemData?.[name] || "",
         write: (object, value) => {
             object.metadata = { ...object.metadata, problemData: { ...object.metadata?.problemData, [name]: String(value ?? "").trim() } };

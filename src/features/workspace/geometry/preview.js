@@ -612,7 +612,7 @@ export function updatePreview(
         );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        ["control-volume", "tank", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        ["control-volume", "tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -642,11 +642,15 @@ export function updatePreview(
                 )
             );
 
-        if (["tank", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (["tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
             if (drawingState.activeTool === "reheat-rankine-cycle") {
                 interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
                 interaction.preview.geometry.reheat = true;
+            }
+            if (drawingState.activeTool === "vapor-compression-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.refrigeration = true;
             }
         }
 
