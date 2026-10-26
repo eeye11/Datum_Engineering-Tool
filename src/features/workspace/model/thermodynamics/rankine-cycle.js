@@ -23,6 +23,13 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
         })) });
     };
     const pipe = (vertices, colour, startBoundary = null, endBoundary = null) => {
+        const origin = at(0, 0), horizontal = at(1, 0), vertical = at(0, 1);
+        const width = Math.hypot(horizontal.x - origin.x, horizontal.y - origin.y);
+        const height = Math.hypot(vertical.x - origin.x, vertical.y - origin.y);
+        if (width < 1e-9 || height < 1e-9) return;
+        // Measure the wall offset after resizing: normalized offsets would
+        // make vertical pipes wider than horizontal ones in a wide diagram.
+        const halfThickness = 0.009 * Math.min(width, height);
         const centreline = [vertices[0]];
         for (let i = 1; i < vertices.length - 1; i++) {
             const previous = vertices[i - 1], corner = vertices[i], next = vertices[i + 1];
@@ -41,9 +48,13 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
         const wall = side => centreline.map((p, index) => {
             const before = centreline[Math.max(0, index - 1)];
             const after = centreline[Math.min(centreline.length - 1, index + 1)];
-            const dx = after[0] - before[0], dy = after[1] - before[1];
+            const dx = (after[0] - before[0]) * width;
+            const dy = (after[1] - before[1]) * height;
             const length = Math.hypot(dx, dy);
-            return [p[0] - side * dy / length * 0.009, p[1] + side * dx / length * 0.009];
+            return [
+                p[0] - side * dy / length * halfThickness / width,
+                p[1] + side * dx / length * halfThickness / height
+            ];
         });
         // Meet each casing independently at each wall, including sloped faces.
         const attach = (points, first, boundary) => {
