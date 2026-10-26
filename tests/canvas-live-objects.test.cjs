@@ -15,6 +15,8 @@ const assert = require("node:assert/strict");
 
 const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 const { locate } = require("./helpers/source-path.cjs");
+const POINTS_PER_UNIT = 72.27 / 25.4;
+const PICTURE_ORIGIN = -72.27;
 
 const { window, document, error } = bootApp();
 
@@ -48,6 +50,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let model;
 let drawingState;
 let canvasRender;
+let exportTransformFor;
 let canvas;
 
 before(async () => {
@@ -56,6 +59,7 @@ before(async () => {
   model = require(locate("drawing-state.js")).default;
   ({ drawingState } = require(locate("editor-state.js")));
   canvasRender = require(locate("canvas-render.js"));
+  ({ exportTransformFor } = require(locate("source-synchronization.js")));
   canvas = document.querySelector(".drawing-canvas");
 
   await wait(300);

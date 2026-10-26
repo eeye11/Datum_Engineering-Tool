@@ -12,6 +12,7 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { updateHistoryControls } from "../toolbar/tool-activation.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
+import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
 import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
@@ -658,9 +659,11 @@ function rememberModelAt(revision) {
         return;
     }
 
+    const objects = drawingState.objects || [];
+
     modelAtRevision.set(
         revision,
-        new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
+        new Map(objects.map((object) => [object.id, serialiseObject(object)]))
     );
     // Capture the same transform the source writers used, before a drag changes
     // the model. An older compiled picture must retain its original frame.
@@ -1438,6 +1441,7 @@ disappeared while I typed" failure.
     rememberModelAt(revision);
 
     const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
+    const pictureTransform = exportTransformAtRevision.get(pictureRevision);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
     const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
