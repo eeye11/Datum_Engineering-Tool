@@ -583,7 +583,7 @@ export function updatePreview(
                 !resolution.snapCandidate
             ) {
                 setToolMessage(
-                    "Release to place the X axis"
+                    "Click or release to place the X axis"
                 );
             }
         } else {
