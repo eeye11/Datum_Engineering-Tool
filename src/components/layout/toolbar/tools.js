@@ -785,7 +785,7 @@ export const engineeringTools = {
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Load", "Stress", "Strain", "Coordinate System"],
+	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Stress", "Strain", "Coordinate System"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
 	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
