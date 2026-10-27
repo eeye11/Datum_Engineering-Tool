@@ -46,6 +46,7 @@ import {
     readField,
     setElbowRunLookup,
     setElbowRadiusApply,
+    setFeatureObjectLookup,
     setFluidReconciler,
     reconcileFluidGeometry,
     supportsTransform,
@@ -63,6 +64,18 @@ import { applyElbowRadius } from "../../../features/workspace/interaction/elbow-
  * edits fields, and it needs no cycle of its own to do it.
  */
 setElbowRunLookup(
+    (id) => (drawingState.objects || []).find((object) => object.id === id) || null
+);
+
+/*
+ * AND THE SAME DOCUMENT ANSWERS A FLOW ARROW FOR ITS HOST.
+ *
+ * The Attached Pipe row states the NAME of the run an arrow lives on, and a
+ * name is not an identity - the student may rename the pipe after placing the
+ * arrow - so the row asks the live document rather than carrying a copy of the
+ * name it was placed with.
+ */
+setFeatureObjectLookup(
     (id) => (drawingState.objects || []).find((object) => object.id === id) || null
 );
 
@@ -92,6 +105,7 @@ import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pan
 import { openColourPicker } from "../../../shared/ui/colour-picker.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
+import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
 
 let host = null;
 
@@ -300,11 +314,23 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
-function textMarkup(key, label, state) {
+function textMarkup(key, label, state, definition = {}) {
+    /*
+     * A READ-ONLY TEXT ROW STATES A FACT, IT DOES NOT OFFER A CONTROL.
+     *
+     * The Flow Arrow's Attached Pipe is the host it lives on. It is chosen by
+     * pressing on a pipe, so there is nothing to type here - a typed name would
+     * have to be resolved back to some pipe, and the wrong guess would silently
+     * move the arrow. So the field is rendered as the value it is, marked
+     * readOnly, with no edit path that could disagree with the drawing.
+     */
+    const readOnly = definition.readOnly === true;
+
     return (
-        `<input type="text" class="dfp-text" data-feature-field="${escapeHtml(key)}" ` +
+        `<input type="text" class="dfp-text${readOnly ? " is-readonly" : ""}" data-feature-field="${escapeHtml(key)}" ` +
         `aria-label="${escapeHtml(label)}" ` +
         `value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
+        (readOnly ? ` readonly aria-readonly="true" tabindex="-1"` : "") +
         (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
         ` autocomplete="off" spellcheck="false">`
     );
@@ -341,7 +367,7 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "text") {
-        return rowMarkup(label, textMarkup(key, label, state), options);
+        return rowMarkup(label, textMarkup(key, label, state, definition), options);
     }
 
     return "";
@@ -385,8 +411,64 @@ function transformRowMarkup(axis, label) {
     );
 }
 
-function stepIcon(direction) {
-    const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
+/*
+ * ============================================================
+ * THE PRESSURE PROFILE'S DATA TABLE
+ * ============================================================
+ *
+ * The graph's numbers are the STUDENT'S, so they are edited as a table of rows:
+ * a station and a pressure per row, an Add Point button and a Remove button on
+ * every row. Each edit writes the same `engineering.points` the renderer plots
+ * from and the source writer emits - so the table, the plotted points and the
+ * TikZ are one fact, not three copies.
+ *
+ * The table is built here rather than as a schema field because it is a LIST, and
+ * a list has no single value a generic row could show. Everything else about the
+ * profile stays in the schema like every other property.
+ */
+function profileDataMarkup(object) {
+    const rows = Array.isArray(object?.engineering?.points) ? object.engineering.points : [];
+
+    const axes = enggPressureProfile.axesOf(object);
+
+    const body = rows
+        .map(
+            (row, index) =>
+                `<div class="dfp-row dfp-data-row" data-profile-row="${index}">` +
+                `<input type="number" class="dfp-number" data-profile-cell="position" data-profile-index="${index}" ` +
+                `aria-label="Point ${index + 1} station" value="${Number(row.position)}">` +
+                `<input type="number" class="dfp-number" data-profile-cell="pressure" data-profile-index="${index}" ` +
+                `aria-label="Point ${index + 1} pressure" value="${Number(row.pressure)}">` +
+                `<button type="button" class="dfp-button" data-profile-remove="${index}" ` +
+                `aria-label="Remove point ${index + 1}">Remove</button>` +
+                `</div>`
+        )
+        .join("");
+
+    /*
+     * THE UNITS ARE STATED ONCE, in the column headings - from the same Axes
+     * fields the student can edit - so a number in the table is never bare.
+     */
+    const heading =
+        `<div class="dfp-row dfp-data-heading">` +
+        `<span class="dfp-row-label">${escapeHtml(axes.xTitle)} (${escapeHtml(axes.xUnit)})</span>` +
+        `<span class="dfp-row-label">${escapeHtml(axes.yTitle)} (${escapeHtml(axes.yUnit)})</span>` +
+        `</div>`;
+
+    return (
+        `<div class="dfp-section" data-feature-group="profile-data">` +
+        `<div class="dfp-section-heading">Data</div>` +
+        heading +
+        body +
+        `<div class="dfp-row">` +
+        `<span class="dfp-row-label">${rows.length} point${rows.length === 1 ? "" : "s"}</span>` +
+        `<button type="button" class="dfp-button" data-profile-add="true">Add Point</button>` +
+        `</div>` +
+        `</div>`
+    );
+}
+
+function stepIcon(direction) {    const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
 
     return (
         `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">` +
@@ -561,6 +643,27 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
         markup.push(editors);
     }
 
+    /*
+     * THE PRESSURE PROFILE'S DATA TABLE, after its properties.
+     *
+     * A single selected profile is the only case: a table belongs to ONE graph,
+     * and a row that silently picked the first of three would edit something the
+     * student did not choose.
+     */
+    if (objects.length === 1 && enggPressureProfile.isPressureProfileType(objects[0].type)) {
+        /* Put the table between the Object section and Axes, as the requirement
+         * orders them: Object, Data, Axes, Appearance, Transform. */
+        const at = markup.findIndex((section) => section.includes('data-feature-group="profile-axes"'));
+
+        const data = profileDataMarkup(objects[0]);
+
+        if (at >= 0) {
+            markup.splice(at, 0, data);
+        } else {
+            markup.push(data);
+        }
+    }
+
     return headerMarkup(objects) + markup.join("");
 }
 
@@ -686,6 +789,35 @@ function applyIndeterminate(root) {
 /* ============================================================
  * WRITING AN EDIT BACK TO THE MODEL
  * ============================================================ */
+
+/*
+ * ONE EDIT TO A PRESSURE PROFILE'S DATA.
+ *
+ * Snapshotted, applied and committed once - so a row added, a cell changed or a
+ * point removed is one entry in History, and Undo puts the table, the plotted
+ * line and the source back together. The canvas is redrawn and the pane rebuilt
+ * from the model afterwards, so no control keeps a value the model refused.
+ */
+function commitProfileData(apply) {
+    const object = selectedObjects().find((candidate) => enggPressureProfile.isPressureProfileType(candidate.type));
+
+    if (!object || object.locked === true) {
+        return false;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+    if (!apply(object)) {
+        return false;
+    }
+
+    enggDrawingState.commitDrawingChange(drawingState, previous);
+
+    renderCurrentDrawing();
+    refreshFeatures();
+
+    return true;
+}
 
 /*
  * Apply one field to every selected object it applies to. The selection is read
@@ -991,6 +1123,54 @@ export function installFeaturesPane() {
 
         if (step) {
             stepTransformValue(step);
+
+            return;
+        }
+
+        /*
+         * THE PRESSURE PROFILE'S DATA ROWS.
+         *
+         * Add and Remove are ONE edit each - snapshotted, applied and committed
+         * once - so Undo steps a point at a time and the table, the graph and the
+         * source all change together.
+         */
+        const addPoint = event.target.closest?.("[data-profile-add]");
+
+        if (addPoint) {
+            commitProfileData((profile) => enggPressureProfile.addPoint(profile));
+
+            return;
+        }
+
+        const removePoint = event.target.closest?.("[data-profile-remove]");
+
+        if (removePoint) {
+            const index = Number(removePoint.dataset.profileRemove);
+
+            commitProfileData((profile) => enggPressureProfile.removePoint(profile, index));
+        }
+    });
+
+    /*
+     * A TYPED CELL IS COMMITTED ON CHANGE, like every other field in the pane -
+     * and the graph redraws with the new number at once, because both read the
+     * same `engineering.points`.
+     */
+    host.addEventListener("change", (event) => {
+        const cell = event.target.closest?.("[data-profile-cell]");
+
+        if (cell) {
+            const index = Number(cell.dataset.profileIndex);
+            const key = cell.dataset.profileCell;
+            const value = Number(cell.value);
+
+            if (Number.isFinite(value)) {
+                commitProfileData((profile) =>
+                    enggPressureProfile.setPoint(profile, index, { [key]: value })
+                );
+            } else {
+                refreshFeatures();
+            }
         }
     });
 

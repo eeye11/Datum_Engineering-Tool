@@ -76,6 +76,14 @@ const EYE_OFF_ICON =
     '<path d="M4 4l12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
     '</svg>';
 
+/*
+ * THE HIDDEN MARK, for a surface that only has to SAY hidden - the Source tab's
+ * gutter and the top of a hidden object's block. It is the list's own picture,
+ * exported rather than redrawn, so "hidden" cannot come to look like two
+ * different things in two panes of the same panel.
+ */
+export const EYE_OFF_MARK_ICON = EYE_OFF_ICON;
+
 /* The eye button for one row, or "" when the list is only identifying rows. */
 export function visibilityButtonMarkup(object) {
     const visible = object.visible !== false;

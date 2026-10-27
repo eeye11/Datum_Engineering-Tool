@@ -89,6 +89,39 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 	ROUTE: "route",
 	DIMENSION: "dimension",
 	ANNOTATE: "annotate",
+
+	/*
+	 * FLOW ARROW: a free directional arrow, and - on a pipe - the attached flow
+	 * direction indicator. It is neither a shape (it has a drawn length of its
+	 * own) nor a free annotation (on a pipe it cannot exist without its host), so
+	 * it carries a capability of its own.
+	 */
+	FLOW_ARROW: "flow-arrow",
+
+	/*
+	 * THE SCHEMATIC FITTERS AND SYMBOLS.
+	 *
+	 * Each is its own feature type with its own model, its own renderer and its
+	 * own Features tab - not a shared primitive wearing a label. They are grouped
+	 * by the GESTURE they take, because that is what the interaction layer has
+	 * to know:
+	 *
+	 *   INLINE_FITTING   inserted into an existing run (Reducer / Expander)
+	 *   INLINE_EQUIPMENT inserted into a run, or placed alone (Pump, Valve, Meter)
+	 *   VESSEL           dragged out as a box (Reservoir / Tank)
+	 *   FLUID_LEVEL      placed inside a vessel
+	 *   FLOW_DIRECTION   selected on a pipe, then given a direction
+	 *   ANALYSIS_DIAGRAM dragged out, then filled in (Pressure Profile)
+	 *   SECTION          dragged out as a trace (Section Plane)
+	 */
+	INLINE_FITTING: "inline-fitting",
+	INLINE_EQUIPMENT: "inline-equipment",
+	VESSEL: "vessel",
+	FLUID_LEVEL: "fluid-level",
+	FLOW_DIRECTION: "flow-direction",
+	ANALYSIS_DIAGRAM: "analysis-diagram",
+	SECTION: "section",
+
 	PLANNED: "planned"
 });
 
@@ -168,22 +201,23 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 			{ id: "fluids-flow-paths", label: "Flow Paths", submenu: true },
 
 			/*
-			 * FLOW INDICATORS: the second group, immediately after the first. How
-			 * the flow is SHOWN belongs with the run it is shown on, not at the
-			 * end of a list of equipment.
+			 * FLOW INDICATORS & ANNOTATIONS: the second group, immediately after the
+			 * first. How the flow is SHOWN - the free arrow and the level line -
+			 * belongs with the run it is shown on, not at the end of a list of
+			 * equipment.
 			 */
-			{ id: "fluids-flow-indicators", label: "Flow Indicators", submenu: true },
+			{ id: "fluids-flow-indicators", label: "Flow Indicators & Annotations", submenu: true },
 
 			/*
 			 * THE INDIVIDUAL TOOLS OF CREATE. Each stands directly under the
 			 * heading and arms on the press - there is no Equipment dropdown
 			 * between the student and a Pump.
 			 */
-			{ id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.PLANNED },
-			{ id: "reservoir-tank", label: "Reservoir / Tank", capability: FLUIDS_CAPABILITIES.PLANNED },
-			{ id: "pump", label: "Pump", capability: FLUIDS_CAPABILITIES.PLANNED },
-			{ id: "valve", label: "Valve", capability: FLUIDS_CAPABILITIES.PLANNED },
-			{ id: "flow-meter", label: "Flow Meter", capability: FLUIDS_CAPABILITIES.PLANNED }
+			{ id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.INLINE_FITTING },
+			{ id: "reservoir-tank", label: "Reservoir / Tank", capability: FLUIDS_CAPABILITIES.VESSEL },
+			{ id: "pump", label: "Pump", capability: FLUIDS_CAPABILITIES.INLINE_EQUIPMENT },
+			{ id: "valve", label: "Valve", capability: FLUIDS_CAPABILITIES.INLINE_EQUIPMENT },
+			{ id: "flow-meter", label: "Flow Meter", capability: FLUIDS_CAPABILITIES.INLINE_EQUIPMENT }
 		]
 	},
 
@@ -199,8 +233,8 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 		id: "fluids-analysis",
 		label: "Analysis",
 		tools: [
-			{ id: "flow-direction-diagram", label: "Flow Direction Diagram", capability: FLUIDS_CAPABILITIES.PLANNED },
-			{ id: "pressure-profile", label: "Pressure Profile", capability: FLUIDS_CAPABILITIES.PLANNED }
+			{ id: "flow-direction-diagram", label: "Flow Direction Diagram", capability: FLUIDS_CAPABILITIES.FLOW_DIRECTION },
+			{ id: "pressure-profile", label: "Pressure Profile", capability: FLUIDS_CAPABILITIES.ANALYSIS_DIAGRAM }
 		]
 	},
 
@@ -214,8 +248,8 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 	 * its button say "not available yet" about a tool that is.
 	 *
 	 * Section Plane is the one Fluids needs that the shared set does not have:
-	 * a cutting plane drawn through a run, which is how a section is marked. It
-	 * is planned, because its construction is not built yet.
+	 * a 2D section-location mark drawn across a run, which is how a section is
+	 * noted on a schematic.
 	 */
 	{
 		id: "fluids-reference",
@@ -224,7 +258,7 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 			{ id: "coordinate-system", label: "Coordinate System", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
 			{ id: "reference-point", label: "Reference Point", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "point" },
 			{ id: "reference-line", label: "Reference Line", capability: FLUIDS_CAPABILITIES.SHAPE, geometryTool: "line" },
-			{ id: "section-plane", label: "Section Plane", capability: FLUIDS_CAPABILITIES.PLANNED }
+			{ id: "section-plane", label: "Section Plane", capability: FLUIDS_CAPABILITIES.SECTION }
 		]
 	}
 ];
@@ -282,9 +316,15 @@ export const FLUIDS_TOOL_MENUS = {
 	],
 
 	"fluids-flow-indicators": [
-		{ id: "flow-arrow", label: "Flow Arrow", capability: FLUIDS_CAPABILITIES.PLANNED },
-		{ id: "fluid-level", label: "Fluid Level", capability: FLUIDS_CAPABILITIES.PLANNED },
-		{ id: "pressure-tap", label: "Pressure Tap", capability: FLUIDS_CAPABILITIES.PLANNED }
+		/*
+		 * FLOW ARROW IS A FREE DIRECTIONAL ARROW. The press-drag-release draws it
+		 * from its tail to its tip (see `flow-arrow-tool.js`), and a press that
+		 * lands ON a pipe gives the attached direction indicator - so the arrow is
+		 * usable on an empty sheet as well as on a run.
+		 */
+		{ id: "flow-arrow", label: "Flow Arrow", capability: FLUIDS_CAPABILITIES.FLOW_ARROW },
+		/* A FLUID LEVEL marks the surface inside a Reservoir / Tank. */
+		{ id: "fluid-level", label: "Fluid Level", capability: FLUIDS_CAPABILITIES.FLUID_LEVEL }
 	]
 };
 

@@ -122,7 +122,6 @@ const expectedTools = {
     "junction",
     "flow-arrow",
     "fluid-level",
-    "pressure-tap",
     "reducer-expander",
     "reservoir-tank",
     "pump",
@@ -160,7 +159,7 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   check(
     "Create lists its groups and tools in the required order",
     entries.join(" | ") ===
-      "Flow Paths | Flow Indicators | Reducer / Expander | Reservoir / Tank | " +
+      "Flow Paths | Flow Indicators & Annotations | Reducer / Expander | Reservoir / Tank | " +
         "Pump | Valve | Flow Meter",
     entries.join(" | "),
   );
@@ -172,8 +171,8 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   );
 
   check(
-    "Create has no Fluid Annotations group",
-    !entries.some((label) => /annotation/i.test(label)),
+    "Create's second group is Flow Indicators & Annotations, not a separate Annotations group",
+    entries.filter((label) => /annotation/i.test(label)).join(" | ") === "Flow Indicators & Annotations",
     entries.join(" | "),
   );
 
@@ -193,7 +192,7 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
     (create?.tools || [])
       .filter((tool) => tool.submenu)
       .map((tool) => tool.label)
-      .join(" | ") === "Flow Paths | Flow Indicators",
+      .join(" | ") === "Flow Paths | Flow Indicators & Annotations",
     (create?.tools || [])
       .filter((tool) => tool.submenu)
       .map((tool) => tool.label)
@@ -204,7 +203,8 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
 /* The contents of the two groups, exactly as the requirement names them. */
 const groupContents = {
   "fluids-flow-paths": ["pipe-duct", "elbow", "junction"],
-  "fluids-flow-indicators": ["flow-arrow", "fluid-level", "pressure-tap"],
+  /* Flow Arrow and Fluid Level only - Pressure Tap is not a listed tool. */
+  "fluids-flow-indicators": ["flow-arrow", "fluid-level"],
 };
 
 Object.entries(groupContents).forEach(([groupId, ids]) => {
@@ -226,8 +226,8 @@ console.log("\n  the eighteen listed tools\n");
 const allIds = groups.flatMap((group) => toolsIn(group).map((tool) => tool.id));
 
 check(
-  "there are exactly eighteen tools",
-  allIds.length === 18,
+  "there are exactly seventeen tools",
+  allIds.length === 17,
   `found ${allIds.length}: ${allIds.join(", ")}`,
 );
 
@@ -255,7 +255,7 @@ check(
 
 check(
   "the flat registry holds one entry per tool",
-  Object.keys(fluids.FLUIDS_TOOLS).length === 18,
+  Object.keys(fluids.FLUIDS_TOOLS).length === 17,
   Object.keys(fluids.FLUIDS_TOOLS).join(", "),
 );
 
@@ -306,9 +306,31 @@ const BUILT = [
    * more branches, and the same connection record.
    */
   "junction",
+
+  /*
+   * FLOW ARROW IS IMPLEMENTED: a free arrow everywhere, and the pipe-attached
+   * indicator when the press lands on a run.
+   */
+  "flow-arrow",
+
+  "fluid-level",
+
+  /*
+   * AND EVERY SCHEMATIC TOOL IS NOW IMPLEMENTED. Each has its own model, its
+   * own renderer, its own Features sections, its own source writer and reader,
+   * and its own gesture - so none of them is `planned` any more.
+   */
+  "reducer-expander",
+  "reservoir-tank",
+  "pump",
+  "valve",
+  "flow-meter",
+  "flow-direction-diagram",
+  "pressure-profile",
   "coordinate-system",
   "reference-point",
   "reference-line",
+  "section-plane"
 ];
 
 const planned = allIds.filter((id) => fluids.isPlannedFluidsTool(id));
@@ -408,7 +430,7 @@ const validCapabilities = Object.values(capabilities);
 check(
   "the capability table names the shared systems",
   validCapabilities.join(" | ") ===
-    "select | shape | route | dimension | annotate | planned",
+    "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | section | planned",
   validCapabilities.join(" | "),
 );
 
@@ -505,8 +527,19 @@ check(
   fluids.fluidsCapability("reference-line") === capabilities.SHAPE,
 );
 check(
-  "fluidsCapability reports planned for a tool with no behaviour yet",
-  fluids.fluidsCapability("flow-arrow") === capabilities.PLANNED,
+  "every listed tool now carries a real capability, and none is left planned",
+  /*
+   * The scope is complete: each of the seventeen listed tools travels a working
+   * system, so the "not available yet" state is carried by nothing in this
+   * section. Pressure Tap was removed with it - the specification's Flow
+   * Indicators & Annotations group holds the Flow Arrow and the Fluid Level.
+   */
+  allIds.every((id) => fluids.fluidsCapability(id) !== capabilities.PLANNED) &&
+    fluids.fluidsCapability("pressure-tap") === null,
+);
+check(
+  "fluidsCapability reports the schematic capability for a fluid level",
+  fluids.fluidsCapability("fluid-level") === capabilities.FLUID_LEVEL,
 );
 check(
   "fluidsArmedTool arms a reference tool's own shared id",

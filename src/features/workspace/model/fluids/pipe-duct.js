@@ -2156,6 +2156,16 @@ export function setObjectLookup(lookup) {
 	objectLookup = typeof lookup === "function" ? lookup : null;
 }
 
+/*
+ * The object with this id, through the published lookup, or null.
+ *
+ * Exported so the inline fittings (a reducer, a piece of equipment) read the
+ * sheet the SAME way the elbow does rather than opening a second lookup.
+ */
+export function connectedPipe(id) {
+	return id ? objectById(id) : null;
+}
+
 function objectById(id) {
 	if (!objectLookup) {
 	return null;
@@ -2793,6 +2803,30 @@ const enggPipeDuct = {
 	setDefaultBendRadius,
 	readDefaultBendRadius,
 
+	/**
+	 * THE LINE THIS RUN'S WALLS ARE OFFSET FROM: its `span`, or its two ends.
+	 *
+	 * A run that has been CUT - by a junction, a reducer or a piece of inline
+	 * equipment - has its `start`/`end` moved onto the fitting's connection
+	 * points. Its `span` is still the line the student drew, so walls offset from
+	 * it would run past the cut. Anything that wants to draw a run as it IS asks
+	 * here, and gets the two stored ends.
+	 */
+	drawnSpan(feature) {
+		const start = feature?.geometry?.start;
+		const end = feature?.geometry?.end;
+
+		if (!finitePoint(start) || !finitePoint(end)) {
+			return null;
+		}
+
+		return {
+			start: { x: start.x, y: start.y },
+			end: { x: end.x, y: end.y },
+			direction: directionOf(start, end)
+		};
+	},
+
 	DEFAULT_BEND_RADIUS_ONES,
 	DEFAULT_ELBOW_ANGLE,
 	COMMON_ELBOW_ANGLES,
@@ -2808,6 +2842,7 @@ const enggPipeDuct = {
 	elbowLegs,
 	elbowCurvesFor,
 	setObjectLookup,
+	connectedPipe,
 	fittingRuns,
 	elbowFitRadius,
 	elbowAngleDegrees,

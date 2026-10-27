@@ -7,6 +7,7 @@ import enggDrawingSnap from "../../shared/snapping/object-snap.js";
 import enggSheets from "../../components/layout/workspace/sheets.js";
 import enggPipeDuct from "./model/fluids/pipe-duct.js";
 import enggPipeAssembly from "./model/fluids/pipe-assembly.js";
+import enggFlowArrow from "./model/fluids/flow-arrow.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
 
@@ -46,7 +47,7 @@ export const editorState = {
      * SHEETS
      * ========================================================
      */
-    
+
     /*
      * The document's sheets.
      *
@@ -191,7 +192,7 @@ export const editorState = {
      * View tools change only the camera. Both reuse the
      * existing selection, snapping and camera systems.
      */
-    
+
     /*
      * The id of the global toolbar tool currently running,
      * so its button can stay visibly highlighted and be
@@ -224,6 +225,19 @@ const lookupEditorObject = (id) =>
     (id ? (drawingState.objects || []).find((object) => object.id === id) || null : null);
 
 enggPipeDuct.setObjectLookup(lookupEditorObject);
+
+/*
+ * AND THE FLOW ARROW'S HOST.
+ *
+ * An arrow never stores a point: it stores the pipe it is attached to and how
+ * far along that pipe it sits. Resolving the pipe is the ONE thing it cannot do
+ * by itself without importing the document, so it is published the same way as
+ * the run lookup above. Everything derived from the attachment - its position,
+ * its direction, whether it can be drawn at all - is then computed against the
+ * pipe AS IT IS NOW, which is what keeps the arrow centred on its run through
+ * every move, resize and reconnection of that run.
+ */
+enggFlowArrow.setHostLookup(lookupEditorObject);
 
 /*
  * AND THE WHOLE SHEET, FOR THE ASSEMBLY GROUPING.

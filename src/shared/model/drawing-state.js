@@ -471,7 +471,7 @@ function seedSupportAttachment(
  * gives it the block's style. The object shape, its defaults, its label and its
  * derived fields therefore stay the model's decision, in one place.
  */
-function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
+function geometryObjectFromSource(type, geometry, { id, name, style, content } = {}) {
     if (!type) {
         return null;
     }
@@ -481,7 +481,15 @@ function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
         geometry,
         {
             name: name || undefined,
-            style: style ? { ...style } : undefined
+            style: style ? { ...style } : undefined,
+
+            /*
+             * A FEATURE'S OWN NON-GEOMETRIC DATA, WHEN THE READER HAS IT. A
+             * Flow Arrow's attachment is its model - which pipe, how far along
+             * it, which way - and none of it is geometry or style. Without it a
+             * block typed into Source would create an arrow with nowhere to be.
+             */
+            ...(content ? { content: { ...content } } : {})
         }
     );
 
@@ -501,10 +509,26 @@ function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
  */
 const PIPE_ASSEMBLY_TYPE_NAME = "pipe-assembly";
 
+/*
+ * The Flow Arrow's stored type, named here for the same reason the assembly's is:
+ * the fluids model sits UNDER this module, so importing the constant back would
+ * close a cycle.
+ */
+const FLOW_ARROW_TYPE_NAME = "flow-arrow";
+
 function createGeometryObject(type, geometry, options = {}) {
-    const generatedId = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
-        ? globalThis.crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const generatedId = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      /*
+       * NO CRYPTO IN THIS RUNTIME, SO A STABLE-LOOKING ID IS MINTED HERE. It
+       * must look like the uuid form the ids above use, so a consumer that
+       * parses an id (a test, a URL, a log) sees the same shape either way.
+       */
+      : (() => {
+            const hex = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+
+            return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+        })();
 
     const typeLabel = {
         line: "Line",
@@ -612,7 +636,38 @@ function createGeometryObject(type, geometry, options = {}) {
          * the Objects tab can label its parent row; it has no geometry, so
          * nothing draws or hit-tests it.
          */
-        [PIPE_ASSEMBLY_TYPE_NAME]: "Pipe Assembly"
+        [PIPE_ASSEMBLY_TYPE_NAME]: "Pipe Assembly",
+
+        /*
+         * A FLOW ARROW IS NAMED FOR WHAT IT IS — a single directional mark on a
+         * run. Multiple arrows share the "Flow Arrow" name and are numbered by
+         * the same pass every other feature uses.
+         *
+         * The FREE flow arrow and the flow-direction annotation share this type
+         * name: both are a directional arrow on the sheet. What distinguishes
+         * them is their attachment model (a free span against a host pipe's
+         * fraction), which is read where it matters.
+         */
+        [FLOW_ARROW_TYPE_NAME]: "Flow Arrow",
+
+        /*
+         * THE INLINE FITTINGS AND THE SCHEMATIC SYMBOLS.
+         *
+         * Each is its own feature type and its own row in the Objects and
+         * Features lists, so a Pump is never filed under a generic shape. They
+         * are named here for the same reason every other type is: the name is
+         * the object's DEFAULT, and the same numbering pass gives "Pump 1",
+         * "Pump 2".
+         */
+        "reducer-expander": "Reducer / Expander",
+        "reservoir-tank": "Reservoir / Tank",
+        pump: "Pump",
+        valve: "Valve",
+        "flow-meter": "Flow Meter",
+        "fluid-level": "Fluid Level",
+        "flow-direction-diagram": "Flow Direction",
+        "pressure-profile": "Pressure Profile",
+        "section-plane": "Section Plane"
     }[type] || type;
 
     return {
@@ -2395,7 +2450,6 @@ function commitDrawingChange(state, previousObjects) {
     }
 
     const drawingChanged = makeAnnouncement("datum:drawing-changed", {});
-
     if (drawingChanged && typeof document !== "undefined") {
         document.dispatchEvent(drawingChanged);
     }
@@ -2648,6 +2702,26 @@ function canUndo(state) {
 
 function canRedo(state) {
     return state.history.future.length > 0;
+}
+
+/*
+ * PUT THE SHEET BACK TO A SNAPSHOT WITHOUT RECORDING A HISTORY STEP.
+ *
+ * A multi-part operation - an inline insertion that splits a run, adds a
+ * segment and places a symbol - must leave ONE entry in History. It therefore
+ * commits once, at the end, against the snapshot taken when the student
+ * clicked; this restores that same snapshot when the operation is abandoned or
+ * refused, so a cancelled insertion leaves neither geometry nor a history entry
+ * behind.
+ */
+function restoreDrawingSnapshot(state, snapshot) {
+    if (!snapshot) {
+        return false;
+    }
+
+    restoreDocumentSnapshot(state, snapshot);
+
+    return true;
 }
 
 function undo(state) {
@@ -3321,6 +3395,7 @@ const enggDrawingState = {
     HISTORY_LIMIT,
     snapshotDocument,
     snapshotDrawing,
+    restoreDrawingSnapshot,
     commitDrawingChange,
     setAnalysisDependencyRegistry,
     refreshAnalysisObjects,

@@ -690,6 +690,12 @@ export function blockContents(source, map) {
         beginLine: block.beginLine,
         endLine: block.endLine,
         unclosed: Boolean(block.unclosed),
+        /*
+         * THE HEADER, AND THE BODY. A block's metadata lives in its header - an
+         * arrow's attachment, a schematic's own model line - so a reader that
+         * needs to know WHAT the block is must see both.
+         */
+        header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart - 1)).join("\n"),
         body: lines.slice(bodyStart, bodyEnd).join("\n"),
         statements: inside.map((statement) => {
           const statementText = text.slice(statement.start, statement.end);

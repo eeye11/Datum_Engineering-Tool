@@ -47,6 +47,32 @@ import { sourceForObject } from "./source-synchronization.js";
 import { objectDisplayName, objectTypeLabel } from "./object-comments.js";
 import { splitStatements } from "./source-statements.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
+import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
+import {
+  readFreeFlowArrow,
+  schematicReaderFor
+} from "./source-readers/fluids-schematic-readers.js";
+
+/*
+ * THE FLOW ARROW'S READER, RESOLVED WHEN A BLOCK NEEDS IT.
+ *
+ * `fluids-readers.js` pulls in the tool library's style primitives, which read
+ * the document at load - and the PARSER is used by tests and by the embedded
+ * pipeline with no DOM. A static import would make every reader of the parser
+ * need a browser, so the reader is required through a callback the caller that
+ * owns the environment supplies. In the application it is registered at start-up;
+ * without it an arrow block simply keeps its last valid form, which is the same
+ * answer any unreadable block gets.
+ */
+let flowArrowReader = null;
+
+export function setFlowArrowSourceReader(reader) {
+  flowArrowReader = typeof reader === "function" ? reader : null;
+}
+
+function readFlowArrowBlock(source, options) {
+  return flowArrowReader ? flowArrowReader(source, options) : null;
+}
 
 /* ============================================================
  * A STABLE ID FOR A BLOCK THAT HAS NONE
@@ -75,6 +101,12 @@ function stableBlockId(index, text) {
  * geometry are built here. A statement DAETUM can render but not edit stays
  * source-only: an object invented from it could not be written back, and the
  * next canvas edit would then disagree with the code it came from.
+ */
+/*
+ * THE ELBOW AND THE JUNCTION ARE NOT CONVERTIBLE. A fitting is written as the
+ * two paths its walls are, and reconstruction is a FIT round that pair round
+ * round - so a one-statement block that parses as a line stays a Line. The
+ * reader only recognises the syntax the tool actually emits.
  */
 const CONVERTIBLE = new Set(["line", "circle", "rectangle", "arc", "point", "polyline"]);
 
@@ -286,6 +318,31 @@ function pipeFromWalls(shapes) {
 /* An object of `type` from the two walls of a pipe, or null. */
 function createPipeFromWalls(walls) {
   return createObjectFromShape("pipe-duct", { ...walls, type: "pipe-duct" }, null) || null;
+}
+
+/*
+ * A FLOW ARROW FROM ITS BLOCK, THROUGH THE MODEL'S OWN FACTORY.
+ *
+ * An arrow typed into the Source tab is the same feature a drag creates: the
+ * same factory, the same attachment, the same name. The block's id is put on it
+ * afterwards, so the block keeps describing the object on the next parse.
+ */
+function createFlowArrowFromSource(arrow, objects = []) {
+  /*
+   * THE HOST IS HANDED IN, NOT LOOKED UP. A parsing pass builds a whole sheet's
+   * objects before any of them is in the document, so the published lookup
+   * cannot see the pipe this arrow names - and an arrow without its pipe cannot
+   * be placed. The host is found in the batch instead, which is the same pipe.
+   */
+  const host = (objects || []).find((object) => object?.id === arrow.hostId) || null;
+
+  return enggFlowArrow.createFlowArrow(arrow.hostId, {
+    fraction: arrow.fraction,
+    reversed: arrow.reversed,
+    size: arrow.size,
+    style: arrow.style,
+    host
+  });
 }
 
 /* ============================================================
@@ -588,6 +645,37 @@ function convertedTypeFor(shape, previous) {
   return shape.type;
 }
 
+/*
+ * THE TYPES THE SCHEMATIC READERS MAY REBUILD.
+ *
+ * A block is only asked what it is when it is new or when it already belongs to
+ * one of these - so an ordinary Line is never re-read as something else because
+ * a comment happens to carry DAETUM metadata.
+ */
+const SCHEMATIC_TYPES = new Set([
+  "reducer-expander",
+  "pump",
+  "valve",
+  "flow-meter",
+  "reservoir-tank",
+  "fluid-level",
+  "flow-direction-diagram",
+  "pressure-profile",
+  "section-plane"
+]);
+
+function isSchematicType(type) {
+  return SCHEMATIC_TYPES.has(type);
+}
+
+/* A block that draws an arrowhead: a two-point shaft and a closed three-point head. */
+function looksLikeArrow(body) {
+  const closed = /\([^)]*\)\s*--\s*\([^)]*\)\s*--\s*\([^)]*\)\s*--\s*cycle/.test(String(body ?? ""));
+  const open = /\([^)]*\)\s*--\s*\([^)]*\)\s*;/.test(String(body ?? ""));
+
+  return closed && open;
+}
+
 /* ============================================================
  * THE READ
  * ============================================================
@@ -645,6 +733,154 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
     }
 
     const shapes = block.statements.map((statement) => statement.shape);
+
+    /*
+     * ============================================================
+     * A FLOW ARROW: A HEAD PLUS ITS ATTACHMENT
+     * ============================================================
+     *
+     * An arrow's block is a closed arrowhead, so it would fall through to the
+     * one-shape rule and come back as a TRIANGLE - a shape with no host, no
+     * direction and no size, which is not the object the student has.
+     *
+     * It is recognised BEFORE that rule, from the metadata the writer emits
+     * (see `source-readers/fluids.js`). A block that is an arrow and cannot be
+     * rebuilt - a host that is not in the drawing, an `ALONG` that is not a
+     * number, a statement that is not a head - falls through to the ordinary
+     * report: the object keeps its last valid form and the block is listed as
+     * unsupported with its own line numbers.
+     */
+    const mayBeArrow =
+      (previous == null || previous?.type === "flow-arrow") &&
+
+      /*
+       * THE COMPACT FORM THE WRITER EMITS, and the three-line form a document
+       * saved before it carries. Both name the arrow's pipe, so either is
+       * enough to attempt a read; a block that fails the read falls through to
+       * the ordinary report like any other unsupported edit.
+       */
+      /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(block.body);
+
+    const arrow = mayBeArrow
+      ? readFlowArrowBlock(block.body, {
+          previous,
+          hostExists: (hostId) =>
+            byId.has(hostId) || objects.some((object) => object?.id === hostId)
+        })
+      : null;
+
+    /*
+     * ============================================================
+     * THE SCHEMATIC TOOLS
+     * ============================================================
+     *
+     * Each of the schematics added after the flow paths writes ONE metadata line
+     * naming what it is and what it joins, and CODE that draws it. They are read
+     * HERE, before the one-shape rule, because a symbol's picture is not its
+     * model: a pump's circle, a profile's polyline and a valve's bow-tie would
+     * otherwise come back as generic geometry with nothing connecting them.
+     *
+     * A block whose metadata is unreadable, or whose host is not in the drawing,
+     * falls through to the ordinary report - the object keeps its last valid form
+     * and the student is told the block could not be read.
+     */
+    /*
+     * THE READER IS CHOSEN FROM THE WHOLE BLOCK, not its commands.
+     *
+     * A schematic's metadata sits in the block's HEADER (`% DAETUM VESSEL: ...`),
+     * above the geometry, so asking only the body would never see it. The header
+     * is where the block says what it is - which is exactly the question.
+     */
+    const blockText = [block.header || "", block.body].filter(Boolean).join("\n");
+
+    const schematicReader = previous == null || isSchematicType(previous?.type)
+      ? schematicReaderFor(blockText)
+      : null;
+
+    const schematic = schematicReader
+      ? schematicReader(blockText, {
+          previous,
+          hostExists: (hostId) => byId.has(hostId) || objects.some((object) => object?.id === hostId)
+        })
+      : null;
+
+    if (schematic) {
+      if (!previous) {
+        /*
+         * A NEW BLOCK: the object is the block's own model, carrying the
+         * block's id - so the block keeps naming it on the next parse. The
+         * engineering travels as `content` as well, because the factory that
+         * builds the feature copies it out of there.
+         */
+        created.push({
+          id: block.id,
+          object: {
+            ...schematic,
+            id: block.id,
+            style: { ...(schematic.style || {}) },
+            engineering: { ...(schematic.engineering || {}) },
+            content: { ...(schematic.engineering || {}) }
+          },
+          geometry: schematic.geometry,
+          block
+        });
+        return;
+      }
+
+      updates.push({
+        id: block.id,
+        object: previous,
+        schematic,
+        type: schematic.type,
+        block
+      });
+
+      return;
+    }
+
+    /* A FREE FLOW ARROW: a shaft plus a head, with no attachment to anything. */
+    const attachedBlock = /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(block.body);
+
+    const freeArrow =
+      !attachedBlock &&
+      (previous == null || (previous?.type === "flow-arrow" && !previous.attachment)) &&
+      looksLikeArrow(block.body)
+        ? readFreeFlowArrow(block.body, { previous })
+        : null;
+
+    if (freeArrow) {
+        if (!previous) {
+          created.push({ id: block.id, object: { ...freeArrow, id: block.id }, geometry: freeArrow.geometry, block });
+
+          return;
+        }
+
+        updates.push({ id: block.id, object: previous, schematic: freeArrow, type: "flow-arrow", block });
+
+      return;
+    }
+
+    if (arrow) {
+      if (!previous) {
+        const object = createFlowArrowFromSource(arrow, objects);
+
+        if (object) {
+          created.push({ id: block.id, object, block });
+        }
+
+        return;
+      }
+
+      updates.push({
+        id: block.id,
+        object: previous,
+        shape: arrow,
+        type: "flow-arrow",
+        block
+      });
+
+      return;
+    }
 
     /*
      * A PIPE / DUCT: TWO PARALLEL WALLS, ONE RUN.
@@ -786,6 +1022,130 @@ export function hasObjectMarkers(source) {
   return /^\s*%\s*DAETUM_OBJECT_(BEGIN|END)\b/m.test(String(source ?? ""));
 }
 
+/*
+ * WHETHER EVERY COMMAND IN A PICTURE IS COMPLETE.
+ *
+ * THE SPLITTER CUTS A COMMAND AT THE NEXT LINE when it has no `;`, and reports it
+ * `complete` so recovery can still send it. That is right for a diagnostic and
+ * wrong for "has the student finished typing": an unterminated line is a line in
+ * progress.
+ *
+ * EVERY OTHER KIND OF BREAKAGE IS FINE. A coordinate the parser cannot read, a
+ * command it does not understand - those statements are preserved as written and
+ * simply not turned into objects, which is exactly what adoption is for.
+ */
+function sourceIsWholePicture(text) {
+  const statements = splitStatements(String(text ?? ""));
+
+  const commands = statements.filter((statement) => statement.kind === "command");
+
+  if (!commands.length) {
+    return false;
+  }
+
+  return commands.every((statement) => statement.complete);
+}
+
+export { sourceIsWholePicture };
+
+/*
+ * ADOPT ONLY THE COMMANDS THE STUDENT JUST AUTHORED.
+ *
+ * The Source tab is a view of the DRAWING, so a command typed into it must become
+ * a feature the student can click, drag and delete - exactly like one drawn on
+ * the canvas. But rebuilding a whole typed picture on every keystroke would put
+ * objects on the sheet the moment they were imagined.
+ *
+ * So adoption happens where the student ACTED: the command at the cursor (or the
+ * one it is inside), when that command is complete and has no block yet. The line
+ * is wrapped in the ordinary header, its own text untouched, and the object
+ * arrives through the same parse a canvas edit uses.
+ *
+ * `caretLine` is the caret's line in the VISIBLE text; the caller maps it into
+ * the canonical text, because the visible text has the headers stripped.
+ */
+export function adoptFollowedStatements(source, { caretLine = null, adoptAll = false, candidates = [] } = {}) {
+  const text = String(source ?? "");
+
+  if (!adoptAll && !Number.isFinite(Number(caretLine))) {
+    return text;
+  }
+
+  const blocks = parseDrawingSource(text);
+  const statements = splitStatements(text);
+
+  const within = (line, block) => line >= block.beginLine && line <= block.endLine;
+
+  const followed = statements.filter(
+    (statement) =>
+      statement.kind === "command" &&
+      statement.complete &&
+      (adoptAll || (statement.startLine <= caretLine && statement.endLine >= caretLine)) &&
+      shapeFromStatement(statement.text) &&
+      !blocks.some((block) => within(statement.startLine, block))
+  );
+
+  if (!followed.length) {
+    return text;
+  }
+
+  /*
+   * RE-USE THE ADOPTER BY HANDING IT A PICTURE WITH NO BLOCKS. It already knows
+   * how to claim an id, avoid a duplicate header and preserve the command text,
+   * and running it on the command's own lines keeps that logic in one place.
+   */
+  const lines = statements.length
+    ? text.replace(/\r\n/g, "\n").split("\n")
+    : [];
+
+  const used = new Set(blocks.map((block) => block.id));
+  const inserts = [];
+
+  followed.forEach((statement) => {
+    const shape = shapeFromStatement(statement.text);
+
+    const match = (candidates || []).find(
+      (candidate) =>
+        !candidate.taken &&
+        candidate.type === shape.type &&
+        commandLines(candidate.source) === commandLines(statement.text)
+    );
+
+    let id = match ? match.id : stableBlockId(statement.startLine, statement.text);
+
+    while (used.has(id)) {
+      id = `${id}-1`;
+    }
+
+    used.add(id);
+
+    if (match) {
+      match.taken = true;
+    }
+
+    inserts.push({
+      line: statement.startLine,
+      before: [
+        `% DAETUM OBJECT: ${objectTypeLabel(shape.type)}`,
+        `% DAETUM ID: ${id}`,
+        `% DAETUM TYPE: ${shape.type}`
+      ]
+    });
+  });
+
+  const out = [];
+
+  lines.forEach((line, index) => {
+    inserts
+      .filter((entry) => entry.line === index)
+      .forEach((entry) => out.push(...entry.before));
+
+    out.push(line);
+  });
+
+  return out.join("\n");
+}
+
 /* The command lines in a piece of source - the `\definecolor` preludes dropped. */
 function commandLines(source) {
   return String(source ?? "")
@@ -854,10 +1214,45 @@ function sameGeometry(candidate, shape) {
  * command DAETUM does not understand gets no block: it has no object to become,
  * and a block would only put markers round code nobody can edit.
  */
-export function adoptUnclaimedStatements(source, { newId, candidates = [] } = {}) {
+	export function adoptUnclaimedStatements(source, { newId, candidates = [], trackedLength = null } = {}) {
   const text = String(source ?? "");
   const blocks = parseDrawingSource(text);
   const statements = splitStatements(text);
+
+  /*
+   * ADOPTION IS FOR A PICTURE THAT HAS NO BLOCKS AT ALL.
+   *
+   * A source that already carries DAETUM object blocks is the document's own:
+   * its commands belong to the objects those blocks name, so anything outside
+   * them is preserved VERBATIM - wrapping it in a header would change text the
+   * student never asked to have changed.
+   *
+   * A PICTURE STILL BEING TYPED IS LEFT ALONE TOO. One that will not compile -
+   * an unclosed parenthesis, a line with no `;` - cannot be adopted without
+   * rewriting text the model only half understands, and the student's latest
+   * text is never to be rewritten.
+   *
+   * AND ONE HOLDING A STATEMENT THE PARSER CANNOT FULLY READ IS LEFT ALONE, for
+   * the same reason: adopting half of it would put a header between two lines
+   * that belong together.
+   */
+  if (blocks.length) {
+  	return text;
+  }
+
+  /*
+   * A PICTURE IS ADOPTED WHEN IT WILL COMPILE.
+   *
+   * A source with no object blocks at all - typed, pasted, or a `.tex` opened
+   * from elsewhere - has nothing to click on the canvas, so its commands are
+   * wrapped and become objects. A picture with a command whose braces, brackets
+   * or parentheses are still open cannot be sent to TeX, and wrapping half a
+   * statement in a header would change text DAETUM cannot make anything of - so
+   * that one is left exactly as the student typed it.
+   */
+  if (!sourceIsWholePicture(text)) {
+  	return text;
+  }
 
   const within = (line, block) => line >= block.beginLine && line <= block.endLine;
 
@@ -1018,8 +1413,30 @@ export function adoptUnclaimedStatements(source, { newId, candidates = [] } = {}
 function collapseBlankRuns(list) {
   const out = [];
 
+  let insideBlock = false;
+
   list.forEach((line) => {
-    const blank = String(line).trim() === "";
+    const text = String(line);
+
+    const header = /^\s*%\s*DAETUM\s+OBJECT\s*:/.test(text);
+
+    /*
+     * A BLANK LINE INSIDE AN OBJECT IS THE STUDENT'S - OR ONE A MERGE CREATED.
+     *
+     * The collapse exists for spacing BETWEEN objects. Applying it inside a
+     * block would delete a blank line the student typed in the middle of their
+     * own code, and adoption would then change text nobody asked it to touch.
+     */
+    if (insideBlock || header) {
+      out.push(line);
+
+      /* A new header starts a NEW block; the picture's close ends the last. */
+      insideBlock = !/^\s*\\end\s*\{tikzpicture\}/.test(text);
+
+      return;
+    }
+
+    const blank = text.trim() === "";
     const previousBlank = out.length > 0 && String(out[out.length - 1]).trim() === "";
     const afterOpening = out.length === 1 && /^\s*\\begin\s*\{tikzpicture\}/.test(String(out[0]));
 
@@ -1110,6 +1527,10 @@ export { stableBlockId };
 
 export default {
   setSourceGeometryFactories,
+  setFlowArrowSourceReader,
+  adoptUnclaimedStatements,
+  adoptFollowedStatements,
+  sourceIsWholePicture,
   readSourceIntoModel,
   sourceForObjectRegion,
   removeObjectBlock,

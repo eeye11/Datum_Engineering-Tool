@@ -136,6 +136,44 @@ export function fluidsInstruction(toolId) {
 		);
 	}
 
+	if (tool.capability === FLUIDS_CAPABILITIES.FLOW_ARROW) {
+		/* The arrow's own wording, from the gesture it actually takes. */
+		return "Press and hold on a Pipe / Duct, then drag to place the Flow Arrow";
+	}
+
+	/*
+	 * THE SCHEMATIC TOOLS. Each says what its NEXT action is - click, drag or
+	 * pick - because that is the one thing a student needs at the moment the
+	 * button is pressed.
+	 */
+	if (tool.capability === FLUIDS_CAPABILITIES.INLINE_FITTING) {
+		return "Click a Pipe / Duct to insert the Reducer / Expander";
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.INLINE_EQUIPMENT) {
+		return `Click a Pipe / Duct to insert the ${tool.label}, or an empty space to place it`;
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.VESSEL) {
+		return "Drag to draw the Reservoir / Tank";
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.FLUID_LEVEL) {
+		return "Click inside a Reservoir / Tank to set the Fluid Level";
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.FLOW_DIRECTION) {
+		return "Click a Pipe / Duct to add a Flow Direction arrow";
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.ANALYSIS_DIAGRAM) {
+		return "Drag to draw the Pressure Profile graph frame";
+	}
+
+	if (tool.capability === FLUIDS_CAPABILITIES.SECTION) {
+		return "Drag to draw the Section Plane trace";
+	}
+
 	return "Ready";
 }
 

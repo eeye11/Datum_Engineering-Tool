@@ -223,9 +223,18 @@ export const toolIcons = {
 	"Motion Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-8 8 5 14-6"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="17" cy="8" r="1"/>`),
 	Pipe: drawingIcon(`<path ${iconStroke} d="M4 5v8a3 3 0 0 0 3 3h9M4 5h4M12 16v-5a2 2 0 0 1 2-2h2"/>`),
 	Reservoir: drawingIcon(`<path ${iconStroke} d="M4 6h12v9H4zM4 9h12M7 4v2M13 4v2"/>`),
-	Valve: drawingIcon(`<path ${iconStroke} d="M3 10h5l2-3 2 3h5M8 14l2-4 2 4M10 7V4"/>`),
-	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 5v5l3 2M3 10h2M15 10h2"/>`),
-	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/>`),
+	Valve: drawingIcon(`<path ${iconStroke} d="M3 6.5l7 3.5-7 3.5zM17 6.5l-7 3.5 7 3.5z"/>`),
+	/*
+	 * PUMP: a circle with a directional triangle inside it - the triangle's
+	 * point says which way the flow is being pushed, which is what tells a pump
+	 * apart from the Flow Meter beside it at twenty pixels.
+	 */
+	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><path ${iconStroke} d="M7.8 7.2v5.6l4.4-2.8z"/>`),
+	/*
+	 * FLOW ARROW: a single directional arrow - a shaft with one head - because
+	 * the object is a free arrow, not a mark riding a run.
+	 */
+	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h13m-4-4 4 4-4 4"/>`),
 	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
 
 	/*
@@ -279,29 +288,28 @@ export const toolIcons = {
 	Junction: drawingIcon(`<path ${iconStroke} d="M3 8h14M10 8v8"/><circle ${iconStroke} cx="10" cy="8" r="1.4"/>`),
 
 	/*
-	 * REDUCER / EXPANDER. A run that changes bore: the wide wall narrows to the
-	 * narrow one across the middle, which is the whole difference a reducer
-	 * makes and an expander makes in reverse.
+	 * REDUCER / EXPANDER. Two pairs of parallel lines tapering between widths -
+	 * the fitting as it is drawn in a run, rather than a shape in empty space.
 	 */
-	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 5h4l6 5-6 5H3zM13 10h4M7 5v10"/>`),
+	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 6h4l6 4-6 4H3M10 10h7M3 6v2M3 14v-2M10 4v2M10 14v-2"/>`),
 
 	/*
-	 * RESERVOIR / TANK. The existing Reservoir with a fluid level line across
-	 * it, so a tank reads as a vessel holding something rather than a box.
+	 * RESERVOIR / TANK. A simple open-top vessel: two walls and a floor, with no
+	 * lid and no fluid inside - the OBJECT, not a symbol for fluid.
 	 */
-	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 5h12v11H4zM4 11h12M7 5v-2M13 5v-2"/>`),
+	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 4v12h12V4"/>`),
 
 	/*
-	 * FLOW METER. A meter in a run: the pipe through it, with the dial that
-	 * reads it sitting on top.
+	 * FLOW METER. A circular gauge with a pointer - deliberately a DIAL rather
+	 * than a pipe with a box on it, so it is never confused with the Pump.
 	 */
-	"Flow Meter": drawingIcon(`<path ${iconStroke} d="M3 13h14M5 13v-3M15 13v-3"/><circle ${iconStroke} cx="10" cy="6.5" r="3"/><path ${iconStroke} d="M10 6.5l2-1.5"/>`),
+	"Flow Meter": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><path ${iconStroke} d="M10 10l3.4-3.4"/><circle fill="currentColor" cx="10" cy="10" r="1"/>`),
 
 	/*
-	 * FLUID LEVEL. A surface with the level marked on it: the fluid line, and
-	 * the level's own datum above it.
+	 * FLUID LEVEL. A horizontal fluid-level line with a gentle wave - the surface
+	 * in a vessel, not a dimension and not a dashed rule.
 	 */
-	"Fluid Level": drawingIcon(`<path ${iconStroke} d="M3 9h14M3 12h14M3 15h14M5 6v-2M15 6v-2M5 6h10"/>`),
+	"Fluid Level": drawingIcon(`<path ${iconStroke} d="M3 11c2-1.6 3.4 1.6 5.4 0s3.4 1.6 5.4 0 2.4.9 3.2.4M5 6.5v-2M15 6.5v-2M5 6.5h10"/>`),
 
 	/*
 	 * PRESSURE TAP. A tap into a run: the pipe wall, and the stem that reads the
@@ -310,32 +318,36 @@ export const toolIcons = {
 	"Pressure Tap": drawingIcon(`<path ${iconStroke} d="M3 13h14M10 13V7"/><circle ${iconStroke} cx="10" cy="5.5" r="1.6"/>`),
 
 	/*
+	 * FLOW INDICATORS & ANNOTATIONS. The group's own heading artwork: the run
+	 * with its direction arrow, now also carrying a level line - how the flow is
+	 * SHOWN, which is everything the group holds.
+	 */
+	"Flow Indicators & Annotations": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M6 10h8M11 7l3 3-3 3"/>`),
+
+	/*
 	 * PIPE DIAMETER. A bore measured across: the pipe's two walls with the
 	 * dimension between them.
 	 */
 	"Pipe Diameter": drawingIcon(`<path ${iconStroke} d="M5 4v12M15 4v12M5 10h10M5 10l2-2M5 10l2 2M15 10l-2-2M15 10l-2 2"/>`),
 
 	/*
-	 * SECTION PLANE. A cutting plane through a run: the plane line with its
-	 * cut arrows, which is how a section is marked.
+	 * SECTION PLANE. A section line with clear viewing-direction arrows: the
+	 * trace, and the two arrows that say which way the section looks.
 	 */
-	"Section Plane": drawingIcon(`<path ${iconStroke} d="M4 4v12M4 10h12M4 4h3M4 16h3M16 10l-3-2M16 10l-3 2"/>`),
+	"Section Plane": drawingIcon(`<path ${iconStroke} d="M9 3v14" stroke-dasharray="2.6 1.8"/><path ${iconStroke} d="M9 6h7m-3-2.6 3 2.6-3 2.6M9 16h7m-3-2.6 3 2.6-3 2.6"/>`),
 
 	/*
-	 * FLOW DIRECTION DIAGRAM. A run with its direction marked along it: the two
-	 * walls, and the arrow drawn between them. It is the Flow Arrow ON A PIPE,
-	 * which is the whole content of the diagram - the student draws the arrows,
-	 * the tool does not work them out.
+	 * FLOW DIRECTION DIAGRAM. A route with directional arrows along it - the
+	 * annotated run, which is what the diagram is - and NOT a bare arrow, so it
+	 * is told apart from the Flow Arrow.
 	 */
-	"Flow Direction Diagram": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M5 10h9M11 7l3 3-3 3"/>`),
+	"Flow Direction Diagram": drawingIcon(`<path ${iconStroke} d="M3 15h6l4-5h4"/><path ${iconStroke} d="M10.5 15h3m-1.6-1.6 1.6 1.6-1.6 1.6M13.5 10h3m-1.6-1.6 1.6 1.6-1.6 1.6"/>`),
 
 	/*
-	 * PRESSURE PROFILE. A plot against a run: the pipe beneath, and the curve
-	 * that falls along it. Drawn as a CURVE rather than a series of bars so it
-	 * is told apart from the Statics stepped shear diagram at a glance - the same
-	 * distinction the real diagrams have.
+	 * PRESSURE PROFILE. Axes with a connected plotted line - a graph of the
+	 * student's own numbers, not a pipe with a curve beneath it.
 	 */
-	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M3 17h14M3 5c3 0 4 4 6 4s3-4 6-4"/>`),
+	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 13.5 9 10.5l2.5 2 4.5-6"/><circle fill="currentColor" cx="6" cy="13.5" r="1"/><circle fill="currentColor" cx="9" cy="10.5" r="1"/><circle fill="currentColor" cx="11.5" cy="12.5" r="1"/><circle fill="currentColor" cx="16" cy="6.5" r="1"/>`),
 
 	/*
 	 * FLUID PROPERTY LABEL. A written note about a fluid: the note's corner and
@@ -446,6 +458,20 @@ export const featureIcons = {
 	     */
 	    "pipe-duct": toolIcons["Pipe / Duct"],
 	    elbow: toolIcons.Elbow,
+	    /*
+	     * AND EVERY SCHEMATIC FLOIDS TYPE wears its own tool's artwork too, so a
+	     * Pump in the Objects list is the Pump button and a Pressure Profile is
+	     * the graph button - the same picture wherever the object appears.
+	     */
+	    "reducer-expander": toolIcons["Reducer / Expander"],
+	    "reservoir-tank": toolIcons["Reservoir / Tank"],
+	    pump: toolIcons.Pump,
+	    valve: toolIcons.Valve,
+	    "flow-meter": toolIcons["Flow Meter"],
+	    "fluid-level": toolIcons["Fluid Level"],
+	    "flow-direction-diagram": toolIcons["Flow Direction Diagram"],
+	    "pressure-profile": toolIcons["Pressure Profile"],
+	    "section-plane": toolIcons["Section Plane"],
 
 	    /*
 	     * A JUNCTION USES THE SAME ART AS ITS TOOL BUTTON, so a generated and a
@@ -811,7 +837,7 @@ export const engineeringTools = {
 		"Pump",
 		"Valve",
 		"Flow Meter",
-		"Flow Indicators",
+		"Flow Indicators & Annotations",
 		"Flow Direction Diagram",
 		"Pressure Profile",
 		"Coordinate System",

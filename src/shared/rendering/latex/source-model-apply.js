@@ -32,6 +32,7 @@
 import { createSourceMap } from "./drawing-source.js";
 import { readSourceIntoModel } from "./source-object-sync.js";
 import { shapeFromStatement } from "./source-model.js";
+import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
 import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 
 /* ============================================================
@@ -43,6 +44,10 @@ import { reconcileFluidConnections } from "../../../features/workspace/interacti
  * that touches only coordinates a coordinate edit.
  */
 function geometryOf(shape) {
+  if (!shape) {
+    return null;
+  }
+
   switch (shape.type) {
     case "line":
       return { start: { ...shape.from }, end: { ...shape.to } };
@@ -109,8 +114,59 @@ function styleOf(shape) {
   return style;
 }
 
+/*
+ * MERGE AN ARROW'S BLOCK INTO THE ARROW IT DESCRIBES.
+ *
+ * An arrow has no shape to merge: its model is an attachment, and the block
+ * states it as metadata. So the id, the position, the direction and the size
+ * are written through `setAttachment` - the SAME call the Features tab and the
+ * canvas handles use - which keeps the geometry mirror, the parent link and the
+ * attachment one statement.
+ *
+ * Returns whether anything changed, so a no-op re-parse records no edit.
+ */
+function mergeArrowIntoObject(object, arrow) {
+  const before = signatureOf(object);
+
+  if (!enggFlowArrow.setAttachment(object, {
+    hostId: arrow.hostId,
+    fraction: arrow.fraction,
+    reversed: arrow.reversed,
+    size: arrow.size
+  })) {
+    return false;
+  }
+
+  if (arrow.style && Object.keys(arrow.style).length) {
+    object.style = { ...(object.style || {}), ...arrow.style };
+  }
+
+  return signatureOf(object) !== before;
+}
+
 /* Merge a shape into an existing object, in place. Returns whether it changed. */
 function mergeShapeIntoObject(object, shape) {
+  /*
+   * AN ARROW IS MERGED THROUGH ITS ATTACHMENT, not through a geometry branch:
+   * its written coordinates are the HEAD's, which are derived from the host and
+   * cannot be written back as if they were the arrow's own position.
+   */
+  if (shape?.type === "flow-arrow") {
+    return mergeArrowIntoObject(object, shape);
+  }
+
+  /*
+   * A SCHEMATIC OBJECT'S BLOCK CARRIES ITS WHOLE MODEL, not a shape: its
+   * connections, its mode, its table, its identifiers. `readSourceIntoModel`
+   * hands that back as `entry.schematic` and the merge here is a PATCH of the
+   * fields the block states - so a hand-edited vessel style or profile limit
+   * updates the object, while everything the block does not mention (a name, a
+   * style, a level's host) is left exactly as it was.
+   */
+  if (shape?.schematic) {
+    return mergeSchematicIntoObject(object, shape.schematic);
+  }
+
   const geometry = geometryOf(shape);
 
   if (!geometry) {
@@ -180,11 +236,41 @@ function mergeShapeIntoObject(object, shape) {
   return signatureOf(object) !== before;
 }
 
+/* Merge a schematic reader's result into the object it describes. */
+function mergeSchematicIntoObject(object, schematic) {
+  const before = JSON.stringify({
+    geometry: object.geometry,
+    engineering: object.engineering,
+    style: object.style
+  });
+
+  if (schematic.geometry) {
+    object.geometry = { ...(object.geometry || {}), ...JSON.parse(JSON.stringify(schematic.geometry)) };
+  }
+
+  if (schematic.engineering) {
+    object.engineering = { ...(object.engineering || {}), ...JSON.parse(JSON.stringify(schematic.engineering)) };
+  }
+
+  if (schematic.style && Object.keys(schematic.style).length) {
+    object.style = { ...(object.style || {}), ...schematic.style };
+  }
+
+  return (
+    JSON.stringify({
+      geometry: object.geometry,
+      engineering: object.engineering,
+      style: object.style
+    }) !== before
+  );
+}
+
 /* The properties one shape edit can change, as one comparable string. */
 function signatureOf(object) {
   return JSON.stringify({
     geometry: object.geometry,
     style: object.style,
+    attachment: object.content?.attachment,
     separation: object.engineering?.separation,
     bendRadius: object.engineering?.bendRadius,
     angle: object.engineering?.angleDegrees
@@ -225,7 +311,7 @@ export function applyParsedSourceToDrawing({
   const before = new Set(state.objects.map((object) => object.id));
 
   parsed.updates.forEach((entry) => {
-    if (mergeShapeIntoObject(entry.object, entry.shape)) {
+    if (mergeShapeIntoObject(entry.object, entry.schematic ? { schematic: entry.schematic } : entry.shape)) {
       updated.push(entry.object.id);
     }
   });
@@ -236,10 +322,29 @@ export function applyParsedSourceToDrawing({
      * naming an object on the next parse, and the student would have an object
      * that the code no longer describes.
      */
+    /*
+     * THE FEATURE'S OWN DATA TRAVELS WITH IT. A Flow Arrow's attachment names
+     * the pipe it is on and how far along it, and the geometry alone cannot
+     * say that - so a block typed into Source rebuilds an arrow that is
+     * actually attached, not an arrow-shaped object with nowhere to be.
+     */
     const object = model.geometryObjectFromSource(entry.object.type, entry.object.geometry, {
       id: entry.id,
       name: entry.object.name,
-      style: entry.object.style
+      style: entry.object.style,
+      /*
+       * A SCHEMATIC'S MODEL IS NOT ITS GEOMETRY. A vessel's style, a profile's
+       * table, a symbol's connections - none of them can be read from the
+       * coordinates - so the block's own model line travels with it, as `content`
+       * (which the factory spreads onto the feature) and as `engineering`.
+       */
+      content: entry.object.attachment
+        ? { attachment: entry.object.attachment }
+        : entry.object.engineering
+          ? { ...entry.object.engineering }
+          : null,
+      engineering: entry.object.engineering,
+      parentId: entry.object.parentId
     });
 
     if (object) {

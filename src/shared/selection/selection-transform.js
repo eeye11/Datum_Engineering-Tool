@@ -3,6 +3,14 @@ import { resistorPoints } from "../../features/workspace/model/thermodynamics/re
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
+import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
+import enggReducer from "../../features/workspace/model/fluids/reducer-expander.js";
+import enggEquipment from "../../features/workspace/model/fluids/inline-equipment.js";
+import enggVessel from "../../features/workspace/model/fluids/reservoir-tank.js";
+import enggFluidLevel from "../../features/workspace/model/fluids/fluid-level.js";
+import enggFlowArrows from "../../features/workspace/model/fluids/flow-arrows.js";
+import enggPressureProfile from "../../features/workspace/model/fluids/pressure-profile.js";
+import enggSectionPlane from "../../features/workspace/model/fluids/section-plane.js";
 
 /*
  * ========================================================
@@ -94,6 +102,89 @@ function flowPathPoints(object) {
         return [...sampled, ...ends].filter(
             (point) => point && Number.isFinite(point.x) && Number.isFinite(point.y)
         );
+    }
+
+    /*
+     * A FLOW ARROW'S INK IS ITS SHAFT AND ITS HEAD.
+     *
+     * An arrow stores an anchor and a direction; its geometry's defining points
+     * are a single anchor, which would draw a box with no extent. The shape the
+     * canvas paints - the shaft's two ends and the head's three corners, from
+     * the same `flowArrowShape` - is what the box fits. Selecting one arrow
+     * therefore highlights that arrow along its whole length, not the pipe
+     * under it and not a fragment of it.
+     */
+    if (object.type === "flow-arrow") {
+        /*
+         * A FREE ARROW IS ITS TWO ENDS; an attached one is its drawn shape.
+         * The distinction is the ATTACHMENT, not the type - both are arrows.
+         */
+        if (!object.attachment && g.start && g.end) {
+            return [g.start, g.end];
+        }
+
+        const shape = enggFlowArrow.flowArrowShape(object);
+
+        return shape
+            ? [shape.shaft.start, shape.shaft.end, shape.tip, shape.barbFirst, shape.barbSecond]
+            : [];
+    }
+
+    /*
+     * THE SCHEMATIC OBJECTS' INK.
+     *
+     * Each is measured from the SAME geometry its renderer draws - the taper's
+     * four corners, a vessel's four corners, a symbol's own box - so the
+     * selection box fits what is on the sheet rather than a stored anchor.
+     */
+    if (enggReducer.isReducerType(object.type)) {
+        return enggReducer.outlineOf(object);
+    }
+
+    if (enggEquipment.isEquipmentType(object.type)) {
+        const box = enggEquipment.equipmentBounds(object);
+
+        return box
+            ? [
+                  { x: box.minX, y: box.minY },
+                  { x: box.maxX, y: box.maxY }
+              ]
+            : [];
+    }
+
+    if (enggVessel.isVesselType(object.type)) {
+        return enggVessel.vesselRect(object)?.corners || [];
+    }
+
+    if (enggFluidLevel.isFluidLevelType(object.type)) {
+        const segment = enggFluidLevel.levelSegment(object);
+
+        return segment ? [segment.start, segment.end] : [];
+    }
+
+    if (enggFlowArrows.isFlowDirectionType(object.type)) {
+        return enggFlowArrows.directionArrowShapes(object).flatMap((shape) => [shape.start, shape.end]);
+    }
+
+    if (enggPressureProfile.isPressureProfileType(object.type)) {
+        const frame = enggPressureProfile.profileFrame(object);
+
+        return frame
+            ? [
+                  { x: frame.position.x, y: frame.position.y },
+                  { x: frame.position.x + frame.width, y: frame.position.y + frame.height }
+              ]
+            : [];
+    }
+
+    if (enggSectionPlane.isSectionPlaneType(object.type)) {
+        const span = enggSectionPlane.sectionSpan(object);
+
+        if (!span) {
+            return [];
+        }
+
+        return [span.start, span.end, ...enggSectionPlane.sectionArrows(object).flatMap((arrow) => [arrow.start, arrow.end])];
     }
 
     return null;

@@ -25,6 +25,14 @@ import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-ac
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { CONTINUATION_TOLERANCE, pipeEndAt, applyManualElbowConnections, applyElbowRadius, elbowMaxBendRadius, refreshManualElbow, reconcileFluidConnections, updateElbowForPair, joiningCornerOf, reseatElbowPipes } from "./pipe-duct-tool.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
+import enggFlowArrow from "../model/fluids/flow-arrow.js";
+import enggReducer from "../model/fluids/reducer-expander.js";
+import enggEquipment from "../model/fluids/inline-equipment.js";
+import enggVessel from "../model/fluids/reservoir-tank.js";
+import enggFluidLevel from "../model/fluids/fluid-level.js";
+import enggFlowArrows from "../model/fluids/flow-arrows.js";
+import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggSectionPlane from "../model/fluids/section-plane.js";
 import { createJunctionForInteriorConnection } from "./junction-tool.js";
 
 export function beginManipulationDrag(
@@ -820,6 +828,17 @@ function applyManipulation(
 
     if (drag.kind === "rotate") {
         /*
+         * A FLOW ARROW DOES NOT TURN. Its orientation is its pipe's; the handle
+         * is not offered for it (see `supportsRotationHandle`), and this refuses
+         * a rotate frame that reached it anyway - so there is no path, however
+         * the drag was started, on which an arrow's angle or its pipe's geometry
+         * can be written by a rotation.
+         */
+        if (object.type === "flow-arrow") {
+            return;
+        }
+
+        /*
          * ========================================================
          * THE ROTATION HANDLE
          * ========================================================
@@ -885,7 +904,51 @@ function applyManipulation(
         return;
     }
 
+    /*
+     * ========================================================
+     * AN ARROW'S BODY IS A POSITION DRAG, BEFORE THE BODY MACHINERY
+     * ========================================================
+     *
+     * The generic body move translates a feature's points by the pointer's
+     * delta. That is exactly wrong for a flow arrow, whose position is a
+     * FRACTION of its pipe: a translation would carry the anchor to the same
+     * place in space, off the centreline and eventually off the pipe.
+     *
+     * So an arrow's body drag is routed to its own branch - the position
+     * handle's - which projects the pointer onto the host. It is the SAME code, not
+     * a second implementation, and it is reached before the translate path so
+     * the arrow can never be moved as if it were a free shape.
+     */
+    if (object.type === "flow-arrow" && (drag.kind === "body" || drag.kind === "group-resize")) {
+        const span = enggFlowArrow.hostSpan(object);
+
+        if (!span) {
+            return true;
+        }
+
+        const dx = span.end.x - span.start.x;
+        const dy = span.end.y - span.start.y;
+
+        const t =
+            ((point.x - span.start.x) * dx + (point.y - span.start.y) * dy) /
+            (span.length * span.length);
+
+        enggFlowArrow.setAttachment(object, { fraction: enggFlowArrow.clampFraction(t) });
+
+        return true;
+    }
+
     if (drag.kind === "body" || drag.kind === "group-resize") {
+        /*
+         * A SCHEMATIC OBJECT'S BODY IS ITS OWN TO MOVE. Its branch above has
+         * already run (this point was reached only if it did not), so the
+         * generic translation below is reserved for the shapes that really do
+         * translate freely.
+         */
+        if (schematicBodyDrag(object) && drag.kind === "body") {
+            return;
+        }
+
         let scale = 1;
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
@@ -1190,6 +1253,46 @@ function applyManipulation(
         return true;
     }
 
+    /* ============================================================
+ * HELPERS FOR THE SCHEMATIC DRAGS
+ * ============================================================ */
+
+/*
+ * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
+ *
+ * A level's line comes from its VESSEL, so a tank that grew or turned takes its
+ * levels with it - at the same height above the bottom - without the level
+ * storing a second copy of where it is.
+ */
+function refreshLevelsOf(vessel, objects = []) {
+    (objects || []).forEach((object) => {
+        if (enggFluidLevel.isFluidLevelType(object?.type) && object.engineering?.vesselId === vessel.id) {
+            enggFluidLevel.refreshFluidLevel(object, objects);
+        }
+    });
+}
+
+/*
+ * WHETHER A BODY DRAG IS THE GENERIC TRANSLATE OR A TOOL'S OWN MOVE.
+ *
+ * The schematic objects are translated by their own branches above, because
+ * each is constrained by something: a reducer by its pipe, a level by its
+ * vessel, a direction arrow by its run. Letting the generic translate reach
+ * them would move geometry the model derives, so they are answered here first.
+ */
+function schematicBodyDrag(object) {
+    return (
+        enggReducer.isReducerType(object?.type) ||
+        enggEquipment.isEquipmentType(object?.type) ||
+        enggFluidLevel.isFluidLevelType(object?.type) ||
+        enggFlowArrows.isFlowDirectionType(object?.type)
+    );
+}
+
+const bodyDragRouted = schematicBodyDrag;
+
+void bodyDragRouted;
+
     const original =
         drag.originals?.[object.id]?.geometry;
 
@@ -1199,6 +1302,384 @@ function applyManipulation(
 
         target.x = point.x;
         target.y = point.y;
+        return;
+    }
+
+    /*
+     * ========================================================
+     * THE SCHEMATIC TOOLS' DRAGS
+     * ========================================================
+     *
+     * Every branch writes the SAME model its Features row writes, and every one
+     * of them is CONSTRAINED by what the object belongs to:
+     *
+     *   a reducer slides along its pipe, and its length/width handles are the
+     *   two parameters that describe the taper;
+     *
+     *   an inline symbol slides along its pipe; a standalone one moves freely;
+     *
+     *   a vessel resizes from a corner and moves by its body, taking attached
+     *   pipes and levels with it;
+     *
+     *   a level moves vertically only, because it is horizontal inside its
+     *   vessel by definition;
+     *
+     *   a direction arrow slides along its pipe, and never leaves it;
+     *
+     *   a profile's point handle writes the DATA ROW it stands for, and its
+     *   frame handles resize the frame.
+     */
+    if (enggReducer.isReducerType(object.type)) {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return;
+        }
+
+        if (drag.kind === "reducer-slide") {
+            enggReducer.slideReducerTo(object, point, drawingState.objects);
+            return;
+        }
+
+        if (drag.kind === "reducer-length-start" || drag.kind === "reducer-length-end") {
+            const walls = enggReducer.wallsOf(object);
+            const other = drag.kind === "reducer-length-start" ? walls?.end.centre : walls?.start.centre;
+
+            if (!walls || !other) {
+                return;
+            }
+
+            const length = Math.hypot(point.x - other.x, point.y - other.y);
+
+            if (enggReducer.setTransitionLength(object, length)) {
+                /* The dragged end is the one that MOVED; the other stays put. */
+                const offset = drag.kind === "reducer-length-start" ? -1 : 1;
+
+                object.geometry = {
+                    ...object.geometry,
+                    position: {
+                        x: other.x + walls.axis.direction.x * offset * (length / 2),
+                        y: other.y + walls.axis.direction.y * offset * (length / 2)
+                    }
+                };
+            }
+
+            return;
+        }
+
+        if (drag.kind === "width-start" || drag.kind === "width-end") {
+            /*
+             * THE WIDTH HANDLE CHANGES THE SEGMENT'S OWN PIPE WIDTH, which is
+             * the only width a reducer has - the fitting follows on the next
+             * read, because its taper is derived from its two pipes.
+             */
+            const runs = enggReducer.connectedRunsOf(object);
+            const run = drag.kind === "width-start" ? runs.start : runs.end;
+
+            if (!run) {
+                return;
+            }
+
+            const walls = enggReducer.wallsOf(object);
+            const centre = drag.kind === "width-start" ? walls.start.centre : walls.end.centre;
+
+            const distance = Math.hypot(point.x - centre.x, point.y - centre.y) * 2;
+            const change = distance - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION;
+
+            if (enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + change > 0) {
+                run.engineering = { ...(run.engineering || {}) };
+
+                if (change === 0) {
+                    delete run.engineering.separation;
+                } else {
+                    run.engineering.separation = change;
+                }
+            }
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggEquipment.isEquipmentType(object.type)) {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return;
+        }
+
+        if (drag.kind === "equipment-size") {
+            const frame = enggEquipment.frameOf(object);
+            const size = frame ? Math.hypot(point.x - frame.center.x, point.y - frame.center.y) : null;
+
+            if (size !== null) {
+                enggEquipment.setSymbolSize(object, size);
+            }
+
+            return;
+        }
+
+        if (drag.kind === "equipment-slide" || (drag.kind === "body" && enggEquipment.isInline(object))) {
+            /*
+             * INLINE: the symbol stays on its pipe's line.
+             *
+             * `slideAlongHost` is the ONE operation for this - it projects the
+             * pointer onto the host's centreline, turns the symbol along it and
+             * re-seats both held pipe ends - so the canvas handle and the
+             * "Position Along Pipe" field write the same geometry, and the sheet
+             * can never show a gap the field would close.
+             */
+            enggEquipment.slideAlongHost(object, point, drawingState.objects);
+
+            return;
+        }
+
+        if (drag.kind === "equipment-rotate") {
+            /* STANDALONE: the symbol turns to face the pointer, about its own centre. */
+            const frame = enggEquipment.frameOf(object);
+
+            if (!frame) {
+                return;
+            }
+
+            object.geometry = {
+                ...object.geometry,
+                rotation: (Math.atan2(point.y - frame.center.y, point.x - frame.center.x) * 180) / Math.PI
+            };
+
+            return;
+        }
+
+        if (drag.kind === "equipment-body" || drag.kind === "body") {
+            /* STANDALONE: a free move, from the drag's own delta. */
+            object.geometry = {
+                ...object.geometry,
+                position: {
+                    x: (drag.originals?.[object.id]?.geometry?.position?.x ?? object.geometry.position.x) + (point.x - drag.start.x),
+                    y: (drag.originals?.[object.id]?.geometry?.position?.y ?? object.geometry.position.y) + (point.y - drag.start.y)
+                }
+            };
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggVessel.isVesselType(object.type)) {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return;
+        }
+
+        const original = drag.originals?.[object.id]?.geometry || object.geometry;
+
+        if (drag.kind === "equipment-body" || drag.kind === "body") {
+            object.geometry = {
+                ...original,
+                position: {
+                    x: original.position.x + (point.x - drag.start.x),
+                    y: original.position.y + (point.y - drag.start.y)
+                }
+            };
+
+            enggVessel.followVessel(object, drawingState.objects);
+            refreshLevelsOf(object, drawingState.objects);
+
+            return;
+        }
+
+        const match = /^vessel-corner(\d)$/.exec(drag.kind);
+
+        if (match) {
+            /*
+             * RESIZE FROM THE CORNER OPPOSITE THE ONE GRABBED. The opposite
+             * corner stays exactly where it is, and the box is re-derived from
+             * the two - which is what makes an edge drag feel like the edge.
+             */
+            const opposite = (Number(match[1]) + 2) % 4;
+
+            const rect = enggVessel.vesselRect({ geometry: original });
+
+            if (!rect) {
+                return;
+            }
+
+            const anchor = rect.corners[opposite];
+
+            /* The drag's point, in the vessel's own (unrotated) frame. */
+            const local = enggVessel.localOf(rect, point);
+            const anchorLocal = enggVessel.localOf(rect, anchor);
+
+            const left = Math.min(local.x, anchorLocal.x);
+            const top = Math.min(local.y, anchorLocal.y);
+
+            const width = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.x - anchorLocal.x));
+            const height = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.y - anchorLocal.y));
+
+            object.geometry = {
+                ...original,
+                position: enggVessel.worldOf(rect, { x: left, y: top }),
+                width,
+                height
+            };
+
+            enggVessel.followVessel(object, drawingState.objects);
+            refreshLevelsOf(object, drawingState.objects);
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggFluidLevel.isFluidLevelType(object.type)) {
+        if (drag.kind === "level-height" || drag.kind === "body") {
+            const vessel = (drawingState.objects || []).find(
+                (item) => item.id === object.engineering?.vesselId
+            );
+
+            if (vessel && point) {
+                enggFluidLevel.setLevelFromPoint(object, point, drawingState.objects);
+            }
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggFlowArrows.isFlowDirectionType(object.type)) {
+        if (drag.kind === "direction-slide" || drag.kind === "body") {
+            if (point) {
+                enggFlowArrows.setDirectionFromPoint(object, point, drawingState.objects);
+            }
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggPressureProfile.isPressureProfileType(object.type)) {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return;
+        }
+
+        const original = drag.originals?.[object.id]?.geometry || object.geometry;
+
+        /*
+         * A DATA POINT. The drag position is mapped back through the axes, and
+         * the ROW is written - so the table and the plotted point are one fact,
+         * not two that could drift apart.
+         */
+        if (drag.kind.startsWith("profile-point")) {
+            const index = Number(drag.kind.slice("profile-point".length));
+            const data = enggPressureProfile.drawingToData(object, point);
+
+            if (data && Number.isInteger(index)) {
+                enggPressureProfile.setPoint(object, index, data);
+            }
+
+            return;
+        }
+
+        if (drag.kind === "equipment-body" || drag.kind === "body") {
+            object.geometry = {
+                ...original,
+                position: {
+                    x: original.position.x + (point.x - drag.start.x),
+                    y: original.position.y + (point.y - drag.start.y)
+                }
+            };
+
+            return;
+        }
+
+        const match = /^profile-corner(\d)$/.exec(drag.kind);
+
+        if (match) {
+            const opposite = (Number(match[1]) + 2) % 4;
+
+            const right = original.position.x + original.width;
+            const top = original.position.y + original.height;
+
+            const corners = [
+                { x: original.position.x, y: original.position.y },
+                { x: right, y: original.position.y },
+                { x: right, y: top },
+                { x: original.position.x, y: top }
+            ];
+
+            const anchor = corners[opposite];
+
+            const width = Math.max(enggPressureProfile.MIN_PROFILE_SIDE, Math.abs(point.x - anchor.x));
+            const height = Math.max(enggPressureProfile.MIN_PROFILE_SIDE, Math.abs(point.y - anchor.y));
+
+            object.geometry = {
+                ...original,
+                position: {
+                    x: Math.min(point.x, anchor.x),
+                    y: Math.min(point.y, anchor.y)
+                },
+                width,
+                height
+            };
+
+            return;
+        }
+
+        return;
+    }
+
+    if (enggSectionPlane.isSectionPlaneType(object.type)) {
+        if (!point) {
+            return;
+        }
+
+        const original = drag.originals?.[object.id]?.geometry || object.geometry;
+
+        if (drag.kind === "section-rotate") {
+            /* TURN ABOUT THE TRACE'S MIDDLE - the mark stays where it is. */
+            const span = enggSectionPlane.sectionSpan(object);
+
+            if (!span) {
+                return;
+            }
+
+            const centre = { x: (span.start.x + span.end.x) / 2, y: (span.start.y + span.end.y) / 2 };
+
+            enggSectionPlane.setSectionRotation(
+                object,
+                (Math.atan2(point.y - centre.y, point.x - centre.x) * 180) / Math.PI
+            );
+
+            return;
+        }
+
+        if (drag.kind === "section-body" || drag.kind === "body") {
+            const dx = point.x - drag.start.x;
+            const dy = point.y - drag.start.y;
+
+            object.geometry = {
+                start: { x: original.start.x + dx, y: original.start.y + dy },
+                end: { x: original.end.x + dx, y: original.end.y + dy }
+            };
+
+            return;
+        }
+
+        if (drag.kind === "start" || drag.kind === "end") {
+            object.geometry = { ...object.geometry, [drag.kind]: { x: point.x, y: point.y } };
+
+            return;
+        }
+
+        return;
+    }
+
+    /*
+     * A FREE FLOW ARROW IS AN ORDINARY SPAN: start and end are its geometry.
+     */
+    if (enggFlowArrows.isFreeFlowArrowType(object.type) && !object.attachment && (drag.kind === "start" || drag.kind === "end")) {
+        object.geometry = { ...object.geometry, [drag.kind]: { x: point.x, y: point.y } };
+
         return;
     }
 
@@ -1330,6 +1811,93 @@ function applyManipulation(
             createJunctionForInteriorConnection(
                 (drawingState.objects || []).find((candidate) => candidate.id === object.id) || object
             );
+        }
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * A FLOW ARROW IS DRAGGED ALONG ITS HOST PIPE
+     * ========================================================
+     *
+     * The arrow's anchor is a FRACTION along the run, so moving it is one
+     * number - and the pointer is projected onto the run's centreline to get
+     * that number. The projection is what keeps the arrow ON the pipe: a cursor
+     * dragged sideways changes nothing, because the sideways component is simply
+     * discarded, and the arrow stays centred and parallel to the pipe's edges
+     * however the drag is made.
+     *
+     * THE PIPE IS NEVER TOUCHED. Only `attachment.fraction` (or `size`) is
+     * written, so a drag cannot stretch, bend or move the run it sits on.
+     *
+     * A pipe whose geometry changed under a body move is read through
+     * `hostSpan` here, so the fraction is measured against the run AS IT IS NOW.
+     */
+    if (object.type === "flow-arrow") {
+        /*
+         * THE BODY IS A POSITION DRAG.
+         *
+         * Grabbing the arrow anywhere on its head is how a student expects to
+         * slide it along the pipe, so the ordinary body drag is treated as the
+         * position handle. There is deliberately NO translate-the-arrow-anywhere
+         * path below this branch: an arrow has no free position, so a drag that
+         * is not one of the two handles does nothing at all.
+         */
+        const kind = drag.kind === "body" ? "flow-arrow-position" : drag.kind;
+
+        const span = enggFlowArrow.hostSpan(object);
+
+        if (!span) {
+            return;
+        }
+
+        if (kind === "flow-arrow-position") {
+            /*
+             * THE POINTER'S PROJECTION ONTO THE RUN. `t` is the raw fraction
+             * along the centreline; clamping it into the drawable range keeps
+             * the arrow strictly inside the run's ends, where fittings are.
+             *
+             * ONLY THE FRACTION IS WRITTEN. The pipe's geometry is not read
+             * into the arrow and the arrow's position is not written into the
+             * pipe, so a drag along the pipe can never move, stretch or turn the
+             * pipe it belongs to.
+             */
+            const dx = span.end.x - span.start.x;
+            const dy = span.end.y - span.start.y;
+
+            const t =
+                ((point.x - span.start.x) * dx + (point.y - span.start.y) * dy) /
+                (span.length * span.length);
+
+            enggFlowArrow.setAttachment(object, { fraction: enggFlowArrow.clampFraction(t) });
+
+            return;
+        }
+
+        if (kind === "flow-arrow-size") {
+            /*
+             * THE SIZE IS THE POINTER'S DISTANCE FROM THE ANCHOR, not a delta
+             * from where the drag began - so the same pointer position always
+             * means the same size, and a drag cannot accumulate rounding.
+             * Clamped to the drawable range, and never below the minimum that
+             * keeps the head drawable.
+             *
+             * Resizing the HEAD changes `attachment.size` and nothing else: the
+             * pipe's walls, width and length are untouched, and there is no
+             * diagonal scale handle that could ever reach them.
+             */
+            const anchor = enggFlowArrow.anchorPoint(object);
+
+            if (!anchor) {
+                return;
+            }
+
+            const wanted = Math.hypot(point.x - anchor.x, point.y - anchor.y) * 2;
+
+            enggFlowArrow.setAttachment(object, { size: wanted });
+
+            return;
         }
 
         return;

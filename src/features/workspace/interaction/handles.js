@@ -8,6 +8,14 @@ import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import enggJunction from "../model/fluids/junction.js";
+import enggFlowArrow from "../model/fluids/flow-arrow.js";
+import enggReducer from "../model/fluids/reducer-expander.js";
+import enggEquipment from "../model/fluids/inline-equipment.js";
+import enggVessel from "../model/fluids/reservoir-tank.js";
+import enggFluidLevel from "../model/fluids/fluid-level.js";
+import enggFlowArrows from "../model/fluids/flow-arrows.js";
+import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggSectionPlane from "../model/fluids/section-plane.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { drawingCanvas } from "../dom.js";
@@ -854,6 +862,232 @@ function manipulationHandles(
     }
 
     /*
+     * ========================================================
+     * THE SCHEMATIC FLUIDS TOOLS' HANDLES
+     * ========================================================
+     *
+     * Each handle has ONE purpose, and it writes the same model its Features
+     * row writes - so a drag and a typed value are the same edit.
+     *
+     * The inline objects are placed by their host, so they get a POSITION handle
+     * that SLIDES ALONG the host (never a free X/Y), and their size handles are
+     * the parameters that belong to them (a transition length, a symbol radius).
+     * A fluid level has one vertical handle; a direction arrow slides along its
+     * pipe; a profile has a handle per data point and eight frame handles.
+     */
+    if (enggReducer.isReducerType(object.type)) {
+        const walls = enggReducer.wallsOf(object);
+
+        return walls
+            ? [
+                  { kind: "reducer-slide", point: walls.axis.centre },
+                  { kind: "reducer-length-start", point: walls.start.centre },
+                  { kind: "reducer-length-end", point: walls.end.centre },
+                  { kind: "width-start", point: walls.start.a },
+                  { kind: "width-end", point: walls.end.a }
+              ]
+            : [];
+    }
+
+    if (enggEquipment.isEquipmentType(object.type)) {
+        const frame = enggEquipment.frameOf(object);
+
+        if (!frame) {
+            return [];
+        }
+
+        const inline = enggEquipment.isInline(object);
+
+        const handles = [{ kind: inline ? "equipment-slide" : "equipment-body", point: frame.center }];
+
+        const sizeAt = enggEquipment.localToWorld(frame, { x: enggEquipment.symbolRadiusOf(object), y: 0 });
+
+        handles.push({ kind: "equipment-size", point: sizeAt });
+
+        /*
+         * A STANDALONE SYMBOL TURNS; an inline one lies along its pipe, so it has
+         * no rotation grip - turning it there would break the run it joins.
+         */
+        if (!inline) {
+            const radius = enggEquipment.symbolRadiusOf(object);
+
+            handles.push({
+                kind: "equipment-rotate",
+                point: enggEquipment.localToWorld(frame, { x: 0, y: radius * 1.5 })
+            });
+        }
+
+        return handles;
+    }
+
+    if (enggVessel.isVesselType(object.type)) {
+        const rect = enggVessel.vesselRect(object);
+
+        if (!rect) {
+            return [];
+        }
+
+        const [topLeft, topRight, bottomRight, bottomLeft] = rect.corners;
+
+        return [
+            { kind: "vessel-corner0", point: topLeft },
+            { kind: "vessel-corner1", point: topRight },
+            { kind: "vessel-corner2", point: bottomRight },
+            { kind: "vessel-corner3", point: bottomLeft },
+            { kind: "equipment-body", point: rect.centre }
+        ];
+    }
+
+    if (enggFluidLevel.isFluidLevelType(object.type)) {
+        const segment = enggFluidLevel.levelSegment(object);
+
+        return segment
+            ? [
+                  {
+                      kind: "level-height",
+                      point: {
+                          x: (segment.start.x + segment.end.x) / 2,
+                          y: (segment.start.y + segment.end.y) / 2
+                      }
+                  }
+              ]
+            : [];
+    }
+
+    if (enggFlowArrows.isFlowDirectionType(object.type)) {
+        const fraction = enggFlowArrows.directionFractionOf(object);
+        const at = enggFlowArrows.directionPointAt(object, fraction);
+
+        return at ? [{ kind: "direction-slide", point: at.point }] : [];
+    }
+
+    if (enggPressureProfile.isPressureProfileType(object.type)) {
+        const frame = enggPressureProfile.profileFrame(object);
+
+        if (!frame) {
+            return [];
+        }
+
+        const corners = [
+            { x: frame.position.x, y: frame.position.y },
+            { x: frame.position.x + frame.width, y: frame.position.y },
+            { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
+            { x: frame.position.x, y: frame.position.y + frame.height }
+        ];
+
+        const centre = {
+            x: frame.position.x + frame.width / 2,
+            y: frame.position.y + frame.height / 2
+        };
+
+        /*
+         * A HANDLE PER DATA POINT, named by the row index - so the drag writes
+         * the SAME row the Features table shows, whatever the table's order.
+         */
+        const points = enggPressureProfile.plottedPoints(object).map((plot) => ({
+            kind: `profile-point${plot.index}`,
+            point: { x: plot.x, y: plot.y }
+        }));
+
+        return [
+            ...corners.map((point, index) => ({ kind: `profile-corner${index}`, point })),
+            { kind: "equipment-body", point: centre },
+            ...points
+        ];
+    }
+
+    if (enggSectionPlane.isSectionPlaneType(object.type)) {
+        const span = enggSectionPlane.sectionSpan(object);
+
+        if (!span) {
+            return [];
+        }
+
+        const centre = { x: (span.start.x + span.end.x) / 2, y: (span.start.y + span.end.y) / 2 };
+
+        /*
+         * A SECTION MARK HAS FOUR GRIPS AND THEY DO FOUR DIFFERENT THINGS:
+         *
+         *   the two ends   set the trace's length AND its angle
+         *   the body       moves the whole marker
+         *   the rotation   turns it about its middle, without moving it
+         *
+         * The rotation grip stands off the middle along the trace's normal, so it
+         * is never mistaken for an end or for the body. The viewing direction is
+         * NOT a grip - it is the Object section's Reverse, and reversing arrows
+         * must not move the trace, which a drag cannot promise.
+         */
+        const normal = { x: -span.direction.y, y: span.direction.x };
+        const reach = Math.max(4, Math.min(span.length * 0.5, 12));
+
+        return [
+            { kind: "start", point: span.start },
+            { kind: "end", point: span.end },
+            { kind: "section-body", point: centre },
+            {
+                kind: "section-rotate",
+                point: { x: centre.x + normal.x * reach, y: centre.y + normal.y * reach }
+            }
+        ];
+    }
+
+    /*
+     * A FREE FLOW ARROW IS A SPAN: its tail and its tip. The attached one above
+     * keeps the two handles it has always had.
+     */
+    if (enggFlowArrows.isFreeFlowArrowType(object.type) && !object.attachment && g.start && g.end) {
+        return [
+            { kind: "start", point: g.start },
+            { kind: "end", point: g.end }
+        ];
+    }
+
+    /*
+     * A FLOW ARROW IS GRABBED BY ITS TIP AND BY ITS SIZE.
+     *
+     * The POSITION handle is the arrow's TIP: dragging it slides the whole arrow
+     * along its host pipe's centreline, because the tip is constrained to the
+     * run by the drag handler and the rest of the arrow follows the anchor. There
+     * is deliberately no rotation handle and no free-body handle: the arrow's
+     * orientation is its pipe's, and moving the pipe is the pipe's own edit.
+     *
+     * The SIZE handle sits at the tip too, offset ACROSS the run, so the two are
+     * distinguishable on the canvas: the position handle is where the arrow
+     * points, the size handle is beside it. Dragging the size handle changes
+     * `attachment.size` and nothing else - the pipe is never touched.
+     */
+    if (object.type === "flow-arrow") {        const shape = enggFlowArrow.flowArrowShape(object);
+
+        if (!shape) {
+            return [];
+        }
+
+        /*
+         * THE SIZE HANDLE SITS BEHIND THE TAIL, ON THE ARROW'S OWN AXIS.
+         *
+         * The arrow is a shaft with a small head, so the distance from the
+         * anchor to the tail IS the size that will be committed - which makes
+         * the handle honest: dragging it out lengthens the arrow, dragging it
+         * in shortens it, and the head stays a quarter of whatever it becomes.
+         *
+         * It is offset slightly ACROSS the run as well, so it is distinguishable
+         * from the stem it sits on.
+         */
+        const back = { x: -shape.axis.x, y: -shape.axis.y };
+
+        return [
+            { kind: "flow-arrow-position", point: shape.anchor },
+            {
+                kind: "flow-arrow-size",
+                point: {
+                    x: shape.shaft.start.x + back.x * 4 + shape.across.x * 4,
+                    y: shape.shaft.start.y + back.y * 4 + shape.across.y * 4
+                }
+            }
+        ];
+    }
+
+    /*
      * A JUNCTION IS GRABBED BY ITS HUB AND BY EACH BRANCH'S PORT.
      *
      * The hub moves the whole fitting. Each port is BOTH the point a pipe
@@ -1260,7 +1494,27 @@ function supportsRotationHandle(
          * A JUNCTION HAS NO ROTATION HANDLE EITHER: its orientation is its
          * MAIN RUN, which the branches are measured from.
          */
-        "junction"
+        "junction",
+
+        /*
+         * A FLOW ARROW HAS NO ROTATION HANDLE. Its orientation IS its pipe's,
+         * and turning it would describe a flow direction the run does not have.
+         * The one way to change what it says is Reverse Direction, which is a
+         * half turn with a meaning - and it is a plain boolean rather than an
+         * angle, so it cannot leave the arrow at some angle off its run.
+         */
+        "flow-arrow",
+
+        /*
+         * AND THE SCHEMATIC TOOLS THAT TURN WITH THEIR HOST. A reducer's axis is
+         * its pipe's, a fluid level is horizontal inside its vessel and a
+         * direction arrow points along its run - so none of them offers a free
+         * turn. A pressure profile, a section trace and a VESSEL do turn, which
+         * is why they are not here.
+         */
+        "reducer-expander",
+        "fluid-level",
+        "flow-direction-diagram"
     ].includes(object.type);
 }
 

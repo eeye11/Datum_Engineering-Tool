@@ -30,9 +30,16 @@
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
+import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 import { isDynamicsObject, dynamicsTypeOf } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";import enggEquipment from "../../../features/workspace/model/fluids/inline-equipment.js";
+import enggVessel from "../../../features/workspace/model/fluids/reservoir-tank.js";
+import enggFluidLevel from "../../../features/workspace/model/fluids/fluid-level.js";
+import enggFlowArrows from "../../../features/workspace/model/fluids/flow-arrows.js";
+import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
+import enggSectionPlane from "../../../features/workspace/model/fluids/section-plane.js";
 
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
@@ -94,7 +101,19 @@ const FILLABLE = new Set([
      * drawn as two open lines unless the student asks for more.
      */
     "pipe-duct",
-    "elbow"
+    "elbow",
+
+    /*
+     * THE SCHEMATIC SHAPES THAT ENCLOSE A REGION: a taper, a valve's body, a
+     * vessel, an inline symbol's circle, the graph's frame. A fluid level, a
+     * free arrow and a section trace are open marks, so they are not here.
+     */
+    "reducer-expander",
+    "pump",
+    "valve",
+    "flow-meter",
+    "reservoir-tank",
+    "pressure-profile"
 ]);
 
 /*
@@ -104,7 +123,7 @@ const FILLABLE = new Set([
  * two arcs and the two end edges. They are filled shapes in the same sense as a
  * closed polygon - one region, filled behind its own outline.
  */
-const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow", "junction"]);
+const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow", "junction", "reducer-expander"]);
 
 /*
  * The types whose stroke can be dashed, dotted or otherwise styled.
@@ -139,7 +158,29 @@ const STROKE_TYPES = new Set([
     	 * deliberately no way to give them different colours.
     	 */
     	"pipe-duct",
-    	"elbow"
+    	"elbow",
+
+    	/*
+    	 * A FLOW ARROW IS DRAWN WITH A PEN TOO: one outline colour and one
+    	 * thickness for the arrowhead. Its Line Style applies to the head's
+    	 * outline; its Colour and Thickness are the same controls a run gets.
+    	 */
+    	"flow-arrow",
+
+    	/*
+    	 * THE SCHEMATIC FLUIDS TOOLS: every one of them is drawn with a pen, so
+    	 * every one gets the SAME Line Style, Outline Colour and Thickness the rest
+    	 * of the drawing uses - rather than a second appearance implementation.
+    	 */
+    	"reducer-expander",
+    	"pump",
+    	"valve",
+    	"flow-meter",
+    	"reservoir-tank",
+    	"fluid-level",
+    	"flow-direction-diagram",
+    	"pressure-profile",
+    	"section-plane"
     ]);
 
 /*
@@ -576,9 +617,7 @@ const FIELDS = {
      */
     arrowhead: {
         kind: "choice",
-        applies: (object) =>
-            object.type === "annotate" &&
-            ANNOTATE_ARROWHEAD_KINDS.has(object.annotateKind),
+        applies: (object) => object.type === "annotate" && ANNOTATE_ARROWHEAD_KINDS.has(object.annotateKind),
         read: (object) => {
             const value = String(object.style?.arrowhead ?? "closed");
 
@@ -908,7 +947,7 @@ function isLockable(object) {
 	 * elbow is a fitting rather than a run, not a dynamics symbol, so it is
 	 * named here rather than inferred.
 	 */
-	if (object && (object.type === "pipe-duct" || object.type === "elbow" || object.type === "junction")) {
+	if (object && (object.type === "pipe-duct" || object.type === "elbow" || object.type === "junction" || object.type === "flow-arrow")) {
 		return true;
 	}
 
@@ -1031,8 +1070,138 @@ export const GROUPS = [
 
     	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
     	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
-    	{ id: "transform", heading: "Transform", fields: ["bendRadius"], transform: true }
+    	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true }
     ];
+
+    	/*
+    	 * ============================================================
+    	 * THE SCHEMATIC TOOLS' SECTIONS
+    	 * ============================================================
+    	 *
+    	 * Object, then Appearance, then Transform - the hierarchy every Fluids tool
+    	 * follows - with one tool-specific section where the tool genuinely needs one:
+    	 * a pressure profile's Data and Axes.
+    	 *
+    	 * EACH GROUP'S FIELDS ARE THE OBJECT's OWN FACTS, in reading order: what it is
+    	 * and what it is attached to, then the one or two parameters that decide its
+    	 * shape. A group with nothing applicable to the selection is dropped by
+    	 * `groupsFor`, so no empty heading is ever drawn.
+    	 */
+    	export const SCHEMATIC_GROUPS = Object.freeze({
+    	    reducer: [
+    	        /*
+    	         * OBJECT: what is held, whether it is, and which way the taper runs.
+    	         *
+    	         * The two pipe references are READ-ONLY: the fitting is placed by
+    	         * clicking a run, so there is no field that could re-point it at a
+    	         * different pipe without first breaking both connections.
+    	         */
+    	        { id: "object", heading: "Object", fields: ["fixed", "reducerMode", "reducerFlip", "reducerStartPipe", "reducerEndPipe"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+    	        /*
+    	         * THE TAPER'S OWN PARAMETERS, then the widths that describe it.
+    	         *
+    	         * Pipe Width EDITS the transitioned segment (the fitting stores no
+    	         * width of its own); the two end widths are DERIVED read-only values,
+    	         * because when both segments are connected they are the pipes'.
+    	         */
+    	        { id: "transform", heading: "Transform", fields: ["transitionLength", "reducerPipeWidth", "reducerStartWidth", "reducerEndWidth"] }
+    	    ],
+    	    equipment: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "equipmentPlacement", "equipmentPipeA", "equipmentPipeB", "valveDepiction"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+    	        /*
+    	         * X, Y AND ROTATE, THEN THE SYMBOL'S OWN SIZE.
+    	         *
+    	         * A STANDALONE symbol moves and turns freely. An INLINE one is placed
+    	         * by its host, so the same rows name its host's position and angle,
+    	         * and "Position Along Pipe" is the one degree of freedom it has.
+    	         * `equipmentPosition` applies to neither: it applies to inline ones
+    	         * only, so a standalone pump never shows a control that cannot act.
+    	         */
+    	        { id: "transform", heading: "Transform", fields: ["equipmentX", "equipmentY", "equipmentRotation", "symbolSize", "equipmentPosition"] }
+    	    ],
+    	    vessel: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "vesselStyle"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+    	        { id: "transform", heading: "Transform", fields: ["vesselX", "vesselY", "vesselRotation", "vesselWidth", "vesselHeight"] }
+    	    ],
+    	    fluidLevel: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "levelVessel", "levelPosition"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth"] },
+    	        /*
+    	         * A LEVEL'S TRANSFORM: its X and Y, with Rotate fixed at 0 deg while
+    	         * it belongs to a vessel. The level's line spans the host's interior
+    	         * horizontally, so an angle would describe a surface the vessel cannot
+    	         * hold.
+    	         */
+    	        { id: "transform", heading: "Transform", fields: ["levelX", "levelY", "levelRotation"] }
+    	    ],
+    	    flowDirection: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "directionPipe", "directionReversed"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
+    	        /* Position and spacing, never an X/Y that would detach the arrows. */
+    	        { id: "transform", heading: "Transform", fields: ["directionPosition", "directionSpacing", "directionSize"] }
+    	    ],
+    	    freeArrow: [
+    	        { id: "object", heading: "Object", fields: ["fixed"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
+    	        { id: "transform", heading: "Transform", fields: ["freeArrowLength"] }
+    	    ],
+    	    profile: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "graphName"] },
+    	        { id: "profile-axes", heading: "Axes", fields: ["profileXTitle", "profileXUnit", "profileXMin", "profileXMax", "profileYTitle", "profileYUnit", "profileYMin", "profileYMax"] },
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "profileShowPoints", "profileShowGrid"] },
+    	        { id: "transform", heading: "Transform", fields: ["profileX", "profileY", "profileWidth", "profileHeight"] }
+    	    ],
+    	    section: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "sectionIdentifier", "sectionDirection"] },
+    	        /* The viewing arrows are a Depiction fact, but stay beside the direction. */
+    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
+    	        { id: "transform", heading: "Transform", fields: ["sectionX", "sectionY", "sectionRotation", "sectionLength"] }
+    	    ]
+    	});
+
+    	/* Which set of sections an object uses, from its own type. */
+    	export function schematicGroupsFor(object) {
+    	    if (!object) {
+    	        return null;
+    	    }
+
+    	    if (enggReducer.isReducerType(object.type)) {
+    	        return SCHEMATIC_GROUPS.reducer;
+    	    }
+
+    	    if (enggEquipment.isEquipmentType(object.type)) {
+    	        return SCHEMATIC_GROUPS.equipment;
+    	    }
+
+    	    if (enggVessel.isVesselType(object.type)) {
+    	        return SCHEMATIC_GROUPS.vessel;
+    	    }
+
+    	    if (enggFluidLevel.isFluidLevelType(object.type)) {
+    	        return SCHEMATIC_GROUPS.fluidLevel;
+    	    }
+
+    	    if (enggFlowArrows.isFlowDirectionType(object.type)) {
+    	        return SCHEMATIC_GROUPS.flowDirection;
+    	    }
+
+    	    if (enggFlowArrows.isFreeFlowArrowType(object.type) && !object.attachment) {
+    	        return SCHEMATIC_GROUPS.freeArrow;
+    	    }
+
+    	    if (enggPressureProfile.isPressureProfileType(object.type)) {
+    	        return SCHEMATIC_GROUPS.profile;
+    	    }
+
+    	    if (enggSectionPlane.isSectionPlaneType(object.type)) {
+    	        return SCHEMATIC_GROUPS.section;
+    	    }
+
+    	    return null;
+    	}
 
 /*
  * ============================================================
@@ -1157,8 +1326,217 @@ Object.assign(FIELDS, {
 
             return adjustElbowRadius(object, change) !== false;
         }
+    },
+
+    /*
+     * ============================================================
+     * THE FLOW ARROW'S OWN CONTROLS
+     * ============================================================
+     *
+     * A flow arrow is an INDICATOR: it has no position of its own, no size in
+     * the drawing's units and no angle. It is a mark on a pipe - which pipe,
+     * how far along it, which way, how big and how drawn. So its section holds
+     * exactly those questions and nothing that could detach it:
+     *
+     *   attachedPipe   WHERE it lives     - read-only, the host's own name
+     *   reverse        WHICH WAY         - flips the head, never the pipe
+     *   fixed          WHETHER IT MOVES  - the shared Fix lock
+     *   arrowSize      HOW BIG           - the head only, never the pipe
+     *   arrowheadFill  WHETHER IT IS INKED
+     *
+     * There is deliberately NO X/Y position, NO rotation and NO "position
+     * along the pipe" number. Those would be ways to detach the arrow from its
+     * run, and each of them already has a canvas handle that is constrained by
+     * the run - see `flow-arrow-position` and `flow-arrow-size` in handles.js.
+     * Every control here writes the drawing through `setAttachment`, so the
+     * geometry mirror and the attachment stay one statement.
+     */
+    /*
+     * ATTACHED PIPE IS READ-ONLY, AND SO ARE THE CONNECTION REFERENCES OF THE
+     * SCHEMATIC TOOLS - every one of them names an object another tool placed,
+     * and a reference typed here would have to be resolved back to that object.
+     * The value is stated, and it is the pipe's OWN name.
+     */
+    attachedPipe: {
+        kind: "text",
+        applies: (object) =>
+            object?.type === "flow-arrow" &&
+            Boolean(
+                enggFlowArrow.attachmentOf(object).hostId ||
+                    object?.engineering?.hostId ||
+                    object?.parentId
+            ),
+        read: (object) => {
+        		const attachment = enggFlowArrow.attachmentOf(object);
+        		const stored = object?.engineering;
+
+        		const hostId = attachment.hostId || stored?.hostId || null;
+
+        		if (!hostId) {
+        			return "";
+        		}
+
+        		return flowArrowHostName({ ...object, attachment: { ...attachment, hostId } });
+        	},
+
+        /*
+         * READ-ONLY, AND THAT IS THE POINT. The host is chosen by pressing on a
+         * pipe, not by typing an id; a name typed here would have to be resolved
+         * back to some pipe, and the wrong guess would silently move the arrow to
+         * another run. The write refuses, so the field is a statement of fact
+         * rather than a control.
+         */
+        write: () => false,
+        readOnly: true,
+        label: "Attached Pipe / Duct"
+    },
+
+    reverseDirection: {
+        kind: "toggle",
+        applies: (object) => object?.type === "flow-arrow",
+        read: (object) => enggFlowArrow.attachmentOf(object).reversed === true,
+        write: (object, value) => {
+            /*
+             * THE HEAD TURNS, THE PIPE DOES NOT. Only `attachment.reversed` is
+             * written; the host's geometry, its connections and its own
+             * direction are untouched, so the physical pipework is exactly
+             * what it was before the flip.
+             */
+            return enggFlowArrow.setAttachment(object, { reversed: Boolean(value) }) !== null;
+        },
+        label: "Reverse Direction"
+    },
+
+    arrowSize: {
+        kind: "number",
+        applies: (object) => object?.type === "flow-arrow",
+        read: (object) => enggFlowArrow.arrowSize(object),
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size < enggFlowArrow.MIN_ARROW_SIZE || size > enggFlowArrow.MAX_ARROW_SIZE) {
+                return false;
+            }
+
+            /*
+             * THE SIZE IS THE HEAD'S. The pipe's width, walls and length are
+             * not read or written here, so a typed size cannot resize the run
+             * the arrow is indicating.
+             */
+            return enggFlowArrow.setAttachment(object, { size }) !== null;
+        },
+        min: enggFlowArrow.MIN_ARROW_SIZE,
+        max: enggFlowArrow.MAX_ARROW_SIZE,
+        step: 1,
+        label: "Arrow Size"
+    },
+
+    arrowheadFill: {
+        kind: "toggle",
+        applies: (object) => object?.type === "flow-arrow",
+        read: (object) => object?.style?.headingFillMode === "solid",
+        write: (object, value) => {
+            const style = { ...(object.style || {}) };
+
+            if (value) {
+                /*
+                 * A FILLED HEAD NEEDS A COLOUR. One the student has already
+                 * chosen is kept; otherwise the head is inked in its own
+                 * outline colour, which is the convention the rest of the
+                 * drawing follows for "filled with the same pen".
+                 */
+                style.headingFillMode = "solid";
+                style.headingFill = fillHexOf(style.headingFill) || fillHexOf(style.stroke) || undefined;
+            } else {
+                style.headingFillMode = "none";
+            }
+
+            object.style = style;
+
+            return true;
+        },
+        label: "Arrowhead Fill"
     }
 });
+
+/* A stored colour, when it is one the drawing can paint - otherwise null. */
+function fillHexOf(value) {
+    return /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? String(value).toLowerCase() : null;
+}
+
+/*
+ * THE NAME OF THE PIPE AN ARROW IS ATTACHED TO.
+ *
+ * Resolved from the live drawing, because a name is not an identity: the pipe
+ * may have been renamed after the arrow was placed, and the panel must show
+ * what the student now calls it. When the host is gone the arrow cannot be
+ * drawn at all, and the field says so rather than showing a stale name.
+ */
+export function flowArrowHostName(object, lookup = null) {
+    if (object?.type !== "flow-arrow") {
+        return "";
+    }
+
+    const attachment = enggFlowArrow.attachmentOf(object);
+    const hostId = attachment.hostId;
+
+    if (!hostId) {
+        return "";
+    }
+
+    const find = typeof lookup === "function" ? lookup : attachedPipeLookup();
+
+    const host = find ? find(hostId) : null;
+
+    if (!host) {
+        return "";
+    }
+
+    return String(host.name || host.id || "");
+}
+
+/*
+ * THE ARROW'S LINE STYLE, COLOUR AND THICKNESS ARE THE SHARED ONES.
+ *
+ * A flow arrow is in STROKE_TYPES, so the Appearance section already offers it
+ * the same Line Style, Outline Colour and Thickness controls a Line or a Pipe
+ * has. There is deliberately no second copy of them here: two controls for one
+ * value is two ways to disagree about it.
+ *
+ * The HOST NAMES still need the document, and it arrives through a setter for
+ * the reason stated at the top of this module - this file must not import the
+ * live document.
+ */
+function attachedPipeLookup() {
+    const find = elbowLookupStore().objects;
+
+    return typeof find === "function" ? find : null;
+}
+
+/*
+ * THE DOCUMENT, INJECTED. The panel hands in ONE reader that answers "the
+ * object with this id" from the active drawing; the elbow's run lookup and this
+ * arrow's host lookup are two questions about the same table, so they share the
+ * store rather than opening a second one.
+ */
+export function setFeatureObjectLookup(lookup) {
+    elbowLookupStore().objects = typeof lookup === "function" ? lookup : null;
+}
+
+/*
+ * THE ARROW'S OWN FIELDS, IN THE ORDER THE PANEL READS THEM.
+ *
+ * Object first - what it is attached to, whether it is held - then the arrow's
+ * controls. Appearance follows in the shared section, because Line Style,
+ * Colour and Thickness are the same values the whole application uses.
+ *
+ * The group is listed BEFORE the shared sections and is filtered by `groupsFor`
+ * to an arrow's own selection, so a pipe never sees a Flow Arrow's controls.
+ */
+export const FLOW_ARROW_GROUP = {
+    id: "flow-arrow",
+    heading: "Object",
+    fields: ["attachedPipe", "fixed", "name", "reverseDirection", "arrowheadFill", "arrowSize"]};
 
 /*
  * HOW AN ELBOW'S ENDS ARE ATTACHED: "connected", "partial" or "standalone".
@@ -1424,6 +1802,889 @@ export function setPipeWidth(object, change) {
 }
 
 const PROCESS_BEND_PREFIX = "processBend:";
+
+/* ============================================================
+ * THE SCHEMATIC FLUIDS TOOLS' OWN FIELDS
+ * ============================================================
+ *
+ * Each is declared once, applies only to its own type, and WRITES THE MODEL
+ * THE RENDERER, THE HANDLES AND THE SOURCE WRITER READ - so a typed value and a
+ * dragged handle are the same edit. There is no decorative field here: every one
+ * moves something on the sheet.
+ *
+ * ATTACHED OBJECTS DO NOT OFFER FREE TRANSFORMS. A reducer, an inline symbol and
+ * a fluid level are placed by their host, so their Object section states that
+ * host read-only and their own rows are the parameters that make sense (the
+ * transition length, the symbol size, the level height) - never an X/Y that
+ * would detach them from the pipe or vessel they belong to.
+ */
+
+/* A read-only statement of fact - the field shows, it never writes. */
+function readonlyField({ applies, read, label, unit = null }) {
+    return {
+        kind: "text",
+        applies,
+        read,
+        write: () => false,
+        readOnly: true,
+        ...(unit ? { unit } : {}),
+        label
+    };
+}
+
+/* The name of the object an object records, for a read-only reference row. */
+function objectNameOf(id) {
+    const find = elbowLookupStore().objects;
+
+    if (!id || typeof find !== "function") {
+        return "";
+    }
+
+    const found = find(id);
+
+    return found ? String(found.name || found.id || "") : "";
+}
+
+Object.assign(FIELDS, {
+    /* ---------------------------------------------- Reducer / Expander */
+
+    reducerMode: {
+        kind: "segmented",
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => enggReducer.normaliseMode(object.engineering?.mode),
+        write: (object, value) => {
+            if (!Object.values(enggReducer.REDUCER_MODES).includes(value)) {
+                return false;
+            }
+
+            object.engineering = { ...(object.engineering || {}), mode: value };
+
+            return true;
+        },
+        label: "Mode",
+        options: [
+            { value: "reduce", label: "Reduce" },
+            { value: "expand", label: "Expand" }
+        ]
+    },
+
+    reducerFlip: {
+        kind: "toggle",
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: () => false,
+        write: (object, value) => {
+            if (!value) {
+                return false;
+            }
+
+            return enggReducer.flipReducer(object);
+        },
+        label: "Reverse Taper"
+    },
+
+    /*
+     * THE TRANSITION'S PIPE WIDTH - the new segment's OWN width.
+     *
+     * It is written to the connected segment, never to the fitting, so the taper
+     * follows on the next read and the two can never disagree. Its value is the
+     * segment's `separation`, the same number the Pipe / Duct's Pipe Width row
+     * edits, so the two surfaces are one fact.
+     */
+    reducerPipeWidth: {
+        kind: "number",
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => enggReducer.targetWidthOf(object),
+        write: (object, value) => enggReducer.setTargetWidth(object, value),
+        min: -(enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION - 0.5),
+        max: 400,
+        step: 0.5,
+        unit: "mm",
+        label: "Pipe Width"
+    },
+
+    reducerStartPipe: readonlyField({
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.startPipeId),
+        label: "Start Pipe / Duct"
+    }),
+
+    reducerEndPipe: readonlyField({
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.endPipeId),
+        label: "End Pipe / Duct"
+    }),
+
+    transitionLength: {
+        kind: "number",
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => enggReducer.transitionLengthOf(object),
+        write: (object, value) => enggReducer.setTransitionLength(object, value),
+        min: enggReducer.MIN_TRANSITION_LENGTH,
+        max: 400,
+        step: 1,
+        unit: "mm",
+        label: "Transition Length"
+    },
+
+    /* The widths the connected pipes give it - stated, never stored here. */
+    reducerStartWidth: readonlyField({
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => {
+            const widths = enggReducer.wallsOf(object)?.widths;
+
+            return widths ? `${Number(widths.start.toFixed(2))}` : "";
+        },
+        unit: "mm",
+        label: "Start Pipe Width"
+    }),
+
+    reducerEndWidth: readonlyField({
+        applies: (object) => enggReducer.isReducerType(object?.type),
+        read: (object) => {
+            const widths = enggReducer.wallsOf(object)?.widths;
+
+            return widths ? `${Number(widths.end.toFixed(2))}` : "";
+        },
+        unit: "mm",
+        label: "End Pipe Width"
+    }),
+
+    /* ------------------------------------------------------ Equipment */
+
+    equipmentPlacement: {
+        kind: "text",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type),
+        read: (object) => (enggEquipment.isInline(object) ? "Inline" : "Standalone"),
+        write: () => false,
+        readOnly: true,
+        label: "Placement"
+    },
+
+    equipmentPipeA: readonlyField({
+        applies: (object) => enggEquipment.isEquipmentType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.pipeIds?.[0]),
+        label: "Attached Pipe / Duct"
+    }),
+
+    equipmentPipeB: readonlyField({
+        applies: (object) => enggEquipment.isEquipmentType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.pipeIds?.[1]),
+        label: "Second Pipe / Duct"
+    }),
+
+    symbolSize: {
+        kind: "number",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type),
+        read: (object) => enggEquipment.symbolRadiusOf(object),
+        write: (object, value) => enggEquipment.setSymbolSize(object, value),
+        min: enggEquipment.MIN_SYMBOL_RADIUS,
+        max: enggEquipment.MAX_SYMBOL_RADIUS,
+        step: 0.5,
+        unit: "mm",
+        label: "Symbol Size"
+    },
+
+    /*
+     * AN EQUIPMENT SYMBOL'S TRANSFORM.
+     *
+     * STANDALONE: X, Y and Rotate move and turn the symbol itself.
+     * INLINE: the same rows state where the symbol sits and which way it lies,
+     * because that is decided by its host pipe - and they are READ-ONLY there, so
+     * the panel never offers an X/Y that would pull the symbol off its run. The
+     * one inline control is Position Along Pipe below.
+     */
+    equipmentX: {
+        kind: "number",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type) && !enggEquipment.isInline(object),
+        read: (object) => Number(object?.geometry?.position?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, x } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "X"
+    },
+
+    equipmentY: {
+        kind: "number",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type) && !enggEquipment.isInline(object),
+        read: (object) => Number(object?.geometry?.position?.y) || 0,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, y } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "Y"
+    },
+
+    equipmentRotation: {
+        kind: "number",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type) && !enggEquipment.isInline(object),
+        read: (object) => Number(object?.geometry?.rotation) || 0,
+        write: (object, value) => {
+            const rotation = Number(value);
+
+            if (!Number.isFinite(rotation)) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, rotation };
+
+            return true;
+        },
+        step: 1,
+        unit: "°",
+        label: "Rotate"
+    },
+
+    /*
+     * POSITION ALONG PIPE - an INLINE symbol's one placement degree of freedom.
+     *
+     * The value is the fraction (0-1) of the host run's centreline the symbol's
+     * centre sits at, and setting it moves the symbol AND re-seats both connected
+     * segments on its connection points in one edit - so it can never leave a gap.
+     */
+    equipmentPosition: {
+        kind: "number",
+        applies: (object) => enggEquipment.isEquipmentType(object?.type) && enggEquipment.isInline(object),
+        read: (object) => {
+            const described = enggEquipment.describeEquipment(object);
+
+            return described.positionAlongPipe === null || described.positionAlongPipe === undefined
+                ? 0
+                : Number(described.positionAlongPipe.toFixed(3));
+        },
+        write: (object, value) => {
+            const fraction = Number(value);
+
+            if (!Number.isFinite(fraction) || fraction <= 0 || fraction >= 1) {
+                return false;
+            }
+
+            const host = enggEquipment.hostRunOf(object);
+            const centre = host ? enggEquipment.centreAtFraction(host, fraction) : null;
+
+            if (!centre) {
+                return false;
+            }
+
+            return enggEquipment.slideAlongHost(object, centre);
+        },
+        min: 0.02,
+        max: 0.98,
+        step: 0.01,
+        label: "Position Along Pipe"
+    },
+
+    valveDepiction: {
+        kind: "segmented",
+        applies: (object) => object?.type === enggEquipment.VALVE_TYPE,
+        read: (object) => enggEquipment.valveDepictionOf(object),
+        write: (object, value) => {
+            if (!enggEquipment.VALVE_DEPICTIONS.includes(value)) {
+                return false;
+            }
+
+            /*
+             * THE DRAWING CHANGES, THE CONNECTION DOES NOT. A depiction is a
+             * schematic state - a bar across the waist, or a stem and wheel - and
+             * the two pipes stay exactly where they were.
+             */
+            object.engineering = { ...(object.engineering || {}), depiction: value };
+
+            return true;
+        },
+        label: "Depiction",
+        options: [
+            { value: "generic", label: "Generic" },
+            { value: "open", label: "Open" },
+            { value: "closed", label: "Closed" }
+        ]
+    },
+
+    /* ---------------------------------------------------------- Vessel */
+
+    vesselStyle: {
+        kind: "segmented",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => enggVessel.vesselStyleOf(object),
+        write: (object, value) => {
+            if (!Object.values(enggVessel.VESSEL_STYLES).includes(value)) {
+                return false;
+            }
+
+            return enggVessel.setVesselStyle(object, value);
+        },
+        label: "Vessel Style",
+        options: [
+            { value: "open", label: "Open Reservoir" },
+            { value: "closed", label: "Closed Tank" }
+        ]
+    },
+
+    vesselX: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, x } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "X"
+    },
+
+    vesselY: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.y) || 0,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, y } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "Y"
+    },
+
+    vesselRotation: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => Number((((Number(object?.geometry?.rotation) || 0) * 180) / Math.PI).toFixed(3)),
+        write: (object, value) => {
+            const degrees = Number(value);
+
+            if (!Number.isFinite(degrees)) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, rotation: (degrees * Math.PI) / 180 };
+
+            return true;
+        },
+        step: 1,
+        unit: "°",
+        label: "Rotate"
+    },
+
+    vesselWidth: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => enggVessel.vesselRect(object)?.width || 0,
+        write: (object, value) => {
+            const rect = enggVessel.vesselRect(object);
+
+            return rect ? enggVessel.resizeVessel(object, Number(value), rect.height) : false;
+        },
+        min: enggVessel.MIN_VESSEL_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Width"
+    },
+
+    vesselHeight: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => enggVessel.vesselRect(object)?.height || 0,
+        write: (object, value) => {
+            const rect = enggVessel.vesselRect(object);
+
+            return rect ? enggVessel.resizeVessel(object, rect.width, Number(value)) : false;
+        },
+        min: enggVessel.MIN_VESSEL_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Height"
+    },
+
+    /* ----------------------------------------------------- Fluid level */
+
+    levelVessel: readonlyField({
+        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.vesselId),
+        label: "Attached Vessel"
+    }),
+
+    levelPosition: {
+        kind: "number",
+        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
+        read: (object) => Number(object.engineering?.levelPosition) || 0,
+        write: (object, value) => enggFluidLevel.setLevelHeight(object, value),
+        min: enggFluidLevel.LEVEL_EDGE_MARGIN,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Level Position"
+    },
+
+    /*
+     * A LEVEL'S X AND Y ARE ITS HOST'S, READ BACK.
+     *
+     * The line can only be where its vessel's interior is, so an X or Y the
+     * student typed cannot move it independently - a typed value would either be
+     * a lie or would detach the level from its host. The row therefore STATES
+     * the level's position (a point on its own line) and does not write. Rotate
+     * is fixed at 0 deg for the same reason: a level spans its vessel
+     * horizontally by definition.
+     */
+    levelX: readonlyField({
+        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
+        read: (object) => {
+            const segment = enggFluidLevel.levelSegment(object);
+
+            return segment ? Number(segment.start.x.toFixed(2)) : "";
+        },
+        unit: "mm",
+        label: "X"
+    }),
+
+    levelY: readonlyField({
+        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
+        read: (object) => {
+            const segment = enggFluidLevel.levelSegment(object);
+
+            return segment ? Number(segment.start.y.toFixed(2)) : "";
+        },
+        unit: "mm",
+        label: "Y"
+    }),
+
+    levelRotation: readonlyField({
+        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
+        read: () => 0,
+        unit: "°",
+        label: "Rotate"
+    }),
+
+    /* ------------------------------------------- Flow direction diagram */
+
+    directionPipe: readonlyField({
+        applies: (object) => enggFlowArrows.isFlowDirectionType(object?.type),
+        read: (object) => objectNameOf(object.engineering?.pipeId),
+        label: "Attached Pipe / Duct"
+    }),
+
+    directionReversed: {
+        kind: "toggle",
+        applies: (object) => enggFlowArrows.isFlowDirectionType(object?.type),
+        read: (object) => object.engineering?.reversed === true,
+        write: (object, value) => enggFlowArrows.setDirectionReversed(object, value),
+        label: "Reverse Direction"
+    },
+
+    /* WHERE THE ARROWS SIT ALONG THEIR HOST - a fraction of its centreline. */
+    directionPosition: {
+        kind: "number",
+        applies: (object) => enggFlowArrows.isFlowDirectionType(object?.type),
+        read: (object) => Number(enggFlowArrows.directionFractionOf(object).toFixed(3)),
+        write: (object, value) => {
+            const fraction = Number(value);
+
+            if (!Number.isFinite(fraction) || fraction < 0 || fraction > 1) {
+                return false;
+            }
+
+            object.engineering = {
+                ...(object.engineering || {}),
+                position: enggFlowArrows.clampDirectionFraction(fraction)
+            };
+
+            enggFlowArrows.refreshFlowDirection(object);
+
+            return true;
+        },
+        min: 0,
+        max: 1,
+        step: 0.01,
+        label: "Position Along Path"
+    },
+
+    directionSpacing: {
+        kind: "segmented",
+        applies: (object) => enggFlowArrows.isFlowDirectionType(object?.type),
+        read: (object) => enggFlowArrows.directionSpacingOf(object),
+        write: (object, value) => {
+            if (!(value in enggFlowArrows.DIRECTION_SPACING_COUNTS)) {
+                return false;
+            }
+
+            object.engineering = { ...(object.engineering || {}), spacing: value };
+            enggFlowArrows.refreshFlowDirection(object);
+
+            return true;
+        },
+        label: "Arrow Spacing",
+        options: [...enggFlowArrows.DIRECTION_SPACING]
+    },
+
+    directionSize: {
+        kind: "number",
+        applies: (object) => enggFlowArrows.isFlowDirectionType(object?.type),
+        read: (object) => enggFlowArrows.directionArrowSizeOf(object),
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size <= 0) {
+                return false;
+            }
+
+            object.engineering = { ...(object.engineering || {}), arrowSize: size };
+            enggFlowArrows.refreshFlowDirection(object);
+
+            return true;
+        },
+        min: 0.5,
+        max: 60,
+        step: 0.5,
+        unit: "mm",
+        label: "Arrow Size"
+    },
+
+    /* ------------------------------------------------ Pressure profile */
+
+    graphName: {
+        kind: "text",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.graphNameOf(object),
+        write: (object, value) => enggPressureProfile.setGraphName(object, value),
+        label: "Graph Name"
+    },
+
+    profileXTitle: {
+        kind: "text",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).xTitle,
+        write: (object, value) => enggPressureProfile.setAxes(object, { xTitle: String(value ?? "") }),
+        label: "X-axis Title"
+    },
+
+    profileXUnit: {
+        kind: "text",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).xUnit,
+        write: (object, value) => enggPressureProfile.setAxes(object, { xUnit: String(value ?? "") }),
+        label: "X-axis Unit"
+    },
+
+    profileYTitle: {
+        kind: "text",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).yTitle,
+        write: (object, value) => enggPressureProfile.setAxes(object, { yTitle: String(value ?? "") }),
+        label: "Y-axis Title"
+    },
+
+    profileYUnit: {
+        kind: "text",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).yUnit,
+        write: (object, value) => enggPressureProfile.setAxes(object, { yUnit: String(value ?? "") }),
+        label: "Pressure Unit"
+    },
+
+    profileXMin: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).xMin,
+        write: (object, value) => enggPressureProfile.setAxes(object, { xMin: Number(value) }),
+        step: 1,
+        label: "X Minimum"
+    },
+
+    profileXMax: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).xMax,
+        write: (object, value) => enggPressureProfile.setAxes(object, { xMax: Number(value) }),
+        step: 1,
+        label: "X Maximum"
+    },
+
+    profileYMin: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).yMin,
+        write: (object, value) => enggPressureProfile.setAxes(object, { yMin: Number(value) }),
+        step: 1,
+        label: "Y Minimum"
+    },
+
+    profileYMax: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.axesOf(object).yMax,
+        write: (object, value) => enggPressureProfile.setAxes(object, { yMax: Number(value) }),
+        step: 1,
+        label: "Y Maximum"
+    },
+
+    profileShowPoints: {
+        kind: "toggle",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.showPointsOf(object),
+        write: (object, value) => {
+            object.engineering = { ...(object.engineering || {}), pointsShown: Boolean(value) };
+
+            return true;
+        },
+        label: "Show Points"
+    },
+
+    profileShowGrid: {
+        kind: "toggle",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.showGridOf(object),
+        write: (object, value) => {
+            object.engineering = { ...(object.engineering || {}), grid: Boolean(value) };
+
+            return true;
+        },
+        label: "Show Grid"
+    },
+
+    profileWidth: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.profileFrame(object)?.width || 0,
+        write: (object, value) => {
+            const frame = enggPressureProfile.profileFrame(object);
+
+            return frame ? enggPressureProfile.resizeProfile(object, Number(value), frame.height) : false;
+        },
+        min: enggPressureProfile.MIN_PROFILE_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Width"
+    },
+
+    profileHeight: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => enggPressureProfile.profileFrame(object)?.height || 0,
+        write: (object, value) => {
+            const frame = enggPressureProfile.profileFrame(object);
+
+            return frame ? enggPressureProfile.resizeProfile(object, frame.width, Number(value)) : false;
+        },
+        min: enggPressureProfile.MIN_PROFILE_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Height"
+    },
+
+    /*
+     * THE GRAPH'S POSITION, AS ITS ANCHOR CORNER.
+     *
+     * X and Y state the frame's own bottom-left corner, and typing one moves the
+     * whole frame - its axes, its grid, its ticks and its plotted points all move
+     * with it, because every one of them is derived from this one corner.
+     */
+    profileX: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, x } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "X"
+    },
+
+    profileY: {
+        kind: "number",
+        applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.y) || 0,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, y } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "Y"
+    },
+
+    /* -------------------------------------------------- Section plane */
+
+    sectionIdentifier: {
+        kind: "text",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => enggSectionPlane.sectionIdentifierOf(object),
+        write: (object, value) => enggSectionPlane.setSectionIdentifier(object, value),
+        label: "Section Identifier"
+    },
+
+    sectionDirection: {
+        kind: "segmented",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => enggSectionPlane.sectionDirectionOf(object),
+        write: (object, value) => enggSectionPlane.setSectionDirection(object, value),
+        label: "Viewing Direction",
+        options: [
+            { value: "forward", label: "Forward" },
+            { value: "reverse", label: "Reverse" }
+        ]
+    },
+
+    sectionShowArrows: {
+        kind: "toggle",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => enggSectionPlane.showSectionArrowsOf(object),
+        write: (object, value) => {
+            object.engineering = { ...(object.engineering || {}), showArrows: Boolean(value) };
+
+            return true;
+        },
+        label: "Viewing Arrows"
+    },
+
+    /* THE MARKER'S MIDDLE - the centre of its trace. */
+    sectionX: {
+        kind: "number",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => {
+            const span = enggSectionPlane.sectionSpan(object);
+
+            return span ? Number(((span.start.x + span.end.x) / 2).toFixed(2)) : 0;
+        },
+        write: (object, value) => {
+            const span = enggSectionPlane.sectionSpan(object);
+            const x = Number(value);
+
+            if (!span || !Number.isFinite(x)) {
+                return false;
+            }
+
+            const dx = x - (span.start.x + span.end.x) / 2;
+
+            object.geometry = {
+                start: { x: span.start.x + dx, y: span.start.y },
+                end: { x: span.end.x + dx, y: span.end.y }
+            };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "X"
+    },
+
+    sectionY: {
+        kind: "number",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => {
+            const span = enggSectionPlane.sectionSpan(object);
+
+            return span ? Number(((span.start.y + span.end.y) / 2).toFixed(2)) : 0;
+        },
+        write: (object, value) => {
+            const span = enggSectionPlane.sectionSpan(object);
+            const y = Number(value);
+
+            if (!span || !Number.isFinite(y)) {
+                return false;
+            }
+
+            const dy = y - (span.start.y + span.end.y) / 2;
+
+            object.geometry = {
+                start: { x: span.start.x, y: span.start.y + dy },
+                end: { x: span.end.x, y: span.end.y + dy }
+            };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "Y"
+    },
+
+    sectionRotation: {
+        kind: "number",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => Number(enggSectionPlane.sectionRotationOf(object).toFixed(3)),
+        write: (object, value) => enggSectionPlane.setSectionRotation(object, value),
+        step: 1,
+        unit: "°",
+        label: "Rotate"
+    },
+
+    sectionLength: {
+        kind: "number",
+        applies: (object) => enggSectionPlane.isSectionPlaneType(object?.type),
+        read: (object) => enggSectionPlane.sectionLengthOf(object),
+        write: (object, value) => enggSectionPlane.setSectionLength(object, value),
+        min: enggSectionPlane.MIN_SECTION_LENGTH,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Section Length"
+    },
+
+    /* ----------------------------------------------- The free flow arrow */
+
+    freeArrowLength: {
+        kind: "number",
+        applies: (object) => enggFlowArrows.isFreeFlowArrowType(object?.type) && !object?.attachment,
+        read: (object) => enggFlowArrows.freeArrowLength(object),
+        write: (object, value) => enggFlowArrows.setFreeArrowLength(object, value),
+        min: enggFlowArrows.MIN_FREE_ARROW_LENGTH,
+        max: enggFlowArrows.MAX_FREE_ARROW_LENGTH,
+        step: 1,
+        unit: "mm",
+        label: "Length"
+    }
+});
 
 /* ============================================================
  * THE DYNAMICS TOOLS' OWN CONTROLS
@@ -2276,6 +3537,28 @@ export function groupsFor(object) {
     }
 
     /*
+     * THE SCHEMATIC FLUIDS TOOLS HAVE THEIR OWN SECTIONS.
+     *
+     * A reducer, a symbol, a vessel, a level, a direction arrow, a free arrow, a
+     * profile or a section mark is not any of the shared shape kinds, so the
+     * shared table would give it an Appearance row and nothing else. Its own
+     * table says Object, Appearance, Transform - and, for a profile, Data and
+     * Axes - in that order.
+     */
+    const schematic = schematicGroupsFor(object);
+
+    if (schematic) {
+        return schematic
+            .map((group) => ({
+                ...group,
+                fields: group.fields
+                    .map((key) => ({ key, definition: definitionOf(key) }))
+                    .filter((entry) => entry.definition && entry.definition.applies(object))
+            }))
+            .filter((group) => group.fields.length);
+    }
+
+    /*
      * A DYNAMICS SYMBOL'S OWN CONTROLS GO FIRST - straight after the heading,
      * and ahead of Appearance, Object and Transform.
      *
@@ -2319,16 +3602,32 @@ export function groupsFor(object) {
 
     const flowPath = isPipe || isElbow || isJunction;
 
-    const groups = [
-        ...dynamics,
-        ...GROUPS
-    ]
+    /*
+     * A FLOW ARROW HAS TWO SECTIONS: Object and Appearance.
+     *
+     * Object holds what it is attached to, whether it is held, which way it
+     * points and how big its head is. Appearance holds the shared Line Style,
+     * Colour, Thickness and Arrowhead Fill. There is no Transform section,
+     * because a transform is a way to move something and an arrow has no
+     * position to transform - it is placed on a pipe, by pressing on the pipe.
+     *
+     * The shared table's per-shape groups (Line, Fill, Shape, Text) are dropped
+     * for it the same way they are for a run: an arrow's label is not part of
+     * the feature the student drew.
+     */
+    const isFlowArrow = object.type === "flow-arrow";
+
+    const base = [...dynamics, ...GROUPS];
+
+    const groups = (isFlowArrow ? [...base, FLOW_ARROW_GROUP] : base)
         .filter(
             (group) =>
                 !flowPath ||
-                ["object", "appearance", "transform"].includes(
-                    group.id
-                )
+                ["object", "appearance", "transform"].includes(group.id)
+        )
+        .filter(
+            (group) =>
+                !isFlowArrow || group.id === "appearance" || group.id === FLOW_ARROW_GROUP.id
         )
         .map((group) => {
             const fields = group.fields
@@ -2346,6 +3645,12 @@ export function groupsFor(object) {
             (left, right) =>
                 order.indexOf(left.id) - order.indexOf(right.id)
         );
+    }
+
+    if (isFlowArrow) {
+        const order = [FLOW_ARROW_GROUP.id, "appearance"];
+
+        groups.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
     }
 
     /* A process path's bends, one per segment, ahead of its appearance. */
@@ -2484,6 +3789,30 @@ export function supportsTransform(object) {
      * rather than inferred from a probe that cannot see a rotation.
      */
     if (object.engineering?.dynamicsType) {
+        return true;
+    }
+
+    /*
+     * A SCHEMATIC OBJECT HAS A TRANSFORM WHEN IT CAN MOVE AT ALL.
+     *
+     * A vessel, a graph frame, a section trace and a free arrow translate by
+     * their stored geometry, so the probe below answers for them. THE HOSTED
+     * ONES - a reducer, an inline symbol, a fluid level, a direction arrow - are
+     * moved along what they belong to, and the probe rightly says a bare
+     * translation changes nothing; but they DO have a transform (their position
+     * along the host, their size), and the panel offers it rather than hiding
+     * it. An object that is FIXED still gets the rows, so the student can see
+     * why nothing moves.
+     */
+    if (
+        enggReducer.isReducerType(object.type) ||
+        enggEquipment.isEquipmentType(object.type) ||
+        enggVessel.isVesselType(object.type) ||
+        enggFluidLevel.isFluidLevelType(object.type) ||
+        enggFlowArrows.isFlowDirectionType(object.type) ||
+        enggPressureProfile.isPressureProfileType(object.type) ||
+        enggSectionPlane.isSectionPlaneType(object.type)
+    ) {
         return true;
     }
 

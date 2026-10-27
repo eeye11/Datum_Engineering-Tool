@@ -454,6 +454,11 @@
  * no heavy rule - so the line numbers read as a margin rather than a second
  * panel. Sized to its widest line number by its own content; the numbers are
  * right-aligned so 9 and 10 do not shift the column.
+ *
+ * THE MARGIN ALSO CARRIES ONE MARK: the eye-off beside a hidden object's header.
+ * It is held in a fixed-width column that exists on EVERY row, so adding it never
+ * moves the numbers - a margin whose digits jump when an object is hidden would
+ * be a distraction at the exact moment the student is looking for it.
  */
 .drawing-source-gutter {
   background: var(--source-editor-gutter-bg);
@@ -467,6 +472,54 @@
   padding: 4px 5px 4px 7px;
   text-align: right;
   user-select: none;
+}
+
+.drawing-source-gutter-row {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+/* Every row reserves the icon's width - see the note on the gutter above. */
+.drawing-source-gutter-row::before {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.drawing-source-gutter-row.is-hidden-header::before {
+  content: none;
+}
+
+/*
+ * THE HIDDEN OBJECT'S EYE. A stroked eye-off in the margin, in the body ink so
+ * it reads as a state mark and not a warning. It is decoration: the number is
+ * still the row's text and the icon is never read out, and margins too narrow to
+ * carry it still show the block's tint, rule and inset eye.
+ */
+.drawing-source-gutter-hidden {
+  color: var(--datum-ink);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.drawing-source-gutter-hidden svg {
+  height: 100%;
+  width: 100%;
+}
+
+.drawing-source-gutter-number {
+  flex: 0 0 auto;
+}
+
+.drawing-source-gutter-row.is-hidden-header .drawing-source-gutter-number {
+  color: var(--datum-ink);
 }
 
 .drawing-source-gutter-row.selected {
@@ -579,7 +632,41 @@
 }
 
 .drawing-source-line {
-    min-height: 1.5em;
+  min-height: 1.5em;
+
+    /*
+     * A BAND MUST COVER THE WHOLE LINE, NOT THE GLYPHS IT HAPPENS TO HOLD.
+     *
+     * The decor layer is `position: absolute` over a scroll box, so with
+     * `white-space: pre` it sizes to its LONGEST line rather than to the
+     * viewport. Without an explicit width, a short line's block - and therefore
+     * its background - stopped at its last character, so selecting an object
+     * lit a stub of colour under the text instead of a full row. `min-width:
+     * 100%` makes every line at least the editor's own width, and the band then
+     * spans whichever is wider: the viewport, or the longest line.
+     *
+     * THE LEFT EDGE IS STRETCHED INTO THE WELL'S OWN PADDING, not by moving the
+     * glyphs. A hidden block's marker needs a strip inside the text's start, and
+     * a selection should reach the well's edge rather than stop short of it. A
+     * negative margin does both without changing the line's position, so the
+     * decor stays exactly under the text layer and the caret and the selection
+     * are measured against unchanged glyphs.
+     */
+  margin-left: -6px;
+  min-width: 100%;
+  padding-left: 6px;
+  width: max-content;
+}
+
+/*
+ * THE TEXT LAYER'S LINES CARRY NO BOX. They are the glyphs themselves, drawn at
+ * the same origin as the real text, so the decor layer's inner strip must not
+ * be repeated here or the two would no longer sit on top of one another.
+ */
+.drawing-source-text .drawing-source-line {
+  background: none;
+  margin-left: 0;
+  padding-left: 0;
 }
 
 /*
@@ -617,6 +704,147 @@
 
 .drawing-source-line.ds-search-range {
     background: color-mix(in srgb, var(--datum-warning-line) 28%, transparent);
+}
+
+/*
+ * ============================================================
+ * THE HIDDEN OBJECT'S BLOCK
+ * ============================================================
+ *
+ * A hidden object is still in the text - the text is what is saved, and the
+ * comment that names it is still the only thing that says what the code below
+ * draws. So it is DECORATED, never rewritten: the block keeps its muted-grey
+ * comment, its syntax colours and its ordinary editable text, and is told apart
+ * from a plain comment by three quiet marks.
+ *
+ *   1. a left-edge marker - a solid rule inside the block's first strip, in the
+ *      gutter's own ink rather than a new colour;
+ *   2. a background tint, one step of the palette off the editor's well, in the
+ *      SAME neutral family - not amber, not a warning, not the selection green;
+ *   3. an eye-off - in the gutter beside the header and at the block's own top
+ *      line - which says "hidden" without relying on the comment's wording.
+ *
+ * THE TINT AND THE RULE ARE ON THE DECOR LAYER, which is where every other band
+ * in this editor lives: UNDER the glyphs, so the text stays fully readable.
+ *
+ * THE MARKER IS INDEPENDENT OF THE SELECTION. These rules key on `is-hidden`
+ * alone, never on `selected`, so selecting a hidden object adds the selection
+ * wash over the tint and leaves the marker, the eye and the muted code exactly
+ * as they were - which is the one place the two states could have cancelled.
+ */
+.drawing-source-line.is-hidden {
+    background: color-mix(in srgb, var(--datum-ink) 6%, transparent);
+    box-shadow: inset 3px 0 0 var(--source-editor-gutter-ink);
+}
+
+/* A hidden block that is also selected: the tint stays, the selection adds to it. */
+.drawing-source-line.is-hidden.selected {
+    background:
+        linear-gradient(
+            color-mix(in srgb, var(--datum-ink) 6%, transparent),
+            color-mix(in srgb, var(--datum-ink) 6%, transparent)
+        ),
+        var(--datum-green-tint);
+}
+
+/*
+ * THE BLOCK'S HEADER LINE carries the second eye, so the block's own first line
+ * says "hidden" as well as the margin.
+ */
+.drawing-source-line.is-hidden-header {
+    position: relative;
+}
+
+/*
+ * The eye at the block's own top line, inside the inner strip. THE DECOR LAYER IS
+ * COLOURED TRANSPARENT (its text only measures line boxes), so the mark states
+ * its own colour rather than inheriting one.
+ */
+.ds-hidden-mark {
+    align-items: center;
+    color: var(--source-editor-gutter-ink);
+    display: inline-flex;
+    height: 1.2em;
+    left: 1px;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    width: 1.2em;
+}
+
+.ds-hidden-mark svg {
+    height: 0.95em;
+    width: 0.95em;
+}
+
+/*
+ * HIDDEN GEOMETRY, SET BACK BUT STILL READ. One class over the whole line of
+ * glyphs: the syntax colours are untouched, so a command is a command and a
+ * coordinate is a coordinate, but the line as a whole recedes a little - which
+ * is what a student needs it to do beside the objects still on the sheet.
+ *
+ * The muting is an OPACITY on the finished glyphs rather than a lighter ink,
+ * because a lighter ink chosen for the light theme would vanish on the dark
+ * one - a degree of recession works against either background.
+ */
+.drawing-source-text .drawing-source-line.is-hidden {
+    opacity: 0.68;
+}
+
+/* The comment on a hidden block is the same muted grey as every other comment. */
+.drawing-source-text .drawing-source-line.is-hidden .ds-comment {
+    color: var(--source-editor-comment);
+}
+
+/*
+ * ============================================================
+ * SYNTAX FOR THE TEXT LAYER
+ * ============================================================
+ *
+ * `highlightLine` wraps comments, commands, coordinates, options and braces in
+ * these spans; the rules below are what make the spans mean something, drawn
+ * from the palette tokens the themes already define.
+ */
+
+/*
+ * A COMMENT IS MUTED, NOT FAINT. `--source-editor-comment` is a desaturated ink
+ * chosen per theme, comfortably above a readable contrast ratio against the
+ * editor's own background. It recedes because it is secondary information, and
+ * it is never a whisper because it is still text the student has to read.
+ */
+.ds-comment {
+    color: var(--source-editor-comment);
+    font-style: italic;
+}
+
+/*
+ * THE OBJECT'S NAME LINE. It is a comment, so it takes the comment grey - the
+ * SAME token as every other comment, so there is one comment colour and none of
+ * them is a separate palette. It is set upright and heavier, because it is the
+ * line that says WHICH object the code below belongs to and must stay easy to
+ * find while scrolling.
+ */
+.ds-marker {
+    color: var(--source-editor-comment);
+    font-style: normal;
+    font-weight: 600;
+}
+
+.ds-command {
+    color: var(--source-editor-command);
+}
+
+.ds-coord {
+    color: var(--source-editor-arg);
+}
+
+.ds-option {
+    color: var(--source-editor-command);
+}
+
+.ds-brace {
+    color: var(--source-editor-ink);
+    opacity: 0.75;
 }
 
 /* ---- the caret and selection layer ---- */

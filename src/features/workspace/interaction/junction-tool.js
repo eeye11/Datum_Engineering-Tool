@@ -50,6 +50,7 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggJunction from "../model/fluids/junction.js";
+import enggFlowArrow from "../model/fluids/flow-arrow.js";
 import { reconcilePipeAssemblies } from "../model/fluids/pipe-assembly.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
@@ -625,6 +626,17 @@ export function splitHostPipeAt(interior, options = {}) {
 /*
  * REPLACE A HOST WITH ITS TWO HALVES, IN PLACE, preserving array order as far as
  * possible so the Objects list does not reshuffle.
+ *
+ * THE HOST'S FLOW ARROWS FOLLOW THEIR ANCHOR. The arrow stores a fraction along
+ * the pipe it was placed on, and a split cuts that pipe in two - so the arrow
+ * must be pointed at whichever half still contains the fraction it was placed
+ * at. See `reattachArrowsAfterSplit`, which measures the anchor against the
+ * halves' own geometry rather than guessing from the array order.
+ *
+ * An arrow anchored exactly where the arrows of the OTHER half leave it on the
+ * old pipe is a duplicate of one already on the new half, so the extra is
+ * removed: the same rule that refuses a second placement at an occupied
+ * position.
  */
 export function replaceHostWithHalves(host, split, objects = drawingState.objects) {
 	const index = (objects || []).findIndex((object) => object.id === host.id);
@@ -633,7 +645,59 @@ export function replaceHostWithHalves(host, split, objects = drawingState.object
 		return false;
 	}
 
+	const halves = [split.first, split.second];
+
+	/*
+	 * THE ARROWS' ANCHORS ARE RESOLVED BEFORE THE HOST IS REPLACED.
+	 *
+	 * An arrow's anchor is read from its host's CURRENT centreline. A split may
+	 * have already shortened the host object it was handed - `splitHostPipeAt`
+	 * writes the halves' geometry, and a caller that reused the host for them
+	 * leaves a substituted object behind - so resolving the anchor AFTER the
+	 * splice could measure it against a run that no longer describes where the
+	 * arrow was placed.
+	 *
+	 * The world position is therefore captured first, per arrow, and the halves
+	 * are then asked which one contains THAT point. The fraction each arrow gets
+	 * back is measured against the half it lands on.
+	 */
+	const arrows = enggFlowArrow.arrowsAttachedTo(objects, host.id);
+
+	const anchors = new Map(
+		arrows.map((arrow) => [arrow.id, enggFlowArrow.anchorPoint(arrow)])
+	);
+
 	objects.splice(index, 1, split.first, split.second);
+
+	arrows.forEach((arrow) => {
+		const anchor = anchors.get(arrow.id);
+
+		if (anchor) {
+			enggFlowArrow.reattachAtPoint(arrow, anchor, halves);
+		}
+	});
+
+	const reattached = arrows.filter((arrow) => enggFlowArrow.isFlowArrowType(arrow.type));
+
+	void reattached;
+
+	if (reattached.length) {
+		const duplicates = new Set(
+			enggFlowArrow
+				.duplicateArrows(
+					objects.filter((object) => enggFlowArrow.isFlowArrowType(object.type))
+				)
+				.map((arrow) => arrow.id)
+		);
+
+		if (duplicates.size) {
+			objects.splice(
+				0,
+				objects.length,
+				...objects.filter((object) => !duplicates.has(object.id))
+			);
+		}
+	}
 
 	return true;
 }

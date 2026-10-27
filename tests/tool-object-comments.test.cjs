@@ -647,8 +647,8 @@ console.log("---------------------------------------------");
   const visible = drawingSource.visibleDrawingSource(source);
 
   check(
-    "metadata adds no drawing command",
-    !/DAETUM/.test(visible),
+    "no identity field reaches the picture",
+    !/DAETUM (ID|TYPE|PART|PARENT)\b/.test(visible),
     visible.slice(0, 200),
   );
 
