@@ -2,6 +2,7 @@ import { cylinderPoint } from "./piston-cylinder.js";
 import { appendReheatRankineCycle } from "./reheat-rankine-cycle.js";
 import { appendVaporCompressionCycle } from "./vapor-compression-cycle.js";
 import { layoutCycleLabels } from "./cycle-label-layout.js";
+import { appendBraytonCycle } from "./brayton-cycle.js";
 
 // One resizable schematic; all paths and labels share its local frame.
 export function rankineCycleDiagram(geometry, problemData = {}) {
@@ -107,6 +108,10 @@ export function rankineCycleDiagram(geometry, problemData = {}) {
         [0.165, 0.57]
     ];
     const turbineCasing = [[0.68, 0.56], [0.87, 0.64], [0.87, 0.36], [0.68, 0.44], [0.68, 0.56]];
+    if (geometry.brayton) {
+        appendBraytonCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
+        return layoutCycleLabels(paths, labels, geometry);
+    }
     if (geometry.refrigeration) {
         appendVaporCompressionCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
         return layoutCycleLabels(paths, labels, geometry);

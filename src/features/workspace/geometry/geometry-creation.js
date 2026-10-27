@@ -1016,7 +1016,7 @@ export function beginOrCompleteGeometry(
                         ? "Specify radius"
 
                     : (drawingState.activeTool === "rectangle" ||
-                        ["control-volume", "tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+                        ["control-volume", "tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -2030,7 +2030,7 @@ export function beginOrCompleteGeometry(
             );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        ["control-volume", "tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        ["control-volume", "tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2058,7 +2058,8 @@ export function beginOrCompleteGeometry(
         const isTank = drawingState.activeTool === "tank";
         const isReheat = drawingState.activeTool === "reheat-rankine-cycle";
         const isRefrigeration = drawingState.activeTool === "vapor-compression-cycle";
-        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration;
+        const isBrayton = drawingState.activeTool === "brayton-cycle";
+        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration || isBrayton;
         const isNozzle = drawingState.activeTool === "nozzle-diffuser" || isRankine;
         const isTurbineCompressor = drawingState.activeTool === "turbine-compressor";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
@@ -2098,10 +2099,11 @@ export function beginOrCompleteGeometry(
             object.metadata = { thermodynamicsKind: "tank" };
         }
         if (isNozzle) {
-            object.name = isRefrigeration ? "Ideal Vapor-Compression Refrigeration Cycle" : isReheat ? "Ideal Reheat Rankine Cycle" : isRankine ? "Rankine Cycle" : "Nozzle / Diffuser";
+            object.name = isBrayton ? "Brayton Cycle" : isRefrigeration ? "Ideal Vapor-Compression Refrigeration Cycle" : isReheat ? "Ideal Reheat Rankine Cycle" : isRankine ? "Rankine Cycle" : "Nozzle / Diffuser";
             object.metadata = { thermodynamicsKind: isRankine ? "rankine-cycle" : "nozzle-diffuser" };
             if (isReheat) object.geometry.reheat = true;
             if (isRefrigeration) object.geometry.refrigeration = true;
+            if (isBrayton) object.geometry.brayton = true;
         }
         if (isTurbineCompressor) {
             object.name = "Turbine / Compressor";
@@ -2283,9 +2285,9 @@ export function beginOrCompleteGeometry(
 
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["tank", "vapor-compression-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
