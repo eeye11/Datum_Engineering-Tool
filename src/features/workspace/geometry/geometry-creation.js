@@ -1728,6 +1728,9 @@ export function beginOrCompleteGeometry(
                 units: enggLoadProfile.FORCE_UNITS,
 
                 onOpen: () => {
+                    // Keep the completed arrow visible until the value is accepted.
+                    drawingState.interaction.previewObjects = [object];
+                    renderCurrentDrawing();
                     setToolMessage(
                         "Enter the force magnitude"
                     );
@@ -1818,6 +1821,8 @@ export function beginOrCompleteGeometry(
                         valueKey: "magnitude"
                     });
 
+                    enggDrawingState.clearInteraction(drawingState);
+
                     commitCreatedFeature(
                         object,
                         previousObjects
@@ -1834,6 +1839,7 @@ export function beginOrCompleteGeometry(
                 },
 
                 onCancel: () => {
+                    enggDrawingState.clearInteraction(drawingState);
                     setToolMessage(
                         "Point force cancelled"
                     );
