@@ -26,8 +26,8 @@ export function dieselCycleFeatures(geometry) {
             const limit = dx > 1e-9 && dy > 1e-9 ? 0.24 * Math.min(dx / dy, dy / dx) : 0;
             return Math.sign(bend) * Math.min(Math.abs(bend), limit);
         });
-        const labelOffsets = (kind === "pv" ? [[0.025, -0.015], [-0.025, 0.01], [0.025, 0.02], [0.025, 0.015]]
-            : [[-0.025, -0.015], [-0.025, 0.02], [0.025, 0.015], [0.025, -0.01]])
+        const labelOffsets = (kind === "pv" ? [[0.045, -0.005], [-0.045, 0.035], [0.035, 0.045], [0.045, 0.025]]
+            : [[-0.045, -0.005], [-0.045, 0.035], [0.045, 0.035], [0.045, -0.005]])
             .map(([dx, dy]) => ({ dx: dx * g.width, dy: dy * g.height }));
         features.push({ id: `diesel-${kind}-path`, type: "polyline", name: kind === "pv" ? "Diesel P-v Process Path" : "Diesel T-s Process Path", parentId: plotId,
             geometry: { points, segmentBends, stateLabelOffsets: labelOffsets },
