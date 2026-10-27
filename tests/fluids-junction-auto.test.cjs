@@ -464,8 +464,13 @@ test("moving the connected endpoint again creates no second junction or split", 
 
   assert.ok(branch, "the branch is identifiable");
 
+  /*
+   * THE BRANCH END IS SEATED ON ITS PORT - the point the model itself hands
+   * back for that branch - so the distance depends on the current spacing.
+   */
+  const port = m.junction.branchPort(junction, (junction.geometry.branches || []).find((b) => b.id === "c"));
   const end = ["start", "end"].find(
-    (candidate) => Math.hypot(branch.geometry[candidate].x - 100, branch.geometry[candidate].y) < 10
+    (candidate) => Math.hypot(branch.geometry[candidate].x - port.x, branch.geometry[candidate].y - port.y) < 10
   );
 
   assert.ok(end, "the branch still ends on the junction hub");
