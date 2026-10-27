@@ -20,6 +20,7 @@ import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { dieselCycleFeatures } from "../../features/workspace/model/thermodynamics/diesel-cycle.js";
 import { ottoCycleFeatures } from "../../features/workspace/model/thermodynamics/otto-cycle.js";
+import { carnotCycleFeatures } from "../../features/workspace/model/thermodynamics/carnot-cycle.js";
 
 
     /*
@@ -94,8 +95,8 @@ import { ottoCycleFeatures } from "../../features/workspace/model/thermodynamics
         state,
         bounds
     ) {
-        if (["diesel-cycle", "otto-cycle"].includes(entity.metadata?.thermodynamicsKind)) {
-            const features = entity.metadata.thermodynamicsKind === "otto-cycle" ? ottoCycleFeatures(entity.geometry) : dieselCycleFeatures(entity.geometry);
+        if (["diesel-cycle", "otto-cycle", "carnot-cycle"].includes(entity.metadata?.thermodynamicsKind)) {
+            const features = entity.metadata.thermodynamicsKind === "carnot-cycle" ? carnotCycleFeatures(entity.geometry) : entity.metadata.thermodynamicsKind === "otto-cycle" ? ottoCycleFeatures(entity.geometry) : dieselCycleFeatures(entity.geometry);
             features.forEach(feature => appendEntity(svg, feature, state, bounds));
             return;
         }

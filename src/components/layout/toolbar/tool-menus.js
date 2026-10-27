@@ -54,7 +54,7 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
-        (tool.id === "thermodynamic-cycles" && ["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle"].includes(drawingState.activeTool)) ||
+        (tool.id === "thermodynamic-cycles" && ["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(drawingState.activeTool)) ||
         (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct", "nozzle-diffuser"].includes(drawingState.activeTool)) ||
         (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||

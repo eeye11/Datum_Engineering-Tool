@@ -20,7 +20,7 @@
  * and it declines an ordinary rectangle, which the Geometry writer owns.
  */
 
-import { num, point, texText } from "./statics-primitives.js";
+import { num, point, texText, colourName, colourDefinitions } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { tankPaths } from "../../../../features/workspace/model/thermodynamics/tank.js";
@@ -274,7 +274,10 @@ function serializeProcessPath(object, options) {
    * `processPathPoints` follows each segment's own bend.
    */
   const drawn = processCurves.processPathPoints({ ...geometry, points });
-  const path = polyline(drawn.length >= 2 ? drawn : points, colour, ["line width=1.1pt"]);
+  const fill = geometry.closed && object.style?.fill && object.style.fill !== "none" ? colourName(object.style.fill) : null;
+  if (fill) commands.push(...colourDefinitions([object.style.fill]));
+  const path = polyline(drawn.length >= 2 ? drawn : points, colour, ["line width=1.1pt", ...(fill ? [`fill=${fill}`,
+    ...(Number.isFinite(object.style.fillOpacity) ? [`fill opacity=${num(Math.max(0, Math.min(1, object.style.fillOpacity)))}`] : [])] : [])]);
 
   if (path) {
     commands.push(path);

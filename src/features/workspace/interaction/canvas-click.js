@@ -120,6 +120,15 @@ export function handleCanvasClick(
             event
         );
 
+    // Also cover clicks delivered without a pointerdown creation session.
+    // Select the note before a click-to-create tool consumes its first point.
+    if (drawingState.interaction.phase === "idle" && ["line", "rectangle", "circle"].includes(drawingState.activeTool) &&
+        isEditableAnnotate(objectAtPoint(resolution.rawPointerPoint || canvasPointFromEvent(event, false)))) {
+        activateTool("select");
+        selectFromCanvasClick(event);
+        return;
+    }
+
     if (isProcessPlotTool(drawingState.activeTool)) {
         addProcessPoint(resolution.rawPointerPoint);
         return;

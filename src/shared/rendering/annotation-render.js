@@ -7,6 +7,7 @@
 import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
+import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
@@ -501,7 +502,9 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     fontSize,
                     lineHeight,
                     entity.style?.align,
-                    entity.metadata?.mathSubscript
+                    entity.metadata?.mathSubscript,
+                    entity.metadata?.mathSymbol,
+                    entity.metadata?.mathSuffix
                 );
             }
         }
@@ -527,7 +530,9 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         fontSize,
         lineHeight,
         align,
-        mathSubscript = null
+        mathSubscript = null,
+        mathSymbol = null,
+        mathSuffix = ""
     ) {
         const anchorName =
             align === "center"
@@ -552,12 +557,17 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         lines.forEach((line, index) => {
             if (index === 0) {
-                const base = mathSubscript === "atm" ? "P" : "q";
-                if (["in", "out", "atm"].includes(mathSubscript) && lines.length === 1 && line === `${base} ${mathSubscript}`) {
-                    textNode.textContent = base;
+                const math = lines.length === 1 && annotationSubscript(line, { mathSubscript, mathSymbol, mathSuffix });
+                if (math) {
+                    textNode.textContent = math.base;
                     const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
-                    subscript.textContent = mathSubscript;
+                    subscript.textContent = math.subscript;
                     textNode.appendChild(subscript);
+                    if (math.suffix) {
+                        const suffix = createSvgElement("tspan", {});
+                        suffix.textContent = math.suffix;
+                        textNode.appendChild(suffix);
+                    }
                     return;
                 }
                 textNode.textContent = line;

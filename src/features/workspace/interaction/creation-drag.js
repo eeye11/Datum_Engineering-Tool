@@ -72,7 +72,7 @@
  * mark exactly once.
  */
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
-import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool } from "../annotate/annotate-creation.js";
+import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
@@ -131,6 +131,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "brayton-cycle",
     "diesel-cycle",
     "otto-cycle",
+    "carnot-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",
@@ -473,6 +474,16 @@ export function beginCreationDrag(
 
     const idle =
         phase === "idle";
+
+    // Written notes are editing targets, including a cycle's temperature
+    // labels. An armed geometry tool must not start a shape through the text.
+    if (idle && ["line", "rectangle", "circle"].includes(drawingState.activeTool)) {
+        const pointed = objectAtPoint(canvasPointFromEvent(event, false));
+        if (isEditableAnnotate(pointed)) {
+            activateTool("select");
+            return false;
+        }
+    }
 
     const continues =
         DRAG_CONTINUE_PHASES.includes(phase);

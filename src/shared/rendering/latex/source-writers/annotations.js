@@ -36,6 +36,7 @@ import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
+import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
 
@@ -160,11 +161,11 @@ function textAnchor(align) {
  * at guessed offsets would space the lines by a number that is not the font's
  * leading, and the second node would not move with the first.
  */
-function multiLineNode(at, text, colour, options = [], mathSubscript = null) {
+function multiLineNode(at, text, colour, options = [], mathSubscript = null, mathSymbol = null, mathSuffix = "") {
   const lines = String(text ?? "").split("\n");
-  const base = mathSubscript === "atm" ? "P" : "q";
-  const content = ["in", "out", "atm"].includes(mathSubscript) && text === `${base} ${mathSubscript}`
-    ? `$${base}_{${mathSubscript}}$`
+  const math = lines.length === 1 && annotationSubscript(text, { mathSubscript, mathSymbol, mathSuffix });
+  const content = math
+    ? `$${math.base}_{${math.subscript}}$${texText(math.suffix)}`
     : lines.map((line) => texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
@@ -212,7 +213,7 @@ function textAtPosition(object) {
     multiLineNode({ x: finite(at.x), y: finite(at.y) }, text, colour, [
       `anchor=${textAnchor(object.style?.align)}`,
       `font=\\fontsize{${num(fontFor(object.style), 2)}}{${num(fontFor(object.style) * 1.2, 2)}}\\selectfont`
-    ], object.metadata?.mathSubscript)
+    ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
   );
 }
 
