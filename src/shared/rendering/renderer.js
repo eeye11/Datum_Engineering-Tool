@@ -180,10 +180,26 @@ import { renderPreview } from "./preview-render.js";
                 : [])
             : state.objects;
 
-        if (drawn.length) {
-            drawn.forEach(
+        /*
+         * A HIDDEN OBJECT IS NOT DRAWN.
+         *
+         * `visible: false` is the model's own flag for this, and the hit test and
+         * the source writer already honour it - so honouring it HERE as well is
+         * what makes the canvas, the pick and the source agree about what is on
+         * the sheet. The object itself stays in `state.objects` with its id,
+         * geometry, style and connections intact; only this pass skips it.
+         *
+         * The filter is applied INSIDE the loop rather than by replacing `drawn`,
+         * so the loop still walks the sheet's own list and the overlay case above
+         * is unaffected.
+         */
+        drawn.forEach(
                 entity => {
                     try {
+                        if (entity?.visible === false) {
+                            return;
+                        }
+
                         appendEntity(
                             svg,
                             entity,
@@ -200,9 +216,8 @@ import { renderPreview } from "./preview-render.js";
                 }
             );
 
-            if (renderFailures.length) {
-                reportRenderFailures(renderFailures);
-            }
+        if (renderFailures.length) {
+            reportRenderFailures(renderFailures);
         }
 
         /*

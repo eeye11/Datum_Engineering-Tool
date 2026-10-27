@@ -470,7 +470,11 @@ console.log("--------------------------------------");
 
 const visible = drawingSource.visibleDrawingSource(formatSample);
 
-check("no marker survives", !/DAETUM/i.test(visible), visible);
+check(
+  "no identity field survives, but the object's name does",
+  !/DAETUM (ID|TYPE|PART|PARENT)\b/.test(visible) && /% DAETUM OBJECT: Point Force 1/.test(visible),
+  visible,
+);
 check(
   "the commands survive character for character",
   has(visible, "\\draw (0,0) -- (0,60);") && has(visible, "\\node at (3,60) {$F = 60$};"),
@@ -629,7 +633,13 @@ const embedded = loadModule("embedded-drawings.js");
 
 check(
   "the embedded drawing block is a plain picture",
-  embedded.serializeDrawingBlock(drawingSource.visibleDrawingSource(picture)).indexOf("DAETUM") < 0,
+  /*
+   * AN EXPORT CARRIES NOTHING OF DAETUM. It goes into a `.tex` the student hands
+   * in, so `pictureSource` - which strips the readable name line too - is what
+   * feeds it. `visibleDrawingSource` is the SOURCE TAB's form, which keeps the
+   * name because it is the label read against the code.
+   */
+  embedded.serializeDrawingBlock(drawingSource.pictureSource(picture)).indexOf("DAETUM") < 0,
 );
 
 /* ====================================================== summary */

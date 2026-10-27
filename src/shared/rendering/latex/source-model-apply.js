@@ -1,3 +1,5 @@
+import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
+import { propagatePipeWidth } from "../../../features/workspace/model/fluids/pipe-width.js";
 /*
  * ============================================================
  * APPLYING A PARSE TO THE DRAWING
@@ -32,6 +34,8 @@
 import { createSourceMap } from "./drawing-source.js";
 import { readSourceIntoModel } from "./source-object-sync.js";
 import { shapeFromStatement } from "./source-model.js";
+import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
+import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 
 /* ============================================================
  * GEOMETRY AND STYLE FROM ONE SHAPE
@@ -42,9 +46,29 @@ import { shapeFromStatement } from "./source-model.js";
  * that touches only coordinates a coordinate edit.
  */
 function geometryOf(shape) {
+  if (!shape) {
+    return null;
+  }
+
   switch (shape.type) {
     case "line":
       return { start: { ...shape.from }, end: { ...shape.to } };
+    case "pipe-duct":
+      return { start: { ...shape.start }, end: { ...shape.end } };
+
+    /*
+     * AN ELBOW'S GEOMETRY IS ITS CORNER AND ITS TWO ENDS. Both walls of the block
+     * become THIS one geometry - which is what keeps the two paths linked to one
+     * object - and the connection record is left alone by this merge, so a source
+     * edit cannot silently orphan a fitting from the pipes it joins.
+     */
+    case "elbow":
+      return {
+        position: { ...shape.position },
+        ends: { a: { ...shape.ends.a }, b: { ...shape.ends.b } },
+        previous: { ...shape.previous },
+        next: { ...shape.next }
+      };
     case "circle":
       return { center: { ...shape.centre }, radius: shape.radius };
     case "rectangle":
@@ -92,15 +116,66 @@ function styleOf(shape) {
   return style;
 }
 
+/*
+ * MERGE AN ARROW'S BLOCK INTO THE ARROW IT DESCRIBES.
+ *
+ * An arrow has no shape to merge: its model is an attachment, and the block
+ * states it as metadata. So the id, the position, the direction and the size
+ * are written through `setAttachment` - the SAME call the Features tab and the
+ * canvas handles use - which keeps the geometry mirror, the parent link and the
+ * attachment one statement.
+ *
+ * Returns whether anything changed, so a no-op re-parse records no edit.
+ */
+function mergeArrowIntoObject(object, arrow) {
+  const before = signatureOf(object);
+
+  if (!enggFlowArrow.setAttachment(object, {
+    hostId: arrow.hostId,
+    fraction: arrow.fraction,
+    reversed: arrow.reversed,
+    size: arrow.size
+  })) {
+    return false;
+  }
+
+  if (arrow.style && Object.keys(arrow.style).length) {
+    object.style = { ...(object.style || {}), ...arrow.style };
+  }
+
+  return signatureOf(object) !== before;
+}
+
 /* Merge a shape into an existing object, in place. Returns whether it changed. */
 function mergeShapeIntoObject(object, shape) {
+  /*
+   * AN ARROW IS MERGED THROUGH ITS ATTACHMENT, not through a geometry branch:
+   * its written coordinates are the HEAD's, which are derived from the host and
+   * cannot be written back as if they were the arrow's own position.
+   */
+  if (shape?.type === "flow-arrow") {
+    return mergeArrowIntoObject(object, shape);
+  }
+
+  /*
+   * A SCHEMATIC OBJECT'S BLOCK CARRIES ITS WHOLE MODEL, not a shape: its
+   * connections, its mode, its table, its identifiers. `readSourceIntoModel`
+   * hands that back as `entry.schematic` and the merge here is a PATCH of the
+   * fields the block states - so a hand-edited vessel style or profile limit
+   * updates the object, while everything the block does not mention (a name, a
+   * style, a level's host) is left exactly as it was.
+   */
+  if (shape?.schematic) {
+    return mergeSchematicIntoObject(object, shape.schematic);
+  }
+
   const geometry = geometryOf(shape);
 
   if (!geometry) {
     return false;
   }
 
-  const before = JSON.stringify({ geometry: object.geometry, style: object.style });
+  const before = signatureOf(object);
 
   const next = { ...object.geometry };
 
@@ -116,7 +191,93 @@ function mergeShapeIntoObject(object, shape) {
     object.style = { ...(object.style || {}), ...style };
   }
 
-  return JSON.stringify({ geometry: object.geometry, style: object.style }) !== before;
+  /*
+   * A PIPE'S WIDTH COMES FROM ITS TWO WALLS.
+   *
+   * The separation the source shows is read back into the run's Pipe Width
+   * Change, so editing the gap between the walls in the Source tab widens the
+   * pipe on the canvas. A block whose walls are exactly the default separation
+   * stores no change at all, so the run keeps tracking the drawing default.
+   */
+  if (shape.type === "pipe-duct" && Number.isFinite(shape.separation)) {
+    if (shape.sourceStyle) object.style = { ...object.style, ...shape.sourceStyle };
+    object.engineering = { ...(object.engineering || {}) };
+
+    if (Math.abs(shape.separation) < 1e-9) {
+      delete object.engineering.separation;
+    } else {
+      object.engineering.separation = Number(shape.separation.toFixed(6));
+    }
+  }
+
+  /*
+   * AN ELBOW'S BEND RADIUS AND ANGLE COME FROM ITS ARCS.
+   *
+   * A retyped radius changes the fitting's bend; a retyped sweep changes its
+   * angle. A NEGATIVE `delta angle` states a bend in the other direction, so the
+   * angle is taken as its magnitude - the bend a fitting has is positive on either
+   * side, and the side itself lives in the geometry.
+   */
+  if (shape.type === "elbow") {
+    const angle = Math.abs(Number(shape.angleDegrees));
+
+    object.engineering = {
+      ...(object.engineering || {}),
+      bendRadius: shape.bendRadius,
+      angleDegrees: Number.isFinite(angle) ? angle : object.engineering?.angleDegrees,
+      angle: Number.isFinite(angle) ? angle : object.engineering?.angle
+    };
+  }
+
+  /*
+   * THE CHANGE IS THE WHOLE OBJECT'S, NOT JUST ITS GEOMETRY. A run whose walls
+   * were moved only further apart or closer together has an unchanged
+   * centreline but a changed width; an elbow whose arcs were retuned has an
+   * unchanged corner but a changed radius. Both are real edits the caller must
+   * hear about.
+   */
+  return signatureOf(object) !== before;
+}
+
+/* Merge a schematic reader's result into the object it describes. */
+function mergeSchematicIntoObject(object, schematic) {
+  const before = JSON.stringify({
+    geometry: object.geometry,
+    engineering: object.engineering,
+    style: object.style
+  });
+
+  if (schematic.geometry) {
+    object.geometry = { ...(object.geometry || {}), ...JSON.parse(JSON.stringify(schematic.geometry)) };
+  }
+
+  if (schematic.engineering) {
+    object.engineering = { ...(object.engineering || {}), ...JSON.parse(JSON.stringify(schematic.engineering)) };
+  }
+
+  if (schematic.style && Object.keys(schematic.style).length) {
+    object.style = { ...(object.style || {}), ...schematic.style };
+  }
+
+  return (
+    JSON.stringify({
+      geometry: object.geometry,
+      engineering: object.engineering,
+      style: object.style
+    }) !== before
+  );
+}
+
+/* The properties one shape edit can change, as one comparable string. */
+function signatureOf(object) {
+  return JSON.stringify({
+    geometry: object.geometry,
+    style: object.style,
+    attachment: object.content?.attachment,
+    separation: object.engineering?.separation,
+    bendRadius: object.engineering?.bendRadius,
+    angle: object.engineering?.angleDegrees
+  });
 }
 
 /* ============================================================
@@ -149,8 +310,16 @@ export function applyParsedSourceToDrawing({
   const updated = [];
   const removed = [];
 
+  /* The objects that existed before the edit, for the elbow report below. */
+  const before = new Set(state.objects.map((object) => object.id));
+  const beforeGeometry = new Map(state.objects.map(object => [object.id, JSON.stringify(object)]));
+
+  const reducerEdits = [];
+  parsed.updates.forEach(entry => {
+    if (entry.schematic?.type === "reducer-expander") reducerEdits.push({ entry, previousMode: enggReducer.modeOf(entry.object, state.objects) });
+  });
   parsed.updates.forEach((entry) => {
-    if (mergeShapeIntoObject(entry.object, entry.shape)) {
+    if (mergeShapeIntoObject(entry.object, entry.schematic ? { schematic: entry.schematic } : entry.shape)) {
       updated.push(entry.object.id);
     }
   });
@@ -161,16 +330,47 @@ export function applyParsedSourceToDrawing({
      * naming an object on the next parse, and the student would have an object
      * that the code no longer describes.
      */
+    /*
+     * THE FEATURE'S OWN DATA TRAVELS WITH IT. A Flow Arrow's attachment names
+     * the pipe it is on and how far along it, and the geometry alone cannot
+     * say that - so a block typed into Source rebuilds an arrow that is
+     * actually attached, not an arrow-shaped object with nowhere to be.
+     */
     const object = model.geometryObjectFromSource(entry.object.type, entry.object.geometry, {
       id: entry.id,
       name: entry.object.name,
-      style: entry.object.style
+      style: entry.object.style,
+      /*
+       * A SCHEMATIC'S MODEL IS NOT ITS GEOMETRY. A vessel's style, a profile's
+       * table, a symbol's connections - none of them can be read from the
+       * coordinates - so the block's own model line travels with it, as `content`
+       * (which the factory spreads onto the feature) and as `engineering`.
+       */
+      content: entry.object.attachment
+        ? { attachment: entry.object.attachment }
+        : entry.object.engineering
+          ? { ...entry.object.engineering }
+          : null,
+      engineering: entry.object.engineering,
+      parentId: entry.object.parentId
     });
 
     if (object) {
       state.objects = [...state.objects, object];
       created.push(object.id);
     }
+  });
+
+  reducerEdits.forEach(({ entry, previousMode }) => {
+    const object = entry.object, schematic = entry.schematic;
+    if (previousMode !== schematic.engineering.mode) {
+      object.engineering.mode = previousMode;
+      enggReducer.setMode(object, schematic.engineering.mode, state.objects);
+    } else {
+      Object.entries(schematic.terminalEdits || {}).forEach(([side,width]) => enggReducer.setEndWidth(object, side, width, state.objects));
+    }
+    object.engineering.mode = enggReducer.modeOf(object, state.objects);
+    enggReducer.keepConnectedEndsSeated(object, state.objects);
   });
 
   if (parsed.removed.length && removeMissing) {
@@ -180,7 +380,50 @@ export function applyParsedSourceToDrawing({
     });
   }
 
+  /*
+   * A RETYPED PIPE JOINS ITS JOINTS THE SAME WAY A DRAGGED ONE DOES.
+   *
+   * Source editing is a supported way to move geometry, so a coordinate typed into
+   * the Source tab must earn the fitting a drag would have earned - and a pipe
+   * retyped away from its neighbour must lose the one it had. Only the pipes that
+   * were created or changed are visited, so an unrelated connection is never
+   * touched by an edit somewhere else.
+   */
+  [...new Set([...created, ...updated])]
+    .map((id) => state.objects.find((object) => object.id === id))
+    .filter((object) => object?.type === "pipe-duct")
+    .forEach((run) => {
+      propagatePipeWidth(run, state.objects);
+      reconcileFluidConnections(run, state.objects);
+    });
+
+  /*
+   * AND THE SETTLEMENT ITSELF MAY HAVE ADDED OR REMOVED A FITTING, so the report
+   * the caller acts on includes those objects too.
+   */
+  state.objects.forEach((object) => {
+    if (object.type === "elbow" && !created.includes(object.id) && !updated.includes(object.id)) {
+      if (!before.has(object.id)) {
+        created.push(object.id);
+      } else {
+        updated.push(object.id);
+      }
+    }
+  });
+
+  const changedIds = new Set([...created, ...updated]);
+  const reducerSyncIds = new Set();
+  state.objects.filter(object => object.type === "reducer-expander").forEach(fitting => {
+    const ids = [fitting.id, ...enggReducer.connectedPipeIds(fitting).filter(Boolean)];
+    if (ids.some(id => changedIds.has(id) || beforeGeometry.get(id) !== JSON.stringify(state.objects.find(object => object.id === id)))) {
+      ids.forEach(id => reducerSyncIds.add(id));
+    }
+  });
+  state.objects.forEach(object => {
+    if (before.has(object.id) && beforeGeometry.get(object.id) !== JSON.stringify(object) && !updated.includes(object.id)) updated.push(object.id);
+  });
   return {
+    reducerSyncIds: [...reducerSyncIds],
     created,
     updated,
     removed,

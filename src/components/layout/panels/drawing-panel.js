@@ -31,6 +31,8 @@ import {
     writeObjectIntoSource
 } from "../../../shared/rendering/latex/source-synchronization.js";
 import { setSourceGeometryFactories } from "../../../shared/rendering/latex/source-object-sync.js";
+import { setFlowArrowSourceReader } from "../../../shared/rendering/latex/source-object-sync.js";
+import { readFlowArrow } from "../../../shared/rendering/latex/source-readers/fluids-readers.js";
 
 import { drawingCanvas } from "../../../features/workspace/dom.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
@@ -399,6 +401,15 @@ export function installDrawingPanel() {
      * invented by the parser.
      */
     setSourceGeometryFactories(enggDrawingState.geometryFactories);
+
+    /*
+     * AND THE FLOW ARROW'S READER. It reads the attachment an arrow block
+     * carries, and it is registered here - not imported by the parser - because
+     * it reaches the tool library's style primitives, which want a document. The
+     * panel is already inside a document; a test that parses without one simply
+     * leaves arrow blocks unread, as it always did.
+     */
+    setFlowArrowSourceReader(readFlowArrow);
 
     /* Let committed model edits patch just their own source region. */
     enggDrawingState.setSourceSink(handleObjectCommitted);
