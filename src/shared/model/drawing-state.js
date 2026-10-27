@@ -472,7 +472,7 @@ function seedSupportAttachment(
  * gives it the block's style. The object shape, its defaults, its label and its
  * derived fields therefore stay the model's decision, in one place.
  */
-function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
+function geometryObjectFromSource(type, geometry, { id, name, style, content, engineering, parentId } = {}) {
     if (!type) {
         return null;
     }
@@ -482,7 +482,17 @@ function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
         geometry,
         {
             name: name || undefined,
-            style: style ? { ...style } : undefined
+            engineering: engineering ? deepClone(engineering) : undefined,
+            parentId,
+            style: style ? { ...style } : undefined,
+
+            /*
+             * A FEATURE'S OWN NON-GEOMETRIC DATA, WHEN THE READER HAS IT. A
+             * Flow Arrow's attachment is its model - which pipe, how far along
+             * it, which way - and none of it is geometry or style. Without it a
+             * block typed into Source would create an arrow with nowhere to be.
+             */
+            ...(content ? { content: { ...content } } : {})
         }
     );
 
@@ -493,10 +503,35 @@ function geometryObjectFromSource(type, geometry, { id, name, style } = {}) {
     return object;
 }
 
+/*
+ * THE TYPE NAME OF A PIPE ASSEMBLY, STATED HERE RATHER THAN IMPORTED.
+ *
+ * This module sits UNDER the fluids model - `pipe-assembly.js` imports it - so
+ * importing the constant back would close a cycle. It is one string, and naming
+ * it here keeps the label table self-contained.
+ */
+const PIPE_ASSEMBLY_TYPE_NAME = "pipe-assembly";
+
+/*
+ * The Flow Arrow's stored type, named here for the same reason the assembly's is:
+ * the fluids model sits UNDER this module, so importing the constant back would
+ * close a cycle.
+ */
+const FLOW_ARROW_TYPE_NAME = "flow-arrow";
+
 function createGeometryObject(type, geometry, options = {}) {
-    const generatedId = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
-        ? globalThis.crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const generatedId = globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      /*
+       * NO CRYPTO IN THIS RUNTIME, SO A STABLE-LOOKING ID IS MINTED HERE. It
+       * must look like the uuid form the ids above use, so a consumer that
+       * parses an id (a test, a URL, a log) sees the same shape either way.
+       */
+      : (() => {
+            const hex = () => Math.floor(Math.random() * 0xffff).toString(16).padStart(4, "0");
+
+            return `${hex()}${hex()}-${hex()}-${hex()}-${hex()}-${hex()}${hex()}${hex()}`;
+        })();
 
     const typeLabel = {
         line: "Line",
@@ -590,7 +625,53 @@ function createGeometryObject(type, geometry, options = {}) {
          * disagree about.
          */
         "pipe-duct": "Pipe / Duct",
-        elbow: "Elbow"
+        elbow: "Elbow",
+
+        /*
+         * A JUNCTION IS NAMED FOR WHAT IT IS - a fitting joining three or more
+         * branches. It sits in the same flat list as the runs and bends it joins,
+         * so the Features list reads "Pipe / Duct 1", "Elbow 1", "Junction 1".
+         */
+        junction: "Junction",
+
+        /*
+         * AN ASSEMBLY IS A CONTAINER, NOT A DRAWN OBJECT. It is named here so
+         * the Objects tab can label its parent row; it has no geometry, so
+         * nothing draws or hit-tests it.
+         */
+        [PIPE_ASSEMBLY_TYPE_NAME]: "Pipe Assembly",
+
+        /*
+         * A FLOW ARROW IS NAMED FOR WHAT IT IS — a single directional mark on a
+         * run. Multiple arrows share the "Flow Arrow" name and are numbered by
+         * the same pass every other feature uses.
+         *
+         * The FREE flow arrow and the flow-direction annotation share this type
+         * name: both are a directional arrow on the sheet. What distinguishes
+         * them is their attachment model (a free span against a host pipe's
+         * fraction), which is read where it matters.
+         */
+        [FLOW_ARROW_TYPE_NAME]: "Flow Arrow",
+
+        /*
+         * THE INLINE FITTINGS AND THE SCHEMATIC SYMBOLS.
+         *
+         * Each is its own feature type and its own row in the Objects and
+         * Features lists, so a Pump is never filed under a generic shape. They
+         * are named here for the same reason every other type is: the name is
+         * the object's DEFAULT, and the same numbering pass gives "Pump 1",
+         * "Pump 2".
+         */
+        "reducer-expander": "Reducer / Expander",
+        "reservoir-tank": "Reservoir / Tank",
+        pump: "Pump",
+        valve: "Valve",
+        "flow-meter": "Flow Meter",
+        "fluid-level": "Fluid Level",
+        "flow-direction-diagram": "Flow Direction",
+        "flow-profile": "Flow Profile",
+        "pressure-profile": "Pressure Profile",
+        "section-plane": "Section Plane"
     }[type] || type;
 
     return {
@@ -1919,20 +2000,56 @@ function removeObjectsAndDescendants(
      */
     const childrenOf = new Map();
 
-    state.objects.forEach(object => {
-        if (!object.parentId) {
-            return;
-        }
-
+    const addChild = (parentId, childId) => {
         const siblings =
-            childrenOf.get(object.parentId) || [];
+            childrenOf.get(parentId) || [];
 
-        siblings.push(object.id);
+        siblings.push(childId);
 
         childrenOf.set(
-            object.parentId,
+            parentId,
             siblings
         );
+    };
+
+    state.objects.forEach(object => {
+        if (object.parentId) {
+            addChild(object.parentId, object.id);
+        }
+
+        /*
+         * AN ELBOW BELONGS TO THE RUNS IT JOINS.
+         *
+         * A fitting has no `parentId`, because it is not a child of either run
+         * - the two runs are peers and the elbow sits between them. But it has
+         * no meaning without them, so it is removed with the FIRST of the pair
+         * to go. Without this a deleted pipe left its bend drawn in mid-air,
+         * joining one run to nothing.
+         *
+         * A shared connection is not a hierarchy: the elbow lists the pair it
+         * joins, and either one's deletion takes it.
+         */
+        if (["elbow", "reducer-expander"].includes(object.type) && Array.isArray(object.engineering?.connections)) {
+            object.engineering.connections.forEach(runId => {
+                if (runId) {
+                    addChild(runId, object.id);
+                }
+            });
+        }
+
+        /*
+         * A JUNCTION BELONGS TO ITS PIPES FOR THE SAME REASON. Its branches are
+         * the runs it joins, and with one gone it no longer describes the
+         * pipework. The RUNS are not removed with it - deleting a junction
+         * leaves its pipes exactly where they are.
+         */
+        if (object.type === "junction") {
+            (object.geometry?.branches || []).forEach(branch => {
+                if (branch?.connected) {
+                    addChild(branch.connected, object.id);
+                }
+            });
+        }
     });
 
     const doomed = new Set(roots);
@@ -2055,6 +2172,82 @@ function selectObject(state, objectId) {
 
 function clearSelection(state) {
     selectObjects(state, []);
+}
+
+/*
+ * ========================================================
+ * SHOWING AND HIDING ONE OBJECT
+ * ========================================================
+ *
+ * `visible: false` is already the model's convention for a hidden object - the
+ * renderer's bounds and the canvas hit test both skip such an object - and
+ * every other type already writes it. This is the ONE setter, so a row's eye
+ * button, a script and a future caller all mean the same thing by "hidden".
+ *
+ * WHAT IT DOES NOT DO is as important as what it does:
+ *
+ *   - it does not touch any OTHER object, so hiding an Elbow leaves the runs
+ *     it joins on the sheet and keeps the connection;
+ *   - it does not touch the object's own geometry, name, id, style or
+ *     engineering, so a hidden object is exactly the object it was;
+ *   - it does not clear the selection, so a hidden object can still be
+ *     inspected in the Features tab after it vanishes from the canvas - which
+ *     is the only way back for a student who has hidden the thing they are
+ *     looking at;
+ *   - it does not fight Fix. `locked` governs EDITING, this governs DRAWING.
+ *
+ * It answers whether the object's visibility actually changed, so the caller
+ * can decide whether the change is worth an undo entry.
+ */
+function setObjectVisible(state, objectId, visible) {
+    const object = (state.objects || []).find(
+        (candidate) => candidate.id === objectId
+    );
+
+    if (!object) {
+        return false;
+    }
+
+    const next = visible !== false;
+
+    /* The default is visible, so absence of the flag and `true` are one state. */
+    if ((object.visible !== false) === next) {
+        return false;
+    }
+
+    /*
+     * ONE UNDO ENTRY, ONE SOURCE REWRITE.
+     *
+     * Hiding is an edit like any other, so it takes the same snapshot every
+     * other committed edit takes and goes through the same commit - which is
+     * what makes Ctrl+Z restore the object to the sheet, keeps the source in
+     * step, marks the document dirty and announces `datum:drawing-changed` (the
+     * event the canvas and the Objects rows both listen to).
+     */
+    const previous = snapshotDrawing(state);
+
+    object.visible = next;
+
+    commitDrawingChange(state, previous);
+
+    return true;
+}
+
+function toggleObjectVisible(state, objectId) {
+    const object = (state.objects || []).find(
+        (candidate) => candidate.id === objectId
+    );
+
+    if (!object) {
+        return false;
+    }
+
+    return setObjectVisible(state, objectId, object.visible === false);
+}
+
+/* Whether an object is drawn. Absence of the flag means visible. */
+function isObjectVisible(object) {
+    return Boolean(object) && object.visible !== false;
 }
 
 /*
@@ -2261,7 +2454,6 @@ function commitDrawingChange(state, previousObjects) {
     }
 
     const drawingChanged = makeAnnouncement("datum:drawing-changed", {});
-
     if (drawingChanged && typeof document !== "undefined") {
         document.dispatchEvent(drawingChanged);
     }
@@ -2514,6 +2706,26 @@ function canUndo(state) {
 
 function canRedo(state) {
     return state.history.future.length > 0;
+}
+
+/*
+ * PUT THE SHEET BACK TO A SNAPSHOT WITHOUT RECORDING A HISTORY STEP.
+ *
+ * A multi-part operation - an inline insertion that splits a run, adds a
+ * segment and places a symbol - must leave ONE entry in History. It therefore
+ * commits once, at the end, against the snapshot taken when the student
+ * clicked; this restores that same snapshot when the operation is abandoned or
+ * refused, so a cancelled insertion leaves neither geometry nor a history entry
+ * behind.
+ */
+function restoreDrawingSnapshot(state, snapshot) {
+    if (!snapshot) {
+        return false;
+    }
+
+    restoreDocumentSnapshot(state, snapshot);
+
+    return true;
 }
 
 function undo(state) {
@@ -3181,10 +3393,14 @@ const enggDrawingState = {
     selectObjects,
     selectObject,
     clearSelection,
+    setObjectVisible,
+    toggleObjectVisible,
+    isObjectVisible,
     setHistorySinks,
     HISTORY_LIMIT,
     snapshotDocument,
     snapshotDrawing,
+    restoreDrawingSnapshot,
     commitDrawingChange,
     setAnalysisDependencyRegistry,
     refreshAnalysisObjects,

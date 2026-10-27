@@ -5,5 +5,5 @@
   "group": "fluids-create",
   "libraryPath": "src/tool-library/fluids/fluids-create/flow-arrow",
   "template": "template.tex",
-  "implemented": false
+  "implemented": true
 }

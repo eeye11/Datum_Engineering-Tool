@@ -343,6 +343,30 @@
     border-bottom: 0;
 }
 
+/*
+ * A SUBGROUP IS A HEADING INSIDE A SECTION.
+ *
+ * Fluids' Create section groups its tools under Flow Paths, Equipment and Flow
+ * Indicators & Annotations, the way Statics' Create groups its tools under
+ * Bodies, Loads and Supports. The heading is an `h4` because it sits under the
+ * section's `h3`, so it inherits the browser's default h4 size and margins -
+ * both of which would make it read as body text. It is reset to the section
+ * heading's own type so the two look like one family, and the spacing between
+ * groups separates them without doubling the section's padding.
+ */
+.drawing-tool-subgroup {
+    min-width: 0;
+}
+
+.drawing-tool-subgroup + .drawing-tool-subgroup {
+    margin-top: 5px;
+}
+
+/* The h4's inherited margins are the only thing that needs undoing. */
+.drawing-tool-subgroup > .drawing-tool-group-label {
+    margin: 0 1px 2px;
+}
+
 .drawing-tool-group-label {
     color: var(--cad-muted);
     font-size: 8px;

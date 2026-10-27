@@ -88,13 +88,24 @@ const objectOf = (type, name, geometryData) => ({
   });
 
   const forcePicture = source.buildDrawingSource([
-    { id: force.id, type: "force", name: force.name, source: statics.serializeStaticsObject(force) },
+    {
+      id: force.id,
+      type: "force",
+      name: force.name,
+      source: statics.serializeStaticsObject(force),
+    },
   ]);
 
-  const forceSvg = await service.renderTikz(source.visibleDrawingSource(forcePicture));
+  const forceSvg = await service.renderTikz(
+    source.visibleDrawingSource(forcePicture),
+  );
   const forceText = texts(forceSvg);
 
-  check("the picture compiles", forceSvg.includes("<svg"), String(forceSvg).slice(0, 200));
+  check(
+    "the picture compiles",
+    forceSvg.includes("<svg"),
+    String(forceSvg).slice(0, 200),
+  );
   check("the arrow is drawn", paths(forceSvg) >= 1, String(paths(forceSvg)));
   check(
     "the magnitude is drawn",
@@ -112,15 +123,30 @@ const objectOf = (type, name, geometryData) => ({
   console.log("\nThe headers never change the picture");
   console.log("-------------------------------------");
 
-  const line = objectOf("line", "Line 1", { start: { x: 0, y: 0 }, end: { x: 40, y: 10 } });
+  const line = objectOf("line", "Line 1", {
+    start: { x: 0, y: 0 },
+    end: { x: 40, y: 10 },
+  });
 
   const picture = source.buildDrawingSource([
-    { id: force.id, type: "force", name: force.name, source: statics.serializeStaticsObject(force) },
-    { id: line.id, type: "line", name: line.name, source: geometry.geometrySourceWriter(line) },
+    {
+      id: force.id,
+      type: "force",
+      name: force.name,
+      source: statics.serializeStaticsObject(force),
+    },
+    {
+      id: line.id,
+      type: "line",
+      name: line.name,
+      source: geometry.geometrySourceWriter(line),
+    },
   ]);
 
   const withHeaders = await service.renderTikz(picture);
-  const withoutHeaders = await service.renderTikz(source.visibleDrawingSource(picture));
+  const withoutHeaders = await service.renderTikz(
+    source.visibleDrawingSource(picture),
+  );
 
   check(
     "the same paths",
@@ -129,7 +155,8 @@ const objectOf = (type, name, geometryData) => ({
   );
   check(
     "and the same text",
-    JSON.stringify(texts(withHeaders)) === JSON.stringify(texts(withoutHeaders)),
+    JSON.stringify(texts(withHeaders)) ===
+      JSON.stringify(texts(withoutHeaders)),
     `${JSON.stringify(texts(withHeaders))} vs ${JSON.stringify(texts(withoutHeaders))}`,
   );
   check(
@@ -143,23 +170,40 @@ const objectOf = (type, name, geometryData) => ({
   console.log("\nA composite symbol is one object");
   console.log("---------------------------------");
 
-  const support = objectOf("pin-support", "Pin Support", { position: { x: 20, y: 0 } });
+  const support = objectOf("pin-support", "Pin Support", {
+    position: { x: 20, y: 0 },
+  });
   const supportSource = statics.serializeStaticsObject(support);
 
   const supportPicture = source.buildDrawingSource([
-    { id: support.id, type: support.type, name: support.name, source: supportSource },
+    {
+      id: support.id,
+      type: support.type,
+      name: support.name,
+      source: supportSource,
+    },
   ]);
 
-  const supportSvg = await service.renderTikz(source.visibleDrawingSource(supportPicture));
+  const supportSvg = await service.renderTikz(
+    source.visibleDrawingSource(supportPicture),
+  );
   const supportBlocks = source.parseDrawingSource(supportPicture);
 
-  check("its source is ONE block", supportBlocks.length === 1, JSON.stringify(supportBlocks.map((b) => b.id)));
+  check(
+    "its source is ONE block",
+    supportBlocks.length === 1,
+    JSON.stringify(supportBlocks.map((b) => b.id)),
+  );
   check(
     "under the object's id",
     supportBlocks[0]?.id === support.id,
     JSON.stringify(supportBlocks.map((b) => b.id)),
   );
-  check("its primitives are all drawn", paths(supportSvg) >= 1, String(paths(supportSvg)));
+  check(
+    "its primitives are all drawn",
+    paths(supportSvg) >= 1,
+    String(paths(supportSvg)),
+  );
   check(
     "and every primitive is inside that one block",
     (() => {
@@ -167,7 +211,8 @@ const objectOf = (type, name, geometryData) => ({
       const lines = supportPicture.split("\n");
 
       return lines.every(
-        (text, index) => !/^\\draw/.test(text) || map.idAtLine(index) === support.id,
+        (text, index) =>
+          !/^\\draw/.test(text) || map.idAtLine(index) === support.id,
       );
     })(),
     supportPicture,
@@ -185,7 +230,10 @@ const objectOf = (type, name, geometryData) => ({
 
   check("no document class", !/\\documentclass/.test(picture));
   check("no document environment", !/\\begin\{document\}/.test(picture));
-  check("exactly one picture", (picture.match(/\\begin\{tikzpicture\}/g) || []).length === 1);
+  check(
+    "exactly one picture",
+    (picture.match(/\\begin\{tikzpicture\}/g) || []).length === 1,
+  );
   check(
     "every metadata line is a comment",
     picture

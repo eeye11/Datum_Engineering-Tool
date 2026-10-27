@@ -23,6 +23,7 @@
 
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { displayNameOf, iconForObject, typeLabelOf } from "./feature-schema.js";
 
 let host = null;
@@ -50,6 +51,58 @@ function escapeHtml(text) {
 }
 
 /*
+ * ============================================================
+ * THE VISIBILITY EYE
+ * ============================================================
+ *
+ * One compact button at the far right of every row. It is drawn from the same
+ * 20x20 / `currentColor` conventions as every other DAEMON icon, so it picks up
+ * the row's colour and hover state rather than needing a palette of its own.
+ *
+ * VISIBLE -> an open eye; HIDDEN -> the eye with a stroke through it. Both are
+ * inline SVG rather than a font glyph, so the button cannot shift the row's
+ * height or fall back to a box on a machine without the icon font.
+ */
+const EYE_ICON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+    '<path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '</svg>';
+
+const EYE_OFF_ICON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+    '<path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M4 4l12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+    '</svg>';
+
+/*
+ * THE HIDDEN MARK, for a surface that only has to SAY hidden - the Source tab's
+ * gutter and the top of a hidden object's block. It is the list's own picture,
+ * exported rather than redrawn, so "hidden" cannot come to look like two
+ * different things in two panes of the same panel.
+ */
+export const EYE_OFF_MARK_ICON = EYE_OFF_ICON;
+
+/* The eye button for one row, or "" when the list is only identifying rows. */
+export function visibilityButtonMarkup(object) {
+    const visible = object.visible !== false;
+    const name = displayNameOf(object);
+    const action = visible ? `Hide ${name}` : `Show ${name}`;
+
+    return (
+        `<button type="button" class="drawing-objects-visibility" ` +
+        `data-visibility-for="${escapeHtml(object.id)}" ` +
+        `data-visible="${visible ? "true" : "false"}" ` +
+        `aria-pressed="${visible ? "true" : "false"}" ` +
+        `aria-label="${escapeHtml(action)}" ` +
+        `title="${escapeHtml(action)}">` +
+        `${visible ? EYE_ICON : EYE_OFF_ICON}` +
+        `</button>`
+    );
+}
+
+/*
  * The row list's markup. Exported so a test can assert the rows without a DOM
  * event, and so the render below stays a one-liner.
  */
@@ -63,22 +116,70 @@ export function objectsListMarkup(
 
     const selected = new Set(selectedIds);
 
-    const rows = objects
-        .map((object) => {
-            const isSelected = selected.has(object.id);
-            const name = displayNameOf(object);
-            const type = typeLabelOf(object);
+    /*
+     * ============================================================
+     * ONE ROW PER OBJECT, AND CHILDREN UNDER THEIR PARENT
+     * ============================================================
+     *
+     * A CHILD is an object whose `parentId` names another object on this sheet -
+     * a Pipe Assembly's members, for instance. Children follow their parent's row
+     * instead of appearing again in the top-level list, so the tree shows the
+     * system as one group with its components inside it.
+     *
+     * THE ROW ITSELF IS UNCHANGED. A child keeps its own icon, name, selection, id
+     * and eye; the only difference is indentation and the row it sits beneath. A
+     * parent row is still just a row, so selecting it selects the assembly, and
+     * selecting a child selects only that component.
+     */
+    const ids = new Set(objects.map((object) => object.id));
 
-            return (
-                `<li class="drawing-objects-item" role="option" aria-selected="${isSelected ? "true" : "false"}" ` +
-                `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
-                `tabindex="${isSelected ? "0" : "-1"}" ` +
-                `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
-                `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
-                `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
-                `</li>`
-            );
-        })
+    const childrenOf = new Map();
+
+    objects.forEach((object) => {
+        if (!object.parentId || !ids.has(object.parentId) || object.parentId === object.id) {
+            return;
+        }
+
+        const siblings = childrenOf.get(object.parentId) || [];
+
+        siblings.push(object);
+        childrenOf.set(object.parentId, siblings);
+    });
+
+    const isChild = (object) => Boolean(object.parentId) && ids.has(object.parentId) && object.parentId !== object.id;
+
+    const rowMarkup = (object, depth = 0) => {
+        const isSelected = selected.has(object.id);
+        const isVisible = object.visible !== false;
+        const name = displayNameOf(object);
+        const type = typeLabelOf(object);
+        const children = childrenOf.get(object.id) || [];
+
+        const indented = depth > 0 ? ` drawing-objects-item-child` : "";
+
+        return (
+            `<li class="drawing-objects-item${indented}${isVisible ? "" : " drawing-objects-item-hidden"}" role="option" ` +
+            `aria-selected="${isSelected ? "true" : "false"}" ` +
+            `aria-level="${depth + 1}" ` +
+            `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
+            `data-object-depth="${depth}" ` +
+            `tabindex="${isSelected ? "0" : "-1"}" ` +
+            `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
+            `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
+            `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
+            visibilityButtonMarkup(object) +
+            (children.length
+                ? `<ul class="drawing-objects-children" role="group" aria-label="${escapeHtml(name)} members">` +
+                  children.map((child) => rowMarkup(child, depth + 1)).join("") +
+                  `</ul>`
+                : "") +
+            `</li>`
+        );
+    };
+
+    const rows = objects
+        .filter((object) => !isChild(object))
+        .map((object) => rowMarkup(object, 0))
         .join("");
 
     return `<ul class="drawing-objects-list" role="listbox" aria-label="Objects" aria-multiselectable="true">${rows}</ul>`;
@@ -171,6 +272,39 @@ export function installObjectsPane() {
     }
 
     host.addEventListener("click", (event) => {
+        /*
+         * THE EYE IS ITS OWN ACTION, NOT A ROW CLICK.
+         *
+         * The button sits inside the row, so without this the browser would
+         * bubble the click to the row handler and SELECT the object as well as
+         * hiding it - the student would hide a pipe and find it selected and
+         * open in Features, which is not what they asked for. The handler stops
+         * here and toggles only the one object's visibility.
+         *
+         * `stopPropagation` alone would still let a parent listener react, so
+         * the row is checked for first and the event is consumed either way.
+         */
+        const eye = event.target.closest?.("[data-visibility-for]");
+
+        if (eye) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            enggDrawingState.toggleObjectVisible(
+                drawingState,
+                eye.dataset.visibilityFor
+            );
+
+            /*
+             * A CHANGE THAT WAS REFUSED STILL REPAINTS THE ROW, so the button
+             * can never be left showing a state the model does not have.
+             */
+            renderObjects();
+            renderCurrentDrawing();
+
+            return;
+        }
+
         const row = event.target.closest?.("[data-object-id]");
 
         if (!row) {
@@ -238,5 +372,6 @@ export function installObjectsPane() {
 export default {
     renderObjects,
     installObjectsPane,
-    objectsListMarkup
+    objectsListMarkup,
+    visibilityButtonMarkup
 };

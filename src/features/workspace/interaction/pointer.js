@@ -1112,6 +1112,17 @@ export function updateInteractionFeedback(
                       )
                 : null;
 
+        /*
+         * THE DIMENSIONS THE READING IS IN.
+         *
+         * The unit is the DIAGRAM's own - a bending moment in kN-m, a shear force
+         * in kN - so it is read from the diagram's `geometry.diagramType`, the
+         * same field the quantity symbol above comes from. A pointer that is not
+         * over a diagram has no diagram type, and states no unit rather than
+         * borrowing one.
+         */
+        const geometry = onDiagram?.geometry || {};
+
         const quantity =
             {
                 sfd: "V",
@@ -1119,12 +1130,17 @@ export function updateInteractionFeedback(
                 afd: "N",
             }[onDiagram?.geometry?.diagramType];
 
+        /*
+         * THE UNIT FOLLOWS THE DIAGRAM TYPE, like the quantity does - a bending
+         * moment in kN-m and a shear force in kN - so the two are read from the
+         * same `geometry.diagramType` in the same place.
+         */
         const unit =
             {
                 sfd: "kN",
                 bmd: "kN\u00b7m",
                 afd: "kN",
-            }[onDiagram?.geometry?.diagramType];
+            }[geometry.diagramType];
 
         drawingCoordinates.textContent =
             `X: ${Number(readable.x).toFixed(1)} ` +

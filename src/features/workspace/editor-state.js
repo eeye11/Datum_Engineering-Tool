@@ -5,6 +5,9 @@
 import enggDrawingState from "../../shared/model/drawing-state.js";
 import enggDrawingSnap from "../../shared/snapping/object-snap.js";
 import enggSheets from "../../components/layout/workspace/sheets.js";
+import enggPipeDuct from "./model/fluids/pipe-duct.js";
+import enggPipeAssembly from "./model/fluids/pipe-assembly.js";
+import enggFlowArrow from "./model/fluids/flow-arrow.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
 
@@ -44,7 +47,7 @@ export const editorState = {
      * SHEETS
      * ========================================================
      */
-    
+
     /*
      * The document's sheets.
      *
@@ -191,7 +194,7 @@ export const editorState = {
      * View tools change only the camera. Both reuse the
      * existing selection, snapping and camera systems.
      */
-    
+
     /*
      * The id of the global toolbar tool currently running,
      * so its button can stay visibly highlighted and be
@@ -199,3 +202,52 @@ export const editorState = {
      */
     activeGlobalTool: null
 };
+
+/*
+ * ========================================================
+ * THE FLUIDS MODEL MAY LOOK AN OBJECT UP - BUT NOT IMPORT ONE
+ * ========================================================
+ *
+ * The pipe / duct model has to measure a bend's arms from the runs it joins, and
+ * the Feature schema has to re-seat a fitting on its pipes. Both live in modules
+ * the interaction layer IMPORTS, so neither may import the live document back:
+ * that is an import cycle, and a cycle around a state object is how a module ends
+ * up reading `undefined` at load time.
+ *
+ * So the document is published once, here - the one module that owns it. Every
+ * Fluids reader asks through this lookup, which is the same pattern the Features
+ * pane already uses for its elbow run lookup (`setElbowRunLookup`).
+ *
+ * IT IS A FUNCTION, NOT A COPY. It reads `drawingState.objects` when it is
+ * called, so a caller always sees the sheet as it is now rather than the sheet as
+ * it was when the module loaded - and Undo, a sheet switch or a reopened file
+ * needs no re-wiring.
+ */
+const lookupEditorObject = (id) =>
+    (id ? (drawingState.objects || []).find((object) => object.id === id) || null : null);
+
+enggPipeDuct.setObjectLookup(lookupEditorObject);
+
+/*
+ * AND THE FLOW ARROW'S HOST.
+ *
+ * An arrow never stores a point: it stores the pipe it is attached to and how
+ * far along that pipe it sits. Resolving the pipe is the ONE thing it cannot do
+ * by itself without importing the document, so it is published the same way as
+ * the run lookup above. Everything derived from the attachment - its position,
+ * its direction, whether it can be drawn at all - is then computed against the
+ * pipe AS IT IS NOW, which is what keeps the arrow centred on its run through
+ * every move, resize and reconnection of that run.
+ */
+enggFlowArrow.setHostLookup(lookupEditorObject);
+
+/*
+ * AND THE WHOLE SHEET, FOR THE ASSEMBLY GROUPING.
+ *
+ * A connection graph is read from EVERY object at once, so a per-id lookup is not
+ * enough: the assembly reconciler needs the list. It is published the same way and
+ * for the same reason, and it too reads the live document at call time.
+ */
+enggPipeAssembly.setObjectListLookup(() => drawingState.objects || []);
+
+export const objectOnSheet = lookupEditorObject;

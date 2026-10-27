@@ -15,7 +15,7 @@ import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPlant, drawP
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
-import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
+import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { isControlBlock } from "../model/plant.js";
@@ -80,8 +80,45 @@ import { isControlBlock } from "../model/plant.js";
         { matches: entity => entity.type === "arc", draw: drawArc },
         { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d },
         { matches: entity => entity.type === "pipe-duct", draw: drawPipeDuct },
-        { matches: entity => entity.type === "elbow", draw: drawElbow }
+        { matches: entity => entity.type === "elbow", draw: drawElbow },
+
+        /* A junction is one fitting: its contour, and any free branch ticks. */
+        { matches: entity => entity.type === "junction", draw: drawJunction },
+
+        /* A flow arrow rides its pipe: one arrowhead on the run's centreline. */
+        { matches: entity => entity.type === "flow-arrow", draw: drawFlowArrow },
+
+        /*
+         * THE REST OF THE FLUIDS SCHEMATIC TOOLS.
+         *
+         * Each is one object with its own model, so each gets one painter. They
+         * are listed AFTER the flow arrow because they are all distinct types -
+         * no two of these tests can match the same feature.
+         */
+        { matches: entity => entity.type === "reducer-expander", draw: drawReducer },
+        { matches: entity => ["pump", "valve", "flow-meter"].includes(entity.type), draw: drawEquipment },
+        { matches: entity => entity.type === "reservoir-tank", draw: drawVessel },
+        { matches: entity => entity.type === "fluid-level", draw: drawFluidLevel },
+        { matches: entity => entity.type === "flow-direction-diagram", draw: drawFlowDirection },
+        { matches: entity => entity.type === "pressure-profile", draw: drawPressureProfile },
+        { matches: entity => entity.type === "flow-profile", draw: drawFlowProfile },
+        { matches: entity => entity.type === "section-plane", draw: drawSectionPlane }
     ];
+
+    /*
+     * THE FREE FLOW ARROW IS THE ONE SPLIT.
+     *
+     * `flow-arrow` is used by TWO tools - the free directional arrow and the
+     * pipe-attached indicator - and they are told apart by what they store: an
+     * attachment (a host pipe and a fraction along it) or a free span (two
+     * points). Both are arrows, so both draw; the painter differs.
+     */
+    const FLOW_ARROW_RENDERER = ENTITY_RENDERERS.find((renderer) => renderer.draw === drawFlowArrow);
+
+    if (FLOW_ARROW_RENDERER) {
+        FLOW_ARROW_RENDERER.draw = (context) =>
+            context.entity?.attachment ? drawFlowArrow(context) : drawFreeFlowArrow(context);
+    }
 
 
     function appendEntity(
@@ -133,6 +170,18 @@ import { isControlBlock } from "../model/plant.js";
             toScreen
         };
 
+        /*
+         * THE FIRST MATCHING RENDERER IS THE ONE THAT DRAWS.
+         *
+         * The table is a DISPATCH - one painter per feature - so the first test
+         * that matches decides, and what that painter does with the feature is
+         * its own decision. A painter that DECLINES (returns true without
+         * appending) hands the feature to the renderers BESIDE it, which is how a
+         * Dynamics reference point - an ordinary `point` with a Dynamics mark -
+         * is drawn by the point painter after the Dynamics painter said it had
+         * nothing of its own to add. The group that was already filled stays in
+         * the context, so the next painter draws into the same feature.
+         */
         for (const renderer of ENTITY_RENDERERS) {
             if (renderer.matches(entity) && renderer.draw(context) === true) {
                 return;
