@@ -657,15 +657,16 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
     assert.ok(layer, "the canvas has no compiled picture layer to seat");
 
     const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
-    const { exportTransformFor } = require(require("./helpers/source-path.cjs").locate("source-synchronization.js"));
-    const centre = exportTransformFor(drawingState.objects).point(25, 10);
+    const transform = syncExportTransformForSheet();
+    const originX = transform.sourceBounds.minX;
+    const originY = transform.sourceBounds.minY;
 
     assert.ok(
-      Math.abs(left + width / 2 - centre.x * k) < 0.05,
+      Math.abs(left + width / 2 - (25 - originX) * transform.factor * k) < 0.05,
       "the canvas centre is not world x = panX in the compiled picture's units",
     );
     assert.ok(
-      Math.abs(top + height / 2 + centre.y * k) < 0.05,
+      Math.abs(top + height / 2 + (10 - originY) * transform.factor * k) < 0.05,
       "the canvas centre is not world y = panY in the compiled picture's units",
     );
   } finally {

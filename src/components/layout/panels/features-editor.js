@@ -36,7 +36,7 @@
  * not add a form here.
  */
 
-import { drawingState } from "../../../features/workspace/editor-state.js";
+import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import {
     displayNameOf,
@@ -1027,6 +1027,7 @@ export function installFeaturesPane() {
     });
 
     globalThis.document.addEventListener("datum:selection-changed", () => {
+        editorState.selectedPlantNode = null;
         resetTransformForSelection();
         renderFeatures();
     });

@@ -126,6 +126,26 @@
     border-color: var(--datum-green-hover);
 }
 
+dialog.plant-options-dialog {
+    border: 1px solid var(--datum-border);
+    color: var(--datum-ink);
+    margin: auto;
+}
+
+dialog.plant-options-dialog::backdrop {
+    background: rgba(28, 36, 41, 0.42);
+}
+
+.plant-options-label {
+    justify-content: flex-start;
+}
+
+.plant-options-label input {
+    accent-color: var(--datum-green);
+    flex: 0 0 auto;
+    margin: 0;
+}
+
 /*
  * =========================================================
  * A DESTRUCTIVE DIALOG BUTTON

@@ -13,10 +13,12 @@ import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
+import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
 import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
+import { isControlBlock } from "../../../shared/model/plant.js";
 
 /*
  * THE POINT PRIMITIVES ARE RE-EXPORTED, NOT RE-DEFINED.
@@ -75,6 +77,31 @@ function distanceToPolygon(
         },
         Infinity
     );
+}
+
+function pointInPolygon(point, corners) {
+    if (!Array.isArray(corners) || corners.length < 3) {
+        return false;
+    }
+
+    let inside = false;
+
+    for (let index = 0, previous = corners.length - 1; index < corners.length; previous = index, index += 1) {
+        const currentCorner = corners[index];
+        const previousCorner = corners[previous];
+        const crossesRay =
+            (currentCorner.y > point.y) !== (previousCorner.y > point.y) &&
+            point.x <
+                ((previousCorner.x - currentCorner.x) * (point.y - currentCorner.y)) /
+                    (previousCorner.y - currentCorner.y) +
+                    currentCorner.x;
+
+        if (crossesRay) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
 }
 
 /*
@@ -748,18 +775,16 @@ export function objectAtPoint(
                  * easy to click as a rectangular one.
                  */
                 if (isRectangleLike(object)) {
+                    const corners = enggFeatureGeometry.definingPoints(
+                        geometry,
+                        object.type === "rigid-body"
+                            ? enggFeatureGeometry.rigidBodyShape(geometry)
+                            : "rectangle"
+                    );
+
                     return (
-                        distanceToPolygon(
-                            point,
-                            enggFeatureGeometry.definingPoints(
-                                geometry,
-                                object.type ===
-                                    "rigid-body"
-                                    ? enggFeatureGeometry
-                                          .rigidBodyShape(geometry)
-                                    : "rectangle"
-                            )
-                        ) <= tolerance
+                        (isControlBlock(object) && pointInPolygon(point, corners)) ||
+                        distanceToPolygon(point, corners) <= tolerance
                     );
                 }
 
@@ -1203,7 +1228,11 @@ export function objectAtPoint(
                     object.type ===
                     "polyline"
                 ) {
-                    const pathPoints = object.metadata?.thermodynamicsKind === "process-path" ? processPathPoints(geometry) : geometry.points;
+                    const pathPoints = isSignalLine(object)
+                        ? signalLinePath(object, drawingState.objects)
+                        : object.metadata?.thermodynamicsKind === "process-path"
+                            ? processPathPoints(geometry)
+                            : geometry.points;
                     return pathPoints.some(
                         (
                             current,

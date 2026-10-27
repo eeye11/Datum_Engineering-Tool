@@ -11,6 +11,9 @@ import { applyStyle, arcPathData, createSvgElement, paintColour } from "../svg-p
 import enggDrawingState from "../../model/drawing-state.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
+import { isPlant, plantNodeLabel, plantNodePosition, plantStyle, plantValue } from "../../model/plant.js";
+import { appendBlockLabelSvg } from "../../model/block-label.js";
+import { isSignalLine, signalLineSegments } from "../../model/signal-line.js";
 
 
     export function drawPoint({ svg, parentSvg, geometry, style, toScreen }) {
@@ -210,13 +213,227 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
             svg.appendChild(
                 rect
             );
+
+            return rect;
+        }
+
+    export function drawPlant(context) {
+            const { svg, parentSvg, geometry, toScreen } = context;
+            const style = plantStyle(context.style);
+            const position = geometry.position || { x: 0, y: 0 };
+            const width = Number(geometry.width) || 0;
+            const height = Number(geometry.height) || 0;
+            const rotation = Number(geometry.rotation) || 0;
+            const centre = {
+                x: position.x + width / 2,
+                y: position.y - height / 2
+            };
+            const radians = rotation * Math.PI / 180;
+            const rotate = (x, y) => ({
+                x: centre.x + x * Math.cos(radians) - y * Math.sin(radians),
+                y: centre.y + x * Math.sin(radians) + y * Math.cos(radians)
+            });
+            const colour = paintColour(style.stroke || enggTheme.defaultLineColour());
+
+            const rectangle = drawRectangleOutline({ ...context, style });
+
+            if (rectangle && style.fill && String(style.fill).toLowerCase() !== "none") {
+                rectangle.setAttribute("fill", style.fill);
+            }
+
+            const screenCentre = toScreen(centre);
+            if (isPlant(context.entity)) {
+                const plantLabel = createSvgElement("text", {
+                    x: screenCentre.x,
+                    y: screenCentre.y,
+                    fill: colour,
+                    "font-size": 15,
+                    "font-family": "sans-serif",
+                    "text-anchor": "middle",
+                    "dominant-baseline": "central"
+                });
+                plantLabel.textContent = "Plant";
+                svg.appendChild(plantLabel);
+            }
+
+            const userLabel = plantValue(context.entity, "plantLabel");
+
+            if (isPlant(context.entity) && userLabel.trim()) {
+                const labelPosition = toScreen({
+                    x: centre.x,
+                    y: centre.y - 6
+                });
+                const label = createSvgElement("text", {
+                    x: labelPosition.x,
+                    y: labelPosition.y,
+                    fill: colour,
+                    "font-size": 11,
+                    "font-family": "sans-serif",
+                    "text-anchor": "middle",
+                    "dominant-baseline": "central"
+                });
+                label.textContent = `[${userLabel}]`;
+                svg.appendChild(label);
+            }
+
+            const blockLabel = plantValue(context.entity, "blockLabel");
+
+            if (blockLabel.trim()) {
+                const label = createSvgElement("g", {
+                    "aria-label": blockLabel
+                });
+                appendBlockLabelSvg(label, blockLabel, svg.ownerDocument, {
+                    x: screenCentre.x,
+                    y: screenCentre.y,
+                    fill: colour,
+                    fontSize: 13
+                });
+                svg.appendChild(label);
+            }
+
+            const blockLowerLabel = plantValue(context.entity, "blockLowerLabel");
+
+            if (blockLowerLabel.trim()) {
+                const labelPosition = toScreen({
+                    x: centre.x,
+                    y: centre.y - height / 2 - 5
+                });
+                const label = createSvgElement("text", {
+                    x: labelPosition.x,
+                    y: labelPosition.y,
+                    fill: colour,
+                    "font-size": 11,
+                    "font-family": "sans-serif",
+                    "text-anchor": "middle",
+                    "dominant-baseline": "central"
+                });
+                label.textContent = blockLowerLabel;
+                svg.appendChild(label);
+            }
+
+            for (const side of ["inputs", "outputs"]) {
+                const count = plantValue(context.entity, side);
+                const isInput = side === "inputs";
+                const x = isInput ? -width / 2 : width / 2;
+                const outward = isInput ? -1 : 1;
+
+                for (let index = 0; index < count; index += 1) {
+                    const terminalPosition = plantNodePosition(context.entity, side, index);
+                    const terminalLocalY =
+                        -(terminalPosition.x - centre.x) * Math.sin(radians) +
+                        (terminalPosition.y - centre.y) * Math.cos(radians);
+                    const port = toScreen(rotate(x, terminalLocalY));
+                    const terminal = toScreen(terminalPosition);
+                    const connector = createSvgElement("line", {
+                        x1: port.x,
+                        y1: port.y,
+                        x2: terminal.x,
+                        y2: terminal.y
+                    });
+                    applyStyle(connector, style);
+                    svg.appendChild(connector);
+
+                    const node = createSvgElement("circle", {
+                        cx: terminal.x,
+                        cy: terminal.y,
+                        r: 3,
+                        fill: colour
+                    });
+                    applyStyle(node, style);
+                    node.setAttribute("fill", colour);
+                    svg.appendChild(node);
+
+                    const selectedSignalNode = context.state?.interaction?.signalLineStart;
+
+                    if (
+                        selectedSignalNode?.objectId === context.entity.id &&
+                        selectedSignalNode.side === side &&
+                        selectedSignalNode.index === index
+                    ) {
+                        const indicator = createSvgElement("circle", {
+                            cx: terminal.x,
+                            cy: terminal.y,
+                            r: 7,
+                            fill: "none",
+                            stroke: "#2563EB",
+                            "stroke-width": 2,
+                            "data-signal-line-node-selected": "true",
+                            "pointer-events": "none"
+                        });
+                        svg.appendChild(indicator);
+                    }
+
+                    if (plantValue(context.entity, "showNodeLabels")) {
+                        const labelPosition = toScreen(rotate(x + outward * 7, terminalLocalY));
+                        const screenOutward = outward * Math.cos(radians);
+                        const label = createSvgElement("text", {
+                            x: labelPosition.x,
+                            y: labelPosition.y + 8,
+                            fill: colour,
+                            "font-size": 12,
+                            "font-family": "sans-serif",
+                            "text-anchor": screenOutward < 0 ? "end" : "start",
+                            "dominant-baseline": "central"
+                        });
+                        label.textContent = plantNodeLabel(context.entity, side, index);
+                        svg.appendChild(label);
+                    }
+                }
+            }
+
+            parentSvg.appendChild(svg);
+
+            return true;
         }
 
 
         /*
          * POLYLINE
          */
-    export function drawPolyline({ svg, entity, geometry, style, toScreen }) {
+    export function drawPolyline({ svg, entity, state, geometry, style, toScreen }) {
+            if (isSignalLine(entity)) {
+                const signalStyle = {
+                    stroke: "#000000",
+                    lineWidth: 0.5,
+                    lineType: "solid",
+                    opacity: 1
+                };
+                const segments = signalLineSegments(entity, state?.objects || []);
+
+                for (const segment of segments) {
+                    const start = toScreen(segment.start);
+                    const end = toScreen(segment.end);
+                    const line = createSvgElement("line", {
+                        x1: start.x,
+                        y1: start.y,
+                        x2: end.x,
+                        y2: end.y
+                    });
+                    applyStyle(line, signalStyle);
+                    svg.appendChild(line);
+
+                    if (segment.hasArrow) {
+                        const dx = end.x - start.x;
+                        const dy = end.y - start.y;
+                        const length = Math.hypot(dx, dy) || 1;
+                        const ux = dx / length;
+                        const uy = dy / length;
+                        const baseX = end.x - ux * 9;
+                        const baseY = end.y - uy * 9;
+                        const perpendicularX = -uy * 4;
+                        const perpendicularY = ux * 4;
+                        const arrow = createSvgElement("path", {
+                            d: `M ${end.x} ${end.y} L ${baseX + perpendicularX} ${baseY + perpendicularY} L ${baseX - perpendicularX} ${baseY - perpendicularY} Z`,
+                            fill: "#000000",
+                            stroke: "none"
+                        });
+                        svg.appendChild(arrow);
+                    }
+                }
+
+                return;
+            }
+
             const points =
                 (
                     entity.metadata?.thermodynamicsKind === "process-path"

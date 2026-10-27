@@ -26,6 +26,9 @@ import { shouldExitToSelectOnClick } from "../../../components/layout/toolbar/to
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { placeBlock, placePlant } from "../controls/plant-tool.js";
+import { plantNodeAtPoint } from "../../../shared/model/plant.js";
+import { handleSignalLineClick } from "../controls/signal-line-tool.js";
 
 export function handleCanvasClick(
     event
@@ -120,6 +123,20 @@ export function handleCanvasClick(
             event
         );
 
+    if (drawingState.activeTool === "signal-line") {
+        handleSignalLineClick(resolution.effectiveConstructionPoint);
+        return;
+    }
+
+    if (drawingState.activeTool === "plant") {
+        placePlant(resolution.effectiveConstructionPoint);
+        return;
+    }
+
+    if (drawingState.activeTool === "block") {
+        placeBlock(resolution.effectiveConstructionPoint);
+        return;
+    }
     if (isProcessPlotTool(drawingState.activeTool)) {
         addProcessPoint(resolution.rawPointerPoint);
         return;
@@ -494,10 +511,15 @@ function selectFromCanvasClick(
             false
         );
 
-    const object =
-        objectAtPoint(
-            rawPoint
-        );
+    const tolerance = 6 / Math.max(drawingState.camera.zoom, 0.25);
+    const plantNode = [...drawingState.objects]
+        .reverse()
+        .map((candidate) => ({
+            object: candidate,
+            node: plantNodeAtPoint(candidate, rawPoint, tolerance)
+        }))
+        .find((candidate) => candidate.node);
+    const object = plantNode?.object || objectAtPoint(rawPoint);
 
     /*
      * Shift extends the selection: clicking an
@@ -545,6 +567,10 @@ function selectFromCanvasClick(
             drawingState
         );
     }
+
+    editorState.selectedPlantNode = plantNode
+        ? { objectId: plantNode.object.id, ...plantNode.node }
+        : null;
 
     renderProperties();
 

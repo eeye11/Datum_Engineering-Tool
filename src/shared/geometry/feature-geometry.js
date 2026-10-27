@@ -15,6 +15,8 @@
 import enggDrawingState from "../model/drawing-state.js";
 import enggBodyFrames from "./body-frames.js";
 import { isConnectionType, isSupportType } from "../model/feature-types.js";
+import { isControlBlock } from "../model/plant.js";
+import { isSignalLine } from "../model/signal-line.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import { coordinateSystemArms } from "./feature-handles.js";
 
@@ -484,6 +486,10 @@ function rotateObjectAbout(
     pivot,
     radians
 ) {
+    if (isSignalLine(object)) {
+        return;
+    }
+
     const g = object.geometry;
 
     if (
@@ -540,11 +546,16 @@ function rotateObjectAbout(
                 360) %
             360;
 
+        const nextDegrees =
+            currentDegrees +
+            (radians * 180) / Math.PI;
+
         setRectangleFromCentre(
             g,
             centre,
-            currentDegrees +
-                (radians * 180) / Math.PI
+            isControlBlock(object)
+                ? Math.round(nextDegrees / 90) * 90
+                : nextDegrees
         );
 
         return;
@@ -793,6 +804,10 @@ function translateObject(
     deltaY,
     lookup
 ) {
+    if (isSignalLine(object)) {
+        return;
+    }
+
     const g = object.geometry;
 
     if (!g) {

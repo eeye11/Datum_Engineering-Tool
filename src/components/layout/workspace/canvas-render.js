@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Drawing the editor's canvas.
  */
 
@@ -13,6 +13,7 @@ import { updateHistoryControls } from "../toolbar/tool-activation.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
 import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
+import { IDENTITY_EXPORT } from "../../../shared/rendering/latex/export-transform.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
 import { pictureViewBox } from "../../../shared/rendering/picture-viewport.js";
@@ -570,16 +571,51 @@ function canvasBounds() {
 }
 
 /*
- * Position the compiled source in the same model frame as selection and snaps.
- * Source coordinates are export-normalised; the backend seats their SVG origin
- * at zero. The viewport uses the source revision's captured export transform,
- * not the live geometry (which may already be mid-drag or awaiting a compile).
+ * WHERE THE WORLD APPEARS IN THE PICTURE.
+ *
+ * The source writers map model coordinates through the drawing's shared export
+ * transform, then TikZ maps millimetres to points. The canvas shows world
+ * points through the camera:
+ *
+ *     screen.x = width / 2 + (x - panX) * k
+ *     screen.y = height / 2 - (y - panY) * k
+ *
+ * so a world point (panX, panY) belongs at the canvas centre, and one drawing
+ * unit is `k` screen pixels.
+ *
+ * THE COMPILED SVG IS NOT IN DRAWING UNITS. After the renderer's SVG wrapper
+ * cancels the page offset, a model point lands at
+ *
+ *     svg.x = (x - originX) * factor * POINTS_PER_UNIT
+ *     svg.y = -(y - originY) * factor * POINTS_PER_UNIT
+ *
+ * The visible world rectangle uses the same transform, so the compiled drawing
+ * sits on the same world coordinates as the snapping, handles and interaction
+ * overlay.
+ *
+ * It is written as a viewBox rather than an SVG transform so the renderer's own
+ * coordinates are never rewritten.
  */
-function positionPictureLayer(layer, bounds, state, revision) {
+const POINTS_PER_UNIT = 72.27 / 25.4;
+
+function positionPictureLayer(layer, bounds, state, transform = IDENTITY_EXPORT) {
+    const zoom = Number(state?.camera?.zoom) || 1;
+    const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
+    const panX = Number(state?.camera?.panX) || 0;
+    const panY = Number(state?.camera?.panY) || 0;
+    const factor = Number(transform?.factor) || 1;
+    const originX = Number(transform?.sourceBounds?.minX) || 0;
+    const originY = Number(transform?.sourceBounds?.minY) || 0;
+
+    const viewWidth = Math.max(1, bounds.width / k);
+    const viewHeight = Math.max(1, bounds.height / k);
+
+    const left = (panX - viewWidth / 2 - originX) * factor * POINTS_PER_UNIT;
+    const top = -(panY + viewHeight / 2 - originY) * factor * POINTS_PER_UNIT;
+
     layer.setAttribute(
         "viewBox",
-        pictureViewBox(bounds, state.camera, enggDrawingState.BASE_PIXELS_PER_UNIT,
-            transformAtRevision.get(revision)).join(" ")
+        `${left} ${top} ${viewWidth * factor * POINTS_PER_UNIT} ${viewHeight * factor * POINTS_PER_UNIT}`
     );
     layer.setAttribute("x", "0");
     layer.setAttribute("y", "0");
@@ -664,8 +700,6 @@ function rememberModelAt(revision) {
         revision,
         new Map(objects.map((object) => [object.id, serialiseObject(object)]))
     );
-    // Capture the same transform the source writers used, before a drag changes
-    // the model. An older compiled picture must retain its original frame.
     transformAtRevision.set(revision, exportTransformFor(drawingState.objects || []));
 
     while (modelAtRevision.size > CACHE_LIMIT) {
@@ -673,6 +707,10 @@ function rememberModelAt(revision) {
         modelAtRevision.delete(oldest);
         transformAtRevision.delete(oldest);
     }
+}
+
+function pictureTransformAt(revision) {
+    return transformAtRevision.get(revision) || exportTransformFor(drawingState.objects || []);
 }
 
 /*
@@ -1454,7 +1492,7 @@ disappeared while I typed" failure.
 
     if (picture) {
         showPicture(picture);
-        positionPictureLayer(pictureLayer, bounds, drawingState, pictureRevision);
+        positionPictureLayer(pictureLayer, bounds, drawingState, pictureTransformAt(pictureRevision));
     }
 
     if (!cachedPicture(revision)) {
@@ -1469,13 +1507,20 @@ disappeared while I typed" failure.
         overlay.removeChild(overlay.firstChild);
     }
 
+    const liveObjectIds = objectsThePictureDoesNotShow(pictureRevision, revision);
+    const pendingSignalNodeId = drawingState.interaction.signalLineStart?.objectId;
+
+    if (pendingSignalNodeId) {
+        liveObjectIds.add(pendingSignalNodeId);
+    }
+
     enggDrawingRenderer.renderDrawing(
         drawingState,
         overlay,
         {
             overlayOnly: true,
             liveObjectIds: staleGeometry
-                ? new Set(drawingState.objects.map(object => object.id)) : liveIds
+                ? new Set(drawingState.objects.map(object => object.id)) : liveObjectIds
         }
     );
 

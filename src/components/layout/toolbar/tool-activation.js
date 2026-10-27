@@ -383,6 +383,10 @@ export function initialToolMessage(
         return "Specify dimension reference - D changes what is measured";
     }
 
+    if (toolId === "signal-line") {
+        return "Select an output node";
+    }
+
     /*
      * A Statics tool carries its own opening instruction, so
      * a direct tool like Point Force tells the student what to

@@ -260,6 +260,7 @@ function createDrawingState() {
             snapToolId: null,
             guideline: null,
             points: [],
+            signalLineStart: null,
             previewObjects: [],
             modifyAxisObjectIds: [],
             arcLastAngle: null,
@@ -2579,6 +2580,7 @@ function clearInteraction(state) {
     state.interaction.rawPointerPoint = null;
     state.interaction.snappedPoint = null;
     state.interaction.inferredPoint = null;
+    state.interaction.signalLineStart = null;
 
     /*
      * The snap context is part of the interaction, so it is

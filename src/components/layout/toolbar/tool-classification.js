@@ -207,6 +207,7 @@ export const MULTI_STEP_TOOLS = [
     "arc",
     "reference-arc",
     "polyline",
+    "signal-line",
     "truss",
     "distributed-load",
     "varying-distributed-load",

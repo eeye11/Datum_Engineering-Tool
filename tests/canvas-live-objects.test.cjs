@@ -52,6 +52,7 @@ let drawingState;
 let canvasRender;
 let exportTransformFor;
 let canvas;
+let objectAtPoint;
 
 before(async () => {
   await whenReady();
@@ -60,6 +61,7 @@ before(async () => {
   ({ drawingState } = require(locate("editor-state.js")));
   canvasRender = require(locate("canvas-render.js"));
   ({ exportTransformFor } = require(locate("source-synchronization.js")));
+  ({ objectAtPoint } = require(locate("hit-testing.js")));
   canvas = document.querySelector(".drawing-canvas");
 
   await wait(300);
@@ -131,6 +133,141 @@ test("an object being moved is drawn where it is, not where the picture last saw
     "old compiled ink must not appear underneath the moved feature");
   assert.equal(canvas.querySelector(":scope > svg.drawing-source-layer").getAttribute("viewBox"), compiledViewBox,
     "moving the model must not reframe an older compiled picture");
+});
+
+test("a plant is drawn immediately and can be selected from its filled interior", async () => {
+  const snapshot = model.snapshotDrawing(drawingState);
+  const plant = model.addObject(drawingState, {
+    type: "rectangle",
+    name: "Plant",
+    geometry: {
+      position: { x: -30, y: 15 },
+      width: 60,
+      height: 30,
+      rotation: 0
+    },
+    style: {
+      stroke: "#000000",
+      lineWidth: 0.5,
+      fill: "#D9D9D9",
+      fillMode: "solid"
+    },
+    metadata: {
+      controlsKind: "plant",
+      inputs: 1,
+      outputs: 1,
+      showNodeLabels: true,
+      plantLabel: "Feed Unit"
+    }
+  });
+
+  model.commitDrawingChange(drawingState, snapshot);
+  canvasRender.renderCurrentDrawing();
+
+  const livePlant = canvas.querySelector(`.drawing-overlay [data-feature-id="${plant.id}"]`);
+
+  assert.ok(livePlant, "the plant's live overlay group is attached to the canvas");
+  assert.equal(livePlant.querySelector("rect")?.getAttribute("fill"), "#D9D9D9");
+  assert.equal(livePlant.querySelector("text")?.textContent, "Plant");
+  assert.ok([...livePlant.querySelectorAll("text")].some((text) => text.textContent === "[Feed Unit]"));
+  const plantRect = livePlant.querySelector("rect");
+  const inputLabel = [...livePlant.querySelectorAll("text")].find((text) => text.textContent === "Input 1");
+  const outputLabel = [...livePlant.querySelectorAll("text")].find((text) => text.textContent === "Output 1");
+  const inputNode = livePlant.querySelector("circle");
+  const outputNode = livePlant.querySelectorAll("circle")[1];
+
+  assert.ok(Number(inputLabel.getAttribute("y")) > Number(inputNode.getAttribute("cy")), "input label is below its node");
+  assert.equal(inputLabel.getAttribute("text-anchor"), "end", "input label stays outside the left edge");
+  assert.equal(inputLabel.getAttribute("font-size"), "12", "node label font is increased");
+  assert.ok(Number(inputLabel.getAttribute("x")) <= Number(plantRect.getAttribute("x")), "input label does not enter the plant box");
+  assert.ok(Number(outputLabel.getAttribute("y")) > Number(outputNode.getAttribute("cy")), "output label is below its node");
+  assert.equal(outputLabel.getAttribute("text-anchor"), "start", "output label stays outside the right edge");
+  assert.ok(Number(outputLabel.getAttribute("x")) >= Number(plantRect.getAttribute("x")) + Number(plantRect.getAttribute("width")), "output label does not enter the plant box");
+  assert.equal(objectAtPoint({ x: 0, y: 0 })?.id, plant.id, "clicking inside the fill selects the plant");
+
+  await answerEveryCompile();
+  canvasRender.renderCurrentDrawing();
+
+  model.selectObject(drawingState, plant.id);
+  require(locate("delete-command.js")).deleteSelectedObjects();
+  await answerEveryCompile();
+
+  assert.ok(!drawingState.objects.some((object) => object.id === plant.id), "deleting removes the plant from the model");
+  assert.ok(!canvas.querySelector('.drawing-source-layer path[fill="#D9D9D9"]'), "the compiled plant disappears after deletion");
+});
+
+test("the Signal Line tool connects an output node to an input node and marks the chosen node", async () => {
+  const snapshot = model.snapshotDrawing(drawingState);
+  const source = model.addObject(drawingState, {
+    type: "rectangle",
+    name: "Plant",
+    geometry: { position: { x: 0, y: 30 }, width: 60, height: 30, rotation: 0 },
+    style: { stroke: "#000000", fill: "#D9D9D9", fillMode: "solid" },
+    metadata: { controlsKind: "plant", inputs: 1, outputs: 1 },
+  });
+  const target = model.addObject(drawingState, {
+    type: "rectangle",
+    name: "Block",
+    geometry: { position: { x: 120, y: 30 }, width: 30, height: 60, rotation: 0 },
+    style: { stroke: "#000000", fill: "#D9D9D9", fillMode: "solid" },
+    metadata: { controlsKind: "block", inputs: 1, outputs: 1 },
+  });
+  model.commitDrawingChange(drawingState, snapshot);
+
+  const plantModel = require(locate("plant.js"));
+  const { handleSignalLineClick } = require(locate("signal-line-tool.js"));
+  const output = plantModel.plantNodePosition(source, "outputs", 0);
+  const input = plantModel.plantNodePosition(target, "inputs", 0);
+
+  assert.equal(handleSignalLineClick(output), true);
+  assert.equal(drawingState.interaction.signalLineStart.objectId, source.id);
+  assert.equal(drawingState.interaction.signalLineStart.side, "outputs");
+
+  const selectedNode = canvas.querySelector(
+    `.drawing-overlay [data-feature-id="${source.id}"] [data-signal-line-node-selected="true"]`
+  );
+  assert.ok(selectedNode, "the selected output node is highlighted while awaiting the input");
+
+  assert.equal(handleSignalLineClick(input), true);
+
+  const signalLine = drawingState.objects.find((object) => object.metadata?.controlsKind === "signal-line");
+  assert.ok(signalLine, "the connected line is stored as one editable object");
+  assert.deepEqual(signalLine.metadata.from, { objectId: source.id, side: "outputs", index: 0 });
+  assert.deepEqual(signalLine.metadata.to, { objectId: target.id, side: "inputs", index: 0 });
+  assert.deepEqual(signalLine.geometry.points[0], output);
+  assert.deepEqual(signalLine.geometry.points.at(-1), input);
+  assert.ok(
+    signalLine.geometry.points.slice(1).every((point, index) =>
+      point.x === signalLine.geometry.points[index].x || point.y === signalLine.geometry.points[index].y
+    ),
+    "the routed connection has only Cartesian segments",
+  );
+
+  canvasRender.renderCurrentDrawing();
+  const liveLine = canvas.querySelector(`.drawing-overlay [data-feature-id="${signalLine.id}"]`);
+  assert.ok(liveLine?.querySelector("line"), "the live line is visible immediately");
+  assert.equal(liveLine.querySelector("line").getAttribute("stroke"), "#000000");
+  assert.ok(liveLine.querySelector("path"), "the live line has an arrowhead");
+
+  const signalLineCount = drawingState.objects.filter(
+    (object) => object.metadata?.controlsKind === "signal-line"
+  ).length;
+  assert.equal(handleSignalLineClick(output), true, "an output node may start another connection");
+  assert.equal(handleSignalLineClick(input), false, "an input node already in use rejects another connection");
+  assert.equal(
+    drawingState.objects.filter((object) => object.metadata?.controlsKind === "signal-line").length,
+    signalLineCount,
+    "rejecting an occupied input does not add a signal line",
+  );
+  drawingState.interaction.signalLineStart = null;
+
+  await answerEveryCompile();
+  const cleanupSnapshot = model.snapshotDrawing(drawingState);
+  for (const object of [signalLine, source, target]) {
+    model.removeObject(drawingState, object.id);
+  }
+  model.commitDrawingChange(drawingState, cleanupSnapshot);
+  await answerEveryCompile();
 });
 
 /*

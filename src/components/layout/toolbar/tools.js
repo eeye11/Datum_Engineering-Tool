@@ -64,6 +64,7 @@ export const toolIcons = {
 	"Fit Whole Page": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><path ${iconStroke} d="M5 12l3-4 3 3 4-4"/>`),
 
 	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
+	Plant: drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="8"/><path ${iconStroke} d="M2 8h3m10 4h3M2 8l1.5-1.5M2 8l1.5 1.5m14 2L16 8.5m1.5 1.5L16 11.5"/>`),
 	/*
 	 * DIMENSION is the one dimension tool.
 	 *
@@ -353,11 +354,10 @@ export const toolIcons = {
 	Fastener: drawingIcon(`<path ${iconStroke} d="M6 4h8M6 7h8M8 7v9M12 7v9M5 16h10"/>`),
 	"Section View": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM4 8h12M8 4v12"/>`),
 	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
-	Input: drawingIcon(`<path ${iconStroke} d="M3 10h10M10 6l4 4-4 4"/>`),
-	Output: drawingIcon(`<path ${iconStroke} d="M17 10H7M10 6l-4 4 4 4"/>`),
 	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
 	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
 	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
+	"Signal Line": drawingIcon(`<path ${iconStroke} d="M4 10h12"/><circle ${iconStroke} cx="3" cy="10" r="1"/><circle ${iconStroke} cx="17" cy="10" r="1"/>`),
 	Point: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
 	Function: drawingIcon(`<path ${iconStroke} d="M4 14c2-8 4 4 6-3s4-5 6-5"/>`),
 	Vector: drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
@@ -790,6 +790,6 @@ export const engineeringTools = {
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
+	CONTROLS: ["Plant", "Block", "Signal Line"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

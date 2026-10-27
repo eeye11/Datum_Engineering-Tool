@@ -11,13 +11,14 @@ import { drawVectorOrSymbol, drawGenericConnection } from "./entities/draw-force
 import { drawMoment, drawUniformLoad, drawVaryingLoad } from "./entities/draw-loads.js";
 import { drawDimension, drawAnnotate, drawAnnotation } from "./entities/draw-annotations.js";
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
-import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
+import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPlant, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import { isControlBlock } from "../model/plant.js";
 
 
     /*
@@ -69,6 +70,7 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.metadata?.thermodynamicsKind === "process-path", draw: drawProcessOverlay },
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
+        { matches: isControlBlock, draw: drawPlant },
         { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
