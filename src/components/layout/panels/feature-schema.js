@@ -1261,7 +1261,15 @@ export const GROUPS = [
 
 	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
 	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
-	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true }
+	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true },
+
+    { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
+    { id: "boundary-dimensions", heading: "Element Dimensions", fields: ["boundary.dimensionWidth", "boundary.dimensionHeight"] },
+    { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
+    ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
+    { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
+    { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
+    { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
 	/*
@@ -1417,21 +1425,14 @@ export const GROUPS = [
     	        return SCHEMATIC_GROUPS.profile;
     	    }
 
-    	    if (enggSectionPlane.isSectionPlaneType(object.type)) {
-    	        return SCHEMATIC_GROUPS.section;
-    	    }
+    	        	    	    if (enggSectionPlane.isSectionPlaneType(object.type)) {
+    	        	    	        return SCHEMATIC_GROUPS.section;
+    	        	    	    }
 
-    	    	    return null;
-    	    	}
+    	        	    	    return null;
+    	        	    	}
 
-    	        { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
-    	        { id: "boundary-dimensions", heading: "Element Dimensions", fields: ["boundary.dimensionWidth", "boundary.dimensionHeight"] },
-    	        { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
-    	        ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
-    	        { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
-    	        { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
-    	        { id: "transform", heading: "Transform", fields: [], transform: true }
-    	    ];
+    	        	    /*
 
 /*
  * ============================================================
