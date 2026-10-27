@@ -785,6 +785,6 @@ export const engineeringTools = {
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Sensor", "Controller", "Signal Arrow", "Signal Line"],
+	CONTROLS: ["Plant", "Block", "Signal Line"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };
