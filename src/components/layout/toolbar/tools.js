@@ -584,6 +584,35 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
+	"SOLID MECHANICS": [
+		{
+			id: "solid-mechanics-selection",
+			label: "Selection",
+			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+		},
+		{
+			id: "solid-mechanics-create",
+			label: "Create",
+			tools: [
+				{ id: "beam", label: "Beam" },
+				{ id: "support", label: "Supports", submenu: true },
+				{ id: "load", label: "Loads", submenu: true }
+			]
+		},
+		{
+			id: "solid-mechanics-analysis",
+			label: "Analysis",
+			tools: [
+				{ id: "stress-element", label: "Stress Element" },
+				{ id: "boundary-stress", label: "Boundary Stress" }
+			]
+		},
+		{
+			id: "solid-mechanics-reference",
+			label: "Reference",
+			tools: [{ id: "coordinate-system", label: "Coordinate System" }]
+		}
+	],
 
 	/*
 	 * ========================================================
@@ -785,7 +814,7 @@ export const engineeringTools = {
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Stress", "Strain", "Coordinate System"],
+	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
 	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
