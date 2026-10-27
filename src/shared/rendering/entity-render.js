@@ -14,11 +14,14 @@ import { drawMemberOrDiagram } from "./entities/draw-members.js";
 import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPlant, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
-import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
+import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { isControlBlock } from "../model/plant.js";
+import { dieselCycleFeatures } from "../../features/workspace/model/thermodynamics/diesel-cycle.js";
+import { ottoCycleFeatures } from "../../features/workspace/model/thermodynamics/otto-cycle.js";
+import { carnotCycleFeatures } from "../../features/workspace/model/thermodynamics/carnot-cycle.js";
 
 
     /*
@@ -71,7 +74,11 @@ import { isControlBlock } from "../model/plant.js";
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
         { matches: isControlBlock, draw: drawPlant },
-        { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
+        { matches: entity => entity.metadata?.thermodynamicsKind === "tank", draw: drawTank },
+        { matches: entity => entity.metadata?.thermodynamicsKind === "rankine-cycle", draw: drawRankineCycle },
+        { matches: entity => entity.metadata?.thermodynamicsKind === "nozzle-diffuser", draw: drawNozzleDiffuser },
+        { matches: entity => entity.metadata?.thermodynamicsKind === "turbine-compressor", draw: drawTurbineCompressor },
+        { matches: entity => (entity.type === "rectangle" && !["tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(entity.metadata?.thermodynamicsKind) && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },
@@ -127,6 +134,11 @@ import { isControlBlock } from "../model/plant.js";
         state,
         bounds
     ) {
+        if (["diesel-cycle", "otto-cycle", "carnot-cycle"].includes(entity.metadata?.thermodynamicsKind)) {
+            const features = entity.metadata.thermodynamicsKind === "carnot-cycle" ? carnotCycleFeatures(entity.geometry) : entity.metadata.thermodynamicsKind === "otto-cycle" ? ottoCycleFeatures(entity.geometry) : dieselCycleFeatures(entity.geometry);
+            features.forEach(feature => appendEntity(svg, feature, state, bounds));
+            return;
+        }
         const parentSvg = svg;
         svg = createSvgElement("g");
         svg.classList.add("drawing-feature");

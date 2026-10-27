@@ -3,9 +3,9 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
-import { drawingState, editorState } from "../editor-state.js";
+import { drawingState } from "../editor-state.js";
 import { activateTool, initialToolMessage } from "../../../components/layout/toolbar/tool-activation.js";
-import { closeCoordinateSystemMenu, openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
+import { openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
@@ -695,159 +695,8 @@ export function staticsConnectionSection(
 }
 
 export function openCoordinateSystemMenu(button) {
-    if (!button) {
-        return;
-    }
-
-    if (
-        editorState.coordinateSystemMenu &&
-        editorState.coordinateSystemMenuAnchor ===
-            button
-    ) {
-        closeCoordinateSystemMenu();
-        return;
-    }
-
-    closeCoordinateSystemMenu();
-
-    const menu =
-        document.createElement("div");
-
-    menu.className =
-        "drawing-coordinate-submenu";
-
-    menu.setAttribute(
-        "role",
-        "menu"
-    );
-
-    menu.innerHTML = `
-        <button
-            type="button"
-            class="drawing-coordinate-submenu-item"
-            role="menuitem"
-            data-coordinate-mode="2d"
-        >
-            2D Coordinate System
-        </button>
-
-        <button
-            type="button"
-            class="drawing-coordinate-submenu-item"
-            role="menuitem"
-            data-coordinate-mode="3d"
-        >
-            3D Coordinate System
-        </button>
-    `;
-
-    document.body.appendChild(menu);
-
-    const buttonRect =
-        button.getBoundingClientRect();
-
-    const menuRect =
-        menu.getBoundingClientRect();
-
-    const gap = 4;
-    const margin = 8;
-
-    let left =
-        buttonRect.right +
-        gap;
-
-    let top =
-        buttonRect.top;
-
-    if (
-        left + menuRect.width >
-        window.innerWidth - margin
-    ) {
-        left =
-            Math.max(
-                margin,
-                buttonRect.left -
-                    menuRect.width -
-                    gap
-            );
-    }
-
-    if (
-        top + menuRect.height >
-        window.innerHeight - margin
-    ) {
-        top =
-            Math.max(
-                margin,
-                window.innerHeight -
-                    menuRect.height -
-                    margin
-            );
-    }
-
-    menu.style.position =
-        "fixed";
-
-    menu.style.left =
-        `${left}px`;
-
-    menu.style.top =
-        `${top}px`;
-
-    menu.style.zIndex =
-        "9999";
-
-    menu.querySelectorAll(
-        ".drawing-coordinate-submenu-item"
-    ).forEach(
-        option => {
-            option.addEventListener(
-                "click",
-                event => {
-                    event.preventDefault();
-                    event.stopPropagation();
-
-                    const mode =
-                        option.dataset
-                            .coordinateMode;
-
-                    closeCoordinateSystemMenu();
-
-                    if (mode === "2d") {
-                        /*
-                         * Arm the real 2D coordinate-system tool. This is
-                         * the same shape `activate2DCoordinateSystemTool`
-                         * uses, written here rather than imported because
-                         * tool-activation imports this module and the
-                         * import would be circular.
-                         */
-                        enggDrawingState.setActiveTool(
-                            drawingState,
-                            "coordinate-system-2d"
-                        );
-
-                        drawingState.interaction.phase = "idle";
-
-                        setToolMessage("Specify origin");
-
-                        renderCurrentDrawing();
-                    } else {
-                        setToolMessage(
-                            "3D Coordinate System is not available on the 2D drawing canvas"
-                        );
-                    }
-                }
-            );
-        }
-    );
-
-    editorState.coordinateSystemMenu = menu;
-    editorState.coordinateSystemMenuAnchor = button;
-
-    button.setAttribute(
-        "aria-expanded",
-        "true"
-    );
+    // Use the same inline toolbar toggle as a direct click on the parent.
+    button?.click();
 }
 
 /*

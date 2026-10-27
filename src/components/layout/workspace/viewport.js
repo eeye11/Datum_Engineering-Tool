@@ -12,6 +12,7 @@ import enggAnnotate from "../../../features/workspace/model/annotations/annotate
 import { resistorPoints } from "../../../features/workspace/model/thermodynamics/resistor.js";
 import { stressArrowPaths, stressAngleMark } from "../../../shared/geometry/stress-element.js";
 import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
+import { fanPaths } from "../../../features/workspace/model/thermodynamics/fan.js";
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
@@ -541,6 +542,9 @@ function annotateBoundsPoints(object) {
     if (object?.metadata?.stressElement && object.visible !== false) {
         const mark = stressAngleMark(object.geometry);
         return stressArrowPaths(object.geometry).flat().concat(mark ? [...mark.reference, ...mark.face, ...mark.perpendicular, ...mark.arc, mark.labelPoint, ...mark.axes.map(axis => axis.point)] : []);
+    }
+    if (object?.metadata?.thermodynamicsKind === "mechanical-work" && object.visible !== false) {
+        return fanPaths(object.geometry).flat();
     }
     if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
         return resistorPoints(object.geometry);

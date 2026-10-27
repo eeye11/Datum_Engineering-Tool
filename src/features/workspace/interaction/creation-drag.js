@@ -72,7 +72,7 @@
  * mark exactly once.
  */
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
-import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool } from "../annotate/annotate-creation.js";
+import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
@@ -181,6 +181,16 @@ const DRAG_GEOMETRY_TOOLS = [
     "stress-element",
     "boundary-stress",
     "control-volume",
+    "tank",
+    "turbine-compressor",
+    "nozzle-diffuser",
+    "rankine-cycle",
+    "reheat-rankine-cycle",
+    "vapor-compression-cycle",
+    "brayton-cycle",
+    "diesel-cycle",
+    "otto-cycle",
+    "carnot-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",
@@ -550,6 +560,16 @@ export function beginCreationDrag(
     const idle =
         phase === "idle";
 
+    // Written notes are editing targets, including a cycle's temperature
+    // labels. An armed geometry tool must not start a shape through the text.
+    if (idle && ["line", "rectangle", "circle"].includes(drawingState.activeTool)) {
+        const pointed = objectAtPoint(canvasPointFromEvent(event, false));
+        if (isEditableAnnotate(pointed)) {
+            activateTool("select");
+            return false;
+        }
+    }
+
     const continues =
         DRAG_CONTINUE_PHASES.includes(phase);
 
@@ -653,6 +673,13 @@ export function beginCreationDrag(
             resolution.rawPointerPoint;
 
         const { start, previous } = resolveRouteStart(pressPoint);
+
+        // Publish the anchor immediately, including for a fast gesture whose
+        // release arrives before the first pointermove is delivered.
+        enggDrawingState.setInteraction(drawingState, {
+            routeSegmentStart: start,
+            startPoint: start
+        });
 
         editorState.creationDrag = {
             pointerId: event.pointerId,
@@ -1539,6 +1566,15 @@ export function finishCreationDrag(
         return false;
     }
 
+    // A pipe's release is authoritative: coalesced or missing move events
+    // must not turn a real drag into a click that silently draws nothing.
+    if (session.pipeDuct && !session.moved) {
+        session.moved = Math.hypot(
+            event.clientX - session.startScreen.x,
+            event.clientY - session.startScreen.y
+        ) >= DRAG_THRESHOLD_PX;
+    }
+
     /*
      * A CLICK WITH A DRAG TOOL LEAVES THE TOOL.
      *
@@ -1683,10 +1719,8 @@ export function finishCreationDrag(
      * continues a previous run through a genuine turn - at ANY angle - and the
      * whole thing is one undoable operation (see pipe-duct-tool.js).
      *
-     * The tool STAYS ARMED and keeps the run's far endpoint as the next leg's
-     * start, so dragging on from there carries the path - which is the
-     * continuous drawing the task asks for, expressed as an operation sequence
-     * rather than a container.
+     * A completed pipe returns to Select so the next gesture can select or
+     * move it. A failed, zero-length run leaves the drawing tool armed.
      */
     if (session.pipeDuct) {
         const resolution = resolvePointerEvent(event);
@@ -1714,6 +1748,8 @@ export function finishCreationDrag(
                 snapGeometry: []
             });
             renderCurrentDrawing();
+        } else {
+            activateTool("select");
         }
 
         return true;

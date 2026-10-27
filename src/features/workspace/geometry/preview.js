@@ -11,7 +11,7 @@ import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { isProcessPlotTool } from "../thermodynamics/process-path.js";
+import { isProcessPlotTool, processPathInstruction } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
@@ -591,8 +591,7 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        ["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
-        drawingState.activeTool === "control-volume" ||
+        ["rectangle", "stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -626,8 +625,20 @@ export function updatePreview(
             interaction.preview.metadata = { boundaryStress: true };
             Object.assign(interaction.preview.geometry, { top_normalStart: 1, top_normalEnd: 1 });
         }
-        if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
+            if (drawingState.activeTool === "reheat-rankine-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.reheat = true;
+            }
+            if (drawingState.activeTool === "vapor-compression-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.refrigeration = true;
+            }
+            if (drawingState.activeTool === "brayton-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.brayton = true;
+            }
         }
 
         setToolMessage(
@@ -670,7 +681,9 @@ export function updatePreview(
         }
 
         setToolMessage(
-            "Click next point or double-click to finish"
+            isProcessPlotTool(drawingState.activeTool)
+                ? processPathInstruction()
+                : "Click next point or double-click to finish"
         );
     } else if (
         drawingState.activeTool === "freeform-polygon"

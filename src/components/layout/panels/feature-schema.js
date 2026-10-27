@@ -1063,6 +1063,21 @@ const FIELDS = {
         label: "Show Name"
     },
 
+    workDirection: {
+        kind: "choice", label: "Direction",
+        applies: object => object.metadata?.thermodynamicsKind === "work-arrow",
+        read: object => object.metadata.workDirection || "in",
+        options: [{ value: "in", label: "Work In" }, { value: "out", label: "Work Out" }],
+        write: (object, value) => {
+            if (!["in", "out"].includes(value)) return false;
+            if ((object.metadata.workDirection || "in") !== value) {
+                [object.geometry.start, object.geometry.end] = [object.geometry.end, object.geometry.start];
+                if (["W in", "W out"].includes(object.text)) object.text = `W ${value}`;
+            }
+            object.metadata = { ...object.metadata, workDirection: value, mathSubscript: value };
+            return true;
+        }
+    },
     text: {
         kind: "text",
         applies: (object) => object.type === "annotate",
@@ -1157,6 +1172,7 @@ function normaliseArrow(value) {
  */
 export const GROUPS = [
     { id: "plant", heading: "Plant", fields: ["plantInputs", "plantOutputs", "plantShowNodeLabels", "plantLabel", "blockLabel", "blockLowerLabel", "plantNodeLabel"] },
+    { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
@@ -3837,7 +3853,38 @@ function processBendField(key) {
 }
 
 function definitionOf(key) {
-    return FIELDS[key] || dynamicField(key) || processBendField(key);
+    return FIELDS[key] || rankineDataField(key) || dynamicField(key) || processBendField(key);
+}
+
+const RANKINE_DATA_LABELS = {
+    state1: "State 1", state2: "State 2", state3: "State 3", state4: "State 4",
+    state5: "State 5", state6: "State 6", reheater: "Reheater", highTurbine: "HP Turbine", lowTurbine: "LP Turbine",
+    compressor: "Compressor", expansionValve: "Expansion Valve", evaporator: "Evaporator",
+    heatAddition: "Heat Addition", heatRejection: "Heat Rejection",
+    massFlow: "Mass Flow Rate", boiler: "Boiler", turbine: "Turbine", condenser: "Condenser", pump: "Pump"
+};
+
+function rankineDataField(key) {
+    if (typeof key !== "string" || !key.startsWith("rankineData.")) return null;
+    const name = key.slice("rankineData.".length);
+    if (!RANKINE_DATA_LABELS[name]) return null;
+    return {
+        kind: "text", label: RANKINE_DATA_LABELS[name],
+        placeholder: name.startsWith("state") ? "P = 100 kPa; T = 20 C" : "Value and units",
+        applies: object => object.metadata?.thermodynamicsKind === "rankine-cycle" &&
+            (!["state5", "state6", "reheater", "highTurbine", "lowTurbine"].includes(name) || object.geometry?.reheat === true) &&
+            (name !== "compressor" || object.geometry?.refrigeration === true || object.geometry?.brayton === true) &&
+            (!["expansionValve", "evaporator"].includes(name) || object.geometry?.refrigeration === true) &&
+            (!["heatAddition", "heatRejection"].includes(name) || object.geometry?.brayton === true) &&
+            (!["boiler", "pump"].includes(name) || (!object.geometry?.refrigeration && !object.geometry?.brayton)) &&
+            (name !== "condenser" || !object.geometry?.brayton) &&
+            (name !== "turbine" || !object.geometry?.refrigeration),
+        read: object => object.metadata?.problemData?.[name] || "",
+        write: (object, value) => {
+            object.metadata = { ...object.metadata, problemData: { ...object.metadata?.problemData, [name]: String(value ?? "").trim() } };
+            return true;
+        }
+    };
 }
 
 export function fieldDefinition(key) {

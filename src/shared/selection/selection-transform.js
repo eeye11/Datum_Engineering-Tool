@@ -2,6 +2,8 @@ import geometry from "../geometry/feature-geometry.js";
 import { boundaryStressDrawing } from "../geometry/boundary-stress.js";
 import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
+import { pipeDuctPaths } from "../../features/workspace/model/fluids/pipe-duct.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
@@ -203,7 +205,9 @@ export function selectionBounds(objects, selectedIds) {
             return geometry.rectangleCorners(g).concat(drawing.paths.flatMap(path => path.points), drawing.labels.map(label => label.point));
         }
         if (object.metadata?.stressElement) return geometry.rectangleCorners(g).concat(stressArrowPaths(g).flat());
+        if (object.type === "pipe-duct") return pipeDuctPaths(g.start, g.end, object.engineering || {}).flat();
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
+        if (object.metadata?.thermodynamicsKind === "mechanical-work") return fanPaths(g).flat();
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];

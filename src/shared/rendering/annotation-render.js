@@ -7,7 +7,10 @@
 import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
+import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
+import { workArrowPoints } from "../../features/workspace/model/thermodynamics/work-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 
@@ -257,6 +260,17 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         const kind = entity.annotateKind;
         const geometry = entity.geometry || {};
 
+        if (entity.metadata?.thermodynamicsKind === "mechanical-work") {
+            for (const points of fanPaths(geometry)) {
+                svg.appendChild(createSvgElement("polyline", {
+                    points: points.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                    fill: "none", stroke: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                    "stroke-width": 1.5, "stroke-linejoin": "round"
+                }));
+            }
+            return;
+        }
+
         if (entity.metadata?.thermodynamicsKind === "electric-work") {
             svg.appendChild(createSvgElement("polyline", {
                 points: resistorPoints(geometry).map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
@@ -294,7 +308,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 toScreen(point)
             );
 
-        if (pathScreen.length >= 2) {
+        const blockArrow = entity.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+        if (blockArrow.length) {
+            svg.appendChild(createSvgElement("polygon", {
+                points: blockArrow.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                fill: stroke, stroke, "stroke-width": 1, "stroke-linejoin": "miter"
+            }));
+        } else if (pathScreen.length >= 2) {
             svg.appendChild(
                 createSvgElement("polyline", {
                     points: pathScreen
@@ -400,7 +420,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     : pathScreen[1] || end;
 
             if (
-                (kind === "arrow" || kind === "leader" || kind === "callout") &&
+                !blockArrow.length && (kind === "arrow" || kind === "leader" || kind === "callout") &&
                 style.arrowhead !== "none"
             ) {
                 appendAnnotateArrowhead(
@@ -488,7 +508,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     textStroke,
                     fontSize,
                     lineHeight,
-                    entity.style?.align
+                    entity.style?.align,
+                    entity.metadata?.mathSubscript,
+                    entity.metadata?.mathSymbol,
+                    entity.metadata?.mathSuffix
                 );
             }
         }
@@ -513,7 +536,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         stroke,
         fontSize,
         lineHeight,
-        align
+        align,
+        mathSubscript = null,
+        mathSymbol = null,
+        mathSuffix = ""
     ) {
         const anchorName =
             align === "center"
@@ -538,6 +564,19 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         lines.forEach((line, index) => {
             if (index === 0) {
+                const math = lines.length === 1 && annotationSubscript(line, { mathSubscript, mathSymbol, mathSuffix });
+                if (math) {
+                    textNode.textContent = math.base;
+                    const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                    subscript.textContent = math.subscript;
+                    textNode.appendChild(subscript);
+                    if (math.suffix) {
+                        const suffix = createSvgElement("tspan", {});
+                        suffix.textContent = math.suffix;
+                        textNode.appendChild(suffix);
+                    }
+                    return;
+                }
                 textNode.textContent = line;
                 return;
             }

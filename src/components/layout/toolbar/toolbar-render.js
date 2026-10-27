@@ -38,7 +38,10 @@ const expandedToolbarSections = {
      * subsection and what makes the click handler toggle it.
      */
     "fluids-flow-paths": false,
-    "fluids-flow-indicators": false
+    "fluids-flow-indicators": false,
+    "steady-state-devices": false,
+    "thermodynamic-cycles": false
+};
 };
 
 function renderToolGroup(group) {
@@ -82,11 +85,7 @@ function renderToolbarTool(tool) {
      * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
      *
      * It is not a menu, so `aria-haspopup` goes; and it gets `aria-expanded`
-     * and `aria-controls` whatever the button renderer happened to emit. A
-     * Fluids group deliberately emits neither (it must not promise a popup),
-     * so the attributes are SET here rather than string-replaced - which is
-     * what keeps a group that emits no `aria-expanded` at all from silently
-     * losing its accessible expanded state.
+     * and `aria-controls` whatever the button renderer happened to emit.
      */
     const button = renderToolButton({ ...tool, submenu: true })
         .replace(' aria-haspopup="menu"', '')
@@ -97,8 +96,25 @@ function renderToolbarTool(tool) {
             { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
             { id: "coordinate-system-3d", label: "3D Coordinate System", iconLabel: "Coordinate System" }
         ].map(renderToolButton).join("")
+        : tool.id === "thermodynamic-cycles"
+        ? [
+            { id: "rankine-cycle", label: "Rankine Cycle" },
+            { id: "reheat-rankine-cycle", label: "Ideal Reheat Rankine Cycle" },
+            { id: "brayton-cycle", label: "Brayton Cycle" },
+            { id: "otto-cycle", label: "Otto Cycle" },
+            { id: "diesel-cycle", label: "Diesel Cycle" },
+            { id: "carnot-cycle", label: "Carnot Cycle" },
+            { id: "vapor-compression-cycle", label: "Ideal Vapor-Compression Refrigeration Cycle" }
+        ].map(cycle => renderToolButton({ ...cycle, disabled: !["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(cycle.id) }).replace(/<span class="drawing-tool-icon"[^>]*>[\s\S]*?<\/span>/, "")).join("")
+        : tool.id === "steady-state-devices"
+        ? [
+            { id: "turbine-compressor", label: "Turbine / Compressor" },
+            { id: "pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct" },
+            { id: "nozzle-diffuser", label: "Nozzle / Diffuser" }
+        ].map(renderToolButton).join("")
         : tool.id === "work"
         ? [
+            { id: "work-arrow", label: "Work Arrow", iconLabel: "Work" },
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }
         ].map(renderToolButton).join("")

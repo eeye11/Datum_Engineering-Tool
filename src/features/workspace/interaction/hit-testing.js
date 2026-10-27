@@ -15,6 +15,11 @@ import { resistorPoints } from "../model/thermodynamics/resistor.js";
 import { stressArrowPaths } from "../../../shared/geometry/stress-element.js";
 import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
 import { selectionBounds } from "../../../shared/selection/selection-transform.js";
+import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
+import { nozzleDiffuserPaths } from "../model/thermodynamics/nozzle-diffuser.js";
+import { rankineCycleDiagram } from "../model/thermodynamics/rankine-cycle.js";
+import { fanPaths } from "../model/thermodynamics/fan.js";
+import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
@@ -331,6 +336,10 @@ function annotateContainsPoint(object, point) {
     if (object.metadata?.thermodynamicsKind === "electric-work") {
         const points = resistorPoints(geometry);
         return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
+    if (object.metadata?.thermodynamicsKind === "mechanical-work") {
+        return fanPaths(geometry).some(points => points.some((end, index) =>
+            index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance));
     }
 
     /*
@@ -793,7 +802,8 @@ export function objectAtPoint(
                  * feature, and one thing to hit.
                  */
                 if (object.type === "pipe-duct") {
-                    return Boolean(
+                    return enggPipeDuct.pipeDuctPaths(geometry.start, geometry.end, object.engineering || {})
+                        .some(path => path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance)) || Boolean(
                         geometry.start &&
                             geometry.end &&
                             distanceToSegment(
@@ -1208,6 +1218,22 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.thermodynamicsKind === "tank") {
+                    return tankPaths(geometry).some(path => path.some((end, index) =>
+                        index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance));
+                }
+                if (object.metadata?.thermodynamicsKind === "nozzle-diffuser") {
+                    return nozzleDiffuserPaths(geometry).some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
+                }
+                if (object.metadata?.thermodynamicsKind === "rankine-cycle") {
+                    const diagram = rankineCycleDiagram(geometry, object.metadata?.problemData);
+                    return diagram.paths.some(path => path.points.some((end, index) => index > 0 && distanceToSegment(point, path.points[index - 1], end) <= tolerance)) ||
+                        diagram.labels.some(label => distance(point, label.point) <= tolerance * 3);
+                }
+                if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
+                    const points = turbineCompressorPoints(geometry);
+                    return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+                }
                 if (isPistonCylinder(object)) {
                     const level = pistonFraction(geometry);
                     const local = (x, y) => cylinderPoint(geometry, x, y);
@@ -2313,13 +2339,13 @@ export function objectPoints(
         ];
 
         enggPipeDuct
-            .boundaryLines(
+            .pipeDuctPaths(
                 geometry.start,
                 geometry.end,
                 object.engineering || {}
             )
-            .forEach((boundary) => {
-                points.push(boundary.start, boundary.end);
+            .forEach((path) => {
+                points.push(...path);
             });
 
         return points.filter(Boolean);

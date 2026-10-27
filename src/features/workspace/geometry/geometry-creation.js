@@ -14,6 +14,9 @@ import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { commitCreatedFeature } from "./creation-commit.js";
 import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
+import { dieselCycleFeatures } from "../model/thermodynamics/diesel-cycle.js";
+import { ottoCycleFeatures } from "../model/thermodynamics/otto-cycle.js";
+import { carnotCycleFeatures } from "../model/thermodynamics/carnot-cycle.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -1026,8 +1029,8 @@ export function beginOrCompleteGeometry(
                         "circle"
                         ? "Specify radius"
 
-                    : (["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
-                        drawingState.activeTool === "control-volume" ||
+                    : (drawingState.activeTool === "rectangle" ||
+                        ["stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -2012,8 +2015,7 @@ export function beginOrCompleteGeometry(
                 }
             );
     } else if (
-        ["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
-        drawingState.activeTool === "control-volume" ||
+        ["rectangle", "stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2040,9 +2042,19 @@ export function beginOrCompleteGeometry(
         const isControlVolume = drawingState.activeTool === "control-volume";
         const isStressElement = drawingState.activeTool === "stress-element";
         const isBoundaryStress = drawingState.activeTool === "boundary-stress";
+        const isTank = drawingState.activeTool === "tank";
+        const isDiesel = drawingState.activeTool === "diesel-cycle";
+        const isOtto = drawingState.activeTool === "otto-cycle";
+        const isCarnot = drawingState.activeTool === "carnot-cycle";
+        const isReheat = drawingState.activeTool === "reheat-rankine-cycle";
+        const isRefrigeration = drawingState.activeTool === "vapor-compression-cycle";
+        const isBrayton = drawingState.activeTool === "brayton-cycle";
+        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration || isBrayton || isDiesel || isOtto || isCarnot;
+        const isNozzle = drawingState.activeTool === "nozzle-diffuser" || isRankine;
+        const isTurbineCompressor = drawingState.activeTool === "turbine-compressor";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isBoundaryStress || isStressElement || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isBoundaryStress || isStressElement || isNozzle || isTurbineCompressor || isTank || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -2065,13 +2077,31 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isStressElement || isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
+                        ...(isStressElement || isBoundaryStress || isNozzle || isTurbineCompressor || isTank || isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
                         currentEngineeringMetadata()
                 }
             );
+        if (isTank) {
+            object.name = "Tank";
+            object.metadata = { thermodynamicsKind: "tank" };
+        }
+        if (isNozzle) {
+            object.name = isBrayton ? "Brayton Cycle" : isRefrigeration ? "Ideal Vapor-Compression Refrigeration Cycle" : isReheat ? "Ideal Reheat Rankine Cycle" : isRankine ? "Rankine Cycle" : "Nozzle / Diffuser";
+            object.metadata = { thermodynamicsKind: isRankine ? "rankine-cycle" : "nozzle-diffuser" };
+            if (isReheat) object.geometry.reheat = true;
+            if (isRefrigeration) object.geometry.refrigeration = true;
+            if (isBrayton) object.geometry.brayton = true;
+            if (isDiesel) object.metadata = { thermodynamicsKind: "diesel-cycle" };
+            if (isOtto) object.metadata = { thermodynamicsKind: "otto-cycle" };
+            if (isCarnot) object.metadata = { thermodynamicsKind: "carnot-cycle" };
+        }
+        if (isTurbineCompressor) {
+            object.name = "Turbine / Compressor";
+            object.metadata = { ...object.metadata, thermodynamicsKind: "turbine-compressor" };
+        }
         if (isPiston && drawingState.activeTool === "piston-cylinder-stoppers") {
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
@@ -2256,6 +2286,29 @@ export function beginOrCompleteGeometry(
             drawingState
         );
 
+        if (["diesel-cycle", "otto-cycle", "carnot-cycle"].includes(object.metadata?.thermodynamicsKind)) {
+            const previous = enggDrawingState.snapshotDrawing(drawingState);
+            const isOtto = object.metadata.thermodynamicsKind === "otto-cycle";
+            const isCarnot = object.metadata.thermodynamicsKind === "carnot-cycle";
+            const seeds = isCarnot ? carnotCycleFeatures(object.geometry) : isOtto ? ottoCycleFeatures(object.geometry) : dieselCycleFeatures(object.geometry);
+            const objects = seeds.map(seed => enggDrawingState.createGeometryObject(seed.type, seed.geometry, {
+                name: seed.name || seed.text || "Cycle Annotation", style: seed.style, metadata: seed.metadata,
+                content: seed.type === "annotate" ? { annotateKind: seed.annotateKind, text: seed.text } : undefined
+            }));
+            const ids = new Map(seeds.map((seed, index) => [seed.id, objects[index].id]));
+            objects.forEach((item, index) => {
+                if (seeds[index].parentId) item.parentId = ids.get(seeds[index].parentId);
+                enggDrawingState.addObject(drawingState, item);
+            });
+            enggDrawingState.selectObjects(drawingState, objects.map(item => item.id));
+            enggDrawingState.commitDrawingChange(drawingState, previous);
+            activateTool("select");
+            setToolMessage(isCarnot ? "Carnot diagram created - select the process path to edit its states or bends" : isOtto ? "Otto diagrams created - select a process path to edit its points or bends" : "Diesel P-v and T-s diagrams created - select a process path to edit its states or bends");
+            renderProperties();
+            renderCurrentDrawing();
+            return;
+        }
+
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
         if (object.metadata?.boundaryStress) {
@@ -2274,16 +2327,24 @@ export function beginOrCompleteGeometry(
             renderCurrentDrawing();
             return;
         }
-        if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
             }
-            setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
+            setToolMessage(object.metadata.thermodynamicsKind === "rankine-cycle"
+                ? "Cycle created - drag to move or use corner dots to resize"
+                : object.metadata.thermodynamicsKind === "nozzle-diffuser"
+                ? "Nozzle/diffuser created - drag to move, use corner dots to resize or the rotation handle to turn"
+                : object.metadata.thermodynamicsKind === "turbine-compressor"
+                ? "Turbine/compressor created - drag to move, use corner dots to resize or the rotation handle to turn"
+                : object.metadata.thermodynamicsKind === "tank"
+                ? "Tank created - drag a corner to resize, or drag the tank to move"
+                : object.metadata.thermodynamicsKind === "piston-cylinder"
                 ? (object.geometry.hasStoppers
-                    ? "Drag a stopper dot to adjust the stops, the centre dot to move the piston, or a corner to resize"
+                    ? "Drag the centre dot to move the piston above or below the stops, a stopper dot to adjust the stops, or a corner to resize"
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : object.metadata.thermodynamicsKind === "saturation-curve"
                     ? "Saturation curve created - drag the corner dots to resize"

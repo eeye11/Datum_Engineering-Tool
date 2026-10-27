@@ -56,7 +56,9 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
-        (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
+        (tool.id === "thermodynamic-cycles" && ["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(drawingState.activeTool)) ||
+        (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct", "nozzle-diffuser"].includes(drawingState.activeTool)) ||
+        (tool.id === "work" && ["work-arrow", "electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
@@ -125,8 +127,7 @@ export function renderToolButton(tool) {
      * `aria-controls` are written by the inline section that renders it.
      */
     const coordinateAttributes =
-        !FLUIDS_TOOL_MENUS[tool.id] &&
-        (tool.id === "coordinate-system" || tool.submenu)
+        tool.submenu && !FLUIDS_TOOL_MENUS[tool.id]
             ? ' aria-haspopup="menu" aria-expanded="false"'
             : "";
 
@@ -140,6 +141,7 @@ export function renderToolButton(tool) {
             class="drawing-tool${active ? " active" : ""}"
             type="button"
             data-tool-id="${tool.id}"
+            ${tool.disabled ? 'disabled aria-disabled="true"' : ""}
             title="${tool.label}${shortcut}"
             aria-label="${tool.label}${shortcut}"
             aria-pressed="${active}"

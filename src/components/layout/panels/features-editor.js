@@ -331,7 +331,7 @@ function textMarkup(key, label, state, definition = {}) {
         `aria-label="${escapeHtml(label)}" ` +
         `value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
         (readOnly ? ` readonly aria-readonly="true" tabindex="-1"` : "") +
-        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : definition.placeholder ? ` placeholder="${escapeHtml(definition.placeholder)}"` : "") +
         ` autocomplete="off" spellcheck="false">`
     );
 }

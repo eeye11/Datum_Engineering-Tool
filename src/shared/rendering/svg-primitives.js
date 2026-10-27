@@ -431,6 +431,10 @@ import enggCanvasPalette from "./canvas-palette.js";
             scaledStrokeWidth(lineWidth)
         );
 
+        if (Number.isFinite(style.fillOpacity)) {
+            element.setAttribute("fill-opacity", Math.max(0, Math.min(1, style.fillOpacity)));
+        }
+
         if (
             style.opacity != null
         ) {

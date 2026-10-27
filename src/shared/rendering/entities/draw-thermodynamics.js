@@ -13,6 +13,89 @@ import { processLabelPoint } from "../../../features/workspace/model/thermodynam
 import { processSegmentPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import { processDiagramPaths } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { cylinderPoint, pistonFraction, stopperPaths } from "../../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import { tankPaths } from "../../../features/workspace/model/thermodynamics/tank.js";
+import { turbineCompressorPoints } from "../../../features/workspace/model/thermodynamics/turbine-compressor.js";
+import { nozzleDiffuserPaths } from "../../../features/workspace/model/thermodynamics/nozzle-diffuser.js";
+import { rankineCycleDiagram } from "../../../features/workspace/model/thermodynamics/rankine-cycle.js";
+
+export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
+    const diagram = rankineCycleDiagram(geometry, entity?.metadata?.problemData);
+    for (const wall of diagram.paths) {
+        const points = wall.points.map(toScreen);
+        const path = createSvgElement("path", { d: points.map((p, i) => `${i ? "L" : "M"} ${p.x} ${p.y}`).join(" ") });
+        applyStyle(path, { ...style, stroke: wall.colour, fill: wall.fill ? (wall.colour === "blue" ? "#d1d1ff" : "#ffd1d1") : "none", fillMode: wall.fill ? "solid" : "none" });
+        if (wall.bold) {
+            path.setAttribute("stroke-width", String(Math.max(2.5, Number(path.getAttribute("stroke-width")) * 2)));
+            path.setAttribute("stroke-linecap", "round");
+            path.setAttribute("stroke-linejoin", "round");
+        }
+        svg.appendChild(path);
+    }
+    const origin = toScreen(cylinderPoint(geometry, 0, 0));
+    const top = toScreen(cylinderPoint(geometry, 0, 1));
+    const fontSize = Math.max(12, Math.hypot(top.x - origin.x, top.y - origin.y) * 0.036);
+    for (const label of diagram.labels) {
+        const labelFontSize = fontSize * (label.fontScale || 1);
+        const p = toScreen(label.point);
+        const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": labelFontSize, fill: "black" });
+        const quantitySubscript = !label.plainText && /^\$([QWqw])_(?:\{([^}]+)\}|([HL]))\$$/.exec(label.latex || "");
+        if (!label.plainText && label.latex === "$P_4=P_5=P_{reheat}$") {
+            for (const [index, value] of ["4", "5", "reheat"].entries()) {
+                const base = createSvgElement("tspan", {});
+                base.textContent = index === 0 ? "P" : " = P";
+                text.appendChild(base);
+                const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                subscript.textContent = value;
+                text.appendChild(subscript);
+            }
+        } else if (quantitySubscript) {
+            text.textContent = quantitySubscript[1];
+            const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+            subscript.textContent = quantitySubscript[2] || quantitySubscript[3];
+            text.appendChild(subscript);
+        } else {
+            const lines = label.lines || [label.text];
+            if (lines.length === 1) text.textContent = lines[0];
+            else lines.forEach((line, index) => {
+                const span = createSvgElement("tspan", { x: p.x, dy: index === 0 ? -(lines.length - 1) * labelFontSize * 0.6 : labelFontSize * 1.2 });
+                span.textContent = line;
+                text.appendChild(span);
+            });
+        }
+        svg.appendChild(text);
+    }
+}
+
+export function drawNozzleDiffuser({ svg, geometry, style, toScreen }) {
+    for (const wall of nozzleDiffuserPaths(geometry)) {
+        const points = wall.map(toScreen);
+        const path = createSvgElement("path", {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+        });
+        applyStyle(path, { ...style, fill: "none" });
+        svg.appendChild(path);
+    }
+}
+
+export function drawTurbineCompressor({ svg, geometry, style, toScreen }) {
+    const points = turbineCompressorPoints(geometry).map(toScreen);
+    const path = createSvgElement("path", {
+        d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ") + " Z"
+    });
+    applyStyle(path, { ...style, fill: "none" });
+    svg.appendChild(path);
+}
+
+export function drawTank({ svg, geometry, style, toScreen }) {
+    for (const outline of tankPaths(geometry)) {
+        const points = outline.map(toScreen);
+        const path = createSvgElement("path", {
+            d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" ")
+        });
+        applyStyle(path, { ...style, fill: "none" });
+        svg.appendChild(path);
+    }
+}
 
     /*
      * A PROCESS PATH'S STATES AND DIRECTION.
@@ -27,19 +110,20 @@ import { cylinderPoint, pistonFraction, stopperPaths } from "../../../features/w
         const points = (geometry.points || []).map(toScreen);
         const colour = paintColour(style.stroke || "#dc2626");
         points.forEach((point, index) => {
-            if (index >= (entity.metadata.stateCount ?? points.length)) return;
-            const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
-            processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
-            processOverlay.appendChild(createSvgElement("circle", {
-                cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
-            }));
-            const label = createSvgElement("text", {
-                x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
-                "text-anchor": "middle", "dominant-baseline": "central"
-            });
-            label.textContent = String(index + 1);
-            processOverlay.appendChild(label);
-            if (!index) return;
+            if (index < (entity.metadata.stateCount ?? points.length)) {
+                const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
+                processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
+                processOverlay.appendChild(createSvgElement("circle", {
+                    cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
+                }));
+                const label = createSvgElement("text", {
+                    x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
+                    "text-anchor": "middle", "dominant-baseline": "central"
+                });
+                label.textContent = String(index + 1);
+                processOverlay.appendChild(label);
+            }
+            if (!index || (Array.isArray(entity.metadata.arrowSegments) && !entity.metadata.arrowSegments.includes(index - 1))) return;
             const segment = processSegmentPoints(geometry, index - 1).map(toScreen);
             const middle = Math.floor(segment.length / 2);
             const previous = segment.length > 2 ? segment[middle - 1] : segment[0];

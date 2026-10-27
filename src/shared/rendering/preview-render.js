@@ -15,6 +15,7 @@ import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
+import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
 
@@ -50,7 +51,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             appendEntity(svg, { ...preview, isPreview: true, style: previewStyle(preview) }, state, bounds);
             return;
         }
-        if (["process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
+        if (["diesel-cycle", "otto-cycle", "carnot-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -457,11 +458,13 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
-                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
+                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
-                geometry: {
+                geometry: state.activeTool === "electric-work" && state.interaction.annotateEnd
+                    ? resistorGeometryFromDrag(state.interaction.annotateStart, state.interaction.annotateEnd)
+                    : {
                     start: state.interaction.annotateStart,
                     end: state.interaction.annotateEnd
                 },
@@ -703,19 +706,15 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
          * same `boundaryLines` the committed run is drawn with.
          */
         if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
-            enggPipeDuct.boundaryLines(
+            enggPipeDuct.pipeDuctPaths(
                 geometry.start,
                 geometry.end,
                 geometry.engineering || preview.engineering || {}
-            ).forEach((boundary) => {
-                const from = toScreen(boundary.start);
-                const to = toScreen(boundary.end);
-
-                svg.appendChild(createSvgElement("line", {
-                    x1: from.x,
-                    y1: from.y,
-                    x2: to.x,
-                    y2: to.y,
+            ).forEach((path) => {
+                const points = path.map(toScreen);
+                svg.appendChild(createSvgElement("path", {
+                    d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
+                    fill: "none",
                     stroke: style.stroke,
                     "stroke-width": 1.5,
                     "stroke-dasharray": "6 4",

@@ -26,7 +26,7 @@ import { processBendPoint } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
 import { translateObject } from "../geometry/transforms.js";
-import { selectionBounds } from "../../../shared/selection/selection-transform.js";
+import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
 import { DYNAMICS_SIZES } from "../dynamics/dynamics-tools.js";
@@ -639,10 +639,20 @@ function manipulationHandles(
     const g =
         object.geometry || {};
 
+    if (object.type === "pipe-duct") {
+        const bounds = selectionBounds([object], [object.id]);
+        return bounds ? selectionCorners(bounds).map((point, index) => ({ kind: `corner${index}`, point })) : [];
+    }
+
+    if (object.metadata?.thermodynamicsKind === "work-arrow" && g.start && g.end) {
+        return [{ kind: "annotate-attachment", point: g.start }, { kind: "annotate-endpoint", point: g.end },
+            ...(g.position ? [{ kind: "position", point: g.position }] : [])];
+    }
+
     if (object.metadata?.thermodynamicsKind === "process-path") {
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
-        return (g.points || []).flatMap((point, index) => [
-            { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
+        return (object.metadata.closed ? (g.points || []).slice(0, object.metadata.stateCount || -1) : (g.points || [])).flatMap((point, index) => [
+            ...(index < (object.metadata.stateCount ?? g.points.length) ? [{ kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) }] : []),
             { kind: `vertex${index}`, point },
             ...(index < g.points.length - 1 ? [{ kind: `process-bend-${index}`, point: processBendPoint(g, index) }] : [])
         ]);

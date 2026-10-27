@@ -6,8 +6,9 @@ export function isPistonCylinder(object) {
 
 export function pistonFraction(geometry) {
     const value = Number(geometry.pistonFraction ?? 0.55);
-    const limit = geometry.hasStoppers ? stopperFraction(geometry) : 0.95;
-    return Math.max(0.05, Math.min(limit, Number.isFinite(value) ? value : 0.55));
+    // This is a drawing tool: allow either side of the stops to represent
+    // a piston rising into upper stops or dropping onto lower stops.
+    return Math.max(0.05, Math.min(0.95, Number.isFinite(value) ? value : 0.55));
 }
 
 export function stopperFraction(geometry) {
@@ -17,7 +18,6 @@ export function stopperFraction(geometry) {
 
 export function setStopperFraction(geometry, value) {
     geometry.stopperFraction = stopperFraction({ stopperFraction: value });
-    geometry.pistonFraction = pistonFraction(geometry);
 }
 
 export function stopperPaths(geometry) {
@@ -41,7 +41,20 @@ export function cylinderPoint(geometry, x, y) {
 }
 
 export function setPistonFromPoint(geometry, point) {
-    geometry.pistonFraction = pistonFraction({ ...geometry, pistonFraction: fractionFromPoint(geometry, point) });
+    let level = pistonFraction({ ...geometry, pistonFraction: fractionFromPoint(geometry, point) });
+    if (geometry.hasStoppers) {
+        const stop = stopperFraction(geometry);
+        // The stored piston level is its TOP face. Below the stops it meets
+        // their underside at `stop`; above them its underside meets their
+        // top at stop + stopper thickness + piston thickness (0.04 each).
+        const contacts = [stop, Math.min(1, stop + 0.04) + 0.04]
+            .filter(contact => contact >= 0.05 && contact <= 0.95);
+        const nearest = contacts.sort((a, b) => Math.abs(a - level) - Math.abs(b - level))[0];
+        if (nearest !== undefined && Math.abs(nearest - level) <= 0.025) {
+            level = nearest;
+        }
+    }
+    geometry.pistonFraction = level;
 }
 
 export function setStoppersFromPoint(geometry, point) {
