@@ -2387,6 +2387,18 @@ function annotationAnchor(
 
   const geometry = object.geometry || {};
 
+  if (object.type === "moment" && geometry.position) {
+    const radius = Number(geometry.arcRadius) || 7;
+    const text = textFor(annotation, state) || "";
+    const fontSize = Number(annotation.style?.fontSize) || 12;
+    const halfWidth = Math.max(...text.split("\n").map(line => line.length), 0) *
+      fontSize * TEXT_CHARACTER_WIDTH / 2;
+    return {
+      x: geometry.position.x + radius * 0.35 + halfWidth,
+      y: geometry.position.y - radius - 1
+    };
+  }
+
   /*
    * ========================================================
    * THE ANCHOR IS THE CURRENT RENDERED FORCE ENDPOINT
@@ -2452,6 +2464,13 @@ function annotationAnchor(
        * the thing it is labelling.
        */
       const standoff = 10;
+
+      if (object.type === "force") {
+        return {
+          x: start.x - direction.x * standoff,
+          y: start.y - direction.y * standoff - 4
+        };
+      }
 
       return {
         x: end.x + direction.x * standoff,

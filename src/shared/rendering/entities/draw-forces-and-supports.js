@@ -381,7 +381,9 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                      * typed: there is no orientation for a student to
                      * set wrongly.
                      */
-                    frame
+                    entity.type === "fixed-support" && placement
+                        ? -placement.orientation
+                        : frame
                         ? enggBodyFrames.supportAngle(
                             frame,
                             flipped

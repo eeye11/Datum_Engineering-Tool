@@ -1120,7 +1120,7 @@ function momentNodes(object) {
     const position = geometry.position || { x: 0, y: 0 };
     const radius = Number(geometry.arcRadius) || 7;
 
-    const at = { x: Number(position.x) + radius * 0.7, y: Number(position.y) + radius * 0.7 };
+    const at = { x: Number(position.x) + radius * 0.35, y: Number(position.y) - radius - 1 };
 
     const nodes = [];
 

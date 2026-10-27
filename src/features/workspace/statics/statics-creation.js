@@ -145,7 +145,8 @@ export function createStaticsFeature(
                 ? enggBodyFrames.supportPlacement(
                     parent,
                     point,
-                    false
+                    false,
+                    { fixed: type === "fixed-support" }
                 )
                 : null;
 
@@ -176,6 +177,10 @@ export function createStaticsFeature(
                         }
                     }
                 );
+
+            if (type === "fixed-support") {
+                object.geometry.orientation = placement.orientation;
+            }
 
             /*
              * The attachment, in the body's frame.

@@ -648,7 +648,7 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             }));
         };
 
-        const frame = selectionBounds(state.objects, [...selected]);
+        const frame = selectionBounds(state.objects, [...selected], state);
         if (frame) {
             const first = toScreen({ x: frame.minX, y: frame.maxY });
             const last = toScreen({ x: frame.maxX, y: frame.minY });
@@ -1017,7 +1017,7 @@ export {
                 let frame;
 
                 try {
-                    frame = selectionBounds([object], [object.id]);
+                    frame = selectionBounds([object], [object.id], state);
                 } catch {
                     frame = null;
                 }

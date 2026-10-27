@@ -44,6 +44,10 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
         state,
         bounds
     ) {
+        if (state.interaction.phase === "point-force-value" && state.interaction.preview) {
+            appendEntity(svg, { ...state.interaction.preview, isPreview: true }, state, bounds);
+            return;
+        }
         if (["process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;

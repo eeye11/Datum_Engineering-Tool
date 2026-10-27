@@ -81,7 +81,7 @@ export function beginManipulationDrag(
         );
 
     const selectedIds = drawingState.selection.selectedObjectIds;
-    const box = selectionBounds(drawingState.objects, selectedIds);
+    const box = selectionBounds(drawingState.objects, selectedIds, drawingState);
     const hit = handleAtPoint(point);
     const pistonHandle = hit && isPistonCylinder(hit.object) &&
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
@@ -119,10 +119,10 @@ export function beginManipulationDrag(
      * Refused ahead of BOTH drag shapes - a handle and the body - so the child
      * stays put; it is still selectable, inspectable and deletable.
      */
-    const underPointer =
-        objectAtPoint(
-            point
-        );
+    const pointed = objectAtPoint(point);
+    const underPointer = pointed?.sourceFeatureId && selectedIds.includes(pointed.sourceFeatureId)
+        ? drawingState.objects.find(item => item.id === pointed.sourceFeatureId)
+        : pointed;
 
     if (isDerivedFeature(underPointer)) {
         setToolMessage(
@@ -148,7 +148,7 @@ export function beginManipulationDrag(
     const locked =
         (hit && hit.object && hit.object.locked) ||
         (() => {
-            const under = objectAtPoint(point);
+            const under = underPointer;
 
             return under && under.locked ? under : null;
         })();
@@ -265,10 +265,7 @@ export function beginManipulationDrag(
      * pointer actually travels, so a press that stays put is still a click -
      * which selects the dimension, exactly as a click on it always did.
      */
-    const overlay =
-        objectAtPoint(
-            point
-        );
+    const overlay = underPointer;
 
     if (
         overlay?.type === "dimension" ||

@@ -41,7 +41,7 @@ function updateMoveCursor(event) {
 
         const ids = drawingState.selection.selectedObjectIds;
         if (ids.length > 1) {
-            const box = selectionBounds(drawingState.objects, ids);
+            const box = selectionBounds(drawingState.objects, ids, drawingState);
             if (box && point.x >= box.minX && point.x <= box.maxX &&
                 point.y >= box.minY && point.y <= box.maxY) {
                 movable = selectionMembers(drawingState.objects, ids)

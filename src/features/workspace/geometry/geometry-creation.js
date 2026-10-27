@@ -1710,8 +1710,14 @@ export function beginOrCompleteGeometry(
             const suggested =
                 Number(geometry.magnitude) || 0;
 
+            // Keep the completed arrow visible while its value is pending.
+            // It enters the document only after confirmation, as one undo step.
+            drawingState.interaction.phase = "point-force-value";
+            drawingState.interaction.preview = object;
+            renderCurrentDrawing();
+
             openLoadValuePopup({
-                title: "Point Force",
+                title: "Point Load",
                 label: "Magnitude",
                 value: suggested.toFixed(2),
                 unit: enggLoadProfile.DEFAULT_FORCE_UNIT,
@@ -1817,6 +1823,7 @@ export function beginOrCompleteGeometry(
                         valueKey: "magnitude"
                     });
 
+                    enggDrawingState.clearInteraction(drawingState);
                     commitCreatedFeature(
                         object,
                         previousObjects
@@ -1833,8 +1840,10 @@ export function beginOrCompleteGeometry(
                 },
 
                 onCancel: () => {
+                    enggDrawingState.clearInteraction(drawingState);
+                    activateTool("select");
                     setToolMessage(
-                        "Point force cancelled"
+                        "Point load cancelled"
                     );
 
                     renderCurrentDrawing();

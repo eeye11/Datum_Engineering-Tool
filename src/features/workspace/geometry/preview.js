@@ -124,6 +124,10 @@ export function updatePreview(
     const interaction =
         drawingState.interaction;
 
+    if (interaction.phase === "point-force-value") {
+        return;
+    }
+
     /*
      * THE ANALYSIS AXIS PREVIEW FOLLOWS THE CURSOR.
      *

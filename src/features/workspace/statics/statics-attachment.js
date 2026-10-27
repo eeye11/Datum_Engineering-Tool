@@ -704,12 +704,16 @@ function commitStaticsAttachment(
                     enggBodyFrames.supportPlacement(
                         body,
                         supportPoint,
-                        object.geometry.flipped === true
+                        object.geometry.flipped === true,
+                        { fixed: type === "fixed-support" }
                     );
 
                 if (placement) {
                     object.geometry.position =
                         placement.render;
+                    if (type === "fixed-support") {
+                        object.geometry.orientation = placement.orientation;
+                    }
                 }
 
                 /*

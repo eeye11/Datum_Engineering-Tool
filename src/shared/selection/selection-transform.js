@@ -2,8 +2,9 @@ import geometry from "../geometry/feature-geometry.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
+import annotations from "../../features/workspace/model/annotations/annotation-model.js";
 
-export function selectionBounds(objects, selectedIds) {
+export function selectionBounds(objects, selectedIds, state = null) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
@@ -29,6 +30,14 @@ export function selectionBounds(objects, selectedIds) {
         }
         return [...geometry.definingPoints(g, object.type), ...(object.placement ? [object.placement] : [])];
     }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+    if (state) {
+        for (const object of objects.filter(object => ids.has(object.id))) {
+            for (const annotation of annotations.derivedAnnotations(object, state)) {
+                const box = annotations.annotationTextBounds(annotation, state);
+                if (box) points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
+            }
+        }
+    }
     if (!points.length) return null;
     return {
         minX: Math.min(...points.map(point => point.x)), maxX: Math.max(...points.map(point => point.x)),
@@ -64,7 +73,18 @@ export function transformSelectionObject(original, anchor, scale = 1, dx = 0, dy
             value.y = anchor.y + (value.y - anchor.y) * scale + dy;
         }
         for (const [key, child] of Object.entries(value)) {
-            if (lengthKeys.has(key) && Number.isFinite(child)) value[key] = child * scale;
+            if (["magnitudeOffset", "pointOffsets", "supportValueOffsets"].includes(key) && child) {
+                // Label offsets are vectors relative to their moving anchors.
+                const scaleOffset = offset => {
+                    if (!offset || typeof offset !== "object") return;
+                    for (const [axis, component] of Object.entries(offset)) {
+                        if ((axis === "x" || axis === "y") && Number.isFinite(component)) offset[axis] *= scale;
+                        else if (component && typeof component === "object") scaleOffset(component);
+                    }
+                };
+                scaleOffset(child);
+            }
+            else if (lengthKeys.has(key) && Number.isFinite(child)) value[key] = child * scale;
             else if (child && typeof child === "object") transform(child);
         }
     };

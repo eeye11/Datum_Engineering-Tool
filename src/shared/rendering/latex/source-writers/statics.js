@@ -72,6 +72,7 @@ import { COMMENT_FIELDS, applyObjectComments, ensureObjectId, objectDisplayName 
 import { renderObjectBlock } from "../drawing-source.js";
 import { NOMINAL_ARROW_HEAD_PT } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
+import bodyFrames from "../../../geometry/body-frames.js";
 import { sketchPointsOf as canvasSketchPointsOf } from "../../analysis-render.js";
 
 /* ============================================================
@@ -343,11 +344,11 @@ function headFor(style, fallback = "filled") {
  * The factor comes from the transform in effect for THIS object, so the head
  * and the shaft it belongs to are always scaled by the same one.
  */
-function scaledTip(tip) {
+function scaledTip(tip, sizeMultiplier = 1) {
   const transform = currentExportTransform();
   const factor = Number(transform?.factor);
 
-  if (!tip || !Number.isFinite(factor) || factor >= 1) {
+  if (!tip || (sizeMultiplier === 1 && (!Number.isFinite(factor) || factor >= 1))) {
     return tip;
   }
 
@@ -357,7 +358,8 @@ function scaledTip(tip) {
     return tip;
   }
 
-  const length = Number((NOMINAL_ARROW_HEAD_PT * factor).toFixed(3));
+  const exportScale = Number.isFinite(factor) && factor < 1 ? factor : 1;
+  const length = Number((NOMINAL_ARROW_HEAD_PT * exportScale * sizeMultiplier).toFixed(3));
   const width = Number((length * 0.6).toFixed(3));
 
   return `{${name[1]}[length=${length}pt, width=${width}pt]}`;
@@ -1019,7 +1021,7 @@ function serializeMoment(entity, object) {
    * clockwise moment's head at the START - as this used to - pointed it
    * against its own sweep, and every CW moment rendered as anticlockwise.
    */
-  const arrow = `-${scaledTip(tip)}`;
+  const arrow = `-${scaledTip(tip, 1.4)}`;
 
   const options = withArrow(styleOptions(object.style), tip ? arrow : null);
 
@@ -1082,7 +1084,14 @@ function supportFrame(geometry) {
 }
 
 function serializeSupport(entity, object) {
-  const geometry = object.geometry || {};
+  let geometry = object.geometry || {};
+  if (entity.type === "fixed-support" && object.parentId) {
+    const parent = entity.__generationOptions?.state?.objects?.find(item => item.id === object.parentId);
+    const bodyFrame = parent && bodyFrames.frameOf(parent);
+    const attachment = bodyFrame && bodyFrames.attachmentPoint(bodyFrame, geometry.attachment);
+    const placement = attachment && bodyFrames.supportPlacement(parent, attachment, false, { fixed: true });
+    if (placement) geometry = { ...geometry, position: placement.render, orientation: placement.orientation };
+  }
   const frame = supportFrame(geometry);
   const options = styleOptions(object.style);
 
