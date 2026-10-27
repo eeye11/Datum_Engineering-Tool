@@ -673,7 +673,7 @@ export const disciplineToolGroups = {
 			tools: [
 				{ id: "resultant", label: "Resultant" },
 				{ id: "force-components", label: "Force Components" },
-				{ id: "shear-force-diagram", label: "Shear Force (SFD)" },
+				{ id: "shear-force-diagram", label: "Shear Force (SFD)", submenu: true },
 				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
 				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
 			]
