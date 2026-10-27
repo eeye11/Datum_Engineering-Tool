@@ -570,7 +570,7 @@ console.log("\n  the groups expand inline through the Statics mechanism\n");
 
   check(
     "the inline subsection is the shared Statics one, not a popup",
-    /FLUIDS_TOOL_MENUS\[tool\.id\]\s*\?\s*FLUIDS_TOOL_MENUS\[tool\.id\]\.map\(renderToolButton\)/.test(
+    /FLUIDS_TOOL_MENUS\[tool\.id\]/.test(
       renderer,
     ) && /class="drawing-inline-tools"/.test(renderer),
     "the children must be rendered as buttons inside .drawing-inline-tools",

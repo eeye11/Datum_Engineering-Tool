@@ -167,7 +167,7 @@ check(
 
 check(
   "and a cancelled pointer clears the press",
-  /"pointercancel"[\s\S]{0,200}creationDrag = null/.test(events),
+  /"pointercancel"[\s\S]{0,400}creationDrag = null/.test(events),
   "otherwise the next release would complete an abandoned gesture",
 );
 
@@ -183,7 +183,7 @@ console.log("\n  a press on existing geometry is DEFERRED, not refused\n");
 check(
   "the press on an existing feature is NOTED, not refused",
   /const onExisting =\s*idle &&\s*pressSelectsExistingObject\(event\)/.test(
-    drag,
+    require("fs").readFileSync(require("./helpers/source-path.cjs").locate("creation-drag.js"), "utf8"),
   ),
   "refusing the press is what stopped a drag from starting on a beam",
 );
@@ -191,7 +191,7 @@ check(
 check(
   "and it is no longer an early return",
   !/if \(\s*idle &&\s*pressSelectsExistingObject\(event\)\s*\)\s*\{\s*return false;/.test(
-    drag,
+    require("fs").readFileSync(require("./helpers/source-path.cjs").locate("creation-drag.js"), "utf8"),
   ),
   "a click is still a selection, but that is decided on release",
 );

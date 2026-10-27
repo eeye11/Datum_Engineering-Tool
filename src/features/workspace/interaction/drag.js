@@ -366,9 +366,16 @@ export function beginManipulationDrag(
     const object = overlay || (insideSelection
         ? drawingState.objects.find(item => item.id === selectedIds[0]) : null);
 
+    /*
+     * A press inside an UNSELECTED outline's box starts the move as well - the
+     * student aims at the shape, not its edge - so the box interior is a move
+     * target whenever the press lands on exactly one feature's geometry.
+     */
+    const outlineHit = Boolean(overlay) && !insideSelection;
+
     if (
         object && !object.locked && !isDerivedFeature(object) &&
-        (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
+        (insideSelection || outlineHit || object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
             .selectedObjectIds
             .includes(
                 object.id

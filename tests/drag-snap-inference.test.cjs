@@ -364,7 +364,7 @@ console.log("\n  the ordinary pointer path is untouched\n");
  */
 check(
   "resolvePointerEvent is still exported and unchanged in shape",
-  /export function resolvePointerEvent\(\s*event\s*\)\s*\{\s*return resolvePointerPoint\(/.test(
+  /export function resolvePointerEvent\(\s*event\s*\)\s*\{[\s\S]{0,200}?resolvePointerPoint\(/.test(
     pointerSource,
   ),
 );
