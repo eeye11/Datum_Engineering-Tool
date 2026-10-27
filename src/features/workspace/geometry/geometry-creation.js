@@ -1966,7 +1966,7 @@ export function beginOrCompleteGeometry(
 
         if (arm <= 1e-9) {
             setToolMessage(
-                "Drag from the origin to set the X axis"
+                "Place the X axis away from the origin"
             );
 
             return;

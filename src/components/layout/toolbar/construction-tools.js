@@ -54,6 +54,14 @@ export function isConstructionTool(
                 "polygon",
                 "circle",
                 "arc",
+
+                /*
+                 * The Statics Reference Arc is the Arc tool by another name.
+                 * Without it here the router dropped every click it was
+                 * given - its first point, and the third point after a drag -
+                 * so an arc could be started by a drag but never finished.
+                 */
+                "reference-arc",
                 "rectangle"
             ].includes(toolId) ||
 

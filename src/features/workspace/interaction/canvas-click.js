@@ -17,7 +17,7 @@ import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
-import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
@@ -125,12 +125,20 @@ export function handleCanvasClick(
         return;
     }
 
+    /*
+     * THE COORDINATE SYSTEM TAKES CLICK-MOVE-CLICK AS WELL AS ITS DRAG.
+     *
+     * The first click is the origin and the second the positive X
+     * direction - the same two points the drag supplies, through the same
+     * construction step. A click used to place a fixed-size system on its
+     * own, so two clicks placed two of them.
+     */
     if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        add2DCoordinateSystem(
-            resolution.effectiveConstructionPoint
+        beginOrCompleteGeometry(
+            resolution
         );
 
         return;
