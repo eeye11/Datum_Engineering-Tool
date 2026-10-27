@@ -45,6 +45,11 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         state,
         bounds
     ) {
+        if (state.interaction.preview?.type === "reducer-expander") {
+            const preview = state.interaction.preview;
+            appendEntity(svg, { ...preview, isPreview: true, style: previewStyle(preview) }, state, bounds);
+            return;
+        }
         if (["process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;

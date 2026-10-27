@@ -1,3 +1,5 @@
+import enggReducer from "../model/fluids/reducer-expander.js";
+import { propagatePipeWidth as propagateWidth } from "../model/fluids/pipe-width.js";
 /*
  * ========================================================
  * DRAWING PIPE / DUCT BY CLICK, HOLD, DRAG AND RELEASE
@@ -1451,95 +1453,7 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
  * `engineering.separation` is written, so the walls open around the same line.
  */
 export function propagatePipeWidth(run, objects = drawingState.objects) {
-  if (!run?.id || !Array.isArray(objects)) {
-    return [];
-  }
-
-  const runs = objects.filter((object) => enggPipeDuct.isPipeDuctType(object.type));
-  const elbows = objects.filter(
-    (object) => enggPipeDuct.isElbowType(object.type) && Array.isArray(object.engineering?.connections)
-  );
-
-  /* An end that carries a fitting stops the walk there. */
-  const joinedAt = (candidate, end) =>
-    elbows.some((elbow) => {
-      const ids = elbow.engineering.connections;
-
-      if (!ids.includes(run.id) || !ids.includes(candidate.id)) {
-        return false;
-      }
-
-      const shared = elbow.geometry?.position;
-      const point = candidate.geometry?.[end];
-
-      return (
-        shared &&
-        point &&
-        Math.hypot(shared.x - point.x, shared.y - point.y) <= CONTINUATION_TOLERANCE
-      );
-    });
-
-  const visited = new Set([run.id]);
-  const queue = [run];
-
-  /*
-   * THE WIDTH IS READ WHEN THE RUN IS REACHED, not from the run the walk began
-   * at. The walk may start from either side of a join, and the side the student
-   * widened is the one whose value must spread.
-   */
-  const widthOf = (candidate) => Number(candidate.engineering?.separation) || 0;
-
-  while (queue.length) {
-    const current = queue.pop();
-
-    ["start", "end"].forEach((end) => {
-      if (joinedAt(current, end)) {
-        return;
-      }
-
-      const point = current.geometry?.[end];
-
-      if (!point) {
-        return;
-      }
-
-      runs.forEach((candidate) => {
-        if (visited.has(candidate.id)) {
-          return;
-        }
-
-        const other = ["start", "end"].find(
-          (candidateEnd) =>
-            candidate.geometry?.[candidateEnd] &&
-            Math.hypot(
-              candidate.geometry[candidateEnd].x - point.x,
-              candidate.geometry[candidateEnd].y - point.y
-            ) <= CONTINUATION_TOLERANCE
-        );
-
-        if (!other) {
-          return;
-        }
-
-        visited.add(candidate.id);
-        queue.push(candidate);
-
-        const source = widthOf(current);
-
-        if ((Number(candidate.engineering?.separation) || 0) !== source) {
-          candidate.engineering = { ...(candidate.engineering || {}) };
-
-          if (source === 0) {
-            delete candidate.engineering.separation;
-          } else {
-            candidate.engineering.separation = source;
-          }
-        }
-      });
-    });
-  }
-
-  return [...visited].filter((id) => id !== run.id);
+  return propagateWidth(run, objects);
 }
 
 /*
@@ -1738,6 +1652,7 @@ export function reconcileFluidConnections(run, objects = drawingState.objects) {
     return { created: [], removed: [], updated: [] };
   }
 
+  enggReducer.reconcilePipe(run, list);
   const result = reconcileRun(run, list);
 
   if (paired) {

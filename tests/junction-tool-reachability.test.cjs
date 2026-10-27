@@ -32,7 +32,16 @@ function ready() {
   return page;
 }
 
-const CANVAS = { left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600, x: 0, y: 0 };
+const CANVAS = {
+  left: 0,
+  top: 0,
+  width: 800,
+  height: 600,
+  right: 800,
+  bottom: 600,
+  x: 0,
+  y: 0,
+};
 
 function modules() {
   ready();
@@ -40,8 +49,14 @@ function modules() {
   const dom = require(locate("interaction/dom.js"));
 
   dom.drawingCanvas.getBoundingClientRect = () => CANVAS;
-  Object.defineProperty(dom.drawingCanvas, "clientWidth", { value: CANVAS.width, configurable: true });
-  Object.defineProperty(dom.drawingCanvas, "clientHeight", { value: CANVAS.height, configurable: true });
+  Object.defineProperty(dom.drawingCanvas, "clientWidth", {
+    value: CANVAS.width,
+    configurable: true,
+  });
+  Object.defineProperty(dom.drawingCanvas, "clientHeight", {
+    value: CANVAS.height,
+    configurable: true,
+  });
   dom.drawingCanvas.setPointerCapture = () => {};
   dom.drawingCanvas.releasePointerCapture = () => {};
   dom.drawingCanvas.hasPointerCapture = () => false;
@@ -62,7 +77,7 @@ function modules() {
     creation: require(locate("creation-drag.js")),
     handles: require(locate("handles.js")),
     schema: require(locate("feature-schema.js")),
-    dom
+    dom,
   };
 }
 
@@ -71,7 +86,7 @@ const pointer = (type, point) => {
     clientX: CANVAS.left + CANVAS.width / 2 + point.x,
     clientY: CANVAS.top + CANVAS.height / 2 - point.y,
     bubbles: true,
-    button: 0
+    button: 0,
   });
 
   event.pointerId = 1;
@@ -86,7 +101,7 @@ test("the Junction tool is a drag-creation tool", () => {
   assert.equal(
     m.creation.isDragCreationTool("junction"),
     true,
-    "a press must be claimed by the junction tool, or it is armed but inert"
+    "a press must be claimed by the junction tool, or it is armed but inert",
   );
 
   /* The two tools it sits beside are still drag tools. */
@@ -100,7 +115,11 @@ test("activating the Junction tool arms it", () => {
   m.activation.activateTool("junction");
 
   assert.equal(m.state.activeTool, "junction", "the tool is the active tool");
-  assert.equal(m.state.interaction.fluidsTool, "junction", "the Fluids panel knows which tool is armed");
+  assert.equal(
+    m.state.interaction.fluidsTool,
+    "junction",
+    "the Fluids panel knows which tool is armed",
+  );
 });
 
 test("press-drag-release on the canvas creates one Junction", () => {
@@ -111,33 +130,48 @@ test("press-drag-release on the canvas creates one Junction", () => {
   assert.equal(
     m.creation.beginCreationDrag(pointer("pointerdown", { x: 100, y: 100 })),
     true,
-    "the press begins the junction's session"
+    "the press begins the junction's session",
   );
 
-  assert.ok(m.editorState.creationDrag?.junction, "and the session is a junction session");
+  assert.ok(
+    m.editorState.creationDrag?.junction,
+    "and the session is a junction session",
+  );
 
   m.creation.moveCreationDrag(pointer("pointermove", { x: 220, y: 100 }));
 
-  assert.ok(m.state.interaction.preview, "a live preview is published while dragging");
+  assert.ok(
+    m.state.interaction.preview,
+    "a live preview is published while dragging",
+  );
 
   m.creation.finishCreationDrag(pointer("pointerup", { x: 220, y: 100 }));
 
-  const junctions = m.state.objects.filter((object) => object.type === "junction");
+  const junctions = m.state.objects.filter(
+    (object) => object.type === "junction",
+  );
 
   assert.equal(junctions.length, 1, "exactly one junction was created");
 
   const junction = junctions[0];
 
-  assert.ok(junction.geometry.branches.length >= 3, "it has three or more branches");
+  assert.ok(
+    junction.geometry.branches.length >= 3,
+    "it has three or more branches",
+  );
   assert.ok(junction.geometry.position, "it has a hub");
 
   /* The drag set the MAIN RUN, and its DISTANCE was not turned into a length. */
   assert.ok(
     Math.abs(junction.geometry.mainDirection.x - 1) < 1e-6,
-    "the horizontal drag set the main-run direction"
+    "the horizontal drag set the main-run direction",
   );
 
-  assert.equal(junction.engineering.branchLength, undefined, "no branch length was stored");
+  assert.equal(
+    junction.engineering.branchLength,
+    undefined,
+    "no branch length was stored",
+  );
 });
 
 test("an armed Junction that cannot be pressed leaves the tool looking broken - guarded", () => {
@@ -151,7 +185,7 @@ test("an armed Junction that cannot be pressed leaves the tool looking broken - 
   assert.equal(
     m.creation.beginCreationDrag(pointer("pointerdown", { x: 70, y: 70 })),
     false,
-    "one gesture at a time"
+    "one gesture at a time",
   );
 });
 
@@ -167,12 +201,16 @@ test("a placed Junction is selectable and offers branch handles", () => {
 
   assert.ok(junction, "the junction exists");
 
-  const kinds = m.handles.editableHandlesFor(junction).map((handle) => handle.kind);
+  const kinds = m.handles
+    .editableHandlesFor(junction)
+    .map((handle) => handle.kind);
 
   assert.ok(kinds.includes("position"), "the hub has a handle");
   assert.ok(
-    kinds.some((kind) => kind.startsWith("junction-branch-") || kind === "junction-main"),
-    "the branches have handles"
+    kinds.some(
+      (kind) => kind.startsWith("junction-branch-") || kind === "junction-main",
+    ),
+    "the branches have handles",
   );
   assert.ok(!kinds.includes("rotate"), "and there is no rotation handle");
 
@@ -181,5 +219,8 @@ test("a placed Junction is selectable and offers branch handles", () => {
     .groupsFor(junction)
     .flatMap((group) => group.fields.map((field) => field.key));
 
-  assert.ok(!keys.some((key) => /angle/i.test(key)), "no angle control in the panel");
+  assert.ok(
+    !keys.some((key) => /angle/i.test(key)),
+    "no angle control in the panel",
+  );
 });

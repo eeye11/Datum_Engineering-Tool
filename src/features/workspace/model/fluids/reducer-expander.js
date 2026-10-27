@@ -1,49 +1,9 @@
-/*
- * ========================================================
- * THE REDUCER / EXPANDER
- * ========================================================
- *
- * A reducer is an INLINE FITTING: it sits in a run of pipework and tapers the
- * two visible walls from one segment's width to the next segment's. It is not a
- * tapered shape the student drags out in empty space - it exists BETWEEN two
- * pipes, and its geometry is derived from theirs.
- *
- *   geometry.position     the fitting's centre, ON its host's centreline
- *   geometry.direction    the unit vector along the run, start -> end
- *   engineering.mode      "reduce" or "expand" - which way the width changes
- *   engineering.transitionLength   how long the taper is, along the run
- *   engineering.startPipeId / endPipeId
- *                         the two segments it joins, in the order the fitting's
- *                         own axis runs
- *   engineering.ports     which end of each segment the fitting holds
- *
- * ========================================================
- * THE WIDTHS ARE READ, NEVER STORED
- * ========================================================
- *
- * The two widths at the fitting's ends ARE the two connected segments' widths -
- * `boundarySeparation` of each. Nothing here keeps its own copy: a fitting with
- * a stored width would be free to disagree with the pipe it is bolted to, which
- * is exactly the failure a reducer exists to avoid. Change a segment's Pipe
- * Width and the taper follows on the next read.
- *
- * ========================================================
- * MODE, AND WHY IT IS ONLY A LOGICAL STATEMENT
- * ========================================================
- *
- * Reduce means "the run gets narrower along the fitting's axis", Expand means
- * "it gets wider". WHICH SEGMENT is narrow is decided by the two pipes' actual
- * widths, so the four combinations of mode and which side the student drew are
- * all drawable - a reducer on a run drawn right-to-left is still a reducer.
- *
- * `orientation` flips the fitting's axis relative to the host segment, so the
- * student can put the narrow end on either side before or after committing.
- * Flipping is a statement about the DRAWING, not about the fluid: DAETUM never
- * infers flow direction.
- */
+/* Inline taper widths derive from the connected Pipe / Duct objects. */
 
 import enggDrawingState from "../../../../shared/model/drawing-state.js";
 import enggPipeDuct from "./pipe-duct.js";
+import { propagatePipeWidth } from "./pipe-width.js";
+import { drawingState } from "../../editor-state.js";
 import {
 	DEFAULT_TRANSITION_LENGTH,
 	finitePoint,
@@ -60,8 +20,8 @@ export const REDUCER_MODES = Object.freeze({
 });
 
 export const REDUCER_MODE_LABELS = Object.freeze({
-	reduce: "Reduce",
-	expand: "Expand"
+	reduce: "Reducer",
+	expand: "Expander"
 });
 
 /* The shortest taper that is still a taper rather than a step. */
@@ -162,6 +122,7 @@ export function connectedRunsOf(reducer, objects = null) {
  * belongs to no pipe.
  */
 export function endWidthsOf(reducer, objects = null) {
+	if (reducer?.previewRuns) objects = reducer.previewRuns;
 	const runs = connectedRunsOf(reducer, objects);
 
 	const widthOf = (run) =>
@@ -173,8 +134,8 @@ export function endWidthsOf(reducer, objects = null) {
 	const fallback = enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION;
 
 	return {
-		start: Number.isFinite(start) ? start : Number.isFinite(end) ? end : fallback,
-		end: Number.isFinite(end) ? end : Number.isFinite(start) ? start : fallback,
+		start: Number.isFinite(start) ? start : reducer?.engineering?.freeWidths?.start || (normaliseMode(reducer?.engineering?.mode) === "expand" ? fallback * 0.75 : fallback),
+		end: Number.isFinite(end) ? end : reducer?.engineering?.freeWidths?.end || (normaliseMode(reducer?.engineering?.mode) === "expand" ? fallback : fallback * 0.75),
 		runs
 	};
 }
@@ -314,78 +275,91 @@ export function createReducer(options = {}) {
 	);
 }
 
-/* Flip the taper end-for-end, without moving anything on the sheet. */
-export function flipReducer(reducer) {
-	if (!isReducerType(reducer?.type)) {
-		return false;
-	}
-
-	const engineering = reducer.engineering || {};
-
-	reducer.engineering = {
-		...engineering,
-		mode: normaliseMode(engineering.mode) === REDUCER_MODES.reduce ? REDUCER_MODES.expand : REDUCER_MODES.reduce,
-		startPipeId: engineering.endPipeId || null,
-		endPipeId: engineering.startPipeId || null,
-		ports: {
-			start: portsOf(reducer).end,
-			end: portsOf(reducer).start
-		}
-	};
-
-	reducer.engineering.connections = [reducer.engineering.startPipeId, reducer.engineering.endPipeId].filter(Boolean);
-	const direction = reducer.geometry?.direction;
-
-	if (finitePoint(direction)) {
-		reducer.geometry = {
-			...reducer.geometry,
-			direction: { x: -direction.x, y: -direction.y }
-		};
-	}
-
-	keepConnectedEndsSeated(reducer);
-	return true;
+/* Connected terminal widths live only on their pipes. */
+export function setEndWidth(reducer, side, width, objects = drawingState.objects) {
+    if (reducer?.locked || !["start", "end"].includes(side) || !Number.isFinite(width) || width <= 0) return false;
+    const run = connectedRunsOf(reducer, objects)[side];
+    if (run?.locked) return false;
+    if (run) {
+        run.engineering = { ...run.engineering, separation: width - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION };
+        propagatePipeWidth(run, objects);
+        if (reducer.engineering.freeWidths) delete reducer.engineering.freeWidths[side];
+    } else {
+        reducer.engineering.freeWidths = { ...reducer.engineering.freeWidths, [side]: width };
+    }
+    return true;
 }
 
-/*
- * MOVING THE FITTING ALONG ITS RUN.
- *
- * The centre is projected onto the host's line and clamped so the fitting stays
- * inside it, which is the same rule the Flow Arrow follows: a drag along the run
- * is the only degree of freedom, and it can never leave the pipe.
- */
-export function slideReducerTo(reducer, point, objects = null) {
-	if (!isReducerType(reducer?.type) || !finitePoint(point)) {
-		return false;
-	}
+export function modeOf(reducer, objects = null) {
+    const widths = endWidthsOf(reducer, objects);
+    return Math.abs(widths.start-widths.end) < 1e-6 ? normaliseMode(reducer?.engineering?.mode) : widths.start > widths.end ? "reduce" : "expand";
+}
 
-	const runs = connectedRunsOf(reducer, objects);
-	const host = runs.start || runs.end;
+export function setMode(reducer, mode, objects = drawingState.objects) {
+    if (!isReducerType(reducer?.type) || reducer.locked || !Object.values(REDUCER_MODES).includes(mode)) return false;
+    if (modeOf(reducer, objects) === mode) { reducer.engineering.mode = mode; return true; }
+    const widths = endWidthsOf(reducer, objects);
+    if (widths.runs.start?.locked || widths.runs.end?.locked) return false;
+    setEndWidth(reducer, "start", widths.end, objects);
+    setEndWidth(reducer, "end", widths.start, objects);
+    reducer.engineering.mode = mode;
+    return true;
+}
 
-	if (!host?.geometry?.start || !host?.geometry?.end) {
-		return false;
-	}
+export function flipReducer(reducer, objects = drawingState.objects) {
+    return setMode(reducer, modeOf(reducer, objects) === "reduce" ? "expand" : "reduce", objects);
+}
 
-	const a = host.geometry.start;
-	const b = host.geometry.end;
+/* A terminal cannot leave its straight route or pass the adjoining pipe's far end. */
+export function canSeat(reducer, centre, length, objects = drawingState.objects) {
+    const axis = axisOf(reducer, objects);
+    if (!axis || !finitePoint(centre) || !Number.isFinite(length) || length < MIN_TRANSITION_LENGTH) return false;
+    const runs = connectedRunsOf(reducer, objects);
+    const ports = portsOf(reducer);
+    return ["start", "end"].every(side => {
+        const run = runs[side];
+        if (!run) return true;
+        const sign = side === "start" ? -1 : 1;
+        const terminal = pointAlong(centre, axis.direction, sign * length / 2);
+        const old = run.geometry?.[ports[side]];
+        const far = run.geometry?.[ports[side] === "start" ? "end" : "start"];
+        if (!far || !old) return false;
+        if (run.locked && Math.hypot(terminal.x - old.x, terminal.y - old.y) > 1e-6) return false;
+        const dx = far.x - terminal.x, dy = far.y - terminal.y;
+        return sign * (dx * axis.direction.x + dy * axis.direction.y) >= 1 &&
+            Math.abs(dx * axis.direction.y - dy * axis.direction.x) < 0.01;
+    });
+}
 
-	const dx = b.x - a.x;
-	const dy = b.y - a.y;
-	const lengthSquared = dx * dx + dy * dy;
+export function slideReducerTo(reducer, point, objects = drawingState.objects) {
+    if (!isReducerType(reducer?.type) || reducer.locked || !finitePoint(point)) return false;
+    const axis = axisOf(reducer, objects);
+    if (!axis) return false;
+    const runs = connectedRunsOf(reducer, objects);
+    let centre = { ...point };
+    if (runs.start || runs.end) {
+        const distance = (point.x - axis.centre.x) * axis.direction.x + (point.y - axis.centre.y) * axis.direction.y;
+        centre = pointAlong(axis.centre, axis.direction, distance);
+    }
+    if (!canSeat(reducer, centre, transitionLengthOf(reducer), objects)) return false;
+    reducer.geometry.position = centre;
+    keepConnectedEndsSeated(reducer, objects);
+    return true;
+}
 
-	if (lengthSquared < 1e-12) {
-		return false;
-	}
-
-	const t = Math.min(1, Math.max(0, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
-
-	reducer.geometry = {
-		...reducer.geometry,
-		position: { x: a.x + dx * t, y: a.y + dy * t }
-	};
-
-	keepConnectedEndsSeated(reducer, objects);
-	return true;
+export function resizeEndTo(reducer, side, point, objects = drawingState.objects) {
+    if (reducer?.locked || !finitePoint(point)) return false;
+    const walls = wallsOf(reducer, objects);
+    if (!walls) return false;
+    const other = side === "start" ? walls.end.centre : walls.start.centre;
+    const sign = side === "start" ? -1 : 1;
+    const length = sign * ((point.x - other.x) * walls.axis.direction.x + (point.y - other.y) * walls.axis.direction.y);
+    const centre = pointAlong(other, walls.axis.direction, sign * length / 2);
+    if (!canSeat(reducer, centre, length, objects)) return false;
+    reducer.geometry.position = centre;
+    reducer.engineering.transitionLength = length;
+    keepConnectedEndsSeated(reducer, objects);
+    return true;
 }
 
 /*
@@ -427,91 +401,12 @@ export function keepConnectedEndsSeated(reducer, objects = null) {
 	return true;
 }
 
-/* ============================================================
- * THE TARGET SEGMENT AND ITS PIPE WIDTH
- * ============================================================
- *
- * Reduce means the run gets NARROWER along the taper; Expand means it gets
- * WIDER. Which of the two connected segments is the one that CHANGES is decided
- * by that statement and the two pipes' actual widths - never by the flow, and
- * never by a stored copy.
- *
- *   Reduce  the END-side segment is the narrower one
- *   Expand  the END-side segment is the wider one
- *
- * Flipping swaps which side is the end side, so the same two pipes are seen the
- * other way round and the taper runs the other way on the sheet.
- */
-export function targetSideOf(reducer) {
-  /* The field edits the END-side segment in both modes; the MODE says whether
-   * that side is the narrow one (Reduce) or the wide one (Expand). */
-  return normaliseMode(reducer?.engineering?.mode) === REDUCER_MODES.expand ? "end" : "end";
-}
-
-/* The connected segment the Pipe Width field edits - the END-side one. */
-export function targetRunOf(reducer, objects = null) {
-  const runs = connectedRunsOf(reducer, objects);
-
-  return runs.end || runs.start || null;
-}
-
-/* The target segment's Pipe Width, exactly as the Pipe / Duct model stores it. */
-export function targetWidthOf(reducer, objects = null) {
-  const run = targetRunOf(reducer, objects);
-
-  return run ? Number(run.engineering?.separation) || 0 : 0;
-}
-
-/*
- * SET THE TARGET SEGMENT'S PIPE WIDTH.
- *
- * The width lives on the SEGMENT, never on the fitting: a reducer with a stored
- * width of its own would be free to disagree with the pipe it is bolted to. The
- * fitting's taper follows on the next read, which is why nothing is copied here.
- */
-export function setTargetWidth(reducer, pipeWidth, objects = null) {
-  const run = targetRunOf(reducer, objects);
-
-  if (!run) {
-    return false;
-  }
-
-  const value = Number(pipeWidth);
-
-  if (!Number.isFinite(value) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + value <= 0) {
-    return false;
-  }
-
-  const engineering = { ...(run.engineering || {}) };
-
-  if (value === 0) {
-    delete engineering.separation;
-  } else {
-    engineering.separation = value;
-  }
-
-  run.engineering = engineering;
-
-  keepConnectedEndsSeated(reducer, objects);
-
-  return true;
-}
-
-/* Set the taper's length, clamped so it can never collapse to nothing. */
-export function setTransitionLength(reducer, length) {
-	const value = Number(length);
-
-	if (!isReducerType(reducer?.type) || !Number.isFinite(value) || value < MIN_TRANSITION_LENGTH) {
-		return false;
-	}
-
-	reducer.engineering = {
-		...(reducer.engineering || {}),
-		transitionLength: value
-	};
-
-	keepConnectedEndsSeated(reducer);
-	return true;
+export function setTransitionLength(reducer, length, objects = drawingState.objects) {
+    const value = Number(length);
+    if (reducer?.locked || !canSeat(reducer, reducer.geometry?.position, value, objects)) return false;
+    reducer.engineering.transitionLength = value;
+    keepConnectedEndsSeated(reducer, objects);
+    return true;
 }
 
 /* The fitting's one editable state, as the panel, the writer and tests read it. */
@@ -533,6 +428,43 @@ export function describeReducer(reducer, objects = null) {
 	};
 }
 
+/* Called by the shared pipe reconciler after an endpoint or source edit. */
+export function reconcilePipe(run, objects = drawingState.objects) {
+    for (const fitting of objects.filter(object => isReducerType(object.type))) {
+        let walls = wallsOf(fitting, objects);
+        if (!walls) continue;
+        const ports = portsOf(fitting);
+        for (const side of ["start", "end"]) {
+            const key = side === "start" ? "startPipeId" : "endPipeId";
+            if (!fitting.engineering[key]) {
+                const port = ["start", "end"].find(end => Math.hypot(run.geometry[end].x-walls[side].centre.x, run.geometry[end].y-walls[side].centre.y) < 1e-6);
+                if (port && !connectedPipeIds(fitting).includes(run.id)) {
+                    const candidate = { ...fitting, engineering: { ...fitting.engineering, [key]: run.id, ports: { ...ports, [side]: port } } };
+                    if (canSeat(candidate, walls.axis.centre, walls.length, objects)) {
+                        fitting.engineering = candidate.engineering;
+                        fitting.engineering.connections = connectedPipeIds(fitting).filter(Boolean);
+                        if (fitting.engineering.freeWidths) delete fitting.engineering.freeWidths[side];
+                        ports[side] = port;
+                        keepConnectedEndsSeated(fitting, objects);
+                    }
+                }
+            }
+            if (fitting.engineering[key] !== run.id) continue;
+            const port = ports[side], point = run.geometry[port];
+            const farPort = port === "start" ? "end" : "start";
+            const far = run.geometry[farPort], sign = side === "start" ? -1 : 1;
+            const along = (far.x-walls[side].centre.x)*walls.axis.direction.x + (far.y-walls[side].centre.y)*walls.axis.direction.y;
+            run.geometry[farPort] = pointAlong(walls[side].centre, walls.axis.direction, sign*Math.max(1,sign*along));
+            syncSpan(run);
+            if (Math.hypot(point.x-walls[side].centre.x,point.y-walls[side].centre.y) > 1e-6) {
+                resizeEndTo(fitting, side, point, objects);
+                keepConnectedEndsSeated(fitting, objects);
+                walls = wallsOf(fitting, objects);
+            }
+        }
+    }
+}
+
 const enggReducer = {
 	REDUCER_TYPE,
 	REDUCER_MODES,
@@ -550,12 +482,14 @@ const enggReducer = {
 	outlineOf,
 	createReducer,
 	flipReducer,
+    setMode,
+    modeOf,
+    setEndWidth,
+    resizeEndTo,
+    canSeat,
+    reconcilePipe,
 	slideReducerTo,
 	keepConnectedEndsSeated,
-	targetSideOf,
-	targetRunOf,
-	targetWidthOf,
-	setTargetWidth,
 	setTransitionLength,
 	syncSpan,
 	describeReducer

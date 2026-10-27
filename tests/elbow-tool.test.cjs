@@ -85,7 +85,7 @@ test("A1: the Elbow tool is registered under Flow Paths and is not planned", () 
 
   assert.deepEqual(
     menu.map((item) => item.label),
-    ["Pipe / Duct", "Elbow", "Junction"],
+    ["Pipe / Duct", "Elbow", "Junction", "Reducer / Expander"],
     "Elbow sits between Pipe / Duct and Junction"
   );
 

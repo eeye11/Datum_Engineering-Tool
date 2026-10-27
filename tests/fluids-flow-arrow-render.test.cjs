@@ -51,7 +51,7 @@ function modules() {
   return {
     state,
     ds: require(locate("drawing-state.js")).default,
-    arrow: require(locate("model/fluids/flow-arrow.js")).default,
+    arrow: require(locate("features/workspace/model/fluids/flow-arrow.js")).default,
     sync: require(locate("source-synchronization.js")),
     schema: require(locate("feature-schema.js"))
   };
@@ -417,7 +417,7 @@ function canvasModules() {
   return {
     state: require(locate("editor-state.js")).drawingState,
     ds: require(locate("drawing-state.js")).default,
-    arrow: require(locate("model/fluids/flow-arrow.js")).default,
+    arrow: require(locate("features/workspace/model/fluids/flow-arrow.js")).default,
     schema: require(locate("feature-schema.js")),
     renderer: require(locate("renderer.js")).default,
     sync: require(locate("source-synchronization.js")),

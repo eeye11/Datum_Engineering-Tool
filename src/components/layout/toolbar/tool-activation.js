@@ -27,6 +27,7 @@ import {
   beginFluidLevelToolSession,
   beginFlowDirectionToolSession,
   beginPressureProfileToolSession,
+  beginFlowProfileToolSession,
   beginSectionToolSession
 } from "../../../features/workspace/interaction/fluids-schematic-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
@@ -251,6 +252,7 @@ export function activateTool(
         requestedTool === "fluid-level" ||
         requestedTool === "flow-direction-diagram" ||
         requestedTool === "pressure-profile" ||
+        requestedTool === "flow-profile" ||
         requestedTool === "section-plane";
 
     const nextTool =
@@ -397,6 +399,7 @@ export function activateTool(
     	"fluid-level": beginFluidLevelToolSession,
     	"flow-direction-diagram": beginFlowDirectionToolSession,
     	"pressure-profile": beginPressureProfileToolSession,
+    	"flow-profile": beginFlowProfileToolSession,
     	"section-plane": beginSectionToolSession
     };
 

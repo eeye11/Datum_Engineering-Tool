@@ -94,7 +94,7 @@ test("Pipe / Duct is registered under Create -> Flow Paths and is not planned", 
 
   assert.deepEqual(
     menu.map((item) => item.label),
-    ["Pipe / Duct", "Elbow", "Junction"]
+    ["Pipe / Duct", "Elbow", "Junction", "Reducer / Expander"]
   );
 
   assert.equal(
@@ -112,7 +112,7 @@ test("Flow Indicators comes directly after Flow Paths in Create", () => {
 
   assert.deepEqual(
     create.tools.map((tool) => tool.label),
-    ["Flow Paths", "Flow Indicators", "Reducer / Expander", "Reservoir / Tank", "Pump", "Valve", "Flow Meter"]
+    ["Flow Paths", "Flow Indicators & Annotations", "Reservoir / Tank", "Pump", "Valve", "Flow Meter"]
   );
 });
 

@@ -21,6 +21,7 @@ import enggVessel from "../../../features/workspace/model/fluids/reservoir-tank.
 import enggFluidLevel from "../../../features/workspace/model/fluids/fluid-level.js";
 import enggFlowArrows from "../../../features/workspace/model/fluids/flow-arrows.js";
 import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
+import enggFlowProfile from "../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../features/workspace/model/fluids/section-plane.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -568,7 +569,7 @@ export function drawReducer({ svg, parentSvg, entity, style, toScreen }) {
         return true;
     }
 
-    const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+    const stroke = entity.invalid ? "#dc2626" : paintColour(style.stroke || enggTheme.defaultLineColour());
     const dash = dashPatternFor(style.lineType);
     const width = scaledStrokeWidth(style.lineWidth);
 
@@ -799,8 +800,16 @@ export function drawVessel({ svg, parentSvg, entity, toScreen }) {
  * THE FLUID LEVEL
  * ============================================================
  *
- * One line across the vessel's interior, at the stored height. Its ends come
- * from the VESSEL, so it can never draw through a wall or outlive its host.
+ * The liquid AND its surface line - both derived from the vessel and the one
+ * stored percentage.
+ *
+ *   the FILL     the region beneath the surface, clipped to the vessel's own
+ *                interior, painted at the student's colour and opacity
+ *   the SURFACE  one line across the interior, in the student's line style
+ *
+ * Its ends come from the VESSEL, so it can never draw through a wall or
+ * outlive its host. At 0% the region is EMPTY and only the surface on the floor
+ * is drawn, so nothing appears below the tank.
  */
 export function drawFluidLevel({ svg, parentSvg, entity, toScreen }) {
     const segment = enggFluidLevel.levelSegment(entity, drawingState.objects);
@@ -811,6 +820,47 @@ export function drawFluidLevel({ svg, parentSvg, entity, toScreen }) {
 
     const style = entity?.style || {};
     const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+
+    const region = enggFluidLevel.fillRegion(entity, drawingState.objects);
+
+    if (region && !region.empty && region.points.length >= 3) {
+        const polygon = region.points.map(toScreen).map((point) => `${point.x},${point.y}`).join(" ");
+
+        const fill = createSvgElement("polygon", {
+            points: polygon,
+            fill: paintColour(enggFluidLevel.levelFillColourOf(entity)),
+            "fill-opacity": enggFluidLevel.levelFillOpacityOf(entity),
+            stroke: "none"
+        });
+
+        /*
+         * THE CLIP IS THE VESSEL'S OWN INTERIOR, not a rectangle assumed for
+         * this level. It is a second guarantee on top of the region already
+         * being built inside the walls: a line width, a rotated tank or a
+         * rounding in the fill can never put ink on the outside of a wall.
+         */
+        const vessel = enggFluidLevel.vesselFor(entity, drawingState.objects);
+        const rect = enggVessel.vesselRect(vessel);
+
+        if (rect) {
+            const clipId = `fluid-clip-${String(entity.id || "level").replace(/[^\w-]/g, "-")}`;
+
+            const clipPath = createSvgElement("clipPath", { id: clipId });
+
+            clipPath.appendChild(createSvgElement("polygon", {
+                points: rect.corners.map(toScreen).map((point) => `${point.x},${point.y}`).join(" ")
+            }));
+
+            const defs = createSvgElement("defs");
+
+            defs.appendChild(clipPath);
+            svg.appendChild(defs);
+
+            fill.setAttribute("clip-path", `url(#${clipId})`);
+        }
+
+        svg.appendChild(fill);
+    }
 
     /* The level's convention is a dashed line; the student's line type overrides it. */
     const dash = dashPatternFor(style.lineType) || "8 5";
@@ -1138,6 +1188,195 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
             frame.position.x + frame.width / 2,
             frame.position.y + frame.height - frame.height * 0.025,
             enggPressureProfile.graphNameOf(entity),
+            { size: 12 }
+        );
+    }
+
+    parentSvg.appendChild(svg);
+    return true;
+}
+
+/* ============================================================
+ * THE FLOW PROFILE
+ * ============================================================
+ *
+ * The SAME frame, axes, grid and ticks as a Pressure Profile - it reads them
+ * from the same shared frame model - with the student's flow rows joined by the
+ * line style they chose. Nothing is interpolated and no point is invented: an
+ * empty table draws the frame and its axes, and the guidance that says so is
+ * the Features panel's, not ink inside the graph.
+ */
+export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
+    const frame = enggFlowProfile.profileFrame(entity);
+    const area = enggFlowProfile.plotArea(entity);
+
+    if (!frame || !area) {
+        return true;
+    }
+
+    const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
+    const width = scaledStrokeWidth(style.lineWidth);
+    const muted = paintColour(enggTheme.defaultLineColour());
+
+    const axes = enggFlowProfile.axesOf(entity);
+
+    const strokeLine = (from, to, extra = {}) => {
+        const a = toScreen(from);
+        const b = toScreen(to);
+
+        svg.appendChild(createSvgElement("line", {
+            x1: a.x,
+            y1: a.y,
+            x2: b.x,
+            y2: b.y,
+            stroke,
+            "stroke-width": width,
+            "stroke-linecap": "round",
+            ...extra
+        }));
+    };
+
+    /* The frame, so a profile is visibly a placed object. */
+    const corners = [
+        { x: frame.position.x, y: frame.position.y },
+        { x: frame.position.x + frame.width, y: frame.position.y },
+        { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
+        { x: frame.position.x, y: frame.position.y + frame.height }
+    ];
+
+    for (let index = 0; index < 4; index += 1) {
+        strokeLine(corners[index], corners[(index + 1) % 4], { "stroke-width": Math.max(0.5, width * 0.6) });
+    }
+
+    strokeLine(area.origin, area.xEnd, { "stroke-width": width });
+    strokeLine(area.origin, area.yEnd, { "stroke-width": width });
+
+    if (enggFlowProfile.showGridOf(entity)) {
+        enggFlowProfile.ticksFor(axes.xMin, axes.xMax).forEach((value) => {
+            const at = enggFlowProfile.dataToDrawing(entity, { position: value, value: axes.yMin });
+
+            if (at) {
+                strokeLine(at, { x: at.x, y: area.top }, { stroke: muted, "stroke-width": Math.max(0.4, width * 0.5), "stroke-dasharray": "3 4" });
+            }
+        });
+
+        enggFlowProfile.ticksFor(axes.yMin, axes.yMax).forEach((value) => {
+            const at = enggFlowProfile.dataToDrawing(entity, { position: axes.xMin, value });
+
+            if (at) {
+                strokeLine(at, { x: area.right, y: at.y }, { stroke: muted, "stroke-width": Math.max(0.4, width * 0.5), "stroke-dasharray": "3 4" });
+            }
+        });
+    }
+
+    const points = enggFlowProfile.plottedPoints(entity);
+    const lineStyle = enggFlowProfile.lineStyleOf(entity);
+
+    if (points.length > 1 && lineStyle !== "none") {
+        const d = points.map((point, index) => {
+            const at = toScreen(point);
+
+            if (!index) {
+                return `M ${at.x} ${at.y}`;
+            }
+
+            /* A STEPPED PROFILE runs along then up - the other common convention. */
+            const previous = toScreen(points[index - 1]);
+
+            return lineStyle === "steps"
+                ? `L ${at.x} ${previous.y} L ${at.x} ${at.y}`
+                : `L ${at.x} ${at.y}`;
+        }).join(" ");
+
+        svg.appendChild(createSvgElement("path", {
+            d,
+            fill: "none",
+            stroke,
+            "stroke-width": width,
+            "stroke-linejoin": "round",
+            "stroke-linecap": "round"
+        }));
+    }
+
+    if (enggFlowProfile.showPointsOf(entity)) {
+        points.forEach((plot) => {
+            const at = toScreen(plot);
+
+            svg.appendChild(createSvgElement("circle", {
+                cx: at.x,
+                cy: at.y,
+                r: 3,
+                fill: paintColour(style.fill || stroke),
+                stroke
+            }));
+        });
+    }
+
+    /* The axes' own text, derived from the same fields the Features tab edits. */
+    const label = (x, y, text, { anchor = "middle", size = 11, baseline = "middle" } = {}) => {
+        if (!String(text ?? "").trim()) {
+            return;
+        }
+
+        const at = toScreen({ x, y });
+
+        const node = createSvgElement("text", {
+            x: at.x,
+            y: at.y,
+            fill: stroke,
+            "font-size": size,
+            "text-anchor": anchor,
+            "dominant-baseline": baseline
+        });
+
+        node.textContent = String(text);
+
+        svg.appendChild(node);
+    };
+
+    const round = (value) => {
+        const number = Number(value);
+
+        return Number.isFinite(number) ? String(Number(number.toFixed(3))) : "";
+    };
+
+    enggFlowProfile.ticksFor(axes.xMin, axes.xMax).forEach((value) => {
+        const at = enggFlowProfile.dataToDrawing(entity, { position: value, value: axes.yMin });
+
+        if (at) {
+            label(at.x, at.y - frame.height * 0.045, round(value), { size: 9 });
+        }
+    });
+
+    enggFlowProfile.ticksFor(axes.yMin, axes.yMax).forEach((value) => {
+        const at = enggFlowProfile.dataToDrawing(entity, { position: axes.xMin, value });
+
+        if (at) {
+            label(at.x - frame.width * 0.02, at.y, round(value), { anchor: "end", size: 9 });
+        }
+    });
+
+    const unitSuffix = (unit) => (String(unit ?? "").trim() ? ` (${String(unit).trim()})` : "");
+
+    label(
+        (area.left + area.right) / 2,
+        frame.position.y + frame.height * 0.035,
+        `${axes.xTitle}${unitSuffix(axes.xUnit)}`,
+        { size: 11 }
+    );
+
+    label(
+        frame.position.x + frame.width * 0.02,
+        (area.bottom + area.top) / 2,
+        `${axes.yTitle}${unitSuffix(axes.yUnit)}`,
+        { size: 11, anchor: "start" }
+    );
+
+    if (enggFlowProfile.graphNameOf(entity).trim()) {
+        label(
+            frame.position.x + frame.width / 2,
+            frame.position.y + frame.height - frame.height * 0.025,
+            enggFlowProfile.graphNameOf(entity),
             { size: 12 }
         );
     }

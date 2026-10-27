@@ -108,12 +108,14 @@ import {
     LEVEL_PHASE,
     DIRECTION_PHASE,
     PROFILE_PHASE,
+    FLOW_PROFILE_PHASE,
     SECTION_PHASE,
     commitInlineAt,
     commitVesselDrag,
     commitFluidLevelAt,
     commitFlowDirectionAt,
     commitProfileDrag,
+    commitFlowProfileDrag,
     commitSectionDrag,
     schematicPreviewAt
 } from "./fluids-schematic-tool.js";
@@ -131,6 +133,7 @@ void DIRECTION_PHASE;
 const SCHEMATIC_DRAG_TOOLS = {
     "reservoir-tank": VESSEL_PHASE,
     "pressure-profile": PROFILE_PHASE,
+    "flow-profile": FLOW_PROFILE_PHASE,
     "section-plane": SECTION_PHASE
 };
 
@@ -1632,6 +1635,8 @@ export function finishCreationDrag(
             commitVesselDrag(session.start, end);
         } else if (session.schematicTool === "pressure-profile") {
             commitProfileDrag(session.start, end);
+        } else if (session.schematicTool === "flow-profile") {
+            commitFlowProfileDrag(session.start, end);
         } else if (session.schematicTool === "section-plane") {
             commitSectionDrag(session.start, end);
         }

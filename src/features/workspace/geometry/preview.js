@@ -26,6 +26,7 @@ import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
 import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
+import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
 
 /*
  * The colour every construction preview is drawn in.
@@ -122,6 +123,14 @@ export function updatePreview(
 ) {
     const interaction =
         drawingState.interaction;
+
+    if (drawingState.activeTool === "reducer-expander" && interaction.phase === "inline-place") {
+        interaction.preview = inlinePreviewAt("reducer-expander", resolution.rawPointerPoint || resolution.effectiveConstructionPoint);
+        setToolMessage(interaction.preview?.invalid
+            ? "Not enough room or incompatible pipe ends"
+            : "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it");
+        return;
+    }
 
     /*
      * THE ANALYSIS AXIS PREVIEW FOLLOWS THE CURSOR.

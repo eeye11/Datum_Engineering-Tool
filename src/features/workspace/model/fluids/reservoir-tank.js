@@ -36,7 +36,7 @@
 
 import enggDrawingState from "../../../../shared/model/drawing-state.js";
 import {
-	DEFAULT_VESSEL_HEIGHT,
+  DEFAULT_VESSEL_HEIGHT,
 	DEFAULT_VESSEL_WIDTH,
 	distanceToSegment,
 	finitePoint,
@@ -61,8 +61,27 @@ export const VESSEL_STYLE_LABELS = Object.freeze({
 /* The shortest side a vessel may have, so it can never collapse to a line. */
 export const MIN_VESSEL_SIDE = 1;
 
+/*
+ * HOW A VESSEL RE-SEATS ITS LEVELS.
+ *
+ * The vessel and the level model import each other only in one direction in
+ * fact but not in the module graph: a level is defined in terms of a vessel, so
+ * `fluid-level.js` imports THIS file. Rather than close that into a cycle, the
+ * one operation the vessel needs from the level model is injected by that model
+ * when it loads - the same seam `feature-schema.js` uses for its run lookup.
+ *
+ * Until it is injected (a module loaded on its own, a partial import) `followVessel`
+ * still updates the level's stored vessel height but leaves its line alone, and
+ * the next `refreshFluidLevel` puts it right.
+ */
+let levelRefresher = null;
+
+export function setVesselLevelRefresher(refresh) {
+  levelRefresher = typeof refresh === "function" ? refresh : null;
+}
+
 export function isVesselType(type) {
-	return type === RESERVOIR_TYPE;
+  return type === RESERVOIR_TYPE;
 }
 
 export function vesselStyleOf(vessel) {
@@ -297,10 +316,14 @@ export function crossesVessel(vessel, run) {
 /*
  * FOLLOW THE VESSEL.
  *
- * Called after the vessel moves or is resized. Everything attached to it is put
- * back where it belongs: a pipe's held end is re-seated on the wall it was
- * attached to, and a Fluid Level is re-seated at the same HEIGHT above the
- * bottom, so the level stays the same depth of fluid in a bigger tank.
+ * Called after the vessel moves, turns or is resized. Everything attached to it
+ * is put back where it belongs: a pipe's held end is re-seated on the wall it
+ * was attached to, and a Fluid Level is re-seated at the same PERCENTAGE of the
+ * usable interior, so a half-full tank stays half full when it grows.
+ *
+ * The level is re-seated through its own `refreshFluidLevel`, which owns the
+ * one derivation from (vessel, percentage) to a line and a fill region. This
+ * function therefore carries the level; it does not compute it a second way.
  */
 export function followVessel(vessel, objects = null) {
 	const rect = vesselRect(vessel);
@@ -348,12 +371,23 @@ export function followVessel(vessel, objects = null) {
 			}
 		}
 
-		/* A level follows the vessel it belongs to, at the same depth. */
+		/*
+		 * A level follows the vessel it belongs to, AT THE SAME PERCENTAGE.
+		 *
+		 * The re-seat goes through the level model's own `refreshFluidLevel`, so
+		 * the line and the fill region are derived in the one place that knows
+		 * how - a resize carries the level proportionally without a second copy
+		 * of the arithmetic here.
+		 */
 		if (object.type === "fluid-level" && object.engineering?.vesselId === id) {
 			object.engineering = {
 				...(object.engineering || {}),
 				vesselHeight: rect.height
 			};
+
+			if (typeof levelRefresher === "function") {
+				levelRefresher(object, list);
+			}
 		}
 	});
 
@@ -480,6 +514,7 @@ const enggVessel = {
 	VESSEL_STYLES,
 	VESSEL_STYLE_LABELS,
 	MIN_VESSEL_SIDE,
+	setVesselLevelRefresher,
 	isVesselType,
 	vesselStyleOf,
 	vesselRect,

@@ -35,6 +35,7 @@ import enggEquipment from "../../../../features/workspace/model/fluids/inline-eq
 import enggVessel from "../../../../features/workspace/model/fluids/reservoir-tank.js";
 import enggFlowArrows from "../../../../features/workspace/model/fluids/flow-arrows.js";
 import enggPressureProfile from "../../../../features/workspace/model/fluids/pressure-profile.js";
+import enggFlowProfile from "../../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../../features/workspace/model/fluids/section-plane.js";
 import { POINTS_PER_LINE_WIDTH } from "../../../../tool-library/shared/primitives/tikz-style.js";
 
@@ -49,6 +50,7 @@ export const SCHEMATIC_FIELDS = Object.freeze({
   level: "LEVEL",
   direction: "DIRECTION",
   profile: "PROFILE",
+  plot: "PLOT",
   section: "SECTION"
 });
 
@@ -115,7 +117,7 @@ function pictureScaleOf(source) {
 void pictureScaleOf;
 
 /* The style a block's options state, mapped back to the model's own words. */
-function baseStyleFromSource(source, previous = {}) {
+export function baseStyleFromSource(source, previous = {}) {
   const style = { ...(previous || {}) };
 
   const definitions = new Map();
@@ -202,62 +204,58 @@ function baseStyleFromSource(source, previous = {}) {
  * Its connections came from the metadata, because the geometry cannot say which
  * of two connecting pipes is which.
  */
-export function readReducer(source, { previous = null, hostExists = () => true } = {}) {
+export function readReducer(source, { previous = null, hostExists = () => true, objects = null } = {}) {
   const settings = settingsOf(metadataOf(source).REDUCER);
-
-  if (!Object.keys(settings).length) {
-    return null;
-  }
-
+  if (!["reduce", "expand"].includes(settings.mode) || !Number.isFinite(Number(settings.length)) || Number(settings.length) < 1) return null;
   const coordinates = coordinatesOf(source);
-
-  if (coordinates.length < 4) {
-    return null;
-  }
-
-  const [startA, endA, startB, endB] = coordinates.slice(0, 4);
-
-  /* The walls both run along the fitting's axis, so the mean of their two ends is its centre. */
-  const centre = {
-    x: (startA.x + endA.x + startB.x + endB.x) / 4,
-    y: (startA.y + endA.y + startB.y + endB.y) / 4
-  };
-
-  const wallA = { x: endA.x - startA.x, y: endA.y - startA.y };
-  const wallB = { x: endB.x - startB.x, y: endB.y - startB.y };
-
-  const axis = {
-    x: (wallA.x / (Math.hypot(wallA.x, wallA.y) || 1) + wallB.x / (Math.hypot(wallB.x, wallB.y) || 1)) / 2,
-    y: (wallA.y / (Math.hypot(wallA.x, wallA.y) || 1) + wallB.y / (Math.hypot(wallB.x, wallB.y) || 1)) / 2
-  };
-
-  const axisLength = Math.hypot(axis.x, axis.y);
-
-  const startId = settings.start && hostExists(settings.start) ? settings.start : null;
-  const endId = settings.end && hostExists(settings.end) ? settings.end : null;
-
+  if (coordinates.length < 4) return null;
+  const closed = /--\s*cycle/.test(source);
+  if ((!closed && coordinates.length !== 4) || (closed && ![4,8].includes(coordinates.length))) return null;
+  const [startA, endA, third, fourth] = coordinates.slice(0,4);
+  const [startB, endB] = /--\s*cycle/.test(source) ? [fourth, third] : [third, fourth];
+  const start = { x:(startA.x+startB.x)/2, y:(startA.y+startB.y)/2 };
+  const end = { x:(endA.x+endB.x)/2, y:(endA.y+endB.y)/2 };
+  const length = Math.hypot(end.x-start.x,end.y-start.y);
+  if (length < 1) return null;
+  const direction = { x:(end.x-start.x)/length,y:(end.y-start.y)/length };
+  const widths = { start: Math.hypot(startA.x-startB.x,startA.y-startB.y), end: Math.hypot(endA.x-endB.x,endA.y-endB.y) };
+  if (Math.min(widths.start,widths.end) <= 0 ||
+      Math.abs((startA.x-startB.x)*direction.x+(startA.y-startB.y)*direction.y) > 0.01 ||
+      Math.abs((endA.x-endB.x)*direction.x+(endA.y-endB.y)*direction.y) > 0.01) return null;
+  const startId = settings.start || null, endId = settings.end || null;
+  if ((startId && !hostExists(startId)) || (endId && !hostExists(endId)) || (startId && startId === endId)) return null;
   const ports = String(settings.ports || "end|start").split("|");
-
-  return {
+  if (ports.length !== 2 || ports.some(port => !["start","end"].includes(port))) return null;
+  if (Array.isArray(objects)) {
+    for (const [index,id] of [startId,endId].entries()) {
+      if (!id) continue;
+      const run = objects.find(object => object.id === id);
+      if (run && run.type !== "pipe-duct") return null;
+      if (objects.some(object => object.type === "reducer-expander" && object.id !== previous?.id &&
+          ((object.engineering?.startPipeId === id && enggReducer.portsOf(object).start === ports[index]) ||
+           (object.engineering?.endPipeId === id && enggReducer.portsOf(object).end === ports[index])))) return null;
+    }
+  }
+  const declaredLength = Number(settings.length);
+  const result = {
     type: enggReducer.REDUCER_TYPE,
-    geometry: {
-      position: centre,
-      direction: axisLength > 1e-9 ? { x: axis.x / axisLength, y: axis.y / axisLength } : { x: 1, y: 0 }
-    },
+    geometry: { position: { x:(start.x+end.x)/2,y:(start.y+end.y)/2 }, direction },
     engineering: {
-      mode: enggReducer.normaliseMode(settings.mode),
-      transitionLength: numberOf(settings.length, enggReducer.transitionLengthOf(previous || { engineering: {} })),
-      startPipeId: startId,
-      endPipeId: endId,
-      ports: {
-        start: ports[0] === "start" ? "start" : "end",
-        end: ports[1] === "end" ? "end" : "start"
-      },
-      connections: [startId, endId].filter(Boolean)
+      mode: settings.mode,
+      transitionLength: previous && Math.abs(declaredLength-enggReducer.transitionLengthOf(previous)) < 0.001 ? length : declaredLength,
+      startPipeId: startId, endPipeId: endId,
+      ports: { start:ports[0],end:ports[1] }, connections: [startId,endId].filter(Boolean),
+      ...(!startId || !endId ? { freeWidths: { ...(!startId ? {start:widths.start} : {}), ...(!endId ? {end:widths.end} : {}) } } : {})
     },
-    style: baseStyleFromSource(source, previous?.style),
-    id: previous?.id || null
+    style: baseStyleFromSource(source, previous?.style), id: previous?.id || null,
+    terminalEdits: {}
   };
+  if (Array.isArray(objects) && !enggReducer.canSeat(result, result.geometry.position, result.engineering.transitionLength, objects)) return null;
+  const oldWidths = previous ? enggReducer.endWidthsOf(previous, objects) : null;
+  for (const side of ["start","end"]) {
+    if (oldWidths && Math.abs(widths[side]-oldWidths[side]) > 0.001) result.terminalEdits[side] = widths[side];
+  }
+  return result;
 }
 
 /* AN INLINE SYMBOL: a circle or a bow-tie, and the metadata that says what it is. */
@@ -373,7 +371,14 @@ export function readVessel(source, { previous = null } = {}) {
   };
 }
 
-/* A LEVEL: it belongs to a vessel, and its height is the fact geometry cannot say. */
+/*
+ * A LEVEL: it belongs to a vessel, and its PERCENTAGE is the fact its geometry
+ * cannot say.
+ *
+ * The block also names the liquid's colour and opacity, so a retyped `fill=` or
+ * `opacity=` is an edit to the level's appearance - the same two facts the
+ * Features tab owns.
+ */
 export function readFluidLevel(source, { previous = null, hostExists = () => true } = {}) {
   const settings = settingsOf(metadataOf(source).LEVEL);
 
@@ -383,12 +388,34 @@ export function readFluidLevel(source, { previous = null, hostExists = () => tru
     return null;
   }
 
+  const percent = numberOf(settings.percent, null);
+  const legacy = numberOf(settings.level, null);
+
+  const engineering = {
+    vesselId,
+
+    /*
+     * The PERCENTAGE is the authority. A block with only `level=` is one this
+     * reader's writer never produced - an older file - and its height is
+     * carried through so the level model can derive the percentage from it.
+     */
+    ...(percent !== null ? { levelPercent: percent } : {}),
+    ...(percent === null && legacy !== null ? { levelPosition: legacy } : {})
+  };
+
+  if (/^#[0-9a-fA-F]{6}$/.test(String(settings.fill || ""))) {
+    engineering.fillColour = String(settings.fill).toLowerCase();
+  }
+
+  const opacity = numberOf(settings.opacity, null);
+
+  if (opacity !== null) {
+    engineering.fillOpacity = Math.min(1, Math.max(0, opacity));
+  }
+
   return {
     type: "fluid-level",
-    engineering: {
-      vesselId,
-      levelPosition: numberOf(settings.level, previous?.engineering?.levelPosition ?? 0)
-    },
+    engineering,
     style: baseStyleFromSource(source, previous?.style),
     id: previous?.id || null
   };
@@ -547,6 +574,100 @@ export function readPressureProfile(source, { previous = null } = {}) {
   };
 }
 
+/*
+ * A FLOW PROFILE: the same frame, limits and rows as a pressure profile, plus
+ * the quantity, its station kind and its line style.
+ *
+ * `PLOT` distinguishes it from `PROFILE` - see `schematicReaderFor` - so the two
+ * profiles' metadata lines can never be read as each other.
+ */
+export function readFlowProfile(source, { previous = null } = {}) {
+  const settings = settingsOf(metadataOf(source).PLOT);
+
+  if (!Object.keys(settings).length) {
+    return null;
+  }
+
+  const coordinates = coordinatesOf(source);
+
+  if (coordinates.length < 2) {
+    return null;
+  }
+
+  const [origin, xEnd] = coordinates;
+
+  const plotWidth = Math.abs(xEnd.x - origin.x) || 1;
+  const plotHeight = Math.abs(coordinates[1]?.y - origin.y) || 1;
+
+  const width = plotWidth / (1 - enggFlowProfile.PLOT_INSET.left - enggFlowProfile.PLOT_INSET.right);
+  const height = plotHeight / (1 - enggFlowProfile.PLOT_INSET.top - enggFlowProfile.PLOT_INSET.bottom);
+
+  const position = {
+    x: origin.x - width * enggFlowProfile.PLOT_INSET.left,
+    y: origin.y - height * enggFlowProfile.PLOT_INSET.bottom
+  };
+
+  /*
+   * THE STUDENT'S ROWS COME BACK FROM `data=`, as `station/value` pairs. An
+   * unreadable pair is DROPPED rather than guessed at, and a block with no
+   * `data=` keeps the rows it already had - so an edit to the axes or the frame
+   * never silently empties the table.
+   */
+  const dataSetting = String(settings.data ?? "").trim();
+
+  const parsedRows = dataSetting
+    ? dataSetting
+        .split(";")
+        .map((pair) => {
+          const [station, value] = pair.split("/").map((entry) => Number(entry));
+
+          return Number.isFinite(station) && Number.isFinite(value)
+            ? { position: station, value }
+            : null;
+        })
+        .filter(Boolean)
+    : Array.isArray(previous?.engineering?.points)
+      ? previous.engineering.points.map((row) => ({ ...row }))
+      : [];
+
+  const quantity = enggFlowProfile.FLOW_QUANTITIES.some((entry) => entry.id === settings.quantity)
+    ? settings.quantity
+    : enggFlowProfile.DEFAULT_FLOW_QUANTITY;
+
+  const axes = {
+    xMin: numberOf(settings.x, enggFlowProfile.DEFAULT_AXES.xMin),
+    xMax: numberOf(settings.xmax, enggFlowProfile.DEFAULT_AXES.xMax),
+    yMin: numberOf(settings.y, enggFlowProfile.DEFAULT_AXES.yMin),
+    yMax: numberOf(settings.ymax, enggFlowProfile.DEFAULT_AXES.yMax),
+    xTitle: settings.xtitle ?? enggFlowProfile.DEFAULT_AXES.xTitle,
+    xUnit: settings.xunit ?? enggFlowProfile.DEFAULT_AXES.xUnit,
+    yTitle: settings.ytitle ?? enggFlowProfile.DEFAULT_AXES.yTitle,
+    yUnit: settings.yunit ?? enggFlowProfile.DEFAULT_AXES.yUnit
+  };
+
+  return {
+    type: enggFlowProfile.FLOW_PROFILE_TYPE,
+    geometry: { position, width, height },
+    engineering: {
+      points: parsedRows,
+      quantity,
+      customLabel: String(settings.qlabel ?? previous?.engineering?.customLabel ?? ""),
+      stationKind: enggFlowProfile.STATION_KINDS.some((entry) => entry.id === settings.station)
+        ? settings.station
+        : enggFlowProfile.DEFAULT_STATION_KIND,
+      axes,
+      graphName: String(settings.name ?? previous?.engineering?.graphName ?? ""),
+      lineStyle: enggFlowProfile.LINE_STYLES.some((entry) => entry.id === settings.line)
+        ? settings.line
+        : "straight",
+      grid: settings.grid !== "off",
+      pointsShown: settings.points !== "off"
+    },
+    style: baseStyleFromSource(source, previous?.style),
+    id: previous?.id || null
+  };
+}
+
 /* A SECTION MARK: two ends from its trace, direction and identifier from metadata. */
 export function readSectionPlane(source, { previous = null } = {}) {
   const settings = settingsOf(metadataOf(source).SECTION);
@@ -599,6 +720,10 @@ export function schematicReaderFor(body) {
     return readFluidLevel;
   }
 
+  if (fields.PLOT) {
+    return readFlowProfile;
+  }
+
   if (fields.PROFILE) {
     return readPressureProfile;
   }
@@ -624,6 +749,7 @@ export default {
   readFreeFlowArrow,
   readFlowDirection,
   readPressureProfile,
+  readFlowProfile,
   readSectionPlane,
   schematicReaderFor
 };

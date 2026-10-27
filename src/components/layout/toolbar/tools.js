@@ -350,6 +350,13 @@ export const toolIcons = {
 	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 13.5 9 10.5l2.5 2 4.5-6"/><circle fill="currentColor" cx="6" cy="13.5" r="1"/><circle fill="currentColor" cx="9" cy="10.5" r="1"/><circle fill="currentColor" cx="11.5" cy="12.5" r="1"/><circle fill="currentColor" cx="16" cy="6.5" r="1"/>`),
 
 	/*
+	 * FLOW PROFILE. Axes with a stepped flow curve - a second profile graph, told
+	 * apart from the Pressure Profile by its BARS UNDER THE LINE (a flow at a
+	 * station) rather than by a different frame.
+	 */
+	"Flow Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 13V9.5h3V7h3V11h3"/><path ${iconStroke} d="M6 15.5v-1M9 15.5v-1M12 15.5v-1M15 15.5v-1"/>`),
+
+	/*
 	 * FLUID PROPERTY LABEL. A written note about a fluid: the note's corner and
 	 * ruled lines, in the same language as the Annotate Note icon.
 	 */
@@ -470,6 +477,7 @@ export const featureIcons = {
 	    "flow-meter": toolIcons["Flow Meter"],
 	    "fluid-level": toolIcons["Fluid Level"],
 	    "flow-direction-diagram": toolIcons["Flow Direction Diagram"],
+	    "flow-profile": toolIcons["Flow Profile"],
 	    "pressure-profile": toolIcons["Pressure Profile"],
 	    "section-plane": toolIcons["Section Plane"],
 
@@ -839,6 +847,7 @@ export const engineeringTools = {
 		"Flow Meter",
 		"Flow Indicators & Annotations",
 		"Flow Direction Diagram",
+		"Flow Profile",
 		"Pressure Profile",
 		"Coordinate System",
 		"Reference Point",

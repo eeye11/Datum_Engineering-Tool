@@ -45,7 +45,7 @@ async function ready() {
         right: 0,
         bottom: 0,
         x: 0,
-        y: 0
+        y: 0,
       });
     }
 
@@ -64,7 +64,7 @@ function modules() {
     click: require(locate("canvas-click.js")),
     ds: require(locate("drawing-state.js")).default,
     bounds: require(locate("selection-transform.js")).selectionBounds,
-    pipe: require(locate("model/fluids/pipe-duct.js")).default
+    pipe: require(locate("model/fluids/pipe-duct.js")).default,
   };
 }
 
@@ -80,8 +80,8 @@ function clickAt(page, world) {
       clientX: (world.x - m.state.camera.panX) * scale,
       clientY: -(world.y - m.state.camera.panY) * scale,
       bubbles: true,
-      button: 0
-    })
+      button: 0,
+    }),
   );
 }
 
@@ -91,13 +91,13 @@ function sheet() {
   const first = m.ds.createGeometryObject(
     "line",
     { start: { x: 100, y: 100 }, end: { x: 400, y: 100 } },
-    {}
+    {},
   );
 
   const second = m.ds.createGeometryObject(
     "line",
     { start: { x: 100, y: 300 }, end: { x: 400, y: 300 } },
-    {}
+    {},
   );
 
   m.state.objects = [first, second];
@@ -124,7 +124,7 @@ test("the highlight box covers the selected object only", async () => {
   assert.equal(
     box.maxY < 300,
     true,
-    "the unselected line must not stretch the box"
+    "the unselected line must not stretch the box",
   );
 });
 
@@ -150,7 +150,10 @@ test("a pipe's box encloses both walls, not just its centreline", async () => {
   const box = m.bounds([run], [run.id]);
   const separation = m.pipe.DEFAULT_SCHEMATIC_SEPARATION;
 
-  assert.ok(box.maxY - box.minY >= separation - 1e-9, "a flat line is not a box around a pipe");
+  assert.ok(
+    box.maxY - box.minY >= separation - 1e-9,
+    "a flat line is not a box around a pipe",
+  );
   assert.equal(box.minY, -separation / 2);
   assert.equal(box.maxY, separation / 2);
 });
@@ -198,8 +201,8 @@ test("shift-click extends the selection", async () => {
       clientY: -(300 - m.state.camera.panY) * scale,
       bubbles: true,
       button: 0,
-      shiftKey: true
-    })
+      shiftKey: true,
+    }),
   );
 
   assert.equal(m.state.selection.selectedObjectIds.length, 2);
@@ -275,12 +278,20 @@ test("a click-click shape still takes its two corners", async () => {
 
   clickAt(page, { x: 0, y: 0 });
 
-  assert.equal(m.state.activeTool, "line", "the first corner must not exit the tool");
+  assert.equal(
+    m.state.activeTool,
+    "line",
+    "the first corner must not exit the tool",
+  );
   assert.equal(m.state.interaction.phase, "first-point");
 
   clickAt(page, { x: 100, y: 100 });
 
-  assert.equal(m.state.objects.length, 1, "the second click must complete the line");
+  assert.equal(
+    m.state.objects.length,
+    1,
+    "the second click must complete the line",
+  );
   assert.equal(m.state.objects[0].type, "line");
 });
 

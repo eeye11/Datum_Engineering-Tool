@@ -45,10 +45,12 @@ import enggVessel from "../model/fluids/reservoir-tank.js";
 import enggFluidLevel from "../model/fluids/fluid-level.js";
 import enggFlowArrows from "../model/fluids/flow-arrows.js";
 import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import {
 	INLINE_PHASE,
 	findInsertionTarget,
+    findReducerTarget,
 	insertInline,
 	insertStandalone,
 	planInsertion,
@@ -65,7 +67,8 @@ import {
 	DEFAULT_TRANSITION_LENGTH,
 	DEFAULT_VESSEL_HEIGHT,
 	DEFAULT_VESSEL_WIDTH,
-	finitePoint
+	finitePoint,
+    unitVector
 } from "../model/fluids/fluids-shared.js";
 
 /* The interaction phases these tools use. */
@@ -73,6 +76,7 @@ export const VESSEL_PHASE = "vessel-construct";
 export const LEVEL_PHASE = "fluid-level-construct";
 export const DIRECTION_PHASE = "flow-direction-construct";
 export const PROFILE_PHASE = "pressure-profile-construct";
+export const FLOW_PROFILE_PHASE = "flow-profile-construct";
 export const SECTION_PHASE = "section-plane-construct";
 
 /* ============================================================
@@ -109,7 +113,7 @@ export function beginInlineToolSession(toolId) {
 		toolId === "reducer-expander"
 			? {
 					inlineMode: enggReducer.REDUCER_MODES.reduce,
-					inlineTransitionLength: DEFAULT_TRANSITION_LENGTH
+					inlineTransitionLength: null
 				}
 			: {
 					inlineSymbolSize: DEFAULT_SYMBOL_RADIUS,
@@ -120,7 +124,7 @@ export function beginInlineToolSession(toolId) {
 
 	setToolMessage(
 		toolId === "reducer-expander"
-			? "Click a Pipe / Duct to insert the Reducer / Expander"
+			? "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it"
 			: `Click a Pipe / Duct to insert the ${enggEquipment.EQUIPMENT_TYPE_LABELS[toolId]}, or an empty space to place it`
 	);
 
@@ -163,6 +167,14 @@ export function beginPressureProfileToolSession() {
 	refresh();
 }
 
+export function beginFlowProfileToolSession() {
+  arm("flow-profile", { phase: FLOW_PROFILE_PHASE });
+
+  setToolMessage("Drag to draw the Flow Profile graph frame, then add its data points");
+
+  refresh();
+}
+
 export function beginSectionToolSession() {
 	arm("section-plane", { phase: SECTION_PHASE, sectionDirection: "forward" });
 
@@ -179,28 +191,26 @@ export function beginSectionToolSession() {
  * WHAT A CLICK ON THE SHEET MEANS TO AN INLINE TOOL.
  *
  * On a pipe: an insertion at that point - interior or end, decided by the
- * target. On empty space: a standalone symbol for the equipment; for the
- * reducer, nothing, because a reducer with no run to sit in is not a reducer -
- * the student is told so rather than given a stray shape.
+ * target. On empty space: a standalone symbol that can be connected later.
  */
 export function commitInlineAt(toolId, point) {
 	if (!finitePoint(point)) {
 		return null;
 	}
 
-	const target = findInsertionTarget(point);
+	const target = toolId === "reducer-expander" ? findReducerTarget(point) : findInsertionTarget(point);
 
 	if (!target) {
-		if (toolId === "reducer-expander") {
-			setToolMessage("Click a Pipe / Duct to insert the Reducer / Expander");
-
-			return null;
-		}
-
-		return insertStandalone(toolId, point, {
-			symbolSize: Number(drawingState.interaction.inlineSymbolSize) || DEFAULT_SYMBOL_RADIUS,
+		const result = insertStandalone(toolId, point, {
+			mode: drawingState.interaction.inlineMode,
+            symbolSize: Number(drawingState.interaction.inlineSymbolSize) || DEFAULT_SYMBOL_RADIUS,
 			depiction: drawingState.interaction.inlineDepiction
 		});
+		if (result?.symbol) {
+			enggDrawingState.selectObject(drawingState, result.symbol.id);
+			refresh();
+		}
+		return result;
 	}
 
 	const extra =
@@ -208,7 +218,7 @@ export function commitInlineAt(toolId, point) {
 			? {
 					mode: drawingState.interaction.inlineMode,
 					transitionLength:
-						Number(drawingState.interaction.inlineTransitionLength) || DEFAULT_TRANSITION_LENGTH
+						Number(drawingState.interaction.inlineTransitionLength) || undefined
 				}
 			: {
 					symbolSize: Number(drawingState.interaction.inlineSymbolSize) || DEFAULT_SYMBOL_RADIUS,
@@ -238,12 +248,11 @@ export function inlinePreviewAt(toolId, point) {
 		return null;
 	}
 
-	const target = findInsertionTarget(point);
+	const target = toolId === "reducer-expander" ? findReducerTarget(point) : findInsertionTarget(point);
 
 	if (!target) {
-		return toolId === "reducer-expander"
-			? null
-			: symbolPreviewFor(toolId, { centre: point, rotation: 0, reach: DEFAULT_SYMBOL_RADIUS }, {
+		return symbolPreviewFor(toolId, { centre: point, direction: { x: 1, y: 0 }, rotation: 0, reach: DEFAULT_SYMBOL_RADIUS }, {
+					mode: drawingState.interaction.inlineMode,
 					symbolSize: Number(drawingState.interaction.inlineSymbolSize) || DEFAULT_SYMBOL_RADIUS,
 					depiction: drawingState.interaction.inlineDepiction
 				});
@@ -254,7 +263,7 @@ export function inlinePreviewAt(toolId, point) {
 			? {
 					mode: drawingState.interaction.inlineMode,
 					transitionLength:
-						Number(drawingState.interaction.inlineTransitionLength) || DEFAULT_TRANSITION_LENGTH
+						Number(drawingState.interaction.inlineTransitionLength) || undefined
 				}
 			: {
 					symbolSize: Number(drawingState.interaction.inlineSymbolSize) || DEFAULT_SYMBOL_RADIUS,
@@ -263,7 +272,13 @@ export function inlinePreviewAt(toolId, point) {
 
 	const plan = planInsertion(toolId, target, extra);
 
-	return plan ? symbolPreviewFor(toolId, plan, extra) : null;
+	if (plan) return symbolPreviewFor(toolId, plan, extra);
+    if (toolId !== "reducer-expander") return null;
+    const run = target.run;
+    const direction = target.direction || unitVector(run.geometry.start, run.geometry.end);
+    const preview = symbolPreviewFor(toolId, { centre: target.point, direction, reach: (extra.transitionLength || DEFAULT_TRANSITION_LENGTH) / 2 }, extra);
+    preview.invalid = true;
+    return preview;
 }
 
 /* ============================================================
@@ -363,25 +378,37 @@ export function vesselAtPoint(point) {
 	return best ? best.vessel : null;
 }
 
+/*
+ * THE LIVE PREVIEW OF A LEVEL.
+ *
+ * The preview is a REAL level object, built by the same factory that commits
+ * one against the vessel under the cursor - so what the student sees while the
+ * pointer hovers is exactly what a click creates: the same surface line and the
+ * same filled region, at the same percentage of the vessel's interior.
+ */
 export function levelPreview(vessel, point) {
 	if (!vessel || !point) {
 		return null;
 	}
 
 	const height = enggVessel.heightAtPoint(vessel, point);
+	const rect = enggVessel.vesselRect(vessel);
 
-	if (height === null) {
+	if (height === null || !rect || !(rect.height > 0)) {
 		return null;
 	}
 
-	const span = enggVessel.interiorSpan(vessel, height, enggFluidLevel.LEVEL_INSET);
+	const level = enggFluidLevel.createFluidLevel(vessel, (height / rect.height) * 100, {
+		style: { ...(drawingState.styleDefaults || {}) }
+	});
 
-	return span
+	return level
 		? {
 				id: "fluid-level-preview",
 				type: enggFluidLevel.FLUID_LEVEL_TYPE,
-				geometry: { start: span.start, end: span.end },
-				style: { ...(drawingState.styleDefaults || {}) },
+				geometry: level.geometry,
+				engineering: { ...level.engineering, vesselId: vessel.id },
+				style: level.style,
 				preview: true
 			}
 		: null;
@@ -402,14 +429,15 @@ export function commitFluidLevelAt(point) {
 	}
 
 	const height = enggVessel.heightAtPoint(vessel, point);
+	const rect = enggVessel.vesselRect(vessel);
 
-	if (height === null) {
+	if (height === null || !rect || !(rect.height > 0)) {
 		return null;
 	}
 
 	const previous = enggDrawingState.snapshotDrawing(drawingState);
 
-	const level = enggFluidLevel.createFluidLevel(vessel, height, {
+	const level = enggFluidLevel.createFluidLevel(vessel, (height / rect.height) * 100, {
 		style: { ...(drawingState.styleDefaults || {}) }
 	});
 
@@ -540,6 +568,65 @@ export function profilePreview(session, point) {
 		: null;
 }
 
+export function flowProfilePreview(session, point) {
+  if (!session?.start || !point) {
+    return null;
+  }
+
+  const profile = enggFlowProfile.profileFromDrag(session.start, point, {
+    style: session.style || {},
+  });
+
+  return profile
+    ? {
+        id: "flow-profile-preview",
+        type: enggFlowProfile.FLOW_PROFILE_TYPE,
+        geometry: profile.geometry,
+        engineering: profile.engineering,
+        style: profile.style,
+        preview: true,
+      }
+    : null;
+}
+
+/*
+ * CREATE A FLOW PROFILE.
+ *
+ * It starts EMPTY - no fabricated point, no invented curve - and is a valid
+ * object the moment it exists: its frame, axes and grid are a complete graph
+ * with nothing plotted, and the Features panel invites the student to add
+ * points. A table with no rows is a legitimate state, not an error.
+ */
+export function commitFlowProfileDrag(start, end) {
+  const profile = enggFlowProfile.profileFromDrag(start, end, {
+    style: { ...(drawingState.styleDefaults || {}) },
+  });
+
+  if (!profile) {
+    setToolMessage("Drag a box to draw the Flow Profile graph frame");
+
+    return null;
+  }
+
+  const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+  enggDrawingState.addObject(drawingState, profile);
+  enggDrawingState.commitDrawingChange(drawingState, previous);
+
+  const committed =
+    drawingState.objects.find((object) => object.id === profile.id) || profile;
+
+  enggDrawingState.selectObject(drawingState, committed.id);
+
+  setToolMessage(
+    `${committed.name} created - add its data points in the Features tab`,
+  );
+
+  refresh();
+
+  return committed;
+}
+
 export function commitProfileDrag(start, end) {
 	const profile = enggPressureProfile.profileFromDrag(start, end, {
 		style: { ...(drawingState.styleDefaults || {}) }
@@ -648,13 +735,16 @@ export function schematicPreviewAt(toolId, session, point) {
 			return levelPreview(vesselAtPoint(point), point);
 
 		case "flow-direction-diagram": {
-			const target = findInsertionTarget(point);
+			const target = toolId === "reducer-expander" ? findReducerTarget(point) : findInsertionTarget(point);
 
 			return target?.run ? directionPreview(target.run, point) : null;
 		}
 
 		case "pressure-profile":
-			return profilePreview(session, point);
+		  return profilePreview(session, point);
+
+		case "flow-profile":
+		  return flowProfilePreview(session, point);
 
 		case "section-plane":
 			return sectionPreview(session, point);
@@ -669,12 +759,14 @@ const enggFluidsSchematicTool = {
 	LEVEL_PHASE,
 	DIRECTION_PHASE,
 	PROFILE_PHASE,
+	FLOW_PROFILE_PHASE,
 	SECTION_PHASE,
 	beginInlineToolSession,
 	beginVesselToolSession,
 	beginFluidLevelToolSession,
 	beginFlowDirectionToolSession,
 	beginPressureProfileToolSession,
+	beginFlowProfileToolSession,
 	beginSectionToolSession,
 	commitInlineAt,
 	inlinePreviewAt,
@@ -687,6 +779,8 @@ const enggFluidsSchematicTool = {
 	commitFlowDirectionAt,
 	profilePreview,
 	commitProfileDrag,
+	flowProfilePreview,
+	commitFlowProfileDrag,
 	sectionPreview,
 	commitSectionDrag,
 	schematicPreviewAt,

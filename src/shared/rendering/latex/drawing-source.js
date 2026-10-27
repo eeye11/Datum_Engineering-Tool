@@ -448,6 +448,7 @@ export function parseDrawingSource(source) {
       current.parent = String(field[2] || "");
       current.headerEndLine = index;
     }
+    if (HEADER_FIELDS.has(key)) current.headerEndLine = index;
   }
 
   /*
@@ -792,6 +793,10 @@ export function restoreObjectMarkersFrom(visible, previous) {
       name: block.name,
       part: block.part,
       parent: block.parent,
+      modelHeaders: linesOf(previous).slice(block.beginLine, block.bodyStartLine).filter(line => {
+        const field = COMMENT_FIELD.exec(line);
+        return field && HEADER_FIELDS.has(field[1]) && ![COMMENT_FIELDS.id, COMMENT_FIELDS.type, COMMENT_FIELDS.part, COMMENT_FIELDS.parent].includes(field[1]);
+      }),
       body: linesOf(previous)
         .slice(block.bodyStartLine, block.bodyEndLine + 1)
         .join("\n")
@@ -835,11 +840,13 @@ export function restoreObjectMarkersFrom(visible, previous) {
   }
 
   /* The header a block had, written again when its id is re-attached. */
-  const headerFor = (block) =>
-    objectCommentHeader(
+  const headerFor = (block) => [
+    ...objectCommentHeader(
       { id: block.id, type: block.type, name: block.name },
       { type: block.type, part: block.part, parent: block.parent }
-    );
+    ),
+    ...block.modelHeaders
+  ];
 
   const raw = lines.slice(0, closing);
 
@@ -990,7 +997,7 @@ export function restoreObjectMarkersFrom(visible, previous) {
     }
 
     result.push(...headerFor(region.block));
-    result.push(...raw.slice(start, region.end).filter((line) => !isObjectMarkerLine(line)));
+    result.push(...raw.slice(start, region.end).filter((line) => !isDroppedHeaderLine(line)));
 
     position = region.end;
   }

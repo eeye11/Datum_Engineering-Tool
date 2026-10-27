@@ -25,6 +25,7 @@ import enggVessel from "../model/fluids/reservoir-tank.js";
 import enggFluidLevel from "../model/fluids/fluid-level.js";
 import enggFlowArrows from "../model/fluids/flow-arrows.js";
 import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { polygonContainsPoint } from "../model/fluids/fluids-shared.js";
 
@@ -831,6 +832,27 @@ export function objectAtPoint(
 
                 if (enggFlowArrows.isFlowDirectionType(object.type)) {
                     return enggFlowArrows.directionContainsPoint(object, point, tolerance);
+                }
+
+                /*
+                 * A FLOW PROFILE IS PICKED INSIDE ITS FRAME, exactly as the
+                 * Pressure Profile is - it is the same graph, and a student aiming
+                 * at one aims at the whole plot area rather than at a one-pixel
+                 * axis.
+                 */
+                if (enggFlowProfile.isFlowProfileType(object.type)) {
+                    const frame = enggFlowProfile.profileFrame(object);
+
+                    if (!frame) {
+                        return false;
+                    }
+
+                    return (
+                        point.x >= frame.position.x - tolerance &&
+                        point.x <= frame.position.x + frame.width + tolerance &&
+                        point.y >= frame.position.y - tolerance &&
+                        point.y <= frame.position.y + frame.height + tolerance
+                    );
                 }
 
                 if (enggPressureProfile.isPressureProfileType(object.type)) {

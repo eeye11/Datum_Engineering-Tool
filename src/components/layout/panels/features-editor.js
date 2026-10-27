@@ -359,7 +359,17 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "choice") {
-        return rowMarkup(label, choicesMarkup(key, label, definition.options || [], state), options);
+        /*
+         * THE OPTIONS MAY DEPEND ON THE OBJECT. Most choices are a fixed list;
+         * a Flow Profile's unit rows are the units of the QUANTITY that profile
+         * plots, so the definition supplies a function of the object and the
+         * same field can offer m³/s on one profile and kg/s on another.
+         */
+        const list = typeof definition.options === "function"
+            ? definition.options(objects[0])
+            : definition.options || [];
+
+        return rowMarkup(label, choicesMarkup(key, label, list, state), options);
     }
 
     if (definition.kind === "number") {
@@ -594,7 +604,7 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
                  * orientation is decided by the pipes it joins, so the rotation
                  * row is omitted for an elbow-only selection.
                  */
-                (objects.every((object) => object.type === "elbow")
+                (objects.every((object) => object.type === "elbow" || (object.type === "reducer-expander" && (object.engineering?.startPipeId || object.engineering?.endPipeId)))
                     ? ""
                     : transformRowMarkup("rotate", "Rotate")) +
                 /*

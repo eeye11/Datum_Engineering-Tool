@@ -32,6 +32,7 @@ import enggVessel from "../model/fluids/reservoir-tank.js";
 import enggFluidLevel from "../model/fluids/fluid-level.js";
 import enggFlowArrows from "../model/fluids/flow-arrows.js";
 import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { createJunctionForInteriorConnection } from "./junction-tool.js";
 
@@ -800,6 +801,33 @@ function applyManipulation(
     const object =
         drag.object;
 
+    if (enggReducer.isReducerType(object.type) && drag.kind !== "rotate") {
+        if (!drag.reducerOriginals) {
+            // Width propagation can touch a whole connected run. The existing undo/cancel
+            // path restores these snapshots together with the fitting.
+            drawingState.objects.filter(item => item.type === "pipe-duct").forEach(item => {
+                if (!drag.originals[item.id]) drag.originals[item.id] = JSON.parse(JSON.stringify(item));
+            });
+            drag.reducerOriginals = true;
+        }
+        if (object.locked || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+        if (drag.kind === "reducer-slide" || drag.kind === "body") {
+            const initial = drag.originals?.[object.id]?.geometry?.position;
+            const target = drag.kind === "body" && initial && drag.start
+                ? { x: initial.x + point.x - drag.start.x, y: initial.y + point.y - drag.start.y } : point;
+            enggReducer.slideReducerTo(object, target, drawingState.objects);
+        } else if (drag.kind.startsWith("reducer-length-")) {
+            enggReducer.resizeEndTo(object, drag.kind.endsWith("start") ? "start" : "end", point, drawingState.objects);
+        } else if (drag.kind === "width-start" || drag.kind === "width-end") {
+            const side = drag.kind === "width-start" ? "start" : "end";
+            const walls = enggReducer.wallsOf(object);
+            const centre = walls[side].centre, axis = walls.axis.direction;
+            const width = Math.max(0.5, Math.abs(-(point.x-centre.x)*axis.y+(point.y-centre.y)*axis.x)*2);
+            enggReducer.setEndWidth(object, side, width, drawingState.objects);
+        }
+        return;
+    }
+
     const g =
         object.geometry;
 
@@ -1260,9 +1288,9 @@ function applyManipulation(
 /*
  * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
  *
- * A level's line comes from its VESSEL, so a tank that grew or turned takes its
- * levels with it - at the same height above the bottom - without the level
- * storing a second copy of where it is.
+ * A level's line and its fill come from its VESSEL, so a tank that grew or
+ * turned takes its levels with it AT THE SAME PERCENTAGE - a half-full tank
+ * stays half full - without the level storing a second copy of where it is.
  */
 function refreshLevelsOf(vessel, objects = []) {
     (objects || []).forEach((object) => {
@@ -1329,77 +1357,6 @@ void bodyDragRouted;
      *   a profile's point handle writes the DATA ROW it stands for, and its
      *   frame handles resize the frame.
      */
-    if (enggReducer.isReducerType(object.type)) {
-        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-            return;
-        }
-
-        if (drag.kind === "reducer-slide") {
-            enggReducer.slideReducerTo(object, point, drawingState.objects);
-            return;
-        }
-
-        if (drag.kind === "reducer-length-start" || drag.kind === "reducer-length-end") {
-            const walls = enggReducer.wallsOf(object);
-            const other = drag.kind === "reducer-length-start" ? walls?.end.centre : walls?.start.centre;
-
-            if (!walls || !other) {
-                return;
-            }
-
-            const length = Math.hypot(point.x - other.x, point.y - other.y);
-
-            if (enggReducer.setTransitionLength(object, length)) {
-                /* The dragged end is the one that MOVED; the other stays put. */
-                const offset = drag.kind === "reducer-length-start" ? -1 : 1;
-
-                object.geometry = {
-                    ...object.geometry,
-                    position: {
-                        x: other.x + walls.axis.direction.x * offset * (length / 2),
-                        y: other.y + walls.axis.direction.y * offset * (length / 2)
-                    }
-                };
-            }
-
-            return;
-        }
-
-        if (drag.kind === "width-start" || drag.kind === "width-end") {
-            /*
-             * THE WIDTH HANDLE CHANGES THE SEGMENT'S OWN PIPE WIDTH, which is
-             * the only width a reducer has - the fitting follows on the next
-             * read, because its taper is derived from its two pipes.
-             */
-            const runs = enggReducer.connectedRunsOf(object);
-            const run = drag.kind === "width-start" ? runs.start : runs.end;
-
-            if (!run) {
-                return;
-            }
-
-            const walls = enggReducer.wallsOf(object);
-            const centre = drag.kind === "width-start" ? walls.start.centre : walls.end.centre;
-
-            const distance = Math.hypot(point.x - centre.x, point.y - centre.y) * 2;
-            const change = distance - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION;
-
-            if (enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + change > 0) {
-                run.engineering = { ...(run.engineering || {}) };
-
-                if (change === 0) {
-                    delete run.engineering.separation;
-                } else {
-                    run.engineering.separation = change;
-                }
-            }
-
-            return;
-        }
-
-        return;
-    }
-
     if (enggEquipment.isEquipmentType(object.type)) {
         if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
             return;
@@ -1529,13 +1486,18 @@ void bodyDragRouted;
         return;
     }
 
+    /*
+     * A FLUID LEVEL MOVES VERTICALLY ONLY, and only inside its vessel.
+     *
+     * `setLevelFromPoint` maps the pointer's height onto the vessel's USABLE
+     * INTERIOR and writes the percentage - the same field the Features tab
+     * writes - so a drag cannot put the surface through a wall or below the
+     * floor, and the fill region follows it live because it is derived from
+     * that percentage.
+     */
     if (enggFluidLevel.isFluidLevelType(object.type)) {
         if (drag.kind === "level-height" || drag.kind === "body") {
-            const vessel = (drawingState.objects || []).find(
-                (item) => item.id === object.engineering?.vesselId
-            );
-
-            if (vessel && point) {
+            if (point) {
                 enggFluidLevel.setLevelFromPoint(object, point, drawingState.objects);
             }
 
@@ -1550,6 +1512,79 @@ void bodyDragRouted;
             if (point) {
                 enggFlowArrows.setDirectionFromPoint(object, point, drawingState.objects);
             }
+
+            return;
+        }
+
+        return;
+    }
+
+    /*
+     * A FLOW PROFILE IS A PRESSURE PROFILE'S FRAME, so it is dragged the same
+     * way - by its frame, its corners and its data points - through its own
+     * model's mapping. The same branch pattern, and the same guarantee: a
+     * point dragged writes the ROW the Features table shows, and the frame's
+     * corners resize the graph without touching a stored value.
+     */
+    if (enggFlowProfile.isFlowProfileType(object.type)) {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+            return;
+        }
+
+        const original = drag.originals?.[object.id]?.geometry || object.geometry;
+
+        if (drag.kind.startsWith("profile-point")) {
+            const index = Number(drag.kind.slice("profile-point".length));
+            const data = enggFlowProfile.drawingToData(object, point);
+
+            if (data && Number.isInteger(index)) {
+                enggFlowProfile.setPoint(object, index, data);
+            }
+
+            return;
+        }
+
+        if (drag.kind === "equipment-body" || drag.kind === "body") {
+            object.geometry = {
+                ...original,
+                position: {
+                    x: original.position.x + (point.x - drag.start.x),
+                    y: original.position.y + (point.y - drag.start.y)
+                }
+            };
+
+            return;
+        }
+
+        const match = /^profile-corner(\d)$/.exec(drag.kind);
+
+        if (match) {
+            const opposite = (Number(match[1]) + 2) % 4;
+
+            const right = original.position.x + original.width;
+            const top = original.position.y + original.height;
+
+            const corners = [
+                { x: original.position.x, y: original.position.y },
+                { x: right, y: original.position.y },
+                { x: right, y: top },
+                { x: original.position.x, y: top }
+            ];
+
+            const anchor = corners[opposite];
+
+            const width = Math.max(enggFlowProfile.MIN_PROFILE_SIDE, Math.abs(point.x - anchor.x));
+            const height = Math.max(enggFlowProfile.MIN_PROFILE_SIDE, Math.abs(point.y - anchor.y));
+
+            object.geometry = {
+                ...original,
+                position: {
+                    x: Math.min(point.x, anchor.x),
+                    y: Math.min(point.y, anchor.y)
+                },
+                width,
+                height
+            };
 
             return;
         }

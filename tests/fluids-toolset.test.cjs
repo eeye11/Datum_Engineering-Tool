@@ -120,15 +120,15 @@ const expectedTools = {
     "pipe-duct",
     "elbow",
     "junction",
+    "reducer-expander",
     "flow-arrow",
     "fluid-level",
-    "reducer-expander",
     "reservoir-tank",
     "pump",
     "valve",
     "flow-meter",
   ],
-  Analysis: ["flow-direction-diagram", "pressure-profile"],
+  Analysis: ["flow-direction-diagram", "flow-profile", "pressure-profile"],
   Reference: [
     "coordinate-system",
     "reference-point",
@@ -159,7 +159,7 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   check(
     "Create lists its groups and tools in the required order",
     entries.join(" | ") ===
-      "Flow Paths | Flow Indicators & Annotations | Reducer / Expander | Reservoir / Tank | " +
+      "Flow Paths | Flow Indicators & Annotations | Reservoir / Tank | " +
         "Pump | Valve | Flow Meter",
     entries.join(" | "),
   );
@@ -177,11 +177,11 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   );
 
   check(
-    "Reducer / Expander, Reservoir / Tank, Pump, Valve and Flow Meter are individual tools",
+    "Reservoir / Tank, Pump, Valve and Flow Meter are individual tools",
     directToolsIn(create)
       .map((tool) => tool.id)
       .join(" | ") ===
-      "reducer-expander | reservoir-tank | pump | valve | flow-meter",
+      "reservoir-tank | pump | valve | flow-meter",
     directToolsIn(create)
       .map((tool) => tool.id)
       .join(" | "),
@@ -202,7 +202,7 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
 
 /* The contents of the two groups, exactly as the requirement names them. */
 const groupContents = {
-  "fluids-flow-paths": ["pipe-duct", "elbow", "junction"],
+  "fluids-flow-paths": ["pipe-duct", "elbow", "junction", "reducer-expander"],
   /* Flow Arrow and Fluid Level only - Pressure Tap is not a listed tool. */
   "fluids-flow-indicators": ["flow-arrow", "fluid-level"],
 };
@@ -226,8 +226,8 @@ console.log("\n  the eighteen listed tools\n");
 const allIds = groups.flatMap((group) => toolsIn(group).map((tool) => tool.id));
 
 check(
-  "there are exactly seventeen tools",
-  allIds.length === 17,
+  "there are exactly eighteen tools",
+  allIds.length === 18,
   `found ${allIds.length}: ${allIds.join(", ")}`,
 );
 
@@ -255,7 +255,7 @@ check(
 
 check(
   "the flat registry holds one entry per tool",
-  Object.keys(fluids.FLUIDS_TOOLS).length === 17,
+  Object.keys(fluids.FLUIDS_TOOLS).length === 18,
   Object.keys(fluids.FLUIDS_TOOLS).join(", "),
 );
 
@@ -326,6 +326,7 @@ const BUILT = [
   "valve",
   "flow-meter",
   "flow-direction-diagram",
+  "flow-profile",
   "pressure-profile",
   "coordinate-system",
   "reference-point",
@@ -338,7 +339,7 @@ const built = allIds.filter((id) => !fluids.isPlannedFluidsTool(id));
 
 check(
   "exactly the built tools are not planned",
-  built.join(" | ") === BUILT.join(" | "),
+  [...built].sort().join(" | ") === [...BUILT].sort().join(" | "),
   built.join(" | "),
 );
 
@@ -430,7 +431,7 @@ const validCapabilities = Object.values(capabilities);
 check(
   "the capability table names the shared systems",
   validCapabilities.join(" | ") ===
-    "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | section | planned",
+    "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | flow-profile | section | planned",
   validCapabilities.join(" | "),
 );
 
@@ -529,7 +530,7 @@ check(
 check(
   "every listed tool now carries a real capability, and none is left planned",
   /*
-   * The scope is complete: each of the seventeen listed tools travels a working
+   * The scope is complete: each of the eighteen listed tools travels a working
    * system, so the "not available yet" state is carried by nothing in this
    * section. Pressure Tap was removed with it - the specification's Flow
    * Indicators & Annotations group holds the Flow Arrow and the Fluid Level.

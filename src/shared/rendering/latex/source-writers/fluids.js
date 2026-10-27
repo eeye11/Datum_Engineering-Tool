@@ -22,6 +22,7 @@ import enggVessel from "../../../../features/workspace/model/fluids/reservoir-ta
 import enggFluidLevel from "../../../../features/workspace/model/fluids/fluid-level.js";
 import enggFlowArrows from "../../../../features/workspace/model/fluids/flow-arrows.js";
 import enggPressureProfile from "../../../../features/workspace/model/fluids/pressure-profile.js";
+import enggFlowProfile from "../../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../../features/workspace/model/fluids/section-plane.js";
 import { drawingState } from "../../../../features/workspace/editor-state.js";
 
@@ -427,7 +428,9 @@ export function fluidsSourceWriter(object) {
                       ? serializeFlowDirection(object)
                       : object.type === "pressure-profile"
                         ? serializePressureProfile(object)
-                        : object.type === "section-plane"
+                        : object.type === "flow-profile"
+                          ? serializeFlowProfile(object)
+                          : object.type === "section-plane"
                           ? serializeSectionPlane(object)
                           : null;
 
@@ -453,8 +456,141 @@ export const FLUIDS_SOURCE_TYPES = Object.freeze([
   "fluid-level",
   "flow-direction-diagram",
   "pressure-profile",
+  "flow-profile",
   "section-plane"
 ]);
+
+/*
+ * ============================================================
+ * THE FLOW PROFILE
+ * ============================================================
+ *
+ * The SAME frame, axes, grid, ticks and polyline the Pressure Profile writes,
+ * from the same shared frame model - plus the three facts that make it a FLOW
+ * profile: which quantity is plotted, which units it is stated in, and which
+ * line style joins the points.
+ *
+ * THE STUDENT'S ROWS TRAVEL IN `data=`, as `station/value` pairs, because a
+ * plotted point is a drawn position and a row is a pair of engineering values -
+ * the line alone could not say what the student typed.
+ */
+function serializeFlowProfile(object) {
+  const frame = enggFlowProfile.profileFrame(object);
+  const area = enggFlowProfile.plotArea(object);
+
+  if (!frame || !area) {
+    return null;
+  }
+
+  const { definitions, options } = styleOf(object);
+  const axes = enggFlowProfile.axesOf(object);
+  const rows = enggFlowProfile.readRows(object);
+
+  const dataPairs = rows.map((row) => `${number(row.position)}/${number(row.value)}`).join(";");
+
+  const settings = settingsLine([
+    ["quantity", enggFlowProfile.quantityIdOf(object)],
+    ["qlabel", `"${enggFlowProfile.quantityLabelOf(object)}"`],
+    ["station", enggFlowProfile.stationKindOf(object)],
+    ["x", number(axes.xMin)],
+    ["xmax", number(axes.xMax)],
+    ["y", number(axes.yMin)],
+    ["ymax", number(axes.yMax)],
+    ["xunit", `"${axes.xUnit}"`],
+    ["yunit", `"${axes.yUnit}"`],
+    ["xtitle", `"${axes.xTitle}"`],
+    ["ytitle", `"${axes.yTitle}"`],
+    ["name", `"${enggFlowProfile.graphNameOf(object)}"`],
+    ["line", enggFlowProfile.lineStyleOf(object)],
+    ["grid", enggFlowProfile.showGridOf(object) ? "on" : "off"],
+    ["points", enggFlowProfile.showPointsOf(object) ? "on" : "off"],
+    ["data", `"${dataPairs}"`]
+  ]);
+
+  const plotPoints = enggFlowProfile.plottedPoints(object).map((plot) => point(plot.x, plot.y));
+
+  const commands = [
+    line(area.origin, area.xEnd, options),
+    line(area.origin, area.yEnd, options)
+  ];
+
+  if (enggFlowProfile.showGridOf(object)) {
+    enggFlowProfile.ticksFor(axes.xMin, axes.xMax).forEach((value) => {
+      const at = enggFlowProfile.dataToDrawing(object, { position: value, value: axes.yMin });
+
+      if (at) {
+        commands.push(`\\draw[${options.join(", ")}, line width=0.25pt] ${point(at.x, at.y)} -- ${point(at.x, area.top)};`);
+      }
+    });
+
+    enggFlowProfile.ticksFor(axes.yMin, axes.yMax).forEach((value) => {
+      const at = enggFlowProfile.dataToDrawing(object, { position: axes.xMin, value });
+
+      if (at) {
+        commands.push(`\\draw[${options.join(", ")}, line width=0.25pt] ${point(at.x, at.y)} -- ${point(area.right, at.y)};`);
+      }
+    });
+  }
+
+  if (plotPoints.length > 1 && enggFlowProfile.lineStyleOf(object) !== "none") {
+    commands.push(`\\draw[${options.join(", ")}] ${plotPoints.join(" -- ")};`);
+  }
+
+  if (enggFlowProfile.showPointsOf(object)) {
+    plotPoints.forEach((at) => {
+      commands.push(`\\fill[${(options.find((option) => option.startsWith("draw=")) || "draw=black").replace("draw=", "")}] ${at} circle[radius=0.6];`);
+    });
+  }
+
+  const ink = colourOfHex(object.style?.stroke) || "black";
+
+  const tickLabel = (at, text) =>
+    `\\node[font=\\scriptsize, text=${ink}] at ${point(at.x, at.y)} {${number(text)}};`;
+
+  enggFlowProfile.ticksFor(axes.xMin, axes.xMax).forEach((value) => {
+    const at = enggFlowProfile.dataToDrawing(object, { position: value, value: axes.yMin });
+
+    if (at) {
+      commands.push(tickLabel({ x: at.x, y: at.y - frame.height * 0.045 }, value));
+    }
+  });
+
+  enggFlowProfile.ticksFor(axes.yMin, axes.yMax).forEach((value) => {
+    const at = enggFlowProfile.dataToDrawing(object, { position: axes.xMin, value });
+
+    if (at) {
+      commands.push(tickLabel({ x: at.x - frame.width * 0.02, y: at.y }, value));
+    }
+  });
+
+  const textOf = (value) => String(value ?? "").replace(/[{}\\\n\r]/g, "").trim();
+  const units = (unit) => (textOf(unit) ? ` (${textOf(unit)})` : "");
+
+  commands.push(
+    `\\node[font=\\scriptsize, text=${ink}] at ${point(
+      (area.left + area.right) / 2,
+      frame.position.y + frame.height * 0.035
+    )} {${textOf(axes.xTitle)}${units(axes.xUnit)}};`
+  );
+
+  commands.push(
+    `\\node[font=\\scriptsize, text=${ink}] at ${point(
+      frame.position.x + frame.width * 0.02,
+      (area.bottom + area.top) / 2
+    )} {${textOf(axes.yTitle)}${units(axes.yUnit)}};`
+  );
+
+  if (textOf(enggFlowProfile.graphNameOf(object))) {
+    commands.push(
+      `\\node[font=\\small, text=${ink}] at ${point(
+        frame.position.x + frame.width / 2,
+        frame.position.y + frame.height - frame.height * 0.025
+      )} {${textOf(enggFlowProfile.graphNameOf(object))}};`
+    );
+  }
+
+  return withDefinitions(definitions, [`% DAETUM PROFILE: ${settings}`, ...commands]);
+}
 
 /* ============================================================
  * THE METADATA A SCHEMATIC OBJECT NEEDS TO BE FOUND AGAIN
@@ -514,7 +650,7 @@ function serializeReducer(object) {
   const { definitions, options } = styleOf(object);
 
   const settings = settingsLine([
-    ["mode", enggReducer.normaliseMode(object.engineering?.mode)],
+    ["mode", enggReducer.modeOf(object, drawingState.objects)],
     ["length", number(enggReducer.transitionLengthOf(object))],
     ["start", object.engineering?.startPipeId || ""],
     ["end", object.engineering?.endPipeId || ""],
@@ -530,7 +666,8 @@ function serializeReducer(object) {
 
     return withDefinitions(definitions, [
       `% DAETUM REDUCER: ${settings}`,
-      `\\draw[${options.join(", ")}] ${corners.join(" -- ")} -- cycle;`
+      `\\fill[${options.join(", ")}] ${corners.join(" -- ")} -- cycle;`,
+      ...commands
     ]);
   }
 
@@ -661,8 +798,14 @@ function serializeVessel(object) {
  * FLUID LEVEL
  * ============================================================
  *
- * One line across the vessel's interior, at the stored height - the SAME two
- * ends the canvas draws, so it cannot run through a wall.
+ * The LIQUID and its SURFACE - the SAME region and the same two ends the canvas
+ * draws, derived from the vessel and the one stored percentage, so the compiled
+ * picture cannot fill past a wall or run through one.
+ *
+ * The fill is written FIRST and as a closed path, because that is what TikZ
+ * needs: the surface, down to the floor, across and back up. The surface line is
+ * then stroked in the level's own line style, so a dashed surface is dashed in
+ * the compiled picture too.
  */
 function serializeFluidLevel(object) {
   const segment = enggFluidLevel.levelSegment(object, drawingState.objects);
@@ -673,15 +816,41 @@ function serializeFluidLevel(object) {
 
   const { definitions, options } = styleOf(object);
 
+  const fillHex = String(enggFluidLevel.levelFillColourOf(object) || "").trim();
+
   const settings = settingsLine([
     ["vessel", object.engineering?.vesselId || ""],
-    ["level", number(object.engineering?.levelPosition ?? 0)]
+    ["percent", number(enggFluidLevel.levelPercentOf(object))],
+    ["fill", fillHex],
+    ["opacity", number(enggFluidLevel.levelFillOpacityOf(object))]
   ]);
 
-  return withDefinitions(definitions, [
-    `% DAETUM LEVEL: ${settings}`,
-    line(segment.start, segment.end, options)
-  ]);
+  const commands = [];
+
+  const region = enggFluidLevel.fillRegion(object, drawingState.objects);
+
+  if (region && !region.empty && region.points.length >= 3) {
+    const ink = colourOfHex(fillHex) || "black";
+    const opacity = number(enggFluidLevel.levelFillOpacityOf(object));
+    const path = region.points.map((corner) => point(corner.x, corner.y)).join(" -- ");
+
+    /* A RAW HEX FILL NEEDS ITS `\definecolor`, exactly as the stroke does. */
+    const fillName = fillHex.match(/^#([0-9a-fA-F]{6})$/);
+
+    const fillDefinition =
+      fillName && ink !== "black" && ink !== "white"
+        ? [`\\definecolor{${ink}}{HTML}{${fillName[1].toUpperCase()}}`]
+        : [];
+
+    commands.push(
+      ...fillDefinition,
+      `\\fill[${ink}, fill opacity=${opacity}] ${path} -- cycle;`
+    );
+  }
+
+  commands.push(line(segment.start, segment.end, options));
+
+  return withDefinitions(definitions, [`% DAETUM LEVEL: ${settings}`, ...commands]);
 }
 
 /* ============================================================

@@ -15,7 +15,7 @@ import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, dr
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
-import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawSectionPlane } from "./entities/draw-fluids.js";
+import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 
@@ -99,6 +99,7 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.type === "fluid-level", draw: drawFluidLevel },
         { matches: entity => entity.type === "flow-direction-diagram", draw: drawFlowDirection },
         { matches: entity => entity.type === "pressure-profile", draw: drawPressureProfile },
+        { matches: entity => entity.type === "flow-profile", draw: drawFlowProfile },
         { matches: entity => entity.type === "section-plane", draw: drawSectionPlane }
     ];
 

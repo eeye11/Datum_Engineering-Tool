@@ -497,6 +497,20 @@ export function hostRunOf(object, objects = null) {
   const find = (id) =>
     id ? (list ? list.find((candidate) => candidate?.id === id) || null : enggPipeDuct.connectedPipe(id)) : null;
 
+  // Measure across the two free ends. Measuring only the first split segment
+  // makes the position fraction change every time the symbol is moved.
+  const first = find(ids[0]);
+  const second = find(ids[1]);
+  const ports = object?.engineering?.ports || {};
+  const farEnd = (run, port) =>
+    port === "start" ? run?.geometry?.end : port === "end" ? run?.geometry?.start : null;
+  const start = farEnd(first, ports.a);
+  const end = farEnd(second, ports.b);
+
+  if (finitePoint(start) && finitePoint(end)) {
+    return { ...first, geometry: { start: { ...start }, end: { ...end } } };
+  }
+
   for (const id of ids) {
     const run = find(id);
 
@@ -572,6 +586,13 @@ export function slideAlongHost(object, point, objects = null) {
 
   const start = host.geometry.start;
   const end = host.geometry.end;
+
+  const length = Math.hypot(end.x - start.x, end.y - start.y);
+  const clearance = connectionOffset(object) + 1;
+
+  if (fraction * length < clearance || (1 - fraction) * length < clearance) {
+    return false;
+  }
 
   object.geometry = {
     ...object.geometry,

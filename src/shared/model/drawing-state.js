@@ -471,7 +471,7 @@ function seedSupportAttachment(
  * gives it the block's style. The object shape, its defaults, its label and its
  * derived fields therefore stay the model's decision, in one place.
  */
-function geometryObjectFromSource(type, geometry, { id, name, style, content } = {}) {
+function geometryObjectFromSource(type, geometry, { id, name, style, content, engineering, parentId } = {}) {
     if (!type) {
         return null;
     }
@@ -481,6 +481,8 @@ function geometryObjectFromSource(type, geometry, { id, name, style, content } =
         geometry,
         {
             name: name || undefined,
+            engineering: engineering ? deepClone(engineering) : undefined,
+            parentId,
             style: style ? { ...style } : undefined,
 
             /*
@@ -666,6 +668,7 @@ function createGeometryObject(type, geometry, options = {}) {
         "flow-meter": "Flow Meter",
         "fluid-level": "Fluid Level",
         "flow-direction-diagram": "Flow Direction",
+        "flow-profile": "Flow Profile",
         "pressure-profile": "Pressure Profile",
         "section-plane": "Section Plane"
     }[type] || type;
@@ -2025,7 +2028,7 @@ function removeObjectsAndDescendants(
          * A shared connection is not a hierarchy: the elbow lists the pair it
          * joins, and either one's deletion takes it.
          */
-        if (object.type === "elbow" && Array.isArray(object.engineering?.connections)) {
+        if (["elbow", "reducer-expander"].includes(object.type) && Array.isArray(object.engineering?.connections)) {
             object.engineering.connections.forEach(runId => {
                 if (runId) {
                     addChild(runId, object.id);

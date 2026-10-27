@@ -58,7 +58,7 @@ import {
     sourceForObjectRegion
 } from "../../../shared/rendering/latex/source-object-sync.js";
 import { applyParsedSourceToDrawing } from "../../../shared/rendering/latex/source-model-apply.js";
-import { sourceForObject } from "../../../shared/rendering/latex/source-synchronization.js";
+import { sourceForObject, writeObjectIntoSource } from "../../../shared/rendering/latex/source-synchronization.js";
 import { activePanelTab, setActivePanelTab } from "./panel-tabs.js";
 import { createSourceEditor } from "./source-editor.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -917,6 +917,13 @@ function applySourceToObjects() {
         editable: true,
         removeMissing: false
     });
+
+    if (result.changed && !result.invalid.length && result.reducerSyncIds?.length) {
+        const ids = new Set([...result.reducerSyncIds, ...result.updated]);
+        drawingState.objects.filter(object => ids.has(object.id)).forEach(object => {
+            writeObjectIntoSource(manager, object, { state: drawingState, allObjects: drawingState.objects });
+        });
+    }
 
     if (result.changed) {
         /*

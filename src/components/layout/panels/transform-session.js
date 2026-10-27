@@ -1,3 +1,4 @@
+import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
 /*
  * ============================================================
  * THE FEATURES PANEL'S TRANSFORM
@@ -172,6 +173,11 @@ export function shiftSelection(deltaX, deltaY) {
     detachSourceSync();
 
     targets.forEach((object) => {
+        if (enggReducer.isReducerType(object.type)) {
+            const centre = object.geometry.position;
+            enggReducer.slideReducerTo(object, { x: centre.x + deltaX, y: centre.y + deltaY }, state.objects);
+            return;
+        }
         enggFeatureGeometry.translateObject(object, deltaX, deltaY, (id) =>
             state.objects.find((candidate) => candidate.id === id) || null
         );
@@ -230,7 +236,7 @@ function rotationEditsFor(object, pivot, radians) {
  */
 export function rotateSelection(degrees) {
     const state = drawingState;
-    const targets = transformableObjects();
+    const targets = transformableObjects().filter(object => object.type !== "reducer-expander" || !enggReducer.connectedPipeIds(object).some(Boolean));
 
     if (!state || !targets.length || !Number.isFinite(degrees)) {
         return 0;

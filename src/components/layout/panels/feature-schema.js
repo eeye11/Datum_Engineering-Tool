@@ -39,7 +39,9 @@ import enggVessel from "../../../features/workspace/model/fluids/reservoir-tank.
 import enggFluidLevel from "../../../features/workspace/model/fluids/fluid-level.js";
 import enggFlowArrows from "../../../features/workspace/model/fluids/flow-arrows.js";
 import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
+import enggFlowProfile from "../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../features/workspace/model/fluids/section-plane.js";
+import enggQuantities from "../../../shared/units/quantities.js";
 
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
@@ -1088,25 +1090,11 @@ export const GROUPS = [
     	 * `groupsFor`, so no empty heading is ever drawn.
     	 */
     	export const SCHEMATIC_GROUPS = Object.freeze({
-    	    reducer: [
-    	        /*
-    	         * OBJECT: what is held, whether it is, and which way the taper runs.
-    	         *
-    	         * The two pipe references are READ-ONLY: the fitting is placed by
-    	         * clicking a run, so there is no field that could re-point it at a
-    	         * different pipe without first breaking both connections.
-    	         */
-    	        { id: "object", heading: "Object", fields: ["fixed", "reducerMode", "reducerFlip", "reducerStartPipe", "reducerEndPipe"] },
-    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-    	        /*
-    	         * THE TAPER'S OWN PARAMETERS, then the widths that describe it.
-    	         *
-    	         * Pipe Width EDITS the transitioned segment (the fitting stores no
-    	         * width of its own); the two end widths are DERIVED read-only values,
-    	         * because when both segments are connected they are the pipes'.
-    	         */
-    	        { id: "transform", heading: "Transform", fields: ["transitionLength", "reducerPipeWidth", "reducerStartWidth", "reducerEndWidth"] }
-    	    ],
+            reducer: [
+                { id: "object", heading: "Object", fields: ["name", "reducerMode", "fixed"] },
+                { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+                { id: "transform", heading: "Transform", fields: [], transform: true }
+            ],
     	    equipment: [
     	        { id: "object", heading: "Object", fields: ["fixed", "equipmentPlacement", "equipmentPipeA", "equipmentPipeB", "valveDepiction"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
@@ -1127,15 +1115,30 @@ export const GROUPS = [
     	        { id: "transform", heading: "Transform", fields: ["vesselX", "vesselY", "vesselRotation", "vesselWidth", "vesselHeight"] }
     	    ],
     	    fluidLevel: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "levelVessel", "levelPosition"] },
-    	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth"] },
     	        /*
-    	         * A LEVEL'S TRANSFORM: its X and Y, with Rotate fixed at 0 deg while
-    	         * it belongs to a vessel. The level's line spans the host's interior
-    	         * horizontally, so an angle would describe a surface the vessel cannot
-    	         * hold.
+    	         * OBJECT: which vessel it marks. The level's position is NOT here -
+    	         * it is the Transform's one degree of freedom, on the row below.
     	         */
-    	        { id: "transform", heading: "Transform", fields: ["levelX", "levelY", "levelRotation"] }
+    	        { id: "object", heading: "Object", fields: ["fixed", "levelVessel"] },
+    	        /*
+    	         * APPEARANCE: the SURFACE (line style, colour, thickness) and the
+    	         * LIQUID (fill colour and opacity) - the same shared controls every
+    	         * other drawn object uses, plus the two a filled region needs.
+    	         */
+    	        {
+    	            id: "appearance",
+    	            heading: "Appearance",
+    	            fields: ["lineType", "stroke", "lineWidth", "customWidth", "levelFillColour", "levelFillOpacity"]
+    	        },
+    	        /*
+    	         * TRANSFORM: THE LEVEL POSITION, as a percentage of the vessel's
+    	         * usable interior - the one value that decides where the surface and
+    	         * the fill are, and the one the canvas handle writes. X, Y and Rotate
+    	         * are deliberately absent: the level's position is constrained by its
+    	         * vessel, and a typed X or an angle would describe a surface the
+    	         * vessel cannot hold.
+    	         */
+    	        { id: "transform", heading: "Transform", fields: ["levelPosition"] }
     	    ],
     	    flowDirection: [
     	        { id: "object", heading: "Object", fields: ["fixed", "directionPipe", "directionReversed"] },
@@ -1147,6 +1150,31 @@ export const GROUPS = [
     	        { id: "object", heading: "Object", fields: ["fixed"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
     	        { id: "transform", heading: "Transform", fields: ["freeArrowLength"] }
+    	    ],
+    	    /*
+    	     * A FLOW PROFILE FOLLOWS THE PRESSURE PROFILE'S HIERARCHY: Object, then
+    	     * its data and its axes, then Appearance and Transform. The Data table is
+    	     * a LIST and is rendered by the pane itself (see `features-editor.js`),
+    	     * exactly as the pressure profile's is.
+    	     */
+    	    flowProfile: [
+    	        { id: "object", heading: "Object", fields: ["fixed", "flowProfileName"] },
+    	        {
+    	            id: "profile-data",
+    	            heading: "Data",
+    	            fields: ["flowQuantity", "flowCustomLabel", "flowStationKind", "flowValueUnit", "flowStationUnit"]
+    	        },
+    	        {
+    	            id: "profile-axes",
+    	            heading: "Axes",
+    	            fields: ["flowXTitle", "flowXMin", "flowXMax", "flowYTitle", "flowYMin", "flowYMax"]
+    	        },
+    	        {
+    	            id: "appearance",
+    	            heading: "Appearance",
+    	            fields: ["lineType", "stroke", "lineWidth", "customWidth", "flowLineStyle", "flowShowPoints", "flowShowGrid"]
+    	        },
+    	        { id: "transform", heading: "Transform", fields: ["flowX", "flowY", "flowWidth", "flowHeight"] }
     	    ],
     	    profile: [
     	        { id: "object", heading: "Object", fields: ["fixed", "graphName"] },
@@ -1190,6 +1218,10 @@ export const GROUPS = [
 
     	    if (enggFlowArrows.isFreeFlowArrowType(object.type) && !object.attachment) {
     	        return SCHEMATIC_GROUPS.freeArrow;
+    	    }
+
+    	    if (enggFlowProfile.isFlowProfileType(object.type)) {
+    	        return SCHEMATIC_GROUPS.flowProfile;
     	    }
 
     	    if (enggPressureProfile.isPressureProfileType(object.type)) {
@@ -1850,106 +1882,15 @@ Object.assign(FIELDS, {
 
     reducerMode: {
         kind: "segmented",
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => enggReducer.normaliseMode(object.engineering?.mode),
-        write: (object, value) => {
-            if (!Object.values(enggReducer.REDUCER_MODES).includes(value)) {
-                return false;
-            }
-
-            object.engineering = { ...(object.engineering || {}), mode: value };
-
-            return true;
-        },
-        label: "Mode",
+        applies: object => enggReducer.isReducerType(object?.type),
+        read: object => enggReducer.modeOf(object),
+        write: (object, value) => enggReducer.setMode(object, value),
+        label: "Type",
         options: [
-            { value: "reduce", label: "Reduce" },
-            { value: "expand", label: "Expand" }
+            { value: "reduce", label: "Reducer" },
+            { value: "expand", label: "Expander" }
         ]
     },
-
-    reducerFlip: {
-        kind: "toggle",
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: () => false,
-        write: (object, value) => {
-            if (!value) {
-                return false;
-            }
-
-            return enggReducer.flipReducer(object);
-        },
-        label: "Reverse Taper"
-    },
-
-    /*
-     * THE TRANSITION'S PIPE WIDTH - the new segment's OWN width.
-     *
-     * It is written to the connected segment, never to the fitting, so the taper
-     * follows on the next read and the two can never disagree. Its value is the
-     * segment's `separation`, the same number the Pipe / Duct's Pipe Width row
-     * edits, so the two surfaces are one fact.
-     */
-    reducerPipeWidth: {
-        kind: "number",
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => enggReducer.targetWidthOf(object),
-        write: (object, value) => enggReducer.setTargetWidth(object, value),
-        min: -(enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION - 0.5),
-        max: 400,
-        step: 0.5,
-        unit: "mm",
-        label: "Pipe Width"
-    },
-
-    reducerStartPipe: readonlyField({
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => objectNameOf(object.engineering?.startPipeId),
-        label: "Start Pipe / Duct"
-    }),
-
-    reducerEndPipe: readonlyField({
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => objectNameOf(object.engineering?.endPipeId),
-        label: "End Pipe / Duct"
-    }),
-
-    transitionLength: {
-        kind: "number",
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => enggReducer.transitionLengthOf(object),
-        write: (object, value) => enggReducer.setTransitionLength(object, value),
-        min: enggReducer.MIN_TRANSITION_LENGTH,
-        max: 400,
-        step: 1,
-        unit: "mm",
-        label: "Transition Length"
-    },
-
-    /* The widths the connected pipes give it - stated, never stored here. */
-    reducerStartWidth: readonlyField({
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => {
-            const widths = enggReducer.wallsOf(object)?.widths;
-
-            return widths ? `${Number(widths.start.toFixed(2))}` : "";
-        },
-        unit: "mm",
-        label: "Start Pipe Width"
-    }),
-
-    reducerEndWidth: readonlyField({
-        applies: (object) => enggReducer.isReducerType(object?.type),
-        read: (object) => {
-            const widths = enggReducer.wallsOf(object)?.widths;
-
-            return widths ? `${Number(widths.end.toFixed(2))}` : "";
-        },
-        unit: "mm",
-        label: "End Pipe Width"
-    }),
-
-    /* ------------------------------------------------------ Equipment */
 
     equipmentPlacement: {
         kind: "text",
@@ -2238,56 +2179,51 @@ Object.assign(FIELDS, {
         label: "Attached Vessel"
     }),
 
+    /*
+     * LEVEL POSITION, AS A PERCENTAGE OF THE VESSEL'S USABLE INTERIOR.
+     *
+     * 0 is empty and 100 is full; the write goes to `engineering.levelPercent`
+     * and re-derives the surface and the fill at once, which is the same write
+     * the canvas handle makes. A percentage, not a height, because a height would
+     * stop meaning the same thing the moment the tank was resized.
+     */
     levelPosition: {
         kind: "number",
         applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
-        read: (object) => Number(object.engineering?.levelPosition) || 0,
-        write: (object, value) => enggFluidLevel.setLevelHeight(object, value),
-        min: enggFluidLevel.LEVEL_EDGE_MARGIN,
-        max: 2000,
+        read: (object) => enggFluidLevel.levelPercentOf(object),
+        write: (object, value) => enggFluidLevel.setLevelPercent(object, Number(value)),
+        min: 0,
+        max: 100,
         step: 1,
-        unit: "mm",
+        unit: "%",
         label: "Level Position"
     },
 
     /*
-     * A LEVEL'S X AND Y ARE ITS HOST'S, READ BACK.
+     * THE LIQUID'S OWN APPEARANCE - the fill BEHIND the surface line.
      *
-     * The line can only be where its vessel's interior is, so an X or Y the
-     * student typed cannot move it independently - a typed value would either be
-     * a lie or would detach the level from its host. The row therefore STATES
-     * the level's position (a point on its own line) and does not write. Rotate
-     * is fixed at 0 deg for the same reason: a level spans its vessel
-     * horizontally by definition.
+     * It is stored on the feature's `engineering` (it is the liquid's colour, not
+     * the drawing object's stroke), and both controls go through the level model,
+     * so a typed value and a picker choice cannot disagree.
      */
-    levelX: readonlyField({
+    levelFillColour: {
+        kind: "colour",
         applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
-        read: (object) => {
-            const segment = enggFluidLevel.levelSegment(object);
+        read: (object) => enggFluidLevel.levelFillColourOf(object),
+        write: (object, value) => enggFluidLevel.setLevelFillColour(object, value),
+        label: "Liquid Fill Colour"
+    },
 
-            return segment ? Number(segment.start.x.toFixed(2)) : "";
-        },
-        unit: "mm",
-        label: "X"
-    }),
-
-    levelY: readonlyField({
+    levelFillOpacity: {
+        kind: "number",
         applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
-        read: (object) => {
-            const segment = enggFluidLevel.levelSegment(object);
-
-            return segment ? Number(segment.start.y.toFixed(2)) : "";
-        },
-        unit: "mm",
-        label: "Y"
-    }),
-
-    levelRotation: readonlyField({
-        applies: (object) => enggFluidLevel.isFluidLevelType(object?.type),
-        read: () => 0,
-        unit: "°",
-        label: "Rotate"
-    }),
+        read: (object) => enggFluidLevel.levelFillOpacityOf(object),
+        write: (object, value) => enggFluidLevel.setLevelFillOpacity(object, value),
+        min: 0,
+        max: 1,
+        step: 0.05,
+        label: "Fill Opacity"
+    },
 
     /* ------------------------------------------- Flow direction diagram */
 
@@ -2537,6 +2473,243 @@ Object.assign(FIELDS, {
     profileY: {
         kind: "number",
         applies: (object) => enggPressureProfile.isPressureProfileType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.y) || 0,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, y } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "Y"
+    },
+
+    /* ------------------------------------------------ Flow profile */
+
+    flowProfileName: {
+        kind: "text",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.graphNameOf(object),
+        write: (object, value) => enggFlowProfile.setGraphName(object, value),
+        label: "Profile Title"
+    },
+
+    /*
+     * THE QUANTITY BEING PLOTTED.
+     *
+     * It decides the units the profile's values may be stated in - so changing
+     * it also re-states the Y axis through `setQuantity`.
+     */
+    flowQuantity: {
+        kind: "choice",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.quantityIdOf(object),
+        write: (object, value) => enggFlowProfile.setQuantity(object, String(value)),
+        options: enggFlowProfile.FLOW_QUANTITIES.map((entry) => ({ value: entry.id, label: entry.label })),
+        label: "Flow Quantity"
+    },
+
+    /* The student's own name for a CUSTOM quantity - shown only when it is one. */
+    flowCustomLabel: {
+        kind: "text",
+        applies: (object) =>
+            enggFlowProfile.isFlowProfileType(object?.type) && enggFlowProfile.quantityIdOf(object) === "custom",
+        read: (object) => String(object.engineering?.customLabel ?? ""),
+        write: (object, value) => enggFlowProfile.setCustomLabel(object, value),
+        label: "Custom Quantity Label"
+    },
+
+    flowStationKind: {
+        kind: "choice",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.stationKindOf(object),
+        write: (object, value) => {
+            const id = String(value);
+
+            if (!enggFlowProfile.STATION_KINDS.some((entry) => entry.id === id)) {
+                return false;
+            }
+
+            object.engineering = { ...(object.engineering || {}), stationKind: id };
+
+            return true;
+        },
+        options: enggFlowProfile.STATION_KINDS.map((entry) => ({ value: entry.id, label: entry.label })),
+        label: "Station Axis"
+    },
+
+    /*
+     * THE TWO UNIT SELECTORS. Each is a CHOICE list drawn from the SHARED unit
+     * table for the profile's own quantity, and each CONVERTS the stored rows
+     * when it changes - so a unit change preserves the physical value instead of
+     * making the graph mean something else.
+     */
+    flowValueUnit: {
+        kind: "choice",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).yUnit,
+        write: (object, value) => enggFlowProfile.setValueUnit(object, String(value)),
+        options: (object) =>
+            enggFlowProfile.unitsOf(object || { engineering: {} }).map((unit) => ({ value: unit, label: unit || "(none)" })),
+        label: "Value Unit"
+    },
+
+    flowStationUnit: {
+        kind: "choice",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).xUnit,
+        write: (object, value) => enggFlowProfile.setStationUnit(object, String(value)),
+        options: () =>
+            enggQuantities.unitsFor("length").map((unit) => ({ value: unit, label: unit })),
+        label: "Station Unit"
+    },
+
+    flowXTitle: {
+        kind: "text",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).xTitle,
+        write: (object, value) => enggFlowProfile.setAxes(object, { xTitle: String(value ?? "") }),
+        label: "Station Axis Title"
+    },
+
+    flowYTitle: {
+        kind: "text",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).yTitle,
+        write: (object, value) => enggFlowProfile.setAxes(object, { yTitle: String(value ?? "") }),
+        label: "Value Axis Title"
+    },
+
+    flowXMin: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).xMin,
+        write: (object, value) => enggFlowProfile.setAxes(object, { xMin: Number(value) }),
+        step: 1,
+        label: "Station Minimum"
+    },
+
+    flowXMax: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).xMax,
+        write: (object, value) => enggFlowProfile.setAxes(object, { xMax: Number(value) }),
+        step: 1,
+        label: "Station Maximum"
+    },
+
+    flowYMin: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).yMin,
+        write: (object, value) => enggFlowProfile.setAxes(object, { yMin: Number(value) }),
+        step: 1,
+        label: "Value Minimum"
+    },
+
+    flowYMax: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.axesOf(object).yMax,
+        write: (object, value) => enggFlowProfile.setAxes(object, { yMax: Number(value) }),
+        step: 1,
+        label: "Value Maximum"
+    },
+
+    flowLineStyle: {
+        kind: "choice",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.lineStyleOf(object),
+        write: (object, value) => enggFlowProfile.setLineStyle(object, String(value)),
+        options: enggFlowProfile.LINE_STYLES.map((entry) => ({ value: entry.id, label: entry.label })),
+        label: "Profile Line"
+    },
+
+    flowShowPoints: {
+        kind: "toggle",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.showPointsOf(object),
+        write: (object, value) => {
+            object.engineering = { ...(object.engineering || {}), pointsShown: Boolean(value) };
+
+            return true;
+        },
+        label: "Show Data Points"
+    },
+
+    flowShowGrid: {
+        kind: "toggle",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.showGridOf(object),
+        write: (object, value) => {
+            object.engineering = { ...(object.engineering || {}), grid: Boolean(value) };
+
+            return true;
+        },
+        label: "Show Grid"
+    },
+
+    flowWidth: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.profileFrame(object)?.width || 0,
+        write: (object, value) => {
+            const frame = enggFlowProfile.profileFrame(object);
+
+            return frame ? enggFlowProfile.resizeProfile(object, Number(value), frame.height) : false;
+        },
+        min: enggFlowProfile.MIN_PROFILE_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Width"
+    },
+
+    flowHeight: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => enggFlowProfile.profileFrame(object)?.height || 0,
+        write: (object, value) => {
+            const frame = enggFlowProfile.profileFrame(object);
+
+            return frame ? enggFlowProfile.resizeProfile(object, frame.width, Number(value)) : false;
+        },
+        min: enggFlowProfile.MIN_PROFILE_SIDE,
+        max: 2000,
+        step: 1,
+        unit: "mm",
+        label: "Height"
+    },
+
+    flowX: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
+        read: (object) => Number(object?.geometry?.position?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x) || !object.geometry?.position) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, position: { ...object.geometry.position, x } };
+
+            return true;
+        },
+        step: 1,
+        unit: "mm",
+        label: "X"
+    },
+
+    flowY: {
+        kind: "number",
+        applies: (object) => enggFlowProfile.isFlowProfileType(object?.type),
         read: (object) => Number(object?.geometry?.position?.y) || 0,
         write: (object, value) => {
             const y = Number(value);
@@ -3555,7 +3728,7 @@ export function groupsFor(object) {
                     .map((key) => ({ key, definition: definitionOf(key) }))
                     .filter((entry) => entry.definition && entry.definition.applies(object))
             }))
-            .filter((group) => group.fields.length);
+            .filter((group) => group.fields.length || group.transform);
     }
 
     /*

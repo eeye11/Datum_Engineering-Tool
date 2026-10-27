@@ -15,6 +15,7 @@ import enggVessel from "../model/fluids/reservoir-tank.js";
 import enggFluidLevel from "../model/fluids/fluid-level.js";
 import enggFlowArrows from "../model/fluids/flow-arrows.js";
 import enggPressureProfile from "../model/fluids/pressure-profile.js";
+import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
@@ -961,6 +962,43 @@ function manipulationHandles(
         return at ? [{ kind: "direction-slide", point: at.point }] : [];
     }
 
+    /*
+     * A FLOW PROFILE GETS THE SAME GRIPS as a Pressure Profile - eight frame
+     * handles and one per data point - because it is the same frame model and
+     * the same data-to-drawing mapping. A point's handle writes the ROW its
+     * index names, so the table and the plotted point are one fact.
+     */
+    if (enggFlowProfile.isFlowProfileType(object.type)) {
+        const frame = enggFlowProfile.profileFrame(object);
+
+        if (!frame) {
+            return [];
+        }
+
+        const corners = [
+            { x: frame.position.x, y: frame.position.y },
+            { x: frame.position.x + frame.width, y: frame.position.y },
+            { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
+            { x: frame.position.x, y: frame.position.y + frame.height }
+        ];
+
+        const centre = {
+            x: frame.position.x + frame.width / 2,
+            y: frame.position.y + frame.height / 2
+        };
+
+        const points = enggFlowProfile.plottedPoints(object).map((plot) => ({
+            kind: `profile-point${plot.index}`,
+            point: { x: plot.x, y: plot.y }
+        }));
+
+        return [
+            ...corners.map((point, index) => ({ kind: `profile-corner${index}`, point })),
+            { kind: "equipment-body", point: centre },
+            ...points
+        ];
+    }
+
     if (enggPressureProfile.isPressureProfileType(object.type)) {
         const frame = enggPressureProfile.profileFrame(object);
 
@@ -1475,6 +1513,8 @@ function supportsRotationHandle(
         return false;
     }
 
+    if (enggReducer.isReducerType(object.type)) return !enggReducer.connectedPipeIds(object).some(Boolean);
+
     return ![
         "dimension",
         "annotation",
@@ -1495,6 +1535,13 @@ function supportsRotationHandle(
          * MAIN RUN, which the branches are measured from.
          */
         "junction",
+
+        /*
+         * A FLOW PROFILE IS A FLAT GRAPH - its frame is axis-aligned, and a turn
+         * would rotate the tick text with it. It is listed with the objects that
+         * do not turn, so a handler cannot appear for it.
+         */
+        "flow-profile",
 
         /*
          * A FLOW ARROW HAS NO ROTATION HANDLE. Its orientation IS its pipe's,

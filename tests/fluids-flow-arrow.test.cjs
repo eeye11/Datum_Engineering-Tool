@@ -47,8 +47,8 @@ function modules() {
   return {
     state,
     ds: require(locate("drawing-state.js")).default,
-    arrow: require(locate("model/fluids/flow-arrow.js")).default,
-    arrows: require(locate("model/fluids/flow-arrow.js")),
+    arrow: require(locate("features/workspace/model/fluids/flow-arrow.js")).default,
+    arrows: require(locate("features/workspace/model/fluids/flow-arrow.js")),
     tool: require(locate("flow-arrow-tool.js")),
     pipeTool: require(locate("pipe-duct-tool.js")),
     junctionTool: require(locate("junction-tool.js")),

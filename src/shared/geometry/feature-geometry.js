@@ -276,9 +276,10 @@ function definingPoints(
 
     /*
      * A VESSEL AND A GRAPH FRAME ARE BOXES: their anchor and their far corner,
-     * so a move carries the whole box.
+     * so a move carries the whole box. A Flow Profile is the same box as a
+     * Pressure Profile - one shared frame model - so it is answered here too.
      */
-    if (type === "reservoir-tank" || type === "pressure-profile") {
+    if (type === "reservoir-tank" || type === "pressure-profile" || type === "flow-profile") {
         const width = Number(g.width) || 0;
         const height = Number(g.height) || 0;
 
@@ -550,6 +551,14 @@ function rotateObjectAbout(
             dx * sin +
             dy * cos;
     };
+
+    if (type === "reducer-expander") {
+        if (object.locked || object.engineering?.startPipeId || object.engineering?.endPipeId) return;
+        turn(g.position);
+        const direction = g.direction;
+        g.direction = { x: direction.x*cos-direction.y*sin, y: direction.x*sin+direction.y*cos };
+        return;
+    }
 
     /*
      * A shape stored as a centre, a size and an angle
@@ -863,7 +872,8 @@ function translateObject(
      */
     if (
         object.type === "reservoir-tank" ||
-        object.type === "pressure-profile"
+        object.type === "pressure-profile" ||
+        object.type === "flow-profile"
     ) {
         if (g.position) {
             g.position.x += deltaX;

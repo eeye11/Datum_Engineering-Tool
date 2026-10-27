@@ -43,14 +43,15 @@ import {
   finitePoint,
   finiteNumber
 } from "./fluids-shared.js";
+import enggProfileFrame from "./profile-frame.js";
 
 /* The shared clamp, used by the axis readers below. */
 void finiteNumber;
 
 export const PRESSURE_PROFILE_TYPE = "pressure-profile";
 
-export const MIN_PROFILE_SIDE = 6;
-export const MAX_PROFILE_POINTS = 200;
+export const MIN_PROFILE_SIDE = enggProfileFrame.MIN_PROFILE_SIDE;
+export const MAX_PROFILE_POINTS = enggProfileFrame.MAX_PROFILE_POINTS;
 
 export const DEFAULT_AXES = Object.freeze({
 	xTitle: "Position",
@@ -64,7 +65,7 @@ export const DEFAULT_AXES = Object.freeze({
 });
 
 /* The share of the frame the axes' plot area occupies, leaving room for titles. */
-export const PLOT_INSET = Object.freeze({ left: 0.14, right: 0.05, top: 0.08, bottom: 0.14 });
+export const PLOT_INSET = enggProfileFrame.PLOT_INSET;
 
 export function isPressureProfileType(type) {
 	return type === PRESSURE_PROFILE_TYPE;
@@ -118,46 +119,12 @@ export function showPointsOf(profile) {
  * ============================================================ */
 
 export function profileFrame(profile) {
-	const position = profile?.geometry?.position;
-
-	if (!finitePoint(position)) {
-		return null;
-	}
-
-	const width = Math.abs(Number(profile.geometry.width));
-	const height = Math.abs(Number(profile.geometry.height));
-
-	if (!(width > 0) || !(height > 0)) {
-		return null;
-	}
-
-	return { position: { x: position.x, y: position.y }, width, height };
+	return enggProfileFrame.profileFrame(profile);
 }
 
 /* The plot area's four corners inside the frame. */
 export function plotArea(profile) {
-	const frame = profileFrame(profile);
-
-	if (!frame) {
-		return null;
-	}
-
-	const left = frame.position.x + frame.width * PLOT_INSET.left;
-	const right = frame.position.x + frame.width * (1 - PLOT_INSET.right);
-	const bottom = frame.position.y + frame.height * PLOT_INSET.bottom;
-	const top = frame.position.y + frame.height * (1 - PLOT_INSET.top);
-
-	return {
-		left,
-		right,
-		bottom,
-		top,
-		width: right - left,
-		height: top - bottom,
-		origin: { x: left, y: bottom },
-		xEnd: { x: right, y: bottom },
-		yEnd: { x: left, y: top }
-	};
+	return enggProfileFrame.plotArea(profile);
 }
 
 /* ============================================================
@@ -207,11 +174,7 @@ export function plottedPoints(profile) {
 }
 
 /* The tick values of one axis: five even stops, including both limits. */
-export function ticksFor(low, high, count = 4) {
-	const span = high - low;
-
-	return Array.from({ length: count + 1 }, (_, index) => low + (span * index) / count);
-}
+export const ticksFor = enggProfileFrame.ticksFor;
 
 /* ============================================================
  * EDITING THE DATA
@@ -400,16 +363,11 @@ export function profileFromDrag(from, to, options = {}) {
 }
 
 export function resizeProfile(profile, width, height) {
-	const w = Number(width);
-	const h = Number(height);
-
-	if (!isPressureProfileType(profile?.type) || !(w >= MIN_PROFILE_SIDE) || !(h >= MIN_PROFILE_SIDE)) {
+	if (!isPressureProfileType(profile?.type)) {
 		return false;
 	}
 
-	profile.geometry = { ...profile.geometry, width: w, height: h };
-
-	return true;
+	return enggProfileFrame.resizeProfileFrame(profile, width, height);
 }
 
 /* The graph's own name, shown on the frame when the student sets one. */

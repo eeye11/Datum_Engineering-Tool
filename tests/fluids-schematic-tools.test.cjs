@@ -231,11 +231,11 @@ test("a reducer follows its pipes' widths, and flipping it stores no second widt
   const before = JSON.stringify(reducer.geometry.position);
 
   assert.equal(m.reducer.flipReducer(reducer), true);
-  assert.equal(m.reducer.normaliseMode(reducer.engineering.mode), "expand");
+  assert.equal(m.reducer.normaliseMode(reducer.engineering.mode), "reduce", "flipping reverses the actual pipe widths");
   assert.equal(JSON.stringify(reducer.geometry.position), before, "flipping does not move the fitting");
 
   /* Changing the transition length re-seats both segments on the new ends. */
-  assert.equal(m.schema.writeField(reducer, "transitionLength", 30), true);
+  assert.equal(m.reducer.setTransitionLength(reducer, 30, m.state.objects), true);
   assert.equal(m.reducer.transitionLengthOf(reducer), 30);
 });
 
@@ -448,20 +448,16 @@ test("a fluid level needs a vessel, spans its interior, and follows it", async (
 
   assert.ok(Math.abs(afterY - (beforeY + 10)) < 1e-6, `the level moved with the vessel (${beforeY} -> ${afterY})`);
 
-  /*
-   * And it is editable, with the vessel stated read-only.
-   *
-   * The Transform section IS offered - the level has X, Y and a Rotate fixed at
-   * 0 deg - but its coordinates are READ BACK from the vessel's interior rather
-   * than typed, because a level that could leave its host is not a level.
-   */
-  const headings = m.schema.groupsFor(committed).map((group) => group.heading);
-
-  assert.deepEqual(headings, ["Object", "Appearance", "Transform"]);
+  /* The level stays horizontal and is positioned by percentage of its vessel. */
+  const groups = m.schema.groupsFor(committed);
+  assert.deepEqual(groups.map((group) => group.heading), ["Object", "Appearance", "Transform"]);
+  assert.deepEqual(groups.find((group) => group.id === "transform").fields.map((field) => field.key), ["levelPosition"]);
   assert.equal(m.schema.readField(committed, "levelVessel"), vessel.name);
-  assert.equal(m.schema.readField(committed, "levelRotation"), 0, "the level is horizontal");
-  assert.equal(m.schema.writeField(committed, "levelX", 0), false, "its X is its host's");
-  assert.ok(Number.isFinite(m.schema.readField(committed, "levelY")), "its Y is stated");
+  assert.ok(Number.isFinite(m.schema.readField(committed, "levelPosition")));
+  assert.equal(m.schema.writeField(committed, "levelPosition", 65), true);
+  assert.equal(m.schema.readField(committed, "levelPosition"), 65);
+  const moved = m.level.levelSegment(committed);
+  assert.equal(moved.start.y, moved.end.y, "the level stays horizontal");
   assert.equal(m.schema.writeField(committed, "levelVessel", "something else"), false, "the host is read-only");
 });
 
