@@ -8,6 +8,36 @@ const cylinder = {
 };
 const cv = { id: "cv", type: "rectangle", geometry: { position: { x: 20, y: 60 }, width: 60, height: 50 } };
 
+test("truss selection bounds include every joint when the span endpoints share a corner", async () => {
+    const { selectionBounds, transformSelectionObject } = await model();
+    const corner = { x: 80, y: 0 };
+    const truss = {
+        id: "truss", type: "truss",
+        geometry: {
+            start: corner, end: { ...corner },
+            members: [
+                { start: corner, end: { x: -20, y: 0 } },
+                { start: { x: -20, y: 0 }, end: { x: 30, y: 60 } },
+                { start: { x: 30, y: 60 }, end: { ...corner } }
+            ]
+        }
+    };
+    assert.deepEqual(selectionBounds([truss], [truss.id]),
+        { minX: -20, maxX: 80, minY: 0, maxY: 60 });
+    const moved = transformSelectionObject(truss, { x: 0, y: 0 }, 1, 10, -15);
+    assert.deepEqual(selectionBounds([moved], [truss.id]),
+        { minX: -10, maxX: 90, minY: -15, maxY: 45 });
+});
+
+test("legacy trusses retain bounds from their span endpoints", async () => {
+    const { selectionBounds } = await model();
+    const truss = { id: "legacy", type: "truss", geometry: {
+        start: { x: 10, y: 20 }, end: { x: 90, y: 50 }
+    } };
+    assert.deepEqual(selectionBounds([truss], [truss.id]),
+        { minX: 10, maxX: 90, minY: 20, maxY: 50 });
+});
+
 test("nested cylinder and control volume move together without accumulating deltas", async () => {
     const { transformSelectionObject, selectionBounds } = await model();
     const moved = [cylinder, cv].map(object => transformSelectionObject(object, { x: 0, y: 0 }, 1, 30, -10));

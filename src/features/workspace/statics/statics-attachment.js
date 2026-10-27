@@ -13,7 +13,8 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { isStaticsBody, trussJointHandles } from "../interaction/handles.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
 import { beginMomentPlacement } from "../geometry/preview.js";
-import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, isBodyAttachedTool, staticsAttachmentId, staticsBodyMessage, staticsInstruction, staticsToolPointCount } from "./statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, staticsAttachmentId, staticsBodyMessage, staticsToolPointCount } from "./statics-tools.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
@@ -782,21 +783,7 @@ function commitStaticsAttachment(
         object.id
     );
 
-    /*
-     * The feature is finished, so the operation is dropped
-     * and the tool asks for its body again. Staying armed
-     * makes placing a second load on the same or another
-     * body one click shorter, without the next one silently
-     * attaching to the body that was just used.
-     */
-    setToolMessage(
-        isBodyAttachedTool(toolId)
-            ? staticsBodyMessage(
-                  toolId,
-                  0
-              )
-            : staticsInstruction(toolId)
-    );
+    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

@@ -12,6 +12,7 @@
 import { commitCreatedFeature } from "./creation-commit.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import {
     DYNAMICS_PLACEMENT_TOOLS,
     dynamicsObjectName,
@@ -59,11 +60,15 @@ export function createDynamicsFeature(
 
     commitCreatedFeature(object);
 
-    setToolMessage(
-        DYNAMICS_PLACEMENT_TOOLS[resolved]
-            ? `Click to place the next ${dynamicsObjectName(resolved).toLowerCase()}`
-            : dynamicsInstruction(resolved)
-    );
+    if (resolved === "dynamics-particle") {
+        activateTool("select");
+    } else {
+        setToolMessage(
+            DYNAMICS_PLACEMENT_TOOLS[resolved]
+                ? `Click to place the next ${dynamicsObjectName(resolved).toLowerCase()}`
+                : dynamicsInstruction(resolved)
+        );
+    }
 
     renderProperties();
 

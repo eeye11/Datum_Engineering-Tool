@@ -1393,6 +1393,9 @@ export function objectIdAtSourceLine(line) {
 }
 
 export function renderCurrentDrawing() {
+    if (drawingState.activeTool !== "select") {
+        drawingCanvas.classList.remove("drawing-can-move");
+    }
     if (pendingFrame) {
         cancelAnimationFrame(pendingFrame);
         pendingFrame = 0;

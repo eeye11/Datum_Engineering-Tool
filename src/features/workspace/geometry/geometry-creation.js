@@ -2416,9 +2416,11 @@ function createPointFeature(
         object.id
     );
 
-    setToolMessage(
-        "Specify point"
-    );
+    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
+        activateTool("select");
+    } else {
+        setToolMessage("Specify point");
+    }
 
     renderProperties();
     renderCurrentDrawing();
@@ -2518,9 +2520,7 @@ export function add2DCoordinateSystem(
         drawingState
     );
 
-    setToolMessage(
-        "Specify origin"
-    );
+    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

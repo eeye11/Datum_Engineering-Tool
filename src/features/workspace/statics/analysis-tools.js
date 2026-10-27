@@ -12,6 +12,7 @@ import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { openAnalysisEditorFor } from "./analysis-editor.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * Statics analysis tools.
@@ -1394,18 +1395,9 @@ export function commitAnalysisInput() {
         createResultant(chosen);
     }
 
-    /*
-     * THE OPERATION IS FINISHED, so the interaction is cleared but the TOOL
-     * stays armed - the same "place another one" shape every placement tool
-     * has. Escape is how the student leaves it.
-     */
+    // The completed analysis returns control to selection.
     enggDrawingState.clearInteraction(drawingState);
-    drawingState.interaction.phase = "analysis-input";
-    drawingState.interaction.analysisKind = toolId;
-
-    drawingState.selection.selectedObjectIds = [];
-
-    setToolMessage(analysisInputMessage(toolId));
+    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();
