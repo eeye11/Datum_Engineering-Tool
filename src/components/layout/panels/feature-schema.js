@@ -33,6 +33,9 @@ import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js"
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 import { isDynamicsObject, dynamicsTypeOf } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import { isBlock, isControlBlock, isPlant, plantNodeLabel, plantValue, setPlantNodeLabel, setPlantValue } from "../../../shared/model/plant.js";
+import { isSignalLine } from "../../../shared/model/signal-line.js";
+import { editorState } from "../../../features/workspace/editor-state.js";
 
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
@@ -414,6 +417,80 @@ const ARROW_OPTIONS = [
 
 const FIELDS = {
     /* ---------------------------------------------------------- Geometry */
+
+    plantInputs: {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: isControlBlock,
+        read: (object) => plantValue(object, "inputs"),
+        write: (object, value) => {
+            const count = Number(value);
+            return setPlantValue(object, "inputs", count);
+        },
+        label: "Input nodes"
+    },
+
+    plantOutputs: {
+        kind: "number",
+        min: 0,
+        step: 1,
+        applies: isControlBlock,
+        read: (object) => plantValue(object, "outputs"),
+        write: (object, value) => {
+            const count = Number(value);
+            return setPlantValue(object, "outputs", count);
+        },
+        label: "Output nodes"
+    },
+
+    plantShowNodeLabels: {
+        kind: "toggle",
+        applies: isControlBlock,
+        read: (object) => plantValue(object, "showNodeLabels"),
+        write: (object, value) => setPlantValue(object, "showNodeLabels", value),
+        label: "Label nodes"
+    },
+
+    plantLabel: {
+        kind: "text",
+        applies: isPlant,
+        read: (object) => plantValue(object, "plantLabel"),
+        write: (object, value) => setPlantValue(object, "plantLabel", value),
+        label: "Plant label"
+    },
+
+    blockLabel: {
+        kind: "text",
+        applies: isBlock,
+        read: (object) => plantValue(object, "blockLabel"),
+        write: (object, value) => setPlantValue(object, "blockLabel", value),
+        label: "Block label (/ for fraction, ^ for exponent)"
+    },
+
+    blockLowerLabel: {
+        kind: "text",
+        applies: isBlock,
+        read: (object) => plantValue(object, "blockLowerLabel"),
+        write: (object, value) => setPlantValue(object, "blockLowerLabel", value),
+        label: "Lower label"
+    },
+
+    plantNodeLabel: {
+        kind: "text",
+        applies: (object) =>
+            isControlBlock(object) &&
+            editorState.selectedPlantNode?.objectId === object.id,
+        read: (object) => {
+            const node = editorState.selectedPlantNode;
+            return plantNodeLabel(object, node?.side, node?.index);
+        },
+        write: (object, value) => {
+            const node = editorState.selectedPlantNode;
+            return setPlantNodeLabel(object, node?.side, node?.index, value);
+        },
+        label: "Node label"
+    },
 
     markerStyle: {
         kind: "segmented",
@@ -859,6 +936,7 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
+    { id: "plant", heading: "Plant", fields: ["plantInputs", "plantOutputs", "plantShowNodeLabels", "plantLabel", "blockLabel", "blockLowerLabel", "plantNodeLabel"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
@@ -1958,6 +2036,10 @@ export function groupsFor(object) {
         return [];
     }
 
+    if (isSignalLine(object)) {
+        return [];
+    }
+
     /*
      * A DYNAMICS SYMBOL'S OWN CONTROLS GO FIRST - straight after the heading,
      * and ahead of Appearance, Object and Transform.
@@ -1968,13 +2050,20 @@ export function groupsFor(object) {
      * panel shows one symbol's real controls rather than a list of sections
      * that might apply to something else.
      */
+    const controlBlock = isControlBlock(object)
+        ? [{
+            ...GROUPS.find((group) => group.id === "plant"),
+            heading: isBlock(object) ? "Block" : "Plant"
+        }]
+        : [];
     const dynamics = isDynamicsObject(object)
         ? DYNAMICS_GROUPS
         : [];
 
     const groups = [
+        ...controlBlock,
         ...dynamics,
-        ...GROUPS
+        ...GROUPS.filter((group) => group.id !== "plant")
     ]
         .map((group) => {
             const fields = group.fields
@@ -2053,7 +2142,7 @@ export function writeField(object, key, value) {
  * the real move goes through `transform-session.js`.
  */
 export function supportsTransform(object) {
-    if (!object || typeof object !== "object" || !object.geometry) {
+    if (!object || typeof object !== "object" || !object.geometry || isSignalLine(object)) {
         return false;
     }
 
@@ -2134,6 +2223,18 @@ const TYPE_LABELS = {
 };
 
 export function typeLabelOf(object) {
+    if (isSignalLine(object)) {
+        return "Signal Line";
+    }
+
+    if (isPlant(object)) {
+        return "Plant";
+    }
+
+    if (isBlock(object)) {
+        return "Block";
+    }
+
     if (object?.type === "annotate") {
         return ANNOTATE_TYPE_LABELS[object.annotateKind] || TYPE_LABELS.annotate;
     }
@@ -2284,9 +2385,11 @@ export function iconForObject(object) {
     }
 
     const key =
-        object.type === "annotate"
-            ? ANNOTATE_ICON_KEYS[object.annotateKind]
-            : TYPE_ICON_KEYS[object.type];
+        isSignalLine(object)
+            ? "Signal Line"
+            : object.type === "annotate"
+                ? ANNOTATE_ICON_KEYS[object.annotateKind]
+                : TYPE_ICON_KEYS[object.type];
 
     return (key && toolIcons[key]) || OBJECT_ICON;
 }

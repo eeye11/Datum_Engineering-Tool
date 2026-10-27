@@ -610,9 +610,8 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
    * behaviour - is ~2.8x too large and offset, and fails here.
    */
   const k = 72.27 / 25.4;
-  const origin = -72.27;
-
-  const svg = await (await engine()).renderTikz(
+   const origin = -72.27;
+   const svg = await (await engine()).renderTikz(
     "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\draw (20,10) -- (30,10);\n\\end{tikzpicture}",
     { anchorOrigin: true },
   );
@@ -648,13 +647,16 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
     assert.ok(layer, "the canvas has no compiled picture layer to seat");
 
     const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
+    const transform = syncExportTransformForSheet();
+    const originX = transform.sourceBounds.minX;
+    const originY = transform.sourceBounds.minY;
 
     assert.ok(
-      Math.abs(left + width / 2 - (origin + 25 * k)) < 0.05,
+      Math.abs(left + width / 2 - (25 - originX) * transform.factor * k) < 0.05,
       "the canvas centre is not world x = panX in the compiled picture's units",
     );
     assert.ok(
-      Math.abs(top + height / 2 - (origin - 10 * k)) < 0.05,
+      Math.abs(top + height / 2 + (10 - originY) * transform.factor * k) < 0.05,
       "the canvas centre is not world y = panY in the compiled picture's units",
     );
   } finally {
@@ -687,4 +689,3 @@ test("the compiled picture is produced from the Source tab's current text", asyn
   assert.equal(manager.lastError(), null, "a render failure was recorded");
   assert.ok(pictureLayer().children.length > 0, "no compiled picture is on the canvas");
 });
-

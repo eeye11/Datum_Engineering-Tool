@@ -91,6 +91,8 @@ export const editorState = {
 
     selectionClickSuppressed: false,
 
+    selectedPlantNode: null,
+
     selectionDrag: null,
 
     /*
