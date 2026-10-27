@@ -42,7 +42,6 @@ const expandedToolbarSections = {
     "steady-state-devices": false,
     "thermodynamic-cycles": false
 };
-};
 
 function renderToolGroup(group) {
     /*
