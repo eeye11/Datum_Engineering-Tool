@@ -12,6 +12,7 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { STATICS_PLACEMENT_TOOLS } from "./statics-tools.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { attachableStaticsType, isSupportType } from "../../../shared/model/feature-types.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 export function createStaticsFeature(
     toolId,
@@ -353,6 +354,12 @@ export function createStaticsFeature(
         drawingState,
         stored.id
     );
+
+    if (isSupportType(type)) {
+        renderProperties();
+        activateTool("select");
+        return;
+    }
 
     setToolMessage(
         `Specify ${definition.label.toLowerCase()} position`

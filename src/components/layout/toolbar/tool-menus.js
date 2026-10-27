@@ -37,6 +37,7 @@ export function toolDefinitionForLabel(label) {
     return {
         id:
             toolIdByLabel[label] ||
+            (label === "Supports" ? "support" : null) ||
             label
                 .toLowerCase()
                 .replace(

@@ -12,6 +12,9 @@ import enggJunction from "../model/fluids/junction.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
+import { stressArrowPaths } from "../../../shared/geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
+import { selectionBounds } from "../../../shared/selection/selection-transform.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
@@ -598,6 +601,18 @@ export function safeDimensionGraphics(
     }
 }
 
+// Match the visible selection frame, including its three-pixel padding.
+export function boundarySelectionAtPoint(point) {
+    const tolerance = 8 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+    const selected = new Set(drawingState.selection.selectedObjectIds);
+    return drawingState.objects.findLast(object => {
+        if (!selected.has(object.id) || !object.metadata?.boundaryStress || object.locked || object.visible === false) return false;
+        const box = selectionBounds([object], [object.id]);
+        return box && point.x >= box.minX - tolerance && point.x <= box.maxX + tolerance &&
+            point.y >= box.minY - tolerance && point.y <= box.maxY + tolerance;
+    }) || null;
+}
+
 export function objectAtPoint(
     point
 ) {
@@ -1161,6 +1176,22 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.boundaryStress) {
+                    const angle = (Number(geometry.rotation) || 0) * Math.PI / 180;
+                    const dx = point.x - geometry.position.x - geometry.width / 2;
+                    const dy = point.y - geometry.position.y + geometry.height / 2;
+                    const x = dx * Math.cos(angle) + dy * Math.sin(angle);
+                    const y = -dx * Math.sin(angle) + dy * Math.cos(angle);
+                    if (Math.abs(x) <= geometry.width / 2 && Math.abs(y) <= geometry.height / 2) return true;
+                }
+                if (object.metadata?.boundaryStress && boundaryStressDrawing(geometry).paths.some(({ points }) =>
+                    points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance))) {
+                    return true;
+                }
+                if (object.metadata?.stressElement && stressArrowPaths(geometry).some(path =>
+                    path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance))) {
+                    return true;
+                }
                 if (
                     object.type ===
                     "circle"
@@ -2031,6 +2062,8 @@ export function pickDerivedMagnitude(
         const object =
             drawingState.objects[i];
 
+        if (object.visible === false) continue;
+
         const annotations =
             model.derivedAnnotations(
                 object,
@@ -2058,7 +2091,7 @@ export function pickDerivedMagnitude(
                 !model.textBoundsContainPoint(
                     bounds,
                     point,
-                    padding
+                    padding + (object.type === "force" ? 4 / Math.max(drawingState.camera.zoom, 0.25) : 0)
                 )
             ) {
                 continue;

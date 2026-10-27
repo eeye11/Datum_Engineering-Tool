@@ -17,7 +17,8 @@ import { isConstructionTool } from "../../../components/layout/toolbar/construct
 import { drawingCanvas, drawingCoordinates } from "../dom.js";
 import { beginManipulationDrag, finishManipulationDrag, updateManipulationDrag } from "./drag.js";
 import { drawingState, editorState } from "../editor-state.js";
-import { objectAtPoint } from "./hit-testing.js";
+import { objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
+import { cancelManipulationDrag } from "./handles.js";
 import { updateDrawingCoordinates } from "./pointer.js";
 import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
@@ -422,6 +423,12 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointermove",
             event => {
+                if (!editorState.manipulationDrag && !editorState.creationDrag) {
+                    const point = canvasPointFromEvent(event, false);
+                    const target = drawingState.activeTool === "select" ? boundarySelectionAtPoint(point) || objectAtPoint(point) : null;
+                    drawingCanvas.classList.toggle("drawing-can-move", Boolean(target && !target.locked &&
+                        (target.metadata?.boundaryStress || ["coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
+                }
                 /*
                  * A DRAG-TO-CREATE KEEPS ITS PREVIEW LIVE.
                  *
@@ -543,6 +550,11 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointercancel",
             event => {
+                if (editorState.manipulationDrag) {
+                    cancelManipulationDrag();
+                    renderCurrentDrawing();
+                }
+                drawingCanvas.classList.remove("drawing-object-moving", "drawing-can-move");
                 editorState.creationDrag = null;
 
                 /*

@@ -62,6 +62,8 @@ function startDerivedAnnotationDrag(
     if (!picked || !point) {
         return false;
     }
+    const source = drawingState.objects.find(object => object.id === picked.sourceFeatureId);
+    if (!source || source.locked) return false;
 
     /*
      * SELECT THE LABEL, so its tight editor box appears while it is dragged
@@ -76,6 +78,8 @@ function startDerivedAnnotationDrag(
 
     editorState.selectionDrag = {
         pointerId: event.pointerId,
+        previousObjects: enggDrawingState.snapshotDrawing(drawingState),
+        originalGeometry: structuredClone(source.geometry),
         start: point,
         current: point,
         moved: false,
@@ -672,10 +676,7 @@ export function finishSelectionDrag(
     if (currentSelection.derived) {
         if (currentSelection.moved) {
             const previous =
-                enggDrawingState
-                    .snapshotDrawing(
-                        drawingState
-                    );
+                currentSelection.previousObjects;
 
             /*
              * The offset is already on the feature from the move handler;
@@ -692,9 +693,8 @@ export function finishSelectionDrag(
             );
         } else {
             /*
-             * A click with no movement: the box goes back where it
-             * naturally falls, so a nudge that was abandoned does not leave
-             * the label a pixel out of place forever.
+             * A click without a drag preserves the label's previous location,
+             * including any offset from an earlier move.
              */
             const source =
                 objectsByIds([
@@ -703,16 +703,7 @@ export function finishSelectionDrag(
                 ])[0];
 
             if (source?.geometry) {
-                /*
-                 * Only THIS label's slot is cleared - one point of a
-                 * varying load, or the whole feature for a single-magnitude
-                 * one - so abandoning a nudge on one label cannot reset the
-                 * positions of the others.
-                 */
-                enggAnnotationModel.resetDerivedAnnotation(
-                    source,
-                    currentSelection.derived.annotation
-                );
+                source.geometry = structuredClone(currentSelection.originalGeometry);
             }
 
             setToolMessage(

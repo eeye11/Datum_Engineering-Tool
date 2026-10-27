@@ -1406,7 +1406,8 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                 style,
                 state,
                 bounds,
-                true
+                true,
+                -(Number(geometry.rotation) || 0)
             );
             return;
         }

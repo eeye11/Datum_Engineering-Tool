@@ -8,7 +8,7 @@ import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
@@ -23,6 +23,7 @@ const expandedToolbarSections = {
     "reference-arc": false,
     arc: false,
     polygon: false,
+    "coordinate-system": false,
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
@@ -77,7 +78,6 @@ function renderToolbarTool(tool) {
 
     const expanded = expandedToolbarSections[tool.id];
     const sectionId = `statics-${tool.id}-tools`;
-
     /*
      * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
      *
@@ -88,19 +88,15 @@ function renderToolbarTool(tool) {
      * what keeps a group that emits no `aria-expanded` at all from silently
      * losing its accessible expanded state.
      */
-    const button =
-        renderToolButton(tool)
-            .replace(' aria-haspopup="menu"', '')
-            .replace('aria-expanded="false"', '')
-            .replace('aria-pressed="', `aria-expanded="${expanded}" aria-controls="${sectionId}" aria-pressed="`);
+    const button = renderToolButton({ ...tool, submenu: true })
+        .replace(' aria-haspopup="menu"', '')
+        .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    /*
-     * A FLUIDS GROUP'S CHILDREN COME FROM ITS OWN REGISTRY, so the tools that
-     * open under Flow Paths are the SAME entries the activation layer reads -
-     * there is no second list here to fall out of step.
-     */
-    const children = FLUIDS_TOOL_MENUS[tool.id]
-        ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+    const children = tool.id === "coordinate-system"
+        ? [
+            { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
+            { id: "coordinate-system-3d", label: "3D Coordinate System", iconLabel: "Coordinate System" }
+        ].map(renderToolButton).join("")
         : tool.id === "work"
         ? [
             { id: "electric-work", label: "Electric Work" },
@@ -265,14 +261,12 @@ export function renderEngineeringTools(
 
                         if (
                             toolId ===
-                            "coordinate-system"
+                            "coordinate-system-3d"
                         ) {
                             event.preventDefault();
                             event.stopPropagation();
 
-                            openCoordinateSystemMenu(
-                                button
-                            );
+                            setToolMessage("3D Coordinate System is not available on the 2D drawing canvas");
 
                             return;
                         }

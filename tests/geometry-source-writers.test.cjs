@@ -406,10 +406,10 @@ const coordinateSystem = write(
 );
 
 check("a coordinate system writes both axes", (coordinateSystem.match(/--/g) || []).length === 2, coordinateSystem);
-check("through its committed origin", has(coordinateSystem, "(30,50) -- (70,50)") && has(coordinateSystem, "(50,30) -- (50,70)"), coordinateSystem);
+check("from its committed origin into one quadrant", has(coordinateSystem, "(50,50) -- (70,50)") && has(coordinateSystem, "(50,50) -- (50,70)"), coordinateSystem);
 check(
   "and the axes are exactly perpendicular",
-  has(coordinateSystem, "(30,50) -- (70,50)") && has(coordinateSystem, "(50,30) -- (50,70)"),
+  has(coordinateSystem, "(50,50) -- (70,50)") && has(coordinateSystem, "(50,50) -- (50,70)"),
   "an X arm of constant y and a Y arm of constant x are perpendicular by construction"
 );
 check("with the axis labels written as nodes", has(coordinateSystem, "{x}") && has(coordinateSystem, "{y}") && has(coordinateSystem, "{O}"), coordinateSystem);
@@ -438,13 +438,13 @@ const turned = write(
 
 check(
   "a rotated coordinate system turns its X arm into the Y direction",
-  has(turned, "(0,-20) -- (0,20)"),
+  has(turned, "(0,0) -- (0,20)"),
   turned
 );
 
 check(
   "and its Y arm into the X direction, staying square to it",
-  has(turned, "(20,0) -- (-20,0)"),
+  has(turned, "(0,0) -- (-20,0)"),
   turned
 );
 

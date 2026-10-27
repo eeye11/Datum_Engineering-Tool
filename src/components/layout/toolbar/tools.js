@@ -6,6 +6,8 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
+    "Boundary Stress": drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="9"/><path ${iconStroke} d="M6 5V1m4 4V1m4 4V1M4 8H1m3 4H1m15-4h3m-3 4h3M6 16v3m4-3v3m4-3v3"/>`),
+    "Stress Element": drawingIcon(`<path ${iconStroke} d="M10 2l8 8-8 8-8-8z"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
     "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
@@ -660,6 +662,35 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
+	"SOLID MECHANICS": [
+		{
+			id: "solid-mechanics-selection",
+			label: "Selection",
+			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
+		},
+		{
+			id: "solid-mechanics-create",
+			label: "Create",
+			tools: [
+				{ id: "beam", label: "Beam" },
+				{ id: "support", label: "Supports", submenu: true },
+				{ id: "load", label: "Loads", submenu: true }
+			]
+		},
+		{
+			id: "solid-mechanics-analysis",
+			label: "Analysis",
+			tools: [
+				{ id: "stress-element", label: "Stress Element" },
+				{ id: "boundary-stress", label: "Boundary Stress" }
+			]
+		},
+		{
+			id: "solid-mechanics-reference",
+			label: "Reference",
+			tools: [{ id: "coordinate-system", label: "Coordinate System" }]
+		}
+	],
 
 	/*
 	 * ========================================================
@@ -826,7 +857,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
 	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
-	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*
 	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,
@@ -861,8 +892,8 @@ export const engineeringTools = {
 	],
 	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
-	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Signal Line"],
+	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
+	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
+	CONTROLS: ["Plant", "Block", "Input", "Output", "Sensor", "Controller", "Signal Line"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

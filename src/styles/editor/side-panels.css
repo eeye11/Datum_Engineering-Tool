@@ -611,6 +611,15 @@
     cursor: default;
 }
 
+.drawing-canvas.drawing-can-move {
+    cursor: move;
+}
+
+.drawing-canvas.drawing-object-moving,
+.drawing-canvas.drawing-object-moving * {
+    cursor: move !important;
+}
+
 /*
  * AND NOTHING ELSE IN THE WORKSPACE ASKS FOR A SYSTEM CROSSHAIR EITHER. A
  * geometry handle is a small dot with a move cursor; a crosshair there was the

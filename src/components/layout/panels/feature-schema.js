@@ -28,6 +28,8 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { STRESS_COLOURS } from "../../../shared/geometry/stress-element.js";
+import { BOUNDARY_EDGES, boundaryEquation } from "../../../shared/geometry/boundary-stress.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
@@ -516,6 +518,98 @@ const ARROW_OPTIONS = [
 ];
 
 const FIELDS = {
+    ...Object.fromEntries([["dimensionWidth", "Width / x extent"], ["dimensionHeight", "Height / y extent"]].map(([key, label]) => [`boundary.${key}`, {
+        kind: "text", label,
+        applies: object => object.metadata?.boundaryStress === true,
+        read: object => object.geometry[key] ?? "",
+        write: (object, value) => {
+            const text = String(value).trim();
+            if (text && !(Number.isFinite(Number(text)) && Number(text) > 0) && !/^[a-wzA-Z][a-zA-Z_]*$/.test(text)) return false;
+            object.geometry[key] = text;
+            return true;
+        }
+    }])),
+    ...Object.fromEntries(BOUNDARY_EDGES.flatMap(edge => {
+        const applies = object => object.metadata?.boundaryStress === true;
+        const field = (key, definition) => [`boundary.${edge}_${key}`, {
+            applies, read: object => object.geometry[`${edge}_${key}`] ?? (definition.kind === "number" ? 0 : definition.kind === "choice" ? "linear" : ""),
+            write: (object, value) => {
+                if (key.endsWith("Equation") && String(value).trim()) {
+                    const equation = boundaryEquation(value, edge, object.geometry);
+                    if (!equation || Array.from({ length: 43 }, (_, i) => equation(i / 42)).some(sample => typeof sample !== "number" || !Number.isFinite(sample))) return false;
+                }
+                if (definition.kind === "number" && (String(value).trim() === "" || !Number.isFinite(Number(value)))) return false;
+                if (definition.kind === "choice" && !["linear", "quadratic"].includes(value)) return false;
+                object.geometry[`${edge}_${key}`] = definition.kind === "number" ? Number(value) : String(value);
+                return true;
+            }, ...definition
+        }];
+        return [field("profile", { kind: "choice", label: "Variation", options: [{ value: "linear", label: "Linear / Uniform" }, { value: "quadratic", label: "Quadratic" }] }),
+            ...["normal", "shear"].flatMap(kind => [
+                field(`${kind}Equation`, { kind: "text", label: `${kind === "normal" ? "Normal" : "Shear"} f(x,y)` }),
+                field(`${kind}Start`, { kind: "number", step: 0.1, label: `${kind === "normal" ? "Normal" : "Shear"} (${edge === "top" || edge === "bottom" ? "left" : "bottom"})` }),
+                field(`${kind}End`, { kind: "number", step: 0.1, label: `${kind === "normal" ? "Normal" : "Shear"} (${edge === "top" || edge === "bottom" ? "right" : "top"})` }),
+                field(`${kind}Label`, { kind: "text", label: `${kind === "normal" ? "Normal" : "Shear"} Label` })
+            ])];
+    })),
+    ...Object.fromEntries(["normal", "shear"].map(kind => [`boundary.${kind}Colour`, {
+        kind: "colour", label: `${kind === "normal" ? "Normal" : "Shear"} Colour`,
+        applies: object => object.metadata?.boundaryStress === true,
+        read: object => object.geometry[`${kind}Colour`] || (kind === "normal" ? "#db2777" : "#2563eb"),
+        write: (object, value) => {
+            if (!/^#[0-9a-f]{6}$/i.test(String(value))) return false;
+            object.geometry[`${kind}Colour`] = value;
+            return true;
+        }
+    }])),
+    "stressElement.showAngle": {
+        kind: "toggle", label: "Show Angle",
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => object.geometry.showAngle !== false,
+        write: (object, value) => { object.geometry.showAngle = Boolean(value); return true; }
+    },
+    ...Object.fromEntries(Object.entries(STRESS_COLOURS).map(([key, colour]) => [`stressElement.${key}Colour`, {
+        kind: "colour",
+        label: `${{ normalStressX: "Normal X", normalStressY: "Normal Y", shearStress: "Shear" }[key]} Colour`,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => object.geometry[`${key}Colour`] || colour,
+        write: (object, value) => {
+            if (!/^#[0-9a-f]{6}$/i.test(String(value))) return false;
+            object.geometry[`${key}Colour`] = value;
+            return true;
+        }
+    }])),
+    ...Object.fromEntries([
+        ["normalStressX", "Normal Stress X", false],
+        ["normalStressY", "Normal Stress Y", false],
+        ["shearStress", "Shear Stress", true]
+    ].map(([key, label, shear]) => [`stressElement.${key}`, {
+        kind: "segmented", label,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => String(Number(object.geometry[key]) || 0),
+        write: (object, value) => {
+            if (!["0", "1", "-1"].includes(String(value))) return false;
+            object.geometry[key] = Number(value);
+            return true;
+        },
+        options: [
+            { value: "0", label: "None" },
+            { value: "1", label: shear ? "Positive" : "Tension" },
+            { value: "-1", label: shear ? "Negative" : "Compression" }
+        ]
+    }])),
+    "stressElement.angle": {
+        kind: "number",
+        label: "Angle (degrees)",
+        step: 1,
+        applies: object => object.type === "rectangle" && object.metadata?.stressElement === true,
+        read: object => Number(object.geometry.rotation) || 0,
+        write: (object, value) => {
+            if (String(value).trim() === "" || !Number.isFinite(Number(value))) return false;
+            object.geometry.rotation = Number(value);
+            return true;
+        }
+    },
     /* ---------------------------------------------------------- Geometry */
 
     plantInputs: {
@@ -1149,26 +1243,26 @@ export const GROUPS = [
         fields: ["dynamics.referenceMarker"]
     },
 
-    	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-    	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
-    	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true }
-    ];
+	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
+	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true }
+];
 
-    	/*
-    	 * ============================================================
-    	 * THE SCHEMATIC TOOLS' SECTIONS
-    	 * ============================================================
-    	 *
-    	 * Object, then Appearance, then Transform - the hierarchy every Fluids tool
-    	 * follows - with one tool-specific section where the tool genuinely needs one:
-    	 * a pressure profile's Data and Axes.
-    	 *
-    	 * EACH GROUP'S FIELDS ARE THE OBJECT's OWN FACTS, in reading order: what it is
-    	 * and what it is attached to, then the one or two parameters that decide its
-    	 * shape. A group with nothing applicable to the selection is dropped by
-    	 * `groupsFor`, so no empty heading is ever drawn.
-    	 */
-    	export const SCHEMATIC_GROUPS = Object.freeze({
+	/*
+	 * ============================================================
+	 * THE SCHEMATIC TOOLS' SECTIONS
+	 * ============================================================
+	 *
+	 * Object, then Appearance, then Transform - the hierarchy every Fluids tool
+	 * follows - with one tool-specific section where the tool genuinely needs one:
+	 * a pressure profile's Data and Axes.
+	 *
+	 * EACH GROUP'S FIELDS ARE THE OBJECT's OWN FACTS, in reading order: what it is
+	 * and what it is attached to, then the one or two parameters that decide its
+	 * shape. A group with nothing applicable to the selection is dropped by
+	 * `groupsFor`, so no empty heading is ever drawn.
+	 */
+	export const SCHEMATIC_GROUPS = Object.freeze({
             reducer: [
                 { id: "object", heading: "Object", fields: ["name", "reducerMode", "fixed"] },
                 { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
@@ -1311,8 +1405,17 @@ export const GROUPS = [
     	        return SCHEMATIC_GROUPS.section;
     	    }
 
-    	    return null;
-    	}
+    	    	    return null;
+    	    	}
+
+    	        { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
+    	        { id: "boundary-dimensions", heading: "Element Dimensions", fields: ["boundary.dimensionWidth", "boundary.dimensionHeight"] },
+    	        { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
+    	        ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
+    	        { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
+    	        { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
+    	        { id: "transform", heading: "Transform", fields: [], transform: true }
+    	    ];
 
 /*
  * ============================================================

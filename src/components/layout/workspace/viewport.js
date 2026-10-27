@@ -3,12 +3,15 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { coordinateSystemArms } from "../../../shared/geometry/feature-handles.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
 import enggAnnotationModel from "../../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../../features/workspace/model/annotations/annotate-model.js";
 import { resistorPoints } from "../../../features/workspace/model/thermodynamics/resistor.js";
+import { stressArrowPaths, stressAngleMark } from "../../../shared/geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
@@ -16,7 +19,6 @@ import { analysisSketchMarks } from "../../../shared/rendering/analysis-render.j
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import { arcSelectionPoints, distributedLoadArrowScreenLength } from "../../../features/workspace/interaction/box-selection.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { COORDINATE_SYSTEM_LENGTH } from "../../../features/workspace/constants.js";
 import { renderedPointsForObjects } from "../../../features/workspace/commands/document-commands.js";
 import { drawingCanvas, drawingGridToggle, drawingSnapToggle } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -532,6 +534,14 @@ function dimensionBoundsPoints(object) {
  * Fit and the renderer cannot disagree about how much room a mark takes.
  */
 function annotateBoundsPoints(object) {
+    if (object?.metadata?.boundaryStress && object.visible !== false) {
+        const drawing = boundaryStressDrawing(object.geometry);
+        return drawing.paths.flatMap(path => path.points).concat(drawing.labels.map(label => label.point));
+    }
+    if (object?.metadata?.stressElement && object.visible !== false) {
+        const mark = stressAngleMark(object.geometry);
+        return stressArrowPaths(object.geometry).flat().concat(mark ? [...mark.reference, ...mark.face, ...mark.perpendicular, ...mark.arc, mark.labelPoint, ...mark.axes.map(axis => axis.point)] : []);
+    }
     if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
         return resistorPoints(object.geometry);
     }
@@ -993,21 +1003,7 @@ function geometryRenderedBounds(
     }
 
     if (object.type === "coordinate-system-2d") {
-        const axisLength =
-            geometry.axisLength ??
-            geometry.xAxisLength ??
-            COORDINATE_SYSTEM_LENGTH;
-
-        return [
-            {
-                x: geometry.origin.x - axisLength,
-                y: geometry.origin.y - axisLength
-            },
-            {
-                x: geometry.origin.x + axisLength,
-                y: geometry.origin.y + axisLength
-            }
-        ];
+        return coordinateSystemArms(geometry).flatMap(arm => [arm.start, arm.end]);
     }
 
     /*

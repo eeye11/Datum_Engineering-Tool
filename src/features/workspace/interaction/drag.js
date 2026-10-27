@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { resizeStressElement } from "../../../shared/geometry/stress-element.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { renderCurrentDrawing, requestRender } from "../../../components/layout/workspace/canvas-render.js";
@@ -16,7 +17,7 @@ import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynamics/process-curves.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../model/thermodynamics/piston-cylinder.js";
-import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
+import { isRectangleLike, objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
 import { rotationPivotFor } from "./handles.js";
@@ -297,7 +298,7 @@ export function beginManipulationDrag(
      * which selects the dimension, exactly as a click on it always did.
      */
     const overlay =
-        objectAtPoint(
+        boundarySelectionAtPoint(point) || objectAtPoint(
             point
         );
 
@@ -365,15 +366,22 @@ export function beginManipulationDrag(
         ? drawingState.objects.find(item => item.id === selectedIds[0]) : null);
 
     if (
-        object && !object.locked && !isDerivedFeature(object)
+        object && !object.locked && !isDerivedFeature(object) &&
+        (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
+            .selectedObjectIds
+            .includes(
+                object.id
+            ))
     ) {
         if (!selectedIds.includes(object.id)) {
             enggDrawingState.selectObject(drawingState, object.id);
         }
+        const coordinateNeedsSelection = (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress) && !selectedIds.includes(object.id);
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,
             kind: "body",
+            pending: coordinateNeedsSelection,
             moved: false,
             start: { ...point },
 
@@ -390,8 +398,7 @@ export function beginManipulationDrag(
             anchor: { ...point },
             originals: Object.fromEntries(
                 selectionMembers(drawingState.objects,
-                    drawingState.selection
-                        .selectedObjectIds
+                    coordinateNeedsSelection ? [object.id] : drawingState.selection.selectedObjectIds
                 ).map(
                     item => [
                         item.id,
@@ -569,6 +576,8 @@ export function updateManipulationDrag(
 
     editorState.manipulationDrag.moved =
         true;
+    drawingCanvas.classList.toggle("drawing-object-moving",
+        ["body", "origin", "position", "center", "annotation-offset"].includes(editorState.manipulationDrag.kind));
 
     applyManipulation(
         editorState.manipulationDrag,
@@ -609,6 +618,7 @@ export function finishManipulationDrag(
 
     editorState.manipulationDrag =
         null;
+    drawingCanvas.classList.remove("drawing-object-moving");
 
     /*
      * THE DRAG'S TRANSIENT SNAP STATE IS CLEARED WITH IT.
@@ -2204,6 +2214,10 @@ void bodyDragRouted;
     }
 
     if (isRectangleLike(object)) {
+        if (object.metadata?.stressElement && drag.kind.startsWith("corner")) {
+            Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
+            return;
+        }
         /*
          * Resize by moving one corner while the opposite
          * corner stays put. A fixed width or height is
@@ -2287,10 +2301,12 @@ void bodyDragRouted;
             return;
         }
 
-        const measured =
-            drag.kind.startsWith("x")
-                ? Math.abs(point.x - g.origin.x)
-                : Math.abs(point.y - g.origin.y);
+        const angle = Number(g.rotation) || 0;
+        const dx = point.x - g.origin.x;
+        const dy = point.y - g.origin.y;
+        const measured = Math.abs(drag.kind.startsWith("x")
+            ? dx * Math.cos(angle) + dy * Math.sin(angle)
+            : -dx * Math.sin(angle) + dy * Math.cos(angle));
 
         g[key] = Math.max(measured, 1e-6);
 

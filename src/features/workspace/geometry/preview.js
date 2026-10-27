@@ -3,6 +3,7 @@
  */
 
 import enggBodyFrames from "../../../shared/geometry/body-frames.js";
+import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
 import enggQuantities from "../../../shared/units/quantities.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
@@ -552,48 +553,16 @@ export function updatePreview(
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        /*
-         * THE AXIS PREVIEWS AS THE CROSS IT WILL BECOME.
-         *
-         * The press placed the origin; the pointer says which way the X arm
-         * runs and how long it is. The Y arm is drawn square to it, from the
-         * same two points the commit uses, so the preview and the placed axis
-         * are the same cross - and the perpendicularity the student sees is
-         * the perpendicularity the code will write. A drag too short to give
-         * the axis a direction shows nothing rather than a degenerate cross.
-         */
-        const arm = Math.hypot(
-            point.x - interaction.startPoint.x,
-            point.y - interaction.startPoint.y
-        );
-
-        if (arm > 1e-9) {
-            interaction.preview =
-                createPreview(
-                    "coordinate-system-2d",
-                    {
-                        origin: {
-                            ...interaction.startPoint
-                        },
-
-                        rotation: Math.atan2(
-                            point.y - interaction.startPoint.y,
-                            point.x - interaction.startPoint.x
-                        ),
-
-                        xPositiveLength: arm,
-                        xNegativeLength: arm,
-                        yPositiveLength: arm,
-                        yNegativeLength: arm
-                    }
-                );
+        const axes = coordinateSystemFromDrag(interaction.startPoint, point);
+        if (axes) {
+            interaction.preview = createPreview("coordinate-system-2d", axes);
 
             if (
                 !resolution.inference &&
                 !resolution.snapCandidate
             ) {
                 setToolMessage(
-                    "Release to place the X axis"
+                    "Release to place the coordinate system"
                 );
             }
         } else {
@@ -622,7 +591,7 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        drawingState.activeTool === "rectangle" ||
+        ["rectangle", "stress-element", "boundary-stress"].includes(drawingState.activeTool) ||
         drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
@@ -639,7 +608,7 @@ export function updatePreview(
          * press decided where the shape begins, and Shift only says the two
          * extents are equal.
          */
-        const square = Boolean(resolution.modifiers?.shift);
+        const square = drawingState.activeTool === "stress-element" || Boolean(resolution.modifiers?.shift);
 
         interaction.squareConstrained = square;
 
@@ -653,6 +622,10 @@ export function updatePreview(
                 )
             );
 
+        if (drawingState.activeTool === "boundary-stress") {
+            interaction.preview.metadata = { boundaryStress: true };
+            Object.assign(interaction.preview.geometry, { top_normalStart: 1, top_normalEnd: 1 });
+        }
         if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
         }

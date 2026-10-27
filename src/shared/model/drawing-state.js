@@ -1350,7 +1350,7 @@ const geometryFactories = {
                     options.xNegativeLength
                 )
                     ? options.xNegativeLength
-                    : xAxisLength,
+                    : 0,
 
                 yPositiveLength: Number.isFinite(
                     options.yPositiveLength
@@ -1362,7 +1362,7 @@ const geometryFactories = {
                     options.yNegativeLength
                 )
                     ? options.yNegativeLength
-                    : yAxisLength,
+                    : 0,
 
                 rotation: Number.isFinite(options.rotation)
                     ? options.rotation

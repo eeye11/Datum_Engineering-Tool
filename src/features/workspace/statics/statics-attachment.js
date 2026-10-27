@@ -17,6 +17,7 @@ import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, isBodyAttachedTool, static
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * Whether a feature is one of the Statics engineering
@@ -781,6 +782,12 @@ function commitStaticsAttachment(
         drawingState,
         object.id
     );
+
+    if (isSupportType(type)) {
+        renderProperties();
+        activateTool("select");
+        return;
+    }
 
     /*
      * The feature is finished, so the operation is dropped

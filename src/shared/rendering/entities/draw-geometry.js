@@ -14,6 +14,8 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 import { isPlant, plantNodeLabel, plantNodePosition, plantStyle, plantValue } from "../../model/plant.js";
 import { appendBlockLabelSvg } from "../../model/block-label.js";
 import { isSignalLine, signalLineSegments } from "../../model/signal-line.js";
+import { stressArrows, stressAngleMark } from "../../geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
 
 
     export function drawPoint({ svg, parentSvg, geometry, style, toScreen }) {
@@ -132,7 +134,50 @@ import { isSignalLine, signalLineSegments } from "../../model/signal-line.js";
          * through the same branch and stays one coherent
          * feature rather than four separate lines.
          */
-    export function drawRectangleOutline({ svg, scale, geometry, style, toScreen }) {
+    export function drawRectangleOutline({ svg, scale, geometry, style, toScreen, entity }) {
+            if (entity.metadata?.boundaryStress) {
+                const drawing = boundaryStressDrawing(geometry);
+                for (const { points, colour } of drawing.paths) {
+                    const path = createSvgElement("polyline", { points: points.map(toScreen).map(p => `${p.x},${p.y}`).join(" ") });
+                    applyStyle(path, { ...style, stroke: colour, fill: "none" });
+                    svg.appendChild(path);
+                }
+                for (const item of drawing.labels) {
+                    const p = toScreen(item.point);
+                    const label = createSvgElement("text", { x: p.x, y: p.y, fill: item.colour, "font-size": 12, "text-anchor": "middle", "dominant-baseline": "middle" });
+                    label.textContent = item.text;
+                    svg.appendChild(label);
+                }
+            }
+            if (entity.metadata?.stressElement) {
+                const mark = stressAngleMark(geometry);
+                if (mark) {
+                    for (const [points, dashed] of [[mark.reference, false], [mark.face, true], [mark.perpendicular, true], [mark.arc, false]]) {
+                        const line = createSvgElement("polyline", {
+                            points: points.map(toScreen).map(p => `${p.x},${p.y}`).join(" "),
+                            fill: "none", stroke: "#909090",
+                            "stroke-width": 1, ...(dashed ? { "stroke-dasharray": "4 3" } : {})
+                        });
+                        svg.appendChild(line);
+                    }
+                    for (const item of [...mark.axes, { point: mark.labelPoint, text: mark.text }]) {
+                    const at = toScreen(item.point);
+                    const label = createSvgElement("text", {
+                        x: at.x, y: at.y, "text-anchor": "middle", "dominant-baseline": "middle",
+                        "font-size": 12, fill: "#909090"
+                    });
+                    label.textContent = item.text;
+                    svg.appendChild(label);
+                    }
+                }
+                for (const { points, colour } of stressArrows(geometry)) {
+                    const arrow = createSvgElement("polyline", {
+                        points: points.map(toScreen).map(p => `${p.x},${p.y}`).join(" ")
+                    });
+                    applyStyle(arrow, { ...style, stroke: colour, fill: "none" });
+                    svg.appendChild(arrow);
+                }
+            }
             const x =
                 geometry.position?.x ??
                 0;
@@ -628,6 +673,6 @@ import { isSignalLine, signalLineSegments } from "../../model/signal-line.js";
                 state,
                 bounds,
                 entity.isPreview,
-                Number(entity.rotation) || 0
+                -(Number(geometry.rotation) || Number(entity.rotation) || 0)
             );
         }
