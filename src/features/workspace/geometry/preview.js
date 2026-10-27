@@ -10,7 +10,7 @@ import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { isProcessPlotTool } from "../thermodynamics/process-path.js";
+import { isProcessPlotTool, processPathInstruction } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
@@ -698,7 +698,9 @@ export function updatePreview(
         }
 
         setToolMessage(
-            "Click next point or double-click to finish"
+            isProcessPlotTool(drawingState.activeTool)
+                ? processPathInstruction()
+                : "Click next point or double-click to finish"
         );
     } else if (
         drawingState.activeTool === "freeform-polygon"
