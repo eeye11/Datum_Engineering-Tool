@@ -11,14 +11,14 @@ import { drawVectorOrSymbol, drawGenericConnection } from "./entities/draw-force
 import { drawMoment, drawUniformLoad, drawVaryingLoad } from "./entities/draw-loads.js";
 import { drawDimension, drawAnnotate, drawAnnotation } from "./entities/draw-annotations.js";
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
-import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPlant, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
+import { drawPoint, drawLine, drawCircle, drawSum, drawRectangleOutline, drawPlant, drawGain, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
-import { isControlBlock } from "../model/plant.js";
+import { isControlBlock, isGain, isSum } from "../model/plant.js";
 
 
     /*
@@ -60,6 +60,7 @@ import { isControlBlock } from "../model/plant.js";
         { matches: entity => entity.type === "connection", draw: drawGenericConnection },
         { matches: entity => entity.type === "point", draw: drawPoint },
         { matches: entity => entity.type === "line", draw: drawLine },
+        { matches: isSum, draw: drawSum },
         { matches: entity => entity.type === "circle", draw: drawCircle },
         { matches: entity => entity.type === "particle", draw: drawParticle },
         /*
@@ -70,6 +71,7 @@ import { isControlBlock } from "../model/plant.js";
         { matches: entity => entity.metadata?.thermodynamicsKind === "process-path", draw: drawProcessOverlay },
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
+        { matches: isGain, draw: drawGain },
         { matches: isControlBlock, draw: drawPlant },
         { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },

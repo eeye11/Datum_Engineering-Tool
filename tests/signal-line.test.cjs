@@ -26,6 +26,31 @@ test("signal node picking returns only the requested input or output node", () =
   assert.equal(signalLines.signalNodeAtPoint([plant], input, 2, "outputs"), null);
 });
 
+test("Gain exposes its flat-side input and point-side output to Signal Line", () => {
+  const gain = makeBlock("gain", 0, 15, 36, 30, "gain");
+  const input = plants.plantNodePosition(gain, "inputs", 0);
+  const output = plants.plantNodePosition(gain, "outputs", 0);
+
+  assert.deepEqual(input, { x: -4, y: 0 });
+  assert.deepEqual(output, { x: 40, y: 0 });
+  assert.equal(signalLines.signalNodeAtPoint([gain], input, 2, "inputs")?.object.id, "gain");
+  assert.equal(signalLines.signalNodeAtPoint([gain], output, 2, "outputs")?.object.id, "gain");
+});
+
+test("Sum nodes are discoverable by Signal Line", () => {
+  const sum = {
+    id: "sum",
+    type: "circle",
+    geometry: { center: { x: 0, y: 0 }, radius: 18 },
+    metadata: { controlsKind: "sum", inputs: 2 },
+  };
+  const input = plants.plantNodePosition(sum, "inputs", 0);
+  const output = plants.plantNodePosition(sum, "outputs", 0);
+
+  assert.equal(signalLines.signalNodeAtPoint([sum], input, 2, "inputs")?.index, 0);
+  assert.equal(signalLines.signalNodeAtPoint([sum], output, 2, "outputs")?.side, "outputs");
+});
+
 test("an input accepts one signal line while an output can be reused", () => {
   const firstLine = {
     type: "polyline",

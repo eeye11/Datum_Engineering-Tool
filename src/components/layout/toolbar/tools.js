@@ -354,6 +354,8 @@ export const toolIcons = {
 	Fastener: drawingIcon(`<path ${iconStroke} d="M6 4h8M6 7h8M8 7v9M12 7v9M5 16h10"/>`),
 	"Section View": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM4 8h12M8 4v12"/>`),
 	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
+	Gain: drawingIcon(`<path ${iconStroke} d="M4 3v14l12-7z"/><path ${iconStroke} d="M8 10h4"/>`),
+	Sum: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="7"/><path ${iconStroke} d="M8 7h4M10 5v4M8 13h4"/>`),
 	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
 	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
 	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
@@ -785,6 +787,6 @@ export const engineeringTools = {
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
 	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Signal Line"],
+	CONTROLS: ["Plant", "Block", "Gain", "Sum", "Signal Line"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

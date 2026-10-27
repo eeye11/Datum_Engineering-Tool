@@ -23,6 +23,7 @@ import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { controlNodeAlignmentOffset, isControlSymbol, isSum, setSumNodeAngle, sumNodeAngle } from "../../../shared/model/plant.js";
 
 export function beginManipulationDrag(
     event
@@ -238,6 +239,15 @@ export function beginManipulationDrag(
             }
         };
 
+        const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(hit.handle.kind);
+        if (sumNodeMatch) {
+            const side = sumNodeMatch[1];
+            const index = Number(sumNodeMatch[2]);
+            enggDrawingState.selectObject(drawingState, hit.object.id);
+            editorState.selectedPlantNode = { objectId: hit.object.id, side, index };
+            renderProperties();
+        }
+
         drawingCanvas.setPointerCapture(
             event.pointerId
         );
@@ -441,6 +451,7 @@ export function updateManipulationDrag(
     const draggingAnnotate =
         editorState.manipulationDrag.object
             ?.type === "annotate";
+    const draggingSumNode = /^sum-node-(inputs|outputs)-\d+$/.test(editorState.manipulationDrag.kind);
 
     /*
      * GEOMETRY IS RESOLVED THROUGH THE SHARED SNAP PIPELINE.
@@ -458,7 +469,7 @@ export function updateManipulationDrag(
     const resolution =
         editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
-            : draggingDimension || draggingAnnotate
+            : draggingDimension || draggingAnnotate || draggingSumNode
             ? resolvePointerEvent(event)
             : resolveManipulationPoint(
                   event,
@@ -466,7 +477,7 @@ export function updateManipulationDrag(
               );
 
     const point =
-        draggingDimension || draggingAnnotate
+        draggingDimension || draggingAnnotate || draggingSumNode
             ? resolution.rawPointerPoint ||
               resolution.effectiveConstructionPoint
             : resolution.effectiveConstructionPoint;
@@ -487,7 +498,7 @@ export function updateManipulationDrag(
      * `setInteraction` is the same path a construction uses, so the guideline
      * hold and its expiry timer behave identically for a drag.
      */
-    if (!draggingDimension && !draggingAnnotate) {
+    if (!draggingDimension && !draggingAnnotate && !draggingSumNode) {
         enggDrawingState.setInteraction(
             drawingState,
             {
@@ -643,6 +654,16 @@ export function finishManipulationDrag(
         return;
     }
 
+    if (drag.kind.startsWith("sum-node-") && !drag.changed) {
+        editorState.selectionClickSuppressed = true;
+        if (drawingState.activeTool === "select") {
+            setToolMessage("Select geometry");
+        }
+        renderProperties();
+        renderCurrentDrawing();
+        return;
+    }
+
     /*
      * The geometry changed live during the drag, so the
      * history entry has to record the geometry as it was
@@ -721,6 +742,23 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(drag.kind);
+    if (isSum(object) && sumNodeMatch) {
+        const side = sumNodeMatch[1];
+        const index = Number(sumNodeMatch[2]);
+        const angle = Math.atan2(point.y - g.center.y, point.x - g.center.x) -
+            (Number(g.rotation) || 0) * Math.PI / 180;
+        const previousAngle = sumNodeAngle(object, side, index);
+        if (setSumNodeAngle(object, side, index, angle)) {
+            const difference = Math.atan2(
+                Math.sin(angle - previousAngle),
+                Math.cos(angle - previousAngle)
+            );
+            drag.changed = drag.changed || Math.abs(difference) > 1e-6;
+        }
+        return;
+    }
 
     if (drag.kind.startsWith("process-bend-")) {
         const index = Number(drag.kind.slice("process-bend-".length));
@@ -812,6 +850,18 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
+        if (
+            drag.kind === "body" &&
+            isControlSymbol(object) &&
+            Object.keys(drag.originals).length === 1
+        ) {
+            const original = drag.originals[object.id];
+            const alignment = controlNodeAlignmentOffset(original, drawingState.objects, dx, dy);
+            if (alignment) {
+                dx += alignment.dx;
+                dy += alignment.dy;
+            }
+        }
         if (drag.kind === "group-resize") {
             const corners = selectionCorners(drag.bounds);
             anchor = corners[(drag.corner + 2) % 4];
@@ -829,6 +879,7 @@ function applyManipulation(
             live.geometry = changed.geometry;
             if (changed.placement) live.placement = changed.placement;
         }
+
         return;
     }
 

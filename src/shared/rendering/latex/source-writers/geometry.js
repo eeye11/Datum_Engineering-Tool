@@ -46,7 +46,7 @@ import {
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
 import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
-import { isControlBlock, isPlant, plantNodeLabel, plantStyle, plantValue } from "../../../model/plant.js";
+import { gainTrianglePoints, isControlBlock, isGain, isPlant, isSum, plantNodeLabel, plantNodePosition, plantStyle, plantValue, sumInputSign, sumInputSignPosition, sumNodePortPosition } from "../../../model/plant.js";
 import { blockLabelLatex } from "../../../model/block-label.js";
 import { isSignalLine, signalLineSegments } from "../../../model/signal-line.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
@@ -353,6 +353,49 @@ const SHAPES = {    line(object) {
     },
 
     rectangle(object) {
+        if (isGain(object)) {
+            const style = renderStyle(plantStyle(object.style));
+            const vertices = gainTrianglePoints(object);
+
+            if (vertices.length !== 3) {
+                return null;
+            }
+
+            const centre = {
+                x: vertices.reduce((sum, vertex) => sum + vertex.x, 0) / vertices.length,
+                y: vertices.reduce((sum, vertex) => sum + vertex.y, 0) / vertices.length
+            };
+            const commands = [
+                closedShape(vertices.map(pointOf), style),
+                textNode({
+                    at: pointOf(centre),
+                    text: plantValue(object, "gainValue"),
+                    style,
+                    fontSize: lengthOf(8)
+                })
+            ];
+
+            for (const [side, port] of [
+                ["inputs", {
+                    x: (vertices[0].x + vertices[1].x) / 2,
+                    y: (vertices[0].y + vertices[1].y) / 2
+                }],
+                ["outputs", vertices[2]]
+            ]) {
+                const terminal = plantNodePosition(object, side, 0);
+                commands.push(
+                    straightLine(pointOf(port), pointOf(terminal), style),
+                    circlePrimitive({
+                        centre: pointOf(terminal),
+                        radius: lengthOf(1.25),
+                        style: { ...style, fill: style.stroke }
+                    })
+                );
+            }
+
+            return commands.filter(Boolean).join("\n");
+        }
+
         /*
          * THE CORNER IS COMPUTED IN MODEL SPACE, THEN TRANSFORMED ONCE.
          *
@@ -509,6 +552,49 @@ const SHAPES = {    line(object) {
     },
 
     circle(object) {
+        if (isSum(object)) {
+            const style = renderStyle(plantStyle(object.style));
+            const centre = pointOf(object.geometry?.center);
+            const radius = lengthOf(object.geometry?.radius);
+
+            if (radius <= 0) {
+                return null;
+            }
+
+            const commands = [circlePrimitive({ centre, radius, style })];
+            for (let index = 0; index < plantValue(object, "inputs"); index += 1) {
+                const terminal = plantNodePosition(object, "inputs", index);
+                const port = sumNodePortPosition(object, "inputs", index);
+                const signPosition = sumInputSignPosition(object, index);
+                commands.push(
+                    straightLine(pointOf(port), pointOf(terminal), style),
+                    circlePrimitive({
+                        centre: pointOf(terminal),
+                        radius: lengthOf(1.25),
+                        style: { ...style, fill: style.stroke }
+                    }),
+                    textNode({
+                        at: pointOf(signPosition),
+                        text: sumInputSign(object, index),
+                        style,
+                        fontSize: lengthOf(6)
+                    })
+                );
+            }
+
+            const outputTerminal = plantNodePosition(object, "outputs", 0);
+            const outputPort = sumNodePortPosition(object, "outputs", 0);
+            commands.push(
+                straightLine(pointOf(outputPort), pointOf(outputTerminal), style),
+                circlePrimitive({
+                    centre: pointOf(outputTerminal),
+                    radius: lengthOf(1.25),
+                    style: { ...style, fill: style.stroke }
+                })
+            );
+            return commands.filter(Boolean).join("\n");
+        }
+
         const centre = pointOf(object.geometry?.center);
         const radius = lengthOf(object.geometry?.radius);
 

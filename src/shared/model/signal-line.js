@@ -1,4 +1,4 @@
-import { isControlBlock, plantNodePosition, plantValue } from "./plant.js";
+import { isControlSymbol, isSum, plantNodePosition, plantValue } from "./plant.js";
 
 const ROUTE_CLEARANCE = 2;
 const CROSSOVER_GAP = 3;
@@ -59,7 +59,7 @@ export function signalNodeAtPoint(objects, point, tolerance, side = null) {
     let nearestDistance = tolerance;
 
     for (const object of objects || []) {
-        if (!isControlBlock(object)) {
+        if (!isControlSymbol(object)) {
             continue;
         }
 
@@ -85,6 +85,22 @@ export function signalNodeAtPoint(objects, point, tolerance, side = null) {
 }
 
 function rectangleBounds(object) {
+    if (isSum(object)) {
+        const { center, radius } = object.geometry || {};
+        const numericRadius = Number(radius);
+
+        if (![center?.x, center?.y, numericRadius].every(Number.isFinite) || numericRadius <= 0) {
+            return null;
+        }
+
+        return {
+            minX: center.x - numericRadius,
+            maxX: center.x + numericRadius,
+            minY: center.y - numericRadius,
+            maxY: center.y + numericRadius
+        };
+    }
+
     const { position = {}, width, height, rotation = 0 } = object.geometry || {};
     const numericWidth = Number(width);
     const numericHeight = Number(height);
@@ -181,7 +197,7 @@ function simplifyPath(points) {
 
 export function routeSignalLine(start, end, objects) {
     const obstacles = (objects || [])
-        .filter(isControlBlock)
+        .filter(isControlSymbol)
         .map(rectangleBounds)
         .filter(Boolean)
         .map(bounds => ({
