@@ -2468,7 +2468,7 @@ function annotationAnchor(
       if (object.type === "force") {
         return {
           x: start.x - direction.x * standoff,
-          y: start.y - direction.y * standoff - 4
+          y: start.y - direction.y * standoff + 1
         };
       }
 

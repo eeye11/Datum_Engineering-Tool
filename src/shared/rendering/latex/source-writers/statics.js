@@ -73,6 +73,7 @@ import { renderObjectBlock } from "../drawing-source.js";
 import { NOMINAL_ARROW_HEAD_PT } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
 import bodyFrames from "../../../geometry/body-frames.js";
+import { COMPONENT_COLOURS } from "../../component-colours.js";
 import { sketchPointsOf as canvasSketchPointsOf } from "../../analysis-render.js";
 
 /* ============================================================
@@ -1277,7 +1278,7 @@ function serializeForceComponents(entity, object) {
 
   const commands = [];
 
-  const segment = (pair) => {
+  const segment = (pair, colour = null) => {
     if (!pair?.start || !pair?.end) {
       return null;
     }
@@ -1289,7 +1290,7 @@ function serializeForceComponents(entity, object) {
       return null;
     }
 
-    return seg(from, to, options, arrow);
+    return seg(from, to, colour ? styleOptions({ ...style, stroke: colour }) : options, arrow);
   };
 
   /*
@@ -1308,11 +1309,11 @@ function serializeForceComponents(entity, object) {
   }
 
   if (geometry.showX !== false) {
-    commands.push(segment(geometry.horizontal));
+    commands.push(segment(geometry.horizontal, COMPONENT_COLOURS.x));
   }
 
   if (geometry.showY !== false) {
-    commands.push(segment(geometry.vertical));
+    commands.push(segment(geometry.vertical, COMPONENT_COLOURS.y));
   }
 
   /*
@@ -1323,8 +1324,13 @@ function serializeForceComponents(entity, object) {
   const endX = geometry.horizontal?.end ? pointOf(geometry.horizontal.end) : null;
   const endY = geometry.vertical?.end ? pointOf(geometry.vertical.end) : null;
 
-  if (endX && endY && geometry.showX !== false && geometry.showY !== false) {
-    commands.push(seg(endX, endY, styleOptions({ ...style, lineType: "dashed" })));
+  if (endX && endY && original?.end && geometry.showX !== false && geometry.showY !== false &&
+      geometry.horizontal?.start && geometry.vertical?.start &&
+      distance(pointOf(geometry.horizontal.start), endX) > 1e-9 &&
+      distance(pointOf(geometry.vertical.start), endY) > 1e-9) {
+    const guideStyle = styleOptions({ ...style, lineType: "dashed", lineWidth: (Number(style.lineWidth) || 0.5) * 0.5 });
+    const tip = pointOf(original.end);
+    commands.push(seg(endX, tip, guideStyle), seg(endY, tip, guideStyle));
   }
 
   return commands.filter(Boolean).join("\n");

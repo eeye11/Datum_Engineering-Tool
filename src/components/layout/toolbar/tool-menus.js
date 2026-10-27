@@ -120,7 +120,7 @@ export function renderToolButton(tool) {
             class="drawing-tool${active ? " active" : ""}"
             type="button"
             data-tool-id="${tool.id}"
-            title="${tool.label}${shortcut}"
+            title="${tool.id === "force-components" ? "Force Components: draw an arrow with Loads > Point Load first, then click that arrow to show X and Y components" : tool.label}${shortcut}"
             aria-label="${tool.label}${shortcut}"
             aria-pressed="${active}"
             ${coordinateAttributes}

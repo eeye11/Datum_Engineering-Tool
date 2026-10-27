@@ -1170,12 +1170,9 @@ function createForceComponents(
          * and `forces[0]` is the one being decomposed - so its parent is
          * unambiguous, and that is what goes on the object.
          */
-        if (force.parentId) {
-            resolved.parentId =
-                force.parentId;
-        }
+        resolved.parentId = force.id;
 
-        enggDrawingState.addObject(
+        const stored = enggDrawingState.addObject(
             drawingState,
             resolved
         );
@@ -1190,9 +1187,11 @@ function createForceComponents(
          * first reading.
          */
         enggAnalysisDependencies.registerDependency(
-            resolved,
+            stored,
             [force.id]
         );
+
+        enggDrawingState.selectObject(drawingState, stored.id);
 
         enggDrawingState.commitDrawingChange(
             drawingState,
@@ -1250,7 +1249,9 @@ export function isAnalysisInputTool(toolId) {
  */
 export function analysisInputMessage(toolId) {
     return toolId === "force-components"
-        ? "Select force"
+        ? drawingState.objects.some(object => object.type === "force")
+            ? "Click a Point Load arrow to show components: X in blue, Y in orange"
+            : "Draw a force first with Loads > Point Load, then choose Force Components and click its arrow"
         : "Select force(s)";
 }
 
@@ -1340,6 +1341,8 @@ export function handleAnalysisInputClick(
          * ONE FORCE, REPLACED RATHER THAN ACCUMULATED.
          */
         enggDrawingState.selectObject(drawingState, object.id);
+        commitAnalysisInput();
+        return;
     } else if (selected.includes(object.id)) {
         /*
          * CLICKING AN ALREADY-CHOSEN FORCE REMOVES IT. No duplicate can be

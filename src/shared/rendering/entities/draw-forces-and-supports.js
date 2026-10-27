@@ -12,6 +12,7 @@ import { createSvgElement, paintColour } from "../svg-primitives.js";
 import enggBodyFrames from "../../geometry/body-frames.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
+import { COMPONENT_COLOURS } from "../component-colours.js";
 import { isConnectionType, isSupportType } from "../../model/feature-types.js";
 
 
@@ -159,7 +160,7 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                             svg,
                             toScreen(geometry.horizontal.start),
                             toScreen(geometry.horizontal.end),
-                            stroke,
+                            COMPONENT_COLOURS.x,
                             style,
                             "solid"
                         );
@@ -173,12 +174,23 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                             svg,
                             toScreen(geometry.vertical.start),
                             toScreen(geometry.vertical.end),
-                            stroke,
+                            COMPONENT_COLOURS.y,
                             style,
                             "solid"
                         );
                     }
 
+                    const x = geometry.horizontal;
+                    const y = geometry.vertical;
+                    if (geometry.showX !== false && geometry.showY !== false &&
+                        x?.start && x.end && y?.start && y.end && geometry.original?.end &&
+                        Math.hypot(x.end.x - x.start.x, x.end.y - x.start.y) > 1e-9 &&
+                        Math.hypot(y.end.x - y.start.x, y.end.y - y.start.y) > 1e-9) {
+                        const guideStyle = { ...style, lineWidth: (Number(style.lineWidth) || 0.5) * 0.5 };
+                        for (const end of [x.end, y.end]) {
+                            appendVectorArrow(svg, toScreen(end), toScreen(geometry.original.end), stroke, guideStyle, "construction");
+                        }
+                    }
                     appendDerivedMagnitude(svg, entity, state, toScreen, style);
                     parentSvg.appendChild(svg);
                     return true;
