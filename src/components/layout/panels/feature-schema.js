@@ -779,6 +779,21 @@ const FIELDS = {
         label: "Show Name"
     },
 
+    workDirection: {
+        kind: "choice", label: "Direction",
+        applies: object => object.metadata?.thermodynamicsKind === "work-arrow",
+        read: object => object.metadata.workDirection || "in",
+        options: [{ value: "in", label: "Work In" }, { value: "out", label: "Work Out" }],
+        write: (object, value) => {
+            if (!["in", "out"].includes(value)) return false;
+            if ((object.metadata.workDirection || "in") !== value) {
+                [object.geometry.start, object.geometry.end] = [object.geometry.end, object.geometry.start];
+                if (["W in", "W out"].includes(object.text)) object.text = `W ${value}`;
+            }
+            object.metadata = { ...object.metadata, workDirection: value, mathSubscript: value };
+            return true;
+        }
+    },
     text: {
         kind: "text",
         applies: (object) => object.type === "annotate",
@@ -859,6 +874,7 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
+    { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },

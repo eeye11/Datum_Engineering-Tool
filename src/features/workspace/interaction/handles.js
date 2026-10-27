@@ -531,6 +531,11 @@ function manipulationHandles(
         return bounds ? selectionCorners(bounds).map((point, index) => ({ kind: `corner${index}`, point })) : [];
     }
 
+    if (object.metadata?.thermodynamicsKind === "work-arrow" && g.start && g.end) {
+        return [{ kind: "annotate-attachment", point: g.start }, { kind: "annotate-endpoint", point: g.end },
+            ...(g.position ? [{ kind: "position", point: g.position }] : [])];
+    }
+
     if (object.metadata?.thermodynamicsKind === "process-path") {
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
         return (object.metadata.closed ? (g.points || []).slice(0, object.metadata.stateCount || -1) : (g.points || [])).flatMap((point, index) => [

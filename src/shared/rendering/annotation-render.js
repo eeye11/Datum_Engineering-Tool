@@ -10,6 +10,7 @@ import enggAnnotate from "../../features/workspace/model/annotations/annotate-mo
 import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
+import { workArrowPoints } from "../../features/workspace/model/thermodynamics/work-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 
@@ -307,7 +308,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 toScreen(point)
             );
 
-        if (pathScreen.length >= 2) {
+        const blockArrow = entity.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+        if (blockArrow.length) {
+            svg.appendChild(createSvgElement("polygon", {
+                points: blockArrow.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                fill: stroke, stroke, "stroke-width": 1, "stroke-linejoin": "miter"
+            }));
+        } else if (pathScreen.length >= 2) {
             svg.appendChild(
                 createSvgElement("polyline", {
                     points: pathScreen
@@ -413,7 +420,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     : pathScreen[1] || end;
 
             if (
-                (kind === "arrow" || kind === "leader" || kind === "callout") &&
+                !blockArrow.length && (kind === "arrow" || kind === "leader" || kind === "callout") &&
                 style.arrowhead !== "none"
             ) {
                 appendAnnotateArrowhead(

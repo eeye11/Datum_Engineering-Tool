@@ -452,7 +452,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
-                metadata: ["electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
+                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",

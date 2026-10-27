@@ -36,6 +36,7 @@ import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
+import { workArrowPoints } from "../../../../features/workspace/model/thermodynamics/work-arrow.js";
 import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
@@ -328,7 +329,10 @@ function serializePen(object) {
     }
   }
 
-  if (path.length >= 2) {
+  const blockArrow = object.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+  if (blockArrow.length) {
+    commands.push(pathThrough([...blockArrow, blockArrow[0]], colour, [`fill=${colour}`, "line join=miter"]));
+  } else if (path.length >= 2) {
     commands.push(pathThrough(path, colour, [], arrow));
   }
 
@@ -350,12 +354,12 @@ function serializePen(object) {
       );
     }
 
-    if (kind !== "arrow") {
+    if (kind !== "arrow" || object.metadata?.thermodynamicsKind === "work-arrow") {
       commands.push(
         multiLineNode({ x: finite(textAt.x), y: finite(textAt.y) }, text, colour, [
           "anchor=center",
           `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * 1.2, 2)}}\\selectfont`
-        ])
+        ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
       );
     }
   }

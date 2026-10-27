@@ -57,6 +57,7 @@ function renderToolbarTool(tool) {
         ].map(renderToolButton).join("")
         : tool.id === "work"
         ? [
+            { id: "work-arrow", label: "Work Arrow", iconLabel: "Work" },
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }
         ].map(renderToolButton).join("")

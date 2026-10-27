@@ -69,7 +69,7 @@ import enggFluidsTools from "../model/fluids/fluids-tools.js";
 export const ANNOTATE_TOOL_KINDS = Object.fromEntries(
   [...Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind]),
     ...Object.keys(HEAT_TRANSFER_TOOLS).map(toolId => [toolId, "arrow"]),
-    ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
+    ["work-arrow", "arrow"], ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
 );
 
 const workToolLabels = {
@@ -126,6 +126,7 @@ export function isAnnotateTool(toolId) {
  * value that is not a sentence.
  */
 export function isEditableAnnotate(object) {
+  if (object?.metadata?.thermodynamicsKind === "work-arrow") return true;
   if (!object || object.type !== "annotate") {
     return false;
   }
@@ -151,6 +152,7 @@ export function isGeometricAnnotateTool(toolId) {
  * to do next rather than leaving the previous tool's wording in place.
  */
 export function annotateInstruction(toolId) {
+  if (toolId === "work-arrow") return "Drag from the arrow tail to where work flows; edit its direction and label in Features";
   if (toolId === "mechanical-work") return "Drag from the shaft end to the fan blades to set size and direction";
   if (toolId === "electric-work") return "Drag diagonally from the lead entry to size the resistor; or click two corners";
   if (workToolLabels[toolId]) {
@@ -303,6 +305,19 @@ export function commitAnnotate(options) {
   }
 
   const heat = kind === "arrow" && heatTransferTool(drawingState.activeTool);
+  if (kind === "arrow" && drawingState.activeTool === "work-arrow") {
+    object.name = "Work Arrow";
+    object.text = "W in";
+    object.style = { ...object.style, stroke: "#dc2626", align: "center" };
+    object.metadata = { ...object.metadata, thermodynamicsKind: "work-arrow", workDirection: "in", mathSymbol: "W", mathSubscript: "in" };
+    const start = object.geometry.start, end = object.geometry.end;
+    if (start && end) {
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const gap = Math.min(1.5, length * 0.045) + 16 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+      object.geometry.position = { x: (start.x + end.x) / 2 - dy / length * gap, y: (start.y + end.y) / 2 + dx / length * gap };
+    }
+  }
   const workLabel = kind === "arrow" && workToolLabels[drawingState.activeTool];
   if (workLabel) {
     if (drawingState.activeTool === "electric-work" && options.start && options.end) {
@@ -338,7 +353,9 @@ export function commitAnnotate(options) {
 
   enggDrawingState.selectObject(drawingState, object.id);
 
-  setToolMessage(heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
+  setToolMessage(object.metadata?.thermodynamicsKind === "work-arrow"
+    ? "Work arrow placed - edit Direction and Text in Features"
+    : heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();
   renderCurrentDrawing();
@@ -370,7 +387,7 @@ export function commitAnnotate(options) {
    * point the model stored, not a screen position, so a later zoom or pan cannot
    * move where the text ends up.
    */
-  if (isEditableAnnotate(object)) {
+  if (isEditableAnnotate(object) && object.metadata?.thermodynamicsKind !== "work-arrow") {
     void import("../interaction/canvas-click.js").then((module) => {
       module.openNoteEditorFor?.(object, nodePoint);
     });
