@@ -37,6 +37,7 @@ import enggPressureProfile from "../model/fluids/pressure-profile.js";
 import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { createJunctionForInteriorConnection } from "./junction-tool.js";
+import { controlNodeAlignmentOffset, isControlSymbol, isSum, setSumNodeAngle, sumNodeAngle } from "../../../shared/model/plant.js";
 
 /* How near the pivot (screen px) a rotation drag stops reading an angle. */
 const ROTATION_DEAD_ZONE_PX = 8;
@@ -265,6 +266,15 @@ export function beginManipulationDrag(
             }
         };
 
+        const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(hit.handle.kind);
+        if (sumNodeMatch) {
+            const side = sumNodeMatch[1];
+            const index = Number(sumNodeMatch[2]);
+            enggDrawingState.selectObject(drawingState, hit.object.id);
+            editorState.selectedPlantNode = { objectId: hit.object.id, side, index };
+            renderProperties();
+        }
+
         drawingCanvas.setPointerCapture(
             event.pointerId
         );
@@ -464,6 +474,7 @@ export function updateManipulationDrag(
     const draggingAnnotate =
         editorState.manipulationDrag.object
             ?.type === "annotate";
+    const draggingSumNode = /^sum-node-(inputs|outputs)-\d+$/.test(editorState.manipulationDrag.kind);
 
     const resizingPipe = editorState.manipulationDrag.object?.type === "pipe-duct" &&
         /^corner[0-3]$/.test(editorState.manipulationDrag.kind);
@@ -500,7 +511,7 @@ export function updateManipulationDrag(
     const resolution =
         resizingPipe || editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body" || rotating
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
-            : draggingDimension || draggingAnnotate
+            : draggingDimension || draggingAnnotate || draggingSumNode
             ? resolvePointerEvent(event)
             : resolveManipulationPoint(
                   event,
@@ -508,7 +519,7 @@ export function updateManipulationDrag(
               );
 
     const point =
-        draggingDimension || draggingAnnotate
+        draggingDimension || draggingAnnotate || draggingSumNode
             ? resolution.rawPointerPoint ||
               resolution.effectiveConstructionPoint
             : resolution.effectiveConstructionPoint;
@@ -529,7 +540,7 @@ export function updateManipulationDrag(
      * `setInteraction` is the same path a construction uses, so the guideline
      * hold and its expiry timer behave identically for a drag.
      */
-    if (!draggingDimension && !draggingAnnotate) {
+    if (!draggingDimension && !draggingAnnotate && !draggingSumNode) {
         enggDrawingState.setInteraction(
             drawingState,
             {
@@ -685,6 +696,16 @@ export function finishManipulationDrag(
             renderCurrentDrawing();
         }
 
+        return;
+    }
+
+    if (drag.kind.startsWith("sum-node-") && !drag.changed) {
+        editorState.selectionClickSuppressed = true;
+        if (drawingState.activeTool === "select") {
+            setToolMessage("Select geometry");
+        }
+        renderProperties();
+        renderCurrentDrawing();
         return;
     }
 
@@ -866,6 +887,23 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(drag.kind);
+    if (isSum(object) && sumNodeMatch) {
+        const side = sumNodeMatch[1];
+        const index = Number(sumNodeMatch[2]);
+        const angle = Math.atan2(point.y - g.center.y, point.x - g.center.x) -
+            (Number(g.rotation) || 0) * Math.PI / 180;
+        const previousAngle = sumNodeAngle(object, side, index);
+        if (setSumNodeAngle(object, side, index, angle)) {
+            const difference = Math.atan2(
+                Math.sin(angle - previousAngle),
+                Math.cos(angle - previousAngle)
+            );
+            drag.changed = drag.changed || Math.abs(difference) > 1e-6;
+        }
+        return;
+    }
 
     if (object.type === "pipe-duct" && /^corner[0-3]$/.test(drag.kind)) {
         const original = drag.originals[object.id];
@@ -1075,6 +1113,18 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
+        if (
+            drag.kind === "body" &&
+            isControlSymbol(object) &&
+            Object.keys(drag.originals).length === 1
+        ) {
+            const original = drag.originals[object.id];
+            const alignment = controlNodeAlignmentOffset(original, drawingState.objects, dx, dy);
+            if (alignment) {
+                dx += alignment.dx;
+                dy += alignment.dy;
+            }
+        }
         if (drag.kind === "group-resize") {
             const corners = selectionCorners(drag.bounds);
             anchor = corners[(drag.corner + 2) % 4];

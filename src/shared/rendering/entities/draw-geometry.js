@@ -11,7 +11,7 @@ import { applyStyle, arcPathData, createSvgElement, paintColour } from "../svg-p
 import enggDrawingState from "../../model/drawing-state.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
-import { isPlant, plantNodeLabel, plantNodePosition, plantStyle, plantValue } from "../../model/plant.js";
+import { gainTrianglePoints, isPlant, plantNodeLabel, plantNodePosition, plantStyle, plantValue, sumInputSign, sumInputSignPosition, sumNodePortPosition } from "../../model/plant.js";
 import { appendBlockLabelSvg } from "../../model/block-label.js";
 import { isSignalLine, signalLineSegments } from "../../model/signal-line.js";
 import { stressArrows, stressAngleMark } from "../../geometry/stress-element.js";
@@ -124,6 +124,125 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
             svg.appendChild(
                 circle
             );
+        }
+
+
+    export function drawSum(context) {
+            const { svg, parentSvg, geometry, toScreen } = context;
+            const style = plantStyle(context.style);
+            const centre = toScreen(geometry.center);
+            const colour = paintColour(style.stroke || enggTheme.defaultLineColour());
+            const circle = createSvgElement("circle", {
+                cx: centre.x,
+                cy: centre.y,
+                r: Number(geometry.radius) * context.scale
+            });
+            applyStyle(circle, style);
+            if (style.fill && String(style.fill).toLowerCase() !== "none") {
+                circle.setAttribute("fill", style.fill);
+            }
+            svg.appendChild(circle);
+
+            for (let index = 0; index < plantValue(context.entity, "inputs"); index += 1) {
+                const terminalPosition = plantNodePosition(context.entity, "inputs", index);
+                const portPosition = sumNodePortPosition(context.entity, "inputs", index);
+                const terminal = toScreen(terminalPosition);
+                const port = toScreen(portPosition);
+                const connector = createSvgElement("line", {
+                    x1: port.x,
+                    y1: port.y,
+                    x2: terminal.x,
+                    y2: terminal.y
+                });
+                applyStyle(connector, style);
+                svg.appendChild(connector);
+
+                const node = createSvgElement("circle", {
+                    cx: terminal.x,
+                    cy: terminal.y,
+                    r: 3,
+                    fill: colour
+                });
+                applyStyle(node, style);
+                node.setAttribute("fill", colour);
+                svg.appendChild(node);
+
+                const signPosition = toScreen(sumInputSignPosition(context.entity, index));
+                const sign = createSvgElement("text", {
+                    x: signPosition.x,
+                    y: signPosition.y,
+                    fill: colour,
+                    "font-size": 13,
+                    "font-family": "sans-serif",
+                    "font-weight": "bold",
+                    "text-anchor": "middle",
+                    "dominant-baseline": "central"
+                });
+                sign.textContent = sumInputSign(context.entity, index);
+                svg.appendChild(sign);
+
+                const selectedSignalNode = context.state?.interaction?.signalLineStart;
+                if (
+                    selectedSignalNode?.objectId === context.entity.id &&
+                    selectedSignalNode.side === "inputs" &&
+                    selectedSignalNode.index === index
+                ) {
+                    svg.appendChild(createSvgElement("circle", {
+                        cx: terminal.x,
+                        cy: terminal.y,
+                        r: 7,
+                        fill: "none",
+                        stroke: "#2563EB",
+                        "stroke-width": 2,
+                        "data-signal-line-node-selected": "true",
+                        "pointer-events": "none"
+                    }));
+                }
+            }
+
+            const outputTerminalPosition = plantNodePosition(context.entity, "outputs", 0);
+            const outputPortPosition = sumNodePortPosition(context.entity, "outputs", 0);
+            const outputTerminal = toScreen(outputTerminalPosition);
+            const outputPort = toScreen(outputPortPosition);
+            const outputConnector = createSvgElement("line", {
+                x1: outputPort.x,
+                y1: outputPort.y,
+                x2: outputTerminal.x,
+                y2: outputTerminal.y
+            });
+            applyStyle(outputConnector, style);
+            svg.appendChild(outputConnector);
+
+            const outputNode = createSvgElement("circle", {
+                cx: outputTerminal.x,
+                cy: outputTerminal.y,
+                r: 3,
+                fill: colour
+            });
+            applyStyle(outputNode, style);
+            outputNode.setAttribute("fill", colour);
+            svg.appendChild(outputNode);
+
+            const selectedSignalNode = context.state?.interaction?.signalLineStart;
+            if (
+                selectedSignalNode?.objectId === context.entity.id &&
+                selectedSignalNode.side === "outputs" &&
+                selectedSignalNode.index === 0
+            ) {
+                svg.appendChild(createSvgElement("circle", {
+                    cx: outputTerminal.x,
+                    cy: outputTerminal.y,
+                    r: 7,
+                    fill: "none",
+                    stroke: "#2563EB",
+                    "stroke-width": 2,
+                    "data-signal-line-node-selected": "true",
+                    "pointer-events": "none"
+                }));
+            }
+
+            parentSvg.appendChild(svg);
+            return true;
         }
 
 
@@ -428,6 +547,90 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
 
             parentSvg.appendChild(svg);
 
+            return true;
+        }
+
+    export function drawGain(context) {
+            const { svg, parentSvg, geometry, toScreen } = context;
+            const style = plantStyle(context.style);
+            const modelPoints = gainTrianglePoints(context.entity);
+            const points = modelPoints.map(toScreen);
+            const colour = paintColour(style.stroke || enggTheme.defaultLineColour());
+
+            const triangle = createSvgElement("polygon", {
+                points: points.map(point => `${point.x},${point.y}`).join(" ")
+            });
+            applyStyle(triangle, style);
+            if (style.fill && String(style.fill).toLowerCase() !== "none") {
+                triangle.setAttribute("fill", style.fill);
+            }
+            svg.appendChild(triangle);
+
+            const centre = {
+                x: modelPoints.reduce((sum, point) => sum + point.x, 0) / modelPoints.length,
+                y: modelPoints.reduce((sum, point) => sum + point.y, 0) / modelPoints.length
+            };
+            const screenCentre = toScreen(centre);
+            const label = createSvgElement("text", {
+                x: screenCentre.x,
+                y: screenCentre.y,
+                fill: colour,
+                "font-size": 14,
+                "font-family": "sans-serif",
+                "text-anchor": "middle",
+                "dominant-baseline": "central"
+            });
+            label.textContent = plantValue(context.entity, "gainValue");
+            svg.appendChild(label);
+
+            for (const side of ["inputs", "outputs"]) {
+                const terminalPosition = plantNodePosition(context.entity, side, 0);
+                const terminal = toScreen(terminalPosition);
+                const radians = (Number(geometry.rotation) || 0) * Math.PI / 180;
+                const outward = side === "inputs" ? -1 : 1;
+                const port = toScreen({
+                    x: terminalPosition.x - outward * 4 * Math.cos(radians),
+                    y: terminalPosition.y - outward * 4 * Math.sin(radians)
+                });
+                const connector = createSvgElement("line", {
+                    x1: port.x,
+                    y1: port.y,
+                    x2: terminal.x,
+                    y2: terminal.y
+                });
+                applyStyle(connector, style);
+                svg.appendChild(connector);
+
+                const node = createSvgElement("circle", {
+                    cx: terminal.x,
+                    cy: terminal.y,
+                    r: 3,
+                    fill: colour
+                });
+                applyStyle(node, style);
+                node.setAttribute("fill", colour);
+                svg.appendChild(node);
+
+                const selectedSignalNode = context.state?.interaction?.signalLineStart;
+                if (
+                    selectedSignalNode?.objectId === context.entity.id &&
+                    selectedSignalNode.side === side &&
+                    selectedSignalNode.index === 0
+                ) {
+                    svg.appendChild(createSvgElement("circle", {
+                        cx: terminal.x,
+                        cy: terminal.y,
+                        r: 7,
+                        fill: "none",
+                        stroke: "#2563EB",
+                        "stroke-width": 2,
+                        "data-signal-line-node-selected": "true",
+                        "pointer-events": "none"
+                    }));
+                }
+            }
+
+            parentSvg.appendChild(svg);
             return true;
         }
 

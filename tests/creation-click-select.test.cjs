@@ -172,9 +172,9 @@ check(
 console.log("\n  the tool inventory: which tools take part\n");
 
 check(
-  "one-gesture span tools exit a bare click",
+  "one-gesture span tools take click-move-click and do not exit",
   ["beam", "cable", "shaft", "point-force"].every(
-    (tool) => classification.shouldExitToSelectOnClick(tool) === true,
+    (tool) => classification.shouldExitToSelectOnClick(tool) === false,
   ),
 );
 

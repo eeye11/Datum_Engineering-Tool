@@ -62,6 +62,8 @@ export const POINT_TOOLS = [
     "point",
     "particle",
     "reference-point",
+    "gain",
+    "sum",
 
     /*
      * THE DYNAMICS PLACEMENT TOOLS PLACE ON ONE CLICK TOO.

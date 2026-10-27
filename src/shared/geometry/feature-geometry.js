@@ -15,7 +15,7 @@
 import enggDrawingState from "../model/drawing-state.js";
 import enggBodyFrames from "./body-frames.js";
 import { isConnectionType, isSupportType } from "../model/feature-types.js";
-import { isControlBlock } from "../model/plant.js";
+import { isControlBlock, isSum } from "../model/plant.js";
 import { isSignalLine } from "../model/signal-line.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import { coordinateSystemArms } from "./feature-handles.js";
@@ -598,6 +598,16 @@ function rotateObjectAbout(
                 : nextDegrees
         );
 
+        return;
+    }
+
+    if (type === "circle" && isSum(object)) {
+        turn(g.center);
+        const nextDegrees =
+            (Number(g.rotation) || 0) +
+            (radians * 180) / Math.PI;
+        g.rotation =
+            ((Math.round(nextDegrees / 90) * 90) % 360 + 360) % 360;
         return;
     }
 

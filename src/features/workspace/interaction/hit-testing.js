@@ -27,7 +27,7 @@ import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/s
 import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
-import { isControlBlock } from "../../../shared/model/plant.js";
+import { gainTrianglePoints, isControlBlock, isGain, isSum } from "../../../shared/model/plant.js";
 import enggFlowArrow from "../model/fluids/flow-arrow.js";
 import enggReducer from "../model/fluids/reducer-expander.js";
 import enggEquipment from "../model/fluids/inline-equipment.js";
@@ -1000,6 +1000,13 @@ export function objectAtPoint(
                  * easy to click as a rectangular one.
                  */
                 if (isRectangleLike(object)) {
+                    if (isGain(object)) {
+                        const points = gainTrianglePoints(object);
+
+                        return pointInPolygon(point, points) ||
+                            distanceToPolygon(point, points) <= tolerance;
+                    }
+
                     const corners = enggFeatureGeometry.definingPoints(
                         geometry,
                         object.type === "rigid-body"
@@ -1206,6 +1213,10 @@ export function objectAtPoint(
                     object.type ===
                     "circle"
                 ) {
+                    if (isSum(object)) {
+                        return distance(point, geometry.center) <= Number(geometry.radius) + tolerance;
+                    }
+
                     return (
                         Math.abs(
                             distance(

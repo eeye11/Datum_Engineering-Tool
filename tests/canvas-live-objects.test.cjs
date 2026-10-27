@@ -196,6 +196,137 @@ test("a plant is drawn immediately and can be selected from its filled interior"
   assert.ok(!canvas.querySelector('.drawing-source-layer path[fill="#D9D9D9"]'), "the compiled plant disappears after deletion");
 });
 
+test("the Gain tool places a triangle with a value and fixed nodes", async () => {
+  const { placeGain } = require(locate("plant-tool.js"));
+  const gain = placeGain({ x: 90, y: 0 });
+  const liveGain = canvas.querySelector(`.drawing-overlay [data-feature-id="${gain.id}"]`);
+  const plantModel = require(locate("plant.js"));
+
+  assert.equal(gain.metadata.controlsKind, "gain");
+  assert.equal(gain.metadata.gainValue, "1");
+  assert.equal(drawingState.activeTool, "select");
+  assert.ok(liveGain?.querySelector("polygon"), "the live Gain is triangular");
+  assert.equal(liveGain.querySelector("text")?.textContent, "1");
+  assert.equal(liveGain.querySelectorAll("circle").length, 2, "the Gain has exactly two nodes");
+  assert.equal(objectAtPoint({ x: 90, y: 0 })?.id, gain.id, "the triangle interior selects the Gain");
+  assert.equal(plantModel.plantNodePosition(gain, "inputs", 0).x, 68);
+  assert.equal(plantModel.plantNodePosition(gain, "outputs", 0).x, 112);
+
+  await answerEveryCompile();
+  model.selectObject(drawingState, gain.id);
+  require(locate("delete-command.js")).deleteSelectedObjects();
+  await answerEveryCompile();
+});
+
+test("the Sum tool places a circle with two signed inputs and one output", async () => {
+  const { placeSum } = require(locate("plant-tool.js"));
+  const sum = placeSum({ x: 150, y: 0 });
+  const liveSum = canvas.querySelector(`.drawing-overlay [data-feature-id="${sum.id}"]`);
+  const plantModel = require(locate("plant.js"));
+
+  assert.equal(sum.metadata.controlsKind, "sum");
+  assert.equal(sum.metadata.inputs, 2);
+  assert.deepEqual(sum.metadata.inputSigns, ["+", "+"]);
+  assert.equal(sum.metadata.outputs, 1);
+  assert.equal(drawingState.activeTool, "select");
+  assert.ok(Math.abs(Number(liveSum.querySelector("circle")?.getAttribute("r")) - 43.2) < 0.001);
+  assert.equal(liveSum.querySelectorAll("circle").length, 4, "the Sum has three nodes and its body");
+  assert.deepEqual([...liveSum.querySelectorAll("text")].map((text) => text.textContent), ["+", "+"]);
+  assert.equal(objectAtPoint({ x: 150, y: 0 })?.id, sum.id, "the circle interior selects the Sum");
+  assert.deepEqual(plantModel.plantNodePosition(sum, "inputs", 0), { x: 150, y: 22 });
+  assert.deepEqual(plantModel.plantNodePosition(sum, "inputs", 1), { x: 128, y: 0 });
+  assert.deepEqual(plantModel.plantNodePosition(sum, "outputs", 0), { x: 172, y: 0 });
+
+  const { beginManipulationDrag, updateManipulationDrag, finishManipulationDrag } = require(locate("drag.js"));
+  const { editorState } = require(locate("editor-state.js"));
+  const pointerAt = (point) => {
+    const rect = canvas.getBoundingClientRect();
+    const scale = model.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+    return {
+      pointerId: 731,
+      button: 0,
+      shiftKey: false,
+      clientX: rect.left + canvas.clientWidth / 2 + (point.x - drawingState.camera.panX) * scale,
+      clientY: rect.top + canvas.clientHeight / 2 - (point.y - drawingState.camera.panY) * scale,
+    };
+  };
+  canvas.setPointerCapture = () => {};
+  canvas.hasPointerCapture = () => false;
+  drawingState.selection.selectedObjectIds = [];
+  editorState.selectedPlantNode = null;
+  const nodeBeforeDrag = plantModel.plantNodePosition(sum, "inputs", 0);
+  assert.equal(beginManipulationDrag(pointerAt(nodeBeforeDrag)), true);
+  assert.deepEqual(drawingState.selection.selectedObjectIds, [sum.id], "grabbing an unselected node selects its Sum");
+  assert.deepEqual(editorState.selectedPlantNode, { objectId: sum.id, side: "inputs", index: 0 });
+  updateManipulationDrag(pointerAt({ x: 161, y: 19.05255888325765 }));
+  finishManipulationDrag(pointerAt({ x: 161, y: 19.05255888325765 }));
+  const nodeAfterDrag = plantModel.plantNodePosition(sum, "inputs", 0);
+  assert.notDeepEqual(nodeAfterDrag, nodeBeforeDrag, "dragging moves the node around the perimeter");
+  assert.ok(Math.abs(Math.hypot(nodeAfterDrag.x - 150, nodeAfterDrag.y) - 22) < 1e-8);
+
+  await answerEveryCompile();
+  model.selectObject(drawingState, sum.id);
+  require(locate("delete-command.js")).deleteSelectedObjects();
+  await answerEveryCompile();
+});
+
+test("dragging a control symbol snaps opposite node types into alignment", async () => {
+  const snapshot = model.snapshotDrawing(drawingState);
+  const source = model.addObject(drawingState, {
+    type: "rectangle",
+    name: "Plant",
+    geometry: { position: { x: -30, y: 15 }, width: 60, height: 30, rotation: 0 },
+    style: { stroke: "#000000", fill: "#D9D9D9", fillMode: "solid" },
+    metadata: { controlsKind: "plant", inputs: 1, outputs: 1 },
+  });
+  const target = model.addObject(drawingState, {
+    type: "rectangle",
+    name: "Block",
+    geometry: { position: { x: 100, y: 30 }, width: 30, height: 60, rotation: 0 },
+    style: { stroke: "#000000", fill: "#D9D9D9", fillMode: "solid" },
+    metadata: { controlsKind: "block", inputs: 1, outputs: 1 },
+  });
+  model.commitDrawingChange(drawingState, snapshot);
+
+  const plantModel = require(locate("plant.js"));
+  const { beginManipulationDrag, updateManipulationDrag, finishManipulationDrag } = require(locate("drag.js"));
+  canvas.setPointerCapture = () => {};
+  canvas.hasPointerCapture = () => false;
+  const pointerAt = (point, pointerId) => {
+    const rect = canvas.getBoundingClientRect();
+    const scale = model.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+    return {
+      pointerId,
+      button: 0,
+      shiftKey: false,
+      clientX: rect.left + canvas.clientWidth / 2 + (point.x - drawingState.camera.panX) * scale,
+      clientY: rect.top + canvas.clientHeight / 2 - (point.y - drawingState.camera.panY) * scale,
+    };
+  };
+  const dragBy = (object, start, delta, pointerId) => {
+    model.selectObject(drawingState, object.id);
+    assert.equal(beginManipulationDrag(pointerAt(start, pointerId)), true);
+    assert.equal(require(locate("editor-state.js")).editorState.manipulationDrag.object.id, object.id);
+    assert.equal(require(locate("editor-state.js")).editorState.manipulationDrag.kind, "body");
+    const destination = { x: start.x + delta.x, y: start.y + delta.y };
+    updateManipulationDrag(pointerAt(destination, pointerId));
+    assert.equal(require(locate("editor-state.js")).editorState.manipulationDrag.moved, true);
+    finishManipulationDrag(pointerAt(destination, pointerId));
+  };
+
+  dragBy(source, { x: 0, y: 0 }, { x: 10, y: 4 }, 732);
+  assert.equal(source.geometry.position.x, -20, "the unsnapped horizontal movement is preserved");
+  assert.equal(source.geometry.position.y, 15, "the output node is snapped to the target input's horizontal line");
+  assert.equal(plantModel.plantNodePosition(source, "outputs", 0).y, plantModel.plantNodePosition(target, "inputs", 0).y);
+
+  await answerEveryCompile();
+  model.selectObject(drawingState, source.id);
+  require(locate("delete-command.js")).deleteSelectedObjects();
+  model.selectObject(drawingState, target.id);
+  require(locate("delete-command.js")).deleteSelectedObjects();
+  await answerEveryCompile();
+});
+
 test("the Signal Line tool connects an output node to an input node and marks the chosen node", async () => {
   const snapshot = model.snapshotDrawing(drawingState);
   const source = model.addObject(drawingState, {

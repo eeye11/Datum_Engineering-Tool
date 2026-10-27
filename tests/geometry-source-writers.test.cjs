@@ -250,6 +250,37 @@ check("a Block formats slash as a fraction and caret as an exponent", has(block,
 check("a Block lower label remains plain text below the rectangle", has(block, "{Acceleration}") && has(block, "(15,-35)"), block);
 check("the Block formula label uses the larger eight-point font", has(block, "\\fontsize{8}{9.6}"), block);
 
+const gain = write(
+  objectOf(
+    "rectangle",
+    { position: { x: -18, y: 15 }, width: 36, height: 30, rotation: 0 },
+    { fill: "#D9D9D9", fillMode: "solid" },
+    { metadata: { controlsKind: "gain", gainValue: "K" } },
+  ),
+);
+check("a Gain is a filled triangle with its editable center value", has(gain, "(-18,15)") && has(gain, "(18,0)") && has(gain, "{K}"), gain);
+check("a Gain has one input on its flat side and one output at its point", has(gain, "(-22,0)") && has(gain, "(22,0)"), gain);
+
+const sum = write(
+  objectOf(
+    "circle",
+    { center: { x: 0, y: 0 }, radius: 18 },
+    { fill: "#D9D9D9", fillMode: "solid" },
+    { metadata: { controlsKind: "sum", inputs: 2, outputs: 1 } },
+  ),
+);
+check("a Sum is a filled circle with plus signs at its two inputs", has(sum, "circle[radius=") && (sum.match(/\{\+\}/g) || []).length === 2, sum);
+check("a Sum's inputs are at the top and left and its output is at the right", has(sum, "(0,22)") && has(sum, "(-22,0)") && has(sum, "(22,0)"), sum);
+const signedSum = write(
+  objectOf(
+    "circle",
+    { center: { x: 0, y: 0 }, radius: 18 },
+    {},
+    { metadata: { controlsKind: "sum", inputs: 2, inputSigns: ["+", "-"] } },
+  ),
+);
+check("a Sum writes each input's selected plus or minus sign", has(signedSum, "{+}") && has(signedSum, "{-}"), signedSum);
+
 console.log("\nSignal Line");
 console.log("-----------");
 

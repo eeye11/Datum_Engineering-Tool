@@ -30,6 +30,7 @@ import { selectionBounds, selectionCorners } from "../../../shared/selection/sel
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
 import { DYNAMICS_SIZES } from "../dynamics/dynamics-tools.js";
+import { isSum, plantNodePosition, plantValue } from "../../../shared/model/plant.js";
 
 /*
  * Which view the Features panel is showing.
@@ -1344,6 +1345,24 @@ function manipulationHandles(
             ];
     }
 
+    if (object.type === "circle" && isSum(object)) {
+        return [
+            ...Array.from({ length: plantValue(object, "inputs") }, (_, index) => ({
+                kind: `sum-node-inputs-${index}`,
+                point: plantNodePosition(object, "inputs", index)
+            })),
+            { kind: "sum-node-outputs-0", point: plantNodePosition(object, "outputs", 0) },
+            { kind: "center", point: g.center },
+            {
+                kind: "radius",
+                point: {
+                    x: g.center.x + g.radius,
+                    y: g.center.y
+                }
+            }
+        ];
+    }
+
     if (object.type === "circle") {
         return [
                 { kind: "center", point: g.center },
@@ -1711,7 +1730,9 @@ export function handleAtPoint(
 
             if (
                 !selected &&
-                object.type !== "dimension" && object.metadata?.thermodynamicsKind !== "process-path"
+                object.type !== "dimension" &&
+                object.metadata?.thermodynamicsKind !== "process-path" &&
+                !isSum(object)
             ) {
                 return;
             }

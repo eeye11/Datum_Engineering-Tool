@@ -1,5 +1,5 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
-import { BLOCK_KIND, DEFAULT_PLANT_FILL, PLANT_KIND } from "../../../shared/model/plant.js";
+import { BLOCK_KIND, DEFAULT_PLANT_FILL, GAIN_KIND, PLANT_KIND, SUM_KIND } from "../../../shared/model/plant.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
@@ -8,7 +8,8 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 
 const CONTROL_DIMENSIONS = {
     plant: { width: 60, height: 30 },
-    block: { width: 30, height: 60 }
+    block: { width: 15, height: 30 },
+    gain: { width: 36, height: 30 }
 };
 
 function placeControlBlock(point, kind) {
@@ -166,4 +167,68 @@ export function placePlant(point) {
 
 export function placeBlock(point) {
     return placeControlBlock(point, "block");
+}
+
+export function placeGain(point) {
+    const dimensions = CONTROL_DIMENSIONS.gain;
+    const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
+    const object = enggDrawingState.addObject(drawingState, {
+        type: "rectangle",
+        name: "Gain",
+        geometry: {
+            position: {
+                x: point.x - dimensions.width / 2,
+                y: point.y + dimensions.height / 2
+            },
+            width: dimensions.width,
+            height: dimensions.height,
+            rotation: 0
+        },
+        style: {
+            ...drawingState.styleDefaults,
+            fill: DEFAULT_PLANT_FILL,
+            fillMode: "solid"
+        },
+        metadata: {
+            controlsKind: GAIN_KIND,
+            gainValue: "1"
+        }
+    });
+
+    enggDrawingState.selectObject(drawingState, object.id);
+    enggDrawingState.commitDrawingChange(drawingState, previousObjects);
+    renderProperties();
+    renderCurrentDrawing();
+    activateTool("select");
+    return object;
+}
+
+export function placeSum(point) {
+    const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
+    const object = enggDrawingState.addObject(drawingState, {
+        type: "circle",
+        name: "Sum",
+        geometry: {
+            center: { x: point.x, y: point.y },
+            radius: 18
+        },
+        style: {
+            ...drawingState.styleDefaults,
+            fill: DEFAULT_PLANT_FILL,
+            fillMode: "solid"
+        },
+        metadata: {
+            controlsKind: SUM_KIND,
+            inputs: 2,
+            outputs: 1,
+            inputSigns: ["+", "+"]
+        }
+    });
+
+    enggDrawingState.selectObject(drawingState, object.id);
+    enggDrawingState.commitDrawingChange(drawingState, previousObjects);
+    renderProperties();
+    renderCurrentDrawing();
+    activateTool("select");
+    return object;
 }

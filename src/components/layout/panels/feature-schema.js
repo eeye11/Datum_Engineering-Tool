@@ -36,7 +36,7 @@ import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.j
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 import { isDynamicsObject, dynamicsTypeOf } from "../../../features/workspace/dynamics/dynamics-tools.js";
-import { isBlock, isControlBlock, isPlant, plantNodeLabel, plantValue, setPlantNodeLabel, setPlantValue } from "../../../shared/model/plant.js";
+import { isBlock, isControlSymbol, isGain, isPlant, isSum, plantNodeLabel, plantValue, setPlantNodeLabel, setPlantValue, setSumInputSign, sumInputSign } from "../../../shared/model/plant.js";
 import { isSignalLine } from "../../../shared/model/signal-line.js";
 import { editorState } from "../../../features/workspace/editor-state.js";
 import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
@@ -616,7 +616,7 @@ const FIELDS = {
         kind: "number",
         min: 0,
         step: 1,
-        applies: isControlBlock,
+        applies: (object) => isPlant(object) || isBlock(object),
         read: (object) => plantValue(object, "inputs"),
         write: (object, value) => {
             const count = Number(value);
@@ -629,7 +629,7 @@ const FIELDS = {
         kind: "number",
         min: 0,
         step: 1,
-        applies: isControlBlock,
+        applies: (object) => isPlant(object) || isBlock(object),
         read: (object) => plantValue(object, "outputs"),
         write: (object, value) => {
             const count = Number(value);
@@ -640,7 +640,7 @@ const FIELDS = {
 
     plantShowNodeLabels: {
         kind: "toggle",
-        applies: isControlBlock,
+        applies: (object) => isPlant(object) || isBlock(object),
         read: (object) => plantValue(object, "showNodeLabels"),
         write: (object, value) => setPlantValue(object, "showNodeLabels", value),
         label: "Label nodes"
@@ -670,10 +670,50 @@ const FIELDS = {
         label: "Lower label"
     },
 
+    gainValue: {
+        kind: "text",
+        applies: isGain,
+        read: (object) => plantValue(object, "gainValue"),
+        write: (object, value) => setPlantValue(object, "gainValue", value),
+        label: "Gain"
+    },
+
+    sumInputs: {
+        kind: "number",
+        min: 2,
+        step: 1,
+        applies: isSum,
+        read: (object) => plantValue(object, "inputs"),
+        write: (object, value) => setPlantValue(object, "inputs", Number(value)),
+        label: "Input nodes"
+    },
+
+    sumInputSign: {
+        kind: "segmented",
+        options: [
+            { value: "+", label: "+" },
+            { value: "-", label: "-" }
+        ],
+        applies: (object) =>
+            isSum(object) &&
+            editorState.selectedPlantNode?.objectId === object.id &&
+            editorState.selectedPlantNode.side === "inputs" &&
+            sumInputSign(object, editorState.selectedPlantNode.index) !== undefined,
+        read: (object) => {
+            const node = editorState.selectedPlantNode;
+            return sumInputSign(object, node?.index);
+        },
+        write: (object, value) => {
+            const node = editorState.selectedPlantNode;
+            return setSumInputSign(object, node?.index, value);
+        },
+        label: "Input sign"
+    },
+
     plantNodeLabel: {
         kind: "text",
         applies: (object) =>
-            isControlBlock(object) &&
+            (isPlant(object) || isBlock(object)) &&
             editorState.selectedPlantNode?.objectId === object.id,
         read: (object) => {
             const node = editorState.selectedPlantNode;
@@ -1173,6 +1213,8 @@ function normaliseArrow(value) {
 export const GROUPS = [
     { id: "plant", heading: "Plant", fields: ["plantInputs", "plantOutputs", "plantShowNodeLabels", "plantLabel", "blockLabel", "blockLowerLabel", "plantNodeLabel"] },
     { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
+    { id: "gain", heading: "Gain", fields: ["gainValue"] },
+    { id: "sum", heading: "Sum", fields: ["sumInputs", "sumInputSign"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
@@ -3972,10 +4014,10 @@ export function groupsFor(object) {
      * panel shows one symbol's real controls rather than a list of sections
      * that might apply to something else.
      */
-    const controlBlock = isControlBlock(object)
+    const controlSymbol = isControlSymbol(object)
         ? [{
-            ...GROUPS.find((group) => group.id === "plant"),
-            heading: isBlock(object) ? "Block" : "Plant"
+            ...GROUPS.find((group) => group.id === (isGain(object) ? "gain" : isSum(object) ? "sum" : "plant")),
+            heading: isGain(object) ? "Gain" : isSum(object) ? "Sum" : isBlock(object) ? "Block" : "Plant"
         }]
         : [];
     const dynamics = isDynamicsObject(object)
@@ -4001,7 +4043,7 @@ export function groupsFor(object) {
             .filter((group) => group.transform || group.fields.length);
     }
 
-    const base = [...controlBlock, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant")];
+    const base = [...controlSymbol, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant" && group.id !== "gain" && group.id !== "sum")];
     /*
      * A FLOW ARROW HAS TWO SECTIONS: Object and Appearance.
      *
@@ -4282,6 +4324,14 @@ export function typeLabelOf(object) {
 
     if (isBlock(object)) {
         return "Block";
+    }
+
+    if (isGain(object)) {
+        return "Gain";
+    }
+
+    if (isSum(object)) {
+        return "Sum";
     }
 
     if (object?.type === "annotate") {

@@ -26,7 +26,7 @@ import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../component
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
-import { placeBlock, placePlant } from "../controls/plant-tool.js";
+import { placeBlock, placeGain, placePlant, placeSum } from "../controls/plant-tool.js";
 import { plantNodeAtPoint } from "../../../shared/model/plant.js";
 import { handleSignalLineClick } from "../controls/signal-line-tool.js";
 
@@ -137,6 +137,14 @@ export function handleCanvasClick(
         placeBlock(resolution.effectiveConstructionPoint);
         return;
     }
+    if (drawingState.activeTool === "gain") {
+        placeGain(resolution.effectiveConstructionPoint);
+        return;
+    }
+    if (drawingState.activeTool === "sum") {
+        placeSum(resolution.effectiveConstructionPoint);
+        return;
+    }
 
     // Also cover clicks delivered without a pointerdown creation session.
     // Select the note before a click-to-create tool consumes its first point.
@@ -146,7 +154,6 @@ export function handleCanvasClick(
         selectFromCanvasClick(event);
         return;
     }
-
 
     if (isProcessPlotTool(drawingState.activeTool)) {
         addProcessPoint(resolution.rawPointerPoint);
