@@ -552,8 +552,9 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         lines.forEach((line, index) => {
             if (index === 0) {
-                if (["in", "out"].includes(mathSubscript) && lines.length === 1 && line === `q ${mathSubscript}`) {
-                    textNode.textContent = "q";
+                const base = mathSubscript === "atm" ? "P" : "q";
+                if (["in", "out", "atm"].includes(mathSubscript) && lines.length === 1 && line === `${base} ${mathSubscript}`) {
+                    textNode.textContent = base;
                     const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
                     subscript.textContent = mathSubscript;
                     textNode.appendChild(subscript);

@@ -316,7 +316,7 @@ function serializeProcessPath(object, options) {
       );
     }
 
-    if (index > 0) {
+    if (index > 0 && (!Array.isArray(object.metadata?.arrowSegments) || object.metadata.arrowSegments.includes(index - 1))) {
       /*
        * THE ARROW SITS ON THE SEGMENT'S MIDDLE and points along it there - on a
        * bent segment that is the curve's middle, as the canvas draws it.

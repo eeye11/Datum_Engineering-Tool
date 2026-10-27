@@ -19,6 +19,7 @@ import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { dieselCycleFeatures } from "../../features/workspace/model/thermodynamics/diesel-cycle.js";
+import { ottoCycleFeatures } from "../../features/workspace/model/thermodynamics/otto-cycle.js";
 
 
     /*
@@ -93,8 +94,9 @@ import { dieselCycleFeatures } from "../../features/workspace/model/thermodynami
         state,
         bounds
     ) {
-        if (entity.metadata?.thermodynamicsKind === "diesel-cycle") {
-            dieselCycleFeatures(entity.geometry).forEach(feature => appendEntity(svg, feature, state, bounds));
+        if (["diesel-cycle", "otto-cycle"].includes(entity.metadata?.thermodynamicsKind)) {
+            const features = entity.metadata.thermodynamicsKind === "otto-cycle" ? ottoCycleFeatures(entity.geometry) : dieselCycleFeatures(entity.geometry);
+            features.forEach(feature => appendEntity(svg, feature, state, bounds));
             return;
         }
         const parentSvg = svg;

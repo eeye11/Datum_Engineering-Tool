@@ -130,6 +130,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "vapor-compression-cycle",
     "brayton-cycle",
     "diesel-cycle",
+    "otto-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",

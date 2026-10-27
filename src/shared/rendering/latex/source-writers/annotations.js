@@ -162,8 +162,9 @@ function textAnchor(align) {
  */
 function multiLineNode(at, text, colour, options = [], mathSubscript = null) {
   const lines = String(text ?? "").split("\n");
-  const content = ["in", "out"].includes(mathSubscript) && text === `q ${mathSubscript}`
-    ? `$q_{${mathSubscript}}$`
+  const base = mathSubscript === "atm" ? "P" : "q";
+  const content = ["in", "out", "atm"].includes(mathSubscript) && text === `${base} ${mathSubscript}`
+    ? `$${base}_{${mathSubscript}}$`
     : lines.map((line) => texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;

@@ -213,6 +213,7 @@ export function activateTool(
         requestedTool === "vapor-compression-cycle" ||
         requestedTool === "brayton-cycle" ||
         requestedTool === "diesel-cycle" ||
+        requestedTool === "otto-cycle" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
@@ -443,6 +444,7 @@ export function initialToolMessage(
             "vapor-compression-cycle": "Drag opposite corners to place an ideal vapor-compression refrigeration cycle",
             "brayton-cycle": "Drag opposite corners to place a Brayton cycle schematic",
             "diesel-cycle": "Drag opposite corners to place Diesel P-v and T-s diagrams",
+            "otto-cycle": "Drag opposite corners to place the Otto indicator and ideal P-v diagrams",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

@@ -71,6 +71,7 @@ export function isConstructionTool(
             toolId === "vapor-compression-cycle" ||
             toolId === "brayton-cycle" ||
             toolId === "diesel-cycle" ||
+            toolId === "otto-cycle" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

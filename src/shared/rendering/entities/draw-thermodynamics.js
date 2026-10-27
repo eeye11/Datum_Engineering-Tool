@@ -123,7 +123,7 @@ export function drawTank({ svg, geometry, style, toScreen }) {
                 label.textContent = String(index + 1);
                 processOverlay.appendChild(label);
             }
-            if (!index) return;
+            if (!index || (Array.isArray(entity.metadata.arrowSegments) && !entity.metadata.arrowSegments.includes(index - 1))) return;
             const segment = processSegmentPoints(geometry, index - 1).map(toScreen);
             const middle = Math.floor(segment.length / 2);
             const previous = segment.length > 2 ? segment[middle - 1] : segment[0];
