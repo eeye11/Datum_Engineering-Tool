@@ -434,7 +434,7 @@ export function initialToolMessage(
             "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
             "coordinate-system-2d": "Drag out the area for the axes; width sets X, height sets Y, and rotation stays at 0 degrees",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
-            "boundary-stress": "Drag opposite corners to draw a plate; edit each edge's normal and shear distributions in Features",
+            "boundary-stress": "Drag a plate; set width and height in Features (numbers or symbols), then enter edge equations such as x/a or y/b. Symbolic dimensions use a schematic scale.",
             "stress-element": "Drag opposite corners to draw a square stress element; use its rotation handle or enter Angle in the Features panel",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",

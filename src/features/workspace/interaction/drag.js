@@ -17,7 +17,7 @@ import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynamics/process-curves.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../model/thermodynamics/piston-cylinder.js";
-import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
+import { isRectangleLike, objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
 import { rotationPivotFor } from "./handles.js";
@@ -267,7 +267,7 @@ export function beginManipulationDrag(
      * which selects the dimension, exactly as a click on it always did.
      */
     const overlay =
-        objectAtPoint(
+        boundarySelectionAtPoint(point) || objectAtPoint(
             point
         );
 
@@ -346,13 +346,13 @@ export function beginManipulationDrag(
 
     if (
         object &&
-        (object.type === COORDINATE_SYSTEM_TYPE || drawingState.selection
+        (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
             .selectedObjectIds
             .includes(
                 object.id
             ))
     ) {
-        const coordinateNeedsSelection = object.type === COORDINATE_SYSTEM_TYPE && !selectedIds.includes(object.id);
+        const coordinateNeedsSelection = (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress) && !selectedIds.includes(object.id);
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,
