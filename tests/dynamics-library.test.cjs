@@ -802,7 +802,7 @@ test("the sidebar still renders the Statics hierarchy unchanged", async () => {
 
   const text = (document.getElementById("drawingToolList")?.textContent || "").replace(/\s+/g, " ");
 
-  ["Selection", "Create", "Bodies", "Point Force", "Analysis", "Reference"].forEach((word) => {
+  ["Selection", "Create", "Bodies", "Point Load", "Analysis", "Reference"].forEach((word) => {
     assert.ok(text.includes(word), `Statics must still show ${word}`);
   });
 });
