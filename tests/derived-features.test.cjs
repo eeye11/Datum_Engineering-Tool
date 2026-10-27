@@ -507,11 +507,12 @@ console.log("\n  and the canvas shows two shafts, not three\n");
       : 0;
   };
 
+  /* Each component arrow is a shaft plus an arrowhead line; the count is per line. */
   const off = shaftsWith(undefined);
 
   check(
     "a fresh components feature draws exactly two shafts",
-    off === 2,
+    off === 4,
     `drew ${off} - a third would be a copy of the force it is decomposing`,
   );
 
@@ -519,7 +520,7 @@ console.log("\n  and the canvas shows two shafts, not three\n");
 
   check(
     "and three when the original is explicitly asked for",
-    on === 3,
+    on === 5,
     `drew ${on}`,
   );
 }
@@ -587,7 +588,7 @@ console.log("\n  and the tool parents it to the force\n");
 
   check(
     "the parent is the force's own, not a guess",
-    /force\.parentId/.test(code.slice(componentsPath, componentsAdds)) &&
+    /resolved\.parentId = force\.id/.test(code.slice(componentsPath, componentsAdds)) &&
       /forces\[0\]\.parentId/.test(
         code.slice(resultantPath, resultantAdds),
       ),

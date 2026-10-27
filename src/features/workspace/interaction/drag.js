@@ -129,25 +129,23 @@ export function beginManipulationDrag(
     }
 
     /*
-     * A DERIVED CHILD IS NEVER DRAGGED.
-     *
-     * A Resultant and a Force Components pair are static children of the
-     * force(s) they read: position, direction and magnitude are all re-derived
-     * from those parents on every refresh. A drag would either be wiped by the
-     * next refresh or survive as a lie about where the reading belongs.
+     * A DERIVED CHILD IS NEVER DRAGGED, AND THE HIT IS RESOLVED THROUGH THE
+     * ONE LOOKUP: a boundary-stress plate is picked by its box, and a press on
+     * a derived child is mapped to its source feature before any check below.
      *
      * Refused ahead of BOTH drag shapes - a handle and the body - so the child
      * stays put; it is still selectable, inspectable and deletable.
      */
-    const pointed = objectAtPoint(point);
-    const underPointer = pointed?.sourceFeatureId && selectedIds.includes(pointed.sourceFeatureId)
+    const pointed =
+        boundarySelectionAtPoint(point) || objectAtPoint(point);
+    const resolved = pointed?.sourceFeatureId && selectedIds.includes(pointed.sourceFeatureId)
         ? drawingState.objects.find(item => item.id === pointed.sourceFeatureId)
-            : pointed;
+        : pointed;
 
-        if (isDerivedFeature(overlay)) {
-            setToolMessage(
-                `${overlay.name || "This feature"} is derived from its source force - change the force instead`
-            );
+    if (isDerivedFeature(resolved)) {
+        setToolMessage(
+            `${resolved.name || "This feature"} is derived from its source force - change the force instead`
+        );
 
         return false;
     }
@@ -167,11 +165,7 @@ export function beginManipulationDrag(
      */
     const locked =
         (hit && hit.object && hit.object.locked) ||
-        (() => {
-            const under = underPointer;
-
-            return under && under.locked ? under : null;
-        })();
+        (resolved && resolved.locked ? resolved : null);
 
     if (locked) {
         setToolMessage(
@@ -298,16 +292,9 @@ export function beginManipulationDrag(
      * pointer actually travels, so a press that stays put is still a click -
      * which selects the dimension, exactly as a click on it always did.
      */
-    /*
-     * A BOUNDARY-STRESS PLATE IS PICKED BY ITS BOX, and the hit is mapped to
-     * its source feature when the press lands on a derived child.
-     */
-    const overlay =
-        boundarySelectionAtPoint(point) || objectAtPoint(point);
-
     if (
-        overlay?.type === "dimension" ||
-        overlay?.type === "annotate"
+        resolved?.type === "dimension" ||
+        resolved?.type === "annotate"
     ) {
         /*
          * ARMED, NOT CLAIMED.
@@ -330,7 +317,7 @@ export function beginManipulationDrag(
          */
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
-            object: overlay,
+            object: resolved,
             kind: "annotation-offset",
             moved: false,
             pending: true,
@@ -343,10 +330,10 @@ export function beginManipulationDrag(
              */
             anchor: { ...point },
             originals: {
-                [overlay.id]:
+                [resolved.id]:
                     JSON.parse(
                         JSON.stringify(
-                            overlay
+                            resolved
                         )
                     )
             }
@@ -365,7 +352,7 @@ export function beginManipulationDrag(
     const insideSelection = selectedIds.length === 1 && box &&
         point.x >= box.minX && point.x <= box.maxX &&
         point.y >= box.minY && point.y <= box.maxY;
-    const object = overlay || (insideSelection
+    const object = resolved || (insideSelection
         ? drawingState.objects.find(item => item.id === selectedIds[0]) : null);
 
     /*
@@ -373,7 +360,7 @@ export function beginManipulationDrag(
      * student aims at the shape, not its edge - so the box interior is a move
      * target whenever the press lands on exactly one feature's geometry.
      */
-    const outlineHit = Boolean(overlay) && !insideSelection;
+    const outlineHit = Boolean(resolved) && !insideSelection;
 
     if (
         object && !object.locked && !isDerivedFeature(object) &&
