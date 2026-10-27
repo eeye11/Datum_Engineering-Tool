@@ -16,7 +16,6 @@ import { exportTransformFor } from "../../../shared/rendering/latex/source-synch
 import { IDENTITY_EXPORT } from "../../../shared/rendering/latex/export-transform.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
-import { pictureViewBox } from "../../../shared/rendering/picture-viewport.js";
 
 /*
  * ============================================================

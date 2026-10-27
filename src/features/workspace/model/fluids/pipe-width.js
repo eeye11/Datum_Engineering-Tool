@@ -41,8 +41,6 @@ export function propagatePipeWidth(run, objects = []) {
    * at. The walk may start from either side of a join, and the side the student
    * widened is the one whose value must spread.
    */
-  const widthOf = (candidate) =>
-    (Number(candidate.engineering?.schematicWidth) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION) - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION;
 
   while (queue.length) {
     const current = queue.pop();
@@ -81,8 +79,6 @@ export function propagatePipeWidth(run, objects = []) {
 
         visited.add(candidate.id);
         queue.push(candidate);
-
-        const source = widthOf(current);
 
         if ((Number(candidate.engineering?.schematicWidth) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION) !==
             (Number(current.engineering?.schematicWidth) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION)) {

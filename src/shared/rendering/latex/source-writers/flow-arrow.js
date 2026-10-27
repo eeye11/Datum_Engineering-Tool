@@ -37,12 +37,6 @@ function finitePoint(at) {
   );
 }
 
-function number(value) {
-  const rounded = Number(Number(value).toFixed(4));
-
-  return Number.isFinite(rounded) ? String(rounded) : "0";
-}
-
 function styleOf(object) {
   const { definitions, options } = splitPrelude(
     styleOptions(object.style || {}),
