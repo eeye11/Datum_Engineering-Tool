@@ -84,7 +84,7 @@ const TOOLS = [
      */
     ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
     ["THERMODYNAMICS", "control-volume"],
-    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
+    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];
 
