@@ -167,7 +167,9 @@ const SANCTIONED = new Set([
   "drawing-reference.js",
   "written-references.js",
   /* The Source tab's canvas overlay: editor chrome, view-only, like wiring. */
-  "source-canvas-bridge.js"
+  "source-canvas-bridge.js",
+  /* The Plant/Block label writes its own tspan exponent into the entity's SVG. */
+  "block-label.js"
 ]);
 
 /* The drawing controller (src/features/workspace/) builds its own canvas overlay. */

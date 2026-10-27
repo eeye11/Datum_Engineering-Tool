@@ -1520,7 +1520,7 @@ Object.assign(FIELDS, {
         kind: "number",
         step: 1,
         applies: (object) => object?.type === "pipe-duct",
-        read: (object) => Number(object.engineering?.separation) || 0,
+        read: (object) => (Number(object.engineering?.schematicWidth) || enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION) - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION,
         write: (object, value) => {
             const change = Number(value);
 
@@ -2021,16 +2021,13 @@ export function setPipeWidth(object, change) {
         return false;
     }
 
-    if (width === 0) {
-        delete engineering.separation;
-
+        if (width === 0) {
+            delete engineering.schematicWidth;
+            return true;
+        }
+        engineering.schematicWidth = enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + width;
         return true;
     }
-
-    engineering.separation = width;
-
-    return true;
-}
 
 const PROCESS_BEND_PREFIX = "processBend:";
 
@@ -3985,36 +3982,26 @@ export function groupsFor(object) {
         ? DYNAMICS_GROUPS
         : [];
 
-    /*
-     * A PIPE / DUCT HAS EXACTLY THREE SECTIONS: Object, Appearance, Transform.
-     *
-     * The shared table is ordered for the drawing shapes - Line, Shape, Fill,
-     * then the common sections - which would put a stray "Line" and "Fill"
-     * heading above Appearance on a pipe. A pipe is a DRAWING STYLE, not a
-     * shape: its line type, colour, thickness and fill all belong together
-     * under Appearance, so the per-shape groups are dropped for it and the
-     * three sections it does have are put in the order they are specified in.
-     */
     const isPipe = object.type === "pipe-duct";
-
-    /*
-     * AN ELBOW HAS THE SAME THREE SECTIONS AS A RUN - Object, Appearance and
-     * Transform - and nothing else. Its Line Style, Outline Colour, Thickness
-     * and Fill belong together under Appearance, and its own Bend Radius and
-     * Bend Angle are Transform rows. There is no Rotate row and no Visibility
-     * control: a fitting is placed by its pipes, so neither is specified.
-     */
     const isElbow = object.type === "elbow";
-
-    /*
-     * A JUNCTION HAS THE SAME THREE SECTIONS AGAIN - Object, Appearance and
-     * Transform - with no branch angle rows and no branch length. An arm is a
-     * connection stub, and the fitting is placed by its pipes.
-     */
     const isJunction = object.type === "junction";
-
     const flowPath = isPipe || isElbow || isJunction;
 
+    /* The pipe / duct family has exactly Object, Appearance and Transform. */
+    if (flowPath) {
+        return ["object", "appearance", "transform"]
+            .map((id) => GROUPS.find((group) => group.id === id))
+            .filter(Boolean)
+            .map((group) => ({
+                ...group,
+                fields: group.fields
+                    .map((key) => ({ key, definition: definitionOf(key) }))
+                    .filter((entry) => entry.definition && entry.definition.applies(object))
+            }))
+            .filter((group) => group.transform || group.fields.length);
+    }
+
+    const base = [...controlBlock, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant")];
     /*
      * A FLOW ARROW HAS TWO SECTIONS: Object and Appearance.
      *
@@ -4030,14 +4017,7 @@ export function groupsFor(object) {
      */
     const isFlowArrow = object.type === "flow-arrow";
 
-    const base = [...dynamics, ...GROUPS];
-
     const groups = (isFlowArrow ? [...base, FLOW_ARROW_GROUP] : base)
-        .filter(
-            (group) =>
-                !flowPath ||
-                ["object", "appearance", "transform"].includes(group.id)
-        )
         .filter(
             (group) =>
                 !isFlowArrow || group.id === "appearance" || group.id === FLOW_ARROW_GROUP.id
@@ -4050,15 +4030,6 @@ export function groupsFor(object) {
             return { ...group, fields };
         })
         .filter((group) => group.transform || group.fields.length);
-
-    if (flowPath) {
-        const order = ["object", "appearance", "transform"];
-
-        groups.sort(
-            (left, right) =>
-                order.indexOf(left.id) - order.indexOf(right.id)
-        );
-    }
 
     if (isFlowArrow) {
         const order = [FLOW_ARROW_GROUP.id, "appearance"];

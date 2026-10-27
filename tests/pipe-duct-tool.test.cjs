@@ -329,11 +329,11 @@ test("the legacy cross-section properties are gone", () => {
   assert.ok(!headings.includes("Cross Section"), "Cross Section must be removed");
 });
 
-test("the default separation is twice the previous value", () => {
+test("the default separation is five times the original value", () => {
   const m = modules();
 
-  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SEPARATION, 4);
-  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SPACING, 4);
+  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SEPARATION, 20);
+  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SPACING, 20);
 });
 
 test("the Transform carries X Shift, Y Shift, Rotate and Pipe Width", () => {

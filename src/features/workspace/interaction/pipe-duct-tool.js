@@ -137,7 +137,7 @@ export const JOINED_LINE_OFFSET_TOLERANCE = 0.05;
 export function beginRouteConstruction() {
   /*
    * THE RUN TOOL IS THE ACTIVE TOOL, so the sidebar button that started it is
-   * the one that lights. Without this the message said "Press and drag…" while
+   * the one that lights. Without this the message said "Press and dragâ€¦" while
    * no button was marked, and Escape had no active tool to return from.
    */
   enggDrawingState.setActiveTool(drawingState, "pipe-duct");
@@ -770,8 +770,8 @@ export function adoptPipeWidth(source, target) {
     return false;
   }
 
-  const width = Number(source.engineering?.separation) || 0;
-  const current = Number(target.engineering?.separation) || 0;
+  const width = Number(source.engineering?.schematicWidth) || 0;
+  const current = Number(target.engineering?.schematicWidth) || 0;
 
   if (width === current) {
     return false;
@@ -780,9 +780,9 @@ export function adoptPipeWidth(source, target) {
   target.engineering = { ...(target.engineering || {}) };
 
   if (width === 0) {
-    delete target.engineering.separation;
+    delete target.engineering.schematicWidth;
   } else {
-    target.engineering.separation = width;
+    target.engineering.schematicWidth = width;
   }
 
   return true;
@@ -1450,7 +1450,7 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
  * width they had - which is what lets a fitting divide two widths.
  *
  * It never changes appearance and never moves a centreline: only
- * `engineering.separation` is written, so the walls open around the same line.
+ * `engineering.schematicWidth` is written, so the walls open around the same line.
  */
 export function propagatePipeWidth(run, objects = drawingState.objects) {
   return propagateWidth(run, objects);

@@ -640,6 +640,13 @@ function manipulationHandles(
         object.geometry || {};
 
     if (object.type === "pipe-duct") {
+        return [
+                { kind: "start", point: g.start },
+                { kind: "end", point: g.end }
+            ];
+    }
+
+    if (object.metadata?.boundaryStress) {
         const bounds = selectionBounds([object], [object.id]);
         return bounds ? selectionCorners(bounds).map((point, index) => ({ kind: `corner${index}`, point })) : [];
     }

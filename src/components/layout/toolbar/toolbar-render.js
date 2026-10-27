@@ -149,7 +149,7 @@ function renderToolbarTool(tool) {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
             return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-reference-arc-mode="${mode.id}">${mode.label}</button>`;
         }).join("")
-        : STATICS_TOOL_MENUS[tool.id].map(renderToolButton).join("");
+        : (STATICS_TOOL_MENUS[tool.id] || FLUIDS_TOOL_MENUS[tool.id] || []).map(renderToolButton).join("");
 
     return `${button}
         <div id="${sectionId}" class="drawing-inline-tools"${expanded ? "" : " hidden"}>
