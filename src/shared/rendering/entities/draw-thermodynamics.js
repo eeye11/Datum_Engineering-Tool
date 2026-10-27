@@ -110,18 +110,19 @@ export function drawTank({ svg, geometry, style, toScreen }) {
         const points = (geometry.points || []).map(toScreen);
         const colour = paintColour(style.stroke || "#dc2626");
         points.forEach((point, index) => {
-            if (index >= (entity.metadata.stateCount ?? points.length)) return;
-            const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
-            processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
-            processOverlay.appendChild(createSvgElement("circle", {
-                cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
-            }));
-            const label = createSvgElement("text", {
-                x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
-                "text-anchor": "middle", "dominant-baseline": "central"
-            });
-            label.textContent = String(index + 1);
-            processOverlay.appendChild(label);
+            if (index < (entity.metadata.stateCount ?? points.length)) {
+                const labelPoint = toScreen(processLabelPoint(geometry, index, scale));
+                processOverlay.appendChild(createSvgElement("circle", { cx: point.x, cy: point.y, r: 3, fill: colour }));
+                processOverlay.appendChild(createSvgElement("circle", {
+                    cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
+                }));
+                const label = createSvgElement("text", {
+                    x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
+                    "text-anchor": "middle", "dominant-baseline": "central"
+                });
+                label.textContent = String(index + 1);
+                processOverlay.appendChild(label);
+            }
             if (!index) return;
             const segment = processSegmentPoints(geometry, index - 1).map(toScreen);
             const middle = Math.floor(segment.length / 2);

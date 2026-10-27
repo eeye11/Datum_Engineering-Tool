@@ -160,9 +160,11 @@ function textAnchor(align) {
  * at guessed offsets would space the lines by a number that is not the font's
  * leading, and the second node would not move with the first.
  */
-function multiLineNode(at, text, colour, options = []) {
+function multiLineNode(at, text, colour, options = [], mathSubscript = null) {
   const lines = String(text ?? "").split("\n");
-  const content = lines.map((line) => texText(line)).join(" \\\\ ");
+  const content = ["in", "out"].includes(mathSubscript) && text === `q ${mathSubscript}`
+    ? `$q_{${mathSubscript}}$`
+    : lines.map((line) => texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
 }
@@ -209,7 +211,7 @@ function textAtPosition(object) {
     multiLineNode({ x: finite(at.x), y: finite(at.y) }, text, colour, [
       `anchor=${textAnchor(object.style?.align)}`,
       `font=\\fontsize{${num(fontFor(object.style), 2)}}{${num(fontFor(object.style) * 1.2, 2)}}\\selectfont`
-    ])
+    ], object.metadata?.mathSubscript)
   );
 }
 

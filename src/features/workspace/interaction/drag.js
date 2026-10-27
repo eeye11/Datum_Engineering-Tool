@@ -1372,6 +1372,9 @@ function applyManipulation(
         if (Array.isArray(g.points) && g.points[index]) {
             g.points[index].x = point.x;
             g.points[index].y = point.y;
+            if (object.metadata?.thermodynamicsKind === "process-path" && object.metadata.closed && index === 0) {
+                g.points[g.points.length - 1] = { x: point.x, y: point.y };
+            }
         }
     }
 }

@@ -70,6 +70,7 @@ export function isConstructionTool(
             toolId === "reheat-rankine-cycle" ||
             toolId === "vapor-compression-cycle" ||
             toolId === "brayton-cycle" ||
+            toolId === "diesel-cycle" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

@@ -212,6 +212,7 @@ export function activateTool(
         requestedTool === "reheat-rankine-cycle" ||
         requestedTool === "vapor-compression-cycle" ||
         requestedTool === "brayton-cycle" ||
+        requestedTool === "diesel-cycle" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
@@ -441,6 +442,7 @@ export function initialToolMessage(
             "reheat-rankine-cycle": "Drag opposite corners to place an ideal reheat Rankine cycle",
             "vapor-compression-cycle": "Drag opposite corners to place an ideal vapor-compression refrigeration cycle",
             "brayton-cycle": "Drag opposite corners to place a Brayton cycle schematic",
+            "diesel-cycle": "Drag opposite corners to place Diesel P-v and T-s diagrams",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

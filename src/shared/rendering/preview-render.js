@@ -45,7 +45,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
         state,
         bounds
     ) {
-        if (["rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
+        if (["diesel-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }

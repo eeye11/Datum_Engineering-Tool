@@ -533,7 +533,7 @@ function manipulationHandles(
 
     if (object.metadata?.thermodynamicsKind === "process-path") {
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
-        return (g.points || []).flatMap((point, index) => [
+        return (object.metadata.closed ? (g.points || []).slice(0, object.metadata.stateCount) : (g.points || [])).flatMap((point, index) => [
             { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
             { kind: `vertex${index}`, point },
             ...(index < g.points.length - 1 ? [{ kind: `process-bend-${index}`, point: processBendPoint(g, index) }] : [])

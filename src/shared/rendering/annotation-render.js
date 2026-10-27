@@ -500,7 +500,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     textStroke,
                     fontSize,
                     lineHeight,
-                    entity.style?.align
+                    entity.style?.align,
+                    entity.metadata?.mathSubscript
                 );
             }
         }
@@ -525,7 +526,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         stroke,
         fontSize,
         lineHeight,
-        align
+        align,
+        mathSubscript = null
     ) {
         const anchorName =
             align === "center"
@@ -550,6 +552,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         lines.forEach((line, index) => {
             if (index === 0) {
+                if (["in", "out"].includes(mathSubscript) && lines.length === 1 && line === `q ${mathSubscript}`) {
+                    textNode.textContent = "q";
+                    const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                    subscript.textContent = mathSubscript;
+                    textNode.appendChild(subscript);
+                    return;
+                }
                 textNode.textContent = line;
                 return;
             }

@@ -129,6 +129,7 @@ const DRAG_GEOMETRY_TOOLS = [
     "reheat-rankine-cycle",
     "vapor-compression-cycle",
     "brayton-cycle",
+    "diesel-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",

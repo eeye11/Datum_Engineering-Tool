@@ -13,6 +13,7 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { commitCreatedFeature } from "./creation-commit.js";
+import { dieselCycleFeatures } from "../model/thermodynamics/diesel-cycle.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -1016,7 +1017,7 @@ export function beginOrCompleteGeometry(
                         ? "Specify radius"
 
                     : (drawingState.activeTool === "rectangle" ||
-                        ["control-volume", "tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+                        ["control-volume", "tank", "diesel-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -2030,7 +2031,7 @@ export function beginOrCompleteGeometry(
             );
     } else if (
         drawingState.activeTool === "rectangle" ||
-        ["control-volume", "tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        ["control-volume", "tank", "diesel-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2056,10 +2057,11 @@ export function beginOrCompleteGeometry(
 
         const isControlVolume = drawingState.activeTool === "control-volume";
         const isTank = drawingState.activeTool === "tank";
+        const isDiesel = drawingState.activeTool === "diesel-cycle";
         const isReheat = drawingState.activeTool === "reheat-rankine-cycle";
         const isRefrigeration = drawingState.activeTool === "vapor-compression-cycle";
         const isBrayton = drawingState.activeTool === "brayton-cycle";
-        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration || isBrayton;
+        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration || isBrayton || isDiesel;
         const isNozzle = drawingState.activeTool === "nozzle-diffuser" || isRankine;
         const isTurbineCompressor = drawingState.activeTool === "turbine-compressor";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
@@ -2104,6 +2106,7 @@ export function beginOrCompleteGeometry(
             if (isReheat) object.geometry.reheat = true;
             if (isRefrigeration) object.geometry.refrigeration = true;
             if (isBrayton) object.geometry.brayton = true;
+            if (isDiesel) object.metadata = { thermodynamicsKind: "diesel-cycle" };
         }
         if (isTurbineCompressor) {
             object.name = "Turbine / Compressor";
@@ -2283,11 +2286,32 @@ export function beginOrCompleteGeometry(
             drawingState
         );
 
+        if (object.metadata?.thermodynamicsKind === "diesel-cycle") {
+            const previous = enggDrawingState.snapshotDrawing(drawingState);
+            const seeds = dieselCycleFeatures(object.geometry);
+            const objects = seeds.map(seed => enggDrawingState.createGeometryObject(seed.type, seed.geometry, {
+                name: seed.name || seed.text || "Diesel Cycle Annotation", style: seed.style, metadata: seed.metadata,
+                content: seed.type === "annotate" ? { annotateKind: seed.annotateKind, text: seed.text } : undefined
+            }));
+            const ids = new Map(seeds.map((seed, index) => [seed.id, objects[index].id]));
+            objects.forEach((item, index) => {
+                if (seeds[index].parentId) item.parentId = ids.get(seeds[index].parentId);
+                enggDrawingState.addObject(drawingState, item);
+            });
+            enggDrawingState.selectObjects(drawingState, objects.map(item => item.id));
+            enggDrawingState.commitDrawingChange(drawingState, previous);
+            activateTool("select");
+            setToolMessage("Diesel P-v and T-s diagrams created - select a process path to edit its states or bends");
+            renderProperties();
+            renderCurrentDrawing();
+            return;
+        }
+
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (["tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
+        if (["tank", "diesel-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["tank", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["tank", "diesel-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");

@@ -293,29 +293,28 @@ function serializeProcessPath(object, options) {
   const scale = 1;
 
   points.forEach((at, index) => {
-    if (index >= finite(object.metadata?.stateCount, points.length)) {
-      return;
+    if (index < finite(object.metadata?.stateCount, points.length)) {
+
+      commands.push(`\\fill[${colour}] ${point(finite(at.x), finite(at.y))} circle[radius=0.5];`);
+
+      let labelAt;
+
+      try {
+        const labels = processLabelsModule();
+
+        labelAt = labels && typeof labels.processLabelPoint === "function"
+          ? labels.processLabelPoint(geometry, index, scale)
+          : null;
+      } catch {
+        labelAt = null;
+      }
+
+      const placed = labelAt || { x: finite(at.x) + 3, y: finite(at.y) + 3 };
+
+      commands.push(
+        `\\node[anchor=center, text=${colour}] at ${point(finite(placed.x), finite(placed.y))} {${num(index + 1, 0)}};`
+      );
     }
-
-    commands.push(`\\fill[${colour}] ${point(finite(at.x), finite(at.y))} circle[radius=0.5];`);
-
-    let labelAt;
-
-    try {
-      const labels = processLabelsModule();
-
-      labelAt = labels && typeof labels.processLabelPoint === "function"
-        ? labels.processLabelPoint(geometry, index, scale)
-        : null;
-    } catch {
-      labelAt = null;
-    }
-
-    const placed = labelAt || { x: finite(at.x) + 3, y: finite(at.y) + 3 };
-
-    commands.push(
-      `\\node[anchor=center, text=${colour}] at ${point(finite(placed.x), finite(placed.y))} {${num(index + 1, 0)}};`
-    );
 
     if (index > 0) {
       /*

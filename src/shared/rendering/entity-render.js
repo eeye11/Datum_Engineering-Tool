@@ -18,6 +18,7 @@ import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, 
 import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import { dieselCycleFeatures } from "../../features/workspace/model/thermodynamics/diesel-cycle.js";
 
 
     /*
@@ -92,6 +93,10 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         state,
         bounds
     ) {
+        if (entity.metadata?.thermodynamicsKind === "diesel-cycle") {
+            dieselCycleFeatures(entity.geometry).forEach(feature => appendEntity(svg, feature, state, bounds));
+            return;
+        }
         const parentSvg = svg;
         svg = createSvgElement("g");
         svg.classList.add("drawing-feature");
