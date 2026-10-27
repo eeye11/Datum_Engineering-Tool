@@ -360,7 +360,8 @@ export function installCanvasEvents() {
                     )
                 ) {
                     /*
-                     * PIPE / DUCT CAPTURES THE POINTER FOR ITS DRAG.
+                     * PIPE / DUCT AND POLAR VECTOR CAPTURE THE POINTER FOR
+                     * THEIR DRAGS.
                      *
                      * A run is defined by press, drag and release - and the
                      * release must commit even when the pointer has travelled
@@ -370,15 +371,15 @@ export function installCanvasEvents() {
                      * receiving its move and up events wherever the cursor
                      * goes.
                      *
-                     * ONLY PIPE / DUCT, and only here. The geometry and
-                     * Statics tools deliberately defer their press, so that a
-                     * press that never travels stays an ordinary click - and
-                     * capturing on their press would redirect the click that
-                     * IS their first point. A run has no click workflow: its
-                     * whole gesture is the drag, so capture belongs on its
-                     * press.
+                     * Both are completed by one drag and have no first-click
+                     * workflow. The other geometry and Statics tools defer
+                     * their press, so a press that never travels stays an
+                     * ordinary click and capture would redirect that click.
                      */
-                    if (drawingState.activeTool === "pipe-duct") {
+                    if (
+                        drawingState.activeTool === "pipe-duct" ||
+                        drawingState.activeTool === "dynamics-polar-vector"
+                    ) {
                         try {
                             drawingCanvas.setPointerCapture(
                                 event.pointerId
@@ -451,12 +452,10 @@ export function installCanvasEvents() {
                 /*
                  * GIVE THE POINTER BACK FIRST, WHATEVER THE RELEASE DOES.
                  *
-                 * A pipe-duct press captures the pointer so its drag survives
-                 * leaving the canvas. The capture is released HERE, before the
-                 * gesture is classified, so it is dropped whether the release
-                 * commits a run or turns out to be an ordinary click - neither
-                 * path may leave the canvas holding a capture the gesture has
-                 * finished with.
+                 * Pipe-duct and Polar Vector presses capture the pointer so
+                 * their drags survive leaving the canvas. The capture is
+                 * released HERE, before the gesture is classified, so neither
+                 * path can leave the canvas holding a capture after release.
                  */
                 if (
                     drawingCanvas.hasPointerCapture(
@@ -532,10 +531,10 @@ export function installCanvasEvents() {
                 /*
                  * A CANCELLED DRAG MUST NOT KEEP THE CAPTURE.
                  *
-                 * A pipe-duct press captures the pointer; if the gesture is
-                 * cancelled before the release the capture has to be dropped
-                 * here, or the canvas would keep swallowing that pointer's
-                 * events and the next gesture would never begin.
+                 * Pipe-duct and Polar Vector presses capture the pointer; if
+                 * the gesture is cancelled before release the capture has to
+                 * be dropped here, or the canvas would keep swallowing that
+                 * pointer's events and the next gesture would never begin.
                  */
                 if (
                     event &&

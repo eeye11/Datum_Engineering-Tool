@@ -19,6 +19,7 @@ import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../m
 import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
+import { applyDynamicsHandle } from "../dynamics/dynamics-handles.js";
 import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
@@ -721,6 +722,10 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    if (object?.engineering?.dynamicsType && applyDynamicsHandle(object, drag, point, g)) {
+        return;
+    }
 
     if (drag.kind.startsWith("process-bend-")) {
         const index = Number(drag.kind.slice("process-bend-".length));

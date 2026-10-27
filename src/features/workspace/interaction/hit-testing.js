@@ -77,6 +77,31 @@ function distanceToPolygon(
     );
 }
 
+function pointWithinPolygon(point, corners) {
+    if (!Array.isArray(corners) || corners.length < 3) {
+        return false;
+    }
+
+    let inside = false;
+
+    for (let index = 0, previous = corners.length - 1; index < corners.length; previous = index, index += 1) {
+        const currentPoint = corners[index];
+        const previousPoint = corners[previous];
+        const crosses = (currentPoint.y > point.y) !== (previousPoint.y > point.y);
+
+        if (crosses) {
+            const intersectionX = ((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) /
+                (previousPoint.y - currentPoint.y) + currentPoint.x;
+
+            if (point.x < intersectionX) {
+                inside = !inside;
+            }
+        }
+    }
+
+    return inside;
+}
+
 /*
  * ========================================================
  * IS A POINT ON AN ELBOW?
@@ -740,6 +765,58 @@ export function objectAtPoint(
                 }
 
                 /*
+                 * A Dynamics Polar Vector is the segment from its tail to
+                 * tip. Pick along the shaft and give the endpoints a slightly
+                 * wider target so the arrowhead and origin remain easy to
+                 * select at normal zoom.
+                 */
+                if (object?.engineering?.dynamicsType === "dynamics-polar-vector") {
+                    return Boolean(
+                        geometry.start &&
+                            geometry.end &&
+                            (
+                                distanceToSegment(point, geometry.start, geometry.end) <= tolerance ||
+                                distance(point, geometry.start) <= tolerance * 2 ||
+                                distance(point, geometry.end) <= tolerance * 2
+                            )
+                    );
+                }
+
+                if (object?.engineering?.dynamicsType === "dynamics-angular-vector") {
+                    if (!geometry.center || !(Number(geometry.radius) > 0)) {
+                        return false;
+                    }
+
+                    if (distance(point, geometry.center) <= tolerance * 2) {
+                        return true;
+                    }
+
+                    const sweep = Math.min(360, Math.abs(Number(geometry.sweep) || 270));
+                    const direction = String(geometry.direction || "ccw").toLowerCase() === "cw" ? -1 : 1;
+                    const start = Number(geometry.startAngle) || 0;
+                    const segments = Math.max(1, Math.ceil(sweep / 5));
+
+                    for (let index = 1; index <= segments; index += 1) {
+                        const previousAngle = start + direction * sweep * (index - 1) / segments;
+                        const currentAngle = start + direction * sweep * index / segments;
+                        const previous = {
+                            x: geometry.center.x + geometry.radius * Math.cos(previousAngle * Math.PI / 180),
+                            y: geometry.center.y + geometry.radius * Math.sin(previousAngle * Math.PI / 180)
+                        };
+                        const current = {
+                            x: geometry.center.x + geometry.radius * Math.cos(currentAngle * Math.PI / 180),
+                            y: geometry.center.y + geometry.radius * Math.sin(currentAngle * Math.PI / 180)
+                        };
+
+                        if (distanceToSegment(point, previous, current) <= tolerance) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                /*
                  * A rigid body is a shape, so it is picked
                  * anywhere inside or on its outline rather
                  * than only at its position anchor. The test
@@ -748,18 +825,16 @@ export function objectAtPoint(
                  * easy to click as a rectangular one.
                  */
                 if (isRectangleLike(object)) {
+                    const corners = enggFeatureGeometry.definingPoints(
+                        geometry,
+                        object.type === "rigid-body"
+                            ? enggFeatureGeometry.rigidBodyShape(geometry)
+                            : "rectangle"
+                    );
+
                     return (
-                        distanceToPolygon(
-                            point,
-                            enggFeatureGeometry.definingPoints(
-                                geometry,
-                                object.type ===
-                                    "rigid-body"
-                                    ? enggFeatureGeometry
-                                          .rigidBodyShape(geometry)
-                                    : "rectangle"
-                            )
-                        ) <= tolerance
+                        distanceToPolygon(point, corners) <= tolerance ||
+                        pointWithinPolygon(point, corners)
                     );
                 }
 

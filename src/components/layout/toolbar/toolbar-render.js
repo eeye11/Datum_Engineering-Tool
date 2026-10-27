@@ -9,7 +9,7 @@ import { drawingToolMessage, toolHeading, toolList } from "../../../features/wor
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
-import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import { DYNAMICS_TOOL_MENUS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 
@@ -19,6 +19,9 @@ const expandedToolbarSections = {
     load: false,
     support: false,
     connection: false,
+    "dynamics-bodies": false,
+    "dynamics-kinematics": false,
+    "dynamics-mechanical": false,
     "reference-arc": false,
     "piston-cylinder": false,
     "process-diagrams": false,
@@ -27,17 +30,24 @@ const expandedToolbarSections = {
 };
 
 function renderToolbarTool(tool) {
-    if (!Object.hasOwn(expandedToolbarSections, tool.id)) {
+    if (!Object.hasOwn(expandedToolbarSections, tool.id) && !tool.collapsible) {
         return renderToolButton(tool);
     }
 
     const expanded = expandedToolbarSections[tool.id];
-    const sectionId = `statics-${tool.id}-tools`;
-    const button = renderToolButton(tool)
+    const sectionId = tool.id.startsWith("dynamics-")
+        ? `${tool.id}-tools`
+        : `statics-${tool.id}-tools`;
+    const button = renderToolButton({
+        ...tool,
+        childToolIds: DYNAMICS_TOOL_MENUS[tool.id]?.map(({ id }) => id)
+    })
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "work"
+    const children = DYNAMICS_TOOL_MENUS[tool.id]
+        ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : tool.id === "work"
         ? [
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }
@@ -185,7 +195,10 @@ export function renderEngineeringTools(
                             const expanded = !expandedToolbarSections[toolId];
                             expandedToolbarSections[toolId] = expanded;
                             button.setAttribute("aria-expanded", String(expanded));
-                            toolList.querySelector(`#statics-${toolId}-tools`).hidden = !expanded;
+                            const sectionId = toolId.startsWith("dynamics-")
+                                ? `${toolId}-tools`
+                                : `statics-${toolId}-tools`;
+                            toolList.querySelector(`#${sectionId}`).hidden = !expanded;
                             return;
                         }
 
@@ -234,27 +247,6 @@ export function renderEngineeringTools(
                                 button,
                                 toolId
                             );
-
-                            return;
-                        }
-
-                        /*
-                         * A DYNAMICS FAMILY OPENS ITS SUBMENU, exactly as a
-                         * Statics one does. Without this branch the family
-                         * button fell through to `activateTool`, which armed
-                         * nothing: the Bodies, Kinematics and Mechanical
-                         * Elements entries looked like tools but opened no
-                         * menu, so no Dynamics tool could be reached from the
-                         * toolbar at all. The injected `onActivate` is the
-                         * module's own decoupling - see `openDynamicsMenu`.
-                         */
-                        if (DYNAMICS_TOOL_MENUS[toolId]) {
-                            event.preventDefault();
-                            event.stopPropagation();
-
-                            openDynamicsMenu(button, toolId, {
-                                onActivate: childId => activateTool(childId)
-                            });
 
                             return;
                         }

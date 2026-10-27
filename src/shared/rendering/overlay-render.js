@@ -1004,12 +1004,46 @@ export {
      */
     function renderSelectionOutline(svg, state, bounds) {
         const selected = new Set(state.selection?.selectedObjectIds || []);
+        const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
+
+        state.objects
+            .filter(object =>
+                object?.locked === true &&
+                object?.engineering?.dynamicsType === "dynamics-particle" &&
+                object?.geometry?.position
+            )
+            .forEach(object => {
+                const position = object.geometry.position;
+                const radius = Math.max(2, Number(object.geometry.markerRadius) || 1.6);
+                const badge = toScreen({ x: position.x + radius + 3, y: position.y + radius + 3 });
+                const group = createSvgElement("g", {
+                    "data-fixed-anchor-badge": object.id,
+                    "aria-label": "Fixed particle anchor",
+                    "pointer-events": "none"
+                });
+
+                group.appendChild(createSvgElement("circle", {
+                    cx: badge.x,
+                    cy: badge.y,
+                    r: 7,
+                    fill: "#ffffff",
+                    stroke: "#17643b",
+                    "stroke-width": 1.2
+                }));
+                group.appendChild(createSvgElement("path", {
+                    d: `M ${badge.x - 3} ${badge.y} v-2 a3 3 0 0 1 6 0 v2 M ${badge.x - 4} ${badge.y} h8 v5 h-8 z`,
+                    fill: "none",
+                    stroke: "#17643b",
+                    "stroke-width": 1.2,
+                    "stroke-linecap": "round",
+                    "stroke-linejoin": "round"
+                }));
+                svg.appendChild(group);
+            });
 
         if (!selected.size) {
             return;
         }
-
-        const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
 
         state.objects
             .filter(object => selected.has(object?.id))

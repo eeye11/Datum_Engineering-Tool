@@ -22,7 +22,6 @@ export const toolIcons = {
 	"Dynamics Bodies": drawingIcon(`<circle ${iconStroke} cx="7" cy="8" r="2.6"/><path ${iconStroke} d="M3 16c0-2.4 1.8-4 4-4s4 1.6 4 4"/><rect ${iconStroke} x="11.5" y="6" width="5.5" height="5.5"/>`),
 	"Dynamics Particle": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Dynamics Rigid Body": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
-	Trajectory: drawingIcon(`<path ${iconStroke} d="M3 16C6 16 6 6 10 6s4 10 7 10"/><circle fill="currentColor" cx="3" cy="16" r="1.3"/>`),
 	Kinematics: drawingIcon(`<path ${iconStroke} d="M4 17L16 4m-4 0h4v4"/><path ${iconStroke} stroke-dasharray="2 2" d="M4 9a8 8 0 0 1 5-5"/>`),
 	"Polar Vector": drawingIcon(`<path ${iconStroke} d="M5 15L15 6m-5 0h5v5"/><path ${iconStroke} d="M5 15a10 10 0 0 1 3-6"/>`),
 	"Angular Vector": drawingIcon(`<path ${iconStroke} d="M10 10l5-4m-5 4a6 6 0 1 0 5 2.6"/><path ${iconStroke} d="M12 11l3-1 .5 3"/>`),

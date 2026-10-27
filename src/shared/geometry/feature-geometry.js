@@ -799,6 +799,12 @@ function translateObject(
         return;
     }
 
+    if (object.engineering?.dynamicsType === "dynamics-angular-vector" && g.center) {
+        g.center.x += deltaX;
+        g.center.y += deltaY;
+        return;
+    }
+
     if (
         object.type ===
             "rectangle" ||

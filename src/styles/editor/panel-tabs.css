@@ -938,6 +938,10 @@
     width: 1px;
 }
 
+.dfp-row-control > .dfp-quantity-unit {
+    flex: 0 0 40%;
+}
+
 /* A segmented group is as wide as its track and shares it evenly. */
 .dfp-row-control > .dfp-segmented {
     flex: 1 1 auto;

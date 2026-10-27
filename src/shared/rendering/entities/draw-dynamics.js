@@ -24,6 +24,7 @@
 
 import { createSvgElement, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
 import enggFeatureGeometry from "../../geometry/feature-geometry.js";
+import { drawRigidBody as drawRigidBodyGeometry } from "./draw-bodies.js";
 
 /* ============================================================
  * SHARED HELPERS
@@ -141,6 +142,8 @@ function strokeLine(parent, a, b, style, scale, extra = {}) {
 }
 
 function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
+    const dash = dashArrayOf(style, scale);
+
     parent.appendChild(
         createSvgElement("circle", {
             cx: centre.x,
@@ -149,6 +152,8 @@ function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
             fill: "none",
             stroke: paintColour(style?.stroke || "#193335"),
             "stroke-width": lineWidthOf(style, scale),
+            ...(dash ? { "stroke-dasharray": dash } : {}),
+            ...(style?.opacity !== undefined ? { opacity: style.opacity } : {}),
             ...extra
         })
     );
@@ -161,7 +166,7 @@ function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
  */
 function arrowHead(parent, tip, degrees, style, scale, filled = true) {
     const radians = (num(degrees) * Math.PI) / 180;
-    const length = 9 * scale;
+    const length = num(style?.arrowheadSize, 9) * scale;
     const spread = 0.38;
 
     const back = {
@@ -248,13 +253,19 @@ function drawParticle(context) {
         strokeLine(svg, { x: centre.x - arm, y: centre.y }, { x: centre.x + arm, y: centre.y }, style, scale);
         strokeLine(svg, { x: centre.x, y: centre.y - arm }, { x: centre.x, y: centre.y + arm }, style, scale);
     } else {
+        const dash = dashArrayOf(style, scale);
+
         svg.appendChild(
             createSvgElement("circle", {
                 cx: centre.x,
                 cy: centre.y,
                 r: radius,
-                fill: colour,
-                stroke: "none"
+                fill: paintColour(style?.fill || colour),
+                stroke: colour,
+                "stroke-width": lineWidthOf(style, scale),
+                ...(dash ? { "stroke-dasharray": dash } : {}),
+                ...(style?.opacity !== undefined ? { opacity: style.opacity } : {}),
+                ...(style?.fillOpacityEnabled !== false ? { "fill-opacity": 0.35 } : {})
             })
         );
     }
@@ -314,58 +325,6 @@ function drawRigidBodyOverlay(context) {
 /* ============================================================
  * KINEMATICS
  * ============================================================ */
-
-function drawTrajectory(context) {
-    const { svg, parentSvg, geometry, style, toScreen, scale } = context;
-    const start = geometry.start;
-    const end = geometry.end;
-
-    if (!start || !end) {
-        return true;
-    }
-
-    const a = toScreen(start);
-    const b = toScreen(end);
-    const bow = num(geometry.bow, 0);
-
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy) || 1;
-
-    /*
-     * THE CONTROL POINT: THE MIDPOINT PUSHED PERPENDICULAR BY `bow`.
-     *
-     * The push is a FRACTION OF THE SPAN (`bow` is the curve's depth over its
-     * length), so it is computed in the SAME length unit the span was measured
-     * in. The screen span is used here because that is what the points are; the
-     * source writer uses the world span, which is the same fraction of the same
-     * segment - so the curve on the sheet and the curve in the compiled picture
-     * have the same shape at every zoom.
-     */
-    const control = {
-        x: mid.x - (dy / length) * length * bow,
-        y: mid.y + (dx / length) * length * bow
-    };
-
-    const path = Math.abs(bow) < 1e-6
-        ? `M ${a.x} ${a.y} L ${b.x} ${b.y}`
-        : `M ${a.x} ${a.y} Q ${control.x} ${control.y} ${b.x} ${b.y}`;
-
-    strokePath(svg, path, style, scale);
-
-    if (geometry.arrowEnd === true) {
-        const tangent = Math.abs(bow) < 1e-6
-            ? Math.atan2(-(b.y - a.y), b.x - a.x)
-            : Math.atan2(-(b.y - control.y), b.x - control.x);
-
-        arrowHead(svg, b, (tangent * 180) / Math.PI, style, scale, true);
-    }
-
-    parentSvg.appendChild(svg);
-
-    return true;
-}
 
 function drawPolarVector(context) {
     const { svg, parentSvg, geometry, style, toScreen, scale } = context;
@@ -480,6 +439,20 @@ function drawAngularVector(context) {
 
     strokeLine(svg, { x: centre.x - arm, y: centre.y }, { x: centre.x + arm, y: centre.y }, style, scale);
     strokeLine(svg, { x: centre.x, y: centre.y }, { x: centre.x, y: centre.y - arm * 2 }, style, scale);
+
+    const symbol = geometry.rotationalType === "acceleration" ? "α" : "ω";
+    const unit = String(geometry.unit || (symbol === "α" ? "rad/s²" : "rad/s"));
+    const label = createSvgElement("text", {
+        x: centre.x + radius + 5 * scale,
+        y: centre.y - radius,
+        fill: paintColour(style?.stroke || "#193335"),
+        "font-size": 10 * scale,
+        "font-family": "Arial, sans-serif",
+        "pointer-events": "none"
+    });
+
+    label.textContent = `${symbol} = ${num(geometry.magnitude)} ${unit}`;
+    svg.appendChild(label);
 
     parentSvg.appendChild(svg);
 
@@ -826,7 +799,10 @@ export function drawDynamicsSymbol(context) {
     }
 
     if (kind === "dynamics-rigid-body") {
-        return drawRigidBodyOverlay(context);
+        drawRigidBodyGeometry(context);
+        drawRigidBodyOverlay(context);
+
+        return true;
     }
 
     /*
@@ -837,10 +813,6 @@ export function drawDynamicsSymbol(context) {
      */
     if (kind === "dynamics-reference-line" || kind === "dynamics-reference-arc" || kind === "dynamics-reference-point") {
         return false;
-    }
-
-    if (kind === "dynamics-trajectory") {
-        return drawTrajectory(context);
     }
 
     if (kind === "dynamics-polar-vector") {
@@ -875,12 +847,6 @@ export function drawDynamicsSymbol(context) {
 }
 
 export default drawDynamicsSymbol;
-
-
-
-
-
-
 
 
 

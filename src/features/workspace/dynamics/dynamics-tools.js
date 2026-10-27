@@ -43,7 +43,6 @@ export const DYNAMICS_TOOL_MENUS = {
     ],
 
     "dynamics-kinematics": [
-        { id: "dynamics-trajectory", label: "Trajectory" },
         { id: "dynamics-polar-vector", label: "Polar Vector" },
         { id: "dynamics-angular-vector", label: "Angular Vector" }
     ],
@@ -101,14 +100,9 @@ export const DYNAMICS_CHILD_TOOLS = {
     "dynamics-rigid-body": {
         label: "Rigid Body",
         type: "rigid-body",
-        placement: "box"
+        placement: "point"
     },
 
-    "dynamics-trajectory": {
-        label: "Trajectory",
-        type: "dynamics-trajectory",
-        placement: "span"
-    },
     "dynamics-polar-vector": {
         label: "Polar Vector",
         type: "dynamics-polar-vector",
@@ -117,7 +111,7 @@ export const DYNAMICS_CHILD_TOOLS = {
     "dynamics-angular-vector": {
         label: "Angular Vector",
         type: "dynamics-angular-vector",
-        placement: "angle"
+        placement: "point"
     },
 
     "dynamics-spring": {
@@ -238,8 +232,8 @@ export function resolveDynamicsToolId(toolId) {
  * WHEN THE FEATURE IS FINISHED
  * ============================================================
  *
- * Tools finished by one click (a point or a particle). Everything else is a
- * drag, which is what the creation session already handles.
+ * Tools finished by one click (a point, particle or default-size rigid body).
+ * Everything else is a drag, which is what the creation session already handles.
  */
 export const DYNAMICS_PLACEMENT_TOOLS = Object.fromEntries(
     Object.entries(DYNAMICS_CHILD_TOOLS)
@@ -387,7 +381,6 @@ export const DYNAMICS_SIZES = Object.freeze({
     particleRadius: 1.6,
     bodyWidth: 24,
     bodyHeight: 14,
-    trajectoryBow: 0.22,
     springCoils: 6,
     springAmplitude: 4,
     springLead: 0.18,

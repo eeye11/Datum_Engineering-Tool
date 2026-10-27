@@ -35,7 +35,8 @@ export function createDynamicsFeature(
     toolId,
     first,
     second,
-    style = {}
+    style = {},
+    metadata = null
 ) {
     const resolved = resolveDynamicsToolId(toolId);
 
@@ -55,6 +56,10 @@ export function createDynamicsFeature(
         setToolMessage("That tool could not be created");
 
         return null;
+    }
+
+    if (metadata?.attachedTo && object.geometry) {
+        object.geometry.attachedTo = metadata.attachedTo;
     }
 
     commitCreatedFeature(object);

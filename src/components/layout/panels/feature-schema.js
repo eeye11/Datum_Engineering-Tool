@@ -57,18 +57,19 @@ export const GEOMETRY_TYPES = new Set([
 const CLOSED_SHAPES = new Set(["triangle", "rectangle", "circle", "polygon", "freeform-polygon"]);
 
 /* The types a fill (and therefore a fill colour) means anything for. */
-const FILLABLE = CLOSED_SHAPES;
+const FILLABLE = new Set([...CLOSED_SHAPES, "particle", "rigid-body"]);
 
 /*
  * The types whose stroke can be dashed, dotted or otherwise styled.
  *
  * THE DYNAMICS SYMBOLS ARE HERE because every one of them is drawn with a pen:
- * a spring's zigzag, a damper's outline, a vector's shaft, a trajectory's path.
+ * a spring's zigzag, a damper's outline and a vector's shaft.
  * Without them the Appearance section would be missing from exactly the tools
  * that need a colour and a weight most.
  */
 const STROKE_TYPES = new Set([
     "line",
+    "particle",
     "triangle",
     "rectangle",
     "circle",
@@ -76,8 +77,8 @@ const STROKE_TYPES = new Set([
     "polygon",
     "freeform-polygon",
     "polyline",
+    "rigid-body",
     COORDINATE_SYSTEM,
-    "dynamics-trajectory",
     "dynamics-polar-vector",
     "dynamics-angular-vector",
     "dynamics-spring",
@@ -123,6 +124,115 @@ export const THICKNESS_OPTIONS = [
     { value: "thick", label: "Thick", width: THICKNESS_PRESETS.thick },
     { value: "very-thick", label: "Very Thick", width: THICKNESS_PRESETS["very-thick"] },
     { value: "ultra-thick", label: "Ultra Thick", width: THICKNESS_PRESETS["ultra-thick"] }
+];
+
+const PARTICLE_GROUPS = [
+    { id: "object", heading: "Object", fields: ["dynamics.name", "fixed"] },
+    {
+        id: "physical-properties",
+        heading: "Physical Properties",
+        fields: [
+            "dynamics.mass",
+            "dynamics.initialVelocityX",
+            "dynamics.initialVelocityY"
+        ]
+    },
+    {
+        id: "appearance",
+        heading: "Appearance",
+        fields: [
+            "lineType",
+            "stroke",
+            "customWidth",
+            "fill",
+            "dynamics.fillOpacityEnabled"
+        ]
+    },
+    {
+        id: "transform",
+        heading: "Transform",
+        fields: ["dynamics.positionX", "dynamics.positionY"]
+    }
+];
+
+const ANGULAR_VECTOR_GROUPS = [
+    { id: "object", heading: "Object", fields: ["dynamics.name", "dynamics.angularAttachment"] },
+    {
+        id: "rotational-properties",
+        heading: "Rotational Properties",
+        fields: ["dynamics.rotationalType", "dynamics.angularMagnitude", "dynamics.direction"]
+    },
+    {
+        id: "appearance",
+        heading: "Appearance",
+        fields: ["lineType", "dynamics.vectorColor", "dynamics.vectorThickness", "dynamics.arrowheadSize"]
+    },
+    {
+        id: "transform",
+        heading: "Transform",
+        fields: ["dynamics.angularCenterX", "dynamics.angularCenterY"]
+    }
+];
+
+const RIGID_BODY_GROUPS = [
+    { id: "object", heading: "Object", fields: ["dynamics.name", "fixed"] },
+    {
+        id: "physical-properties",
+        heading: "Physical Properties",
+        fields: [
+            "dynamics.mass",
+            "dynamics.bodyWidth",
+            "dynamics.bodyHeight",
+            "dynamics.momentOfInertia"
+        ]
+    },
+    {
+        id: "appearance",
+        heading: "Appearance",
+        fields: [
+            "lineType",
+            "stroke",
+            "customWidth",
+            "fillMode",
+            "fill",
+            "dynamics.fillOpacityEnabled"
+        ]
+    },
+    {
+        id: "transform",
+        heading: "Transform",
+        fields: ["dynamics.positionX", "dynamics.positionY", "dynamics.rotation"]
+    }
+];
+
+const POLAR_VECTOR_GROUPS = [
+    { id: "object", heading: "Object", fields: ["dynamics.name", "dynamics.vectorAttachment"] },
+    {
+        id: "vector-properties",
+        heading: "Vector Properties",
+        fields: [
+            "dynamics.vectorRepresentation",
+            "dynamics.vectorMagnitude",
+            "dynamics.vectorAngle",
+            "dynamics.vectorComponentX",
+            "dynamics.vectorComponentY"
+        ]
+    },
+    {
+        id: "appearance",
+        heading: "Appearance",
+        fields: [
+            "lineType",
+            "dynamics.vectorColor",
+            "dynamics.vectorThickness",
+            "dynamics.arrowheadSize"
+        ]
+    },
+    {
+        id: "transform",
+        heading: "Transform",
+        fields: ["dynamics.vectorOriginX", "dynamics.vectorOriginY"]
+    }
 ];
 
 export const CUSTOM_THICKNESS_MIN = 0.05;
@@ -434,6 +544,127 @@ const FIELDS = {
         ]
     },
 
+    "dynamics.angularAttachment": {
+        kind: "reference",
+        label: "Attached To",
+        applies: isAngularVector,
+        read: (object) => String(object.geometry?.attachedTo ?? "origin"),
+        write: (object, value) => {
+            if (typeof value !== "string" || !value) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "attachedTo", value);
+        }
+    },
+
+    "dynamics.rotationalType": {
+        kind: "choice",
+        label: "Type",
+        applies: isAngularVector,
+        read: (object) => object.geometry?.rotationalType === "acceleration" ? "acceleration" : "velocity",
+        write: (object, value) => {
+            if (!["velocity", "acceleration"].includes(value)) {
+                return false;
+            }
+
+            const geometry = object.geometry || {};
+            let unit = geometry.unit;
+
+            if (
+                !["rad/s", "rad/s²", "rpm"].includes(unit) ||
+                (value === "acceleration" && unit === "rad/s") ||
+                (value === "velocity" && unit === "rad/s²")
+            ) {
+                unit = value === "acceleration" ? "rad/s²" : "rad/s";
+            }
+
+            object.geometry = { ...geometry, rotationalType: value, unit };
+
+            return true;
+        },
+        options: [
+            { value: "velocity", label: "Angular Velocity (ω)" },
+            { value: "acceleration", label: "Angular Acceleration (α)" }
+        ]
+    },
+
+    "dynamics.angularMagnitude": {
+        kind: "quantity",
+        label: "Magnitude",
+        min: 0,
+        step: 0.1,
+        unitField: "dynamics.angularUnit",
+        unitOptions: [
+            { value: "rad/s", label: "rad/s" },
+            { value: "rad/s²", label: "rad/s²" },
+            { value: "rpm", label: "rpm" }
+        ],
+        applies: isAngularVector,
+        read: (object) => dynamicsGeometryOf(object, "magnitude", 0),
+        write: (object, value) => {
+            const magnitude = Number(value);
+
+            if (!Number.isFinite(magnitude) || magnitude < 0) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "magnitude", magnitude);
+        }
+    },
+
+    "dynamics.angularUnit": {
+        kind: "choice",
+        label: "Magnitude unit",
+        applies: isAngularVector,
+        read: (object) => ["rad/s", "rad/s²", "rpm"].includes(object.geometry?.unit)
+            ? object.geometry.unit
+            : "rad/s",
+        write: (object, value) => {
+            if (!["rad/s", "rad/s²", "rpm"].includes(value)) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "unit", value);
+        }
+    },
+
+    "dynamics.angularCenterX": {
+        kind: "number",
+        label: "Center X",
+        step: 0.1,
+        unit: "mm",
+        applies: isAngularVector,
+        read: (object) => Number(object.geometry?.center?.x ?? 0),
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x)) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "center", { ...object.geometry.center, x });
+        }
+    },
+
+    "dynamics.angularCenterY": {
+        kind: "number",
+        label: "Center Y",
+        step: 0.1,
+        unit: "mm",
+        applies: isAngularVector,
+        read: (object) => Number(object.geometry?.center?.y ?? 0),
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y)) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "center", { ...object.geometry.center, y });
+        }
+    },
+
     markerSize: {
         kind: "segmented",
         applies: (object) => object.type === "point",
@@ -460,6 +691,7 @@ const FIELDS = {
 
     lineType: {
         kind: "choice",
+        label: "Line Style",
         applies: (object) => STROKE_TYPES.has(object.type),
         read: (object) => {
             const type = object.style?.lineType;
@@ -659,6 +891,7 @@ const FIELDS = {
 
     customWidth: {
         kind: "number",
+        label: "Thickness",
         applies: (object) => STROKE_TYPES.has(object.type) && thicknessOf(object) === "custom",
         read: customThicknessOf,
         write: (object, value) => {
@@ -898,11 +1131,6 @@ export const GROUPS = [
         fields: ["dynamics.showCenterOfMass"]
     },
     {
-        id: "dynamics-trajectory",
-        heading: "Path",
-        fields: ["dynamics.bow", "dynamics.trajectoryArrow"]
-    },
-    {
         id: "dynamics-polar-vector",
         heading: "Vector",
         fields: ["dynamics.polarArrow", "dynamics.showAngle", "dynamics.angleValue"]
@@ -1127,6 +1355,59 @@ function isDynamicsKind(object, kind) {
     return object?.engineering?.dynamicsType === kind;
 }
 
+function isDynamicsBody(object) {
+    return (
+        isDynamicsKind(object, "dynamics-particle") ||
+        isDynamicsKind(object, "dynamics-rigid-body")
+    );
+}
+
+function isPolarVector(object) {
+    return isDynamicsKind(object, "dynamics-polar-vector");
+}
+
+function isAngularVector(object) {
+    return isDynamicsKind(object, "dynamics-angular-vector");
+}
+
+function isKinematicVector(object) {
+    return isPolarVector(object) || isAngularVector(object);
+}
+
+function polarVectorEndpoints(object, start, end) {
+    const x = end.x - start.x;
+    const y = end.y - start.y;
+    const magnitude = Math.hypot(x, y);
+    const angle = (Math.atan2(y, x) * 180) / Math.PI;
+
+    object.geometry = {
+        ...(object.geometry || {}),
+        start,
+        end,
+        vectorMagnitude: magnitude,
+        vectorAngle: magnitude > 0 ? (angle + 360) % 360 : Number(object.geometry?.vectorAngle) || 0
+    };
+
+    return true;
+}
+
+function polarVectorDelta(object) {
+    const geometry = object?.geometry || {};
+    const start = geometry.start || { x: 0, y: 0 };
+    const end = geometry.end || start;
+    const x = Number(end.x) - Number(start.x);
+    const y = Number(end.y) - Number(start.y);
+
+    return {
+        start,
+        end,
+        x: Number.isFinite(x) ? x : 0,
+        y: Number.isFinite(y) ? y : 0,
+        magnitude: Math.hypot(x, y),
+        angle: (Math.atan2(y, x) * 180) / Math.PI
+    };
+}
+
 function dynamicsGeometryOf(object, key, fallback) {
     const value = Number(object?.geometry?.[key]);
 
@@ -1206,6 +1487,549 @@ function branchLabelField(key) {
 Object.assign(FIELDS, {
     /* ----------------------------------------------------------- Bodies */
 
+    "dynamics.name": {
+        kind: "text",
+        label: "Name",
+        applies: (object) => isDynamicsBody(object) || isKinematicVector(object),
+        read: (object) =>
+            String(
+                object.name ||
+                    (isDynamicsKind(object, "dynamics-rigid-body")
+                        ? "Rigid Body"
+                        : isPolarVector(object)
+                          ? "Polar Vector 1"
+                          : isAngularVector(object)
+                            ? "Angular Vector 1"
+                          : "Particle A")
+            ),
+        write: (object, value) => {
+            object.name = String(value ?? "");
+
+            return true;
+        }
+    },
+
+    "dynamics.vectorAttachment": {
+        kind: "reference",
+        label: "Attached To",
+        applies: isPolarVector,
+        read: (object) => String(object.geometry?.attachedTo ?? "origin"),
+        write: (object, value) => {
+            if (typeof value !== "string" || !value) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "attachedTo", value);
+        }
+    },
+
+    "dynamics.vectorRepresentation": {
+        kind: "choice",
+        label: "Representation",
+        applies: isPolarVector,
+        read: (object) => object.geometry?.vectorRepresentation === "cartesian" ? "cartesian" : "magnitude-angle",
+        write: (object, value) => {
+            if (!["magnitude-angle", "cartesian"].includes(value)) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "vectorRepresentation", value);
+        },
+        options: [
+            { value: "magnitude-angle", label: "Magnitude & Angle" },
+            { value: "cartesian", label: "Cartesian Components (i, j)" }
+        ]
+    },
+
+    "dynamics.vectorMagnitude": {
+        kind: "quantity",
+        label: "Magnitude (V)",
+        min: 0,
+        step: 0.1,
+        unitField: "dynamics.vectorUnit",
+        unitOptions: [
+            { value: "m/s", label: "m/s" },
+            { value: "m/s²", label: "m/s²" },
+            { value: "N", label: "N" },
+            { value: "m", label: "m" },
+            { value: "mm", label: "mm" },
+            { value: "km/h", label: "km/h" },
+            { value: "rad/s", label: "rad/s" }
+        ],
+        applies: isPolarVector,
+        read: (object) => polarVectorDelta(object).magnitude,
+        write: (object, value) => {
+            const magnitude = Number(value);
+
+            if (!Number.isFinite(magnitude) || magnitude < 0) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+            const radians = (vector.magnitude > 0
+                ? vector.angle
+                : Number(object.geometry?.vectorAngle) || 0) * Math.PI / 180;
+
+            return polarVectorEndpoints(object, vector.start, {
+                x: vector.start.x + magnitude * Math.cos(radians),
+                y: vector.start.y + magnitude * Math.sin(radians)
+            });
+        }
+    },
+
+    "dynamics.vectorUnit": {
+        kind: "choice",
+        label: "Magnitude unit",
+        applies: isPolarVector,
+        read: (object) => object.geometry?.vectorUnit || "m/s",
+        write: (object, value) => {
+            if (!["m/s", "m/s²", "N", "m", "mm", "km/h", "rad/s"].includes(value)) {
+                return false;
+            }
+
+            return writeDynamicsGeometry(object, "vectorUnit", value);
+        }
+    },
+
+    "dynamics.vectorAngle": {
+        kind: "number",
+        label: "Angle (θ)",
+        min: 0,
+        max: 360,
+        step: 1,
+        unit: "°",
+        applies: isPolarVector,
+        read: (object) => {
+            const vector = polarVectorDelta(object);
+
+            if (vector.magnitude === 0) {
+                const stored = Number(object.geometry?.vectorAngle);
+
+                return Number.isFinite(stored) ? stored : 0;
+            }
+
+            return (vector.angle + 360) % 360;
+        },
+        write: (object, value) => {
+            const angle = Number(value);
+
+            if (!Number.isFinite(angle) || angle < 0 || angle > 360) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+            const magnitude = vector.magnitude;
+            const radians = angle * Math.PI / 180;
+
+            object.geometry = {
+                ...(object.geometry || {}),
+                vectorAngle: angle
+            };
+
+            return polarVectorEndpoints(object, vector.start, {
+                x: vector.start.x + magnitude * Math.cos(radians),
+                y: vector.start.y + magnitude * Math.sin(radians)
+            });
+        }
+    },
+
+    "dynamics.vectorComponentX": {
+        kind: "number",
+        label: "X Component (V_x)",
+        step: 0.1,
+        applies: isPolarVector,
+        read: (object) => polarVectorDelta(object).x,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x)) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+
+            return polarVectorEndpoints(object, vector.start, {
+                x: vector.start.x + x,
+                y: vector.start.y + vector.y
+            });
+        }
+    },
+
+    "dynamics.vectorComponentY": {
+        kind: "number",
+        label: "Y Component (V_y)",
+        step: 0.1,
+        applies: isPolarVector,
+        read: (object) => polarVectorDelta(object).y,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y)) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+
+            return polarVectorEndpoints(object, vector.start, {
+                x: vector.start.x + vector.x,
+                y: vector.start.y + y
+            });
+        }
+    },
+
+    "dynamics.vectorColor": {
+        kind: "colour",
+        label: "Color",
+        applies: isKinematicVector,
+        read: strokeOf,
+        write: setStroke
+    },
+
+    "dynamics.vectorThickness": {
+        kind: "number",
+        label: "Thickness",
+        min: 0.05,
+        max: 20,
+        step: 0.05,
+        unit: "px",
+        applies: isKinematicVector,
+        read: (object) => Number(object.style?.lineWidth) || 0.75,
+        write: (object, value) => {
+            const thickness = Number(value);
+
+            if (!Number.isFinite(thickness) || thickness < 0.05 || thickness > 20) {
+                return false;
+            }
+
+            object.style = { ...(object.style || {}), lineWidth: thickness, lineWidthCustom: true };
+
+            return true;
+        }
+    },
+
+    "dynamics.arrowheadSize": {
+        kind: "number",
+        label: "Arrowhead Size",
+        min: 2,
+        max: 40,
+        step: 1,
+        unit: "px",
+        applies: isKinematicVector,
+        read: (object) => Number(object.style?.arrowheadSize) || 9,
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size < 2 || size > 40) {
+                return false;
+            }
+
+            object.style = { ...(object.style || {}), arrowheadSize: size };
+
+            return true;
+        }
+    },
+
+    "dynamics.vectorOriginX": {
+        kind: "number",
+        label: "Origin X",
+        step: 0.1,
+        unit: "mm",
+        applies: isPolarVector,
+        read: (object) => Number(object.geometry?.start?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x)) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+
+            return polarVectorEndpoints(object, { ...vector.start, x }, {
+                x: x + vector.x,
+                y: vector.start.y + vector.y
+            });
+        }
+    },
+
+    "dynamics.vectorOriginY": {
+        kind: "number",
+        label: "Origin Y",
+        step: 0.1,
+        unit: "mm",
+        applies: isPolarVector,
+        read: (object) => Number(object.geometry?.start?.y) || 0,
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y)) {
+                return false;
+            }
+
+            const vector = polarVectorDelta(object);
+
+            return polarVectorEndpoints(object, { ...vector.start, y }, {
+                x: vector.start.x + vector.x,
+                y: y + vector.y
+            });
+        }
+    },
+
+    "dynamics.mass": {
+        kind: "quantity",
+        label: "Mass (m)",
+        min: 0,
+        step: 0.1,
+        unitField: "dynamics.massUnit",
+        unitOptions: [
+            { value: "kg", label: "kg" },
+            { value: "g", label: "g" },
+            { value: "lb", label: "lb" },
+            { value: "slug", label: "slug" }
+        ],
+        applies: isDynamicsBody,
+        read: (object) => {
+            const factors = { kg: 1, g: 0.001, lb: 0.45359237, slug: 14.59390294 };
+            const unit = object.engineering?.massUnit || "kg";
+
+            return Number(object.engineering?.massKg ?? 1) / factors[unit];
+        },
+        write: (object, value) => {
+            const mass = Number(value);
+
+            if (!Number.isFinite(mass) || mass < 0) {
+                return false;
+            }
+
+            const factors = { kg: 1, g: 0.001, lb: 0.45359237, slug: 14.59390294 };
+            const unit = object.engineering?.massUnit || "kg";
+            object.engineering = {
+                ...object.engineering,
+                massKg: mass * factors[unit]
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.massUnit": {
+        kind: "choice",
+        label: "Mass unit",
+        applies: isDynamicsBody,
+        read: (object) => object.engineering?.massUnit || "kg",
+        write: (object, value) => {
+            if (!["kg", "g", "lb", "slug"].includes(value)) {
+                return false;
+            }
+
+            object.engineering = { ...object.engineering, massUnit: value };
+
+            return true;
+        },
+        options: [
+            { value: "kg", label: "kg" },
+            { value: "g", label: "g" },
+            { value: "lb", label: "lb" },
+            { value: "slug", label: "slug" }
+        ]
+    },
+
+    "dynamics.bodyWidth": {
+        kind: "number",
+        label: "Width (mm)",
+        min: 1,
+        step: 1,
+        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
+        read: (object) => Number(object.geometry?.width ?? 50),
+        write: (object, value) => {
+            const width = Number(value);
+
+            if (!Number.isFinite(width) || width < 1) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, width };
+
+            return true;
+        }
+    },
+
+    "dynamics.bodyHeight": {
+        kind: "number",
+        label: "Height (mm)",
+        min: 1,
+        step: 1,
+        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
+        read: (object) => Number(object.geometry?.height ?? 30),
+        write: (object, value) => {
+            const height = Number(value);
+
+            if (!Number.isFinite(height) || height < 1) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, height };
+
+            return true;
+        }
+    },
+
+    "dynamics.momentOfInertia": {
+        kind: "number",
+        label: "Mass Moment of Inertia (I)",
+        min: 0,
+        step: 0.000001,
+        unit: "kg·m²",
+        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
+        read: (object) => Number(object.engineering?.momentOfInertiaKgM2 ?? 0),
+        write: (object, value) => {
+            const inertia = Number(value);
+
+            if (!Number.isFinite(inertia) || inertia < 0) {
+                return false;
+            }
+
+            object.engineering = {
+                ...object.engineering,
+                momentOfInertiaKgM2: inertia
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.initialVelocityX": {
+        kind: "number",
+        label: "Initial Velocity X (v₀ₓ)",
+        min: -Infinity,
+        step: 0.1,
+        unit: "m/s",
+        applies: (object) => isDynamicsKind(object, "dynamics-particle"),
+        read: (object) => Number(object.engineering?.initialVelocity?.x ?? 0),
+        write: (object, value) => {
+            const velocity = Number(value);
+
+            if (!Number.isFinite(velocity)) {
+                return false;
+            }
+
+            object.engineering = {
+                ...object.engineering,
+                initialVelocity: {
+                    ...(object.engineering?.initialVelocity || {}),
+                    x: velocity
+                }
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.initialVelocityY": {
+        kind: "number",
+        label: "Initial Velocity Y (v₀ᵧ)",
+        min: -Infinity,
+        step: 0.1,
+        unit: "m/s",
+        applies: (object) => isDynamicsKind(object, "dynamics-particle"),
+        read: (object) => Number(object.engineering?.initialVelocity?.y ?? 0),
+        write: (object, value) => {
+            const velocity = Number(value);
+
+            if (!Number.isFinite(velocity)) {
+                return false;
+            }
+
+            object.engineering = {
+                ...object.engineering,
+                initialVelocity: {
+                    ...(object.engineering?.initialVelocity || {}),
+                    y: velocity
+                }
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.fillOpacityEnabled": {
+        kind: "toggle",
+        label: "Fill Opacity",
+        applies: (object) => isDynamicsBody(object),
+        read: (object) => object.style?.fillOpacityEnabled !== false,
+        write: (object, value) => {
+            object.style = { ...(object.style || {}), fillOpacityEnabled: Boolean(value) };
+
+            return true;
+        }
+    },
+
+    "dynamics.positionX": {
+        kind: "number",
+        label: "X Shift",
+        step: 0.1,
+        unit: "mm",
+        applies: isDynamicsBody,
+        read: (object) => Number(object.geometry?.position?.x ?? 0),
+        write: (object, value) => {
+            const x = Number(value);
+
+            if (!Number.isFinite(x)) {
+                return false;
+            }
+
+            object.geometry = {
+                ...object.geometry,
+                position: { ...object.geometry?.position, x }
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.positionY": {
+        kind: "number",
+        label: "Y Shift",
+        step: 0.1,
+        unit: "mm",
+        applies: isDynamicsBody,
+        read: (object) => Number(object.geometry?.position?.y ?? 0),
+        write: (object, value) => {
+            const y = Number(value);
+
+            if (!Number.isFinite(y)) {
+                return false;
+            }
+
+            object.geometry = {
+                ...object.geometry,
+                position: { ...object.geometry?.position, y }
+            };
+
+            return true;
+        }
+    },
+
+    "dynamics.rotation": {
+        kind: "number",
+        label: "Rotate",
+        step: 1,
+        unit: "°",
+        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
+        read: (object) => Number(object.geometry?.rotation ?? 0),
+        write: (object, value) => {
+            const rotation = Number(value);
+
+            if (!Number.isFinite(rotation)) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, rotation };
+
+            return true;
+        }
+    },
+
     "dynamics.markerStyle": {
         kind: "segmented",
         label: "Marker",
@@ -1235,21 +2059,6 @@ Object.assign(FIELDS, {
     "dynamics.showCenterOfMass": dynamicsToggleField("dynamics-rigid-body", "showCenterOfMass", "Centre of Mass"),
 
     /* ------------------------------------------------------ Kinematics */
-
-    "dynamics.bow": dynamicsNumberField("dynamics-trajectory", "bow", {
-        min: -0.5,
-        max: 0.5,
-        step: 0.02,
-        label: "Curvature"
-    }),
-
-    "dynamics.trajectoryArrow": {
-        kind: "toggle",
-        label: "Direction Arrow",
-        applies: (object) => isDynamicsKind(object, "dynamics-trajectory"),
-        read: (object) => object?.geometry?.arrowEnd === true,
-        write: (object, value) => writeDynamicsGeometry(object, "arrowEnd", Boolean(value))
-    },
 
     "dynamics.polarArrow": {
         kind: "segmented",
@@ -1307,7 +2116,7 @@ Object.assign(FIELDS, {
     "dynamics.direction": {
         kind: "segmented",
         label: "Direction",
-        applies: (object) => isDynamicsKind(object, "dynamics-angular-vector"),
+        applies: isAngularVector,
         read: (object) => (String(object?.geometry?.direction || "ccw").toLowerCase() === "cw" ? "cw" : "ccw"),
         write: (object, value) => {
             if (!["ccw", "cw"].includes(value)) {
@@ -1317,7 +2126,7 @@ Object.assign(FIELDS, {
             return writeDynamicsGeometry(object, "direction", value);
         },
         options: [
-            { value: "ccw", label: "Anti-clockwise" },
+            { value: "ccw", label: "Counter-Clockwise (CCW)" },
             { value: "cw", label: "Clockwise" }
         ]
     },
@@ -1627,35 +2436,6 @@ Object.assign(FIELDS, {
 
     /* ---- Kinematics -------------------------------------------- */
 
-    trajectoryPath: dynamicsChoice(
-        "pathStyle",
-        "Path",
-        ["dynamics-trajectory"],
-        [
-            { value: "curved", label: "Curved" },
-            { value: "straight", label: "Straight" }
-        ],
-        "curved"
-    ),
-
-    bow: dynamicsNumber("bow", { min: -0.5, max: 0.5, step: 0.02 }, {
-        appliesTo: ["dynamics-trajectory"],
-        fallback: 0.22,
-        label: "Curvature"
-    }),
-
-    trajectoryArrow: {
-        kind: "toggle",
-        label: "Direction Arrow",
-        applies: (object) => dynamicsKindOf(object) === "dynamics-trajectory",
-        read: (object) => object?.geometry?.arrowEnd === true,
-        write: (object, value) => {
-            object.geometry = { ...(object.geometry || {}), arrowEnd: Boolean(value) };
-
-            return true;
-        }
-    },
-
     vectorArrowHead: dynamicsChoice(
         "arrowHead",
         "Arrowhead",
@@ -1803,12 +2583,6 @@ export const DYNAMICS_GROUPS = [
         heading: "Body",
         dynamics: true,
         fields: ["particleStyle", "markerRadius", "showCenterOfMass"]
-    },
-    {
-        id: "dynamics-trajectory",
-        heading: "Path",
-        dynamics: true,
-        fields: ["trajectoryPath", "bow", "trajectoryArrow"]
     },
     {
         id: "dynamics-vector",
@@ -1968,14 +2742,25 @@ export function groupsFor(object) {
      * panel shows one symbol's real controls rather than a list of sections
      * that might apply to something else.
      */
-    const dynamics = isDynamicsObject(object)
+    const isParticle = object?.engineering?.dynamicsType === "dynamics-particle";
+    const isRigidBody = object?.engineering?.dynamicsType === "dynamics-rigid-body";
+    const isPolarVector = object?.engineering?.dynamicsType === "dynamics-polar-vector";
+    const isAngularVector = object?.engineering?.dynamicsType === "dynamics-angular-vector";
+    const dynamics = isDynamicsObject(object) && !isParticle && !isRigidBody && !isPolarVector && !isAngularVector
         ? DYNAMICS_GROUPS
         : [];
 
-    const groups = [
-        ...dynamics,
-        ...GROUPS
-    ]
+    const groups = (
+        isParticle
+            ? PARTICLE_GROUPS
+            : isRigidBody
+              ? RIGID_BODY_GROUPS
+              : isPolarVector
+                ? POLAR_VECTOR_GROUPS
+                : isAngularVector
+                  ? ANGULAR_VECTOR_GROUPS
+                : [...dynamics, ...GROUPS]
+    )
         .map((group) => {
             const fields = group.fields
                 .map((key) => ({ key, definition: definitionOf(key) }))
@@ -2178,7 +2963,6 @@ function dynamicsTypeLabel(object) {
 const DYNAMICS_TYPE_LABELS = {
     "dynamics-particle": "Particle",
     "dynamics-rigid-body": "Rigid Body",
-    "dynamics-trajectory": "Trajectory",
     "dynamics-polar-vector": "Polar Vector",
     "dynamics-angular-vector": "Angular Vector",
     "dynamics-spring": "Spring",

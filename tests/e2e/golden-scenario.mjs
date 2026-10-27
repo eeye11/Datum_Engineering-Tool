@@ -64,7 +64,6 @@ const TOOLS = [
      */
     ["DYNAMICS", "dynamics-bodies", "dynamics-particle"],
     ["DYNAMICS", "dynamics-bodies", "dynamics-rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
-    ["DYNAMICS", "dynamics-kinematics", "dynamics-trajectory", null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-kinematics", "dynamics-polar-vector", null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-kinematics", "dynamics-angular-vector", null, ["d:0.3,0.55,0.55,0.3"]],
     ["DYNAMICS", "dynamics-mechanical", "dynamics-spring", null, ["d:0.3,0.55,0.6,0.55"]],

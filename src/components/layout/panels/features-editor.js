@@ -56,6 +56,7 @@ import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
 
 let host = null;
+let dynamicsGeometryEditSnapshot = null;
 
 function element(id) {
     return globalThis.document.getElementById(id);
@@ -262,6 +263,83 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
+function quantityMarkup(key, definition, label, state, objects) {
+    const unitState = fieldState(objects, definition.unitField);
+    const bounds = [
+        Number.isFinite(definition.min) ? `min="${definition.min}"` : "",
+        Number.isFinite(definition.max) ? `max="${definition.max}"` : "",
+        `step="${definition.step ?? 1}"`
+    ]
+        .filter(Boolean)
+        .join(" ");
+    const units = (definition.unitOptions || [])
+        .map((option) => (
+            `<option value="${escapeHtml(option.value)}"${
+                !unitState?.mixed && option.value === unitState?.value ? " selected" : ""
+            }>${escapeHtml(option.label)}</option>`
+        ))
+        .join("");
+
+    return (
+        `<div class="dfp-row-control dfp-quantity-control${state.mixed ? " is-mixed" : ""}">` +
+        `<input type="number" class="dfp-number" data-feature-field="${escapeHtml(key)}" ` +
+        `aria-label="${escapeHtml(label)}" ${bounds} value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        `>` +
+        `<select class="dfp-select dfp-quantity-unit" data-feature-field="${escapeHtml(definition.unitField)}" ` +
+        `aria-label="${escapeHtml(`${label} unit`)}"${unitState?.mixed ? ' data-mixed="true"' : ""}>` +
+        (unitState?.mixed ? `<option value="" selected disabled>Mixed</option>` : "") +
+        units +
+        `</select>` +
+        `</div>`
+    );
+}
+
+function attachmentMarkup(key, label, state) {
+    const eligible = drawingState.objects.filter((object) => {
+        const type = object?.engineering?.dynamicsType;
+
+        if (key === "dynamics.angularAttachment") {
+            return (
+                type === "dynamics-rigid-body" ||
+                type === "dynamics-coordinate-system" ||
+                object?.type === "rigid-body" ||
+                object?.type === "point" ||
+                object?.type === "coordinate-system-2d"
+            );
+        }
+
+        return (
+            type === "dynamics-particle" ||
+            type === "dynamics-rigid-body" ||
+            type === "dynamics-reference-point" ||
+            type === "dynamics-coordinate-system" ||
+            object?.type === "particle" ||
+            object?.type === "rigid-body" ||
+            object?.type === "point" ||
+            object?.type === "coordinate-system-2d"
+        );
+    });
+    const options = [
+        { value: "origin", label: "Origin Point" },
+        ...eligible.map((object) => ({
+            value: object.id,
+            label: `${object.name || "Unnamed"} (${object.engineering?.dynamicsType === "dynamics-particle"
+                || object.type === "particle"
+                ? "Particle"
+                : object.engineering?.dynamicsType === "dynamics-rigid-body" || object.type === "rigid-body"
+                  ? "Rigid Body"
+                  : "Origin Point"})`
+        }))
+    ];
+
+    if (!state.mixed && !options.some((option) => option.value === state.value)) {
+        options.push({ value: state.value, label: "Unresolved reference" });
+    }
+
+    return rowMarkup(label, choicesMarkup(key, label, options, state), { mixed: state.mixed });
+}
+
 function textMarkup(key, label, state) {
     return (
         `<input type="text" class="dfp-text" data-feature-field="${escapeHtml(key)}" ` +
@@ -300,6 +378,19 @@ function fieldMarkup(key, definition, objects) {
 
     if (definition.kind === "number") {
         return rowMarkup(label, numberMarkup(key, definition, label, state), options);
+    }
+
+    if (definition.kind === "quantity") {
+        return (
+            `<div class="dfp-row">` +
+            `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
+            quantityMarkup(key, definition, label, state, objects) +
+            `</div>`
+        );
+    }
+
+    if (definition.kind === "reference") {
+        return attachmentMarkup(key, label, state);
     }
 
     if (definition.kind === "text") {
@@ -446,13 +537,18 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
     });
 
     /*
-     * TRANSFORM IS OFFERED WHEN SOMETHING CAN MOVE. A selection of only fixed
-     * objects keeps its Transform rows - so the student can see why nothing
-     * moves, and the arrows say so by doing nothing - but a selection of objects
-     * the model cannot move at all does not get a Transform section that could
-     * never act.
+     * The Dynamics Particle and Rigid Body have explicit coordinate fields in
+     * their own Transform group. Other movable selections use the shared
+     * relative-offset controls below.
      */
-    if (objects.some((object) => supportsTransform(object))) {
+    const hasExplicitTransform = objects.every(
+        object =>
+            object?.engineering?.dynamicsType === "dynamics-particle" ||
+            object?.engineering?.dynamicsType === "dynamics-rigid-body" ||
+            object?.engineering?.dynamicsType === "dynamics-angular-vector"
+    );
+
+    if (objects.some((object) => supportsTransform(object)) && !hasExplicitTransform) {
         markup.push(
             `<div class="dfp-section" data-feature-group="transform">` +
                 `<div class="dfp-section-heading">Transform</div>` +
@@ -643,6 +739,42 @@ function commitField(key, value) {
     return true;
 }
 
+function updateDynamicsGeometry(target) {
+    const value = Number(target.value);
+
+    if (!Number.isFinite(value)) {
+        return;
+    }
+
+    const key = target.dataset.featureField;
+    const objects = selectedObjects().filter(object => readField(object, key) !== value);
+
+    if (!objects.length) {
+        return;
+    }
+
+    if (!dynamicsGeometryEditSnapshot) {
+        dynamicsGeometryEditSnapshot = enggDrawingState.snapshotDrawing(drawingState);
+    }
+
+    objects.forEach((object) => {
+        writeField(object, key, value);
+    });
+
+    renderCurrentDrawing();
+}
+
+function commitDynamicsGeometryEdit() {
+    if (!dynamicsGeometryEditSnapshot) {
+        return false;
+    }
+
+    enggDrawingState.commitDrawingChange(drawingState, dynamicsGeometryEditSnapshot);
+    dynamicsGeometryEditSnapshot = null;
+
+    return true;
+}
+
 /*
  * Re-render and put focus back on the field the student was using. A change can
  * make another row appear or disappear - Solid adds a fill colour, Custom adds a
@@ -745,6 +877,20 @@ function applySegmentedChoice(button) {
  */
 let transformOffsets = { x: 0, y: 0, rotate: 0 };
 let transformOffsetsFor = "";
+const LIVE_DYNAMICS_GEOMETRY_FIELDS = new Set([
+    "dynamics.positionX",
+    "dynamics.positionY",
+    "dynamics.rotation",
+    "dynamics.vectorMagnitude",
+    "dynamics.vectorAngle",
+    "dynamics.vectorComponentX",
+    "dynamics.vectorComponentY",
+    "dynamics.vectorOriginX",
+    "dynamics.vectorOriginY",
+    "dynamics.angularCenterX",
+    "dynamics.angularCenterY",
+    "dynamics.angularMagnitude"
+]);
 
 function transformSelectionKey() {
     return (drawingState.selection?.selectedObjectIds || []).join("|");
@@ -901,6 +1047,14 @@ export function installFeaturesPane() {
         }
     });
 
+    host.addEventListener("input", (event) => {
+        const target = event.target;
+
+        if (target.matches?.("[data-feature-field]") && LIVE_DYNAMICS_GEOMETRY_FIELDS.has(target.dataset.featureField)) {
+            updateDynamicsGeometry(target);
+        }
+    });
+
     host.addEventListener("change", (event) => {
         const target = event.target;
 
@@ -915,6 +1069,13 @@ export function installFeaturesPane() {
         }
 
         const key = target.dataset.featureField;
+
+        if (LIVE_DYNAMICS_GEOMETRY_FIELDS.has(key)) {
+            if (commitDynamicsGeometryEdit()) {
+                refreshFeatures();
+                return;
+            }
+        }
 
         /*
          * CUSTOM THICKNESS FROM THE DROPDOWN is the same mode choice as the
@@ -1002,6 +1163,15 @@ export function installFeaturesPane() {
      * moment the offsets are meant to be forgotten.
      */
     host.addEventListener("focusout", (event) => {
+        if (
+            event.target.matches?.("[data-feature-field]") &&
+            LIVE_DYNAMICS_GEOMETRY_FIELDS.has(event.target.dataset.featureField) &&
+            commitDynamicsGeometryEdit()
+        ) {
+            renderCurrentDrawing();
+            return;
+        }
+
         const leftThePane = !event.relatedTarget || !host.contains(event.relatedTarget);
         const fromTransform = event.target.closest?.("[data-transform-input]") || event.target === host;
 

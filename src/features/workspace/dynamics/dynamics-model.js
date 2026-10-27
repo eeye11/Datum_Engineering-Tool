@@ -23,6 +23,8 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { drawingState } from "../editor-state.js";
+import { RIGID_BODY_HEIGHT, RIGID_BODY_WIDTH } from "../constants.js";
 import {
     DYNAMICS_SIZES,
     DYNAMICS_CHILD_TOOLS,
@@ -130,8 +132,14 @@ function particle(position, style) {
     const object = enggDrawingState.geometryFactories.particle(
         at(position),
         factoryOptions("dynamics-particle", {
-            style: style,
-            name: "Particle",
+            style: {
+                ...style,
+                fill: style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#193335",
+                fillMode: "solid",
+                lineWidthCustom: true,
+                fillOpacityEnabled: true
+            },
+            name: nextParticleName(),
             metadata: { markerRadius: DYNAMICS_SIZES.particleRadius }
         })
     );
@@ -142,87 +150,120 @@ function particle(position, style) {
         markerStyle: "filled"
     };
 
-    return markDynamics(object, "dynamics-particle", {
+    const marked = markDynamics(object, "dynamics-particle", {
         markerRadius: DYNAMICS_SIZES.particleRadius
     });
+
+    marked.engineering = {
+        ...marked.engineering,
+        massKg: 1,
+        massUnit: "kg",
+        initialVelocity: { x: 0, y: 0 }
+    };
+
+    return marked;
 }
 
-function rigidBody(start, end, style) {
-    const first = at(start);
-    const second = at(end);
+function nextParticleName() {
+    const count = drawingState.objects.filter(
+        object => object?.engineering?.dynamicsType === "dynamics-particle"
+    ).length;
+    let suffix = "";
+    let ordinal = count;
 
-    const width = Math.max(4, Math.abs(second.x - first.x));
-    const height = Math.max(3, Math.abs(second.y - first.y));
+    do {
+        suffix = String.fromCharCode(65 + (ordinal % 26)) + suffix;
+        ordinal = Math.floor(ordinal / 26) - 1;
+    } while (ordinal >= 0);
 
-    return markDynamics(
-        enggDrawingState.geometryFactories["rigid-body"](
-            {
-                x: Math.min(first.x, second.x),
-                y: Math.max(first.y, second.y)
+    return `Particle ${suffix}`;
+}
+
+function rigidBody(position, style) {
+    const center = at(position);
+    const stroke = style?.stroke || drawingState.styleDefaults?.stroke || "#193335";
+    const fill = style?.fill && style.fill !== "none" ? style.fill : stroke;
+    const object = enggDrawingState.geometryFactories["rigid-body"](
+        {
+            x: center.x - RIGID_BODY_WIDTH / 2,
+            y: center.y + RIGID_BODY_HEIGHT / 2
+        },
+        RIGID_BODY_WIDTH,
+        RIGID_BODY_HEIGHT,
+        factoryOptions("dynamics-rigid-body", {
+            style: {
+                ...drawingState.styleDefaults,
+                ...style,
+                fill,
+                fillMode: "solid",
+                fillOpacityEnabled: true
             },
-            width,
-            height,
-            factoryOptions("dynamics-rigid-body", {
-                style: style,
-                name: "Rigid Body",
-                metadata: { showCenterOfMass: true }
-            })
-        ),
-        "dynamics-rigid-body"
+            name: "Rigid Body",
+            metadata: { showCenterOfMass: true }
+        })
     );
+
+    object.geometry = {
+        ...object.geometry,
+        showCenterOfMass: true
+    };
+
+    const marked = markDynamics(object, "dynamics-rigid-body");
+
+    marked.engineering = {
+        ...marked.engineering,
+        massKg: 1,
+        massUnit: "kg",
+        momentOfInertiaKgM2: 0
+    };
+
+    return marked;
 }
 
 /* ============================================================
  * KINEMATICS
  * ============================================================ */
 
-function trajectory(start, end, style) {
-    const from = at(start);
-    const to = at(end);
-
-    return {
-        type: "dynamics-trajectory",
-        geometry: {
-            start: from,
-            end: to,
-
-            /*
-             * The bow is the height of the curve at its midpoint, as a
-             * fraction of the span. Zero is a straight path; the default
-             * gives a path that reads as a trajectory rather than as a
-             * vector, and the curve handle adjusts it.
-             */
-            bow: DYNAMICS_SIZES.trajectoryBow,
-            arrowEnd: false
-        },
-        style: style,
-        label: ""
-    };
-}
-
 function polarVector(tail, tip, style) {
     const from = at(tail);
     const to = at(tip);
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const count = drawingState.objects.filter(
+        object => object?.engineering?.dynamicsType === "dynamics-polar-vector"
+    ).length;
 
     return {
         type: "dynamics-polar-vector",
+        name: `Polar Vector ${count + 1}`,
         geometry: {
             start: from,
             end: to,
-            showAngle: false
+            showAngle: false,
+            vectorRepresentation: "magnitude-angle",
+            vectorMagnitude: lengthOf(from, to),
+            vectorAngle: (angle + 360) % 360,
+            vectorUnit: "m/s",
+            attachedTo: "origin"
         },
-        style: style,
+        style: { arrowheadSize: 9, ...style },
         label: ""
     };
 }
 
 function angularVector(centre, radiusPoint, style) {
     const origin = at(centre);
-    const radius = Math.max(1, lengthOf(origin, at(radiusPoint)));
-    const radiusAngle = spanAngle(origin, at(radiusPoint));
+    const requestedRadius = lengthOf(origin, at(radiusPoint));
+    const radius = Math.max(1, requestedRadius || 12);
+    const radiusAngle = requestedRadius ? spanAngle(origin, at(radiusPoint)) : 0;
+    const count = drawingState.objects.filter(
+        object => object?.engineering?.dynamicsType === "dynamics-angular-vector"
+    ).length;
 
     return {
         type: "dynamics-angular-vector",
+        name: `Angular Vector ${count + 1}`,
         geometry: {
             center: origin,
             radius,
@@ -234,9 +275,13 @@ function angularVector(centre, radiusPoint, style) {
             startAngle: finite(radiusAngle, 0),
             sweep: 270,
             direction: "ccw",
-            arrowHead: "filled"
+            arrowHead: "filled",
+            rotationalType: "velocity",
+            magnitude: 0,
+            unit: "rad/s",
+            attachedTo: "origin"
         },
-        style: style,
+        style: { arrowheadSize: 9, ...style },
         label: ""
     };
 }
@@ -512,14 +557,13 @@ function referenceArc(start, end, style) {
 /*
  * A SYMBOL BUILT FROM ITS OWN GEOMETRY STILL CARRIES ITS IDENTITY.
  *
- * The spring, the damper, the vectors, the trajectory and the pulley are
+ * The spring, the damper, the vectors and the pulley are
  * plain objects rather than factory output, so the `engineering` block the
  * builders do not write is put on here - once, in the same place for all of
  * them - instead of each builder remembering. A symbol without it would be
  * drawn as nothing, written as nothing and never recognised as Dynamics.
  */
 const OWN_GEOMETRY_TOOLS = new Set([
-    "dynamics-trajectory",
     "dynamics-polar-vector",
     "dynamics-angular-vector",
     "dynamics-spring",
@@ -530,8 +574,7 @@ const OWN_GEOMETRY_TOOLS = new Set([
 
 const BUILDERS = {
     "dynamics-particle": (points, style) => particle(points[0], style),
-    "dynamics-rigid-body": (points, style) => rigidBody(points[0], points[1], style),
-    "dynamics-trajectory": (points, style) => trajectory(points[0], points[1], style),
+    "dynamics-rigid-body": (points, style) => rigidBody(points[0], style),
     "dynamics-polar-vector": (points, style) => polarVector(points[0], points[1], style),
     "dynamics-angular-vector": (points, style) => angularVector(points[0], points[1], style),
     "dynamics-spring": (points, style) => spring(points[0], points[1], style),

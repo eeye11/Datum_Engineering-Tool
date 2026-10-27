@@ -69,7 +69,7 @@ import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/
         { matches: entity => entity.metadata?.thermodynamicsKind === "process-path", draw: drawProcessOverlay },
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
-        { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
+        { matches: entity => entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity), draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },

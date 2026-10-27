@@ -281,7 +281,18 @@ function handleToolChanged() {
 function handleSelectionChanged(event) {
     const ids = event?.detail?.objectIds || drawingState.selection.selectedObjectIds;
 
-    if (ids && ids.length && activePanelTab() === "objects") {
+    const selectedDynamicsBody = ids?.some(id => {
+        const object = drawingState.objects.find(candidate => candidate.id === id);
+
+        return (
+            object?.engineering?.dynamicsType === "dynamics-particle" ||
+            object?.engineering?.dynamicsType === "dynamics-rigid-body" ||
+            object?.engineering?.dynamicsType === "dynamics-polar-vector" ||
+            object?.engineering?.dynamicsType === "dynamics-angular-vector"
+        );
+    });
+
+    if (selectedDynamicsBody || (ids && ids.length && activePanelTab() === "objects")) {
         setActivePanelTab("features");
     }
 }
