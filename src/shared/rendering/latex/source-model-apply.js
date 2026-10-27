@@ -199,15 +199,11 @@ function mergeShapeIntoObject(object, shape) {
    * pipe on the canvas. A block whose walls are exactly the default separation
    * stores no change at all, so the run keeps tracking the drawing default.
    */
-  if (shape.type === "pipe-duct" && Number.isFinite(shape.separation)) {
+  if (shape.type === "pipe-duct" && Number.isFinite(shape.schematicWidth)) {
     if (shape.sourceStyle) object.style = { ...object.style, ...shape.sourceStyle };
     object.engineering = { ...(object.engineering || {}) };
 
-    if (Math.abs(shape.separation) < 1e-9) {
-      delete object.engineering.separation;
-    } else {
-      object.engineering.separation = Number(shape.separation.toFixed(6));
-    }
+    object.engineering.schematicWidth = Number(shape.schematicWidth.toFixed(6));
   }
 
   /*

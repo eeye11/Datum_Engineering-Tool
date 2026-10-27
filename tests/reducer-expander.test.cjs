@@ -37,7 +37,7 @@ async function ready() {
 }
 function pipe(from, to, width = 8, style = {}) {
   const created = m.ds.createGeometryObject('pipe-duct', { start: {x:from,y:0}, end: {x:to,y:0} },
-    { engineering: { separation: width-m.pipe.DEFAULT_SCHEMATIC_SEPARATION }, style });
+    { engineering: { schematicWidth: width }, style });
   m.ds.addObject(m.state, created);
   return m.state.objects.find(object => object.id === created.id);
 }
@@ -111,7 +111,7 @@ test('hover shows invalid placement and standalone expander preview matches its 
   m.preview.updatePreview({rawPointerPoint:{x:100,y:100}});
   const preview=m.state.interaction.preview;
   const fitting=m.tool.commitInlineAt('reducer-expander',{x:100,y:100}).symbol;
-  assert.deepEqual(widths(preview),[3,4]);
+  assert.deepEqual(widths(preview),[15,20]);
   assert.deepEqual(widths(fitting),widths(preview));
   assert.equal(m.reducer.transitionLengthOf(fitting),m.reducer.transitionLengthOf(preview));
   assert.deepEqual(m.state.selection.selectedObjectIds,[fitting.id]);
@@ -293,7 +293,7 @@ test('hidden pipes are excluded from reducer insertion and gap targets',async()=
 
 test('standalone fitting moves and connects later through the shared pipe reconciler',async()=>{
   await ready();const fitting=m.inline.insertStandalone('reducer-expander',{x:50,y:0},{transitionLength:12}).symbol;
-  assert.deepEqual(widths(fitting),[4,3]);
+  assert.deepEqual(widths(fitting),[20,15]);
   const first=pipe(0,44,10),second=pipe(56,100,6);
   m.connections.reconcileFluidConnections(first,m.state.objects);
   m.connections.reconcileFluidConnections(second,m.state.objects);
@@ -407,7 +407,7 @@ test('editing a styled connected pipe in complete source updates only its fittin
   const report=m.apply.applyParsedSourceToDrawing({model:m.ds,state:m.state,
     source:'\\begin{tikzpicture}[x=1mm,y=1mm]\n'+blocks.join('\n')+'\n\\end{tikzpicture}'});
   assert.equal(report.invalid.length,0);
-  assert.deepEqual(widths(fitting),[12,6]);seated(fitting);
+  assert.deepEqual(widths(fitting),[12,6],JSON.stringify(blocks[0]));seated(fitting);
   assert.ok(report.reducerSyncIds.includes(fitting.id));
 });
 

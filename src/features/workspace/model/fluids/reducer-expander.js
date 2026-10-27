@@ -281,7 +281,7 @@ export function setEndWidth(reducer, side, width, objects = drawingState.objects
     const run = connectedRunsOf(reducer, objects)[side];
     if (run?.locked) return false;
     if (run) {
-        run.engineering = { ...run.engineering, separation: width - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION };
+        run.engineering = { ...run.engineering, schematicWidth: width };
         propagatePipeWidth(run, objects);
         if (reducer.engineering.freeWidths) delete reducer.engineering.freeWidths[side];
     } else {

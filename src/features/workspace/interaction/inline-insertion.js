@@ -347,7 +347,7 @@ export function planInsertion(kind, target, options = {}) {
 function applyReducerWidth(kind, segment) {
     if (kind !== enggReducer.REDUCER_TYPE || !segment) return;
     segment.engineering = { ...segment.engineering,
-        separation: enggPipeDuct.boundarySeparation(segment.engineering) * 0.75 - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION };
+        schematicWidth: enggPipeDuct.boundarySeparation(segment.engineering) * 0.75 };
 }
 
 /* Everything the caller gets on a press at (or too near) an end. */
