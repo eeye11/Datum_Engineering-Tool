@@ -31,6 +31,8 @@ import {
   unique as sharedUnique,
 } from "../../../../tool-library/shared/primitives/tikz-style.js";
 
+import { COMPONENT_COLOURS } from "../../component-colours.js";
+
 /* ============================================================
  * NUMBERS AND COORDINATES
  * ============================================================ */
@@ -1120,7 +1122,7 @@ function momentNodes(object) {
     const position = geometry.position || { x: 0, y: 0 };
     const radius = Number(geometry.arcRadius) || 7;
 
-    const at = { x: Number(position.x) + radius * 0.7, y: Number(position.y) + radius * 0.7 };
+    const at = { x: Number(position.x) + radius * 0.35, y: Number(position.y) - radius - 1 };
 
     const nodes = [];
 
@@ -1189,26 +1191,31 @@ function resultantNodes(object) {
 function componentNodes(object) {
     const geometry = object?.geometry || {};
     const style = object?.style || {};
-    const colour = nodeColourOf(object);
     const font = fontFor(style);
 
     const nodes = [];
     const unit = unitOf(object);
 
-    const place = (pair, fallbackText, anchor) => {
+    const place = (pair, fallbackText) => {
         if (!pair?.end) {
             return;
         }
 
         const end = pair.end;
+        const start = pair.start || end;
+        const horizontal = Math.abs(end.y - start.y) < 1e-9;
+        if (Math.hypot(end.x - start.x, end.y - start.y) < 1e-9) return;
+        const at = horizontal
+            ? { x: (start.x + end.x) / 2, y: start.y - 3 }
+            : { x: start.x - 3, y: (start.y + end.y) / 2 };
 
         nodes.push(
             labelNode({
-                at: { x: Number(end.x) + 2, y: Number(end.y) + 1 },
+                at,
                 text: fallbackText,
-                colour,
+                colour: colourOf({ stroke: horizontal ? COMPONENT_COLOURS.x : COMPONENT_COLOURS.y }),
                 font,
-                anchor,
+                anchor: horizontal ? "north" : "east",
             }),
         );
     };
@@ -1219,7 +1226,7 @@ function componentNodes(object) {
             ? `$F_x = ${formatNumber(fx)}\\ ${unit}$`
             : "$F_x$";
 
-        place(geometry.horizontal, text, "south");
+        place(geometry.horizontal, text);
     }
 
     if (geometry.showY !== false) {
@@ -1228,7 +1235,7 @@ function componentNodes(object) {
             ? `$F_y = ${formatNumber(fy)}\\ ${unit}$`
             : "$F_y$";
 
-        place(geometry.vertical, text, "west");
+        place(geometry.vertical, text);
     }
 
     return nodes;

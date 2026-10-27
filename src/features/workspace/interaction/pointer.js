@@ -20,6 +20,42 @@ import { STATICS_SPAN_SNAP_TOOLS } from "../statics/statics-tools.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { allowsDirectManipulation } from "./direct-manipulation.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
+import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
+import { isDerivedFeature } from "../../../shared/model/feature-types.js";
+import { selectionBounds, selectionMembers } from "../../../shared/selection/selection-transform.js";
+
+function updateMoveCursor(event) {
+    let movable = false;
+    if (allowsDirectManipulation() && !event.shiftKey &&
+        !editorState.modifySession && !isConstructionInProgress()) {
+        const point = canvasPointFromEvent(event, false);
+        const hit = handleAtPoint(point);
+        const object = objectAtPoint(point);
+        const target = hit?.object || object;
+        movable = Boolean(target && !target.locked && !isDerivedFeature(target));
+        if (pickDerivedMagnitude(point)) {
+            movable = true;
+        }
+
+        const ids = drawingState.selection.selectedObjectIds;
+        if (ids.length > 1) {
+            const box = selectionBounds(drawingState.objects, ids, drawingState);
+            if (box && point.x >= box.minX && point.x <= box.maxX &&
+                point.y >= box.minY && point.y <= box.maxY) {
+                movable = selectionMembers(drawingState.objects, ids)
+                    .every(member => !member.locked && !isDerivedFeature(member));
+            }
+        }
+    }
+    if (allowsDirectManipulation() &&
+        (editorState.manipulationDrag || editorState.selectionDrag?.derived ||
+            editorState.selectionDrag?.axisLabel)) {
+        movable = true;
+    }
+    drawingCanvas?.classList.toggle("drawing-can-move", movable);
+}
 
 /*
  * The positional reference of each SELECTED force, for horizontal alignment.
@@ -1353,6 +1389,7 @@ export function scheduleGuidelineExpiry(
 export function updateDrawingCoordinates(
     event
 ) {
+    updateMoveCursor(event);
     /*
      * Always calculate from the current
      * pointer event.

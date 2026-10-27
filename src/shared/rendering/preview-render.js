@@ -51,6 +51,10 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             appendEntity(svg, { ...preview, isPreview: true, style: previewStyle(preview) }, state, bounds);
             return;
         }
+        if (state.interaction.phase === "point-force-value" && state.interaction.preview) {
+            appendEntity(svg, { ...state.interaction.preview, isPreview: true }, state, bounds);
+            return;
+        }
         if (["diesel-cycle", "otto-cycle", "carnot-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;

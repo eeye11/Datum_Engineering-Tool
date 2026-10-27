@@ -179,6 +179,20 @@ check(
 );
 
 check(
+  "the Statics two-point tools take click-move-click and do not exit",
+  [
+    "beam", "cable", "shaft", "point-force",
+    "pin-connection", "fixed-connection", "slider-connection",
+    "distributed-load", "varying-distributed-load",
+    "reference-line", "reference-arc", "coordinate-system-2d",
+  ].every(
+    (tool) =>
+      classification.isClickClickTool(tool) === true &&
+      classification.shouldExitToSelectOnClick(tool) === false,
+  ),
+);
+
+check(
   "click-move-click geometry does not",
   ["line", "rectangle", "circle", "triangle", "arc", "polygon", "coordinate-system-2d"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === false,
@@ -197,6 +211,20 @@ check(
   ["triangle", "polygon", "arc", "reference-arc", "polyline", "truss", "distributed-load"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === false,
   ),
+);
+
+const construction = fs.readFileSync(locate("construction-tools.js"), "utf8");
+
+check(
+  "the Reference Arc's clicks reach the construction pipeline",
+  /"arc",[\s\S]{0,400}?"reference-arc",/.test(section(construction, "isConstructionTool")),
+  "without it a click on a Reference Arc is dropped and the arc can never be finished",
+);
+
+check(
+  "a Coordinate System click is a construction point, not a fixed-size placement",
+  !/add2DCoordinateSystem\(/.test(click),
+  "two clicks used to place two systems",
 );
 
 check(

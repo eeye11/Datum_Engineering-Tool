@@ -1384,7 +1384,9 @@ export function objectIdAtSourceLine(line) {
 
 export function renderCurrentDrawing() {
     const manipulation = editorState.manipulationDrag;
-    if (drawingState.activeTool !== "select") drawingCanvas.classList.remove("drawing-can-move");
+    if (drawingState.activeTool !== "select") {
+        drawingCanvas.classList.remove("drawing-can-move");
+    }
     drawingCanvas.classList.toggle("drawing-object-moving", Boolean((manipulation?.moved &&
         ["body", "origin", "position", "center", "annotation-offset"].includes(manipulation.kind)) ||
         (editorState.selectionDrag?.moved && (editorState.selectionDrag.derived || editorState.selectionDrag.axisLabel))));

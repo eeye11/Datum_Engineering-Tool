@@ -12,6 +12,7 @@ import { distanceToSegment, isRectangleLike, objectPoints } from "../interaction
 import { cancelInteraction } from "../interaction/selection.js";
 import { staticsAttachedStyle, staticsBodyAtPoint } from "./statics-attachment.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * THE DISTRIBUTED LOAD, AS ONE CONTINUOUS FEATURE
@@ -390,7 +391,7 @@ export function beginDistributedLoadConstruction(
     );
 
     setToolMessage(
-        "Drag to define the loaded span, then release"
+        "Click the end of the loaded span, or drag to it and release"
     );
 
     renderCurrentDrawing();
@@ -433,7 +434,7 @@ const LOAD_BUILD_INSTRUCTIONS = {
     "distributed-load-start":
         "Specify start point",
     "distributed-load-end":
-        "Drag along the body to define the loaded span, then release",
+        "Click the end of the loaded span, or drag along the body and release",
     "distributed-load-vector":
         "Click to place the load",
 };
@@ -1613,7 +1614,7 @@ function startConstantLoadBuild(
     );
 
     setToolMessage(
-        "Drag along the body to define the loaded span, then release"
+        "Click the start of the loaded span, or drag along the body and release"
     );
 
     renderProperties();
@@ -1643,7 +1644,7 @@ export function takeDistributedLoadStart(
     );
 
     setToolMessage(
-        "Drag along the body to define the loaded span, then release"
+        "Click the end of the loaded span, or drag along the body and release"
     );
 
     renderProperties();
@@ -1887,6 +1888,7 @@ function commitConstantLoadFromPopup({
     );
 
     cancelInteraction();
+    activateTool("select");
 
     setToolMessage(
         "Distributed load created"
@@ -2241,6 +2243,8 @@ export function finishDistributedLoadConstruction() {
         drawingState,
         object.id
     );
+
+    activateTool("select");
 
     setToolMessage(
         "Distributed load created"

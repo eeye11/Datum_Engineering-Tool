@@ -9,6 +9,8 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { drawingState } from "../editor-state.js";
+import { STATICS_CHILD_TOOLS } from "../statics/statics-tools.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * The snapshot is taken BEFORE the object is added, so Undo removes the
@@ -49,6 +51,10 @@ export function commitCreatedFeature(
         drawingState,
         previous
     );
+
+    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
+        activateTool("select");
+    }
 
     return object;
 }

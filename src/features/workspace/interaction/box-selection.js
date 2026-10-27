@@ -616,6 +616,11 @@ export function objectIntersectsSelection(
 
     const geometry = object.geometry;
 
+    if (enggAnnotationModel.derivedAnnotations(object, drawingState)
+        .some(annotation => annotationBoxIntersectsSelection(annotation, selectionBox))) {
+        return true;
+    }
+
     /*
      * A rigid body, and a rectangle, are areas rather than
      * outlines: a rectangle drawn wholly inside a large rigid

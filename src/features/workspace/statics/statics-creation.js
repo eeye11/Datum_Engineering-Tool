@@ -10,9 +10,8 @@ import { openMomentValuePrompt } from "../geometry/preview.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { STATICS_PLACEMENT_TOOLS } from "./statics-tools.js";
-import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { attachableStaticsType, isSupportType } from "../../../shared/model/feature-types.js";
 import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+import { attachableStaticsType, isSupportType } from "../../../shared/model/feature-types.js";
 
 export function createStaticsFeature(
     toolId,
@@ -146,7 +145,8 @@ export function createStaticsFeature(
                 ? enggBodyFrames.supportPlacement(
                     parent,
                     point,
-                    false
+                    false,
+                    { fixed: type === "fixed-support" }
                 )
                 : null;
 
@@ -177,6 +177,10 @@ export function createStaticsFeature(
                         }
                     }
                 );
+
+            if (type === "fixed-support") {
+                object.geometry.orientation = placement.orientation;
+            }
 
             /*
              * The attachment, in the body's frame.
@@ -361,9 +365,7 @@ export function createStaticsFeature(
         return;
     }
 
-    setToolMessage(
-        `Specify ${definition.label.toLowerCase()} position`
-    );
+    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

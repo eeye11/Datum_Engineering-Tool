@@ -556,7 +556,7 @@ function createGeometryObject(type, geometry, options = {}) {
         truss: "Truss",
         cable: "Cable",
         shaft: "Shaft",
-        force: "Point Force",
+        force: "Point Load",
         resultant: "Resultant",
         "force-components": "Force Components",
 

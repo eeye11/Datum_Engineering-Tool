@@ -135,7 +135,7 @@ export const toolIcons = {
 	 */
 	Truss: drawingIcon(`<path ${iconStroke} d="M3 6h14M3 6l14 8M17 6L3 14M3 14h14M8 6v8M12 6v8"/>`),
 	Cable: drawingIcon(`<path ${iconStroke} d="M3 5c5 8 9 8 14 0"/><circle ${iconStroke} cx="3" cy="5" r="1.2"/><circle ${iconStroke} cx="17" cy="5" r="1.2"/>`),
-	"Point Force": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
+	"Point Load": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
 	"Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 4h14M3 4v10M6.5 4v10M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Varying Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 11l7-7h7M3 11v3M6.5 7.5V14M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Applied Moment": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 5.6a4.4 4.4 0 0 1 3.7 2"/><path ${iconStroke} d="M10 14.4a4.4 4.4 0 0 1-3.7-2"/><path ${iconStroke} d="M12.6 5.2l3 1.7-1.7 3"/><path ${iconStroke} d="M7.4 14.8l-3-1.7 1.7-3"/>`),
@@ -443,7 +443,7 @@ export const featureIcons = {
 	cable: toolIcons.Cable,
 	shaft: toolIcons.Shaft,
 
-	force: toolIcons["Point Force"],
+	force: toolIcons["Point Load"],
 	moment: toolIcons.Moment,
 
 	load: toolIcons["Distributed Load"],
@@ -774,13 +774,6 @@ export const disciplineToolGroups = {
 			tools: [
 				{ id: "body", label: "Bodies", submenu: true },
 
-				/*
-				 * A Point Force is a single direct tool, in
-				 * the same way Line and Circle are. It has no
-				 * submenu and opens no popup before drawing.
-				 */
-				{ id: "point-force", label: "Point Force" },
-
 				{ id: "load", label: "Loads", submenu: true },
 				{ id: "moment", label: "Moment" },
 				{ id: "support", label: "Supports", submenu: true },
@@ -896,7 +889,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
 	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
-	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Load", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*
 	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,

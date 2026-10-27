@@ -53,8 +53,8 @@ export const STATICS_TOOL_MENUS = {
  * Every Statics feature tool, with the label shown in the
  * status line and the authoritative feature type it creates.
  *
- * Point Force and the Load menu's Point Load entry share the
- * `point-force` tool and its `force` feature type.
+ * Point Load lives in the Loads submenu and keeps the `force` feature type
+ * and `point-force` tool id for compatibility with existing drawings.
  */
 export const STATICS_CHILD_TOOLS = {
     particle: { label: "Particle", type: "particle" },
@@ -64,7 +64,7 @@ export const STATICS_CHILD_TOOLS = {
     cable: { label: "Cable", type: "cable" },
     shaft: { label: "Shaft", type: "shaft" },
 
-    "point-force": { label: "Point Force", type: "force" },
+    "point-force": { label: "Point Load", type: "force" },
 
     /*
      * The three analysis templates.
@@ -758,7 +758,7 @@ export const STATICS_PLACEMENT_TOOLS = {
  * Tools that span two points, so they need a second click.
  */
 export const STATICS_SPAN_TOOLS = {
-    "point-force": "Point Force",
+    "point-force": "Point Load",
     beam: "Beam",
     cable: "Cable",
     shaft: "Shaft",

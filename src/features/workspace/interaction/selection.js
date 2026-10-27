@@ -210,6 +210,13 @@ export function beginAnnotationDrag(
         return false;
     }
 
+    const selectedIds = drawingState.selection.selectedObjectIds;
+    if (selectedIds.includes(picked.sourceFeatureId)) {
+        // A force and its label are one selected feature, even when it is
+        // the only feature inside the selection rectangle.
+        return false;
+    }
+
     if (picked.type === "axis-label") {
         return startAxisLabelDrag(
             event,

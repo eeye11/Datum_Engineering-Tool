@@ -77,6 +77,9 @@ export function installCanvasEvents() {
         drawingCanvas
     ) {
         installAxisLabelEditor();
+        drawingCanvas.addEventListener("mouseleave", () => {
+            drawingCanvas.classList.remove("drawing-can-move");
+        });
         drawingCanvas.addEventListener(
             "mousemove",
             updateDrawingCoordinates

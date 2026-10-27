@@ -153,6 +153,14 @@ export function handleCanvasClick(
         return;
     }
 
+    /*
+     * THE COORDINATE SYSTEM TAKES CLICK-MOVE-CLICK AS WELL AS ITS DRAG.
+     *
+     * The first click is the origin and the second the positive X
+     * direction - the same two points the drag supplies, through the same
+     * construction step. A click used to place a fixed-size system on its
+     * own, so two clicks placed two of them.
+     */
     if (
         drawingState.activeTool ===
         "coordinate-system-2d"

@@ -248,13 +248,12 @@ export function isMultiStepTool(toolId) {
 }
 
 /*
- * The GEOMETRY tools that take click-move-click as well as press-drag-release.
+ * The tools that take click-move-click as well as press-drag-release.
  *
  * A bare click with one of these armed is the shape's FIRST POINT, exactly as in
  * a CAD program - the second click completes it, and Esc or Select leaves the
- * tool. Kept to the Geometry category on purpose: the Statics, Annotate and
- * Thermodynamics path tools keep the exit-on-click rule until their owners
- * choose otherwise.
+ * tool. The Annotate and Thermodynamics path tools keep the exit-on-click rule
+ * until their owners choose otherwise.
  */
 export const CLICK_CLICK_TOOLS = [
     "line",
@@ -277,6 +276,28 @@ export const CLICK_CLICK_TOOLS = [
     "triangle",
     "arc",
     "polygon",
+
+    /*
+     * THE STATICS TWO-POINT TOOLS.
+     *
+     * Every Statics tool whose feature (or whose first step) is a start and an
+     * end takes the click workflow as well as the drag: the bodies drawn as a
+     * span, the Point Force, the connections, a load's span, the reference
+     * line and arc, and the coordinate system's origin and X direction. The
+     * single-click placements (particle, supports, moment, reference point)
+     * and the flow tools (truss) already take clicks and are not listed.
+     */
+    "beam",
+    "cable",
+    "shaft",
+    "point-force",
+    "pin-connection",
+    "fixed-connection",
+    "slider-connection",
+    "distributed-load",
+    "varying-distributed-load",
+    "reference-line",
+    "reference-arc",
     "coordinate-system-2d",
 
     /*

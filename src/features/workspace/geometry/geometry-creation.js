@@ -1728,8 +1728,14 @@ export function beginOrCompleteGeometry(
             const suggested =
                 Number(geometry.magnitude) || 0;
 
+            // Keep the completed arrow visible while its value is pending.
+            // It enters the document only after confirmation, as one undo step.
+            drawingState.interaction.phase = "point-force-value";
+            drawingState.interaction.preview = object;
+            renderCurrentDrawing();
+
             openLoadValuePopup({
-                title: "Point Force",
+                title: "Point Load",
                 label: "Magnitude",
                 value: suggested.toFixed(2),
                 unit: enggLoadProfile.DEFAULT_FORCE_UNIT,
@@ -1857,8 +1863,9 @@ export function beginOrCompleteGeometry(
 
                 onCancel: () => {
                     enggDrawingState.clearInteraction(drawingState);
+                    activateTool("select");
                     setToolMessage(
-                        "Point force cancelled"
+                        "Point load cancelled"
                     );
 
                     renderCurrentDrawing();
@@ -1963,9 +1970,19 @@ export function beginOrCompleteGeometry(
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
+        /*
+         * THE COORDINATE SYSTEM IS DRAWN BY ONE GESTURE
+         *
+         * The press is the origin and the release is the positive X
+         * direction; Y is derived perpendicular, so the axes are square
+         * from a single drag. The arm length is the distance dragged.
+         * A degenerate drag (no length) is refused with a message.
+         */
         const axes = coordinateSystemFromDrag(first, point);
+
         if (!axes) {
             setToolMessage("Drag to set the coordinate system size");
+
             return;
         }
 
@@ -2493,9 +2510,11 @@ function createPointFeature(
         object.id
     );
 
-    setToolMessage(
-        "Specify point"
-    );
+    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
+        activateTool("select");
+    } else {
+        setToolMessage("Specify point");
+    }
 
     renderProperties();
     renderCurrentDrawing();

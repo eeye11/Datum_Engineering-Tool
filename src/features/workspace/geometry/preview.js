@@ -23,6 +23,7 @@ import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInter
 import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
@@ -130,6 +131,10 @@ export function updatePreview(
         setToolMessage(interaction.preview?.invalid
             ? "Not enough room or incompatible pipe ends"
             : "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it");
+        return;
+    }
+
+    if (interaction.phase === "point-force-value") {
         return;
     }
 
@@ -1912,6 +1917,8 @@ function staticsPreviewType(
             drawingState,
             stored.id
         );
+
+        activateTool("select");
 
         renderProperties();
         renderCurrentDrawing();
