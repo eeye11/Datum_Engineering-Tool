@@ -3,7 +3,7 @@
  */
 
 import { disciplineToolGroups, drawingToolGroups, engineeringTools } from "./tools.js";
-import { ANALYSIS_DIAGRAM_TOOLS, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS, beginAnalysisDiagram, analysisDiagramIntroMessage, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -23,6 +23,7 @@ const expandedToolbarSections = {
     "dynamics-bodies": false,
     "dynamics-kinematics": false,
     "dynamics-mechanical": false,
+    "shear-force-diagram": false,
     "reference-arc": false,
     arc: false,
     polygon: false,
@@ -101,6 +102,11 @@ function renderToolbarTool(tool) {
 
     const children = DYNAMICS_TOOL_MENUS[tool.id]
         ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : tool.id === "shear-force-diagram"
+        ? ANALYSIS_DIAGRAM_MODES.map(mode =>
+            renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })
+                .replace('data-tool-id=', `data-analysis-diagram-mode="${mode}" data-tool-id=`)
+        ).join("")
         : tool.id === "coordinate-system"
         ? [
             { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
@@ -241,6 +247,17 @@ export function renderEngineeringTools(
                         const toolId =
                             button.dataset
                                 .toolId;
+
+                        if (button.dataset.analysisDiagramMode) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            activateTool(toolId);
+                            drawingState.interaction.analysisMode = button.dataset.analysisDiagramMode;
+                            beginAnalysisDiagram(toolId);
+                            setToolMessage(analysisDiagramIntroMessage(null));
+                            renderCurrentDrawing();
+                            return;
+                        }
 
                         if (button.dataset.pistonCylinderOption) {
                             event.preventDefault();
