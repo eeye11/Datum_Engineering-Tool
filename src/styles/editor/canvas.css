@@ -222,6 +222,19 @@
 }
 
 /*
+ * THE BEND-CENTRE DOT.
+ *
+ * The Elbow's radius handle marks the centre of the circle its arc is drawn
+ * on. It is a small filled dot with a light ring - enough to see and aim at
+ * inside a bend, not a shape that competes with the fitting it belongs to.
+ */
+.drawing-manipulation-handle.elbow-radius {
+    fill: var(--datum-focus);
+    stroke: var(--datum-surface);
+    stroke-width: 1.5px;
+}
+
+/*
  * THE ROTATION HANDLE.
  *
  * Deliberately different from the shape handles: a ring with a turn arrow on

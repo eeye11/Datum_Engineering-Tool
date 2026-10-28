@@ -66,7 +66,7 @@ check("one block is found", parsed.length === 1, String(parsed.length));
 check("and it names the drawing", parsed[0].drawingId === ID_A);
 check(
   "with a stable block id, so the reference and the drawing are the same thing",
-  parsed[0].blockId === `dwg_${ID_A}`,
+  parsed[0].blockId === `dwg${ID_A}`,
   parsed[0].blockId,
 );
 check("and its position in the document", parsed[0].index === document1.indexOf(command));

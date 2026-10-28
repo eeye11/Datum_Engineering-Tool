@@ -366,8 +366,12 @@ SIGNS.forEach(([label, magnitude, angle, signX, signY]) => {
    * none, and reported "the origin is not drawn" - a fault in the test,
    * not the drawing.)
    */
+  /*
+   * The dashed lines that close the force parallelogram are construction, not
+   * vectors - they have no head and are not part of the decomposition's count.
+   */
   const shafts = (group ? group.children : []).filter(
-    c => c.tagName === "LINE" && c.attributes?.x1 !== undefined
+    c => c.tagName === "LINE" && c.attributes?.x1 !== undefined && !c.getAttribute?.("stroke-dasharray")
   );
 
   const origins = shafts.map(s => ({

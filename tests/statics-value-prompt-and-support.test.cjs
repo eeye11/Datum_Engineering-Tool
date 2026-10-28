@@ -323,12 +323,18 @@ console.log("\n  a fixed support is a wall at the END of the member\n");
 
   const ordinary = frames.supportPlacement(beam, end, false);
 
+  /*
+   * The wall is built ACROSS the end of the member - a cantilever's support -
+   * so it stands on the end itself, on the centreline, facing back along the
+   * member (here, away from the beam, along -x).
+   */
   check(
-    "a FIXED support's wall sits ON the member's FACE, at the end",
+    "a FIXED support's wall stands across the member's END, on its centreline",
     fixed &&
       Math.abs(fixed.render.x - end.x) < 1e-6 &&
-      Math.abs(Math.abs(fixed.render.y) - frame.halfDepth) < 1e-6,
-    JSON.stringify(fixed?.render) + " halfDepth=" + frame.halfDepth,
+      Math.abs(fixed.render.y - end.y) < 1e-6 &&
+      Math.abs(Math.abs(fixed.orientation) - Math.PI) < 1e-6,
+    JSON.stringify(fixed?.render) + " orientation=" + fixed?.orientation,
   );
 
   check(

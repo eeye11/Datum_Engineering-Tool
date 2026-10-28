@@ -503,7 +503,8 @@ console.log("\n  and the canvas shows two shafts, not three\n");
     );
 
     return group
-      ? group.querySelectorAll("line").length
+      /* The dashed parallelogram guides are construction, not shafts. */
+      ? group.querySelectorAll("line:not([stroke-dasharray])").length
       : 0;
   };
 
@@ -587,7 +588,11 @@ console.log("\n  and the tool parents it to the force\n");
 
   check(
     "the parent is the force's own, not a guess",
-    /force\.parentId/.test(code.slice(componentsPath, componentsAdds)) &&
+    /*
+     * The components belong to the FORCE ITSELF (`force.id`) - or, as they
+     * once did, to the force's own parent - never to a guessed neighbour.
+     */
+    /force\.(parentId|id)/.test(code.slice(componentsPath, componentsAdds)) &&
       /forces\[0\]\.parentId/.test(
         code.slice(resultantPath, resultantAdds),
       ),

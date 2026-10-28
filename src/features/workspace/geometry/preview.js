@@ -1,3 +1,4 @@
+import { dimensionEndpointAt, endpointPosition, endpointDimensionType } from "../annotate/dimension-endpoints.js";
 /*
  * The live preview while a tool is in use.
  */
@@ -25,7 +26,8 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
-import { ROUTE_PHASE, routeInstruction, routeSegmentPreview } from "../interaction/pipe-duct-tool.js";
+import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
+import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
 
 /*
  * The colour every construction preview is drawn in.
@@ -124,6 +126,14 @@ export function updatePreview(
         drawingState.interaction;
 
     if (interaction.phase === "point-force-value") {
+        return;
+    }
+
+    if (drawingState.activeTool === "reducer-expander" && interaction.phase === "inline-place") {
+        interaction.preview = inlinePreviewAt("reducer-expander", resolution.rawPointerPoint || resolution.effectiveConstructionPoint);
+        setToolMessage(interaction.preview?.invalid
+            ? "Not enough room or incompatible pipe ends"
+            : "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it");
         return;
     }
 
@@ -344,6 +354,19 @@ export function updatePreview(
      * setInteraction, because a per-frame pointer position is not a
      * change of state and must not become a history entry.
      */
+    if (drawingState.activeTool === "dimension" && interaction.dimensionStage === "selecting" && interaction.dimensionFirstRef) {
+        const raw = resolution.rawPointerPoint || resolution.effectiveConstructionPoint;
+        if (raw) {
+            const ref = dimensionEndpointAt(raw, drawingState);
+            interaction.dimensionRefs = [interaction.dimensionFirstRef, ref];
+            interaction.dimensionChoice = endpointDimensionType(interaction.dimensionFirstRef, ref, drawingState);
+            interaction.dimensionPlacement = endpointPosition(ref, drawingState);
+            interaction.snappedPoint = ref.kind === "canvas-point" ? null : endpointPosition(ref, drawingState);
+        }
+        reportConstructionStatus(resolution, "Pick the second dimension endpoint");
+        return;
+    }
+
     if (
         isDimensionTool(
             drawingState.activeTool
@@ -438,7 +461,9 @@ export function updatePreview(
     ) {
         reportConstructionStatus(
             resolution,
-            "Specify dimension reference"
+            drawingState.activeTool === "dimension"
+                ? "Pick the first dimension endpoint — nearby geometry snaps automatically"
+                : "Specify dimension reference"
         );
 
         return;
@@ -464,6 +489,8 @@ export function updatePreview(
             "truss-construct" ||
         interaction.phase ===
             ROUTE_PHASE ||
+        interaction.phase ===
+            ELBOW_PHASE ||
         isLoadBuildPhase(interaction) ||
         isLoadSpanPhase(interaction);
 
@@ -1041,6 +1068,44 @@ export function updatePreview(
 
                 setToolMessage(
                     routeInstruction(
+                        drawingState.interaction
+                    )
+                );
+            } else if (
+                drawingState.interaction.phase ===
+                    ELBOW_PHASE
+            ) {
+                /*
+                 * THE ELBOW BEING DRAGGED IS PREVIEWED AS THE FITTING IT WILL
+                 * BECOME - both curved boundaries, from the same geometry the
+                 * commit stores.
+                 *
+                 * Its two ends are published to the snap system, never its
+                 * walls, so the moving end snaps to a pipe's own endpoint (and
+                 * so connects) rather than to a drawn boundary line.
+                 */
+                const draft = elbowGesturePreview(
+                    drawingState.interaction,
+                    point
+                );
+
+                interaction.preview = draft
+                    ? createPreview("elbow", draft)
+                    : null;
+
+                interaction.snapGeometry = draft
+                    ? [
+                          {
+                              start: draft.ends?.a,
+                              end: draft.ends?.b
+                          }
+                      ].filter((span) => span.start && span.end)
+                    : [];
+
+                interaction.snapToolId = "elbow";
+
+                setToolMessage(
+                    elbowInstruction(
                         drawingState.interaction
                     )
                 );

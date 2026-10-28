@@ -88,7 +88,8 @@ const NAMES = {
   polygon: "Polygon",
   "freeform-polygon": "Freeform Polygon",
   "coordinate-system-2d": "2D Coordinate System",
-  force: "Point Force",
+  /* Renamed from Point Force with the toolbar entry (Loads > Point Load). */
+  force: "Point Load",
   "pin-support": "Pin Support",
   "roller-support": "Roller Support",
   "fixed-support": "Fixed Support",

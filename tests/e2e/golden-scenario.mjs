@@ -14,6 +14,7 @@
  *   node tests/e2e/golden-scenario.mjs <baseUrl> <out.json>
  */
 import fs from "fs";
+import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 
 const baseUrl = process.argv[2] || "http://localhost:8123/";
@@ -27,9 +28,10 @@ const TOOLS = [
     ["GEOMETRY", "arc", "3-Point Arc"], ["GEOMETRY", "arc", "Centrepoint Arc"],
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
-    ["ANNOTATE", "dimension", null, "line", ["c:0.475,0.6", "Enter", "c:0.475,0.5", "Enter"]],
-    ["ANNOTATE", "note"], ["ANNOTATE", "label", null, "line"],
-    ["ANNOTATE", "leader"], ["ANNOTATE", "callout"],
+    ["ANNOTATE", "dimension", null, "line", ["c:0.25,0.6", "c:0.7,0.6", "c:0.475,0.45"]],
+    ["ANNOTATE", "note", null, null, ["c:0.3,0.55"]],
+    ["ANNOTATE", "label", null, "line", ["c:0.475,0.6"]],
+    ["ANNOTATE", "callout", null, "line", ["c:0.475,0.6", "c:0.6,0.35"]],
     ["ANNOTATE", "symbol"], ["ANNOTATE", "table"],
     ["STATICS", "body", "particle"], ["STATICS", "body", "rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
     ["STATICS", "body", "beam", null, ["d:0.25,0.6,0.7,0.6"]], ["STATICS", "body", "truss"],
@@ -75,7 +77,15 @@ const TOOLS = [
     ["DYNAMICS", "dynamics-reference-point"],
     ["DYNAMICS", "dynamics-reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-reference-arc", null, null, ["d:0.3,0.55,0.6,0.55"]],
-    ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
+    /*
+     * FLUIDS. Pipe / Duct is a child of the Flow Paths INLINE GROUP, which the
+     * Fluids sidebar opens in place exactly as Dynamics opens its families. The
+     * family id is passed as `sub`'s parent, so the harness opens the group
+     * before it looks for the tool - without it the button exists in the DOM but
+     * sits inside a `hidden` subsection, and Playwright refused to click it.
+     */
+    ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
+    ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];
@@ -161,16 +171,25 @@ async function main() {
                 const shown = el => el && getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
                 /* The Annotate pickers: answer them deterministically. */
                 const symbol = [...document.querySelectorAll(".datum-symbol-picker")].find(shown);
-                if (symbol) { symbol.querySelector("[data-symbol-id]")?.click(); return { kind: "picked" }; }
+                if (symbol) {
+                    const psi = symbol.querySelector('[data-symbol-id="greek-upper-psi"]');
+                    if (!psi) throw new Error("Symbol picker is missing uppercase Psi");
+                    psi.click(); return { kind: "picked" };
+                }
                 const table = [...document.querySelectorAll(".datum-table-picker")].find(shown);
                 if (table) {
                     const cell = table.querySelector('[data-row="1"][data-col="1"]') || table.querySelector("[data-row]");
                     cell?.click();
                     return { kind: "picked" };
                 }
+                const editor = [...document.querySelectorAll(".drawing-canvas-text-editor, .drawing-inline-entry")].find(shown);
+                if (editor) {
+                    const input = editor.querySelector("textarea, input");
+                    return {kind:"text", empty:!input?.value};
+                }
                 const sizing = [...document.querySelectorAll(".drawing-creation-dimension")].find(shown);
                 if (sizing) {
-                    const input = sizing.querySelector("[data-creation-input]");
+                    const input = sizing.querySelector("[data-creation-input], input[type=text]");
                     return { kind: "sizing", label: (input?.getAttribute("aria-label") || "").toLowerCase(), empty: !input?.value };
                 }
                 const dialog = [...document.querySelectorAll("dialog[open], .engg-dialog-backdrop, [role=dialog]")].find(shown);
@@ -179,9 +198,10 @@ async function main() {
             if (!popup) return;
             debug("popup", JSON.stringify(popup));
             if (popup.kind === "picked") { await sleep(150); continue; }
-            if (popup.kind === "sizing" && popup.empty) {
+            if (popup.kind === "text" && popup.empty) await page.keyboard.type("Example note");
+            if (popup.kind === "sizing" && (popup.empty || /magnitude|content/.test(popup.label))) {
                 const key = Object.keys(VALUES).find(k => popup.label.includes(k));
-                await page.keyboard.type(VALUES[key] || "50");
+                await page.locator(".drawing-creation-dimension [data-creation-input], .drawing-creation-dimension input[type=text]").first().fill(VALUES[key] || "50");
             }
             await page.keyboard.press("Enter");
             await sleep(150);
@@ -351,10 +371,36 @@ async function main() {
             await acceptPopups();
             steps.push(await page.evaluate(() => window.enggDrawing.state.objects.length));
         }
+        if (category === "ANNOTATE") {
+            assert.equal(await page.evaluate(() => window.enggDrawing.state.activeTool), "select",
+                `${key} should return to Select after completing the tool`);
+        }
         await page.keyboard.press("Enter"); await sleep(120); await acceptPopups();
         await escape();
         const snap = await snapshot();
         const created = snap.objects.map(o => o.id).filter(id => !before.includes(id));
+        if (category === "ANNOTATE") {
+            const added = snap.objects.filter(object => created.includes(object.id));
+            assert.equal(added.length, 1, `${key} should create exactly one annotation`);
+            const object = added[0];
+            if (toolId === "dimension") {
+                assert.equal(object.type, "dimension");
+                assert.equal(object.content, VALUES.magnitude);
+                assert.equal(object.sourceRefs.length, 2);
+                assert.notEqual(object.dimensionType, "angular");
+            } else {
+                assert.equal(object.annotateKind, toolId);
+                if (toolId === "note") assert.equal(object.text, "Example note");
+                if (toolId === "symbol") assert.equal(object.geometry.symbolId, "greek-upper-psi");
+                if (toolId === "callout") {
+                    assert.equal(object.text, "1");
+                    assert.equal(object.style.arrowhead, "closed");
+                    assert.ok(before.includes(object.targetFeatureId), "Callout must reference the seeded geometry");
+                    assert.equal(object.anchorRef.featureId, object.targetFeatureId);
+                    assert.deepEqual(object.geometry.position, object.geometry.end);
+                }
+            }
+        }
         const panels = {};
         debug("panels", created.length);
         for (const id of created) panels[id] = await panelFor(id);

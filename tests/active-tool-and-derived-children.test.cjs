@@ -199,7 +199,8 @@ check(
 
 check(
   "the components record their one force",
-  /registerDependency\(\s*resolved/.test(analysis),
+  /* Registered on the object the model STORED, or on the one built for it. */
+  /registerDependency\(\s*(resolved|stored)/.test(analysis),
 );
 
 check(

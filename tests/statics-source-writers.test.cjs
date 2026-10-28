@@ -433,7 +433,11 @@ const components = write(
 );
 
 check("force components write both component arrows", has(components, "(0,0) -- (30,0)") && has(components, "(0,0) -- (0,40)"), components);
-check("and the closing decomposition line", has(components, "(30,0) -- (0,40)") && has(components, "dashed"), components);
+check(
+  "and the dashed lines that close the force parallelogram",
+  has(components, "(30,0) -- (30,40)") && has(components, "(0,40) -- (30,40)") && has(components, "dashed"),
+  components,
+);
 check("with their labels and values", has(components, "F_x") && has(components, "F_y"), components);
 
 const sfd = write(

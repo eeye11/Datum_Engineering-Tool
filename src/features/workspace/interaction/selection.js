@@ -30,7 +30,7 @@ import { renderEngineeringTools, setToolMessage } from "../../../components/layo
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { STATICS_CHILD_TOOLS } from "../statics/statics-tools.js";
 import { clearGlobalToolHighlight } from "../../../components/layout/workspace/workspace-controls.js";
-import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
+import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruction } from "./pipe-duct-tool.js";
 
 /*
  * ========================================================
@@ -1184,6 +1184,19 @@ export function finishActiveConstruction() {
         interaction.fluidsTool === "pipe-duct"
     ) {
         finishRouteConstruction();
+        return true;
+    }
+
+    /*
+     * ENTER FINISHES AN ELBOW TOOL SESSION the same way: the fitting was
+     * committed on release, so there is nothing half-built - finishing only
+     * clears the session and leaves the tool armed for the next one.
+     */
+    if (
+        phase === ELBOW_PHASE ||
+        interaction.fluidsTool === "elbow"
+    ) {
+        finishElbowConstruction();
         return true;
     }
 

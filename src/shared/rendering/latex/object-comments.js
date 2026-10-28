@@ -160,7 +160,9 @@ const TYPE_LABELS = Object.freeze({
 /* The readable name a header states for an object of `type`. */
 export function objectTypeLabel(type) {
   const key = clean(type);
-  const fallback = key.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const fallback = key
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 
   return TYPE_LABELS[key] || fallback || "Object";
 }
@@ -263,11 +265,15 @@ export function objectCommentHeader(object, options = {}) {
   }
 
   if (options.part) {
-    lines.push(`% ${COMMENT_PREFIX} ${COMMENT_FIELDS.part}: ${clean(options.part)}`);
+    lines.push(
+      `% ${COMMENT_PREFIX} ${COMMENT_FIELDS.part}: ${clean(options.part)}`,
+    );
   }
 
   if (options.parent) {
-    lines.push(`% ${COMMENT_PREFIX} ${COMMENT_FIELDS.parent}: ${clean(options.parent)}`);
+    lines.push(
+      `% ${COMMENT_PREFIX} ${COMMENT_FIELDS.parent}: ${clean(options.parent)}`,
+    );
   }
 
   if (Number.isFinite(Number(options.version)) && Number(options.version) > 0) {
@@ -302,7 +308,10 @@ export function applyObjectComments(object, commands, options = {}) {
   }
 
   const header = objectCommentHeader(object, options);
-  const footer = options.end && object?.id ? [objectCommentFooter(options.id || object.id)] : [];
+  const footer =
+    options.end && object?.id
+      ? [objectCommentFooter(options.id || object.id)]
+      : [];
 
   return [...header, body, ...footer].join("\n");
 }

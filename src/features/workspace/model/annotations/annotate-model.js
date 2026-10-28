@@ -1,3 +1,5 @@
+import { MATH_SYMBOL_GROUPS } from "../../../../shared/symbols/math-symbol-catalog.js";
+import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../../../shared/typography/note-text-style.js";
 /*
  * ========================================================
  * THE ANNOTATE FEATURES
@@ -113,9 +115,8 @@ export const ANNOTATE_KINDS = {
  * The symbol library the Symbol tool offers.
  *
  * Grouped the way an engineer looks for them rather than alphabetically,
- * and deliberately SHORT: each entry is a symbol drawing this application
- * actually renders. A longer list of names with nothing behind them would
- * be a menu that lies, which is worse than a short honest one.
+ * Every entry has a glyph; Greek and mathematical entries also share their
+ * TeX representation with the source and SVG exporters.
  */
 export const SYMBOL_LIBRARY = [
   {
@@ -186,31 +187,7 @@ export const SYMBOL_LIBRARY = [
     ]
   },
 
-  /*
-   * GREEK AND MATHEMATICAL NOTATION.
-   *
-   * The letters and operators an engineering statement needs - an angle is
-   * `θ`, a stress is `σ`, a change is `Δ`, a sum is `Σ`. Offered as a group so
-   * they are browsable, and searchable by their LATIN name, which is how a
-   * student who cannot type the glyph finds it.
-   */
-  {
-    id: "greek-math",
-    label: "Greek & Mathematical",
-    symbols: [
-      { id: "theta", label: "Theta", text: "θ" },
-      { id: "alpha", label: "Alpha", text: "α" },
-      { id: "beta", label: "Beta", text: "β" },
-      { id: "gamma", label: "Gamma", text: "γ" },
-      { id: "delta-sym", label: "Delta symbol", text: "Δ" },
-      { id: "sigma", label: "Sigma", text: "σ" },
-      { id: "mu", label: "Mu", text: "μ" },
-      { id: "omega", label: "Omega", text: "ω" },
-      { id: "pi", label: "Pi", text: "π" },
-      { id: "sum", label: "Sum", text: "Σ" },
-      { id: "integral", label: "Integral", text: "∫" }
-    ]
-  }
+  ...MATH_SYMBOL_GROUPS
 ];
 
 /* Every symbol, flat, keyed by id, for lookup from a stored feature. */
@@ -301,6 +278,7 @@ export function createAnnotate({
   end = null,
   anchor = null,
   targetFeatureId = null,
+  anchorRef = null,
   symbolId = null,
   toleranceMode = "symmetric",
   toleranceValues = {},
@@ -354,6 +332,7 @@ export function createAnnotate({
       x: Number(end.x) || 0,
       y: Number(end.y) || 0
     };
+    if (kind === "callout") geometry.position = {...geometry.end};
     /*
      * A LEADER OR CALLOUT MAY CARRY BENDS - the ordered intermediate points
      * between attachment and endpoint. They are stored on the geometry rather
@@ -444,14 +423,15 @@ export function createAnnotate({
      * so the same move/select code serves every kind.
      */
     targetFeatureId: targetFeatureId || null,
+    ...(anchorRef ? {anchorRef:structuredClone(anchorRef)} : {}),
 
     geometry,
 
     style: {
       fontSize: 12,
       stroke: "#000000",
-      align: "left",
-      arrowhead: kind === "arrow" || kind === "leader" ? "closed" : "none",
+      align: kind === "callout" ? "center" : "left",
+      arrowhead: ["arrow", "leader", "callout"].includes(kind) ? "closed" : "none",
       leaderStyle: "straight",
       ...style
     },
@@ -1029,12 +1009,50 @@ export function translateAnnotation(annotation, dx, dy) {
  * The points that bound an annotation, for Fit, the selection box and hit
  * testing. Computed from the stored geometry, so it is right at any zoom.
  */
-export function boundsOf(annotation) {  if (!annotation || !annotation.geometry) {
+export function textBoundsOf(annotation, state = {}) {
+  if (!annotation || annotation.visible === false) return null;
+  if (annotation.annotateKind === "callout") return calloutBox(annotation, state);
+  const at = annotation.geometry?.position || annotation.geometry?.end || annotation.geometry?.start;
+  const text = displayTextOf(annotation);
+  if (!at || !text) return null;
+  const zoom = Number(state.camera?.zoom) || 1;
+  const scale = 2.4 * zoom;
+  const typography = noteTextStyle(annotation.style);
+  const baseFont = Number(annotation.style?.fontSize) || 12;
+  const font = noteFontPixels(annotation.style, zoom);
+  const lines = String(text).split("\n");
+  const isNote = annotation.annotateKind === "note";
+  const width = noteTextWidth(text, annotation.style, font) / scale;
+  const lineHeight = isNote ? font * typography.lineSpacing : baseFont * 1.2;
+  const height = (font * 1.2 + (lines.length - 1) * lineHeight) / scale;
+  const align = annotation.style?.align;
+  const indent = isNote ? typography.indent : 0;
+  const left = at.x + indent - (align === "center" ? width / 2 : align === "right" ? width : 0);
+  const padding = 3 / scale;
+  return { minX: left - padding, maxX: left + width + padding,
+    minY: at.y - height / 2 - padding, maxY: at.y + height / 2 + padding };
+}
+
+export function calloutBox(annotation, state = {}) {
+  const at = annotation.geometry?.end || annotation.geometry?.position;
+  if (!at) return null;
+  const zoom = Number(state.camera?.zoom) || 1;
+  const scale = 2.4 * zoom;
+  const font = noteFontPixels(annotation.style, zoom);
+  const text = displayTextOf(annotation);
+  const width = Math.max(20, noteTextWidth(text, annotation.style, font) + 10) / scale;
+  const height = Math.max(20, String(text).split("\n").length * font * 1.2 + 6) / scale;
+  return {minX:at.x-width/2,maxX:at.x+width/2,minY:at.y-height/2,maxY:at.y+height/2};
+}
+
+export function boundsOf(annotation, state = {}) {  if (!annotation || !annotation.geometry) {
     return [];
   }
 
   const geometry = annotation.geometry;
   const points = [];
+  const textBox = textBoundsOf(annotation, state);
+  if (textBox) points.push({x:textBox.minX,y:textBox.minY}, {x:textBox.maxX,y:textBox.maxY});
 
   if (geometry.position) {
     points.push(geometry.position);
@@ -1292,6 +1310,8 @@ const enggAnnotate = {
   maxBendsFor,
   translateAnnotation,
   boundsOf,
+  textBoundsOf,
+  calloutBox,
   tableWidthOf,
   tableHeightOf,
   tableCellAt,

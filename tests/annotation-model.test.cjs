@@ -178,9 +178,13 @@ const suggested = model.suggestPlacement(
   }),
   state(force())
 );
+/*
+ * A FORCE'S VALUE SITS BEHIND ITS TAIL, clear of the arrowhead: this force
+ * runs from (0,0) to (0,-30), so its label lies on the far side of the start.
+ */
 check(
-  "is beyond the arrow, not on it",
-  suggested.y < -30,
+  "is behind the arrow's tail, not on it",
+  suggested.y > 0,
   true
 );
 

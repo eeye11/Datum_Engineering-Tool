@@ -263,12 +263,44 @@ function definingPoints(
          * NOT defining points of their own - moving the run carries both walls
          * because both walls come from these two ends.
          */
-        type === "pipe-duct"
+        type === "pipe-duct" ||
+
+        /* A SECTION TRACE IS A SPAN TOO: two points, and a move carries both. */
+        type === "section-plane"
     ) {
         return valid([
             g.start,
             g.end
         ]);
+    }
+
+    /*
+     * A VESSEL AND A GRAPH FRAME ARE BOXES: their anchor and their far corner,
+     * so a move carries the whole box. A Flow Profile is the same box as a
+     * Pressure Profile - one shared frame model - so it is answered here too.
+     */
+    if (type === "reservoir-tank" || type === "pressure-profile" || type === "flow-profile") {
+        const width = Number(g.width) || 0;
+        const height = Number(g.height) || 0;
+
+        return valid([
+            g.position,
+            g.position ? { x: g.position.x + width, y: g.position.y + height } : null
+        ]);
+    }
+
+    /*
+     * A SYMBOL IS MOVED BY ITS OWN MODEL, not by translating point lists: an
+     * inline symbol follows its pipe and a taper is derived from its two pipes.
+     * Its position is the one point a transform may see.
+     */
+    if (type === "pump" || type === "valve" || type === "flow-meter" || type === "reducer-expander") {
+        return valid([g.position]);
+    }
+
+    /* A FLUID LEVEL IS ITS OWN DERIVED LINE, from its vessel and its height. */
+    if (type === "fluid-level") {
+        return valid([g.start, g.end]);
     }
 
     /*
@@ -519,6 +551,14 @@ function rotateObjectAbout(
             dx * sin +
             dy * cos;
     };
+
+    if (type === "reducer-expander") {
+        if (object.locked || object.engineering?.startPipeId || object.engineering?.endPipeId) return;
+        turn(g.position);
+        const direction = g.direction;
+        g.direction = { x: direction.x*cos-direction.y*sin, y: direction.x*sin+direction.y*cos };
+        return;
+    }
 
     /*
      * A shape stored as a centre, a size and an angle
@@ -823,6 +863,54 @@ function translateObject(
             deltaX,
             deltaY
         );
+
+        return;
+    }
+
+    /*
+     * THE SCHEMATIC OBJECTS THAT TRANSLATE WHOLE.
+     *
+     * A vessel, a graph frame, a section trace and a free arrow move by their
+     * stored geometry, exactly as a rectangle or a line does. The objects that
+     * are constrained by a host - a reducer, an inline symbol, a fluid level,
+     * a direction arrow - are deliberately NOT here: their own drag branches
+     * move them along what they belong to, and a generic translation would
+     * carry derived geometry off it.
+     */
+    if (
+        object.type === "reservoir-tank" ||
+        object.type === "pressure-profile" ||
+        object.type === "flow-profile"
+    ) {
+        if (g.position) {
+            g.position.x += deltaX;
+            g.position.y += deltaY;
+        }
+
+        return;
+    }
+
+    if (object.type === "section-plane" || object.type === "flow-arrow") {
+        [g.start, g.end].forEach((at) => {
+            if (at) {
+                at.x += deltaX;
+                at.y += deltaY;
+            }
+        });
+
+        return;
+    }
+
+    if (
+        object.type === "pump" ||
+        object.type === "valve" ||
+        object.type === "flow-meter" ||
+        object.type === "reducer-expander"
+    ) {
+        if (g.position) {
+            g.position.x += deltaX;
+            g.position.y += deltaY;
+        }
 
         return;
     }

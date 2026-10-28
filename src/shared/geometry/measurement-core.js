@@ -273,6 +273,15 @@ function resolveAnchor(
    * can enumerate every fraction, and it only applies to features that
    * actually have a span.
    */
+  const edgePoint = /^edgePoint@(\d+)@([\d.e+-]+)$/.exec(anchorName);
+  if (edgePoint) {
+    const start = resolveAnchor(object, `segment${edgePoint[1]}Start`);
+    const end = resolveAnchor(object, `segment${edgePoint[1]}End`);
+    const fraction = Number(edgePoint[2]);
+    return start && end && Number.isFinite(fraction)
+      ? lerpPoint(start, end, Math.max(0, Math.min(1, fraction))) : null;
+  }
+
   const onEntity = parsePointOnEntity(
     anchorName
   );

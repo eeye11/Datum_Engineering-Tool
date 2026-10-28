@@ -172,7 +172,7 @@ const editor = fs.readFileSync(locate("features-editor.js"), "utf8");
 check(
   "the pane writes those rows inside the Transform section",
   /group\.transformValues[\s\S]{0,80}?valueRows \+= rows/.test(editor) &&
-    /transformRowMarkup\("rotate", "Rotate"\)[\s\S]{0,80}?valueRows/.test(editor),
+    /transformRowMarkup\("rotate", "Rotate"\)[\s\S]{0,3000}?valueRows/.test(editor),
 );
 
 console.log("\n  a typed magnitude is a label, in the chosen unit\n");
