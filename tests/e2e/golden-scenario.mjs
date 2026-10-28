@@ -212,6 +212,19 @@ async function main() {
             await sleep(150);
             return;
         }
+        /*
+         * A tool WITHOUT a sub can still live inside a collapsed statics
+         * section (e.g. point-force inside Loads): expand its parent section
+         * before clicking, otherwise the button exists but is never visible.
+         */
+        for (const group of ["body", "load", "support", "connection"]) {
+            const parent = page.locator(`#statics-${group}-tools`);
+            if (await parent.locator(`.drawing-tool[data-tool-id="${toolId}"]`).count()
+                && await parent.evaluate(el => el.hidden)) {
+                await page.click(`.drawing-tool[data-tool-id="${group}"]`);
+                await sleep(120);
+            }
+        }
         await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
         await sleep(120);
         if (sub) {
