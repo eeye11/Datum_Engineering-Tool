@@ -1092,6 +1092,27 @@ console.log("\n  a snap is SHOWN while the cursor is over one\n");
 
   check("and Ctrl+Z brings it back", strokes6() === 1, `found ${strokes6()}`);
 
+  /* Select drags an UNSELECTED line's end by itself, without moving the line. */
+  pointer6("pointerdown", 850, 300);
+  pointer6("pointerup", 850, 300);
+
+  const line7 = dialog6.querySelector(".sketch-editor-stroke");
+  const end7 = { x: Number(line7.getAttribute("x2")), y: Number(line7.getAttribute("y2")) };
+  const start7 = { x: Number(line7.getAttribute("x1")), y: Number(line7.getAttribute("y1")) };
+
+  pointer6("pointerdown", end7.x, end7.y);
+  pointer6("pointermove", end7.x + 30, end7.y - 20);
+  pointer6("pointerup", end7.x + 30, end7.y - 20);
+
+  const line8 = dialog6.querySelector(".sketch-editor-stroke");
+
+  check(
+    "Select drags an unselected line's END on its own",
+    Math.abs(Number(line8.getAttribute("x1")) - start7.x) < 1 &&
+      Math.abs(Number(line8.getAttribute("x2")) - (end7.x + 30)) < 1,
+    line8.outerHTML,
+  );
+
   editor.close();
 }
 

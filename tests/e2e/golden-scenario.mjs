@@ -196,16 +196,43 @@ async function main() {
          * ordinary tool buttons; open it only if it is closed, then pick the child.
          */
         const section = page.locator(`#statics-${toolId}-tools`);
-        if (sub && await section.count() && await section.locator(`[data-tool-id="${sub}"]`).count()) {
+        /*
+         * AN INLINE SECTION'S CHILD, found by what it is: a child tool
+         * (`data-tool-id`), a diagram mode (Sketch / Plot) or a coordinate
+         * system kind (2D / 3D). Statics opens these beneath their button
+         * rather than in a flyout.
+         */
+        const inlineChild = sub
+            ? section.locator(
+                `[data-tool-id="${sub}"], [data-analysis-diagram-mode="${String(sub).toLowerCase()}"], ` +
+                `[data-coordinate-mode="${String(sub).toLowerCase().startsWith("2d") ? "2d" : String(sub).toLowerCase().startsWith("3d") ? "3d" : "-"}"]`
+            )
+            : null;
+        if (sub && await section.count() && await inlineChild.count()) {
             if (await section.evaluate(el => el.hidden)) {
                 await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
                 await sleep(120);
             }
-            await section.locator(`.drawing-tool[data-tool-id="${sub}"]`).first().click();
+            await inlineChild.first().click();
             await sleep(150);
             return;
         }
-        await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
+        /*
+         * A TOOL THAT LIVES INSIDE A CLOSED SECTION - Point Force sits under
+         * Loads - is reached by opening that section first. The FIRST button
+         * with the id is the one the toolbar shows at the top level, if any.
+         */
+        const button = page.locator(`.drawing-tool[data-tool-id="${toolId}"]`).first();
+        if (!(await button.isVisible())) {
+            const parentId = await button.evaluate(el =>
+                el.closest(".drawing-inline-tools")?.id?.replace(/^statics-/, "").replace(/-tools$/, "") || null
+            ).catch(() => null);
+            if (parentId) {
+                await page.click(`.drawing-tool[data-tool-id="${parentId}"]`);
+                await sleep(120);
+            }
+        }
+        await button.click();
         await sleep(120);
         if (sub) {
             /*

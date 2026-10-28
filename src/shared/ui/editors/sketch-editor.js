@@ -1454,7 +1454,7 @@ function open(options = {}) {
       return;
     }
 
-    if (handleAt(screen)) {
+    if (handleAt(screen) || (tool === "select" && pointOwnerAt(screen))) {
       svg.style.cursor = "grab";
       return;
     }
@@ -1713,6 +1713,36 @@ function open(options = {}) {
   };
 
   /*
+   * The element whose defining point (an end, or a curve's bend) is under this
+   * screen point, and that point as a handle - so an unselected element can be
+   * reshaped in one press. A line's middle is not offered here: grabbing the
+   * middle of an unselected line moves it, and its bend dot appears once it
+   * is selected.
+   */
+  const pointOwnerAt = (screen) => {
+    let best = null;
+    let bestDistance = Infinity;
+
+    elements.forEach((element) => {
+      selectedElementPoints(element).forEach((entry) => {
+        if (element.kind === "line" && entry.kind === "bend") {
+          return;
+        }
+
+        const at = scale.toScreen(entry.point);
+        const distance = Math.hypot(screen.x - at.x, screen.y - at.y);
+
+        if (distance <= 9 && distance < bestDistance) {
+          bestDistance = distance;
+          best = { element, handle: entry };
+        }
+      });
+    });
+
+    return best;
+  };
+
+  /*
    * A HANDLE WINS THE PRESS; then an ELEMENT IS MOVED; then EMPTY SPACE DRAWS.
    *
    * Deciding at the press is what makes the states predictable - a student
@@ -1741,7 +1771,26 @@ function open(options = {}) {
 
     const screen = screenFromEvent(event);
 
-    const handle = handleAt(screen);
+    /*
+     * ANY ELEMENT'S POINT CAN BE GRABBED, not only the selected one's. A
+     * student who sees the end of a line and drags it means "move that end" -
+     * requiring a selecting click first made the press move the whole line.
+     * The selected element's handles still win when two overlap.
+     *
+     * IN SELECT ONLY. With Line or Curve armed, a press on an existing end is
+     * how a new stroke is started FROM it (a shear diagram's jump), so the
+     * drawing tools keep that and reshape only the selected element.
+     */
+    let handle = handleAt(screen);
+
+    if (!handle && tool === "select") {
+      const owner = pointOwnerAt(screen);
+
+      if (owner) {
+        selectedId = owner.element.id;
+        handle = owner.handle;
+      }
+    }
 
     if (handle) {
       const element = selected();

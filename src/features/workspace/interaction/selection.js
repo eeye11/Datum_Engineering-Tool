@@ -561,13 +561,26 @@ export function updateSelectionDrag(
              * single offset for the whole load, which would drag every
              * label with the one the student grabbed.
              */
+            /*
+             * A LOAD PROFILE POINT'S LABEL IS STORED AS A PLACE, NOT AN OFFSET
+             * (`profilePointPlacement`): its default follows the load's
+             * direction, so the student's spot is kept absolutely. Writing the
+             * offset from the anchor there made the label leap to that small
+             * offset read as a position the moment the drag began, and only
+             * then follow the cursor.
+             */
+            const absolute =
+                Boolean(derivation.annotation?.anchorRef?.pointId);
+
             enggAnnotationModel.moveDerivedAnnotation(
                 source,
                 derivation.annotation,
-                {
-                    x: derivation.offsetX,
-                    y: derivation.offsetY
-                }
+                absolute
+                    ? placed
+                    : {
+                          x: derivation.offsetX,
+                          y: derivation.offsetY
+                      }
             );
 
             requestRender();

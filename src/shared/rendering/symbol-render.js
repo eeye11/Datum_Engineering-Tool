@@ -194,14 +194,21 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         const rollers = type === "roller-support";
 
         const apex = at(-size);
-        const base = at(size);
+        const baseLeft = at(size, size);
+        const baseRight = at(size, -size);
 
         const triangle =
             createSvgElement("polygon", {
                 points: [
                     `${apex.x},${apex.y}`,
-                    `${base.x + size},${base.y}`,
-                    `${base.x - size},${base.y}`
+                    /*
+                     * THE BASE CORNERS ARE ACROSS THE SYMBOL, not across the
+                     * screen. Offsetting them along screen x kept the base
+                     * horizontal while the rest of the symbol turned, so a
+                     * support on a rotated body was drawn as a skewed fin.
+                     */
+                    `${baseLeft.x},${baseLeft.y}`,
+                    `${baseRight.x},${baseRight.y}`
                 ].join(" "),
                 fill: "none",
                 stroke,
