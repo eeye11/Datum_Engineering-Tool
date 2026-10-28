@@ -212,6 +212,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         const heldFirst =
             state.interaction
                 .dimensionStage === "first" ||
+            state.interaction.dimensionStage === "selecting" ||
             state.interaction
                 .dimensionStage === "armed"
                 ? state.interaction
@@ -226,7 +227,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                     object.id === heldFirst.featureId
             );
 
-            const heldPoint =
+            const heldPoint = heldFirst.kind === "canvas-point" ? heldFirst.point :
                 enggMeasurement?.resolveAnchor?.(
                     heldObject,
                     heldFirst.anchor

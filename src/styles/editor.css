@@ -21,3 +21,9 @@
 @import url("./editor/analysis-editors.css");
 @import url("./editor/latex-editor.css");
 @import url("./editor/panel-tabs.css");
+
+.dimension-value-editor { position: fixed; left: 50%; top: 25%; transform: translateX(-50%); z-index: 1200; width: min(380px, calc(100vw - 32px)); padding: 18px; display: grid; gap: 12px; background: var(--datum-menu); color: var(--datum-ink); border: 1px solid var(--datum-border-strong); border-radius: var(--radius-md); box-shadow: var(--datum-shadow); }
+.dimension-value-editor label { display: grid; gap: 6px; }
+.dimension-value-editor p { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.dimension-value-editor [role="alert"] { color: var(--datum-error); }
+.dimension-value-editor input[readonly] { opacity: .7; }

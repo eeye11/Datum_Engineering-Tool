@@ -1,3 +1,4 @@
+import annotate from "../../features/workspace/model/annotations/annotate-model.js";
 import geometry from "../geometry/feature-geometry.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
@@ -190,10 +191,11 @@ function flowPathPoints(object) {
     return null;
 }
 
-export function selectionBounds(objects, selectedIds) {
+export function selectionBounds(objects, selectedIds, state = {}) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.type === "annotate") return annotate.boundsOf(object, state);
         const ink = flowPathPoints(object);
         if (ink) return ink;
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);

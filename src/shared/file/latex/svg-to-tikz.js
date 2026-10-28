@@ -1,3 +1,4 @@
+import { SYMBOL_TEX } from "../../symbols/math-symbol-catalog.js";
 /*
  * ============================================================
  * THE DRAWN SHEET, AS LaTeX DRAWING COMMANDS
@@ -96,6 +97,7 @@ function normaliseHex(value) {
  * written so pdflatex compiles them without extra packages.
  */
 const LATEX_SYMBOLS = {
+    ...SYMBOL_TEX,
     "\\": "\\textbackslash{}",
     "{": "\\{",
     "}": "\\}",
@@ -157,7 +159,7 @@ const LATEX_SYMBOLS = {
     "⊻": "$\\veebar$",
     "℄": "\\textsf{CL}",
     "⊕": "$\\oplus$",
-    "Ⓐ": "\\textcircled{A}",
+    "Ⓐ": "\\ooalign{\\hfil A\\hfil\\cr\\hfil$\\bigcirc$\\hfil\\cr}",
     "▭": "$\\square$",
     "□": "$\\square$",
     "⌴": "$\\sqcup$",

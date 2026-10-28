@@ -66,6 +66,7 @@ import { renderPreview } from "./preview-render.js";
         if (!canvas) {
             return;
         }
+        state = { ...state, textEntryObjectId };
 
         /*
          * THE ZOOM THIS FRAME IS DRAWN AT, recorded once so every font scale
@@ -166,7 +167,7 @@ import { renderPreview } from "./preview-render.js";
          * or not the picture on screen already shows it. `textEntryObjectId` is
          * set and cleared by the editor; nothing is written to the model.
          */
-        const textEntryId = state.textEntryObjectId || null;
+        const textEntryId = textEntryObjectId || null;
 
         const live = new Set(liveObjectIds || []);
 

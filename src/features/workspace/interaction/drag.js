@@ -1,3 +1,4 @@
+import { calloutReferenceAt } from "../model/annotations/callout-reference.js";
 /*
  * Dragging a feature or one of its handles.
  */
@@ -93,7 +94,7 @@ export function beginManipulationDrag(
         );
 
     const selectedIds = drawingState.selection.selectedObjectIds;
-    const box = selectionBounds(drawingState.objects, selectedIds);
+    const box = selectionBounds(drawingState.objects, selectedIds, drawingState);
     const hit = handleAtPoint(point);
     const pistonHandle = hit && isPistonCylinder(hit.object) &&
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
@@ -333,36 +334,24 @@ export function beginManipulationDrag(
     }
 
     /*
-     * Dragging the body of a selected object translates the
-     * whole selection.
-     *
-     * This only claims the press when the object is ALREADY
-     * selected. A press on a selected feature is ambiguous: it
-     * is equally a click that a drawing tool may want, since the
-     * feature the user has just drawn stays selected and its
-     * next click is very often at or near it.
-     *
-     * Claiming it unconditionally meant that choosing a tool
-     * and clicking to use it did nothing whenever the thing
-     * under the cursor happened to be selected, and a Statics
-     * tool asking for a body could never receive its own click.
-     *
-     * A drag is distinguished from a click by MOVEMENT, and
-     * movement is judged once the pointer has actually travelled
-     * in updateManipulationDrag. So the drag is armed here, and
-     * only becomes a manipulation if the pointer moves; a press
-     * that stays put is left for the tool.
+     * Select can grab an outline in one gesture. For an already selected
+     * feature its box interior is also a move target, matching multi-selection.
+     * A press without movement stays a selection click, not a committed edit.
      */
-    const object = overlay;
+    // Once selected, the interior of the selection box is a move target too.
+    // Keep ordinary hit testing outline-only so internal geometry stays pickable.
+    const insideSelection = selectedIds.length === 1 && box &&
+        point.x >= box.minX && point.x <= box.maxX &&
+        point.y >= box.minY && point.y <= box.maxY;
+    const object = overlay || (insideSelection
+        ? drawingState.objects.find(item => item.id === selectedIds[0]) : null);
 
     if (
-        object &&
-        drawingState.selection
-            .selectedObjectIds
-            .includes(
-                object.id
-            )
+        object && !object.locked && !isDerivedFeature(object)
     ) {
+        if (!selectedIds.includes(object.id)) {
+            enggDrawingState.selectObject(drawingState, object.id);
+        }
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,
@@ -798,8 +787,11 @@ function applyManipulation(
     drag,
     point
 ) {
-    const object =
-        drag.object;
+    // Committing/synchronising source may replace model instances. Never keep
+    // editing a detached object after a render or an earlier drag.
+    const object = drawingState.objects.find(item => item.id === drag.object.id);
+    if (!object) return;
+    drag.object = object;
 
     if (enggReducer.isReducerType(object.type) && drag.kind !== "rotate") {
         if (!drag.reducerOriginals) {
@@ -1098,6 +1090,10 @@ function applyManipulation(
         const geometry = object.geometry || {};
 
         if (drag.kind === "annotate-attachment") {
+            if (object.annotateKind === "callout") {
+                object.anchorRef = calloutReferenceAt(point, drawingState);
+                object.targetFeatureId = object.anchorRef?.featureId || null;
+            }
             geometry.start = { x: point.x, y: point.y };
             return true;
         }
@@ -1129,7 +1125,12 @@ function applyManipulation(
         }
 
         if (drag.kind === "annotate-endpoint") {
-            geometry.end = { x: point.x, y: point.y };
+            if (object.annotateKind === "callout") {
+                const original = drag.originals?.[object.id]?.geometry?.end;
+                const end = original && drag.start
+                    ? {x:original.x+point.x-drag.start.x,y:original.y+point.y-drag.start.y} : {...point};
+                geometry.position = {...end}; geometry.end = {...end};
+            } else geometry.end = { x: point.x, y: point.y };
             return true;
         }
 
@@ -1238,6 +1239,13 @@ function applyManipulation(
             return true;
         }
 
+        if (object.annotateKind === "callout") {
+            const end = original.geometry.end || original.geometry.position;
+            object.geometry.end = {x:end.x+deltaX,y:end.y+deltaY};
+            object.geometry.position = {...object.geometry.end};
+            return true;
+        }
+
         enggAnnotate.translateAnnotation(
             object,
             deltaX,
@@ -1262,7 +1270,7 @@ function applyManipulation(
             drag.start;
 
         const placement =
-            object.placement;
+            drag.originals?.[object.id]?.placement;
 
         if (
             !start ||

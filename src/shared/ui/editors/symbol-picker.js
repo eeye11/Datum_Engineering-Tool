@@ -75,7 +75,7 @@ function matches(symbol, query) {
     return true;
   }
 
-  const haystack = `${symbol.label} ${symbol.id} ${symbol.group}`.toLowerCase();
+  const haystack = `${symbol.label} ${symbol.id} ${symbol.text} ${symbol.tex || ""} ${symbol.group}`.toLowerCase();
 
   return haystack.includes(query.toLowerCase());
 }

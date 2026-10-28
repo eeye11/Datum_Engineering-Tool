@@ -27,7 +27,11 @@
  * value" and "do they all agree" separate responsibilities.
  */
 
+import { NOTE_FONTS, noteTextStyle } from "../../../shared/typography/note-text-style.js";
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import dimensions from "../../../features/workspace/model/dimensions/dimension-model.js";
+import { referenceSummary } from "../../../features/workspace/model/dimensions/dimension-driving.js";
+import { drawingState } from "../../../features/workspace/editor-state.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
@@ -511,7 +515,63 @@ const ARROW_OPTIONS = [
     { value: "bar", label: "Bar" }
 ];
 
+function noteStyleField(key, kind, label, extra = {}) {
+    return {
+        kind, label, ...extra,
+        applies: object => object.type === "annotate" && object.annotateKind === "note",
+        read: object => noteTextStyle(object.style)[key],
+        write: (object, value) => {
+            if (kind === "number" && !Number.isFinite(Number(value))) return false;
+            if (extra.options && !extra.options.some(option => option.value === value)) return false;
+            object.style = {...object.style, [key]:noteTextStyle({...object.style, [key]:value})[key]};
+            return true;
+        }
+    };
+}
+
 const FIELDS = {
+    calloutReference: {
+        kind:"readonly", label:"Reference",
+        applies:object => object.type === "annotate" && object.annotateKind === "callout",
+        read:object => object.targetFeatureId
+            ? drawingState.objects.find(item=>item.id===object.targetFeatureId)?.name || "Missing reference"
+            : "Free marker (drag the arrow tip to attach)"
+    },
+    noteFont: noteStyleField("fontFamily", "choice", "Font", {options:NOTE_FONTS}),
+    noteSize: noteStyleField("fontSize", "number", "Size (px)", {min:6,max:64,step:1}),
+    noteBold: noteStyleField("bold", "toggle", "Bold"),
+    noteItalic: noteStyleField("italic", "toggle", "Italic"),
+    noteUnderline: noteStyleField("underline", "toggle", "Underline"),
+    noteAlign: noteStyleField("align", "segmented", "Alignment", {options:[
+        {value:"left",label:"Left"},{value:"center",label:"Centre"},{value:"right",label:"Right"}
+    ]}),
+    noteIndent: noteStyleField("indent", "number", "Indent (mm)", {min:0,max:1000,step:1}),
+    noteSpacing: noteStyleField("lineSpacing", "number", "Line spacing", {min:1,max:3,step:0.1}),
+    dimensionContent: {
+        kind: "text", label: "Magnitude",
+        applies: object => object.type === "dimension" && object.dimensionKind === "variable",
+        read: object => object.content || "",
+        write: (object, value) => {
+            if (!String(value).trim()) { object.dimensionError = "Dimension content is required."; return true; }
+            object.content = String(value).trim(); delete object.dimensionError; return true;
+        }
+    },
+    dimensionMeasurement: {
+        kind:"readonly", label:"Measurement",
+        applies: object => object.type === "dimension",
+        read: object => dimensions.measurementFor(object,drawingState)
+            ? `${dimensions.measurementFor(object,drawingState).value.toFixed(2)} ${object.dimensionType === "angular" ? "°" : "mm"}` : "Unresolved — geometry reference missing"
+    },
+    dimensionReferences: {
+        kind:"readonly", label:"Geometry references",
+        applies: object => object.type === "dimension",
+        read: object => referenceSummary(object,drawingState)
+    },
+    dimensionStatus: {
+        kind:"readonly", label:"Status",
+        applies: object => object.type === "dimension" && Boolean(object.dimensionError),
+        read: object => object.dimensionError
+    },
     /* ---------------------------------------------------------- Geometry */
 
     markerStyle: {
@@ -847,7 +907,7 @@ const FIELDS = {
 
     label: {
         kind: "text",
-        applies: (object) => typeof object?.type === "string" && object.type !== "annotate",
+        applies: (object) => typeof object?.type === "string" && !["annotate", "dimension"].includes(object.type),
         read: labelOf,
         write: (object, value) => {
             object.label = String(value ?? "");
@@ -984,13 +1044,15 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
+    { id:"dimension", heading:"Dimension", fields:["dimensionContent","dimensionMeasurement","dimensionReferences","dimensionStatus"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
-    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text"] },
+    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text", "calloutReference"] },
+    { id: "note-format", heading: "Text formatting", fields: ["noteFont", "noteSize", "noteBold", "noteItalic", "noteUnderline", "noteAlign", "noteIndent", "noteSpacing"] },
 
     /*
      * ========================================================

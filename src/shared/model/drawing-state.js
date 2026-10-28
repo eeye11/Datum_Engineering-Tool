@@ -1,7 +1,9 @@
+import { refreshCalloutReferences } from "../../features/workspace/model/annotations/callout-reference.js";
 /* Central source of truth for structured engineering drawings. */
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
 import enggDimensionModel from "../../features/workspace/model/dimensions/dimension-model.js";
+import { maintainDrivingDimensions } from "../../features/workspace/model/dimensions/dimension-driving.js";
 import enggMeasurement from "../geometry/measurement-core.js";
 import enggDrawingSnap from "../snapping/object-snap.js";
 import { deepClone } from "../util/clone.js";
@@ -1684,6 +1686,10 @@ const geometryFactories = {
                     placement:
                         created.placement,
                     label: created.label,
+                    dimensionKind: created.dimensionKind,
+                    mode: created.mode,
+                    content: created.content,
+                    drivingValue: created.drivingValue,
                     orientation:
                         created.orientation,
                     resolved:
@@ -1779,6 +1785,7 @@ const geometryFactories = {
                     annotateKind: created.annotateKind,
                     text: created.text,
                     targetFeatureId: created.targetFeatureId,
+                    ...(created.anchorRef ? {anchorRef:created.anchorRef} : {}),
                     visible: created.visible
                 }
             }
@@ -2322,6 +2329,8 @@ function cloneObjects(objects) {
  * stack with one entry per keystroke.
  */
 function refreshDerivedFeatures(state) {
+    refreshCalloutReferences(state);
+    maintainDrivingDimensions(state);
     refreshAnalysisObjects(state);
 
     return state;
@@ -2393,6 +2402,16 @@ let onDocumentChanged = null;
 let onObjectCommitted = null;
 
 function commitDrawingChange(state, previousObjects) {
+    refreshCalloutReferences(state);
+    const previousIds = new Set((Array.isArray(previousObjects) ? previousObjects : previousObjects?.objects || []).map(object => object.id));
+    const created = state.objects.some(object => !previousIds.has(object.id));
+    const creatingTool = state.activeTool;
+    if ((created || ["move", "rotate", "mirror", "trim", "extend"].includes(creatingTool)) && creatingTool && creatingTool !== "select") {
+        queueMicrotask(() => {
+            if (state.activeTool === creatingTool) setActiveTool(state, "select");
+        });
+    }
+    maintainDrivingDimensions(state, previousObjects);
     /*
      * Keep every Analysis object true of its sources, HERE, before
      * the snapshot is taken.

@@ -457,7 +457,7 @@ export function commitFlowArrowSession(session) {
 	/* The arrow hangs off its host, so deleting the host deletes the arrow. */
 	arrow.parentId = session.hostId;
 
-	enggDrawingState.addObject(drawingState, arrow);
+	const stored = enggDrawingState.addObject(drawingState, arrow);
 
 	enggDrawingState.commitDrawingChange(drawingState, previousObjects);
 
@@ -470,8 +470,10 @@ export function commitFlowArrowSession(session) {
 	renderProperties();
 	renderCurrentDrawing();
 
-	/* The tool stays armed: the next press places another arrow. */
-	return arrow;
+	/* Insertion and source synchronisation can replace the draft. Return the
+	 * live feature, just as free-arrow creation does, so subsequent edits never
+	 * target an object outside the drawing. */
+	return drawingState.objects.find((object) => object.id === stored.id) || stored;
 }
 
 /* ============================================================

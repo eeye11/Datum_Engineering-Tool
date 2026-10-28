@@ -694,7 +694,7 @@ console.log("---------------------------------------------------");
 
   check(
     "the feature being written is drawn live while the prompt is open",
-    /textEntryObjectId/.test(click) && /state\.textEntryObjectId/.test(renderer),
+    /textEntryObjectId/.test(click) && /const textEntryId = textEntryObjectId/.test(renderer),
   );
 
   check(

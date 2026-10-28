@@ -64,15 +64,7 @@ export const toolIcons = {
 	"Fit Whole Page": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><path ${iconStroke} d="M5 12l3-4 3 3 4-4"/>`),
 
 	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
-	/*
-	 * DIMENSION is the one dimension tool.
-	 *
-	 * The retired Smart Dimension and Variable Dimension tools are gone from
-	 * the catalogue: a dimension is a single annotation tool whose linear,
-	 * aligned, angular, radius, diameter and arc-length types are read from
-	 * the geometry the student picks, and whose displayed value is editable
-	 * text rather than a second tool.
-	 */
+	/* Both dimension tools share the measurement and reference engine. */
 	Dimension: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
 	"Annotation": drawingIcon(`<path ${iconStroke} d="M4 5h8M4 9h8M4 13h5"/><path ${iconStroke} d="M12 16l1.5-4L18 7l-4.5 1.5L12 13"/>`),
 	"Note / Text": drawingIcon(`<path ${iconStroke} d="M4 4h12v9H9l-4 3v-3H4zM7 7h6M7 10h4"/>`),
@@ -428,6 +420,7 @@ export const toolIcons = {
  * category such as Bodies or Loads is not a feature and has no
  * entry here, so no tree row is ever created for one.
  */
+
 export const featureIcons = {
 	point: toolIcons.Point,
 	particle: toolIcons.Particle,
@@ -577,7 +570,7 @@ export const annotateToolGroups = [
 	 *     Need writing?                    Text
 	 *     Need to point at geometry?       Leaders
 	 *     Need a free arrow?               Markup
-	 *     Need a symbol or a tolerance?    Symbols & Tolerances
+	 *     Need a note, label or symbol?    Text
 	 *     Need a table?                    Tables
 	 *
 	 * THESE ARE CATEGORIES, NOT SUBMENUS.
@@ -603,14 +596,14 @@ export const annotateToolGroups = [
 		label: "Text",
 		tools: [
 			{ id: "note", label: "Note / Text" },
-			{ id: "label", label: "Label" }
+			{ id: "label", label: "Label" },
+			{ id: "symbol", label: "Symbol" }
 		]
 	},
 	{
-		id: "annotate-leaders",
-		label: "Leaders",
+		id: "annotate-callouts",
+		label: "Callouts",
 		tools: [
-			{ id: "leader", label: "Leader" },
 			{ id: "callout", label: "Callout" }
 		]
 	},
@@ -633,11 +626,6 @@ export const annotateToolGroups = [
 	 * Markup is gone as a heading for the same reason: with Arrow out of V1 it
 	 * would be a category holding no command.
 	 */
-	{
-		id: "annotate-symbols",
-		label: "Symbols",
-		tools: [{ id: "symbol", label: "Symbol" }]
-	},
 	{
 		id: "annotate-tables",
 		label: "Tables",
@@ -820,7 +808,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
-	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
+	ANNOTATE: ["Dimension", "Note / Text", "Label", "Callout", "Symbol", "Table"],
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*

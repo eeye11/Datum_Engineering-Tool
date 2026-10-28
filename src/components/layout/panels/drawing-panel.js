@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ============================================================
  * THE DRAWING INSPECTOR (OBJECTS | FEATURES | SOURCE)
  * ============================================================
@@ -11,6 +11,8 @@
  *  - Source: the editable TikZ/LaTeX source that generates the drawing.
  */
 
+import { renderEngineeringTools } from "../toolbar/toolbar-render.js";
+import { activeCategory } from "../toolbar/tool-menus.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
@@ -43,7 +45,7 @@ import { installObjectsPane } from "./objects-pane.js";
 import { installFeaturesPane, renderFeatures } from "./features-pane.js";
 import { installSourceTab, refreshSourceSelection } from "./source-tab.js";
 import { notifyDrawingChanged } from "./source-canvas-bridge.js";
-import { requestSourceRender } from "../workspace/canvas-render.js";
+import { requestSourceRender, renderCurrentDrawing } from "../workspace/canvas-render.js";
 
 /* ============================================================
  * MODEL -> SOURCE SYNC
@@ -267,6 +269,8 @@ function handleObjectsReplaced() {
  * ============================================================ */
 
 function handleToolChanged() {
+    renderEngineeringTools(activeCategory());
+    renderCurrentDrawing();
     renderFeatures();
 }
 

@@ -599,7 +599,8 @@ function canvasBounds() {
  * coordinates are never rewritten.
  */
 const POINTS_PER_UNIT = 72.27 / 25.4;
-const PICTURE_ORIGIN = -72.27;
+// The backend's seatPictureAtOrigin already removes TeX's page offset.
+const PICTURE_ORIGIN = 0;
 
 function positionPictureLayer(layer, bounds, state, transform) {
     const zoom = Number(state?.camera?.zoom) || 1;
@@ -1490,6 +1491,14 @@ disappeared while I typed" failure.
     const pictureTransform = exportTransformAtRevision.get(pictureRevision);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
+    const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
+    const shownObjects = modelAtRevision.get(pictureRevision);
+    const staleGeometry = Boolean(editorState.textEntryObjectId) || Boolean(picture && shownObjects &&
+        [...shownObjects.keys()].some(id => liveIds.has(id) ||
+            !drawingState.objects.some(object => object.id === id)));
+    // Do not paint the previous position under the live drag preview, even
+    // when the compiler is unavailable and cannot replace its cached picture.
+    pictureLayer.style.visibility = staleGeometry ? "hidden" : "";
 
     if (picture) {
         showPicture(picture);
@@ -1513,7 +1522,9 @@ disappeared while I typed" failure.
         overlay,
         {
             overlayOnly: true,
-            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision, revision)
+            textEntryObjectId: editorState.textEntryObjectId,
+            liveObjectIds: staleGeometry
+                ? new Set(drawingState.objects.map(object => object.id)) : liveIds
         }
     );
 

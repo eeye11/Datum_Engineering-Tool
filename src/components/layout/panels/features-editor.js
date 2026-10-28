@@ -314,17 +314,12 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
-function textMarkup(key, label, state, definition = {}) {
-    /*
-     * A READ-ONLY TEXT ROW STATES A FACT, IT DOES NOT OFFER A CONTROL.
-     *
-     * The Flow Arrow's Attached Pipe is the host it lives on. It is chosen by
-     * pressing on a pipe, so there is nothing to type here - a typed name would
-     * have to be resolved back to some pipe, and the wrong guess would silently
-     * move the arrow. So the field is rendered as the value it is, marked
-     * readOnly, with no edit path that could disagree with the drawing.
-     */
+function textMarkup(key, label, state, definition = {}, multiline = false) {
     const readOnly = definition.readOnly === true;
+
+    if (multiline) {
+        return `<textarea class="dfp-text dfp-note-text${readOnly ? " is-readonly" : ""}" data-feature-field="${escapeHtml(key)}" aria-label="${escapeHtml(label)}" rows="3"${readOnly ? ' readonly aria-readonly="true" tabindex="-1"' : ""}${state.mixed ? ' data-mixed="true" placeholder="Mixed"' : ""}>${escapeHtml(state.mixed ? "" : state.value ?? "")}</textarea>`;
+    }
 
     return (
         `<input type="text" class="dfp-text${readOnly ? " is-readonly" : ""}" data-feature-field="${escapeHtml(key)}" ` +
@@ -345,6 +340,10 @@ function fieldMarkup(key, definition, objects) {
 
     const label = fieldLabel(definition, key);
     const options = { mixed: state.mixed };
+
+    if (definition.kind === "readonly") {
+        return rowMarkup(label, `<span class="dfp-readonly">${escapeHtml(state.mixed ? "Mixed" : state.value ?? "")}</span>`, options);
+    }
 
     if (definition.kind === "toggle") {
         return rowMarkup(label, toggleMarkup(key, label, state), options);
@@ -377,7 +376,18 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "text") {
-        return rowMarkup(label, textMarkup(key, label, state, definition), options);
+        return rowMarkup(
+            label,
+            textMarkup(
+                key,
+                label,
+                state,
+                definition,
+                key === "text" &&
+                    objects.every(object => object.annotateKind === "note")
+            ),
+            options
+        );
     }
 
     return "";
