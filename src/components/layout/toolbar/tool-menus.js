@@ -62,6 +62,7 @@ export function renderToolButton(tool) {
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
+        tool.childToolIds?.includes(drawingState.activeTool) ||
         STATICS_TOOL_MENUS[tool.id]?.some(
             item =>
                 item.id ===

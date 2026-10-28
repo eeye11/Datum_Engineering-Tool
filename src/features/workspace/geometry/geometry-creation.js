@@ -829,18 +829,37 @@ export function beginOrCompleteGeometry(
          * A DYNAMICS TOOL TAKES ITS POINTS THE WAY IT DECLARED
          * ========================================================
          *
-         * A placement tool (a Particle, a Reference Point) commits on the
-         * FIRST click and goes on offering the next one, like a Statics
-         * placement tool. Everything else - a span, a box or a centre-out
-         * angle tool - anchors on this click and is committed by the next
-         * one, through the `dynamics-*` phases handled further down.
+         * A placement tool (a Particle, Reference Point or default-size Rigid
+         * Body) commits on the FIRST click and goes on offering the next one,
+         * like a Statics placement tool. Everything else - a span, a box or a
+         * centre-out angle tool - anchors on this click and is committed by the
+         * next one, through the `dynamics-*` phases handled further down.
          */
         if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
+            const toolId = drawingState.activeTool;
+            const target = toolId === "dynamics-angular-vector" ? objectAtPoint(point) : null;
             createDynamicsFeature(
-                drawingState.activeTool,
+                toolId,
                 point,
-                point
+                point,
+                {},
+                target && (
+                    target.engineering?.dynamicsType === "dynamics-rigid-body" ||
+                    target.type === "rigid-body" ||
+                    target.type === "point" ||
+                    target.type === "coordinate-system-2d"
+                )
+                    ? { attachedTo: target.id }
+                    : null
             );
+
+            if (
+                toolId === "dynamics-particle" ||
+                toolId === "dynamics-rigid-body" ||
+                toolId === "dynamics-angular-vector"
+            ) {
+                activateTool("select");
+            }
 
             renderCurrentDrawing();
             return;
@@ -1514,6 +1533,10 @@ export function beginOrCompleteGeometry(
 
         if (object) {
             enggDrawingState.clearInteraction(drawingState);
+
+            if (gestureTool === "dynamics-polar-vector") {
+                activateTool("select");
+            }
         }
 
         renderCurrentDrawing();

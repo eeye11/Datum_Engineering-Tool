@@ -426,6 +426,10 @@ import enggCanvasPalette from "./canvas-palette.js";
             )
         );
 
+        if (style.fillMode === "solid" && style.fillOpacityEnabled === true) {
+            element.setAttribute("fill-opacity", "0.35");
+        }
+
         element.setAttribute(
             "stroke-width",
             scaledStrokeWidth(lineWidth)

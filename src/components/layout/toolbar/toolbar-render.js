@@ -20,6 +20,9 @@ const expandedToolbarSections = {
     load: false,
     support: false,
     connection: false,
+    "dynamics-bodies": false,
+    "dynamics-kinematics": false,
+    "dynamics-mechanical": false,
     "reference-arc": false,
     arc: false,
     polygon: false,
@@ -74,23 +77,31 @@ function renderToolGroup(group) {
 }
 
 function renderToolbarTool(tool) {
-    if (!Object.hasOwn(expandedToolbarSections, tool.id)) {
+    if (!Object.hasOwn(expandedToolbarSections, tool.id) && !tool.collapsible) {
         return renderToolButton(tool);
     }
 
     const expanded = expandedToolbarSections[tool.id];
-    const sectionId = `statics-${tool.id}-tools`;
+    const sectionId = tool.id.startsWith("dynamics-")
+        ? `${tool.id}-tools`
+        : `statics-${tool.id}-tools`;
     /*
      * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
      *
      * It is not a menu, so `aria-haspopup` goes; and it gets `aria-expanded`
      * and `aria-controls` whatever the button renderer happened to emit.
      */
-    const button = renderToolButton({ ...tool, submenu: true })
+    const button = renderToolButton({
+        ...tool,
+        submenu: true,
+        childToolIds: DYNAMICS_TOOL_MENUS[tool.id]?.map(({ id }) => id)
+    })
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "coordinate-system"
+    const children = DYNAMICS_TOOL_MENUS[tool.id]
+        ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : tool.id === "coordinate-system"
         ? [
             { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
             { id: "coordinate-system-3d", label: "3D Coordinate System", iconLabel: "Coordinate System" }
@@ -270,7 +281,10 @@ export function renderEngineeringTools(
                             const expanded = !expandedToolbarSections[toolId];
                             expandedToolbarSections[toolId] = expanded;
                             button.setAttribute("aria-expanded", String(expanded));
-                            toolList.querySelector(`#statics-${toolId}-tools`).hidden = !expanded;
+                            const sectionId = toolId.startsWith("dynamics-")
+                                ? `${toolId}-tools`
+                                : `statics-${toolId}-tools`;
+                            toolList.querySelector(`#${sectionId}`).hidden = !expanded;
                             return;
                         }
 
@@ -317,27 +331,6 @@ export function renderEngineeringTools(
                                 button,
                                 toolId
                             );
-
-                            return;
-                        }
-
-                        /*
-                         * A DYNAMICS FAMILY OPENS ITS SUBMENU, exactly as a
-                         * Statics one does. Without this branch the family
-                         * button fell through to `activateTool`, which armed
-                         * nothing: the Bodies, Kinematics and Mechanical
-                         * Elements entries looked like tools but opened no
-                         * menu, so no Dynamics tool could be reached from the
-                         * toolbar at all. The injected `onActivate` is the
-                         * module's own decoupling - see `openDynamicsMenu`.
-                         */
-                        if (DYNAMICS_TOOL_MENUS[toolId]) {
-                            event.preventDefault();
-                            event.stopPropagation();
-
-                            openDynamicsMenu(button, toolId, {
-                                onActivate: childId => activateTool(childId)
-                            });
 
                             return;
                         }

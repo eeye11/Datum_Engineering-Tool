@@ -40,6 +40,7 @@ import {
   styleOptions,
   texText
 } from "./statics-primitives.js";
+import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
 import { applyObjectComments, ensureObjectId, objectDisplayName } from "../object-comments.js";
 import { renderObjectBlock } from "../drawing-source.js";
 
@@ -179,9 +180,11 @@ function serializeParticle(object) {
    * here, so the marker's ink is defined exactly the way every other
    * symbol's is - and a marker copied out of the Source on its own compiles.
    */
-  const options = styleOptions(style)
-    .filter((option) => !/^draw=/.test(String(option)) && !/^fill=/.test(String(option)) && !/^line width=/.test(String(option)))
-    .concat([`fill=${colourName(style)}`]);
+  const options = styleOptions(style);
+
+  if (style.fillOpacityEnabled !== false) {
+    options.push("fill opacity=0.35");
+  }
 
   return command(
     "fill",
@@ -191,28 +194,13 @@ function serializeParticle(object) {
 }
 
 function rigidBodyCorners(geometry) {
-  const shape = String(geometry?.shape || "rectangle").toLowerCase();
+  const shape = enggFeatureGeometry.rigidBodyShape(geometry);
 
   if (shape === "circle") {
     return null;
   }
 
-  const position = pt(geometry.position);
-  const width = finite(geometry.width);
-  const height = finite(geometry.height);
-  const radians = (finite(geometry.rotation) * Math.PI) / 180;
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-
-  return [
-    { x: 0, y: 0 },
-    { x: width, y: 0 },
-    { x: width, y: height },
-    { x: 0, y: height },
-  ].map((corner) => ({
-    x: position.x + corner.x * cos - corner.y * sin,
-    y: position.y + corner.x * sin + corner.y * cos,
-  }));
+  return enggFeatureGeometry.definingPoints(geometry, "rigid-body");
 }
 
 function serializeRigidBody(object) {
@@ -221,6 +209,10 @@ function serializeRigidBody(object) {
 
   if (!hasPoint(geometry.position)) {
     return null;
+  }
+
+  if (object.style?.fillMode === "solid" && object.style?.fillOpacityEnabled === true) {
+    options.push("fill opacity=0.35");
   }
 
   if (String(geometry.shape || "rectangle").toLowerCase() === "circle") {
@@ -248,10 +240,11 @@ function serializeRigidBody(object) {
    * MARK, not a calculated property: its position is the centre of the shape
    * the student drew.
    */
-  const centre = {
-    x: finite(geometry.position.x) + finite(geometry.width) / 2,
-    y: finite(geometry.position.y) - finite(geometry.height) / 2,
-  };
+  const centre = enggFeatureGeometry.rigidBodyCenter(geometry);
+
+  if (!centre) {
+    return body;
+  }
 
   const mark = [
     command(
@@ -267,76 +260,6 @@ function serializeRigidBody(object) {
   ].join("\n");
 
   return `${body}\n${mark}`;
-}
-
-function serializeTrajectory(object) {
-  const geometry = object.geometry || {};
-
-  if (!hasPoint(geometry.start) || !hasPoint(geometry.end)) {
-    return null;
-  }
-
-  const a = pt(geometry.start);
-  const b = pt(geometry.end);
-  const bow = finite(geometry.bow);
-  const options = styleOptions(object.style || {});
-
-  if (Math.abs(bow) < 1e-6) {
-    return path([a, b], options, {
-      arrow: geometry.arrowEnd === true ? object.style?.arrowEnd || "filled" : null
-    });
-  }
-
-  /*
-   * A CURVED PATH IS A QUADRATIC BEND. The control point is the midpoint
-   * pushed perpendicular by `bow`, exactly as the canvas computes it, so the
-   * picture and the code describe the same curve.
-   *
-   * THE MIDPOINT, NOT THE START. `offsetFrom(a, b, ...)` walks from `a`, so the
-   * old control point sat a bow's length from the START and the "curve" was a
-   * shallow bend near one end - the canvas, which bends about the midpoint,
-   * drew a different shape from the code. The control is the midpoint plus the
-   * SAME perpendicular offset the canvas uses.
-   */
-  const span = Math.hypot(b.x - a.x, b.y - a.y);
-  const normal = offsetFrom(a, b, span * bow);
-  const control = {
-    x: (a.x + b.x) / 2 + (normal.x - a.x),
-    y: (a.y + b.y) / 2 + (normal.y - a.y),
-  };
-  const tip =
-    geometry.arrowEnd === true
-      ? `-${arrowHeadTip(object.style?.arrowEnd || "filled")}`
-      : "";
-
-  /*
-   * THE HEAD GOES BEFORE THE DESTINATION, as a path modifier: `.. controls
-   * (...) .. (a) -{Latex} (b)`. Written as `.. -{Latex} (b)` TikZ reads the
-   * head as the curvature symbol and stops the whole document.
-   */
-  const body = `${point(a.x, a.y)} .. controls ${point(control.x, control.y)} and ${point(control.x, control.y)} .. ${point(b.x, b.y)}`;
-
-  /*
-   * THE LAST RUN, WITH THE HEAD AS AN OPTION.
-   *
-   * An `arc`/`.. controls` operation ends the path, so a tip written after it
-   * would be a stray coordinate. A short `--` run back along the final tangent
-   * carries `-{Latex}` exactly where the curve ends, which is where the student
-   * sees the direction arrow on the sheet.
-   */
-  const degrees = (Math.atan2(b.y - control.y, b.x - control.x) * 180) / Math.PI;
-  const radians = (degrees * Math.PI) / 180;
-  const back = { x: b.x - Math.cos(radians) * 1.5, y: b.y - Math.sin(radians) * 1.5 };
-
-  const head = tip
-    ? `\n${command(
-        "draw",
-        [...options, `-${arrowHeadTip(object.style?.arrowEnd || "filled")}`],
-        `${point(back.x, back.y)} -- ${point(b.x, b.y)}`
-      )}`
-    : "";
-
-  return `${command("draw", options, body)}${head}`;
 }
 
 function serializePolarVector(object) {
@@ -735,7 +658,6 @@ function serializeReferenceArc(object) {
 const SERIALIZERS = {
   "dynamics-particle": serializeParticle,
   "dynamics-rigid-body": serializeRigidBody,
-  "dynamics-trajectory": serializeTrajectory,
   "dynamics-polar-vector": serializePolarVector,
   "dynamics-angular-vector": serializeAngularVector,
   "dynamics-spring": serializeSpring,

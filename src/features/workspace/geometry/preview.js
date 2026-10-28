@@ -555,6 +555,53 @@ export function updatePreview(
             }
         }
     } else if (
+        interaction.phase === "dynamics-span" &&
+        interaction.toolId === "dynamics-polar-vector"
+    ) {
+        const start = interaction.startPoint;
+        const dx = point.x - start.x;
+        const dy = point.y - start.y;
+        const magnitude = Math.hypot(dx, dy);
+        const angle = magnitude > 0
+            ? (Math.atan2(dy, dx) * 180) / Math.PI
+            : 0;
+        const normalizedAngle = (angle + 360) % 360;
+
+        interaction.preview = magnitude > 1e-9
+            ? {
+                  id: "preview-dynamics-polar-vector",
+                  type: "dynamics-polar-vector",
+                  engineering: {
+                      dynamicsType: "dynamics-polar-vector"
+                  },
+                  geometry: {
+                      start: { ...start },
+                      end: { ...point },
+                      vectorMagnitude: magnitude,
+                      vectorAngle: normalizedAngle,
+                      vectorUnit: "m/s"
+                  },
+                  style: {
+                      ...drawingState.styleDefaults,
+                      stroke: PREVIEW_STROKE,
+                      fill: "none",
+                      lineType: "dashed",
+                      opacity: 1
+                  }
+              }
+            : null;
+
+        const feedback = [
+            inferenceLabel(resolution.inference),
+            snapTypeLabel(resolution.snapCandidate?.type)
+        ].filter(Boolean);
+
+        setToolMessage(
+            magnitude > 1e-9
+                ? `Magnitude: ${magnitude.toFixed(1)} mm · Angle: ${normalizedAngle.toFixed(1)}°${feedback.length ? ` · ${feedback.join(" · ")}` : ""}`
+                : "Drag to set vector magnitude and angle"
+        );
+    } else if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {

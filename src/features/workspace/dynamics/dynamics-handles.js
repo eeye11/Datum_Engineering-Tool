@@ -86,6 +86,17 @@ export function applyDynamicsHandle(object, drag, point, geometry) {
 
         geometry[kind] = { x: point.x, y: point.y };
 
+        if (object.engineering?.dynamicsType === "dynamics-polar-vector") {
+            const dx = geometry.end.x - geometry.start.x;
+            const dy = geometry.end.y - geometry.start.y;
+            const magnitude = Math.hypot(dx, dy);
+
+            geometry.vectorMagnitude = magnitude;
+            geometry.vectorAngle = magnitude > 0
+                ? ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360
+                : finite(geometry.vectorAngle);
+        }
+
         return true;
     }
 
