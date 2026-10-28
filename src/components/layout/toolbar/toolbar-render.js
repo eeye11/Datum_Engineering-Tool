@@ -102,6 +102,8 @@ function renderToolbarTool(tool) {
 
     const children = DYNAMICS_TOOL_MENUS[tool.id]
         ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : FLUIDS_TOOL_MENUS[tool.id]
+        ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
         : tool.id === "shear-force-diagram"
         ? ANALYSIS_DIAGRAM_MODES.map(mode =>
             renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })

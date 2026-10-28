@@ -1324,13 +1324,27 @@ function serializeForceComponents(entity, object) {
   const endX = geometry.horizontal?.end ? pointOf(geometry.horizontal.end) : null;
   const endY = geometry.vertical?.end ? pointOf(geometry.vertical.end) : null;
 
-  if (endX && endY && original?.end && geometry.showX !== false && geometry.showY !== false &&
-      geometry.horizontal?.start && geometry.vertical?.start &&
-      distance(pointOf(geometry.horizontal.start), endX) > 1e-9 &&
-      distance(pointOf(geometry.vertical.start), endY) > 1e-9) {
+  if (endX && endY && geometry.showX !== false && geometry.showY !== false) {
     const guideStyle = styleOptions({ ...style, lineType: "dashed", lineWidth: (Number(style.lineWidth) || 0.5) * 0.5 });
-    const tip = pointOf(original.end);
-    commands.push(seg(endX, tip, guideStyle), seg(endY, tip, guideStyle));
+
+    /*
+     * WITH A DRAWN ORIGINAL, the closing lines run from each component's
+     * end to the original's tip - the parallelogram that shows the two
+     * components adding back to the force. Without one, the two ends are
+     * joined directly, which is still the statement that the components
+     * belong to one decomposition.
+     */
+    if (
+        original?.end &&
+        geometry.showOriginal === true &&
+        distance(pointOf(original.start), pointOf(original.end)) > 1e-9
+    ) {
+      const tip = pointOf(original.end);
+
+      commands.push(seg(endX, tip, guideStyle), seg(endY, tip, guideStyle));
+    } else {
+      commands.push(seg(endX, endY, guideStyle));
+    }
   }
 
   return commands.filter(Boolean).join("\n");

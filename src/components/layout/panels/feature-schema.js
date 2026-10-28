@@ -4823,20 +4823,17 @@ export function groupsFor(object) {
             .filter((group) => group.transform || group.fields.length);
     }
 
-    const base = [...controlSymbol, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant" && group.id !== "gain" && group.id !== "sum")];
-    /*
-     * A FLOW ARROW HAS TWO SECTIONS: Object and Appearance.
-     *
-     * Object holds what it is attached to, whether it is held, which way it
-     * points and how big its head is. Appearance holds the shared Line Style,
-     * Colour, Thickness and Arrowhead Fill. There is no Transform section,
-     * because a transform is a way to move something and an arrow has no
-     * position to transform - it is placed on a pipe, by pressing on the pipe.
-     *
-     * The shared table's per-shape groups (Line, Fill, Shape, Text) are dropped
-     * for it the same way they are for a run: an arrow's label is not part of
-     * the feature the student drew.
-     */
+    const base = (
+        isParticle
+            ? PARTICLE_GROUPS
+            : isRigidBody
+              ? RIGID_BODY_GROUPS
+              : isPolarVector
+                ? POLAR_VECTOR_GROUPS
+                : isAngularVector
+                  ? ANGULAR_VECTOR_GROUPS
+                  : [...controlSymbol, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant" && group.id !== "gain" && group.id !== "sum")]
+    );
     const isFlowArrow = object.type === "flow-arrow";
 
     const groups = (isFlowArrow ? [...base, FLOW_ARROW_GROUP] : base)
@@ -4844,7 +4841,7 @@ export function groupsFor(object) {
             (group) =>
                 !isFlowArrow || group.id === "appearance" || group.id === FLOW_ARROW_GROUP.id
         )
-    const base = [...controlSymbol, ...dynamics, ...GROUPS.filter((group) => group.id !== "plant" && group.id !== "gain" && group.id !== "sum")];
+        .map((group) => {
             const fields = group.fields
                 .map((key) => ({ key, definition: definitionOf(key) }))
                 .filter((entry) => entry.definition && entry.definition.applies(object));

@@ -840,8 +840,7 @@ export function applyManipulationFrame(drag, point) {
 
     applyManipulation(drag, point);
 
-    return drag.object;
-}
+    return drag.object;}
 
 /* The name the endpoint tests drive; the same frame, stated once. */
 export const applyManipulationForTest = applyManipulationFrame;

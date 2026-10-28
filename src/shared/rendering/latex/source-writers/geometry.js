@@ -379,7 +379,6 @@ const SHAPES = {    line(object) {
                 ...stressArrows(object.geometry).map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" })))].join("\n");
         }
         if (isGain(object)) {
-        if (isGain(object)) {
             const style = renderStyle(plantStyle(object.style));
             const vertices = gainTrianglePoints(object);
 

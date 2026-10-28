@@ -315,6 +315,83 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
+function quantityMarkup(key, definition, label, state, objects) {
+    const unitState = fieldState(objects, definition.unitField);
+    const bounds = [
+        Number.isFinite(definition.min) ? `min="${definition.min}"` : "",
+        Number.isFinite(definition.max) ? `max="${definition.max}"` : "",
+        `step="${definition.step ?? 1}"`
+    ]
+        .filter(Boolean)
+        .join(" ");
+    const units = (definition.unitOptions || [])
+        .map((option) => (
+            `<option value="${escapeHtml(option.value)}"${
+                !unitState?.mixed && option.value === unitState?.value ? " selected" : ""
+            }>${escapeHtml(option.label)}</option>`
+        ))
+        .join("");
+
+    return (
+        `<div class="dfp-row-control dfp-quantity-control${state.mixed ? " is-mixed" : ""}">` +
+        `<input type="number" class="dfp-number" data-feature-field="${escapeHtml(key)}" ` +
+        `aria-label="${escapeHtml(label)}" ${bounds} value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        `>` +
+        `<select class="dfp-select dfp-quantity-unit" data-feature-field="${escapeHtml(definition.unitField)}" ` +
+        `aria-label="${escapeHtml(`${label} unit`)}"${unitState?.mixed ? ' data-mixed="true"' : ""}>` +
+        (unitState?.mixed ? `<option value="" selected disabled>Mixed</option>` : "") +
+        units +
+        `</select>` +
+        `</div>`
+    );
+}
+
+function attachmentMarkup(key, label, state) {
+    const eligible = drawingState.objects.filter((object) => {
+        const type = object?.engineering?.dynamicsType;
+
+        if (key === "dynamics.angularAttachment") {
+            return (
+                type === "dynamics-rigid-body" ||
+                type === "dynamics-coordinate-system" ||
+                object?.type === "rigid-body" ||
+                object?.type === "point" ||
+                object?.type === "coordinate-system-2d"
+            );
+        }
+
+        return (
+            type === "dynamics-particle" ||
+            type === "dynamics-rigid-body" ||
+            type === "dynamics-reference-point" ||
+            type === "dynamics-coordinate-system" ||
+            object?.type === "particle" ||
+            object?.type === "rigid-body" ||
+            object?.type === "point" ||
+            object?.type === "coordinate-system-2d"
+        );
+    });
+    const options = [
+        { value: "origin", label: "Origin Point" },
+        ...eligible.map((object) => ({
+            value: object.id,
+            label: `${object.name || "Unnamed"} (${object.engineering?.dynamicsType === "dynamics-particle"
+                || object.type === "particle"
+                ? "Particle"
+                : object.engineering?.dynamicsType === "dynamics-rigid-body" || object.type === "rigid-body"
+                  ? "Rigid Body"
+                  : "Origin Point"})`
+        }))
+    ];
+
+    if (!state.mixed && !options.some((option) => option.value === state.value)) {
+        options.push({ value: state.value, label: "Unresolved reference" });
+    }
+
+    return rowMarkup(label, choicesMarkup(key, label, options, state), { mixed: state.mixed });
+}
+
 function textMarkup(key, label, state, definition = {}) {
     /*
      * A READ-ONLY TEXT ROW STATES A FACT, IT DOES NOT OFFER A CONTROL.

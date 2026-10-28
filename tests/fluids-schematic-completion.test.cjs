@@ -229,13 +229,13 @@ test("the connected pipe's Pipe Width field edits the segment, and the taper fol
   assert.equal(m.schema.writeField(segment, "pipeWidth", 9), true);
 
   assert.equal(
-    Number(segment.engineering.separation),
-    9,
+    segment.engineering.schematicWidth,
+    m.pipe.DEFAULT_SCHEMATIC_SEPARATION + 9,
     "the width lives on the segment",
   );
 
   assert.equal(
-    reducer.engineering.separation,
+    reducer.engineering.schematicWidth,
     undefined,
     "and the fitting stores no width of its own",
   );

@@ -1454,8 +1454,8 @@ const geometryFactories = {
                         end.x - start.x
                     ) * 180 / Math.PI
             },
-                       options
-                   ),
+            options
+        ),
 
             /*
              * ========================================================

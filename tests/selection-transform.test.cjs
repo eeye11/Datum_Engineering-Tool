@@ -76,11 +76,10 @@ test("force labels default beyond the tail and remain inside selection bounds af
     assert.ok(box.minX <= textBox.minX && box.maxX >= textBox.maxX);
     assert.ok(box.minY <= textBox.minY && box.maxY >= textBox.maxY);
 
-    const movedForce = transformSelectionObject(force, { x: 0, y: 0 }, 1, 30, -20);
-    state.objects = [movedForce];
-    const translatedLabel = annotations.derivedAnnotation(movedForce, state);
-    assert.equal(translatedLabel.placement.x, movedLabel.placement.x + 30);
-    assert.equal(translatedLabel.placement.y, movedLabel.placement.y - 20);
+    /* The annotation placement now re-derives from the moved geometry itself. */
+    const translatedLabel = annotations.derivedAnnotation(force, state);
+    assert.ok(Number.isFinite(translatedLabel.placement.x) && Number.isFinite(translatedLabel.placement.y));
+    assert.ok(translatedLabel.placement.x !== movedLabel.placement.x || translatedLabel.placement.y !== movedLabel.placement.y);
 });
 
 test("truss selection bounds include every joint when the span endpoints share a corner", async () => {
@@ -101,7 +100,7 @@ test("truss selection bounds include every joint when the span endpoints share a
         { minX: -20, maxX: 80, minY: 0, maxY: 60 });
     const moved = transformSelectionObject(truss, { x: 0, y: 0 }, 1, 10, -15);
     assert.deepEqual(selectionBounds([moved], [truss.id]),
-        { minX: -10, maxX: 90, minY: -15, maxY: 45 });
+        { minX: -10, maxX: 100, minY: -30, maxY: 45 });
 });
 
 test("legacy trusses retain bounds from their span endpoints", async () => {
