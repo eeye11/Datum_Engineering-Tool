@@ -1,3 +1,4 @@
+import { dimensionEndpointAt, endpointPosition, endpointDimensionType } from "./dimension-endpoints.js";
 /*
  * Placing a dimension: reference selection and the placement click.
  */
@@ -34,6 +35,36 @@ export function handleDimensionClick(
     resolution,
     event
 ) {
+    if (drawingState.activeTool === "dimension") {
+        const raw = canvasPointFromEvent(event, false) || resolution.rawPointerPoint || resolution.effectiveConstructionPoint || resolution.snappedPoint;
+        if (!raw) return;
+        const interaction = drawingState.interaction;
+        if (interaction.dimensionStage === "placement") {
+            commitDimension(interaction.dimensionChoice, interaction.dimensionRefs, raw);
+        } else {
+            const ref = dimensionEndpointAt(raw, drawingState);
+            const point = endpointPosition(ref, drawingState);
+            if (!interaction.dimensionFirstRef) {
+                enggDrawingState.setInteraction(drawingState, {
+                    dimensionStage:"selecting", dimensionFirstRef:ref,
+                    dimensionFirstPoint:point, dimensionPickedRefs:[]
+                });
+                setToolMessage("Pick the second dimension endpoint — nearby geometry snaps automatically");
+            } else {
+                const first = endpointPosition(interaction.dimensionFirstRef, drawingState);
+                if (Math.hypot(first.x-point.x, first.y-point.y) < 1e-8) return;
+                enggDrawingState.setInteraction(drawingState, {
+                    dimensionStage:"placement", dimensionRefs:[interaction.dimensionFirstRef,ref],
+                    dimensionChoice:endpointDimensionType(interaction.dimensionFirstRef,ref,drawingState),
+                    dimensionPlacement:point
+                });
+                setToolMessage("Move to position the dimension, then click to enter its magnitude");
+            }
+            renderCurrentDrawing();
+        }
+        return;
+    }
+
     /*
      * THE RESOLVED REFERENCE, NOT THE POINTER.
      *

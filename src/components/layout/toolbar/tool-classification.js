@@ -256,6 +256,7 @@ export function isMultiStepTool(toolId) {
  * choose otherwise.
  */
 export const CLICK_CLICK_TOOLS = [
+    "callout",
     "line",
     "rectangle",
     "circle",

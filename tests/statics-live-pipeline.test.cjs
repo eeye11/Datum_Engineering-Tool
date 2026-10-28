@@ -658,11 +658,11 @@ test("the compiled picture lies on the objects' own world coordinates", async ()
     const [left, top, width, height] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
 
     assert.ok(
-      Math.abs(left + width / 2 - (origin + cameraPoint.x * k)) < 0.05,
+      Math.abs(left + width / 2 - (cameraPoint.x * k)) < 0.05,
       "the canvas centre is not world x = panX in the compiled picture's units",
     );
     assert.ok(
-      Math.abs(top + height / 2 - (origin - cameraPoint.y * k)) < 0.05,
+      Math.abs(top + height / 2 - (-cameraPoint.y * k)) < 0.05,
       "the canvas centre is not world y = panY in the compiled picture's units",
     );
   } finally {

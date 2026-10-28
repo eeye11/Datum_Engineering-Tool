@@ -612,6 +612,7 @@ function manipulationHandles(
                     ? g.bends
                     : [];
 
+            const balloon = object.annotateKind === "callout" ? enggAnnotate.calloutBox(object, drawingState) : null;
             return [
                 { kind: "annotate-attachment", point: path[0] },
 
@@ -620,7 +621,7 @@ function manipulationHandles(
                     point: bend
                 })),
 
-                { kind: "annotate-endpoint", point: path[path.length - 1] }
+                { kind: "annotate-endpoint", point: balloon ? {x:balloon.maxX,y:balloon.maxY} : path[path.length - 1] }
             ];
         }
     }
@@ -1025,7 +1026,8 @@ export function editableHandlesFor(
     const box =
         selectionBounds(
             [object],
-            [object.id]
+            [object.id],
+            drawingState
         );
 
     const scale =

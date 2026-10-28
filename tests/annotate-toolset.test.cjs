@@ -53,7 +53,7 @@ check(
 
     return (
       labels.join(" | ") ===
-      "Selection | Dimensions | Text | Leaders | Symbols | Tables"
+      "Selection | Dimensions | Text | Callouts | Tables"
     );
   })(),
   "Annotate is organised by WHAT AN ANNOTATION DOES, in a fixed order",
@@ -72,7 +72,6 @@ console.log("\n  every command is listed DIRECTLY under its category\n");
   "dimension",
   "note",
   "label",
-  "leader",
   "callout",
   "symbol",
   "table",
@@ -81,18 +80,6 @@ console.log("\n  every command is listed DIRECTLY under its category\n");
     `"${id}" is a command in the toolset`,
     new RegExp(`id:\\s*"${id}"`).test(groups),
     `${id} was not found in the Annotate groups`,
-  );
-});
-
-/*
- * THE RETIRED DIMENSION TOOLS. Smart Dimension and Variable Dimension were
- * folded into the one Dimension tool; neither may come back as a command.
- */
-["smart-dimension", "variable-dimension"].forEach((id) => {
-  check(
-    `the retired "${id}" tool is NOT offered`,
-    !new RegExp(`id:\s*"${id}"`).test(groups),
-    `${id} is still listed in the Annotate groups`,
   );
 });
 
@@ -130,7 +117,7 @@ check(
 
 check(
   "the hierarchy stops at category -> tool",
-  (groups.match(/tools:\s*\[/g) || []).length === 6,
+  (groups.match(/tools:\s*\[/g) || []).length === 5,
   "one `tools` list per category, and none inside a tool",
 );
 

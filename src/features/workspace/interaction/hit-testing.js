@@ -280,44 +280,9 @@ function annotateContainsPoint(object, point) {
      * callout's box. A kind with no text (an arrow, a bare table) simply
      * matches nothing here and falls through to its geometry.
      */
-    const text = annotateTextOf(object);
-
-    const anchor =
-        geometry.position ||
-        geometry.end ||
-        geometry.start;
-
-    if (text && anchor) {
-        const fontSize =
-            Number(object.style?.fontSize) || 12;
-
-        const lines = String(text)
-            .split("\n")
-            .filter((line) => line.length > 0);
-
-        if (lines.length) {
-            const lineHeight = fontSize * 1.2;
-
-            const widest = Math.max(
-                ...lines.map((line) => line.length)
-            );
-
-            const halfWidth =
-                (widest * fontSize * 0.58) / 2 +
-                fontSize * 0.5;
-
-            const halfHeight =
-                (lines.length * lineHeight) / 2 +
-                fontSize * 0.35;
-
-            if (
-                Math.abs(point.x - anchor.x) <= halfWidth &&
-                Math.abs(point.y - anchor.y) <= halfHeight
-            ) {
-                return true;
-            }
-        }
-    }
+    const textBox = enggAnnotate.textBoundsOf(object, drawingState);
+    if (textBox && point.x >= textBox.minX && point.x <= textBox.maxX &&
+        point.y >= textBox.minY && point.y <= textBox.maxY) return true;
 
     /*
      * THE LINE. A leader, a callout's stem and an arrow are grabbed along
@@ -360,7 +325,8 @@ function annotateContainsPoint(object, point) {
      * A POINT-PLACED MARK WITH NO TEXT - a bare dot or crosshair. Picked
      * within the same small tolerance of its anchor.
      */
-    if (anchor && !text) {
+    const anchor = geometry.position || geometry.end || geometry.start;
+    if (anchor && !annotateTextOf(object)) {
         return distance(point, anchor) <= tolerance;
     }
 

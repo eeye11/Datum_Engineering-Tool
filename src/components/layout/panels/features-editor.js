@@ -262,7 +262,10 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
-function textMarkup(key, label, state) {
+function textMarkup(key, label, state, multiline = false) {
+    if (multiline) {
+        return `<textarea class="dfp-text dfp-note-text" data-feature-field="${escapeHtml(key)}" aria-label="${escapeHtml(label)}" rows="3"${state.mixed ? ' data-mixed="true" placeholder="Mixed"' : ""}>${escapeHtml(state.mixed ? "" : state.value ?? "")}</textarea>`;
+    }
     return (
         `<input type="text" class="dfp-text" data-feature-field="${escapeHtml(key)}" ` +
         `aria-label="${escapeHtml(label)}" ` +
@@ -281,6 +284,10 @@ function fieldMarkup(key, definition, objects) {
 
     const label = fieldLabel(definition, key);
     const options = { mixed: state.mixed };
+
+    if (definition.kind === "readonly") {
+        return rowMarkup(label, `<span class="dfp-readonly">${escapeHtml(state.mixed ? "Mixed" : state.value ?? "")}</span>`, options);
+    }
 
     if (definition.kind === "toggle") {
         return rowMarkup(label, toggleMarkup(key, label, state), options);
@@ -303,7 +310,7 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "text") {
-        return rowMarkup(label, textMarkup(key, label, state), options);
+        return rowMarkup(label, textMarkup(key, label, state, key === "text" && objects.every(object => object.annotateKind === "note")), options);
     }
 
     return "";

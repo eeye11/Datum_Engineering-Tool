@@ -1,3 +1,4 @@
+import { dimensionEndpointAt, endpointPosition, endpointDimensionType } from "../annotate/dimension-endpoints.js";
 /*
  * The live preview while a tool is in use.
  */
@@ -340,6 +341,19 @@ export function updatePreview(
      * setInteraction, because a per-frame pointer position is not a
      * change of state and must not become a history entry.
      */
+    if (drawingState.activeTool === "dimension" && interaction.dimensionStage === "selecting" && interaction.dimensionFirstRef) {
+        const raw = resolution.rawPointerPoint || resolution.effectiveConstructionPoint;
+        if (raw) {
+            const ref = dimensionEndpointAt(raw, drawingState);
+            interaction.dimensionRefs = [interaction.dimensionFirstRef, ref];
+            interaction.dimensionChoice = endpointDimensionType(interaction.dimensionFirstRef, ref, drawingState);
+            interaction.dimensionPlacement = endpointPosition(ref, drawingState);
+            interaction.snappedPoint = ref.kind === "canvas-point" ? null : endpointPosition(ref, drawingState);
+        }
+        reportConstructionStatus(resolution, "Pick the second dimension endpoint");
+        return;
+    }
+
     if (
         isDimensionTool(
             drawingState.activeTool
@@ -434,7 +448,9 @@ export function updatePreview(
     ) {
         reportConstructionStatus(
             resolution,
-            "Specify dimension reference"
+            drawingState.activeTool === "dimension"
+                ? "Pick the first dimension endpoint — nearby geometry snaps automatically"
+                : "Specify dimension reference"
         );
 
         return;

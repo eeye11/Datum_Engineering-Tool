@@ -380,7 +380,9 @@ export function initialToolMessage(
          * given. Saying "reference" rather than "feature" is what tells
          * the student they may click a midpoint as readily as a body.
          */
-        return "Specify dimension reference - D changes what is measured";
+        return toolId === "dimension"
+            ? "Pick the first dimension endpoint — nearby geometry snaps automatically"
+            : "Specify dimension reference - D changes what is measured";
     }
 
     /*

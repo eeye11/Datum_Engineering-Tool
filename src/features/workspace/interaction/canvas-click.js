@@ -729,9 +729,19 @@ export function openNoteEditorFor(object, atPoint = null) {
             return false;
         }
 
+        const originalText = object.text || "";
+        const previousTextObjects = enggDrawingState.snapshotDrawing(drawingState);
+        const currentObject = () => drawingState.objects.find(candidate => candidate.id === object.id);
+        const canvasText = ["note", "callout"].includes(object.annotateKind);
         beginTextEntry(object);
 
         enggNoteEditor?.open({
+            canvasText,
+            onInput: canvasText ? text => {
+                const current = currentObject();
+                if (current) current.text = text;
+                renderCurrentDrawing();
+            } : undefined,
             text: object.text || "",
 
             /*
@@ -754,17 +764,13 @@ export function openNoteEditorFor(object, atPoint = null) {
             cameraSignal,
 
             onApply: (text) => {
+                const current = currentObject();
+                if (current) {
+                    current.text = text;
+                    enggDrawingState.commitDrawingChange(drawingState, previousTextObjects);
+                }
                 endTextEntry();
-
-                const previousObjects =
-                    enggDrawingState.snapshotDrawing(drawingState);
-
-                object.text = text;
-
-                enggDrawingState.commitDrawingChange(
-                    drawingState,
-                    previousObjects
-                );
+                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation updated");
 
@@ -773,7 +779,10 @@ export function openNoteEditorFor(object, atPoint = null) {
             },
 
             onCancel: () => {
+                const current = currentObject();
+                if (current && canvasText) current.text = originalText;
                 endTextEntry();
+                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation edit cancelled");
 

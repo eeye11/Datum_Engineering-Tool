@@ -78,10 +78,8 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
      *
      * Placed with the frame the model computed, so a vertical
      * dimension reads bottom-to-top and an angled one follows the
-     * line without ever turning upside down. A small white plate sits
-     * behind the text so it stays readable where it crosses the
-     * dimension line - the standard drafting treatment for a dimension
-     * that interrupts its own line.
+     * line without ever turning upside down. A canvas-coloured glyph halo
+     * keeps crossing lines from obscuring the value without an opaque plate.
      */
     function appendDimensionText(svg, text, frame, stroke, toScreen) {
         if (!text || !frame || !toScreen) {
@@ -97,45 +95,29 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
         const origin = toScreen(frame);
 
         const lines = String(text).split("\n");
-        const fontSize = 11;
+        const fontSize = zoomedFontHere(11);
         const lineHeight = fontSize * 1.15;
 
         const group = createSvgElement("g", {
             transform: `translate(${origin.x} ${origin.y}) rotate(${frame.angle || 0})`
         });
 
-        const plateWidth =
-            Math.max(...lines.map(line => line.length)) * fontSize * 0.58 +
-            6;
-
-        /*
-         * THE TEXT PLATE IS PAPER, NOT INK.
-         *
-         * It is the pale backing that keeps a label legible where it crosses the
-         * geometry, so it must match the SHEET it sits on - not invert with the
-         * drawing. Resolved through `paintColour` with an explicit white authored
-         * value, it becomes white on the light canvas and the dark canvas's own
-         * background on a dark one, so the label reads in both without the plate
-         * ever becoming a dark block on white paper.
-         */
-        group.appendChild(
-            createSvgElement("rect", {
-                x: -plateWidth / 2,
-                y: (-lines.length * lineHeight) / 2,
-                width: plateWidth,
-                height: lines.length * lineHeight,
-                fill: paintColour(enggCanvasPalette.CANVAS_BACKGROUND.light),
-                stroke: "none",
-                "fill-opacity": 0.9
-            })
-        );
+        // A narrow canvas-coloured halo separates glyphs from crossing lines.
+        // Background is paper, so do not send it through ink contrast mapping
+        // (that turns a white plate into white ink on the dark canvas).
+        const background = enggCanvasPalette.CANVAS_BACKGROUND[enggCanvasPalette.activeCanvasTheme()];
 
         lines.forEach((line, index) => {
             const span = createSvgElement("text", {
                 x: 0,
-                y: (index - (lines.length - 1) / 2) * lineHeight + fontSize * 0.35,
+                y: (index - (lines.length - 1) / 2) * lineHeight,
                 fill: stroke,
-                "font-size": zoomedFontHere(fontSize),
+                stroke: background,
+                "stroke-width": 3,
+                "stroke-linejoin": "round",
+                "paint-order": "stroke fill",
+                class: "drawing-dimension-label",
+                "font-size": fontSize,
                 "font-family": "Arial, sans-serif",
                 "text-anchor": "middle",
                 "dominant-baseline": "middle"
@@ -177,8 +159,8 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
         /*
          * A DIMENSION IS AN ANNOTATION WITH ONE APPEARANCE.
          *
-         * There is no Driving/Driven state any more, so the dimension is drawn
-         * in its own stroke colour - the same treatment as every other
+         * Driving and Driven dimensions share the same visual treatment:
+         * each uses its own stroke colour, like every other
          * annotation on the sheet.
          */
         const stroke = paintColour(

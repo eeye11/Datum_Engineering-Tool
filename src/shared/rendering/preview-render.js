@@ -206,6 +206,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
         const heldFirst =
             state.interaction
                 .dimensionStage === "first" ||
+            state.interaction.dimensionStage === "selecting" ||
             state.interaction
                 .dimensionStage === "armed"
                 ? state.interaction
@@ -220,7 +221,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
                     object.id === heldFirst.featureId
             );
 
-            const heldPoint =
+            const heldPoint = heldFirst.kind === "canvas-point" ? heldFirst.point :
                 enggMeasurement?.resolveAnchor?.(
                     heldObject,
                     heldFirst.anchor
