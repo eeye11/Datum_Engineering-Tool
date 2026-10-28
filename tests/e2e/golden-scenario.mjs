@@ -75,7 +75,15 @@ const TOOLS = [
     ["DYNAMICS", "dynamics-reference-point"],
     ["DYNAMICS", "dynamics-reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-reference-arc", null, null, ["d:0.3,0.55,0.6,0.55"]],
-    ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
+    /*
+     * FLUIDS. Pipe / Duct is a child of the Flow Paths INLINE GROUP, which the
+     * Fluids sidebar opens in place exactly as Dynamics opens its families. The
+     * family id is passed as `sub`'s parent, so the harness opens the group
+     * before it looks for the tool - without it the button exists in the DOM but
+     * sits inside a `hidden` subsection, and Playwright refused to click it.
+     */
+    ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
+    ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];

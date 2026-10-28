@@ -50,7 +50,8 @@
  * uses - so a wrapped line, a tab and an emoji all measure the same in all four.
  */
 
-import { isObjectMarkerLine } from "../../../shared/rendering/latex/drawing-source.js";
+import { isObjectNameComment } from "../../../shared/rendering/latex/drawing-source.js";
+import { EYE_OFF_MARK_ICON } from "./objects-list.js";
 
 const CLASS = {
     root: "drawing-source-editor-root",
@@ -59,6 +60,7 @@ const CLASS = {
     scroll: "drawing-source-scroll",
     decor: "drawing-source-decor",
     text: "drawing-source-text",
+    hiddenRow: "drawing-source-gutter-hidden",
     caret: "drawing-source-caret-layer",
     input: "drawing-source-input",
     line: "drawing-source-line"
@@ -110,13 +112,19 @@ function highlightLine(line) {
 
     if (commentAt === 0) {
         /*
-         * A MARKER GETS ITS OWN, MUTED CLASS. The test is the source module's,
-         * so a readable `% DAETUM OBJECT:` header is highlighted like the legacy
-         * markers rather than as ordinary prose - and a student's own comment
-         * that merely mentions DAETUM is not.
+         * EVERY COMMENT IS THE SAME MUTED GREY.
+         *
+         * A student's note, an object's `% DAETUM OBJECT:` header, a tool's own
+         * remark - all of them are `ds-comment`, so there is ONE comment colour
+         * and it is never re-decided per object, per tool or per visibility.
+         *
+         * THE OBJECT'S NAME LINE IS ALSO `ds-marker`, which only sets it UPRIGHT
+         * and heavier than prose: it is the line that says which object the code
+         * below belongs to and must stay easy to find while scrolling. It draws
+         * in the same comment ink, so being a header is a weight, not a colour.
          */
-        if (isObjectMarkerLine(line)) {
-            return `<span class="ds-marker">${escaped}</span>`;
+        if (isObjectNameComment(line)) {
+            return `<span class="ds-comment ds-marker">${escaped}</span>`;
         }
 
         return `<span class="ds-comment">${escaped}</span>`;
@@ -312,6 +320,16 @@ export function createSourceEditor(host, options = {}) {
      */
     let selectedRegions = [];
 
+    /*
+     * THE HIDDEN OBJECTS' BLOCKS, in the same { beginLine, endLine } form.
+     *
+     * They are DECORATION, not selection: they are painted from their own list
+     * so a hidden object that is also selected keeps its mark, its tint and its
+     * header icon - the hidden state must not depend on what the student has
+     * clicked. Resolved by the tab, exactly as the selection is.
+     */
+    let hiddenRegions = [];
+
     /* Error ranges in VISIBLE character offsets: [{ start, end }]. */
     let errorRanges = [];
 
@@ -334,15 +352,51 @@ export function createSourceEditor(host, options = {}) {
      * measure each line box exactly, so a wrapped line is as tall here as it is
      * there.
      */
-    function renderDecor(text) {
-        const split = lines(text);
-        const regions = new Set();
+    /*
+     * The one-based visible lines a list of regions covers, as a set for cheap
+     * membership while a layer is built.
+     */
+    function lineSet(regions) {
+        const set = new Set();
 
-        selectedRegions.forEach((region) => {
+        regions.forEach((region) => {
             for (let line = region.beginLine; line <= region.endLine; line += 1) {
-                regions.add(line);
+                set.add(line);
             }
         });
+
+        return set;
+    }
+
+    /*
+     * THE HEADER LINE OF A BLOCK is the line of its readable `% DAETUM OBJECT:`
+     * comment, which the tab reports with the region. Where a caller gives no
+     * header, the block's first line is the best answer there is.
+     */
+    function hiddenHeaderLines(regions) {
+        const headers = new Set();
+
+        regions.forEach((region) => headers.add(region.headerLine ?? region.beginLine));
+
+        return headers;
+    }
+
+    /*
+     * THE DECORATION LAYER: one block per line, whose background carries the
+     * object band, the hidden block's tint and edge, and the error mark. The text
+     * is the same as the text layer's, but made INVISIBLE rather than omitted -
+     * the glyphs are still needed to measure each line box exactly, so a wrapped
+     * line is as tall here as it is there.
+     *
+     * IT IS ALWAYS REBUILT FROM THE FULL TEXT and never depends on what is
+     * already in it, so it can be redrawn on every render - after a keystroke
+     * that moved every line, or when only the hidden state changed.
+     */
+    function renderDecor(text) {
+        const split = lines(text);
+        const regions = lineSet(selectedRegions);
+        const hidden = lineSet(hiddenRegions);
+        const hiddenHeaders = hiddenHeaderLines(hiddenRegions);
 
         decor.innerHTML = split
             .map((line, index) => {
@@ -353,11 +407,40 @@ export function createSourceEditor(host, options = {}) {
                     classes.push("selected");
                 }
 
+                if (hidden.has(number)) {
+                    classes.push("is-hidden");
+                }
+
+                if (hiddenHeaders.has(number)) {
+                    classes.push("is-hidden-header");
+                }
+
+                /*
+                 * `&nbsp;` FOR AN EMPTY LINE. A trailing or only space in a
+                 * `white-space: pre` block can measure as no width at all, and
+                 * the band would then be zero-width on a blank line that belongs
+                 * to the selected object. A non-breaking space always has the
+                 * line's own character width, so the row keeps its height and
+                 * its band.
+                 */
                 return `<div class="${classes.join(" ")}" data-line="${number}">${
-                    line ? escapeHtml(line) : " "
+                    line ? escapeHtml(line) : "&nbsp;"
                 }</div>`;
             })
             .join("");
+
+        /*
+         * THE EYE AT THE BLOCK'S EDGE. The gutter carries one beside the comment
+         * header; this one rides the header's own line, just inside the block's
+         * left edge, so a hidden object is recognisable from the code itself and
+         * not only from the margin.
+         */
+        hiddenHeaders.forEach((number) => {
+            decor.querySelector(`[data-line="${number}"]`)?.insertAdjacentHTML(
+                "afterbegin",
+                `<span class="ds-hidden-mark">${EYE_OFF_MARK_ICON}</span>`
+            );
+        });
 
         paintErrorRanges();
     }
@@ -403,20 +486,31 @@ export function createSourceEditor(host, options = {}) {
     }
 
     function renderText(text) {
+        const hidden = lineSet(hiddenRegions);
+
         textLayer.innerHTML = lines(text)
-            .map((line) => `<div class="${CLASS.line}">${line ? highlightLine(line) : " "}</div>`)
+            .map((line, index) => {
+                /*
+                 * A HIDDEN OBJECT'S CODE IS SET BACK, not recoloured: the same
+                 * syntax spans (so a command is still a command, a coordinate
+                 * still a coordinate) under one class that mutes them slightly.
+                 * The comment lines keep `--source-editor-comment` either way.
+                 */
+                const classes = [CLASS.line];
+
+                if (hidden.has(index + 1)) {
+                    classes.push("is-hidden");
+                }
+
+                return `<div class="${classes.join(" ")}">${line ? highlightLine(line) : " "}</div>`;
+            })
             .join("");
     }
 
     function renderGutter(text) {
         const count = lines(text).length;
-        const selected = new Set();
-
-        selectedRegions.forEach((region) => {
-            for (let line = region.beginLine; line <= region.endLine; line += 1) {
-                selected.add(line);
-            }
-        });
+        const selected = lineSet(selectedRegions);
+        const hiddenHeaders = hiddenHeaderLines(hiddenRegions);
 
         const fragment = ownerDocument.createDocumentFragment();
 
@@ -424,7 +518,29 @@ export function createSourceEditor(host, options = {}) {
             const row = ownerDocument.createElement("div");
 
             row.className = CLASS.gutterRow;
-            row.textContent = String(line);
+
+            /*
+             * THE EYE BESIDE A HIDDEN OBJECT'S HEADER. The number is kept as its
+             * own element and the icon sits before it, so the margin does not
+             * re-align; every row reserves the icon's width in the stylesheet,
+             * so the digits never move when an object is hidden or shown.
+             */
+            if (hiddenHeaders.has(line)) {
+                row.classList.add("is-hidden-header");
+
+                const mark = ownerDocument.createElement("span");
+
+                mark.className = CLASS.hiddenRow;
+                mark.innerHTML = EYE_OFF_MARK_ICON;
+                row.append(mark);
+            }
+
+            /* The number itself, in its own element so the icon shares the row. */
+            const number = ownerDocument.createElement("span");
+
+            number.className = "drawing-source-gutter-number";
+            number.textContent = String(line);
+            row.append(number);
 
             if (selected.has(line)) {
                 row.classList.add("selected");
@@ -1165,6 +1281,22 @@ export function createSourceEditor(host, options = {}) {
 
             renderDecor(currentText);
             renderGutter(currentText);
+        },
+
+        /* The hidden objects' blocks to decorate, exactly as the selection is. */
+        setHiddenRegions(regions) {
+            hiddenRegions = (regions || []).filter(
+                (region) => region && Number.isFinite(region.beginLine) && Number.isFinite(region.endLine)
+            );
+
+            /*
+             * ONLY THE HIDDEN STATE IS REDRAWN. The text layer and the caret are
+             * untouched, so a visibility change never re-lays-out the glyphs,
+             * never moves the caret and never rewrites a line of the text.
+             */
+            renderDecor(currentText);
+            renderGutter(currentText);
+            renderText(currentText);
         },
 
         /* Compatibility with the old single-object API. */

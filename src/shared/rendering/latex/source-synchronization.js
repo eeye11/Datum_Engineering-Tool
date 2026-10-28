@@ -115,6 +115,28 @@ export function sourceForObject(object, context = {}) {
     return null;
   }
 
+  /*
+   * A HIDDEN OBJECT WRITES NOTHING.
+   *
+   * The drawing is the compiled source, so an object the canvas does not draw
+   * must not be drawn here either - otherwise hiding a pipe would blank it on
+   * the sheet and leave it standing in the printed picture, which is the
+   * "invisible on the canvas, visible in the preview" failure the design calls
+   * out.
+   *
+   * IT IS DONE HERE, ONCE, rather than in each writer: every type's writer goes
+   * through this function, so a tool added tomorrow is covered without being
+   * thought about, and no writer can forget the rule.
+   *
+   * The object is NOT lost. Its identity, geometry, style and connections stay
+   * in the model, and `writeObjectSource` removes only its region from the
+   * text - the same block that reappears, with the same id, when it is shown
+   * again.
+   */
+  if (object.visible === false) {
+    return null;
+  }
+
   for (let index = sourceWriters.length - 1; index >= 0; index -= 1) {
     let written;
 

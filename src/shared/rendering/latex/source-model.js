@@ -138,6 +138,16 @@ export function pathOperations(body) {
   const operations = [];
   let index = 0;
 
+  /*
+   * THE POLAR OFFSET BEFORE AN ARC.
+   *
+   * TikZ writes "draw from this angle at this radius" as `++(from:r)`, and an arc
+   * drawn that way states only a start angle and a delta. The offset is remembered
+   * here so the arc it belongs to can be read as the one arc it is, rather than as
+   * a path with an unrecognised word in it.
+   */
+  let lastPolarAngle = null;
+
   while (index < body.length) {
     const character = body[index];
 
@@ -220,7 +230,31 @@ export function pathOperations(body) {
     if (character === "(") {
       const end = endOfGroup(body, index, "(", ")");
 
-      operations.push({ type: "point", value: coordinateValue(body.slice(index + 1, end - 1)) });
+      const inner = body.slice(index + 1, end - 1);
+
+      /* `++(angle:radius)` is a polar OFFSET, not a coordinate. */
+      if (body[index - 1] === "+" && body[index - 2] === "+" && inner.includes(":") && !inner.includes(",")) {
+        const [angleText, radiusText] = inner.split(":");
+
+        lastPolarAngle = Number(angleText);
+
+        /*
+         * A POLAR OFFSET IS ITS OWN OPERATION, not a coordinate: it moves the
+         * pen without naming a position. Keeping it as a `polar` op is what lets
+         * the ONE path that is a plain TikZ arc - a centre plus a `++` plus the
+         * arc - be recognised without any other path being mistaken for a shape.
+         */
+        operations.push({
+          type: "polar",
+          angle: lastPolarAngle,
+          radius: Number(radiusText)
+        });
+
+        index = end;
+        continue;
+      }
+
+      operations.push({ type: "point", value: coordinateValue(inner) });
       index = end;
       continue;
     }
@@ -302,15 +336,18 @@ export function pathOperations(body) {
         let startAngle = null;
         let endAngle = null;
         let radius = null;
+        let deltaAngle = null;
 
         if (body[index] === "[") {
           const options = optionsAt(body, index);
           const start = /start\s+angle\s*=\s*(-?[\d.]+)/.exec(options);
           const finish = /end\s+angle\s*=\s*(-?[\d.]+)/.exec(options);
+          const delta = /delta\s+angle\s*=\s*(-?[\d.]+)/.exec(options);
           const size = /radius\s*=\s*([\d.]+)/.exec(options);
 
           startAngle = start ? Number(start[1]) : null;
           endAngle = finish ? Number(finish[1]) : null;
+          deltaAngle = delta ? Number(delta[1]) : null;
           radius = size ? Number(size[1]) : null;
 
           index = afterOptions(body, index);
@@ -325,7 +362,19 @@ export function pathOperations(body) {
           index = end;
         }
 
-        operations.push({ type: "arc", startAngle, endAngle, radius });
+        operations.push({
+          type: "arc",
+          startAngle,
+          endAngle: Number.isFinite(endAngle)
+            ? endAngle
+            : Number.isFinite(startAngle) && Number.isFinite(deltaAngle)
+              ? startAngle + deltaAngle
+              : null,
+          radius,
+          deltaAngle,
+          polarAngle: lastPolarAngle
+        });
+        lastPolarAngle = null;
         continue;
       }
 
@@ -356,7 +405,7 @@ function shapeOfPath(body) {
 
   /* Anything that is not a plain point, line, cycle, shape or curve marker. */
   const plain = operations.every((operation) =>
-    ["point", "line", "cycle", "circle", "rectangle", "arc"].includes(operation.type)
+    ["point", "polar", "line", "cycle", "circle", "rectangle", "arc"].includes(operation.type)
   );
 
   if (!plain) {
@@ -370,7 +419,6 @@ function shapeOfPath(body) {
   }
 
   const kinds = operations.map((operation) => operation.type).join(" ");
-
   if (kinds === "point line point" && points.length === 2) {
     return { type: "line", from: points[0].value, to: points[1].value };
   }
@@ -403,12 +451,59 @@ function shapeOfPath(body) {
           centre: points[0].value,
           radius: arc.radius,
           startAngle: arc.startAngle,
-          endAngle: arc.endAngle
+          endAngle: arc.endAngle,
+          deltaAngle: arc.deltaAngle ?? null
         }
       : null;
   }
 
+  /*
+   * A WALL OF A FITTING: an `arc` WRITTEN AS A POINT OFFSET.
+   *
+   * The elbow writer emits `\draw (centre) ++(from:r) arc[start angle=..., delta
+   * angle=..., radius=...]` when both of its ends are drawn at the same width -
+   * the ordinary case - and this is that statement. The polar offset IS the
+   * arc's position on its circle, so the whole path reduces to the one arc it
+   * draws, about `centre`, from `from` sweeping by `delta`.
+   *
+   * WITHOUT THIS the written form of a plain elbow could not be read back, and the
+   * Source tab would report DAETUM's own output as a shape it cannot edit.
+   */
+  if (kinds === "point polar arc" && points.length === 1) {
+    const arc = operations.find((operation) => operation.type === "arc");
+    const polar = polarOffsetOf(arc);
+
+    if (!polar || !Number.isFinite(arc.radius) || !(arc.radius > 0)) {
+      return null;
+    }
+
+    return {
+      type: "arc",
+      centre: points[0].value,
+      radius: arc.radius,
+      startAngle: polar.angle,
+      endAngle: polar.angle + polar.delta,
+      deltaAngle: polar.delta
+    };
+  }
+
   return null;
+}
+
+/* The `++(from:r)` a TikZ arc is drawn from, when the statement carries one. */
+function polarOffsetOf(arc) {
+  if (!arc) {
+    return null;
+  }
+
+  const from = Number(arc.polarAngle);
+  const delta = Number(arc.deltaAngle);
+
+  if (!Number.isFinite(from) || !Number.isFinite(delta)) {
+    return null;
+  }
+
+  return { angle: from, delta };
 }
 
 /* `line width=0.28mm` -> 0.28. */
@@ -595,6 +690,12 @@ export function blockContents(source, map) {
         beginLine: block.beginLine,
         endLine: block.endLine,
         unclosed: Boolean(block.unclosed),
+        /*
+         * THE HEADER, AND THE BODY. A block's metadata lives in its header - an
+         * arrow's attachment, a schematic's own model line - so a reader that
+         * needs to know WHAT the block is must see both.
+         */
+        header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart)).join("\n"),
         body: lines.slice(bodyStart, bodyEnd).join("\n"),
         statements: inside.map((statement) => {
           const statementText = text.slice(statement.start, statement.end);

@@ -22,7 +22,7 @@ import { activeCategory, closeCoordinateSystemMenu } from "../../../components/l
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { cancelTrussConstruction } from "../statics/truss-tool.js";
 import { fitDrawingToView } from "../../../components/layout/workspace/viewport.js";
-import { ROUTE_PHASE, cancelRouteConstruction } from "./pipe-duct-tool.js";
+import { ROUTE_PHASE, ELBOW_PHASE, cancelRouteConstruction, cancelElbowConstruction } from "./pipe-duct-tool.js";
 import { formatDrawingSource } from "../commands/source-commands.js";
 
 /*
@@ -398,6 +398,20 @@ export function installKeyboardShortcuts() {
                     editorState.creationDrag = null;
 
                     cancelRouteConstruction();
+                    return;
+                }
+
+                /*
+                 * THE SAME GUARANTEE FOR AN ELBOW: nothing is written until
+                 * the release, so Escape only drops the fitting being dragged.
+                 */
+                if (
+                    drawingState.interaction.phase === ELBOW_PHASE ||
+                    drawingState.interaction.fluidsTool === "elbow"
+                ) {
+                    editorState.creationDrag = null;
+
+                    cancelElbowConstruction();
                     return;
                 }
 

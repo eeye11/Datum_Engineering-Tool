@@ -16,7 +16,20 @@ import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBod
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
-import { beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+import { beginElbowConstruction, beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+import { beginJunctionConstruction } from "../../../features/workspace/interaction/junction-tool.js";
+import {
+  resumeFlowArrowConstruction
+} from "../../../features/workspace/interaction/flow-arrow-tool.js";
+import {
+  beginInlineToolSession,
+  beginVesselToolSession,
+  beginFluidLevelToolSession,
+  beginFlowDirectionToolSession,
+  beginPressureProfileToolSession,
+  beginFlowProfileToolSession,
+  beginSectionToolSession
+} from "../../../features/workspace/interaction/fluids-schematic-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -215,7 +228,32 @@ export function activateTool(
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
-        requestedTool === "polygon";
+        requestedTool === "polygon" ||
+
+        /*
+         * AND EVERY FLUIDS ROUTE-STYLE TOOL: each places a feature per
+         * gesture, and re-clicking one keeps it armed so the next placement
+         * needs no second press on the button.
+         */
+        requestedTool === "pipe-duct" ||
+        requestedTool === "junction" ||
+        requestedTool === "elbow" ||
+        requestedTool === "flow-arrow" ||
+
+        /*
+         * AND EVERY SCHEMATIC TOOL: each places its object per gesture, so
+         * re-clicking one keeps it armed rather than cancelling it.
+         */
+        requestedTool === "reducer-expander" ||
+        requestedTool === "pump" ||
+        requestedTool === "valve" ||
+        requestedTool === "flow-meter" ||
+        requestedTool === "reservoir-tank" ||
+        requestedTool === "fluid-level" ||
+        requestedTool === "flow-direction-diagram" ||
+        requestedTool === "pressure-profile" ||
+        requestedTool === "flow-profile" ||
+        requestedTool === "section-plane";
 
     const nextTool =
         drawingState.activeTool ===
@@ -286,6 +324,98 @@ export function activateTool(
      */
     if (requestedTool === "pipe-duct") {
         beginRouteConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * THE ELBOW IS THE SAME KIND OF TOOL - a press, a drag and a release.
+     * Arming it begins no construction: there is nothing until the student
+     * presses, exactly as for a run.
+     */
+    /*
+     * THE JUNCTION IS THE THIRD OF THE SAME KIND. Press, drag, release: the
+     * press is the hub and the drag its main run.
+     */
+    if (requestedTool === "junction") {
+        beginJunctionConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    if (requestedTool === "elbow") {
+        beginElbowConstruction();
+
+        renderEngineeringTools(
+            activeCategory()
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * THE FLOW ARROW IS THE FOURTH OF THE SAME KIND - a press, a drag and a
+     * release. Arming it begins no construction: there is nothing until the
+     * student presses ON a pipe, exactly as a run waits for its first press.
+     *
+     * A PLACEMENT THAT ENDED IN SELECT RESUMES HERE. Placing an arrow, pressing
+     * on empty canvas or being refused a duplicate all leave the drawing in
+     * Select - which is the required behaviour, and which means the button is
+     * no longer lit. Pressing Flow Arrow again is therefore NOT a re-click of an
+     * active tool; it is the student asking for the tool again, so it is armed
+     * afresh rather than toggled away. Nothing is created and no message is
+     * printed by either path.
+     */
+    /*
+     * ========================================================
+     * THE SCHEMATIC TOOLS ARM THEMSELVES
+     * ========================================================
+     *
+     * Each of these is its OWN tool id - no shared primitive - because each is
+     * its own object with its own gesture. Arming one sets the active tool to
+     * that id, clears any construction the last tool left behind, and prints
+     * its own instruction; the canvas then routes the press to it.
+     */
+    const schematicTools = {
+    	"reducer-expander": beginInlineToolSession,
+    	"pump": beginInlineToolSession,
+    	"valve": beginInlineToolSession,
+    	"flow-meter": beginInlineToolSession,
+    	"reservoir-tank": beginVesselToolSession,
+    	"fluid-level": beginFluidLevelToolSession,
+    	"flow-direction-diagram": beginFlowDirectionToolSession,
+    	"pressure-profile": beginPressureProfileToolSession,
+    	"flow-profile": beginFlowProfileToolSession,
+    	"section-plane": beginSectionToolSession
+    };
+
+    const beginSchematic = schematicTools[requestedTool];
+
+    if (beginSchematic) {
+    	beginSchematic(toolId);
+
+    	renderEngineeringTools(activeCategory());
+    	renderCurrentDrawing();
+
+    	return;
+    }
+
+    if (requestedTool === "flow-arrow") {
+        resumeFlowArrowConstruction();
 
         renderEngineeringTools(
             activeCategory()
