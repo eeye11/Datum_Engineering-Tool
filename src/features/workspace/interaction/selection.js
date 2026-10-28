@@ -28,6 +28,7 @@ import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-ac
 import { activeCategory, closeCoordinateSystemMenu, closePolygonSidesPrompt } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
+import { STATICS_CHILD_TOOLS } from "../statics/statics-tools.js";
 import { clearGlobalToolHighlight } from "../../../components/layout/workspace/workspace-controls.js";
 import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
 
@@ -158,6 +159,22 @@ function startDerivedAnnotationDrag(
  * not on a label returns false, so creation, manipulation and selection all
  * carry on exactly as they did.
  */
+/*
+ * A STATICS TOOL BETWEEN FEATURES MAY GRAB A VALUE.
+ *
+ * Statics tools stay armed after placing, so "move the value I just made"
+ * happens with the tool still active - and handing that press to the tool
+ * started a NEW load under the number while the number stayed put. A press ON
+ * a Statics value, while nothing is being constructed, moves the value;
+ * anywhere else the armed tool still takes the press.
+ */
+function staticsToolBetweenFeatures() {
+    return Boolean(
+        STATICS_CHILD_TOOLS[drawingState.activeTool] &&
+            drawingState.interaction.phase === "idle"
+    );
+}
+
 export function beginAnnotationDrag(
     event
 ) {
@@ -169,8 +186,9 @@ export function beginAnnotationDrag(
      * that tool instead. Without this, starting a Line by pressing near a
      * force's magnitude moved the label rather than drawing, which is exactly
      * the accidental manipulation the active-tool rule exists to prevent.
+     * (One exception: see `staticsToolBetweenFeatures`.)
      */
-    if (!allowsDirectManipulation()) {
+    if (!allowsDirectManipulation() && !staticsToolBetweenFeatures()) {
         return false;
     }
 
@@ -207,9 +225,16 @@ export function beginAnnotationDrag(
     }
 
     const selectedIds = drawingState.selection.selectedObjectIds;
-    if (selectedIds.includes(picked.sourceFeatureId)) {
-        // A force and its label are one selected feature, even when it is
-        // the only feature inside the selection rectangle.
+    /*
+     * A GROUP MOVES TOGETHER; ONE FEATURE'S NUMBER MOVES ALONE.
+     *
+     * With several features selected, a press on one of their labels moves
+     * the whole group, label included. With only the label's own feature
+     * selected, a press on the NUMBER means "move the number": handing it to
+     * the feature drag instead carried a selected load off its beam whenever
+     * a student tried to reposition its value.
+     */
+    if (selectedIds.length > 1 && selectedIds.includes(picked.sourceFeatureId)) {
         return false;
     }
 

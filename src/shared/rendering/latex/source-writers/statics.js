@@ -339,17 +339,30 @@ function headFor(style, fallback = "filled") {
  * A TikZ tip's size is PHYSICAL and does not follow the coordinates, so a head
  * on a reduced figure would stay full-size on a hairline shaft - visibly out of
  * proportion. `arrows.meta` is loaded by DAETUM's renderer and by the standalone
- * export, and lets the size be stated: `{Latex[length=.., width=..]}`. At scale
- * 1 the plain token is written, which is the code a reader expects.
+ * export, and lets the size be stated: `{Latex[length=.., width=..]}`.
+ *
+ * A STATICS HEAD IS LARGER THAN TikZ's DEFAULT, AND ALWAYS STATED. The default
+ * head (about 2.5 mm) suits a thin geometry arrow, but on a free-body diagram
+ * the head is what says which way a force acts - and once the figure is fitted
+ * to the page it shrank to a speck the student could barely see. So every
+ * Statics arrow carries the larger head, at every scale.
  *
  * The factor comes from the transform in effect for THIS object, so the head
  * and the shaft it belongs to are always scaled by the same one.
  */
+/*
+ * `sizeMultiplier` asks for a larger head than the Statics one (a moment's
+ * curved shaft reads better with more head). The larger of the two is used, so
+ * the Statics base and a caller's own enlargement never compound.
+ */
+const STATICS_ARROW_HEAD_SCALE = 1.7;
+
 function scaledTip(tip, sizeMultiplier = 1) {
   const transform = currentExportTransform();
   const factor = Number(transform?.factor);
+  const scale = Number.isFinite(factor) && factor < 1 ? factor : 1;
 
-  if (!tip || (sizeMultiplier === 1 && (!Number.isFinite(factor) || factor >= 1))) {
+  if (!tip) {
     return tip;
   }
 
@@ -359,8 +372,9 @@ function scaledTip(tip, sizeMultiplier = 1) {
     return tip;
   }
 
-  const exportScale = Number.isFinite(factor) && factor < 1 ? factor : 1;
-  const length = Number((NOMINAL_ARROW_HEAD_PT * exportScale * sizeMultiplier).toFixed(3));
+  const length = Number(
+    (NOMINAL_ARROW_HEAD_PT * scale * Math.max(STATICS_ARROW_HEAD_SCALE, sizeMultiplier)).toFixed(3),
+  );
   const width = Number((length * 0.6).toFixed(3));
 
   return `{${name[1]}[length=${length}pt, width=${width}pt]}`;
@@ -926,7 +940,20 @@ function serializeLoadArrows(entity, object) {
   const farEnds = [];
 
   samples.forEach((sample) => {
-    if (!(sample.magnitude > 0) || !validPoint(sample.base)) {
+    if (!validPoint(sample.base) || !Number.isFinite(Number(sample.magnitude))) {
+      return;
+    }
+
+    /*
+     * A ZERO INTENSITY HAS NO ARROW, but the envelope still passes through the
+     * span there - which is where a profile crossing from one side to the
+     * other meets its baseline.
+     */
+    if (Number(sample.magnitude) === 0) {
+      const at = { x: Number(sample.base.x), y: Number(sample.base.y) };
+
+      bases.push(at);
+      farEnds.push(at);
       return;
     }
 
@@ -939,9 +966,16 @@ function serializeLoadArrows(entity, object) {
 
     const reach = loadArrowLength(object.geometry || {}, sample.magnitude);
 
+    /*
+     * A NEGATIVE INTENSITY ACTS THE OTHER WAY. Its arrow leaves the same base
+     * in the opposite direction, so a profile that changes sign is drawn on
+     * one plot: one side of the span for positive, the other for negative.
+     */
+    const sense = Number(sample.magnitude) < 0 ? -1 : 1;
+
     const far = {
-      x: base.x + direction.x * reach,
-      y: base.y + direction.y * reach,
+      x: base.x + direction.x * reach * sense,
+      y: base.y + direction.y * reach * sense,
     };
 
     bases.push(base);
@@ -1086,12 +1120,30 @@ function supportFrame(geometry) {
 
 function serializeSupport(entity, object) {
   let geometry = object.geometry || {};
-  if (entity.type === "fixed-support" && object.parentId) {
+
+  /*
+   * A SUPPORT ON A BODY FACES AWAY FROM THAT BODY, as the canvas draws it.
+   * Only a Fixed support used to read its body here; a Pin or Roller fell back
+   * to its stored orientation of 0 - which this frame reads as "out along +x" -
+   * so every one of them was written lying on its side. The direction is the
+   * body's own normal on the support's side (the canvas's `supportAngle`, in
+   * model rather than screen sense).
+   */
+  if (object.parentId) {
     const parent = entity.__generationOptions?.state?.objects?.find(item => item.id === object.parentId);
     const bodyFrame = parent && bodyFrames.frameOf(parent);
     const attachment = bodyFrame && bodyFrames.attachmentPoint(bodyFrame, geometry.attachment);
-    const placement = attachment && bodyFrames.supportPlacement(parent, attachment, false, { fixed: true });
-    if (placement) geometry = { ...geometry, position: placement.render, orientation: placement.orientation };
+    const fixed = entity.type === "fixed-support";
+    const flipped = !fixed && geometry.flipped === true;
+    const placement = attachment && bodyFrames.supportPlacement(parent, attachment, flipped, { fixed });
+
+    if (placement) {
+      geometry = {
+        ...geometry,
+        position: placement.render,
+        orientation: fixed ? placement.orientation : -bodyFrames.supportAngle(bodyFrame, flipped),
+      };
+    }
   }
   const frame = supportFrame(geometry);
   const options = styleOptions(object.style);

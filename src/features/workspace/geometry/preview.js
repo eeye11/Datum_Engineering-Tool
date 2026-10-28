@@ -19,10 +19,9 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { polygonFromCursor, closingFreeformPolygon } from "./geometry-creation.js";
 import { LOAD_BUILD_PHASES, constantLoadDraft, distributedLoadDirectionCursor, distributedLoadDraft, isLoadBuildPhase, isLoadSpanPhase, loadBuildInstruction } from "../statics/load-tool.js";
 import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInteractionFeedback } from "../interaction/pointer.js";
-import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, keepStaticsToolArmed, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
@@ -1868,7 +1867,7 @@ function staticsPreviewType(
             stored.id
         );
 
-        activateTool("select");
+        keepStaticsToolArmed();
 
         renderProperties();
         renderCurrentDrawing();
@@ -1909,6 +1908,7 @@ function staticsPreviewType(
         openLoadValuePopup({
             title: "Applied Moment",
             label: "Magnitude",
+            nearPointer: true,
 
             value: Number(object.geometry.magnitude) || "",
 

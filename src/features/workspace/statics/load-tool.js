@@ -4,15 +4,14 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
-import { openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
+import { closeLoadValuePopup, openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { distanceToSegment, isRectangleLike, objectPoints } from "../interaction/hit-testing.js";
-import { cancelInteraction } from "../interaction/selection.js";
 import { staticsAttachedStyle, staticsBodyAtPoint } from "./statics-attachment.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+import { keepStaticsToolArmed } from "./statics-tools.js";
 
 /*
  * THE DISTRIBUTED LOAD, AS ONE CONTINUOUS FEATURE
@@ -1069,10 +1068,12 @@ export function distributedLoadDraft(
         const dx = cursor.x - base.x;
         const dy = cursor.y - base.y;
 
-        return Math.max(
-            0,
-            dx * vector.x + dy * vector.y
-        );
+        /*
+         * SIGNED. A point placed on the far side of the span, against the
+         * load's direction, is a NEGATIVE intensity - the profile changes
+         * sign there and is drawn on the other side of the same baseline.
+         */
+        return dx * vector.x + dy * vector.y;
     };
 
     /*
@@ -1235,7 +1236,7 @@ function distributedLoadSnapGeometry(
          * snap to and alignment references - with no new snap type.
          */
         const tip =
-            point.magnitude > 0
+            point.magnitude !== 0
                 ? {
                       x:
                           along.x +
@@ -1377,10 +1378,28 @@ export function continueDistributedLoadBuild(
      * removes it, so a profile never gains a point whose value nobody gave -
      * which is the state the old flow could reach by clicking quickly.
      */
+    /*
+     * THE STATION UNDER THE CURSOR, found by its position along the span. A
+     * click on an existing station REPLACES that point in place, so the last
+     * entry of the list is not necessarily this one - reading it offered the
+     * previous point's value as this point's suggestion.
+     */
+    const clickedT =
+        enggLoadProfile.fractionAlong(
+            {
+                start: draft.start,
+                end: draft.end
+            },
+            point
+        );
+
     const station =
-        draft.points.length
+        draft.points.find(
+            entry => Math.abs(entry.t - clickedT) < 1e-6
+        ) ||
+        (draft.points.length
             ? draft.points[draft.points.length - 1]
-            : null;
+            : null);
 
     const suggested =
         station && Number.isFinite(station.magnitude)
@@ -1392,6 +1411,8 @@ export function continueDistributedLoadBuild(
         label: `Point ${draft.points.length} Magnitude`,
         value: Number(suggested).toFixed(2),
         unit: loadUnitOfInteraction(interaction),
+        confirmOnOutside: true,
+        nearPointer: true,
 
         /*
          * THE BOTTOM BAR SAYS WHAT THE OPEN POPUP IS ASKING FOR. The current
@@ -1482,7 +1503,7 @@ function commitDistributedLoadPoint({
 
     const entry = {
         t,
-        magnitude: Math.max(0, Number(magnitude) || 0)
+        magnitude: Number(magnitude) || 0
     };
 
     if (existing >= 0) {
@@ -1810,6 +1831,14 @@ function openLoadMagnitudePopup({
         unit,
 
         /*
+         * THE LOAD DOES NOT EXIST UNTIL THIS IS CONFIRMED, so a click
+         * elsewhere - the Select button, the canvas - accepts the value shown
+         * rather than throwing the whole load away. Escape still cancels.
+         */
+        confirmOnOutside: true,
+        nearPointer: true,
+
+        /*
          * THE BOTTOM BAR REPORTS THE OPEN POPUP'S QUESTION. The current step
          * is said in one place, and while the value is being entered that step
          * is the entry itself.
@@ -1887,8 +1916,7 @@ function commitConstantLoadFromPopup({
         previous
     );
 
-    cancelInteraction();
-    activateTool("select");
+    keepStaticsToolArmed();
 
     setToolMessage(
         "Distributed load created"
@@ -2104,6 +2132,13 @@ function commitConstantLoad(
  * rather than as a crowd of separate forces.
  */
 export function finishDistributedLoadConstruction() {
+    /*
+     * A POINT'S VALUE POPUP LEFT OPEN must not outlive the load: confirmed
+     * later, it would restart the build from its own stale draft and finish
+     * the load a second time.
+     */
+    closeLoadValuePopup();
+
     const interaction =
         drawingState.interaction;
 
@@ -2244,7 +2279,7 @@ export function finishDistributedLoadConstruction() {
         object.id
     );
 
-    activateTool("select");
+    keepStaticsToolArmed();
 
     setToolMessage(
         "Distributed load created"

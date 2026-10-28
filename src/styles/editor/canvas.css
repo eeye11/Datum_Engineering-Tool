@@ -288,6 +288,28 @@
 }
 
 /*
+ * TEXT ON THE SHEET CLEARS A SPACE FOR ITSELF.
+ *
+ * A value or a label often sits over the thing it describes - a moment's
+ * "M = 50 N·m" across its own ring, a force's value across a member. Each
+ * glyph is given a thin outline in the canvas colour, painted BEHIND the
+ * letter (`paint-order`), so a line passing under the text is interrupted
+ * just around the letters and nowhere else. Where nothing overlaps there is
+ * nothing to see; where something does, the text stays readable and the
+ * drawing stays visible around it.
+ *
+ * `non-scaling-stroke` keeps the halo the same on-screen width whatever the
+ * zoom or the picture's own scale.
+ */
+.drawing-canvas text {
+    paint-order: stroke fill;
+    stroke: var(--canvas-background);
+    stroke-width: 3px;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+}
+
+/*
  * THE AXES, distinguishable from the ordinary grid.
  *
  * An axis is a REFERENCE, not a guide: it marks where the origin is, so it must

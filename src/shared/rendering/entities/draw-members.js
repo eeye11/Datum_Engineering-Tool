@@ -7,7 +7,7 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, MAX_TICKS_PER_AXIS, analysisFrameExtents, analysisValueScale, appendAnalysisPlot, appendAnalysisSketch, numberText, tickValues } from "../analysis-render.js";
-import { applyStyle, createSvgElement, paintColour, scaledStrokeWidth, zoomedFontHere } from "../svg-primitives.js";
+import { applyStyle, createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth, zoomedFontHere } from "../svg-primitives.js";
 import enggDiagramEquations from "../../../features/workspace/model/analysis/diagram-equations.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
@@ -93,7 +93,22 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                  * generated code, and the fit reserved only half of it. One
                  * constant, read by the canvas, the writer and the bounds.
                  */
-                const depth = BEAM_HALF_DEPTH;
+                /*
+                 * THE BEAM'S OWN DEPTH, IN MODEL UNITS, AS THE SOURCE DRAWS IT.
+                 * A fixed screen half-depth ignored the Depth the student set
+                 * and drew a thinner bar than the supports attached to its
+                 * real face, so they floated off it. The bar is scaled from
+                 * the model by the same projection as its ends.
+                 */
+                const modelLength = Math.hypot(end.x - start.x, end.y - start.y);
+                const pixelsPerUnit = modelLength > 1e-9 ? length / modelLength : 1;
+                const storedDepth = Number(geometry.depth);
+                const depth = (storedDepth > 0 ? storedDepth / 2 : BEAM_HALF_DEPTH) * pixelsPerUnit;
+
+                /* And its Features appearance: line style, thickness and fill. */
+                const dash = dashPatternFor(style.lineType);
+                const solid = String(style.fillMode || "").toLowerCase() === "solid";
+                const fillColour = /^#[0-9a-fA-F]{6}$/.test(String(style.fill || "")) ? style.fill : style.stroke;
 
                 svg.appendChild(
                     createSvgElement("polygon", {
@@ -103,9 +118,12 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                             `${to.x - nx * depth},${to.y - ny * depth}`,
                             `${from.x - nx * depth},${from.y - ny * depth}`
                         ].join(" "),
-                        fill: "none",
+                        fill: solid ? paintColour(fillColour || enggTheme.defaultLineColour()) : "none",
                         stroke,
-                        "stroke-width": 1.4
+                        "stroke-width": Number.isFinite(Number(style.lineWidth))
+                            ? scaledStrokeWidth(Number(style.lineWidth))
+                            : 1.4,
+                        ...(dash ? { "stroke-dasharray": dash } : {})
                     })
                 );
             } else if (

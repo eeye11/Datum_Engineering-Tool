@@ -322,8 +322,8 @@ check("a plot's curve reaches the source", /--/.test(plotted), plotted);
 
 check(
   "the diagram's reference axis is opaque unless the object is not",
-  /draw\[([^\]]*)\] \(-30,-40\) -- \(30,-40\);/.test(plotted) &&
-    !/draw opacity/.test("/".concat(plotted.match(/draw\[([^\]]*)\] \(-30,-40\) -- \(30,-40\);/) || [])),
+  /draw\[((?:[^\[\]]|\[[^\]]*\])*)\] \(-30,-40\) -- \(30,-40\);/.test(plotted) &&
+    !/draw opacity/.test("/".concat(plotted.match(/draw\[((?:[^\[\]]|\[[^\]]*\])*)\] \(-30,-40\) -- \(30,-40\);/) || [])),
   plotted,
 );
 

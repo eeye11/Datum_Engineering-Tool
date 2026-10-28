@@ -1168,7 +1168,7 @@ function applyManipulation(
      * away from the rest.
      */
     const jointMatch =
-        /^truss-joint(\d)$/.exec(drag.kind);
+        /^truss-joint(\d+)$/.exec(drag.kind);
 
     if (jointMatch) {
         moveTrussJoint(

@@ -15,6 +15,37 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 import { COMPONENT_COLOURS } from "../component-colours.js";
 import { isConnectionType, isSupportType } from "../../model/feature-types.js";
 
+/* One component's "Fx = 67.5 N", at the middle of its own arrow. */
+function appendComponentValue(svg, pair, shown, symbol, value, colour, toScreen) {
+    const number = Number(value);
+
+    if (!shown || !pair?.start || !pair?.end || !Number.isFinite(number)) {
+        return;
+    }
+
+    const start = toScreen(pair.start);
+    const end = toScreen(pair.end);
+
+    if (Math.hypot(end.x - start.x, end.y - start.y) < 1) {
+        return;
+    }
+
+    const horizontal = Math.abs(end.y - start.y) < Math.abs(end.x - start.x);
+    const rounded = Math.round(number * 10) / 10;
+
+    const text = createSvgElement("text", {
+        x: horizontal ? (start.x + end.x) / 2 : start.x - 8,
+        y: horizontal ? start.y + 18 : (start.y + end.y) / 2 + 4,
+        fill: colour,
+        "font-size": 13,
+        "font-family": "Arial, sans-serif",
+        "text-anchor": horizontal ? "middle" : "end"
+    });
+
+    text.textContent = `${symbol} = ${rounded} N`;
+    svg.appendChild(text);
+}
+
 
         /*
          * STATICS SYMBOL FEATURES
@@ -191,6 +222,17 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                             appendVectorArrow(svg, toScreen(end), toScreen(geometry.original.end), stroke, guideStyle, "construction");
                         }
                     }
+                    /*
+                     * EACH COMPONENT STATES ITS OWN VALUE, beside its own arrow
+                     * and in its colour - Fx under the horizontal, Fy left of
+                     * the vertical - the same text the TikZ source writes. The
+                     * values are the stored, calculated forceX / forceY.
+                     */
+                    if (geometry.showValues !== false) {
+                        appendComponentValue(svg, x, geometry.showX !== false, "Fx", geometry.forceX, COMPONENT_COLOURS.x, toScreen);
+                        appendComponentValue(svg, y, geometry.showY !== false, "Fy", geometry.forceY, COMPONENT_COLOURS.y, toScreen);
+                    }
+
                     appendDerivedMagnitude(svg, entity, state, toScreen, style);
                     parentSvg.appendChild(svg);
                     return true;
@@ -400,7 +442,13 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                             frame,
                             flipped
                         )
-                        : Number(geometry.orientation) || 0,
+                        /*
+                         * A FREE SUPPORT'S STORED ANGLE IS IN MODEL SENSE (y up),
+                         * as the source reads it; the screen's y runs down, so
+                         * it is negated here - the same conversion the fixed
+                         * support's body angle gets above.
+                         */
+                        : -(Number(geometry.orientation) || 0),
 
                     stroke
                 );

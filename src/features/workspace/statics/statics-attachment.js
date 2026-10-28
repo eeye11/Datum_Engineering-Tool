@@ -13,8 +13,7 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { isStaticsBody, trussJointHandles } from "../interaction/handles.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
 import { beginMomentPlacement } from "../geometry/preview.js";
-import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, staticsAttachmentId, staticsBodyMessage, staticsToolPointCount } from "./statics-tools.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, keepStaticsToolArmed, staticsAttachmentId, staticsBodyMessage, staticsToolPointCount } from "./statics-tools.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
@@ -379,6 +378,9 @@ export function staticsBodyAtPoint(
  * nothing is created yet. The valid placement locations then
  * appear along it, and the feature is built on a later click.
  */
+/* Half the span a connection placed on empty sheet is given, in model units. */
+const FREE_CONNECTION_HALF_SPAN = 8;
+
 export function beginStaticsAttachment(
     resolution
 ) {
@@ -425,7 +427,40 @@ export function beginStaticsAttachment(
               )
             : staticsBodyAtPoint(point);
 
+    /*
+     * A SUPPORT OR A CONNECTION MAY STAND ON ITS OWN.
+     *
+     * Clicked on a body, it attaches and slides with it, as before. Clicked
+     * on empty sheet, the symbol is simply placed there: a student can draw
+     * the symbol first and turn it with Rotate in Transform, rather than
+     * being refused until a body exists. A free connection is given a short
+     * span of its own, centred on the click.
+     */
     if (!body) {
+        const type =
+            STATICS_CHILD_TOOLS[drawingState.activeTool]?.type;
+
+        if (isSupportType(type) || isConnectionType(type)) {
+            enggDrawingState.setInteraction(
+                drawingState,
+                {
+                    staticsTarget: null
+                }
+            );
+
+            commitStaticsAttachment(
+                isConnectionType(type)
+                    ? [
+                          { x: point.x - FREE_CONNECTION_HALF_SPAN, y: point.y },
+                          { x: point.x + FREE_CONNECTION_HALF_SPAN, y: point.y }
+                      ]
+                    : [point],
+                resolution
+            );
+
+            return;
+        }
+
         setToolMessage(
             "Select a body to attach to"
         );
@@ -768,6 +803,15 @@ function commitStaticsAttachment(
         body?.id ??
         undefined;
 
+    /*
+     * A FREE-STANDING SUPPORT STARTS UPRIGHT - its symbol below the point,
+     * as it would sit under a horizontal beam. The angle is the model-space
+     * direction away from the (absent) body, so straight down.
+     */
+    if (!body && isSupportType(type)) {
+        object.geometry.orientation = -Math.PI / 2;
+    }
+
     enggDrawingState.addObject(
         drawingState,
         object
@@ -787,7 +831,7 @@ function commitStaticsAttachment(
         object.id
     );
 
-    activateTool("select");
+    keepStaticsToolArmed();
 
     renderProperties();
     renderCurrentDrawing();

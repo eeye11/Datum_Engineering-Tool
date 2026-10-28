@@ -329,7 +329,13 @@ import enggCanvasPalette from "./canvas-palette.js";
             y1: from.y,
             x2: to.x,
             y2: to.y,
-            stroke: style?.stroke || "#000000",
+            /*
+             * THROUGH THE THEME, like every other stroke. The raw stored
+             * colour is black, which vanished on the dark canvas - a load's
+             * arrow shafts were invisible while their heads, painted through
+             * `paintColour`, showed in the theme ink.
+             */
+            stroke: paintColour(style?.stroke || "#000000"),
             "stroke-width": width,
             "stroke-linecap": "round"
         };

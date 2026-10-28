@@ -123,17 +123,17 @@ import enggQuantities from "../../../../shared/units/quantities.js";
             if (Array.isArray(geometry.points) && geometry.points.length) {
                 geometry.points = geometry.points.map(point => ({
                     ...point,
-                    magnitude: Math.max(0, convert(point.magnitude))
+                    magnitude: convert(point.magnitude)
                 }));
             }
 
             if (Number.isFinite(Number(geometry.intensity))) {
-                geometry.intensity = Math.max(0, convert(geometry.intensity));
+                geometry.intensity = convert(geometry.intensity);
             }
 
             for (const key of ["startIntensity", "endIntensity"]) {
                 if (Number.isFinite(Number(geometry[key]))) {
-                    geometry[key] = Math.max(0, convert(geometry[key]));
+                    geometry[key] = convert(geometry[key]);
                 }
             }
         }
@@ -409,7 +409,7 @@ import enggQuantities from "../../../../shared/units/quantities.js";
                             ? entry.point.id
                             : legacyPointId(entry.index, entry.point),
                     t: finite(entry.point.t),
-                    magnitude: Math.max(0, finite(entry.point.magnitude))
+                    magnitude: finite(entry.point.magnitude)
                 }));
         }
 
@@ -429,12 +429,12 @@ import enggQuantities from "../../../../shared/units/quantities.js";
                 {
                     id: legacyPointId(0, { t: 0 }),
                     t: 0,
-                    magnitude: Math.max(0, Math.abs(finite(geometry.startIntensity)))
+                    magnitude: finite(geometry.startIntensity)
                 },
                 {
                     id: legacyPointId(1, { t: 1 }),
                     t: 1,
-                    magnitude: Math.max(0, Math.abs(finite(geometry.endIntensity)))
+                    magnitude: finite(geometry.endIntensity)
                 }
             ];
         }
@@ -449,12 +449,12 @@ import enggQuantities from "../../../../shared/units/quantities.js";
             {
                 id: legacyPointId(0, { t: 0 }),
                 t: 0,
-                magnitude: Math.max(0, finite(geometry.intensity))
+                magnitude: finite(geometry.intensity)
             },
             {
                 id: legacyPointId(1, { t: 1 }),
                 t: 1,
-                magnitude: Math.max(0, finite(geometry.intensity))
+                magnitude: finite(geometry.intensity)
             }
         ];
     }
@@ -481,7 +481,7 @@ import enggQuantities from "../../../../shared/units/quantities.js";
                         ? point.id
                         : mintPointId(),
                 t: finite(point.t),
-                magnitude: Math.max(0, finite(point.magnitude))
+                magnitude: finite(point.magnitude)
             }))
             .sort((a, b) => a.t - b.t);
 
@@ -787,9 +787,14 @@ function unitVector(degrees) {
      * The peak magnitude of a profile, used to scale arrow
      * length so the shape reads clearly at any overall size.
      */
+    /*
+     * THE LARGEST INTENSITY BY SIZE. A profile may cross zero - part of the
+     * span loaded one way and part the other - so the peak is measured on the
+     * absolute value; the sign only decides which way an arrow points.
+     */
     function peakMagnitude(geometry) {
         return profilePoints(geometry).reduce(
-            (peak, point) => Math.max(peak, point.magnitude),
+            (peak, point) => Math.max(peak, Math.abs(point.magnitude)),
             0
         );
     }

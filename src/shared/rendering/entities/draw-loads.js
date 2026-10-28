@@ -181,9 +181,22 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                  * stub, so the ends of a triangular load genuinely
                  * taper to nothing.
                  */
-                if (sample.magnitude <= 0) {
+                /*
+                 * A ZERO INTENSITY HAS NO ARROW. A NEGATIVE ONE ACTS THE
+                 * OTHER WAY: its arrow leaves the same base in the opposite
+                 * direction, so a profile that changes sign reads on one plot.
+                 */
+                if (!(Math.abs(Number(sample.magnitude)) > 0)) {
                     return;
                 }
+
+                const sampleDirection = sample.magnitude < 0
+                    ? { x: -direction.x, y: -direction.y }
+                    : direction;
+
+                const sampleNormal = sample.magnitude < 0 && normal
+                    ? { x: -normal.x, y: -normal.y }
+                    : normal;
 
                 const length =
                     distributedLoadArrowLength(
@@ -201,15 +214,15 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                 const endpoints =
                     forceEndpoints(
                         toScreen(sample.base),
-                        direction,
+                        sampleDirection,
                         length,
-                        normal
+                        sampleNormal
                     );
 
                 const tip =
                     arrowheadTip(
                         endpoints,
-                        direction,
+                        sampleDirection,
                         reversed
                     );
 
@@ -330,15 +343,18 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                  * region it belongs to.
                  */
                 ...samples.map(sample => {
+                    /* A negative intensity's envelope lies on the other side. */
+                    const flip = sample.magnitude < 0;
+
                     const drawn = forceEndpoints(
                         toScreen(sample.base),
-                        direction,
+                        flip ? { x: -direction.x, y: -direction.y } : direction,
                         distributedLoadArrowLength(
                             geometry,
                             sample.magnitude,
                             scale
                         ),
-                        normal
+                        flip && normal ? { x: -normal.x, y: -normal.y } : normal
                     );
 
                     return `${drawn.far.x},${drawn.far.y}`;
@@ -523,9 +539,26 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                 );
 
             samples.forEach(sample => {
-                if (sample.magnitude <= 0) {
+                /*
+                 * A ZERO INTENSITY HAS NO ARROW. A NEGATIVE ONE ACTS THE
+                 * OTHER WAY: its arrow leaves the same base in the opposite
+                 * direction, so a profile that changes sign reads on one plot.
+                 */
+                if (!(Math.abs(Number(sample.magnitude)) > 0)) {
+                    const at = toScreen(sample.base);
+
+                    outline.push(`${at.x},${at.y}`);
+                    back.unshift(`${at.x},${at.y}`);
                     return;
                 }
+
+                const sampleDirection = sample.magnitude < 0
+                    ? { x: -direction.x, y: -direction.y }
+                    : direction;
+
+                const sampleNormal = sample.magnitude < 0 && normal
+                    ? { x: -normal.x, y: -normal.y }
+                    : normal;
 
                 const length =
                     distributedLoadArrowLength(
@@ -542,15 +575,15 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
                 const endpoints =
                     forceEndpoints(
                         toScreen(sample.base),
-                        direction,
+                        sampleDirection,
                         length,
-                        normal
+                        sampleNormal
                     );
 
                 const tip =
                     arrowheadTip(
                         endpoints,
-                        direction,
+                        sampleDirection,
                         reversed
                     );
 

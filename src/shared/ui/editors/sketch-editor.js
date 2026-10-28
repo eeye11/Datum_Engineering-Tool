@@ -87,16 +87,20 @@ const LABEL_BAND = 26;
 const Y_LABEL_MARGIN = 34;
 
 const TOOLS = [
-  { id: "select", label: "Select", hint: "Click an element to select it" },
+  {
+    id: "select",
+    label: "Select",
+    hint: "Click to select, drag to move, drag a dot to reshape - Delete removes it",
+  },
   {
     id: "line",
     label: "Straight Line",
-    hint: "Drag from the start to the end, then release",
+    hint: "Drag from start to end, or click the start then the end - drag its middle dot to bend it",
   },
   {
     id: "curve",
     label: "Curve",
-    hint: "Drag in three goes: Start, then Bend, then End",
+    hint: "Click (or drag) Start, then Bend, then End - drag any dot afterwards to adjust",
   },
   { id: "erase", label: "Erase", hint: "Click an element to remove it" },
 ];
@@ -687,7 +691,7 @@ function drawGraph(svg, elements, range, options) {
           <circle class="sketch-editor-handle"
             data-handle-kind="${escapeHtml(entry.kind)}"
             data-handle-index="${entry.index}"
-            cx="${screen.x}" cy="${screen.y}" r="4.5"/>
+            cx="${screen.x}" cy="${screen.y}" r="6"/>
         `);
     });
   }
@@ -1029,6 +1033,9 @@ function snapLabel(kind) {
  */
 const SNAP_TOLERANCE_PX = 8;
 
+/* The shortest line a drag may draw, in screen pixels; anything less is a wobble. */
+const MIN_STROKE_PX = 6;
+
 /*
  * One screen pixel, in each graph unit. The two axes have different scales, so
  * they get different factors - using one for both would make the snap twice as
@@ -1320,7 +1327,8 @@ function open(options = {}) {
             something is being placed or changed.
           -->
           <div class="sketch-editor-graph-area">
-            <svg class="sketch-editor-graph" data-sketch-graph
+            <svg class="sketch-editor-graph" data-sketch-graph tabindex="0"
+                aria-label="Sketch area"
                 viewBox="0 0 ${WIDTH} ${HEIGHT}"
                 preserveAspectRatio="xMidYMid meet"></svg>
           </div>
@@ -1374,6 +1382,89 @@ function open(options = {}) {
 
   function selected() {
     return elements.find((entry) => entry.id === selectedId) || null;
+  }
+
+  /*
+   * ========================================================
+   * UNDO AND REDO, INSIDE THE EDITOR
+   * ========================================================
+   *
+   * Every edit - a stroke, a drag, an erase, a typed coordinate - first records
+   * the sketch as it stood, so Ctrl+Z steps back one edit and Ctrl+Y (or
+   * Ctrl+Shift+Z) steps forward again. Cancel still discards the whole session.
+   */
+  const undoStack = [];
+  let redoStack = [];
+
+  function remember() {
+    undoStack.push(JSON.stringify(elements));
+
+    if (undoStack.length > 100) {
+      undoStack.shift();
+    }
+
+    redoStack = [];
+  }
+
+  function restoreFrom(from, to) {
+    if (!from.length) {
+      return;
+    }
+
+    to.push(JSON.stringify(elements));
+    elements = JSON.parse(from.pop());
+
+    if (!elements.some((entry) => entry.id === selectedId)) {
+      selectedId = null;
+    }
+
+    pending = null;
+    refreshScale();
+    redraw();
+  }
+
+  /* Remove one element, as Erase, the list's x and the Delete key all do. */
+  function removeElement(id) {
+    if (!elements.some((entry) => entry.id === id)) {
+      return;
+    }
+
+    remember();
+
+    elements = elements.filter((entry) => entry.id !== id);
+
+    if (selectedId === id) {
+      selectedId = null;
+    }
+
+    /* The extent comes from what is LEFT, not from what was removed. */
+    refreshScale();
+    redraw();
+  }
+
+  /* The pointer feedback: what a press here would do, said by the cursor. */
+  function updateCursor(screen) {
+    if (gesture) {
+      svg.style.cursor = gesture.type === "draw" ? "crosshair" : "grabbing";
+      return;
+    }
+
+    if (tool === "erase") {
+      svg.style.cursor = elementAt(screen, elements, scale) ? "pointer" : "default";
+      return;
+    }
+
+    if (handleAt(screen)) {
+      svg.style.cursor = "grab";
+      return;
+    }
+
+    if (elementAt(screen, elements, scale)) {
+      svg.style.cursor = "move";
+      return;
+    }
+
+    svg.style.cursor = tool === "select" ? "default" : "crosshair";
   }
 
   /*
@@ -1629,7 +1720,20 @@ function open(options = {}) {
    * empty space can never move something that is not there.
    */
   svg.addEventListener("pointerdown", (event) => {
-    if (tool === "erase" || tool === "select") {
+    /*
+     * SELECT MANIPULATES; IT USED TO DO NOTHING ON A PRESS. Only a drawing tool
+     * could drag a handle or move an element, so the tool named for editing was
+     * the one that could not edit. Now Select grabs handles and elements too,
+     * and a press on empty space simply clears the selection.
+     */
+    /*
+     * THE GRAPH TAKES THE KEYBOARD, so Delete and Ctrl+Z act on the sketch
+     * straight after a click on it - an SVG is not focusable by default, and
+     * the keys were going nowhere.
+     */
+    svg.focus?.({ preventScroll: true });
+
+    if (tool === "erase" || event.button > 0) {
       return;
     }
 
@@ -1665,12 +1769,19 @@ function open(options = {}) {
         pointerId: event.pointerId,
         elementId: hit.id,
         origin: JSON.parse(JSON.stringify(hit)),
+        original: JSON.parse(JSON.stringify(hit)),
         from: scale.fromScreen(screen),
         moved: false,
       };
 
       redraw();
       svg.setPointerCapture?.(event.pointerId);
+      return;
+    }
+
+    if (tool === "select") {
+      selectedId = null;
+      redraw();
       return;
     }
 
@@ -1800,6 +1911,19 @@ function open(options = {}) {
     if (finished.type === "point" || finished.type === "move") {
       if (!finished.moved) {
         restoreOriginal(finished);
+      } else {
+        /*
+         * RECORDED AS ONE EDIT, as it stood before the drag began - the live
+         * element is put back for a moment so the snapshot holds the original.
+         */
+        const index = elements.findIndex((entry) => entry.id === finished.elementId);
+        const after = index >= 0 ? elements[index] : null;
+
+        if (after) {
+          elements[index] = finished.original;
+          remember();
+          elements[index] = after;
+        }
       }
 
       /*
@@ -1822,6 +1946,23 @@ function open(options = {}) {
      * a CLICK, and the stroke is left open for the next click - so the student
      * gets whichever idiom they used without saying which they meant.
      */
+    /*
+     * A DRAG TOO SHORT TO SEE IS NOT A STROKE. A hand that wobbles while
+     * clicking travelled a few pixels and committed a line a fraction of a unit
+     * long - the stray elements a student then had to find and delete. Under
+     * this length the stroke is dropped and nothing is added.
+     */
+    if (finished.moved && tool === "line" && pending.points.length >= 2) {
+      const [a, b] = pending.points.map((point) => scale.toScreen(point));
+
+      if (Math.hypot(b.x - a.x, b.y - a.y) < MIN_STROKE_PX) {
+        pending = null;
+        justFinished = true;
+        redraw();
+        return;
+      }
+    }
+
     if (finished.moved) {
       if (tool === "curve") {
         if (pending.points.length >= 3) {
@@ -1853,6 +1994,8 @@ function open(options = {}) {
    * be a second opinion about the same point.
    */
   svg.addEventListener("pointermove", (event) => {
+    updateCursor(screenFromEvent(event));
+
     if (gesture) {
       return;
     }
@@ -1936,6 +2079,8 @@ function open(options = {}) {
       return;
     }
 
+    remember();
+
     elements.push({
       id: newId(++sequence),
       kind: "line",
@@ -1954,6 +2099,8 @@ function open(options = {}) {
   /* COMMIT A THREE-POINT CURVE. Start, Bend and End, all from the cursor. */
   function commitCurve() {
     const [start, bend, end] = pending.points;
+
+    remember();
 
     elements.push(
       buildThreePointCurve(newId(++sequence), start, bend, end),
@@ -2129,14 +2276,7 @@ function open(options = {}) {
       );
 
       if (hit) {
-        elements = elements.filter((entry) => entry.id !== hit.id);
-
-        if (selectedId === hit.id) {
-          selectedId = null;
-        }
-
-        /* The tallest thing may just have been erased. */
-        refreshScale();
+        removeElement(hit.id);
       }
 
       redraw();
@@ -2191,6 +2331,35 @@ function open(options = {}) {
    * are placed one click at a time.
    */
   dialog.addEventListener("keydown", (event) => {
+    const typing = event.target.closest?.("input, textarea, select");
+
+    /* DELETE (or Backspace) REMOVES THE SELECTED ELEMENT - not while typing. */
+    if (
+      !typing &&
+      (event.key === "Delete" || event.key === "Backspace") &&
+      selectedId
+    ) {
+      event.preventDefault();
+      removeElement(selectedId);
+      return;
+    }
+
+    if (!typing && (event.ctrlKey || event.metaKey) && !event.altKey) {
+      const key = event.key.toLowerCase();
+
+      if (key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        restoreFrom(undoStack, redoStack);
+        return;
+      }
+
+      if (key === "y" || (key === "z" && event.shiftKey)) {
+        event.preventDefault();
+        restoreFrom(redoStack, undoStack);
+        return;
+      }
+    }
+
     if (
       event.key === "Enter" &&
       pending &&
@@ -2238,19 +2407,7 @@ function open(options = {}) {
     const remove = event.target.closest("[data-sketch-delete]");
 
     if (remove) {
-      const id = remove.dataset.sketchDelete;
-
-      elements = elements.filter((entry) => entry.id !== id);
-
-      if (selectedId === id) {
-        selectedId = null;
-      }
-
-      /* The extent comes from what is LEFT, not from what was removed. */
-      refreshScale();
-
-      redraw();
-
+      removeElement(remove.dataset.sketchDelete);
       return;
     }
 
@@ -2260,6 +2417,13 @@ function open(options = {}) {
       selectedId = pick.dataset.sketchSelect;
 
       redraw();
+    }
+  });
+
+  /* Typing into a coordinate is one edit, recorded when the box is entered. */
+  detail.addEventListener("focusin", (event) => {
+    if (event.target.closest("[data-sketch-point]")) {
+      remember();
     }
   });
 
@@ -2283,10 +2447,13 @@ function open(options = {}) {
       return;
     }
 
+    /* A three-point curve's rows are its Start, Bend and End. */
     const point =
       element.kind === "line"
         ? [element.start, element.end][index]
-        : element.points?.[index];
+        : element.kind === "curve3"
+          ? [element.start, element.bend, element.end][index]
+          : element.points?.[index];
 
     if (!point) {
       return;

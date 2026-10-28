@@ -712,7 +712,14 @@ function rotateObjectAbout(
     ) {
         advanceAngle("direction");
     } else if (isSupportType(type)) {
-        advanceAngle("orientation");
+        /*
+         * A SUPPORT'S ORIENTATION IS IN RADIANS, unlike the degrees above, so
+         * it is advanced by the turn itself. Adding degrees to it made a one-
+         * degree nudge turn the symbol by about 57 degrees.
+         */
+        if (Number.isFinite(Number(g.orientation))) {
+            g.orientation = Number(g.orientation) + radians;
+        }
     } else if (type === "moment") {
         /*
          * A moment does not point: it turns. Rotating its symbol about the
@@ -936,6 +943,16 @@ function translateObject(
             typeof lookup === "function"
                 ? lookup(object.parentId)
                 : null;
+
+        /*
+         * A FREE-STANDING SUPPORT - placed on empty sheet, with no body -
+         * has nothing to slide along, so it simply moves.
+         */
+        if (!object.parentId && g.position) {
+            g.position.x += deltaX;
+            g.position.y += deltaY;
+            return;
+        }
 
         if (!parent) {
             return;

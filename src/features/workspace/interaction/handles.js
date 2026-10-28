@@ -729,6 +729,21 @@ function manipulationHandles(
      * handles move those joints; the members its renderer
      * draws follow from them and the topology is preserved.
      */
+    /*
+     * A DRAWN TRUSS IS EDITED JOINT BY JOINT. It stores its own members, so
+     * every joint gets a handle and dragging one carries each member that
+     * meets it (`moveTrussJoint`). This is checked before the member branch
+     * below: listed there, a truss only ever showed the two end handles of a
+     * template truss and its joints could not be reached.
+     */
+    if (
+        object.type === "truss" &&
+        Array.isArray(g.members) &&
+        g.members.length
+    ) {
+        return trussJointHandles(g.members);
+    }
+
     if (
         object.type === "beam" ||
         object.type === "truss" ||

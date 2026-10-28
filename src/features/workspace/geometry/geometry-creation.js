@@ -26,7 +26,7 @@ import { createDynamicsFeature } from "./dynamics-creation.js";
 /* The one Dynamics creation entry point, shared with the span gesture. */
 export { createDynamicsFeature };
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../dynamics/dynamics-tools.js";
-import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "../statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, keepStaticsToolArmed, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "../statics/statics-tools.js";
 import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { TRUSS_STAGES, continueTrussConstruction } from "../statics/truss-tool.js";
@@ -1721,6 +1721,14 @@ export function beginOrCompleteGeometry(
                 label: "Magnitude",
                 value: suggested.toFixed(2),
                 unit: enggLoadProfile.DEFAULT_FORCE_UNIT,
+                nearPointer: true,
+
+                /*
+                 * The force does not exist until this is confirmed, so a
+                 * click elsewhere accepts the value shown rather than losing
+                 * the arrow. Escape still cancels.
+                 */
+                confirmOnOutside: true,
 
                 /*
                  * A FORCE IS STATED IN kN OR N.
@@ -2426,7 +2434,7 @@ function createPointFeature(
     );
 
     if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
-        activateTool("select");
+        keepStaticsToolArmed();
     } else {
         setToolMessage("Specify point");
     }

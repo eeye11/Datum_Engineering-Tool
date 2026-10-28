@@ -107,8 +107,14 @@ export const toolIcons = {
 	 * than final geometry, so the two read as relatives.
 	 */
 	"Reference Arc": drawingIcon(`<path ${iconStroke} stroke-dasharray="3 2" d="M3 15A8 8 0 0 1 17 5"/><circle ${iconStroke} cx="3" cy="15" r="1"/><circle ${iconStroke} cx="17" cy="5" r="1"/>`),
-	Moment: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 1 1 7-9M13 5h3v3M10 10l3-3"/>`),
-	Moments: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 1 1 7-9M13 5h3v3M10 10l3-3"/>`),
+	/*
+	 * A MOMENT: three quarters of a ring about its point of application, with
+	 * the head lying ALONG the ring at its end - the way the canvas draws one.
+	 * The old mark's head was a corner bracket off the end of the arc plus a
+	 * stray diagonal, so it read as skewed.
+	 */
+	Moment: drawingIcon(`<path ${iconStroke} d="M4 10A6 6 0 1 1 10 16"/><path fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round" d="M7.6 16l3.2-2.1v4.2z"/><circle fill="currentColor" cx="10" cy="10" r="1.1"/>`),
+	Moments: drawingIcon(`<path ${iconStroke} d="M4 10A6 6 0 1 1 10 16"/><path fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round" d="M7.6 16l3.2-2.1v4.2z"/><circle fill="currentColor" cx="10" cy="10" r="1.1"/>`),
 	Support: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15l4-7 4 7M4 17h12"/>`),
 	Supports: drawingIcon(`<path ${iconStroke} d="M4 15h12M6 15l4-7 4 7M4 17h12"/>`),
 	Beam: drawingIcon(`<path ${iconStroke} d="M3 7h14v6H3zM6 7v6M14 7v6"/>`),
@@ -128,7 +134,8 @@ export const toolIcons = {
 	 */
 	Truss: drawingIcon(`<path ${iconStroke} d="M3 6h14M3 6l14 8M17 6L3 14M3 14h14M8 6v8M12 6v8"/>`),
 	Cable: drawingIcon(`<path ${iconStroke} d="M3 5c5 8 9 8 14 0"/><circle ${iconStroke} cx="3" cy="5" r="1.2"/><circle ${iconStroke} cx="17" cy="5" r="1.2"/>`),
-	"Point Load": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
+	/* The shaft stops at the head, and the head is solid, so the arrow reads as one mark. */
+	"Point Load": drawingIcon(`<path ${iconStroke} d="M10 15.3V7"/><path fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round" d="M10 3l-3 4.2h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
 	"Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 4h14M3 4v10M6.5 4v10M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Varying Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 11l7-7h7M3 11v3M6.5 7.5V14M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Applied Moment": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 5.6a4.4 4.4 0 0 1 3.7 2"/><path ${iconStroke} d="M10 14.4a4.4 4.4 0 0 1-3.7-2"/><path ${iconStroke} d="M12.6 5.2l3 1.7-1.7 3"/><path ${iconStroke} d="M7.4 14.8l-3-1.7 1.7-3"/>`),
@@ -674,15 +681,15 @@ export const disciplineToolGroups = {
 				{ id: "resultant", label: "Resultant" },
 				{ id: "force-components", label: "Force Components" },
 				{ id: "shear-force-diagram", label: "Shear Force (SFD)", submenu: true },
-				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
-				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
+				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)", submenu: true },
+				{ id: "axial-force-diagram", label: "Axial Force (AFD)", submenu: true }
 			]
 		},
 		{
 			id: "statics-reference",
 			label: "Reference",
 			tools: [
-				{ id: "coordinate-system", label: "Coordinate System" },
+				{ id: "coordinate-system", label: "Coordinate System", submenu: true },
 				{ id: "reference-point", label: "Reference Point" },
 				{ id: "reference-line", label: "Reference Line" },
 

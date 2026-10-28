@@ -37,6 +37,47 @@ import enggLoadProfile from "../../../features/workspace/model/analysis/load-pro
  */
 let openPopup = null;
 
+/*
+ * WHERE THE STUDENT LAST PRESSED, so a popup asked for `nearPointer` opens
+ * beside the work instead of at the top of the window. A value is asked for
+ * straight after the click that placed the feature, so this is that click.
+ */
+let lastPointer = null;
+
+if (typeof document !== "undefined") {
+    document.addEventListener(
+        "pointerdown",
+        event => {
+            lastPointer = { x: event.clientX, y: event.clientY };
+        },
+        true
+    );
+}
+
+function placeNearPointer(popup) {
+    if (!lastPointer || typeof window === "undefined") {
+        return;
+    }
+
+    const margin = 8;
+    const offset = 18;
+    const rect = popup.getBoundingClientRect();
+
+    const left = Math.min(
+        Math.max(lastPointer.x + offset, margin),
+        window.innerWidth - rect.width - margin
+    );
+
+    const top = Math.min(
+        Math.max(lastPointer.y + offset, margin),
+        window.innerHeight - rect.height - margin
+    );
+
+    popup.style.left = `${Math.max(left, margin)}px`;
+    popup.style.top = `${Math.max(top, margin)}px`;
+    popup.style.transform = "none";
+}
+
 export function closeLoadValuePopup() {
     if (!openPopup) {
         return;
@@ -130,7 +171,21 @@ export function openLoadValuePopup({
      * the editor STAYS OPEN so the student can correct it, rather than closing
      * and leaving nothing behind with no explanation.
      */
-    requireContent = false
+    requireContent = false,
+
+    /*
+     * WHAT A CLICK OUTSIDE THE POPUP MEANS.
+     *
+     * Off by default: the click cancels, as it always has. ON for a value
+     * whose feature does not exist until the value is confirmed - a
+     * Distributed Load - where a cancel throws away everything the student
+     * just drew. There the click ACCEPTS the value in the box, and only
+     * Escape cancels.
+     */
+    confirmOnOutside = false,
+
+    /* Open beside the last click rather than at the top of the window. */
+    nearPointer = false
 } = {}) {
     closeLoadValuePopup();
 
@@ -189,6 +244,10 @@ export function openLoadValuePopup({
         `;
 
     document.body.appendChild(popup);
+
+    if (nearPointer) {
+        placeNearPointer(popup);
+    }
 
     const input = popup.querySelector("[data-load-input]");
     const select = popup.querySelector("[data-load-unit]");
@@ -410,6 +469,19 @@ export function openLoadValuePopup({
      * THERE IS NO CONTROL IN EXPRESSION MODE, so this is bound only when one
      * was rendered.
      */
+    /*
+     * A PRESS ON THE POPUP'S FRAME KEEPS THE FIELD FOCUSED. Without this a
+     * click on the title moved focus to the page, and the student's next Enter
+     * went to the canvas - finishing the load being built instead of
+     * confirming the value in the box.
+     */
+    popup.addEventListener("mousedown", (event) => {
+        if (!event.target.closest?.("input, select")) {
+            event.preventDefault();
+            input.focus();
+        }
+    });
+
     select?.addEventListener("change", () => {
         chosen.unit = select.value;
 
@@ -494,7 +566,11 @@ export function openLoadValuePopup({
                     onOutside
                 );
 
-                cancel();
+                if (confirmOnOutside) {
+                    confirm();
+                } else {
+                    cancel();
+                }
             }
         },
         true

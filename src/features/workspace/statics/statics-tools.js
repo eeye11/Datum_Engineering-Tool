@@ -5,8 +5,8 @@
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { activateTool, initialToolMessage } from "../../../components/layout/toolbar/tool-activation.js";
-import { closeCoordinateSystemMenu, openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
-import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activeCategory, closeCoordinateSystemMenu, openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
+import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { beginAnalysisDiagram, analysisDiagramIntroMessage, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS } from "./analysis-tools.js";
@@ -244,38 +244,41 @@ export function openAnalysisModeMenu(
                     mode
             })
         ),
-        mode => {
-            const previous =
-                drawingState.activeTool;
+        mode => activateAnalysisMode(toolId, mode)
+    );
+}
 
-            void previous;
+/*
+ * Arm a diagram tool in Sketch or Plot mode - what the mode menu's items do,
+ * and what the inline Sketch / Plot buttons in the toolbar do.
+ *
+ * THE MODE IS STORED ON THE INTERACTION, then the tool is armed.
+ * `beginAnalysisDiagram` reads it back, so the frame the student sees is the
+ * one they asked for - a Plot starts with an expression ready to type, a
+ * Sketch starts empty.
+ */
+export function activateAnalysisMode(toolId, mode) {
+    activateTool(toolId);
 
-            /*
-             * THE MODE IS STORED ON THE INTERACTION, then the tool is
-             * armed. `beginAnalysisDiagram` reads it back, so the frame the
-             * student sees is the one they asked for - a Plot starts with an
-             * expression ready to type, a Sketch starts empty.
-             */
-            activateTool(toolId);
-
-            enggDrawingState.setInteraction(
-                drawingState,
-                {
-                    analysisMode: mode
-                }
-            );
-
-            beginAnalysisDiagram(toolId);
-
-            setToolMessage(
-                analysisDiagramIntroMessage(
-                    null
-                )
-            );
-
-            renderCurrentDrawing();
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            analysisMode: mode
         }
     );
+
+    beginAnalysisDiagram(toolId);
+
+    setToolMessage(
+        analysisDiagramIntroMessage(
+            null
+        )
+    );
+
+    /* Drawn again now the mode is set, so the chosen Sketch / Plot is highlighted. */
+    renderEngineeringTools(activeCategory());
+
+    renderCurrentDrawing();
 }
 
 /*
@@ -604,6 +607,36 @@ export function bodyPlacementLocations(
  * The opening instruction for each Statics child tool, so
  * the status line always says what to do next.
  */
+/*
+ * ============================================================
+ * AFTER A STATICS FEATURE IS PLACED, THE TOOL STAYS ARMED
+ * ============================================================
+ *
+ * A student drawing a free-body diagram places several particles, several
+ * supports, several loads - so a placement tool keeps going until they press
+ * Escape or pick another tool, as the Geometry tools do. The feature just
+ * made stays selected, so its Features tab is open for it.
+ *
+ * A TRUSS IS THE EXCEPTION. It is finished explicitly, as a whole structure,
+ * and returns to Select so the finished truss can be edited joint by joint.
+ */
+export function keepStaticsToolArmed() {
+    const toolId = drawingState.activeTool;
+
+    if (!toolId || toolId === "select" || toolId === "truss") {
+        activateTool("select");
+        return;
+    }
+
+    enggDrawingState.clearInteraction(drawingState);
+
+    setToolMessage(staticsInstruction(toolId) || initialToolMessage(toolId));
+
+    renderEngineeringTools(activeCategory());
+
+    renderCurrentDrawing();
+}
+
 export function staticsInstruction(
     toolId
 ) {
@@ -693,6 +726,37 @@ export function staticsConnectionSection(
         "fixed-connection": "FIXED CONNECTION",
         "slider-connection": "SLIDER CONNECTION"
     }[type] || "CONNECTION";
+}
+
+/*
+ * Arm a coordinate system of the chosen kind - what the menu's items do, and
+ * what the inline 2D / 3D buttons in the Statics toolbar do.
+ */
+export function activateCoordinateMode(mode) {
+    if (mode === "2d") {
+        /*
+         * Arm the real 2D coordinate-system tool. This is the same shape
+         * `activate2DCoordinateSystemTool` uses, written here rather than
+         * imported because tool-activation imports this module and the
+         * import would be circular.
+         */
+        enggDrawingState.setActiveTool(
+            drawingState,
+            "coordinate-system-2d"
+        );
+
+        drawingState.interaction.phase = "idle";
+
+        setToolMessage("Specify origin");
+
+        renderEngineeringTools(activeCategory());
+
+        renderCurrentDrawing();
+    } else {
+        setToolMessage(
+            "3D Coordinate System is not available on the 2D drawing canvas"
+        );
+    }
 }
 
 export function openCoordinateSystemMenu(button) {
@@ -814,29 +878,7 @@ export function openCoordinateSystemMenu(button) {
 
                     closeCoordinateSystemMenu();
 
-                    if (mode === "2d") {
-                        /*
-                         * Arm the real 2D coordinate-system tool. This is
-                         * the same shape `activate2DCoordinateSystemTool`
-                         * uses, written here rather than imported because
-                         * tool-activation imports this module and the
-                         * import would be circular.
-                         */
-                        enggDrawingState.setActiveTool(
-                            drawingState,
-                            "coordinate-system-2d"
-                        );
-
-                        drawingState.interaction.phase = "idle";
-
-                        setToolMessage("Specify origin");
-
-                        renderCurrentDrawing();
-                    } else {
-                        setToolMessage(
-                            "3D Coordinate System is not available on the 2D drawing canvas"
-                        );
-                    }
+                    activateCoordinateMode(mode);
                 }
             );
         }

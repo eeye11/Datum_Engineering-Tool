@@ -36,6 +36,12 @@ import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { wouldMove } from "./feature-schema.js";
+
+/* Any object on the sheet, by id - the body a support slides along. */
+export function lookupObject(id) {
+    return drawingState.objects.find((candidate) => candidate.id === id) || null;
+}
 
 /* The increment every arrow applies, and the precision the fields are read at. */
 export const TRANSFORM_STEP = 0.1;
@@ -88,20 +94,11 @@ export function transformableObjects() {
              * Ask the registry, on a copy, whether it would move anything. This
              * is the same probe the Features schema uses to decide whether to
              * offer Transform, so the control and the action cannot disagree.
+             *
+             * WITH THE REAL LOOKUP: a support slides along its body, and
+             * without the body the probe saw no move and dropped it.
              */
-            const probe = {
-                ...object,
-                geometry: JSON.parse(JSON.stringify(object.geometry)),
-                style: { ...(object.style || {}) }
-            };
-
-            try {
-                enggFeatureGeometry.translateObject(probe, 0.5, 0.5, () => null);
-            } catch {
-                return false;
-            }
-
-            return JSON.stringify(probe.geometry) !== JSON.stringify(object.geometry);
+            return wouldMove(object, lookupObject);
         });
 }
 

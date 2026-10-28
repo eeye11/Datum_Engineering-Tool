@@ -979,6 +979,122 @@ console.log("\n  a snap is SHOWN while the cursor is over one\n");
   editor.close();
 }
 
+
+/*
+ * ========================================================
+ * EDITING IS EASY: SELECT DRAGS, DELETE DELETES, CTRL+Z UNDOES
+ * ========================================================
+ *
+ * Select used to do nothing on a press, there was no Delete key and no undo,
+ * and a wobble while clicking committed a line a fraction of a unit long.
+ */
+{
+  console.log("\n  editing a sketch\n");
+
+  const dialog6 = editor.open({
+    title: "SFD Sketch",
+    range: { from: 0, to: 100 },
+    elements: [],
+    stations: [],
+  });
+
+  const svg6 = dialog6.querySelector("[data-sketch-graph]");
+
+  svg6.getBoundingClientRect = () => ({ left: 0, top: 0, width: 900, height: 320 });
+
+  const pointer6 = (type, x, y) => {
+    const event = new global.window.Event(type, { bubbles: true, cancelable: true });
+
+    event.clientX = x;
+    event.clientY = y;
+    event.pointerId = 6;
+
+    svg6.dispatchEvent(event);
+  };
+
+  const key6 = (key, extra = {}) => {
+    svg6.dispatchEvent(
+      new global.window.KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...extra }),
+    );
+  };
+
+  const strokes6 = () => dialog6.querySelectorAll(".sketch-editor-stroke").length;
+
+  /* A wobble: pressed and released three pixels apart. */
+  pointer6("pointerdown", 200, 100);
+  pointer6("pointermove", 203, 101);
+  pointer6("pointermove", 205, 101);
+  pointer6("pointerup", 205, 101);
+
+  check("a stroke too short to see is not added", strokes6() === 0, `found ${strokes6()}`);
+
+  /* A real line. */
+  pointer6("pointerdown", 100, 100);
+  pointer6("pointermove", 300, 140);
+  pointer6("pointerup", 300, 140);
+
+  check("a real drag still draws a line", strokes6() === 1, `found ${strokes6()}`);
+
+  /* Select can move it. */
+  dialog6.querySelector('[data-sketch-tool="select"]').click();
+
+  const before = dialog6.querySelector(".sketch-editor-list").textContent;
+
+  /*
+   * The graph rescales to fit a committed stroke, so the line is found where it
+   * is now drawn - a quarter of the way along, clear of its three handles.
+   */
+  const line6 = dialog6.querySelector(".sketch-editor-stroke");
+  const along = (t) => ({
+    x: Number(line6.getAttribute("x1")) + (Number(line6.getAttribute("x2")) - Number(line6.getAttribute("x1"))) * t,
+    y: Number(line6.getAttribute("y1")) + (Number(line6.getAttribute("y2")) - Number(line6.getAttribute("y1"))) * t,
+  });
+  const grab = along(0.25);
+
+  pointer6("pointerdown", grab.x, grab.y);
+  pointer6("pointermove", grab.x + 40, grab.y);
+  pointer6("pointerup", grab.x + 40, grab.y);
+
+  const after = dialog6.querySelector(".sketch-editor-list").textContent;
+
+  check("the Select tool moves an element by dragging it", before !== after, `${before} | ${after}`);
+
+  /* Ctrl+Z puts it back; Ctrl+Y moves it again. */
+  key6("z", { ctrlKey: true });
+
+  check(
+    "Ctrl+Z undoes the move",
+    dialog6.querySelector(".sketch-editor-list").textContent === before,
+  );
+
+  key6("y", { ctrlKey: true });
+
+  check(
+    "and Ctrl+Y redoes it",
+    dialog6.querySelector(".sketch-editor-list").textContent === after,
+  );
+
+  /* Delete removes the selected element. */
+  const moved6 = dialog6.querySelector(".sketch-editor-stroke");
+  const pressAt = {
+    x: Number(moved6.getAttribute("x1")) + (Number(moved6.getAttribute("x2")) - Number(moved6.getAttribute("x1"))) * 0.25,
+    y: Number(moved6.getAttribute("y1")) + (Number(moved6.getAttribute("y2")) - Number(moved6.getAttribute("y1"))) * 0.25,
+  };
+
+  pointer6("pointerdown", pressAt.x, pressAt.y);
+  pointer6("pointerup", pressAt.x, pressAt.y);
+
+  key6("Delete");
+
+  check("Delete removes the selected element", strokes6() === 0, `found ${strokes6()}`);
+
+  key6("z", { ctrlKey: true });
+
+  check("and Ctrl+Z brings it back", strokes6() === 1, `found ${strokes6()}`);
+
+  editor.close();
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 console.log("\n  the axis follows the DRAWN geometry\n");
 

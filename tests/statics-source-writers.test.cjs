@@ -168,7 +168,7 @@ const force = write(
 );
 
 check("a force is an arrow from its application point", has(force, "(20,20) -- (20,80)"), force);
-check("with an arrow head at the far end", has(force, "-{Latex}"), force);
+check("with an arrow head at the far end", /-\{Latex[\[}]/.test(force), force);
 check("and its magnitude, as its value annotation", has(force, "F = 60"), force);
 
 /*
@@ -233,7 +233,7 @@ const load = write(
 );
 
 check("a load writes its loaded span", has(load, "(0,0) -- (100,0)"), load);
-check("a row of arrows standing off the body", count(load, /-{Latex}/g) >= 4, load);
+check("a row of arrows standing off the body", count(load, /-\{Latex[\[}]/g) >= 4, load);
 check("its envelope", has(load, "fill=daetumC193335") && has(load, "-- cycle"), load);
 check("its intensity", has(load, "w = 5"), load);
 check("and not its internal name as text", !has(load, "{Distributed Load 1}"), load);
@@ -255,8 +255,8 @@ const respaced = write(
 
 check(
   "arrow spacing is a display property: fewer arrows at a wider interval",
-  count(respaced, /-{Latex}/g) < count(load, /-{Latex}/g),
-  `${count(respaced, /-{Latex}/g)} vs ${count(load, /-{Latex}/g)}`,
+  count(respaced, /-\{Latex[\[}]/g) < count(load, /-\{Latex[\[}]/g),
+  `${count(respaced, /-\{Latex[\[}]/g)} vs ${count(load, /-\{Latex[\[}]/g)}`,
 );
 check("and the intensity it states is unchanged", has(respaced, "w = 5"), respaced);
 

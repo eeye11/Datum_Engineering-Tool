@@ -28,6 +28,27 @@ import { zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport
 import { ROUTE_PHASE, finishRouteConstruction } from "./pipe-duct-tool.js";
 
 /*
+ * WHERE THE LAST TWO CLICKS LANDED, in screen pixels.
+ *
+ * The browser fires `dblclick` for any two quick clicks, wherever they land -
+ * so a student placing truss joints quickly had their truss finished on the
+ * second joint. A finishing double-click is two clicks on the SAME spot, and
+ * these are what that is checked against.
+ */
+const recentClicks = [];
+const SAME_SPOT_PX = 6;
+
+function bothClicksOnOneSpot() {
+    if (recentClicks.length < 2) {
+        return true;
+    }
+
+    const [first, second] = recentClicks.slice(-2);
+
+    return Math.hypot(second.x - first.x, second.y - first.y) <= SAME_SPOT_PX;
+}
+
+/*
  * Wire this part of the editor to the page. Called once, at start-up,
  * by editor/index.js.
  */
@@ -42,6 +63,15 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "mousemove",
             updateDrawingCoordinates
+        );
+
+        drawingCanvas.addEventListener(
+            "click",
+            event => {
+                recentClicks.push({ x: event.clientX, y: event.clientY });
+                recentClicks.splice(0, Math.max(0, recentClicks.length - 2));
+            },
+            true
         );
 
         drawingCanvas.addEventListener(
@@ -253,6 +283,15 @@ export function installCanvasEvents() {
                         .phase ===
                         "truss-construct"
                 ) {
+                    /*
+                     * TWO FAST CLICKS ON TWO JOINTS ARE TWO MEMBERS, NOT A
+                     * FINISH. Only a double-click on one spot ends the truss;
+                     * Enter ends it too.
+                     */
+                    if (!bothClicksOnOneSpot()) {
+                        return;
+                    }
+
                     event.preventDefault();
 
                     finishTrussConstruction();
@@ -854,6 +893,19 @@ export function installCanvasEvents() {
             }
 
             /*
+             * A TARGET THAT IS NO LONGER ON THE PAGE was redrawn by this same
+             * press - a value popup that confirms on an outside click re-renders
+             * the canvas before this runs - so it cannot be told apart from a
+             * canvas click, and is never a reason to cancel.
+             */
+            if (
+                target &&
+                target.isConnected === false
+            ) {
+                return;
+            }
+
+            /*
              * Clicks on a toolbar or panel button are handled
              * by that button, which activates its own tool and
              * cancels this one.
@@ -866,8 +918,9 @@ export function installCanvasEvents() {
             }
 
             /*
-             * Clicks inside the Features panel or a popup are
-             * part of the operation, not a cancellation.
+             * Clicks inside the Features panel or a popup - a value
+             * popup's field or unit list included - are part of the
+             * operation, not a cancellation.
              *
              * THE PANEL IS MATCHED BY ITS CONTAINER, not by the element the
              * old property page lived in: that element no longer exists, and
@@ -878,7 +931,7 @@ export function installCanvasEvents() {
              */
             if (
                 target.closest?.(
-                    ".drawing-inspector, .drawing-polygon-prompt"
+                    ".drawing-inspector, .drawing-polygon-prompt, .drawing-creation-dimension"
                 )
             ) {
                 return;

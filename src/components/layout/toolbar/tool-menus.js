@@ -578,6 +578,15 @@ function armCreationMode(toolId, key, mode) {
                 }
             );
 
+            /*
+             * AND THE TOOLBAR IS DRAWN AGAIN, NOW THAT THE MODE IS KNOWN.
+             * `activateTool` drew it before the mode was re-applied, so the
+             * chosen option (Centrepoint, 3-Point) was never highlighted.
+             */
+            import("./toolbar-render.js").then(({ renderEngineeringTools }) =>
+                renderEngineeringTools(activeCategory())
+            );
+
             renderCurrentDrawing();
         }
     );

@@ -45,7 +45,7 @@ export const TRUSS_STAGES = [
  * and nothing is committed until they say so.
  */
 const TRUSS_CONSTRUCT_HINT =
-    "Click to add a member, double-click to finish the truss";
+    "Click to add a member - double-click on the last joint, or press Enter, to finish";
 
 /*
  * A member of a truss that is being built.

@@ -48,7 +48,7 @@ import {
     typeLabelOf,
     writeField
 } from "./feature-schema.js";
-import { TRANSFORM_STEP, applyTransform } from "./transform-session.js";
+import { TRANSFORM_STEP, applyTransform, lookupObject } from "./transform-session.js";
 import { settingsFor } from "./tool-settings-store.js";
 import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pane.js";
 import { openColourPicker } from "../../../shared/ui/colour-picker.js";
@@ -425,6 +425,13 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
 
     const markup = [];
 
+    /*
+     * A TOOL'S OWN VALUES BELONG IN TRANSFORM. The Statics template lists them
+     * under X Shift, Y Shift and Rotate, so their rows are kept aside here and
+     * written into that section below rather than under a heading of their own.
+     */
+    let valueRows = "";
+
     order.forEach((id) => {
         const { group, fields } = sections.get(id);
         const rows = [...fields.entries()]
@@ -432,6 +439,11 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
             .join("");
 
         if (!rows) {
+            return;
+        }
+
+        if (group.transformValues) {
+            valueRows += rows;
             return;
         }
 
@@ -452,13 +464,18 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
      * the model cannot move at all does not get a Transform section that could
      * never act.
      */
-    if (objects.some((object) => supportsTransform(object))) {
+    const movable = objects.some((object) => supportsTransform(object, lookupObject));
+
+    if (movable || valueRows) {
         markup.push(
             `<div class="dfp-section" data-feature-group="transform">` +
                 `<div class="dfp-section-heading">Transform</div>` +
-                transformRowMarkup("x", "X Shift") +
-                transformRowMarkup("y", "Y Shift") +
-                transformRowMarkup("rotate", "Rotate") +
+                (movable
+                    ? transformRowMarkup("x", "X Shift") +
+                      transformRowMarkup("y", "Y Shift") +
+                      transformRowMarkup("rotate", "Rotate")
+                    : "") +
+                valueRows +
                 `</div>`
         );
     }

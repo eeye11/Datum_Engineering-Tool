@@ -33,6 +33,8 @@ import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js"
 import { THICKNESS_PRESETS } from "../../../tool-library/shared/primitives/tikz-primitives.js";
 import { toolIcons } from "../toolbar/tools.js";
 import { isDynamicsObject, dynamicsTypeOf } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
+import enggQuantities from "../../../shared/units/quantities.js";
 
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
@@ -412,6 +414,190 @@ const ARROW_OPTIONS = [
     { value: "bar", label: "Bar" }
 ];
 
+/* ============================================================
+ * STATICS OBJECTS
+ * ============================================================
+ *
+ * The Statics tools follow the team's Features template: Object (Name, Fix),
+ * Appearance (Line Style, Outline Colour, Thickness, Fill) and Transform (X
+ * Shift, Y Shift, Rotate, then the tool's own values). Reference Point, Line
+ * and Arc and the Coordinate System are stored as Geometry types and already
+ * have that panel, so they are not listed here.
+ */
+const STATICS_TYPES = new Set([
+    "particle",
+    "rigid-body",
+    "beam",
+    "truss",
+    "cable",
+    "shaft",
+    "force",
+    "moment",
+    "load",
+    "varying-load",
+    "pin-support",
+    "roller-support",
+    "fixed-support",
+    "smooth-support",
+    "pin-connection",
+    "fixed-connection",
+    "slider-connection",
+    "resultant",
+    "force-components",
+    "analysis-diagram",
+    "shear-force-diagram",
+    "bending-moment-diagram",
+    "axial-force-diagram"
+]);
+
+/*
+ * ONLY WHAT THE DRAWING SHOWS IS OFFERED.
+ *
+ * Every Statics object takes an Outline Colour. The other Appearance controls
+ * are offered only where the canvas actually draws them - a support or a
+ * connection is a fixed engineering symbol, and a dashed or thickened one is
+ * not drawn as such - so the panel never shows a control that silently does
+ * nothing. (The TikZ source honours them all; the canvas is the stricter of
+ * the two, and is what the student sees.)
+ */
+const STATICS_SYMBOLS = new Set([
+    "particle",
+    "truss",
+    "cable",
+    "pin-support",
+    "roller-support",
+    "fixed-support",
+    "smooth-support",
+    "pin-connection",
+    "fixed-connection",
+    "slider-connection"
+]);
+
+/* A moment's arc keeps its weight but is always drawn solid. */
+const STATICS_NO_LINE_STYLE = new Set([...STATICS_SYMBOLS, "moment"]);
+
+const STATICS_NO_THICKNESS = STATICS_SYMBOLS;
+
+/* A solid fill is drawn for a Beam's bar. */
+const STATICS_FILLABLE = new Set(["beam"]);
+
+function staticsThickness(object) {
+    return isStaticsObject(object) && !STATICS_NO_THICKNESS.has(object.type);
+}
+
+/*
+ * A Dynamics particle or body shares its storage type with the Statics one,
+ * and keeps the Dynamics panel - so the Dynamics mark decides first.
+ */
+export function isStaticsObject(object) {
+    return Boolean(
+        object &&
+            STATICS_TYPES.has(object.type) &&
+            !object.engineering?.dynamicsType &&
+            !isDynamicsObject(object)
+    );
+}
+
+function roundValue(value) {
+    const number = Number(value);
+
+    return Number.isFinite(number) ? Number(number.toFixed(4)) : 0;
+}
+
+function normaliseDegrees(value) {
+    const degrees = Number(value) % 360;
+
+    return degrees < 0 ? degrees + 360 : degrees;
+}
+
+function unitOptions(units) {
+    return (Array.isArray(units) ? units : []).map((unit) => ({ value: unit, label: unit }));
+}
+
+/*
+ * A NUMBER TYPED IN FEATURES IS A STATED VALUE. It replaces any symbol the
+ * student gave at creation (`F₁`) and clears the Unknown mark, so the panel
+ * and the sheet do not go on saying two different things.
+ */
+function statedValue(object) {
+    object.magnitudeLabel = null;
+
+    if (object.unknownValues) {
+        object.unknownValues = { ...object.unknownValues, magnitude: false };
+    }
+}
+
+function loadPointsOf(object) {
+    return Array.isArray(object?.geometry?.points) ? object.geometry.points : [];
+}
+
+function isUniformLoad(object) {
+    const points = loadPointsOf(object);
+
+    return points.every((point) => Math.abs(Number(point.magnitude) - Number(points[0].magnitude)) < 1e-9);
+}
+
+function uniformIntensityOf(object) {
+    const intensity = Number(object.geometry?.intensity);
+
+    if (Number.isFinite(intensity)) {
+        return intensity;
+    }
+
+    return Number(loadPointsOf(object)[0]?.magnitude) || 0;
+}
+
+/* A Varying Load's intensity at one end. */
+function varyingEndField(key, label) {
+    return {
+        kind: "number",
+        applies: (object) => object.type === "varying-load",
+        read: (object) => roundValue(Number(object.geometry?.[key]) || 0),
+        write: (object, value) => {
+            const intensity = Number(value);
+
+            if (!Number.isFinite(intensity)) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, [key]: intensity };
+            statedValue(object);
+
+            return true;
+        },
+        step: "any",
+        label
+    };
+}
+
+/* A member's drawn size across its centreline - a Beam's depth, a Shaft's diameter. */
+function bodySizeField(type, key, label, fallback) {
+    return {
+        kind: "number",
+        applies: (object) => object.type === type,
+        read: (object) => {
+            const stored = Number(object.geometry?.[key]);
+
+            return roundValue(stored > 0 ? stored : fallback);
+        },
+        write: (object, value) => {
+            const size = Number(value);
+
+            if (!Number.isFinite(size) || size <= 0) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, [key]: size };
+
+            return true;
+        },
+        min: 0,
+        step: "any",
+        unit: "mm",
+        label
+    };
+}
+
 const FIELDS = {
     /* ---------------------------------------------------------- Geometry */
 
@@ -588,14 +774,14 @@ const FIELDS = {
 
     stroke: {
         kind: "colour",
-        applies: (object) => STROKE_TYPES.has(object.type),
+        applies: (object) => STROKE_TYPES.has(object.type) || isStaticsObject(object),
         read: strokeOf,
         write: setStroke
     },
 
     lineWidth: {
         kind: "choice",
-        applies: (object) => STROKE_TYPES.has(object.type),
+        applies: (object) => STROKE_TYPES.has(object.type) || staticsThickness(object),
         read: thicknessOf,
         write: (object, value) => {
             /*
@@ -659,7 +845,7 @@ const FIELDS = {
 
     customWidth: {
         kind: "number",
-        applies: (object) => STROKE_TYPES.has(object.type) && thicknessOf(object) === "custom",
+        applies: (object) => (STROKE_TYPES.has(object.type) || staticsThickness(object)) && thicknessOf(object) === "custom",
         read: customThicknessOf,
         write: (object, value) => {
             const width = Number(value);
@@ -742,6 +928,291 @@ const FIELDS = {
         applies: (object) => object.type === COORDINATE_SYSTEM && showLabelsOf(object),
         read: (object) => axisLabelOf(object, "originLabel", "O"),
         write: (object, value) => setGeometryText(object, "originLabel", value)
+    },
+
+    /* ------------------------------------------------- Statics */
+
+    /*
+     * THE OBJECT'S NAME, as the Objects list and the source header show it.
+     * Renaming is not labelling: the name never appears in the picture unless
+     * Show Name is on. An empty name is refused, so an object is never left
+     * unnamed in the list.
+     */
+    name: {
+        kind: "text",
+        applies: isStaticsObject,
+        read: (object) => (typeof object.name === "string" ? object.name : ""),
+        write: (object, value) => {
+            const name = String(value ?? "").trim();
+
+            if (!name) {
+                return false;
+            }
+
+            object.name = name;
+
+            return true;
+        },
+        label: "Name"
+    },
+
+    /*
+     * A STATICS OBJECT'S APPEARANCE IS ONE SECTION. Geometry splits its pen
+     * across Line, Fill and Appearance; the Statics template keeps Line Style,
+     * Outline Colour, Thickness and Fill together, so these are the same
+     * properties under the keys that section uses.
+     */
+    staticsLineType: {
+        kind: "choice",
+        applies: (object) => isStaticsObject(object) && !STATICS_NO_LINE_STYLE.has(object.type),
+        read: (object) => FIELDS.lineType.read(object),
+        write: (object, value) => FIELDS.lineType.write(object, value),
+        options: [
+            { value: "solid", label: "Solid" },
+            { value: "dashed", label: "Dashed" },
+            { value: "dotted", label: "Dotted" }
+        ],
+        label: "Line Style"
+    },
+
+    staticsFillMode: {
+        kind: "segmented",
+        applies: (object) => isStaticsObject(object) && STATICS_FILLABLE.has(object.type),
+        read: fillModeOf,
+        write: setFillMode,
+        options: [
+            { value: "none", label: "None" },
+            { value: "solid", label: "Solid" }
+        ],
+        label: "Fill"
+    },
+
+    staticsFill: {
+        kind: "colour",
+        applies: (object) =>
+            isStaticsObject(object) && STATICS_FILLABLE.has(object.type) && fillModeOf(object) === "solid",
+        read: fillColourOf,
+        write: setFillColour,
+        label: "Fill Colour"
+    },
+
+    /*
+     * ============================================================
+     * THE OTHER FACTORS: EACH TOOL'S OWN VALUES
+     * ============================================================
+     *
+     * DAETUM documents a value; it never solves for one. So a magnitude typed
+     * here is the LABEL the drawing states - the arrow keeps the length the
+     * student drew, exactly as at creation.
+     *
+     * A force and a moment store their magnitude in the BASE unit (N, N·m) with
+     * the chosen unit beside it, so these fields read and write in the chosen
+     * unit and convert. A load keeps its numbers in its own unit already.
+     */
+    forceMagnitude: {
+        kind: "number",
+        applies: (object) => object.type === "force",
+        read: (object) => roundValue(
+            enggQuantities.convertValue(Number(object.geometry?.magnitude) || 0, "force", "N", enggLoadProfile.forceUnit(object.geometry))
+        ),
+        write: (object, value) => {
+            const typed = Number(value);
+
+            if (!Number.isFinite(typed) || typed < 0) {
+                return false;
+            }
+
+            const newtons = enggQuantities.convertValue(typed, "force", enggLoadProfile.forceUnit(object.geometry), "N");
+
+            enggLoadProfile.setForceVector(object.geometry, newtons, enggLoadProfile.forceVector(object.geometry).angle);
+            statedValue(object);
+
+            return true;
+        },
+        min: 0,
+        step: "any",
+        label: "Magnitude"
+    },
+
+    forceUnit: {
+        kind: "choice",
+        applies: (object) => object.type === "force",
+        read: (object) => enggLoadProfile.forceUnit(object.geometry),
+        write: (object, value) => {
+            if (!enggLoadProfile.isForceUnit(value)) {
+                return false;
+            }
+
+            /* The force is unchanged; only the unit it is written in. */
+            enggLoadProfile.setForceUnit(object.geometry, value);
+
+            return true;
+        },
+        options: unitOptions(enggLoadProfile.FORCE_UNITS),
+        label: "Unit"
+    },
+
+    forceAngle: {
+        kind: "number",
+        applies: (object) => object.type === "force",
+        read: (object) => roundValue(normaliseDegrees(enggLoadProfile.forceVector(object.geometry).angle)),
+        write: (object, value) => {
+            const degrees = Number(value);
+
+            if (!Number.isFinite(degrees)) {
+                return false;
+            }
+
+            enggLoadProfile.setForceVector(object.geometry, Number(object.geometry.magnitude) || 0, normaliseDegrees(degrees));
+
+            return true;
+        },
+        step: "any",
+        unit: "°",
+        label: "Angle"
+    },
+
+    momentMagnitude: {
+        kind: "number",
+        applies: (object) => object.type === "moment",
+        read: (object) => roundValue(
+            enggQuantities.convertValue(Number(object.geometry?.magnitude) || 0, "moment", "N·m", enggLoadProfile.momentUnit(object.geometry))
+        ),
+        write: (object, value) => {
+            const typed = Number(value);
+
+            if (!Number.isFinite(typed) || typed < 0) {
+                return false;
+            }
+
+            object.geometry = {
+                ...object.geometry,
+                magnitude: enggQuantities.convertValue(typed, "moment", enggLoadProfile.momentUnit(object.geometry), "N·m")
+            };
+            statedValue(object);
+
+            return true;
+        },
+        min: 0,
+        step: "any",
+        label: "Magnitude"
+    },
+
+    momentUnit: {
+        kind: "choice",
+        applies: (object) => object.type === "moment",
+        read: (object) => enggLoadProfile.momentUnit(object.geometry),
+        write: (object, value) => {
+            if (!enggLoadProfile.isMomentUnit(value)) {
+                return false;
+            }
+
+            enggLoadProfile.setMomentUnit(object.geometry, value);
+
+            return true;
+        },
+        options: unitOptions(enggLoadProfile.MOMENT_UNITS),
+        label: "Unit"
+    },
+
+    momentDirection: {
+        kind: "segmented",
+        applies: (object) => object.type === "moment",
+        read: (object) => (String(object.geometry?.direction).toUpperCase() === "CCW" ? "CCW" : "CW"),
+        write: (object, value) => {
+            if (value !== "CW" && value !== "CCW") {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, direction: value };
+
+            return true;
+        },
+        options: [
+            { value: "CW", label: "Clockwise" },
+            { value: "CCW", label: "Anticlockwise" }
+        ],
+        label: "Direction"
+    },
+
+    /*
+     * A UNIFORM LOAD HAS ONE INTENSITY. It is stored both as `intensity` (the
+     * label) and as its profile points (what the arrows are sampled from), so
+     * both are written - one without the other would draw one load and state
+     * another. A load whose points differ is edited point by point instead.
+     */
+    loadIntensity: {
+        kind: "number",
+        applies: (object) => object.type === "load" && isUniformLoad(object),
+        read: (object) => roundValue(uniformIntensityOf(object)),
+        write: (object, value) => {
+            /* Signed: a negative intensity acts against the load's direction. */
+            const intensity = Number(value);
+
+            if (!Number.isFinite(intensity)) {
+                return false;
+            }
+
+            const points = Array.isArray(object.geometry.points) ? object.geometry.points : [];
+
+            object.geometry = {
+                ...object.geometry,
+                intensity,
+                points: points.map((point) => ({ ...point, magnitude: intensity }))
+            };
+            statedValue(object);
+
+            return true;
+        },
+        step: "any",
+        label: "Intensity"
+    },
+
+    loadStartIntensity: varyingEndField("startIntensity", "Start Intensity"),
+    loadEndIntensity: varyingEndField("endIntensity", "End Intensity"),
+
+    loadUnit: {
+        kind: "choice",
+        applies: (object) => object.type === "load" || object.type === "varying-load",
+        read: (object) => enggLoadProfile.loadUnit(object.geometry),
+        write: (object, value) => {
+            if (!enggLoadProfile.LOAD_UNITS.includes(value)) {
+                return false;
+            }
+
+            /* The load is unchanged; its numbers are restated in the new unit. */
+            enggLoadProfile.setLoadUnit(object.geometry, value);
+
+            return true;
+        },
+        options: unitOptions(enggLoadProfile.LOAD_UNITS),
+        label: "Unit"
+    },
+
+    beamDepth: bodySizeField("beam", "depth", "Depth", 12),
+    shaftDiameter: bodySizeField("shaft", "diameter", "Diameter", 20),
+
+    trussPanels: {
+        kind: "number",
+        /* A drawn truss keeps its own members; only a template truss has panels. */
+        applies: (object) =>
+            object.type === "truss" && !(Array.isArray(object.geometry?.members) && object.geometry.members.length),
+        read: (object) => Math.max(2, Math.round(Number(object.geometry?.panels) || 4)),
+        write: (object, value) => {
+            const panels = Math.round(Number(value));
+
+            if (!Number.isFinite(panels) || panels < 2) {
+                return false;
+            }
+
+            object.geometry = { ...object.geometry, panels };
+
+            return true;
+        },
+        min: 2,
+        step: 1,
+        integer: true,
+        label: "Panels"
     },
 
     /* ------------------------------------------------- Universal */
@@ -836,10 +1307,16 @@ function isLockable(object) {
      * cannot be dragged. The specification requires it on every Dynamics tool,
      * including the ones whose stored type (a spring's, a pulley's) is not in
      * the list below, so the Dynamics mark is enough on its own.
+     *
+     * EVERY STATICS TOOL CAN BE FIXED TOO, as the Features template asks. The
+     * lock only withdraws handles and stops a drag; an analysis object still
+     * follows its sources when they change, because that refresh is not a drag.
      */
     return Boolean(
         object &&
-            (LOCKABLE_TYPES.has(object.type) || object.engineering?.dynamicsType)
+            (LOCKABLE_TYPES.has(object.type) ||
+                object.engineering?.dynamicsType ||
+                isStaticsObject(object))
     );
 }
 
@@ -954,6 +1431,100 @@ export const GROUPS = [
     { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
+
+/*
+ * ============================================================
+ * THE STATICS GROUPS: THE TEAM'S FEATURES TEMPLATE
+ * ============================================================
+ *
+ *   Object       Name (with Show Name and Label beside it), Fix
+ *   Appearance   Line Style, Outline Colour, Thickness, Fill
+ *   Transform    X Shift, Y Shift, Rotate - then the tool's own values
+ *
+ * The section ids are the shared ones, so a mixed selection still merges
+ * Appearance with Appearance. `transformValues` marks the rows the pane writes
+ * INSIDE the Transform section, under the shift and rotate rows, which is
+ * where the template puts a tool's other factors.
+ *
+ * Visibility is part of the template but is deliberately not built yet.
+ */
+export const STATICS_GROUPS = [
+    { id: "object", heading: "Object", fields: ["name", "showName", "label", "fixed"] },
+    {
+        id: "appearance",
+        heading: "Appearance",
+        fields: ["staticsLineType", "stroke", "lineWidth", "customWidth", "staticsFillMode", "staticsFill"]
+    },
+    { id: "transform", heading: "Transform", fields: [], transform: true },
+    {
+        id: "statics-values",
+        heading: "Transform",
+        transformValues: true,
+        fields: [
+            "forceMagnitude",
+            "forceUnit",
+            "forceAngle",
+            "momentMagnitude",
+            "momentUnit",
+            "momentDirection",
+            "loadIntensity",
+            "loadStartIntensity",
+            "loadEndIntensity",
+            "loadUnit",
+            "beamDepth",
+            "shaftDiameter",
+            "trussPanels"
+        ]
+    }
+];
+
+/*
+ * A LOAD WHOSE POINTS DIFFER IS EDITED POINT BY POINT. A Varying Load drawn
+ * with the tool keeps its profile as `points`, as many as the student placed,
+ * so - like a process path's bends - each gets a field generated from its key,
+ * `loadPoint:<index>`, in the order the points run along the span.
+ */
+const LOAD_POINT_PREFIX = "loadPoint:";
+
+function loadPointField(key) {
+    if (!String(key).startsWith(LOAD_POINT_PREFIX)) {
+        return null;
+    }
+
+    const index = Number(String(key).slice(LOAD_POINT_PREFIX.length));
+
+    if (!Number.isInteger(index) || index < 0) {
+        return null;
+    }
+
+    const sorted = (object) =>
+        loadPointsOf(object)
+            .map((point, at) => ({ point, at }))
+            .sort((a, b) => Number(a.point.t) - Number(b.point.t));
+
+    return {
+        kind: "number",
+        applies: (object) => object.type === "load" && !isUniformLoad(object) && index < loadPointsOf(object).length,
+        read: (object) => roundValue(Number(sorted(object)[index]?.point.magnitude) || 0),
+        write: (object, value) => {
+            const magnitude = Number(value);
+            const entry = sorted(object)[index];
+
+            if (!entry || !Number.isFinite(magnitude)) {
+                return false;
+            }
+
+            const points = loadPointsOf(object).map((point, at) => (at === entry.at ? { ...point, magnitude } : point));
+
+            object.geometry = { ...object.geometry, points };
+            statedValue(object);
+
+            return true;
+        },
+        step: "any",
+        label: `Point ${index + 1}`
+    };
+}
 
 /*
  * ============================================================
@@ -1898,7 +2469,7 @@ function processBendField(key) {
 }
 
 function definitionOf(key) {
-    return FIELDS[key] || dynamicField(key) || processBendField(key);
+    return FIELDS[key] || dynamicField(key) || processBendField(key) || loadPointField(key);
 }
 
 export function fieldDefinition(key) {
@@ -1972,10 +2543,23 @@ export function groupsFor(object) {
         ? DYNAMICS_GROUPS
         : [];
 
-    const groups = [
-        ...dynamics,
-        ...GROUPS
-    ]
+    const statics = isStaticsObject(object);
+
+    const declared = statics
+        ? STATICS_GROUPS.map((group) =>
+              group.transformValues
+                  ? {
+                        ...group,
+                        fields: [
+                            ...group.fields,
+                            ...loadPointsOf(object).map((_, index) => `${LOAD_POINT_PREFIX}${index}`)
+                        ]
+                    }
+                  : group
+          )
+        : [...dynamics, ...GROUPS];
+
+    const groups = declared
         .map((group) => {
             const fields = group.fields
                 .map((key) => ({ key, definition: definitionOf(key) }))
@@ -2052,7 +2636,12 @@ export function writeField(object, key, value) {
  * The probe is thrown away. Nothing here touches the object the student can see;
  * the real move goes through `transform-session.js`.
  */
-export function supportsTransform(object) {
+/*
+ * `lookup` finds another object by id. A SUPPORT MOVES ALONG ITS BODY, so the
+ * probe needs that body to answer honestly - without it every attached support
+ * looked immovable and was never offered Transform.
+ */
+export function supportsTransform(object, lookup = () => null) {
     if (!object || typeof object !== "object" || !object.geometry) {
         return false;
     }
@@ -2074,19 +2663,30 @@ export function supportsTransform(object) {
         return true;
     }
 
-    const probe = {
-        ...object,
-        geometry: JSON.parse(JSON.stringify(object.geometry)),
-        style: { ...(object.style || {}) }
-    };
+    return wouldMove(object, lookup);
+}
 
-    try {
-        enggFeatureGeometry.translateObject(probe, 0.5, 0.5, () => null);
-    } catch {
-        return false;
-    }
+/*
+ * WHETHER A SMALL MOVE CHANGES THE OBJECT, tried both ways. One direction is
+ * not enough: a support at the far end of its body is clamped there, so a push
+ * outward does nothing although a push inward moves it.
+ */
+export function wouldMove(object, lookup = () => null) {
+    return [0.5, -0.5].some((delta) => {
+        const probe = {
+            ...object,
+            geometry: JSON.parse(JSON.stringify(object.geometry)),
+            style: { ...(object.style || {}) }
+        };
 
-    return JSON.stringify(probe.geometry) !== JSON.stringify(object.geometry);
+        try {
+            enggFeatureGeometry.translateObject(probe, delta, delta, lookup);
+        } catch {
+            return false;
+        }
+
+        return JSON.stringify(probe.geometry) !== JSON.stringify(object.geometry);
+    });
 }
 
 /* ============================================================

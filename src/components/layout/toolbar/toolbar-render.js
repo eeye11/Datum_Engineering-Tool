@@ -3,12 +3,12 @@
  */
 
 import { disciplineToolGroups, drawingToolGroups, engineeringTools } from "./tools.js";
-import { ANALYSIS_DIAGRAM_TOOLS, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS, beginAnalysisDiagram, analysisDiagramIntroMessage, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
+import { ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS, ANALYSIS_DIAGRAM_TOOLS, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_TOOL_MENUS, activateAnalysisMode, activateCoordinateMode, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
@@ -19,16 +19,51 @@ const expandedToolbarSections = {
     load: false,
     support: false,
     connection: false,
-    "shear-force-diagram": false,
     "reference-arc": false,
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
-    work: false
+    work: false,
+
+    /*
+     * STATICS EXPANDS INLINE, NOT IN A FLYOUT. The Coordinate System's 2D / 3D
+     * choice and each diagram's Sketch / Plot choice open beneath their button
+     * like Bodies and Loads do. Only in Statics: the Coordinate System button is
+     * shared with Geometry, which keeps its own menu.
+     */
+    "coordinate-system": false,
+    "shear-force-diagram": false,
+    "bending-moment-diagram": false,
+    "axial-force-diagram": false
 };
 
+const STATICS_ONLY_INLINE = new Set([
+    "coordinate-system",
+    "shear-force-diagram",
+    "bending-moment-diagram",
+    "axial-force-diagram"
+]);
+
+function expandsInline(toolId) {
+    return (
+        Object.hasOwn(expandedToolbarSections, toolId) &&
+        (!STATICS_ONLY_INLINE.has(toolId) || activeCategory() === "STATICS")
+    );
+}
+
+/*
+ * ONE OPTION, ONE HIGHLIGHT. Sketch and Plot are the same tool underneath, so
+ * the button renderer - which highlights by tool - lit both of them at once.
+ * An option's own state decides instead.
+ */
+function optionButton(markup, active) {
+    return markup
+        .replace(/class="drawing-tool( active)?"/, `class="drawing-tool${active ? " active" : ""}"`)
+        .replace(/aria-pressed="(true|false)"/, `aria-pressed="${active}"`);
+}
+
 function renderToolbarTool(tool) {
-    if (!Object.hasOwn(expandedToolbarSections, tool.id)) {
+    if (!expandsInline(tool.id)) {
         return renderToolButton(tool);
     }
 
@@ -38,10 +73,17 @@ function renderToolbarTool(tool) {
         .replace(' aria-haspopup="menu"', '')
         .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
 
-    const children = tool.id === "shear-force-diagram"
+    /*
+     * A DIAGRAM'S SKETCH / PLOT CHOICE, as tool buttons beneath it - the same
+     * mode the flyout used to ask for, chosen in place.
+     */
+    const children = ANALYSIS_DIAGRAM_TOOLS[tool.id]
         ? ANALYSIS_DIAGRAM_MODES.map(mode =>
-            renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })
-                .replace('data-tool-id=', `data-analysis-diagram-mode="${mode}" data-tool-id=`)
+            optionButton(
+                renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })
+                    .replace('data-tool-id=', `data-analysis-diagram-mode="${mode}" data-tool-id=`),
+                drawingState.activeTool === tool.id && drawingState.interaction.analysisMode === mode
+            )
         ).join("")
         : tool.id === "work"
         ? [
@@ -65,6 +107,14 @@ function renderToolbarTool(tool) {
             { id: "piston-cylinder", label: "Without Stoppers", iconLabel: "Piston Cylinder" },
             { id: "piston-cylinder-stoppers", label: "With Stoppers", iconLabel: "Piston Cylinder With Stoppers" }
         ].map(option => renderToolButton(option).replace('data-tool-id=', 'data-piston-cylinder-option="true" data-tool-id=')).join("")
+        : tool.id === "coordinate-system"
+        ? [
+            { mode: "2d", label: "2D Coordinate System" },
+            { mode: "3d", label: "3D Coordinate System" }
+        ].map(option => {
+            const active = option.mode === "2d" && drawingState.activeTool === "coordinate-system-2d";
+            return `<button type="button" class="drawing-tool${active ? " active" : ""}" aria-pressed="${active}" data-coordinate-mode="${option.mode}">${option.label}</button>`;
+        }).join("")
         : tool.id === "reference-arc"
         ? ARC_CREATION_MODES.map(mode => {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
@@ -175,11 +225,7 @@ export function renderEngineeringTools(
                         if (button.dataset.analysisDiagramMode) {
                             event.preventDefault();
                             event.stopPropagation();
-                            activateTool(toolId);
-                            drawingState.interaction.analysisMode = button.dataset.analysisDiagramMode;
-                            beginAnalysisDiagram(toolId);
-                            setToolMessage(analysisDiagramIntroMessage(null));
-                            renderCurrentDrawing();
+                            activateAnalysisMode(toolId, button.dataset.analysisDiagramMode);
                             return;
                         }
 
@@ -196,7 +242,14 @@ export function renderEngineeringTools(
                             return;
                         }
 
-                        if (Object.hasOwn(expandedToolbarSections, toolId)) {
+                        if (button.dataset.coordinateMode) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            activateCoordinateMode(button.dataset.coordinateMode);
+                            return;
+                        }
+
+                        if (expandsInline(toolId)) {
                             event.preventDefault();
                             event.stopPropagation();
                             const expanded = !expandedToolbarSections[toolId];

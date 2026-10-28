@@ -22,6 +22,7 @@
  */
 
 import { createSourceMap } from "../drawing-source.js";
+import enggQuantities from "../../../units/quantities.js";
 import {
   DEFAULT_STROKE,
   colourName as sharedColourName,
@@ -530,8 +531,8 @@ export function loadPoints(geometry) {
     /* A varying load's two end intensities are its profile; see load-profile.js. */
     if (!points.length && (geometry?.startIntensity !== undefined || geometry?.endIntensity !== undefined)) {
         points = [
-            { t: 0, magnitude: Math.abs(Number(geometry.startIntensity) || 0) },
-            { t: 1, magnitude: Math.abs(Number(geometry.endIntensity) || 0) }
+            { t: 0, magnitude: Number(geometry.startIntensity) || 0 },
+            { t: 1, magnitude: Number(geometry.endIntensity) || 0 }
         ];
     }
 
@@ -896,6 +897,38 @@ function unitCommand(unit) {
         .trim();
 }
 
+/*
+ * A FORCE'S OR A MOMENT'S VALUE, IN THE UNIT IT IS WRITTEN IN.
+ *
+ * Both store their magnitude in the BASE unit (N, N·m) and the student's chosen
+ * unit beside it - `unit` for a force, `momentUnit` for a moment. The label must
+ * convert between the two: printing the stored number with the chosen unit made
+ * a 2 kN force read "F = 2000 kN". A load keeps its numbers in its own unit, so
+ * it is not converted here.
+ */
+function displayedQuantity(object) {
+    const geometry = object?.geometry || {};
+    const magnitude = Number(geometry.magnitude);
+
+    if (object?.type === "moment") {
+        const unit = enggQuantities.isUnitFor("moment", geometry.momentUnit) ? geometry.momentUnit : "N·m";
+
+        return {
+            value: enggQuantities.convertValue(magnitude, "moment", "N·m", unit),
+            unit: unitCommand(unit),
+        };
+    }
+
+    if (object?.type === "force" && enggQuantities.isUnitFor("force", geometry.unit)) {
+        return {
+            value: enggQuantities.convertValue(magnitude, "force", "N", geometry.unit),
+            unit: unitCommand(geometry.unit),
+        };
+    }
+
+    return { value: magnitude, unit: unitOf(object) };
+}
+
 function unitOf(object) {
     const geometry = object?.geometry || {};
 
@@ -1017,8 +1050,8 @@ function forceNodes(object) {
     }
 
     if (valuesShown(object) && Number.isFinite(magnitude)) {
-        const unit = unitOf(object);
-        const text = `$F = ${formatNumber(magnitude)}${unit ? `\\ ${unit}` : ""}$`;
+        const { value, unit } = displayedQuantity(object);
+        const text = `$F = ${formatNumber(value)}${unit ? `\\ ${unit}` : ""}$`;
 
         nodes.push(
             labelNode({
@@ -1096,6 +1129,37 @@ function loadNodes(object) {
         return nodes;
     }
 
+    /*
+     * A PROFILE STATES EACH OF ITS POINTS. One averaged "w" says nothing true
+     * about a load whose intensity varies - and nothing at all about one that
+     * changes sign - so each defined point is labelled with its own value,
+     * as the canvas does (w1, w2, ...).
+     */
+    const defined = loadPoints(geometry);
+    const varies = defined.some((entry) => Math.abs(entry.magnitude - defined[0].magnitude) > 1e-9);
+
+    if (varies) {
+        defined.forEach((entry, index) => {
+            const at = pointAlong(geometry, entry.t);
+
+            if (!at) {
+                return;
+            }
+
+            nodes.push(
+                labelNode({
+                    at: { x: Number(at.x) + normal.x * 3, y: Number(at.y) + normal.y * 3 },
+                    text: `$w_{${index + 1}} = ${formatNumber(entry.magnitude)}${unit ? `\\ ${unit}` : ""}$`,
+                    colour,
+                    font,
+                    anchor: normal.y >= 0 ? "south" : "north",
+                }),
+            );
+        });
+
+        return nodes;
+    }
+
     const intensity = Number(geometry.intensity);
 
     if (Number.isFinite(intensity)) {
@@ -1135,12 +1199,12 @@ function momentNodes(object) {
     const magnitude = Number(geometry.magnitude);
 
     if (valuesShown(object) && Number.isFinite(magnitude)) {
-        const unit = unitOf(object);
+        const { value, unit } = displayedQuantity(object);
 
         nodes.push(
             labelNode({
                 at: { x: at.x, y: at.y - font * 0.45 },
-                text: `$M = ${formatNumber(magnitude)}${unit ? `\\ ${unit}` : ""}$`,
+                text: `$M = ${formatNumber(value)}${unit ? `\\ ${unit}` : ""}$`,
                 colour,
                 font,
                 anchor: "south west",

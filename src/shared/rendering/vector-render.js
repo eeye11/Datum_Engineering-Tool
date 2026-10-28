@@ -7,8 +7,20 @@
 import enggLoadProfile from "../../features/workspace/model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../../features/workspace/model/analysis/rotational-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
-import { createSvgElement, paintColour, scaledStrokeWidth } from "./svg-primitives.js";
-import { arrowHeadSize } from "./dimension-render.js";
+import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth } from "./svg-primitives.js";
+
+/*
+ * A FORCE'S HEAD ON SCREEN.
+ *
+ * The dimension head (`arrowHeadSize` in dimension-render.js, 4-11 px) suits a thin dimension line,
+ * but on a free-body diagram the head is what says which way a force acts -
+ * and at the default weight it came out about 5 px, barely visible. Force,
+ * resultant, component and moment heads are sized here instead: about twice
+ * that, still following the line weight.
+ */
+export function vectorHeadSize(lineWidth) {
+    return Math.max(10, Math.min(20, (Number(lineWidth) || 0.5) * 16));
+}
 
 
     /*
@@ -177,6 +189,15 @@ import { arrowHeadSize } from "./dimension-render.js";
                     ? {
                         "stroke-dasharray": "4 3"
                     }
+                    : dashPatternFor(style.lineType)
+                    ? {
+                        /*
+                         * THE STUDENT'S LINE STYLE. A dashed force (an unknown
+                         * or a reaction, by convention) was stored and written
+                         * to the source but drawn solid on the canvas.
+                         */
+                        "stroke-dasharray": dashPatternFor(style.lineType)
+                    }
                     : {})
             })
         );
@@ -196,9 +217,7 @@ import { arrowHeadSize } from "./dimension-render.js";
             head,
             Math.atan2(dy, dx),
             stroke,
-            arrowHeadSize(
-                Number(style.lineWidth) || 0.5
-            )
+            vectorHeadSize(style.lineWidth)
         );
     }
 
@@ -642,10 +661,15 @@ import { arrowHeadSize } from "./dimension-render.js";
          *
          * The head may never exceed its own shaft, or it stops
          * reading as an arrow and becomes a separate mark.
+         *
+         * READABLE AT THE DEFAULT WEIGHT. Five shaft widths gave a 3-5 px
+         * head on a 1 px line - present, but barely visible. A load's head
+         * starts at 8 px and still grows with the line weight, and is never
+         * more than half its own arrow, so a short arrow keeps its shaft.
          */
-        return Math.max(
-            3,
-            Math.min(width * 5, length)
+        return Math.min(
+            Math.max(8, width * 8),
+            Math.max(3, length * 0.5)
         );
     }
 
@@ -772,7 +796,7 @@ import { arrowHeadSize } from "./dimension-render.js";
         const head =
             rotational.headPoints(
                 arc,
-                arrowHeadSize(lineWidth) * 1.12
+                vectorHeadSize(lineWidth) * 0.8
             );
 
         svg.appendChild(

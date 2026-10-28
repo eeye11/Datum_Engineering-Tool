@@ -321,7 +321,7 @@ test("a clockwise moment's head points clockwise, an anticlockwise one's anticlo
 
   const arcOf = (direction) => {
     const source = serializeStaticsObject(f.moment({ x: 0, y: 0 }, 10, direction, {}));
-    const match = /\[([^\]]*)\][^\n]*arc\[start angle=(-?[\d.]+), end angle=(-?[\d.]+)/.exec(source);
+    const match = /\[((?:[^\[\]]|\[[^\]]*\])*)\][^\n]*arc\[start angle=(-?[\d.]+), end angle=(-?[\d.]+)/.exec(source);
 
     assert.ok(match, `no arc in the ${direction} moment:\n${source}`);
 
@@ -332,10 +332,10 @@ test("a clockwise moment's head points clockwise, an anticlockwise one's anticlo
   const ccw = arcOf("CCW");
 
   /* The head is at the END of the sweep, and the sweep runs the right way. */
-  assert.match(cw.options, /(^|, )-\{Latex\}/, "the CW head is not at the end of its sweep");
+  assert.match(cw.options, /(^|, )-\{Latex[\[}]/, "the CW head is not at the end of its sweep");
   assert.ok(cw.end < cw.start, "the CW arc does not sweep clockwise");
 
-  assert.match(ccw.options, /(^|, )-\{Latex\}/, "the CCW head is not at the end of its sweep");
+  assert.match(ccw.options, /(^|, )-\{Latex[\[}]/, "the CCW head is not at the end of its sweep");
   assert.ok(ccw.end > ccw.start, "the CCW arc does not sweep anticlockwise");
 });
 

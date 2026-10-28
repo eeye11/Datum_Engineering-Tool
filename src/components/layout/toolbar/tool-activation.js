@@ -5,7 +5,7 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { isAnnotationTool } from "../../../features/workspace/annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool } from "../../../features/workspace/annotate/annotate-creation.js";
-import { analysisInputMessage, isAnalysisInputTool } from "../../../features/workspace/statics/analysis-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS, analysisInputMessage, isAnalysisInputTool } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { isDimensionTool } from "../../../features/workspace/annotate/dimension-tool.js";
 import { drawingCanvas, drawingRedo, drawingUndo, toolList } from "../../../features/workspace/dom.js";
@@ -21,6 +21,7 @@ import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
 import { isLegacyResetTool, legacyPlaceholderMessage } from "./phase-reset.js";
+import { finishDistributedLoadConstruction } from "../../../features/workspace/statics/load-tool.js";
 
 export function activate2DCoordinateSystemTool() {
     /*
@@ -106,6 +107,19 @@ export function activateTool(
     if (
         requestedTool === "select"
     ) {
+        /*
+         * A VARYING LOAD WITH ITS POINTS PLACED IS FINISHED, NOT DROPPED.
+         * Its profile is only committed on Enter, and a student who presses
+         * Select when the drawing looks done would otherwise lose the whole
+         * load. One that cannot be finished yet is abandoned as before.
+         */
+        if (
+            drawingState.interaction.phase ===
+            "distributed-load-build"
+        ) {
+            finishDistributedLoadConstruction();
+        }
+
         closePolygonSidesPrompt();
 
         clearGlobalToolHighlight();
@@ -215,7 +229,15 @@ export function activateTool(
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
-        requestedTool === "polygon";
+        requestedTool === "polygon" ||
+
+        /*
+         * A DIAGRAM IS PLACED TOO, and its Sketch / Plot choice re-arms it
+         * through here. Toggling on the second call sent a student who picked
+         * Plot after Sketch back to Select instead of into Plot.
+         */
+        Boolean(ANALYSIS_DIAGRAM_TOOLS[requestedTool]) ||
+        requestedTool === "coordinate-system-2d";
 
     const nextTool =
         drawingState.activeTool ===
