@@ -197,6 +197,16 @@ function elbowContainsPoint(
         }
     }
 
+    /*
+     * THE CORNER ITSELF IS PICKABLE. The arc samples leave a wedge of dead
+     * space at each end of the bend, and at a sharp corner the two sampled
+     * ends are far apart - a click on the corner the fitting sits at is a
+     * click on the fitting.
+     */
+    if (geometry.position && distance(point, geometry.position) <= tolerance * 2) {
+        return true;
+    }
+
     return false;
 }
 

@@ -457,7 +457,20 @@ export function commitFlowArrowSession(session) {
 	/* The arrow hangs off its host, so deleting the host deletes the arrow. */
 	arrow.parentId = session.hostId;
 
-	enggDrawingState.addObject(drawingState, arrow);
+	/*
+	 * THE STORED OBJECT IS THE ONE HANDED BACK, not the one created.
+	 *
+	 * `addObject` may store a COPY of what it is given - it renames a feature
+	 * by spreading it (see `statics-creation.js`'s note, and the Mirror/Paste
+	 * fix in docs/CHANGES.md) - so the object passed in is not always the
+	 * object on the sheet. A caller holding the stray copy would drag an
+	 * arrow the document never sees.
+	 */
+	const stored =
+		enggDrawingState.addObject(
+			drawingState,
+			arrow
+		) || arrow;
 
 	enggDrawingState.commitDrawingChange(drawingState, previousObjects);
 
@@ -465,13 +478,13 @@ export function commitFlowArrowSession(session) {
 
 	enggDrawingState.selectObject(drawingState, arrow.id);
 
-	setToolMessage(`${arrow.name} placed`);
+	setToolMessage(`${stored.name} placed`);
 
 	renderProperties();
 	renderCurrentDrawing();
 
 	/* The tool stays armed: the next press places another arrow. */
-	return arrow;
+	return stored;
 }
 
 /* ============================================================

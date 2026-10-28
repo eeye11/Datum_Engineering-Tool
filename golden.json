@@ -1,0 +1,3396 @@
+{
+ "STATICS/body/particle": {
+  "steps": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/body/rigid-body": {
+  "steps": [
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/body/beam": {
+  "steps": [
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000005-0000-4000-8000-000000000005",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000005-0000-4000-8000-000000000005\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "beam-00000005-0000-4000-8000-000000000005": ""
+  },
+  "errors": []
+ },
+ "STATICS/body/truss": {
+  "steps": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/body/cable": {
+  "steps": [
+   1
+  ],
+  "objects": [
+   {
+    "id": "cable-00000008-0000-4000-8000-000000000008",
+    "name": "Cable",
+    "type": "cable",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "tension": 0
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "cable"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"cable-00000008-0000-4000-8000-000000000008\"><polygon points=\"289,506 793,506 793,500 289,500\" fill=\"#000000\" stroke=\"none\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "cable-00000008-0000-4000-8000-000000000008": ""
+  },
+  "errors": []
+ },
+ "STATICS/body/shaft": {
+  "steps": [
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/point-force": {
+  "steps": [
+   1,
+   2,
+   2,
+   2
+  ],
+  "objects": [
+   {
+    "id": "beam-0000000b-0000-4000-8000-00000000000b",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   },
+   {
+    "id": "force-0000000c-0000-4000-8000-00000000000c",
+    "name": "Point Load",
+    "type": "force",
+    "geometry": {
+     "start": {
+      "x": -90,
+      "y": -15
+     },
+     "end": {
+      "x": 45,
+      "y": -15
+     },
+     "position": {
+      "x": -90,
+      "y": -15
+     },
+     "magnitude": 50,
+     "angle": 0,
+     "unit": "N",
+     "forceX": 50,
+     "forceY": 0
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "point-force"
+    },
+    "unknownValues": {
+     "magnitude": false
+    },
+    "magnitudeLabel": null
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000000b-0000-4000-8000-00000000000b\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g><g class=\"drawing-feature\" data-feature-id=\"force-0000000c-0000-4000-8000-00000000000c\"><line x1=\"343\" y1=\"449\" x2=\"667\" y2=\"449\" stroke=\"#000000\" stroke-width=\"1.2\" stroke-linecap=\"round\"></line><polygon points=\"667,449 662.3946950299855,450.94709171154324 662.3946950299855,447.05290828845676\" fill=\"#000000\" stroke=\"none\"></polygon><g data-feature-id=\"derived-force-0000000c-0000-4000-8000-00000000000c-force-value\" class=\"drawing-derived-magnitude\"><text x=\"319\" y=\"450.8\" fill=\"#000000\" font-size=\"12\" font-family=\"Arial, sans-serif\" text-anchor=\"middle\">F = 50.0 N</text></g></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "force-0000000c-0000-4000-8000-00000000000c": ""
+  },
+  "errors": []
+ },
+ "STATICS/load/distributed-load": {
+  "steps": [
+   1,
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-0000000e-0000-4000-8000-00000000000e",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000000e-0000-4000-8000-00000000000e\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/load/varying-distributed-load": {
+  "steps": [
+   1,
+   1,
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000010-0000-4000-8000-000000000010",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000010-0000-4000-8000-000000000010\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/moment": {
+  "steps": [
+   1,
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000012-0000-4000-8000-000000000012",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000012-0000-4000-8000-000000000012\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/support/pin-support": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000014-0000-4000-8000-000000000014",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000014-0000-4000-8000-000000000014\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/support/roller-support": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000016-0000-4000-8000-000000000016",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000016-0000-4000-8000-000000000016\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/support/fixed-support": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000018-0000-4000-8000-000000000018",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000018-0000-4000-8000-000000000018\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/support/smooth-support": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-0000001a-0000-4000-8000-00000000001a",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000001a-0000-4000-8000-00000000001a\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/connection/pin-connection": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-0000001c-0000-4000-8000-00000000001c",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000001c-0000-4000-8000-00000000001c\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/connection/fixed-connection": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-0000001e-0000-4000-8000-00000000001e",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000001e-0000-4000-8000-00000000001e\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/connection/slider-connection": {
+  "steps": [
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000020-0000-4000-8000-000000000020",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000020-0000-4000-8000-000000000020\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/resultant": {
+  "steps": [
+   1,
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000022-0000-4000-8000-000000000022",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000022-0000-4000-8000-000000000022\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/force-components": {
+  "steps": [
+   1,
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000024-0000-4000-8000-000000000024",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000024-0000-4000-8000-000000000024\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/shear-force-diagram/sketch": {
+  "steps": [
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000026-0000-4000-8000-000000000026",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000026-0000-4000-8000-000000000026\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/shear-force-diagram/Sketch": {
+  "steps": [
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-00000028-0000-4000-8000-000000000028",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-00000028-0000-4000-8000-000000000028\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/shear-force-diagram/plot": {
+  "steps": [
+   1,
+   1,
+   1
+  ],
+  "objects": [
+   {
+    "id": "beam-0000002a-0000-4000-8000-00000000002a",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000002a-0000-4000-8000-00000000002a\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/bending-moment-diagram/sketch": {
+  "steps": [
+   1,
+   2,
+   2
+  ],
+  "objects": [
+   {
+    "id": "beam-0000002c-0000-4000-8000-00000000002c",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   },
+   {
+    "id": "analysis-diagram-0000002d-0000-4000-8000-00000000002d",
+    "name": "BMD 1",
+    "type": "analysis-diagram",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": 67.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": 67.5
+     },
+     "diagramType": "bmd",
+     "zeroAxis": {
+      "from": {
+       "x": -112.5,
+       "y": 67.5
+      },
+      "to": {
+       "x": 97.5,
+       "y": 67.5
+      }
+     },
+     "drawingHeight": 90,
+     "referencePositions": [
+      {
+       "key": "start",
+       "label": "A",
+       "t": 0,
+       "position": {
+        "x": -112.5,
+        "y": 67.5
+       }
+      },
+      {
+       "key": "end",
+       "label": "B",
+       "t": 1,
+       "position": {
+        "x": 97.5,
+        "y": 67.5
+       }
+      }
+     ],
+     "backgroundVisible": true,
+     "sourceOffset": {
+      "distance": 105
+     },
+     "baseAxis": {
+      "start": {
+       "x": -112.5,
+       "y": 67.5
+      },
+      "end": {
+       "x": 97.5,
+       "y": 67.5
+      }
+     },
+     "mode": "sketch",
+     "placementOffset": null,
+     "localRange": {
+      "from": 0,
+      "to": 210
+     },
+     "sourceSpan": {
+      "start": {
+       "x": -112.5,
+       "y": -37.5
+      },
+      "end": {
+       "x": 97.5,
+       "y": -37.5
+      },
+      "length": 210
+     },
+     "sketchElements": [],
+     "sketchContent": false
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "analysisKind": "bending-moment-diagram",
+     "sourceFeatureIds": [
+      "beam-0000002c-0000-4000-8000-00000000002c"
+     ],
+     "unresolved": false,
+     "sourceFeatureId": "beam-0000002c-0000-4000-8000-00000000002c"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000002c-0000-4000-8000-00000000002c\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g><g class=\"drawing-feature\" data-feature-id=\"analysis-diagram-0000002d-0000-4000-8000-00000000002d\"><line x1=\"289\" y1=\"251\" x2=\"839\" y2=\"251\" stroke=\"#000000\" stroke-width=\"1.2\" stroke-opacity=\"0.55\" pointer-events=\"none\"></line><path d=\"M 839 251 L 832 247.5 L 832 254.5\" fill=\"#000000\" fill-opacity=\"0.55\" stroke=\"none\" pointer-events=\"none\"></path><line x1=\"289\" y1=\"246\" x2=\"289\" y2=\"256\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.4\" pointer-events=\"none\"></line><line x1=\"793\" y1=\"246\" x2=\"793\" y2=\"256\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.4\" pointer-events=\"none\"></line><path d=\"M 289 361 L 289 141\" fill=\"none\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.55\" pointer-events=\"none\"></path><path d=\"M 286.5 145 L 289 141 L 291.5 145\" fill=\"#000000\" fill-opacity=\"0.55\" stroke=\"none\" pointer-events=\"none\"></path><text x=\"284\" y=\"196\" font-size=\"8\" fill=\"#000000\" fill-opacity=\"0.75\" transform=\"rotate(-90 284 196)\" text-anchor=\"middle\" pointer-events=\"none\">Bending moment (N·m)</text><text x=\"853\" y=\"254\" font-size=\"8\" fill=\"#000000\" fill-opacity=\"0.75\" text-anchor=\"start\" pointer-events=\"none\">x (m)</text></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "analysis-diagram-0000002d-0000-4000-8000-00000000002d": ""
+  },
+  "errors": []
+ },
+ "STATICS/axial-force-diagram/plot": {
+  "steps": [
+   1,
+   2,
+   2
+  ],
+  "objects": [
+   {
+    "id": "beam-0000002f-0000-4000-8000-00000000002f",
+    "name": "Beam",
+    "type": "beam",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": -37.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": -37.5
+     },
+     "depth": 12
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "staticsType": "beam"
+    }
+   },
+   {
+    "id": "analysis-diagram-00000030-0000-4000-8000-000000000030",
+    "name": "AFD 1",
+    "type": "analysis-diagram",
+    "geometry": {
+     "start": {
+      "x": -112.5,
+      "y": 67.5
+     },
+     "end": {
+      "x": 97.5,
+      "y": 67.5
+     },
+     "diagramType": "afd",
+     "zeroAxis": {
+      "from": {
+       "x": -112.5,
+       "y": 67.5
+      },
+      "to": {
+       "x": 97.5,
+       "y": 67.5
+      }
+     },
+     "drawingHeight": 90,
+     "referencePositions": [
+      {
+       "key": "start",
+       "label": "A",
+       "t": 0,
+       "position": {
+        "x": -112.5,
+        "y": 67.5
+       }
+      },
+      {
+       "key": "end",
+       "label": "B",
+       "t": 1,
+       "position": {
+        "x": 97.5,
+        "y": 67.5
+       }
+      }
+     ],
+     "backgroundVisible": true,
+     "sourceOffset": {
+      "distance": 105
+     },
+     "baseAxis": {
+      "start": {
+       "x": -112.5,
+       "y": 67.5
+      },
+      "end": {
+       "x": 97.5,
+       "y": 67.5
+      }
+     },
+     "mode": "plot",
+     "localRange": {
+      "from": 0,
+      "to": 210
+     },
+     "expressions": [
+      {
+       "id": "expr-1-functionX",
+       "relationType": "functionX",
+       "visible": true,
+       "expression": "",
+       "xRange": {
+        "start": 0,
+        "end": 210
+       }
+      }
+     ],
+     "placementOffset": null,
+     "sourceSpan": {
+      "start": {
+       "x": -112.5,
+       "y": -37.5
+      },
+      "end": {
+       "x": 97.5,
+       "y": -37.5
+      },
+      "length": 210
+     }
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY",
+     "discipline": "statics",
+     "analysisKind": "axial-force-diagram",
+     "sourceFeatureIds": [
+      "beam-0000002f-0000-4000-8000-00000000002f"
+     ],
+     "unresolved": false,
+     "sourceFeatureId": "beam-0000002f-0000-4000-8000-00000000002f"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"beam-0000002f-0000-4000-8000-00000000002f\"><polygon points=\"289,509 793,509 793,497 289,497\" fill=\"none\" stroke=\"#000000\" stroke-width=\"1.4\"></polygon></g><g class=\"drawing-feature\" data-feature-id=\"analysis-diagram-00000030-0000-4000-8000-000000000030\"><line x1=\"289\" y1=\"251\" x2=\"839\" y2=\"251\" stroke=\"#000000\" stroke-width=\"1.2\" stroke-opacity=\"0.55\" pointer-events=\"none\"></line><path d=\"M 839 251 L 832 247.5 L 832 254.5\" fill=\"#000000\" fill-opacity=\"0.55\" stroke=\"none\" pointer-events=\"none\"></path><line x1=\"289\" y1=\"246\" x2=\"289\" y2=\"256\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.4\" pointer-events=\"none\"></line><line x1=\"793\" y1=\"246\" x2=\"793\" y2=\"256\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.4\" pointer-events=\"none\"></line><path d=\"M 289 361 L 289 141\" fill=\"none\" stroke=\"#000000\" stroke-width=\"0.9\" stroke-opacity=\"0.55\" pointer-events=\"none\"></path><path d=\"M 286.5 145 L 289 141 L 291.5 145\" fill=\"#000000\" fill-opacity=\"0.55\" stroke=\"none\" pointer-events=\"none\"></path><text x=\"284\" y=\"196\" font-size=\"8\" fill=\"#000000\" fill-opacity=\"0.75\" transform=\"rotate(-90 284 196)\" text-anchor=\"middle\" pointer-events=\"none\">Axial force (N)</text><text x=\"853\" y=\"254\" font-size=\"8\" fill=\"#000000\" fill-opacity=\"0.75\" text-anchor=\"start\" pointer-events=\"none\">x (m)</text></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "analysis-diagram-00000030-0000-4000-8000-000000000030": ""
+  },
+  "errors": []
+ },
+ "STATICS/coordinate-system/2D Coordinate System": {
+  "steps": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/reference-point": {
+  "steps": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "STATICS/reference-line": {
+  "steps": [
+   1
+  ],
+  "objects": [
+   {
+    "id": "line-00000034-0000-4000-8000-000000000034",
+    "name": "Line",
+    "type": "line",
+    "geometry": {
+     "start": {
+      "x": -90,
+      "y": -15
+     },
+     "end": {
+      "x": 45,
+      "y": -15
+     }
+    },
+    "style": {
+     "stroke": "#000000",
+     "fill": "none",
+     "lineWidth": 0.5,
+     "lineType": "solid",
+     "opacity": 1
+    },
+    "metadata": {},
+    "engineering": {
+     "plane": "XY"
+    }
+   }
+  ],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path><g class=\"drawing-feature\" data-feature-id=\"line-00000034-0000-4000-8000-000000000034\"><line x1=\"343\" y1=\"449\" x2=\"667\" y2=\"449\" stroke=\"#000000\" fill=\"none\" stroke-width=\"1.2\" opacity=\"1\"></line></g></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {
+   "line-00000034-0000-4000-8000-000000000034": ""
+  },
+  "errors": []
+ },
+ "STATICS/reference-arc": {
+  "steps": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "objects": [],
+  "selection": [],
+  "svg": "\n                    <svg class=\"drawing-source-layer\" aria-hidden=\"true\"></svg><svg class=\"drawing-overlay\" aria-hidden=\"true\" viewBox=\"0 0 1120 828\" width=\"1120\" height=\"828\"><path d=\"M 1 0 V 826 M 19 0 V 826 M 37 0 V 826 M 55 0 V 826 M 73 0 V 826 M 91 0 V 826 M 109 0 V 826 M 127 0 V 826 M 145 0 V 826 M 163 0 V 826 M 181 0 V 826 M 199 0 V 826 M 217 0 V 826 M 235 0 V 826 M 253 0 V 826 M 271 0 V 826 M 289 0 V 826 M 307 0 V 826 M 325 0 V 826 M 343 0 V 826 M 361 0 V 826 M 379 0 V 826 M 397 0 V 826 M 415 0 V 826 M 433 0 V 826 M 451 0 V 826 M 469 0 V 826 M 487 0 V 826 M 505 0 V 826 M 523 0 V 826 M 541 0 V 826 M 559 0 V 826 M 577 0 V 826 M 595 0 V 826 M 613 0 V 826 M 631 0 V 826 M 649 0 V 826 M 667 0 V 826 M 685 0 V 826 M 703 0 V 826 M 721 0 V 826 M 739 0 V 826 M 757 0 V 826 M 775 0 V 826 M 793 0 V 826 M 811 0 V 826 M 829 0 V 826 M 847 0 V 826 M 865 0 V 826 M 883 0 V 826 M 901 0 V 826 M 919 0 V 826 M 937 0 V 826 M 955 0 V 826 M 973 0 V 826 M 991 0 V 826 M 1009 0 V 826 M 1027 0 V 826 M 1045 0 V 826 M 1063 0 V 826 M 1081 0 V 826 M 1099 0 V 826 M 1117 0 V 826 M 0 809 H 1118 M 0 791 H 1118 M 0 773 H 1118 M 0 755 H 1118 M 0 737 H 1118 M 0 719 H 1118 M 0 701 H 1118 M 0 683 H 1118 M 0 665 H 1118 M 0 647 H 1118 M 0 629 H 1118 M 0 611 H 1118 M 0 593 H 1118 M 0 575 H 1118 M 0 557 H 1118 M 0 539 H 1118 M 0 521 H 1118 M 0 503 H 1118 M 0 485 H 1118 M 0 467 H 1118 M 0 449 H 1118 M 0 431 H 1118 M 0 413 H 1118 M 0 395 H 1118 M 0 377 H 1118 M 0 359 H 1118 M 0 341 H 1118 M 0 323 H 1118 M 0 305 H 1118 M 0 287 H 1118 M 0 269 H 1118 M 0 251 H 1118 M 0 233 H 1118 M 0 215 H 1118 M 0 197 H 1118 M 0 179 H 1118 M 0 161 H 1118 M 0 143 H 1118 M 0 125 H 1118 M 0 107 H 1118 M 0 89 H 1118 M 0 71 H 1118 M 0 53 H 1118 M 0 35 H 1118 M 0 17 H 1118\" class=\"drawing-engineering-grid\" fill=\"none\" stroke-width=\"0.65\"></path></svg>",
+  "message": "Select geometry",
+  "tree": "",
+  "panels": {},
+  "errors": []
+ },
+ "export/svg-and-file": {
+  "svg": "{\"ok\":true,\"empty\":true,\"sheet\":{\"id\":\"sheet_00000035\",\"name\":\"Sheet 29\",\"version\":1,\"units\":\"mm\",\"objects\":[],\"snap\":{\"enabled\":true,\"spacing\":1},\"objectSnap\":{\"enabled\":true,\"tolerancePx\":10,\"inferenceTolerancePx\":24},\"styleDefaults\":{\"stroke\":\"#000000\",\"fill\":\"none\",\"lineWidth\":0.5,\"lineType\":\"solid\",\"opacity\":1},\"viewport\":{\"zoom\":1,\"panX\":0,\"panY\":0},\"grid\":{\"visible\":true,\"spacing\":7.5,\"snapToGrid\":true},\"source\":{\"source\":\"\\\\begin{tikzpicture}[x=1mm, y=1mm]\\n\\\\end{tikzpicture}\",\"renderedSource\":\"\\\\begin{tikzpicture}[x=1mm, y=1mm]\\n\\\\end{tikzpicture}\",\"dirty\":false}},\"caption\":\"Sheet 29\",\"svg\":null}",
+  "fileKeys": [
+   "format",
+   "version",
+   "application",
+   "savedAt",
+   "document"
+  ],
+  "rereadKeys": [
+   "ok",
+   "failure",
+   "detail"
+  ],
+  "errors": []
+ },
+ "history/undo-redo": {
+  "n": 0,
+  "undos": 24,
+  "afterUndo": 0,
+  "redos": 24,
+  "afterRedo": 0,
+  "errors": []
+ },
+ "sheets/ops": {
+  "count": 30,
+  "names": [
+   "Sheet 1",
+   "Sheet 1 copy",
+   "Sheet 2",
+   "Sheet 3",
+   "Sheet 4",
+   "Sheet 5",
+   "Sheet 6",
+   "Sheet 7",
+   "Sheet 8",
+   "Sheet 9",
+   "Sheet 10",
+   "Sheet 11",
+   "Sheet 12",
+   "Sheet 13",
+   "Sheet 14",
+   "Sheet 15",
+   "Sheet 16",
+   "Sheet 17",
+   "Sheet 18",
+   "Sheet 19",
+   "Sheet 20",
+   "Sheet 21",
+   "Sheet 22",
+   "Sheet 23",
+   "Sheet 24",
+   "Sheet 25",
+   "Sheet 26",
+   "Sheet 27",
+   "Sheet 28",
+   "Sheet 29"
+  ],
+  "dup": false,
+  "errors": []
+ },
+ "document/serialized": {
+  "body": {
+   "version": 1,
+   "units": "mm",
+   "camera": {
+    "zoom": 1,
+    "panX": 0,
+    "panY": 0
+   },
+   "grid": {
+    "visible": true,
+    "spacing": 7.5,
+    "snapToGrid": true
+   },
+   "snap": {
+    "enabled": true,
+    "spacing": 1
+   },
+   "objectSnap": {
+    "enabled": true,
+    "tolerancePx": 10,
+    "inferenceTolerancePx": 24
+   },
+   "styleDefaults": {
+    "stroke": "#000000",
+    "fill": "none",
+    "lineWidth": 0.5,
+    "lineType": "solid",
+    "opacity": 1,
+    "strokeExplicit": false
+   },
+   "objects": [],
+   "sheets": [
+    {
+     "id": "sheet_00000001",
+     "name": "Sheet 1",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1,
+      "strokeExplicit": false
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000036",
+     "name": "Sheet 1 copy",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1,
+      "strokeExplicit": false
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000002",
+     "name": "Sheet 2",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000003",
+     "name": "Sheet 3",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000004",
+     "name": "Sheet 4",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000005-0000-4000-8000-000000000005",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000005-0000-4000-8000-000000000005\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000006",
+     "name": "Sheet 5",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000007",
+     "name": "Sheet 6",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "cable-00000008-0000-4000-8000-000000000008",
+       "name": "Cable",
+       "type": "cable",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "tension": 0
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "cable"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Cable\n% DAETUM ID: cable-00000008-0000-4000-8000-000000000008\n% DAETUM TYPE: cable\n\\draw[draw=black, line width=0.8257pt] (0,0) -- (144.4954,0);\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000009",
+     "name": "Sheet 7",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_0000000a",
+     "name": "Sheet 8",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000000b-0000-4000-8000-00000000000b",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      },
+      {
+       "id": "force-0000000c-0000-4000-8000-00000000000c",
+       "name": "Point Load",
+       "type": "force",
+       "geometry": {
+        "start": {
+         "x": -90,
+         "y": -15
+        },
+        "end": {
+         "x": 45,
+         "y": -15
+        },
+        "position": {
+         "x": -90,
+         "y": -15
+        },
+        "magnitude": 50,
+        "angle": 0,
+        "unit": "N",
+        "forceX": 50,
+        "forceY": 0
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "point-force"
+       },
+       "unknownValues": {
+        "magnitude": false
+       },
+       "magnitudeLabel": null
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000000b-0000-4000-8000-00000000000b\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.7417pt] (15.2658,7.4166) -- (145.0556,7.4166) -- (145.0556,0) -- (15.2658,0) -- cycle;\n% DAETUM OBJECT: Point Load\n% DAETUM ID: force-0000000c-0000-4000-8000-00000000000c\n% DAETUM TYPE: force\n\\draw[draw=black, line width=0.7417pt, -{Latex[length=4.45pt, width=2.67pt]}] (29.1718,17.6143) -- (112.6082,17.6143);\n\\node[anchor=west, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (114.4623,15.1112) {$F = 50\\ N$};\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000000d",
+     "name": "Sheet 9",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000000e-0000-4000-8000-00000000000e",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000000e-0000-4000-8000-00000000000e\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000000f",
+     "name": "Sheet 10",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000010-0000-4000-8000-000000000010",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000010-0000-4000-8000-000000000010\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000011",
+     "name": "Sheet 11",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000012-0000-4000-8000-000000000012",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000012-0000-4000-8000-000000000012\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000013",
+     "name": "Sheet 12",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000014-0000-4000-8000-000000000014",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000014-0000-4000-8000-000000000014\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000015",
+     "name": "Sheet 13",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000016-0000-4000-8000-000000000016",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000016-0000-4000-8000-000000000016\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000017",
+     "name": "Sheet 14",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000018-0000-4000-8000-000000000018",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000018-0000-4000-8000-000000000018\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000019",
+     "name": "Sheet 15",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000001a-0000-4000-8000-00000000001a",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000001a-0000-4000-8000-00000000001a\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000001b",
+     "name": "Sheet 16",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000001c-0000-4000-8000-00000000001c",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000001c-0000-4000-8000-00000000001c\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000001d",
+     "name": "Sheet 17",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000001e-0000-4000-8000-00000000001e",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000001e-0000-4000-8000-00000000001e\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000001f",
+     "name": "Sheet 18",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000020-0000-4000-8000-000000000020",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000020-0000-4000-8000-000000000020\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000021",
+     "name": "Sheet 19",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000022-0000-4000-8000-000000000022",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000022-0000-4000-8000-000000000022\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000023",
+     "name": "Sheet 20",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000024-0000-4000-8000-000000000024",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000024-0000-4000-8000-000000000024\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000025",
+     "name": "Sheet 21",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000026-0000-4000-8000-000000000026",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000026-0000-4000-8000-000000000026\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000027",
+     "name": "Sheet 22",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-00000028-0000-4000-8000-000000000028",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-00000028-0000-4000-8000-000000000028\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000029",
+     "name": "Sheet 23",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000002a-0000-4000-8000-00000000002a",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000002a-0000-4000-8000-00000000002a\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000002b",
+     "name": "Sheet 24",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000002c-0000-4000-8000-00000000002c",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      },
+      {
+       "id": "analysis-diagram-0000002d-0000-4000-8000-00000000002d",
+       "name": "BMD 1",
+       "type": "analysis-diagram",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": 67.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": 67.5
+        },
+        "diagramType": "bmd",
+        "zeroAxis": {
+         "from": {
+          "x": -112.5,
+          "y": 67.5
+         },
+         "to": {
+          "x": 97.5,
+          "y": 67.5
+         }
+        },
+        "drawingHeight": 90,
+        "referencePositions": [
+         {
+          "key": "start",
+          "label": "A",
+          "t": 0,
+          "position": {
+           "x": -112.5,
+           "y": 67.5
+          }
+         },
+         {
+          "key": "end",
+          "label": "B",
+          "t": 1,
+          "position": {
+           "x": 97.5,
+           "y": 67.5
+          }
+         }
+        ],
+        "backgroundVisible": true,
+        "sourceOffset": {
+         "distance": 105
+        },
+        "baseAxis": {
+         "start": {
+          "x": -112.5,
+          "y": 67.5
+         },
+         "end": {
+          "x": 97.5,
+          "y": 67.5
+         }
+        },
+        "mode": "sketch",
+        "placementOffset": null,
+        "localRange": {
+         "from": 0,
+         "to": 210
+        },
+        "sourceSpan": {
+         "start": {
+          "x": -112.5,
+          "y": -37.5
+         },
+         "end": {
+          "x": 97.5,
+          "y": -37.5
+         },
+         "length": 210
+        },
+        "sketchElements": [],
+        "sketchContent": false
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "analysisKind": "bending-moment-diagram",
+        "sourceFeatureIds": [
+         "beam-0000002c-0000-4000-8000-00000000002c"
+        ],
+        "unresolved": false,
+        "sourceFeatureId": "beam-0000002c-0000-4000-8000-00000000002c"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000002c-0000-4000-8000-00000000002c\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.728pt] (0,7.2801) -- (127.4014,7.2801) -- (127.4014,0) -- (0,0) -- cycle;\n% DAETUM OBJECT: BMD 1\n% DAETUM ID: analysis-diagram-0000002d-0000-4000-8000-00000000002d\n% DAETUM TYPE: analysis-diagram\n\\draw[draw=black, line width=0.728pt, -{Latex[length=4.368pt, width=2.621pt]}] (0,67.3407) -- (127.4014,67.3407);\n\\draw[draw=black, line width=0.728pt, -{Latex[length=4.368pt, width=2.621pt]}] (0,62.9241) -- (0,71.7574);\n\\draw[draw=black, line width=0.5096pt, draw opacity=0.4] (0,66.7887) -- (0,67.8928);\n\\draw[draw=black, line width=0.5096pt, draw opacity=0.4] (127.4014,66.7887) -- (127.4014,67.8928);\n\\node[anchor=south west, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (0,72.8008) {BMD};\n\\node[anchor=north east, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (-1.2133,75.2275) {$M$ ($\\mathrm{N\\cdot m}$)};\n\\node[anchor=south west, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (128.6148,70.9808) {$x$ ($\\mathrm{m}$)};\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_0000002e",
+     "name": "Sheet 25",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "beam-0000002f-0000-4000-8000-00000000002f",
+       "name": "Beam",
+       "type": "beam",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": -37.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": -37.5
+        },
+        "depth": 12
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "staticsType": "beam"
+       }
+      },
+      {
+       "id": "analysis-diagram-00000030-0000-4000-8000-000000000030",
+       "name": "AFD 1",
+       "type": "analysis-diagram",
+       "geometry": {
+        "start": {
+         "x": -112.5,
+         "y": 67.5
+        },
+        "end": {
+         "x": 97.5,
+         "y": 67.5
+        },
+        "diagramType": "afd",
+        "zeroAxis": {
+         "from": {
+          "x": -112.5,
+          "y": 67.5
+         },
+         "to": {
+          "x": 97.5,
+          "y": 67.5
+         }
+        },
+        "drawingHeight": 90,
+        "referencePositions": [
+         {
+          "key": "start",
+          "label": "A",
+          "t": 0,
+          "position": {
+           "x": -112.5,
+           "y": 67.5
+          }
+         },
+         {
+          "key": "end",
+          "label": "B",
+          "t": 1,
+          "position": {
+           "x": 97.5,
+           "y": 67.5
+          }
+         }
+        ],
+        "backgroundVisible": true,
+        "sourceOffset": {
+         "distance": 105
+        },
+        "baseAxis": {
+         "start": {
+          "x": -112.5,
+          "y": 67.5
+         },
+         "end": {
+          "x": 97.5,
+          "y": 67.5
+         }
+        },
+        "mode": "plot",
+        "localRange": {
+         "from": 0,
+         "to": 210
+        },
+        "expressions": [
+         {
+          "id": "expr-1-functionX",
+          "relationType": "functionX",
+          "visible": true,
+          "expression": "",
+          "xRange": {
+           "start": 0,
+           "end": 210
+          }
+         }
+        ],
+        "placementOffset": null,
+        "sourceSpan": {
+         "start": {
+          "x": -112.5,
+          "y": -37.5
+         },
+         "end": {
+          "x": 97.5,
+          "y": -37.5
+         },
+         "length": 210
+        }
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY",
+        "discipline": "statics",
+        "analysisKind": "axial-force-diagram",
+        "sourceFeatureIds": [
+         "beam-0000002f-0000-4000-8000-00000000002f"
+        ],
+        "unresolved": false,
+        "sourceFeatureId": "beam-0000002f-0000-4000-8000-00000000002f"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000002f-0000-4000-8000-00000000002f\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.728pt] (0,7.2801) -- (127.4014,7.2801) -- (127.4014,0) -- (0,0) -- cycle;\n% DAETUM OBJECT: AFD 1\n% DAETUM ID: analysis-diagram-00000030-0000-4000-8000-000000000030\n% DAETUM TYPE: analysis-diagram\n\\draw[draw=black, line width=0.728pt, -{Latex[length=4.368pt, width=2.621pt]}] (0,67.3407) -- (127.4014,67.3407);\n\\draw[draw=black, line width=0.728pt, -{Latex[length=4.368pt, width=2.621pt]}] (0,62.9241) -- (0,71.7574);\n\\draw[draw=black, line width=0.5096pt, draw opacity=0.4] (0,66.7887) -- (0,67.8928);\n\\draw[draw=black, line width=0.5096pt, draw opacity=0.4] (127.4014,66.7887) -- (127.4014,67.8928);\n\\node[anchor=south west, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (0,72.8008) {AFD};\n\\node[anchor=north east, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (-1.2133,75.2275) {$N$ ($\\mathrm{N}$)};\n\\node[anchor=south west, text=black, font=\\fontsize{6}{7.2}\\selectfont] at (128.6148,70.9808) {$x$ ($\\mathrm{m}$)};\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000031",
+     "name": "Sheet 26",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000032",
+     "name": "Sheet 27",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": false
+     }
+    },
+    {
+     "id": "sheet_00000033",
+     "name": "Sheet 28",
+     "version": 1,
+     "units": "mm",
+     "objects": [
+      {
+       "id": "line-00000034-0000-4000-8000-000000000034",
+       "name": "Line",
+       "type": "line",
+       "geometry": {
+        "start": {
+         "x": -90,
+         "y": -15
+        },
+        "end": {
+         "x": 45,
+         "y": -15
+        }
+       },
+       "style": {
+        "stroke": "#000000",
+        "fill": "none",
+        "lineWidth": 0.5,
+        "lineType": "solid",
+        "opacity": 1
+       },
+       "metadata": {},
+       "engineering": {
+        "plane": "XY"
+       }
+      }
+     ],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Line\n% DAETUM ID: line-00000034-0000-4000-8000-000000000034\n% DAETUM TYPE: line\n\\draw[draw=black, line width=1.2pt] (0,0) -- (135,0);\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    },
+    {
+     "id": "sheet_00000035",
+     "name": "Sheet 29",
+     "version": 1,
+     "units": "mm",
+     "objects": [],
+     "snap": {
+      "enabled": true,
+      "spacing": 1
+     },
+     "objectSnap": {
+      "enabled": true,
+      "tolerancePx": 10,
+      "inferenceTolerancePx": 24
+     },
+     "styleDefaults": {
+      "stroke": "#000000",
+      "fill": "none",
+      "lineWidth": 0.5,
+      "lineType": "solid",
+      "opacity": 1,
+      "strokeExplicit": false
+     },
+     "viewport": {
+      "zoom": 1,
+      "panX": 0,
+      "panY": 0
+     },
+     "grid": {
+      "visible": true,
+      "spacing": 7.5,
+      "snapToGrid": true
+     },
+     "source": {
+      "source": "\\begin{tikzpicture}[x=1mm, y=1mm]\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000002f-0000-4000-8000-00000000002f\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000002c-0000-4000-8000-00000000002c\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n% DAETUM OBJECT: Beam\n% DAETUM ID: beam-0000000b-0000-4000-8000-00000000000b\n% DAETUM TYPE: beam\n\\draw[draw=black, line width=0.8257pt] (0,8.2569) -- (144.4954,8.2569) -- (144.4954,0) -- (0,0) -- cycle;\n\\end{tikzpicture}",
+      "renderedSource": "\\begin{tikzpicture}[x=1mm, y=1mm]\n\\end{tikzpicture}",
+      "dirty": true
+     }
+    }
+   ],
+   "activeSheetId": "sheet_00000036",
+   "solution": ""
+  },
+  "errors": []
+ },
+ "solution/render": {
+  "html": "<span><mjx-container class=\"MathJax CtxtMenu_Attached_0\" jax=\"CHTML\" display=\"true\" tabindex=\"0\" ctxtmenu_counter=\"0\" style=\"font-size: 113.1%; position: relative;\"><mjx-math display=\"true\" class=\"MJX-TEX\" aria-hidden=\"true\" style=\"margin-left: 0px; margin-right: 0px;\"><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D438 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45E TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D462 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D456 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D459 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D456 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D44F TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45F TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D456 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D462 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45A TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45C TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D453 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D461 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c210E TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D452 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D44F TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D452 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D44E TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45A TEX-I\"></mjx-c></mjx-mi></mjx-math><mjx-assistive-mml unselectable=\"on\" display=\"block\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mi>E</mi><mi>q</mi><mi>u</mi><mi>i</mi><mi>l</mi><mi>i</mi><mi>b</mi><mi>r</mi><mi>i</mi><mi>u</mi><mi>m</mi><mi>o</mi><mi>f</mi><mi>t</mi><mi>h</mi><mi>e</mi><mi>b</mi><mi>e</mi><mi>a</mi><mi>m</mi></math></mjx-assistive-mml></mjx-container></span><figure class=\"drawing-reference-figure\"><p class=\"drawing-reference-empty\">Sheet 1 copy — this sheet is empty</p></figure><span><mjx-container class=\"MathJax CtxtMenu_Attached_0\" jax=\"CHTML\" display=\"true\" tabindex=\"0\" ctxtmenu_counter=\"1\" style=\"font-size: 113.1%; position: relative;\"><mjx-math display=\"true\" class=\"MJX-TEX\" aria-hidden=\"true\" style=\"margin-left: 0px; margin-right: 0px;\"><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D447 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c210E TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D452 TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D45B TEX-I\"></mjx-c></mjx-mi><mjx-texatom texclass=\"ORD\"><mjx-mo class=\"mjx-n\"><mjx-c class=\"mjx-c24\"></mjx-c></mjx-mo></mjx-texatom><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D439 TEX-I\"></mjx-c></mjx-mi><mjx-mo class=\"mjx-n\" space=\"4\"><mjx-c class=\"mjx-c3D\"></mjx-c></mjx-mo><mjx-mi class=\"mjx-i\" space=\"4\"><mjx-c class=\"mjx-c1D45A TEX-I\"></mjx-c></mjx-mi><mjx-mi class=\"mjx-i\"><mjx-c class=\"mjx-c1D44E TEX-I\"></mjx-c></mjx-mi><mjx-texatom texclass=\"ORD\"><mjx-mo class=\"mjx-n\"><mjx-c class=\"mjx-c24\"></mjx-c></mjx-mo></mjx-texatom><mjx-mo class=\"mjx-n\"><mjx-c class=\"mjx-c2E\"></mjx-c></mjx-mo></mjx-math><mjx-assistive-mml unselectable=\"on\" display=\"block\"><math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\"><mi>T</mi><mi>h</mi><mi>e</mi><mi>n</mi><mrow data-mjx-texclass=\"ORD\"><mo>$</mo></mrow><mi>F</mi><mo>=</mo><mi>m</mi><mi>a</mi><mrow data-mjx-texclass=\"ORD\"><mo>$</mo></mrow><mo>.</mo></math></mjx-assistive-mml></mjx-container></span>",
+  "errors": []
+ }
+}
