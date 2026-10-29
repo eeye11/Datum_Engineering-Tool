@@ -270,6 +270,57 @@ function buildDropdown(menu, onRun) {
 const FLYOUT_GAP_PX = 2;
 const WINDOW_MARGIN_PX = 8;
 
+/*
+ * A TOP-LEVEL PANEL, PLACED AGAINST THE WINDOW BENEATH ITS LABEL.
+ *
+ * Used only while the rail scrolls (see `open`). The panel is made `fixed` so
+ * the rail's clip cannot touch it, then squared up under its own label and
+ * pushed back inside the window if it would overhang the edge. Placement is
+ * repeated on scroll and on resize, so a panel that is open while the rail is
+ * panned stays over the label it belongs to instead of floating away.
+ */
+function placePanelAgainstWindow(label, panel) {
+  panel.classList.add("datum-menu-panel-fixed");
+
+  const place = () => {
+    const anchor = label.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const left = Math.min(
+      Math.max(WINDOW_MARGIN_PX, anchor.left),
+      Math.max(WINDOW_MARGIN_PX, window.innerWidth - WINDOW_MARGIN_PX - width),
+    );
+
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(anchor.bottom)}px`;
+  };
+
+  place();
+
+  /*
+   * THE PANEL FOLLOWS ITS LABEL.
+   *
+   * `scroll` does not bubble, so the rail's own scrolling is caught in the
+   * CAPTURE phase - every element it happens on, wherever that is in the page.
+   * A window resize can move the label by itself, so it is listened for too.
+   * Both are removed when the panel leaves the document, which is what closing
+   * a menu does.
+   */
+  const onMove = () => place();
+
+  window.addEventListener("scroll", onMove, { capture: true, passive: true });
+  window.addEventListener("resize", onMove, { passive: true });
+
+  const observer = new globalThis.MutationObserver(() => {
+    if (!panel.isConnected) {
+      window.removeEventListener("scroll", onMove, { capture: true });
+      window.removeEventListener("resize", onMove);
+      observer.disconnect();
+    }
+  });
+
+  observer.observe(panel.parentNode ?? panel, { childList: true });
+}
+
 function placeSubmenu(row, sub) {
   const rect = row.getBoundingClientRect();
   const width = sub.offsetWidth;
@@ -425,6 +476,27 @@ export function installMenuBar(host, menus) {
       });
 
       slot.appendChild(panel);
+
+      /*
+       * THE PANEL IS PLACED AGAINST THE WINDOW, ALWAYS.
+       *
+       * It cannot be left as an ordinary child of the bar. The bar lives inside
+       * the top rail, the rail is a stacking context so it can sit above the
+       * canvas, and a dropdown painted inside that context is therefore painted
+       * BELOW the tools panel and the drawing space - no `z-index` on the panel
+       * can change that, because it is only being compared with its siblings in
+       * the rail.
+       *
+       * Placed `fixed` against the viewport it takes part in the root stacking
+       * context, where it can be above everything, and it also escapes the
+       * rail's horizontal clip when the window is narrow enough to need a
+       * scroll. Both of the problems the dropdown had - being covered, and being
+       * cut off - are the same problem: being a child of a clipped, stacked box.
+       *
+       * `placePanelAgainstWindow` keeps it under its own label as the rail
+       * scrolls and the window resizes.
+       */
+      placePanelAgainstWindow(label, panel);
 
       label.setAttribute("aria-expanded", "true");
       wrap.classList.add("datum-menu-open");

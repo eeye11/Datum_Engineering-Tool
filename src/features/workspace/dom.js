@@ -82,4 +82,12 @@ export const drawingFeaturesPanelToggle = dom?.getElementById("drawingFeaturesPa
  */
 export const headerHideButton = dom?.getElementById("headerHideButton");
 
+/*
+ * THE SHARED TOP RAIL - the menu bar stacked over the toolset bar, in one
+ * horizontally scrolling area. It is one element so the two bars have ONE
+ * scroll offset and cannot drift apart; see `.drawing-top-rail` in
+ * workspace-chrome.css.
+ */
+export const drawingTopRail = dom?.getElementById("drawingTopRail");
+
 export const drawingTopBarShow = dom?.getElementById("drawingTopBarShow");

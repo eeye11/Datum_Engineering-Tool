@@ -545,6 +545,18 @@ dialog.plant-options-dialog::backdrop {
     background: var(--datum-panel);
     border: 1px solid var(--datum-border);
     border-radius: 4px;
+
+    /*
+     * THE THUMBNAIL'S PX SIZE IS ITS BORDER BOX, NOT ITS CONTENT BOX.
+     *
+     * Nothing in this sheet gives `box-sizing: border-box` to every element,
+     * so a `width: 100%; height: 72px` thumbnail is measured on its CONTENT:
+     * it renders 2px wider and taller than the grid cell it was placed in.
+     *
+     * Stated on the box itself, so it holds in the list square, the grid card
+     * and the template card alike.
+     */
+    box-sizing: border-box;
     display: flex;
     flex: 0 0 auto;
     height: 34px;
@@ -906,16 +918,27 @@ dialog.plant-options-dialog::backdrop {
     display: grid;
     gap: 8px;
     grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+
+    /*
+     * THE PICTURE'S OWN OUTLINE IS THE CELL'S EDGE.
+     *
+     * A `1fr` track whose item is wider than the track grows the track - so a
+     * thumbnail that was 2px too wide pushed a card past the last column, where
+     * the popup's scroll area cut it off. A zero minimum lets the track win.
+     */
+    min-width: 0;
 }
 
 .datum-open-recents-grid .datum-open-recent {
     align-items: stretch;
     flex-direction: column;
     gap: 6px;
+    min-width: 0;
 }
 
 .datum-open-recents-grid .datum-open-thumb {
     height: 72px;
+    max-width: 100%;
     width: 100%;
 }
 
@@ -964,10 +987,38 @@ dialog.plant-options-dialog::backdrop {
  */
 .datum-open-thumb,
 .datum-open-template-preview {
+    /*
+     * THE BOX'S SIZE INCLUDES ITS BORDER.
+     *
+     * A preview box is a `<span>`, whose default sizing is CONTENT-box, so a
+     * declared size is the size of the inside - the border is added around it
+     * and the box comes out larger than the slot it was given. In the grid that
+     * pushed the thumbnail past the card's right edge; in the template card it
+     * ran the same 2px over. The SVG `inset: 0` fills the PADDING box, so the
+     * visible picture is also inset by the border and no longer lines up with
+     * the outline drawn around it.
+     */
+    box-sizing: border-box;
     overflow: hidden;
     position: relative;
 }
 
+/*
+ * THE PREVIEW SCALES TO FIT ITS BOX, AND KEEPS ITS SHAPE.
+ *
+ * It used to be forced to `width: 100%; height: 100%`, which STRETCHES the
+ * drawing to whatever box it lands in. A preview is rendered into a box shaped
+ * like the DRAWING (`renderFittedDocument` derives the height from the extent:
+ * a wide plan comes out, say, 160x42), so forcing it into a 46x34 list square or
+ * a 72px-tall card squashed it vertically - the picture was cut off wrongly
+ * rather than merely small.
+ *
+ * The equivalent for an inline SVG is its own `preserveAspectRatio`, set to
+ * `xMidYMid meet` by the preview builder (`document-export.js`).
+ * `meet` fits the whole drawing inside the box, and `xMidYMid` centres it - the
+ * same result `object-fit: contain` gives an image. `width/height: 100%` is then
+ * correct and no longer distorts anything: the viewBox does the fitting.
+ */
 .datum-open-thumb svg,
 .datum-open-template-preview svg {
     display: block;

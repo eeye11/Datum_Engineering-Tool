@@ -112,6 +112,24 @@ async function openWithPicker() {
       },
       {
         /*
+         * PLAIN LATEX, SO A REAL `.tex` CAN BE CHOSEN AT ALL.
+         *
+         * A DAETUM drawing is `application/x-tex`, and a system that knows the
+         * type files every ordinary `.tex` under `text/x-tex` or `text/plain`.
+         * With only the first entry, an existing LaTeX file is GREYED OUT in
+         * Chrome's panel even though the Open workflow can read it - which is
+         * one way "existing LaTeX files cannot be opened". They are accepted
+         * here, and what the file CONTAINS decides what it is (see
+         * `applyOpenedLatex`).
+         */
+        description: "LaTeX source (*.tex)",
+        accept: {
+          "text/x-tex": [".tex"],
+          "text/plain": [".tex"]
+        }
+      },
+      {
+        /*
          * THE RETIRED FORMAT, OPENED AS AN IMPORT. An old .enggdraw still
          * opens; it is never written, and its first save is a .tex.
          */
@@ -342,13 +360,22 @@ function forgetFileHandle() {
  * document embedded (file/latex/latex-document.js). Built here, once, so every
  * save writes the same thing.
  */
-function documentText(documentBody, name) {
+function documentText(documentBody, name, options = {}) {
   const title =
     String(name || "")
       .replace(/\.(tex|enggdraw)$/i, "")
       .trim() || "Drawing";
 
-  return writeLatexDocument(documentBody, { title });
+  /*
+   * THE PICTURES COME FROM THE CALLER, when it has them.
+   *
+   * A saved .tex holds each sheet's OWN source - the code the Source tab shows -
+   * and only the editor can produce that. This module writes the bytes; it does
+   * not know how to read a sheet's source, and duplicating that here would be a
+   * second, drifting copy of the export. Absent the pictures, the writer
+   * measures the drawing itself, which is what the template preview relies on.
+   */
+  return writeLatexDocument(documentBody, { title, pictures: options.pictures });
 }
 
 /*
@@ -362,10 +389,10 @@ function documentText(documentBody, name) {
  * produce one - a drawing with nothing in it, or a canvas that
  * refused - which the caller reports rather than claiming a success.
  */
-async function contentFor(format, documentBody, renderImage, name) {
+async function contentFor(format, documentBody, renderImage, name, options = {}) {
   if (!format.image) {
     return {
-      blob: new Blob([documentText(documentBody, name)], {
+      blob: new Blob([documentText(documentBody, name, options)], {
         type: format.mime
       }),
       mime: format.mime
@@ -403,7 +430,7 @@ async function contentFor(format, documentBody, renderImage, name) {
  * last Save As happened to be one: the document is the thing that has
  * a location, so it is the thing Save writes.
  */
-async function save(documentBody) {
+async function save(documentBody, options = {}) {
   /*
    * AN IMPORTED .enggdraw IS NEVER WRITTEN OVER. Its handle is not a save
    * target, so Save falls through to Save As and the drawing becomes a .tex
@@ -413,7 +440,7 @@ async function save(documentBody) {
     return null;
   }
 
-  const text = documentText(documentBody, currentHandle.name);
+  const text = documentText(documentBody, currentHandle.name, options);
 
   /*
    * THE WRITE IS COMMITTED, OR IT IS NOT.
@@ -597,6 +624,7 @@ async function saveAs(documentBody, suggestedName, options = {}) {
       documentBody,
       renderImage,
       handle.name,
+      options,
     );
 
     if (!content) {
@@ -664,6 +692,7 @@ async function saveAs(documentBody, suggestedName, options = {}) {
     documentBody,
     renderImage,
     fileName,
+    options,
   );
 
   if (!content) {

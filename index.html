@@ -541,11 +541,12 @@
                     (that is Band 4), no extra top-level menus, no decorative
                     carets.
 
-                    It is its own row of the workspace grid. It used to share a
-                    row with a global tool bar that has since been removed, so
-                    the wrapper that survived only to keep the grid's child
-                    count at six is no longer needed - the bar itself is the
-                    second of the four bands and takes the second grid row.
+                    IT NOW SITS ABOVE THE TOOLSET SELECTOR, and the two are
+                    stacked inside ONE shared top rail - a single grid child with
+                    one horizontal scroller - so the menu is the top row, the
+                    toolsets the row beneath it, and scrolling either one moves
+                    both. See the rail's markup below and
+                    `.drawing-top-rail` in `styles/editor/workspace-chrome.css`.
 
                     The menu bar is built by script: a menu's items change with
                     the state (Undo greys out, a visibility item's label flips),
@@ -609,75 +610,52 @@
                     the menu offers application commands, this changes which
                     collection of drawing tools the Tools panel shows.
 
-                    ONE ROW THAT SCROLLS. Eleven named toolsets do not fit a
-                    narrow window, so the row scrolls horizontally rather than
-                    wrapping onto a second line, which would take height from the
-                    drawing. `styles/editor.css` owns that.
+                    ONE ROW THAT NEVER WRAPS. Eleven named toolsets do not fit a
+                    narrow window, so the row is kept on a single line and the
+                    SHARED TOP RAIL scrolls horizontally instead - together with
+                    the menu bar above it. See below.
                 -->
-                <nav class="drawing-toolbar" aria-label="Engineering toolsets">
-                    <!--
-                        THE TOOLSETS SCROLL; THE HIDE CONTROL DOES NOT.
-
-                        Eleven named toolsets do not fit a narrow window, so they
-                        live in their own horizontally-scrolling row
-                        (`.drawing-toolbar-scroll`). The Hide button, which sits
-                        at the far right, is a SIBLING of that scroller rather
-                        than a child of it - so it is never pushed off the edge
-                        by the toolsets it shares the bar with.
-                    -->
-                    <div class="drawing-toolbar-scroll" role="group" aria-label="Toolsets">
-                        <button class="drawing-category active" data-category="GEOMETRY">GEOMETRY</button>
-                        <button class="drawing-category" data-category="ANNOTATE">ANNOTATE</button>
-                        <button class="drawing-category" data-category="STATICS">STATICS</button>
-                        <button class="drawing-category" data-category="DYNAMICS">DYNAMICS</button>
-                        <button class="drawing-category" data-category="FLUIDS">FLUIDS</button>
-                        <button class="drawing-category" data-category="THERMODYNAMICS">THERMODYNAMICS</button>
-                        <button class="drawing-category" data-category="HEAT TRANSFER">HEAT TRANSFER</button>
-                        <button class="drawing-category" data-category="SOLID MECHANICS">SOLID MECHANICS</button>
-                        <button class="drawing-category" data-category="MECHANICAL DESIGN">MECHANICAL DESIGN</button>
-                        <button class="drawing-category" data-category="CONTROLS">CONTROLS</button>
-                        <button class="drawing-category" data-category="MATH / ANALYSIS">MATH / ANALYSIS</button>
-                    </div>
-
-                    <!--
-                        THE DRAWING BARS' OWN HIDE CONTROL.
-
-                        IT LIVES ON THE TOOLSET BAR, AND THE TOOLSET BAR IS ONE
-                        OF THE BARS IT HIDES - which is the point. Pressing Hide
-                        folds the whole top bar away, INCLUDING this button, and
-                        the Show control that takes its place sits at the very
-                        top of the drawing area, exactly where the bar was. So
-                        the control stays under the pointer: press Hide here and
-                        Show appears in the same place, and pressing that brings
-                        the bar back under the same pointer again.
-
-                        THE MENU BAR (Band 2) IS NOT HIDDEN. It is the
-                        application's menu, not the drawing's chrome, and it
-                        stays reachable at every width - which is also why it is
-                        a separate grid row from the bar this button folds away.
-                    -->
-
-                    <button
-                        class="drawing-topbar-hide"
-                        id="headerHideButton"
-                        type="button"
-                        title="Hide the drawing's top bars to give the canvas more room"
-                        aria-controls="drawing"
-                        aria-expanded="true"
-                    >
-                        <svg viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span class="header-hide-text">Hide</span>
-                    </button>
-                </nav>
-
-
-
                 <!--
                     ========================================================
-                    BAND 4: COMMAND SEARCH AND THE ICON-FIRST QUICK-ACCESS
-                    TOOLBAR
+                    THE SHARED TOP RAIL: MENU BAR ABOVE SECTION BAR
+                    ========================================================
+
+                    The main menu (File, Edit, Insert, View, Tools, Help) and the
+                    toolset selector are ONE navigation area. Each is a single
+                    non-wrapping row, and BOTH live inside this one scroller, so
+                    scrolling either bar moves the other by the same offset - the
+                    two can never drift out of alignment. The menu is on top and
+                    the toolset bar directly beneath it; the rail is one grid row
+                    of the workspace, so neither bar can push the page wider.
+
+                    `styles/editor/workspace-chrome.css` owns the rail.
+                -->
+                <div class="drawing-top-rail" id="drawingTopRail">
+                <div
+                    class="drawing-top-rail-scroll"
+                    id="drawingTopRailScroll"
+                    tabindex="0"
+                    aria-label="Menu bar and toolsets"
+                >
+                <div class="drawing-top-rail-track">
+
+                <!--
+                    BAND 2: THE MAIN MENU BAR.
+
+                    Built by script into this placeholder (see
+                    `components/layout/menu-bar/menu-bar.js`).
+                -->
+                <div class="drawing-menu-controls-bar">
+                    <div id="datumMenuBar" class="datum-menubar" aria-label="Main menu"></div>
+                    <!--
+                        THE DIVIDER BETWEEN THE MENUS AND THE CONTROLS BELOW.
+                        See `.drawing-menu-controls-bar > .drawing-style-strip::before`
+                        in `toolbar.css`.
+                    -->
+                    <!--
+                    ========================================================
+                    THE QUICK-ACCESS BAR: SEARCH, UNDO/REDO, THE STYLE CONTROLS AND THE
+                    DISPLAY TOGGLES
                     ========================================================
 
                     The order left to right is mandatory and is the order the
@@ -685,8 +663,8 @@
                     wrong, adjust how the drawing is being made, then adjust
                     how it is read.
 
-                        Search  Undo  Redo  |  Thickness  Color  Line Type
-                        |  Grid  Snap  Dimensions  Magnitudes
+                    Search  Undo  Redo  |  Thickness  Color  Line Type
+                    |  Grid  Snap  Dimensions  Magnitudes
 
                     ICON-FIRST. Every control except Command Search is
                     represented by its ICON rather than by a word: a toolbar of
@@ -715,205 +693,271 @@
 
                     THE DRAWING'S HIDE CONTROL IS ON THE TOOLSET BAR ABOVE,
                     not here - see `editor/workspace/workspace-layout.js`.
-                -->
-                <div class="drawing-menu-controls-bar">
-                    <div id="datumMenuBar" class="datum-menubar" aria-label="Main menu"></div>
-                <div class="drawing-style-strip" aria-label="Command search and quick-access controls">
+                    -->
+                    <div class="drawing-style-strip" aria-label="Command search and quick-access controls">
                     <label class="drawing-command-search" aria-label="Search commands">
-                        <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" class="drawing-command-search-icon"><circle fill="none" stroke="currentColor" stroke-width="1.6" cx="9" cy="9" r="5"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M12.8 12.8L17 17"/></svg>
-                        <input
-                            type="search"
-                            id="drawingCommandSearch"
-                            data-command-search
-                            placeholder="Search commands&#8230;"
-                            aria-label="Search commands"
-                            autocomplete="off"
-                            spellcheck="false"
-                        >
-                        <kbd class="drawing-command-search-key" title="Focus the search field">Ctrl+K</kbd>
+                    <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true" class="drawing-command-search-icon"><circle fill="none" stroke="currentColor" stroke-width="1.6" cx="9" cy="9" r="5"/><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="M12.8 12.8L17 17"/></svg>
+                    <input
+                    type="search"
+                    id="drawingCommandSearch"
+                    data-command-search
+                    placeholder="Search commands&#8230;"
+                    aria-label="Search commands"
+                    autocomplete="off"
+                    spellcheck="false"
+                    >
+                    <kbd class="drawing-command-search-key" title="Focus the search field">Ctrl+K</kbd>
                     </label>
 
                     <!--
-                        UNDO AND REDO, immediately after the search.
+                    UNDO AND REDO, immediately after the search.
 
-                        These are the application's own history - the same
-                        commands the Edit menu and Ctrl+Z use - so there is one
-                        history with three doors onto it, not three histories.
+                    These are the application's own history - the same
+                    commands the Edit menu and Ctrl+Z use - so there is one
+                    history with three doors onto it, not three histories.
 
-                        The ids are kept (`drawingUndo`, `drawingRedo`) because
-                        `updateHistoryControls` disables them by id, and the Edit
-                        menu reads the same can-undo/can-redo state.
+                    The ids are kept (`drawingUndo`, `drawingRedo`) because
+                    `updateHistoryControls` disables them by id, and the Edit
+                    menu reads the same can-undo/can-redo state.
 
-                        ACTIONS, NOT TOGGLES: they give hover, focus and a brief
-                        pressed feedback, and never stay highlighted after a
-                        click.
+                    ACTIONS, NOT TOGGLES: they give hover, focus and a brief
+                    pressed feedback, and never stay highlighted after a
+                    click.
                     -->
                     <button class="drawing-toolbar-icon-button" id="drawingUndo" type="button" title="Undo (Ctrl+Z)" aria-label="Undo">
-                        <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M7 6L3 10l4 4"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4 10h7a4 4 0 0 1 4 4v1"/></svg>
+                    <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M7 6L3 10l4 4"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4 10h7a4 4 0 0 1 4 4v1"/></svg>
                     </button>
                     <button class="drawing-toolbar-icon-button" id="drawingRedo" type="button" title="Redo (Ctrl+Y)" aria-label="Redo">
-                        <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 6l4 4-4 4"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M16 10H9a4 4 0 0 0-4 4v1"/></svg>
+                    <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 6l4 4-4 4"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M16 10H9a4 4 0 0 0-4 4v1"/></svg>
                     </button>
 
                     <span class="drawing-style-strip-divider" aria-hidden="true"></span>
 
                     <!--
-                        THICKNESS, COLOUR AND LINE TYPE: VALUE CONTROLS.
+                    THICKNESS, COLOUR AND LINE TYPE: VALUE CONTROLS.
 
-                        Each is icon-first. The ICON carries the meaning and is
-                        drawn from the CURRENT VALUE, so the control states its
-                        own setting without a word beside it:
+                    Each is icon-first. The ICON carries the meaning and is
+                    drawn from the CURRENT VALUE, so the control states its
+                    own setting without a word beside it:
 
-                          Thickness  a stroke whose bar thickness IS the value
-                          Color      the swatch IS the value (the real drawing
-                                     colour, never the interface accent)
-                          Line Type  a line drawn in the actual pattern
+                    Thickness  a stroke whose bar thickness IS the value
+                    Color      the swatch IS the value (the real drawing
+                    colour, never the interface accent)
+                    Line Type  a line drawn in the actual pattern
 
-                        THE SELECT IS STILL THE CONTROL. It is visually hidden
-                        but present and focusable, so the full list of supported
-                        values is reachable by keyboard, by a screen reader, and
-                        by clicking the icon - which opens it. That keeps the
-                        existing values, units and validation exactly as they
-                        were; nothing here re-implements a picker.
+                    THE SELECT IS STILL THE CONTROL. It is visually hidden
+                    but present and focusable, so the full list of supported
+                    values is reachable by keyboard, by a screen reader, and
+                    by clicking the icon - which opens it. That keeps the
+                    existing values, units and validation exactly as they
+                    were; nothing here re-implements a picker.
 
-                        A VALUE CONTROL NEVER LOOKS TOGGLED. It takes hover,
-                        focus and an open-state treatment, and nothing else - a
-                        permanent green background would claim a state the
-                        drawing does not have.
+                    A VALUE CONTROL NEVER LOOKS TOGGLED. It takes hover,
+                    focus and an open-state treatment, and nothing else - a
+                    permanent green background would claim a state the
+                    drawing does not have.
                     -->
                     <!--
-                        =========================================================
-                        THE THREE LINE PROPERTIES: THICKNESS, COLOUR, LINE TYPE
-                        =========================================================
+                    =========================================================
+                    THE THREE LINE PROPERTIES: THICKNESS, COLOUR, LINE TYPE
+                    =========================================================
 
-                        THREE IDENTICAL CONTROLS. Each is the same box - one
-                        `<select>` (or the colour input) laid invisibly over one
-                        icon - so the three are the same size, the same shape and
-                        the same distance apart, and nothing about one of them is
-                        special.
+                    THREE IDENTICAL CONTROLS. Each is the same box - one
+                    `<select>` (or the colour input) laid invisibly over one
+                    icon - so the three are the same size, the same shape and
+                    the same distance apart, and nothing about one of them is
+                    special.
 
-                        THE ICONS ARE FIXED ARTWORK, NOT PREVIEWS. The thickness
-                        and line-type icons are plain, static drawings: they label
-                        the control rather than re-drawing themselves from the
-                        value. Live previews were the source of most of the trouble
-                        here - the icon changed size and shape as the value moved,
-                        so the three buttons stopped looking like a set - and the
-                        VALUE IS ALREADY ON THE TOOLTIP and in the dropdown, which
-                        is where it belongs.
+                    THE ICONS ARE FIXED ARTWORK, NOT PREVIEWS. The thickness
+                    and line-type icons are plain, static drawings: they label
+                    the control rather than re-drawing themselves from the
+                    value. Live previews were the source of most of the trouble
+                    here - the icon changed size and shape as the value moved,
+                    so the three buttons stopped looking like a set - and the
+                    VALUE IS ALREADY ON THE TOOLTIP and in the dropdown, which
+                    is where it belongs.
 
-                        The colour control shows the current colour in the drop,
-                        because a colour swatch has to show the colour. That is the
-                        one place it is genuinely the value.
+                    The colour control shows the current colour in the drop,
+                    because a colour swatch has to show the colour. That is the
+                    one place it is genuinely the value.
                     -->
                     <div class="drawing-strip-field drawing-strip-icon-control">
-                        <select id="drawingThickness" class="drawing-strip-icon-select" title="Line thickness" aria-label="Line thickness">
-                            <option value="0.25">0.25 mm</option>
-                            <option value="0.5" selected>0.50 mm</option>
-                            <option value="0.75">0.75 mm</option>
-                            <option value="1">1.00 mm</option>
-                        </select>
-                        <span class="drawing-strip-icon" aria-hidden="true">
-                            <svg viewBox="0 0 20 20" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M5 7h10"/><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M5 13h10"/></svg>
-                        </span>
+                    <select id="drawingThickness" class="drawing-strip-icon-select" title="Line thickness" aria-label="Line thickness">
+                    <option value="0.25">0.25 mm</option>
+                    <option value="0.5" selected>0.50 mm</option>
+                    <option value="0.75">0.75 mm</option>
+                    <option value="1">1.00 mm</option>
+                    </select>
+                    <span class="drawing-strip-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" width="18" height="18"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M5 7h10"/><path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M5 13h10"/></svg>
+                    </span>
                     </div>
 
                     <div class="drawing-strip-field drawing-strip-icon-control">
-                        <label class="drawing-strip-colour" title="Drawing colour">
-                            <input id="drawingColor" type="color" value="#193335" aria-label="Drawing colour" title="Drawing colour">
-                            <span class="drawing-strip-icon" aria-hidden="true">
-                                <svg viewBox="0 0 20 20" width="18" height="18"><path class="drawing-strip-icon-fill" stroke="none" d="M10 5.4c1.6 2.2 3.4 4 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.8 1.8-3.6 3.4-5.8z"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" d="M10 5.4c1.6 2.2 3.4 4 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.8 1.8-3.6 3.4-5.8z"/></svg>
-                            </span>
-                        </label>
+                    <label class="drawing-strip-colour" title="Drawing colour">
+                    <input id="drawingColor" type="color" value="#193335" aria-label="Drawing colour" title="Drawing colour">
+                    <span class="drawing-strip-icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" width="18" height="18"><path class="drawing-strip-icon-fill" stroke="none" d="M10 5.4c1.6 2.2 3.4 4 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.8 1.8-3.6 3.4-5.8z"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" d="M10 5.4c1.6 2.2 3.4 4 3.4 5.8a3.4 3.4 0 0 1-6.8 0c0-1.8 1.8-3.6 3.4-5.8z"/></svg>
+                    </span>
+                    </label>
                     </div>
 
                     <div class="drawing-strip-field drawing-strip-icon-control">
-                        <select id="drawingLineType" class="drawing-strip-icon-select" title="Line type" aria-label="Line type">
-                            <option value="solid">Solid</option>
-                            <option value="dashed">Dashed</option>
-                            <option value="center">Center</option>
-                            <option value="construction">Construction</option>
-                        </select>
-                        <span class="drawing-strip-icon" aria-hidden="true">
-                            <!--
-                                LINE TYPE: A RULE DRAWN IN THE SELECTED PATTERN.
+                    <select id="drawingLineType" class="drawing-strip-icon-select" title="Line type" aria-label="Line type">
+                    <option value="solid">Solid</option>
+                    <option value="dashed">Dashed</option>
+                    <option value="center">Center</option>
+                    <option value="construction">Construction</option>
+                    </select>
+                    <span class="drawing-strip-icon" aria-hidden="true">
+                    <!--
+                    LINE TYPE: A RULE DRAWN IN THE SELECTED PATTERN.
 
-                                The dash pattern IS the value, so solid, dashed, centre
-                                and construction each read straight off the icon - the
-                                control shows what is selected rather than merely naming
-                                itself. `stroke-dasharray` is set on this path by
-                                `style-controls.js` from the real line type.
-                            -->
-                            <svg viewBox="0 0 20 20" width="18" height="18"><path id="drawingLineTypeStroke" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3.5 10h13"/></svg>
-                        </span>
+                    The dash pattern IS the value, so solid, dashed, centre
+                    and construction each read straight off the icon - the
+                    control shows what is selected rather than merely naming
+                    itself. `stroke-dasharray` is set on this path by
+                    `style-controls.js` from the real line type.
+                    -->
+                    <svg viewBox="0 0 20 20" width="18" height="18"><path id="drawingLineTypeStroke" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M3.5 10h13"/></svg>
+                    </span>
                     </div>
 
                     <span class="drawing-style-strip-divider" aria-hidden="true"></span>
 
                     <!--
-                        GRID, SNAP, DIMENSIONS, MAGNITUDES: ICON-ONLY TOGGLES.
+                    GRID, SNAP, DIMENSIONS, MAGNITUDES: ICON-ONLY TOGGLES.
 
-                        Each has TWO PERSISTENT VISUAL STATES, and the state is
-                        read from the real shared setting - `state.grid.visible`,
-                        `state.snap.enabled` and the two `state.display` flags -
-                        never from a decorative flag of its own.
+                    Each has TWO PERSISTENT VISUAL STATES, and the state is
+                    read from the real shared setting - `state.grid.visible`,
+                    `state.snap.enabled` and the two `state.display` flags -
+                    never from a decorative flag of its own.
 
-                        THE STATE IS NOT COLOUR ALONE. An "on" toggle carries a
-                        filled surface, a border and a brighter icon as well as
-                        the green, so it is still readable in a monochrome view
-                        and to a student who cannot distinguish the green. The
-                        `aria-pressed` attribute states it for a screen reader,
-                        and the tooltip is kept up to date with ON/OFF.
+                    THE STATE IS NOT COLOUR ALONE. An "on" toggle carries a
+                    filled surface, a border and a brighter icon as well as
+                    the green, so it is still readable in a monochrome view
+                    and to a student who cannot distinguish the green. The
+                    `aria-pressed` attribute states it for a screen reader,
+                    and the tooltip is kept up to date with ON/OFF.
 
-                        Grid and Snap change HOW the drawing is made; Dimensions
-                        and Magnitudes change how it is READ. They are four
-                        independent switches, so "magnitudes without dimensions"
-                        is a state the row can express.
+                    Grid and Snap change HOW the drawing is made; Dimensions
+                    and Magnitudes change how it is READ. They are four
+                    independent switches, so "magnitudes without dimensions"
+                    is a state the row can express.
                     -->
                     <button class="drawing-status-toggle active" id="drawingGridToggle" type="button" data-toggle-name="Grid" aria-pressed="true" title="Grid: on" aria-label="Grid">
-                        <!-- GRID: a ruled sheet - the grid the drawing sits on. -->
-                        <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect fill="none" stroke="currentColor" stroke-width="1.5" x="3.5" y="3.5" width="13" height="13" rx="1"/><path fill="none" stroke="currentColor" stroke-width="1.5" d="M3.5 8h13M3.5 12h13M8 3.5v13M12 3.5v13"/></svg>
+                    <!-- GRID: a ruled sheet - the grid the drawing sits on. -->
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect fill="none" stroke="currentColor" stroke-width="1.5" x="3.5" y="3.5" width="13" height="13" rx="1"/><path fill="none" stroke="currentColor" stroke-width="1.5" d="M3.5 8h13M3.5 12h13M8 3.5v13M12 3.5v13"/></svg>
                     </button>
                     <button class="drawing-status-toggle active" id="drawingSnapToggle" type="button" data-toggle-name="Snap" aria-pressed="true" title="Snap: on" aria-label="Snap">
-                        <!--
-                            SNAP: a cursor tip aligned with a target point.
-                        -->
-                        <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M2 6V2h4M10 2h4v4M2 10v4h4"/><circle fill="currentColor" cx="8" cy="8" r="1.5"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 8l3.5 9 1.5-4 4-1.5z"/></svg>
+                    <!--
+                    SNAP: a cursor tip aligned with a target point.
+                    -->
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" d="M2 6V2h4M10 2h4v4M2 10v4h4"/><circle fill="currentColor" cx="8" cy="8" r="1.5"/><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 8l3.5 9 1.5-4 4-1.5z"/></svg>
                     </button>
                     <button class="drawing-status-toggle active" id="drawingDimensionsToggle" type="button" data-toggle-name="Dimensions" aria-pressed="true" title="Dimensions: on" aria-label="Dimensions">
-                        <!--
-                            DIMENSIONS: a ruler with measurement tick marks.
-                        -->
-                        <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="2" y="6" width="16" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M5 6v4M7.5 6v2.5M10 6v4M12.5 6v2.5M15 6v4"/></svg>
+                    <!--
+                    DIMENSIONS: a ruler with measurement tick marks.
+                    -->
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="2" y="6" width="16" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M5 6v4M7.5 6v2.5M10 6v4M12.5 6v2.5M15 6v4"/></svg>
                     </button>
                     <button class="drawing-status-toggle active" id="drawingMagnitudesToggle" type="button" data-toggle-name="Magnitudes" aria-pressed="true" title="Magnitudes: on" aria-label="Magnitudes">
-                        <!--
-                            MAGNITUDES: A FORCE ARROW WITH ITS VALUE.
+                    <!--
+                    MAGNITUDES: A FORCE ARROW WITH ITS VALUE.
 
-                            A force arrow with an F label above it
-                            represents showing or hiding force magnitudes.
-                        -->
-                        <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><text x="9" y="9" text-anchor="middle" fill="currentColor" font-family="Georgia, serif" font-size="11" font-style="italic">F</text><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 14h14M13.5 10.5L17 14l-3.5 3.5"/></svg>
+                    A force arrow with an F label above it
+                    represents showing or hiding force magnitudes.
+                    -->
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><text x="9" y="9" text-anchor="middle" fill="currentColor" font-family="Georgia, serif" font-size="11" font-style="italic">F</text><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 14h14M13.5 10.5L17 14l-3.5 3.5"/></svg>
                     </button>
 
                     <!--
-                        FIT: A ONE-SHOT ACTION, NOT A TOGGLE.
+                    FIT: A ONE-SHOT ACTION, NOT A TOGGLE.
 
-                        Fit is a COMMAND, not a workspace setting. It has no
-                        persistent on/off state of its own - pressing it fits
-                        the drawing to the view once and leaves nothing to turn
-                        back off - so it is NOT a `drawing-status-toggle` and
-                        carries no `aria-pressed` or active treatment. It is a
-                        plain action button, styled like the zoom controls
-                        beside it, so it does not read as a fifth switch.
+                    Fit is a COMMAND, not a workspace setting. It has no
+                    persistent on/off state of its own - pressing it fits
+                    the drawing to the view once and leaves nothing to turn
+                    back off - so it is NOT a `drawing-status-toggle` and
+                    carries no `aria-pressed` or active treatment. It is a
+                    plain action button, styled like the zoom controls
+                    beside it, so it does not read as a fifth switch.
                     -->
                     <button class="drawing-action-button" id="drawingFitView" type="button" title="Fit drawing to view" aria-label="Fit drawing to view">
-                        <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M7 3H3v4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M7 3H3v4M13 3h4v4M17 13v4h-4M7 17H3v-4"/><rect x="6.5" y="6.5" width="7" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
                     </button>
 
+                    </div>
                 </div>
+
+                <nav class="drawing-toolbar" aria-label="Engineering toolsets">
+                    <!--
+                        THE TOOLSETS AND THE HIDE CONTROL, IN ONE ROW.
+
+                        The row does not scroll on its own - the rail above
+                        scrolls both rows together, through
+                        `.drawing-top-rail-scroll`. The Hide control is outside
+                        the scroller entirely, pinned to the rail's right edge.
+                    -->
+                    <div class="drawing-toolbar-scroll" role="group" aria-label="Toolsets">
+                        <button class="drawing-category active" data-category="GEOMETRY">GEOMETRY</button>
+                        <button class="drawing-category" data-category="ANNOTATE">ANNOTATE</button>
+                        <button class="drawing-category" data-category="STATICS">STATICS</button>
+                        <button class="drawing-category" data-category="DYNAMICS">DYNAMICS</button>
+                        <button class="drawing-category" data-category="FLUIDS">FLUIDS</button>
+                        <button class="drawing-category" data-category="THERMODYNAMICS">THERMODYNAMICS</button>
+                        <button class="drawing-category" data-category="HEAT TRANSFER">HEAT TRANSFER</button>
+                        <button class="drawing-category" data-category="SOLID MECHANICS">SOLID MECHANICS</button>
+                        <button class="drawing-category" data-category="MECHANICAL DESIGN">MECHANICAL DESIGN</button>
+                        <button class="drawing-category" data-category="CONTROLS">CONTROLS</button>
+                        <button class="drawing-category" data-category="MATH / ANALYSIS">MATH / ANALYSIS</button>
+                    </div>
+
+                    <!--
+                        The Hide control is NOT here any more. It is a direct
+                        child of the rail, outside this scroller, so it is on
+                        screen at every scroll position and every width - see
+                        the button after the rail's closing tags.
+                    -->
+                </nav>
+
+                </div>
+                </div>
+
+                <!--
+                    THE HIDE CONTROL LIVES OUTSIDE THE SCROLLER, ON THE RAIL.
+
+                    It is the way back from the sliver, so it must be on screen
+                    at every scroll position and every width. Inside the
+                    scroller it would be pushed to the end of eleven toolsets,
+                    off the right of a compressed window - the one control that
+                    could not be found when it was needed. Out here it is
+                    `position: absolute; right: 0` against the rail, which is
+                    the visible box (see `.drawing-top-rail` in
+                    `workspace-chrome.css`).
+
+                    It still does exactly the same job: it folds the drawing's
+                    top bars away, and the Show control that replaces it sits
+                    at the top of the canvas.
+                -->
+                <button
+                    class="drawing-topbar-hide"
+                    id="headerHideButton"
+                    type="button"
+                    title="Hide the drawing's top bars to give the canvas more room"
+                    aria-controls="drawing"
+                    aria-expanded="true"
+                >
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M3 10l5-5 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="header-hide-text">Hide</span>
+                </button>
 
                 </div>
 
+
+
+                
                 <!--
                     The tool panel's own column, holding a single
                     hide/show arrow. The arrow is a SIBLING of the

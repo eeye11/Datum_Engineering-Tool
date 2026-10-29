@@ -70,6 +70,32 @@ export const editorState = {
      */
     sheetCollection: enggSheets.createCollection(),
 
+    /*
+     * ========================================================
+     * A DOCUMENT IS BEING INSTALLED
+     * ========================================================
+     *
+     * True from the moment an opened file starts being applied until it has
+     * finished, and closed however that ends (see `beginDocumentLoad` in
+     * document-commands.js). While it is true the document is being RESTORED,
+     * not edited: the ordinary "this changed" notifications are suppressed, so
+     * a file that arrives does not land marked as having unsaved changes.
+     */
+    documentLoading: false,
+
+    /*
+     * THE ONLY VARIANT OF A DOCUMENT THAT MAY BE INSTALLED AT ONCE.
+     *
+     * Opening reads a file, and then applies what it read. That is two steps
+     * with an await between them when the file arrives from the operating
+     * system's picker, so a second Open - a double-click, a slow read while
+     * another file is chosen - could otherwise finish FIRST and be replaced by
+     * the older answer. Each load takes a ticket from here and only the newest
+     * one is allowed to commit; a superseded read is dropped rather than
+     * overwriting the document the user asked for last.
+     */
+    documentLoadVariant: null,
+
     coordinateSystemMenu: null,
 
     coordinateSystemMenuAnchor: null,

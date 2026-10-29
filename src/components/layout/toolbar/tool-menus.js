@@ -127,8 +127,18 @@ export function renderToolButton(tool) {
      * a popup, so it must not promise a menu. Its `aria-expanded` and
      * `aria-controls` are written by the inline section that renders it.
      */
-    const coordinateAttributes =
-        tool.submenu && !FLUIDS_TOOL_MENUS[tool.id]
+    /*
+     * A GROUP THAT EXPANDS IN PLACE SAYS WHETHER IT IS OPEN.
+     *
+     * The inline section is rendered underneath the button with `hidden` set
+     * from the same state, so the button must state it too - otherwise a
+     * collapsed group looks identical to an open one, and nothing on the page
+     * records what a press would do. `inlineSection` carries the id the button
+     * controls and whether it is showing.
+     */
+    const coordinateAttributes = tool.inlineSection
+        ? ` aria-expanded="${tool.inlineSection.expanded}" aria-controls="${tool.inlineSection.id}"`
+        : tool.submenu && !FLUIDS_TOOL_MENUS[tool.id]
             ? ' aria-haspopup="menu" aria-expanded="false"'
             : "";
 

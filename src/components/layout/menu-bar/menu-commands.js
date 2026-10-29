@@ -37,7 +37,7 @@ import {
 } from "../../../features/workspace/commands/clipboard-commands.js";
 import { deleteSelectedObjects } from "../../../features/workspace/commands/delete-command.js";
 import { FILE_ACTIONS } from "../../../features/workspace/commands/document-commands.js";
-import { openLatexCodeEditor } from "../../../features/workspace/commands/latex-commands.js";
+import { openCurrentDrawingAsLatex } from "../../../features/workspace/commands/latex-commands.js";
 import { formatDrawingSource } from "../../../features/workspace/commands/source-commands.js";
 import { fitDrawingToView } from "../workspace/viewport.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -456,7 +456,7 @@ const insertMenu = () => ({
             id: "latex-code",
             label: "LaTeX Code…",
             icon: "file-text",
-            run: () => openLatexCodeEditor()
+            run: () => openCurrentDrawingAsLatex()
         }
     ]
 });

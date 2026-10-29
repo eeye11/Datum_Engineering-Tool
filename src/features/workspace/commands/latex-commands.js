@@ -81,16 +81,41 @@ function insertFeatures(features) {
     return message;
 }
 
+/*
+ * THE SHEET AS THE EDITOR SHOWS IT: its own source text, or the picture the
+ * exporter writes when the sheet has no source of its own. Either way the text
+ * is a DAETUM picture (its opening line states `x=1mm, y=1mm`), so it is read
+ * and previewed as one.
+ */
 function currentSheetAsLatex() {
     return writeLatexPicture(serializeDocumentBody(), activeSheet()?.id);
 }
 
-/* Insert > LaTeX code…, and a .tex opened without DAETUM's data. */
-export function openLatexCodeEditor({ text, notice } = {}) {
+export function openCurrentDrawingAsLatex() {
+    return openLatexCodeEditor({
+        text: currentSheetAsLatex(),
+        daetumPicture: true
+    });
+}
+
+/*
+ * Insert > LaTeX code…, and a .tex opened without DAETUM's data.
+ *
+ * `view` is the print transform the picture was written with, when the file
+ * says what it was (see `latex-document.js`). Without it the code is read at
+ * its own coordinates, which is what a picture written by hand means.
+ *
+ * `daetumPicture` says the text being read is one of DAETUM's own pictures -
+ * a saved file whose embedded document could not be used. Its numbers are
+ * drawing units and it draws itself at that size, so it is previewed with
+ * `latex: false` (no centimetre default); a picture written by hand is read the
+ * way LaTeX reads it.
+ */
+export function openLatexCodeEditor({ text, notice, view = null, daetumPicture = false } = {}) {
     return openLatexEditor({
         text,
         notice,
-        read: readLatexDrawing,
+        read: (source) => readLatexDrawing(source, { view, latex: !daetumPicture }),
         preview: previewFeatures,
         insert: insertFeatures,
         fromDrawing: currentSheetAsLatex

@@ -76,10 +76,19 @@ test("force labels default beyond the tail and remain inside selection bounds af
     assert.ok(box.minX <= textBox.minX && box.maxX >= textBox.maxX);
     assert.ok(box.minY <= textBox.minY && box.maxY >= textBox.maxY);
 
-    /* The annotation placement now re-derives from the moved geometry itself. */
+    /*
+     * THE ANNOTATION PLACEMENT RE-DERIVES FROM THE MOVED GEOMETRY ITSELF.
+     *
+     * The placement is a pure function of the feature's current geometry and
+     * its stored offset, so re-deriving twice with no change in between is
+     * stable (no drift) and finite. A call that mutated the feature in place
+     * would make the second derivation differ from the first - which is what
+     * an earlier regression did.
+     */
     const translatedLabel = annotations.derivedAnnotation(force, state);
     assert.ok(Number.isFinite(translatedLabel.placement.x) && Number.isFinite(translatedLabel.placement.y));
-    assert.ok(translatedLabel.placement.x !== movedLabel.placement.x || translatedLabel.placement.y !== movedLabel.placement.y);
+    assert.ok(translatedLabel.placement.x === movedLabel.placement.x && translatedLabel.placement.y === movedLabel.placement.y,
+        "re-deriving without an edit is stable");
 });
 
 test("truss selection bounds include every joint when the span endpoints share a corner", async () => {

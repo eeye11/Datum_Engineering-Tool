@@ -171,6 +171,47 @@ console.log("\n  the preview svg cannot fall back to its own size\n");
   );
 }
 
+console.log("\n  the picture is not cut off by its own box\n");
+
+{
+  /*
+   * A PREVIEW BOX IS SIZED BY ITS BORDER BOX.
+   *
+   * Nothing in the editor's stylesheets gives every element
+   * `box-sizing: border-box`, so a `<span>` preview box was CONTENT-box: its
+   * declared `width: 100%` plus a 1px border on each side came out 2px wider
+   * than the grid cell, and the picture inside - `inset: 0`, so filling the
+   * padding box - no longer lined up with the outline drawn around it. In the
+   * list the box overflowed its column; in the grid it pushed the card past the
+   * popup's last track. That is the "recent images are cut off" defect.
+   */
+  check(
+    "both preview boxes size themselves by the border box",
+    /\.datum-open-thumb,\s*\n\.datum-open-template-preview \{[^}]*box-sizing:\s*border-box/.test(
+      css,
+    ),
+    "a content-box preview is 2px wider than the slot it sits in",
+  );
+
+  check(
+    "and so does the thumbnail on its own",
+    /\.datum-open-thumb \{[^}]*box-sizing:\s*border-box/.test(css),
+    "the base rule is what the list square and the grid card both inherit",
+  );
+
+  check(
+    "the grid track and the card may shrink to the column, not past it",
+    /\.datum-open-recents-grid \{[^}]*min-width:\s*0/.test(css) &&
+      /\.datum-open-recents-grid \.datum-open-recent \{[^}]*min-width:\s*0/.test(css),
+    "a `1fr` track grows to fit a wide item and pushes the last card out of view",
+  );
+
+  check(
+    "and the grid thumbnail is capped at its cell's width",
+    /\.datum-open-recents-grid \.datum-open-thumb \{[^}]*max-width:\s*100%/.test(css),
+  );
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 
 if (fail) {

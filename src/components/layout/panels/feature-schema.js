@@ -2164,10 +2164,11 @@ export function setElbowRunLookup(lookup) {
 /*
  * THE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS, injected the same way.
  *
- * The Features tab must not have a radius calculation of its own: the canvas
- * handle and the panel have to write the SAME geometry for the same radius.
- * Seating the pipes on the new tangents is part of that one operation, which is
- * why there is no separate reseat hook beside it.
+ * Still the panel's handle on "cut the joined pipes back to this bend", which
+ * an elbow's OTHER writes use (an angle change, a connection change). The
+ * RADIUS no longer goes through it separately - `applyElbowRadius` does the
+ * seating itself, so that the fitted arc and the pipes it meets are always
+ * regenerated together.
  */
 export function setElbowRadiusApply(apply) {
     elbowLookupStore().applyRadius = typeof apply === "function" ? apply : null;

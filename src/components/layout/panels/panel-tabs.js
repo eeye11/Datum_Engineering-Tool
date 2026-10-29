@@ -73,6 +73,38 @@ export function activePanelTab() {
   return PANEL_TABS.includes(tab) ? tab : DEFAULT_PANEL_TAB;
 }
 
+/*
+ * OPEN A TAB, WAITING FOR THE PANEL TO EXIST IF IT DOES NOT YET.
+ *
+ * `setActivePanelTab` is synchronous and silently does nothing when the page
+ * has no tab strip - which is right for a pane asking "am I visible?", and
+ * wrong for a COMMAND that was asked to take the student somewhere. A command
+ * that arrives before the panel's markup is attached waits for it (a few
+ * animation frames at most) and then opens the tab; one that never finds a
+ * panel gives up rather than waiting forever.
+ */
+export async function openPanelTab(tab, { frames = 30 } = {}) {
+  if (!PANEL_TABS.includes(tab)) {
+    return false;
+  }
+
+  const wait = () =>
+    typeof globalThis.requestAnimationFrame === "function"
+      ? new Promise((resolve) => globalThis.requestAnimationFrame(resolve))
+      : new Promise((resolve) => setTimeout(resolve, 16));
+
+  for (let attempt = 0; attempt <= frames; attempt += 1) {
+    if (tabButtons().length) {
+      setActivePanelTab(tab);
+      return true;
+    }
+
+    await wait();
+  }
+
+  return false;
+}
+
 export function setActivePanelTab(tab, { focus = false } = {}) {
   if (!PANEL_TABS.includes(tab)) {
     return;
@@ -231,6 +263,7 @@ export default {
   DEFAULT_PANEL_TAB,
   activePanelTab,
   setActivePanelTab,
+  openPanelTab,
   showFeaturesPanel,
   showObjectsPanel,
   showPropertiesPanel,

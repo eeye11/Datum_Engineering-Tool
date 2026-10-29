@@ -596,7 +596,16 @@ function shapeCommand(element, context, matrix) {
             return null;
         }
 
-        return `${command(style)} ${point(context, matrix, attr(element, "cx", 0), attr(element, "cy", 0))} circle[radius=${num(r)}];`;
+        /*
+         * THE RADIUS IS STATED IN MILLIMETRES.
+         *
+         * A bare number in this picture's coordinate space is multiplied by the
+         * picture's `scale=` - so `circle[radius=40]` in a sheet printed at
+         * `scale=0.354` is a circle of 14.2 drawing units, not 40. The radius is
+         * a MEASUREMENT, already in drawing units (millimetres), so it is
+         * written with its unit and cannot be scaled a second time.
+         */
+        return `${command(style)} ${point(context, matrix, attr(element, "cx", 0), attr(element, "cy", 0))} circle[radius=${num(r)}mm];`;
     }
 
     if (tag === "path") {

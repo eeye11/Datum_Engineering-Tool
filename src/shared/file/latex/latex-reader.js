@@ -303,6 +303,26 @@ function applyTo(m, p) {
     return { x: m.a * p.x + m.c * p.y + m.e, y: m.b * p.x + m.d * p.y + m.f };
 }
 
+/*
+ * TIKZ COMPOSES TRANSFORMS LEFT TO RIGHT, and the reader used to compose them
+ * on the right.
+ *
+ * `\begin{tikzpicture}[shift={(-20,-5)}, scale=0.3]` is read by TikZ as
+ * "scale first, then shift": the picture is translated by the shift AS WRITTEN,
+ * and is not moved a further 20 mm for every 0.3. Writing one point back gives
+ * `t(x) = shift + scale * p`, which in the (a, b, c, d, e, f) matrix is
+ * `compose(next, current)` - the NEW option on the left.
+ *
+ * Appending each option on the right instead gave `t(x) = scale * (shift + p)`,
+ * so the shift was multiplied by the scale: a picture fitted at 0.3 and shifted
+ * by -20 reopened ~14 mm from where it was drawn, and the error grew with the
+ * size of the shift. One writer because both `scale=` and `shift=` must agree
+ * about the order, and both go through this.
+ */
+function composeAfter(frame, step) {
+    frame.matrix = compose(step, frame.matrix);
+}
+
 /* ---------- the reader ---------- */
 
 /*
@@ -341,9 +361,159 @@ const COSMETIC = new Set([
     "end angle", "delta angle", "step", "help lines", "label", "pin", "name", "nodes", "every path/.style"
 ]);
 
-export function readLatexDrawing(source) {
+/*
+ * ============================================================
+ * HOW THE NUMBERS IN A PICTURE ARE READ
+ * ============================================================
+ *
+ * `readLatexDrawing(source, options)` takes two options, and both are about
+ * the same thing: what a bare number in the picture MEANS.
+ *
+ *   latex        a picture written by hand, or by another program. LaTeX's own
+ *                rule applies - a bare coordinate is CENTIMETRES - and that is
+ *                the default, because it is what an ordinary `.tex` means.
+ *
+ *   latex: false a picture DAETUM wrote. Its numbers are DRAWING UNITS, which
+ *                is why the writer states `x=1mm, y=1mm` on the picture; the
+ *                reader has always honoured that, so nothing changes here.
+ *
+ *   view         the print transform the picture was WRITTEN at - its origin,
+ *                pan and `scale` - read from the `%% DAETUM-PICTURE-VIEW` line
+ *                beside the sheet (see `pictureViewFromText`). A DAETUM picture
+ *                is printed FITTED to a page, so every coordinate in it is the
+ *                drawing's own coordinate put through that transform. Reading it
+ *                without undoing the transform puts the drawing back smaller than
+ *                it was, and away from where it was drawn.
+ *
+ * THE TRANSFORM IS UNDONE, NOT GUESSED.
+ *
+ * A written coordinate reaches the page as `(model * factor - offset) * scale`,
+ * where `offset` is the fit the writer normalised against and `scale` is the
+ * picture's print scale. The model coordinate itself is
+ *
+ *     model = written / scale + offset / factor
+ *
+ * The record's `origin-x`/`origin-y` are the fitted image's corner - `offset /
+ * factor` once the export's own margin is accounted for - so they are the one
+ * available estimate of the shift. A reopened drawing therefore comes back to
+ * the region it was drawn in, scaled and placed as printed rather than collapsed
+ * onto the page corner.
+ *
+ * THE RECORD'S `pan` IS DELIBERATELY NOT USED. `cameraFor` pans the rendered
+ * image to the centre of its box, which is a property of the SCREEN render and
+ * not of the written coordinates; applying it would move every reopened drawing
+ * by half a page.
+ */
+function unprintFrame(view) {
+    const scale = Number(view && view.scaleFactor);
+
+    if (!Number.isFinite(scale) || !(scale > 0)) {
+        return null;
+    }
+
+    /*
+     * `written / scale + pan` IS THE DRAWING'S OWN COORDINATE, EXACTLY.
+     *
+     * A saved sheet states both numbers for a line drawn from `(60, -2)` to
+     * `(220, -2)` at `pan = 187.5`, `scale = 0.556`:
+     *
+     *     %% DAETUM-PICTURE-VIEW ... pan-x=187.5 pan-y=26.5 scale=0.556
+     *     \draw[draw=black, line width=0.58pt] (-93,32.27) -- (67,32.27);
+     *
+     * and `-93 / 0.556 + 187.5 = 60`. That is the writer's formula exactly -
+     * `(model - pan) * scale`, which is what the geometry writer's `pointOf`
+     * produces - so this is its inverse and nothing more. The picture restates no
+     * transform of its own, so the record is applied once.
+     */
+    return {
+        scale,
+        factor: scale,
+        originX: Number(view.originX) || 0,
+        originY: Number(view.originY) || 0
+    };
+}
+
+/* Put one read point - already in drawing space - back where it was drawn. */
+function unprintPoint(point, frame) {
+    if (!point || !frame) {
+        return point;
+    }
+
+    /*
+     * `x / scale + pan` IS THE DRAWING'S OWN COORDINATE.
+     *
+     * The writer emits `(model - pan) * scale` - a saved sheet states
+     * `(-93, 32.27)` for a line drawn from `(60, -2)` to `(220, -2)` at
+     * `pan = 187.5`, `scale = 0.556` - so this is its inverse, applied to the
+     * numbers exactly as they were read.
+     */
+    return {
+        x: point.x / frame.factor + frame.originX,
+        y: point.y / frame.factor + frame.originY
+    };
+}
+
+/*
+ * ONE FEATURE'S GEOMETRY, PUT BACK WHERE IT WAS DRAWN.
+ *
+ * Every field is named rather than walked: a coordinate is a `{x, y}` and a
+ * radius is a LENGTH, so a generic walk would scale a radius as a point and
+ * move it away from the shape it belongs to. The fields below are the ones the
+ * model stores geometry in.
+ */
+function unprintFeature(feature, frame) {
+    const geometry = feature && feature.geometry;
+
+    if (!geometry) {
+        return feature;
+    }
+
+    const point = (value) => (value && Number.isFinite(Number(value.x)) ? unprintPoint(value, frame) : value);
+    const length = (value) => (Number.isFinite(Number(value)) ? Number(value) / frame.scale : value);
+
+    ['start', 'end', 'center', 'centre', 'position', 'previous', 'next', 'a', 'b'].forEach((key) => {
+        if (geometry[key]) {
+            geometry[key] = point(geometry[key]);
+        }
+    });
+
+    if (geometry.span) {
+        geometry.span = { ...geometry.span, start: point(geometry.span.start), end: point(geometry.span.end) };
+    }
+
+    if (geometry.ends) {
+        geometry.ends = { a: point(geometry.ends.a), b: point(geometry.ends.b) };
+    }
+
+    if (Array.isArray(geometry.points)) {
+        geometry.points = geometry.points.map(point);
+    }
+
+    ['radius', 'width', 'height'].forEach((key) => {
+        if (Number.isFinite(Number(geometry[key]))) {
+            geometry[key] = length(geometry[key]);
+        }
+    });
+
+
+    return feature;
+}
+
+export function readLatexDrawing(source, options = {}) {
     const raw = String(source || "");
     const text = stripComments(raw);
+
+    /*
+     * A PICTURE DAETUM WROTE IS READ AT ITS OWN SIZE.
+     *
+     * A written picture states `x=1mm, y=1mm`, so its bare numbers are drawing
+     * units and need no centimetre default at all; `latex: false` says so for a
+     * picture whose option line was edited away. A hand-written picture keeps
+     * LaTeX's centimetre, which is the default (`latex` is not false).
+     */
+    const unitlessMm = options.latex === false ? 1 : 10;
+    const print = unprintFrame(options.view);
+
     const defined = definedColours(text);
     const diagnostics = [];
     const features = [];
@@ -391,6 +561,21 @@ export function readLatexDrawing(source) {
         readPicture(picture);
     }
 
+    /*
+     * THE PRINT TRANSFORM IS UNDONE LAST, AND ONLY WHEN THE FILE SAYS WHAT IT
+     * WAS.
+     *
+     * Every feature is read in the picture's own coordinates, which are the
+     * PRINTED ones - the drawing scaled to fit a page and shifted to its corner.
+     * Undoing it here, once, over the finished features means every construct
+     * the reader knows is covered by one rule, instead of each one having to
+     * remember the transform. A feature with no geometry - an annotation, a
+     * dimension, a reference - has nothing to move and is left as it is.
+     */
+    if (print) {
+        features.forEach((feature) => unprintFeature(feature, print));
+    }
+
     return {
         features,
         diagnostics: diagnostics.sort((a, b) => a.line - b.line),
@@ -404,12 +589,39 @@ export function readLatexDrawing(source) {
     function readPicture(picture) {
         /* Unit vectors in mm. The picture's own `scale` is its print size only. */
         const frame = {
-            ux: 10,
-            uy: 10,
+            ux: unitlessMm,
+            uy: unitlessMm,
             matrix: IDENTITY,
             style: {}
         };
-        applyFrameOptions(frame, parseOptions(picture.options), picture.start, true);
+
+        /*
+         * THE PRINT TRANSFORM A WRITTEN PICTURE STATES ABOUT ITSELF.
+         *
+         * A DAETUM picture's commands are printed - reduced to the page and
+         * shifted to its corner - and the environment says so with `scale=` and
+         * `shift={...}`. LaTeX applies them, so the reader must too, or the
+         * drawing would come back at the size of its printed numbers rather
+         * than the size it was drawn.
+         *
+         * The SHIFT is taken from the RECORD when the file carries one: it is
+         * stated at four decimal places there and only two on the picture, so
+         * the record is the better copy of the same number.
+         */
+        /*
+         * THE PRINT TRANSFORM IS UNDONE ONCE, OVER THE FINISHED FEATURES.
+         *
+         * A picture this build writes states no `scale=`/`shift=` of its own -
+         * the record above it does - and its numbers are in drawing units either
+         * way (`x=1mm, y=1mm`). So the frame is given the picture's units only,
+         * and the record's one undo is applied in `unprintFeature` below. A
+         * picture written earlier, which DOES restate the transform on its own
+         * environment, has it applied by the frame and is undone by the same
+         * record - which is the same pair of numbers.
+         */
+        const optionsText = parseOptions(picture.options);
+
+        applyFrameOptions(frame, optionsText, picture.start, true);
 
         const stack = [frame];
         const names = new Map();
@@ -518,26 +730,26 @@ export function readLatexDrawing(source) {
     function applyFrameOptions(frame, options, index, isPicture) {
         for (const { key, value } of options) {
             if (key === "x" && value) {
-                const mm = lengthMm(value, 10);
+                const mm = lengthMm(value, unitlessMm);
                 if (mm !== null) frame.ux = mm;
             } else if (key === "y" && value) {
-                const mm = lengthMm(value, 10);
+                const mm = lengthMm(value, unitlessMm);
                 if (mm !== null) frame.uy = mm;
             } else if (key === "scale" && value && !isPicture) {
                 const s = Number(value);
-                if (Number.isFinite(s)) frame.matrix = compose(frame.matrix, { a: s, b: 0, c: 0, d: s, e: 0, f: 0 });
+                if (Number.isFinite(s)) composeAfter(frame, { a: s, b: 0, c: 0, d: s, e: 0, f: 0 });
             } else if ((key === "xscale" || key === "yscale") && value && !isPicture) {
                 const s = Number(value);
-                if (Number.isFinite(s)) frame.matrix = compose(frame.matrix, key === "xscale" ? { ...IDENTITY, a: s } : { ...IDENTITY, d: s });
+                if (Number.isFinite(s)) composeAfter(frame, key === "xscale" ? { ...IDENTITY, a: s } : { ...IDENTITY, d: s });
             } else if (key === "shift" && value) {
                 const p = coordinateValue(value.replace(/^\{|\}$/g, "").trim().replace(/^\(([\s\S]*)\)$/, "$1"), { ...frame, matrix: IDENTITY }, null, new Map(), index);
-                if (p) frame.matrix = compose(frame.matrix, { ...IDENTITY, e: p.x, f: p.y });
+                if (p) composeAfter(frame, { ...IDENTITY, e: p.x, f: p.y });
             } else if ((key === "xshift" || key === "yshift") && value) {
                 const mm = lengthMm(value, frame[key === "xshift" ? "ux" : "uy"]);
-                if (mm !== null) frame.matrix = compose(frame.matrix, key === "xshift" ? { ...IDENTITY, e: mm } : { ...IDENTITY, f: mm });
+                if (mm !== null) composeAfter(frame, key === "xshift" ? { ...IDENTITY, e: mm } : { ...IDENTITY, f: mm });
             } else if (key === "rotate" && value) {
                 const r = (Number(value) * Math.PI) / 180;
-                if (Number.isFinite(r)) frame.matrix = compose(frame.matrix, { a: Math.cos(r), b: Math.sin(r), c: -Math.sin(r), d: Math.cos(r), e: 0, f: 0 });
+                if (Number.isFinite(r)) composeAfter(frame, { a: Math.cos(r), b: Math.sin(r), c: -Math.sin(r), d: Math.cos(r), e: 0, f: 0 });
             } else if (key === "scale" && isPicture) {
                 /* print size only */
             } else {

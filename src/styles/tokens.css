@@ -175,6 +175,17 @@
     --datum-border-strong: var(--precision-slate-300);
 
     /*
+     * THE RULE UNDER THE MENU ROW, measured from the top of the top rail.
+     *
+     * It is a MEASUREMENT, not a colour: the workspace writes the real height of
+     * the menu-and-controls row here on start-up and on every resize, and the
+     * rail's first hairline is positioned with it. Zero is the honest default
+     * for the instant before the first measurement, when there is no row to
+     * place the line under.
+     */
+    --datum-rail-row-one: 0px;
+
+    /*
      * THE BRAND MARK. The DAETUM logo is drawn with `currentColor`, and this
      * token is what feeds it. It is the interface's own INK, so the mark is
      * high contrast on whatever surface it sits on - near-black on the ice-mint
@@ -507,6 +518,7 @@
     --datum-subtle: var(--precision-night-500);
     --datum-border: #365052;
     --datum-border-strong: var(--precision-night-bd-strong);
+    --datum-rail-row-one: 0px;
 
     /* The brand mark steps up to ice-white on the dark sheet. */
     --logo-color: #E8F5F3;
@@ -763,6 +775,7 @@
         --datum-subtle: var(--precision-night-500);
         --datum-border: #365052;
         --datum-border-strong: var(--precision-night-bd-strong);
+        --datum-rail-row-one: 0px;
 
         /* The OS-dark fallback needs the brand token too - ice-white on charcoal. */
         --logo-color: #E8F5F3;

@@ -116,7 +116,6 @@
 }
 
 .drawing-toolbar {
-    grid-row: 1;
     position: relative;
     z-index: 61;
     /*
@@ -131,55 +130,115 @@
      * WRAP onto a second line, which made the bar taller and took the height out
      * of the drawing below it.
      *
-     * So the row DOES NOT WRAP: the toolsets scroll horizontally in their own
-     * inner row (`.drawing-toolbar-scroll`), and the Hide control, which is a
-     * sibling of that scroller, stays pinned at the right where eleven toolsets
-     * cannot push it off the edge. The bar is always the same height and the
-     * drawing never loses a line to it.
+     * So the row DOES NOT WRAP. The toolsets and the Hide control that follows
+     * them stay on one line at their natural widths, and the overflow is taken
+     * by the SHARED TOP RAIL that holds this bar and the menu above it - one
+     * scroller for both, so they always scroll together (see
+     * `.drawing-top-rail` in `workspace-chrome.css`). The bar is always the
+     * same height and the drawing never loses a line to it.
      */
     align-items: flex-end;
     background: var(--datum-surface);
     border-bottom: 1px solid var(--cad-border);
     display: flex;
+    flex: 0 0 auto;
     flex-wrap: nowrap;
-    grid-column: 1 / -1;
     min-width: 0;
     padding: 6px 8px;
 }
 
 .drawing-menu-controls-bar {
-    grid-column: 1 / -1;
-    grid-row: 2;
     display: flex;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
     align-items: center;
     min-width: 0;
     background: var(--datum-chrome);
     border-bottom: 1px solid var(--cad-border);
     position: relative;
-    z-index: 60;
+    /*
+     * ABOVE THE SECTION ROW BELOW IT.
+     *
+     * The menu's dropdown hangs over the section bar, so this row must be
+     * painted after it - and the panel inside has no `z-index` of its own that
+     * could rescue that (it would only be compared within this context). The
+     * section bar is at 61; this row is at 65 and the rail at 60 keeps both
+     * above the canvas.
+     */
+    z-index: 65;
+    white-space: nowrap;
 }
 
 .drawing-menu-controls-bar > .datum-menubar {
     border-bottom: 0;
     align-self: stretch;
     align-items: center;
-}
-
-.drawing-menu-controls-bar > .drawing-style-strip {
-    flex: 1 1 480px;
-    background: transparent;
-    border-bottom: 0;
+    flex: 0 0 auto;
 }
 
 /*
- * THE SCROLLER HOLDS THE TOOLSETS, AND ONLY THE TOOLSETS.
+ * THE DIVIDER BETWEEN THE MENUS AND THE QUICK-ACCESS CONTROLS.
  *
- * It is the element that overflows; the bar around it is a plain flex row that
- * lets this take the slack and keeps the Hide button beside it. `min-width: 0`
- * is what allows a flex item to shrink below its content width at all - without
- * it the scroller would refuse to be narrower than its toolsets and the whole
- * page would scroll sideways instead.
+ * One rule, drawn on the strip's leading edge so it travels with the search
+ * field and is never left standing alone at the end of a long scroll. It is a
+ * full-height hairline rather than a gap: the two groups belong to one row but
+ * are different kinds of control - COMMANDS on the left, SETTINGS on the right
+ * - and the line says where one ends.
+ *
+ * THE STRIP IS A FLEX ROW, AND THE RULE IS ONE OF ITS ITEMS.
+ *
+ * `align-self: stretch` alone did nothing: the strip's own `align-items: center`
+ * is what a flex item resolves against, and `stretch` only fills the row if the
+ * item has no cross-size of its own - which an empty 1px-wide box does not
+ * guarantee. So the divider carries an explicit height in `em`, matched to the
+ * row's tallest control, and `align-self: stretch` is kept as the preferred
+ * behaviour for a row that ever grows.
+ *
+ * `align-items` on the strip is left to the controls: a divider that stretched
+ * would also stretch the selects.
+ *
+ * IT USES THE STRONG BORDER COLOUR, NOT THE ORDINARY ONE. `--datum-border` is a
+ * pale mint a shade off the bar's own white, which is
+ * right for a hairline between panels that are already separated by a gap and
+ * wrong for the one line that has to say "commands end here". The strong
+ * token is the same family, one step darker, and actually reads at 1px.
+ */
+.drawing-menu-controls-bar > .drawing-style-strip::before {
+    background: var(--datum-border-strong);
+    content: "";
+    flex: 0 0 auto;
+    align-self: center;
+    height: 24px;
+    margin: 0 10px 0 2px;
+    width: 1px;
+}
+
+.drawing-menu-controls-bar > .drawing-style-strip {
+    flex: 1 1 auto;
+    background: transparent;
+    border-bottom: 0;
+    min-width: 0;
+}
+
+/*
+ * THE TOOLSET GROUP IS A PLAIN, NON-WRAPPING ROW.
+ *
+ * It used to be the scroller. It is not any more: the toolset bar and the menu
+ * bar above it are ONE navigation area, and two independent horizontal
+ * scrollers would let the bars drift out of alignment. The overflow is handled
+ * once, by `.drawing-top-rail-scroll`, so scrolling this group scrolls the menu
+ * with it.
+ *
+ * `flex: 0 0 auto` keeps the toolsets at their NATURAL width - they never
+ * shrink to fit - so a narrow window overflows rather than squeezing a label.
+ *
+ * AND GROWING WITH THE ROW IS WHAT KEEPS THE HIDE BUTTON AT THE RIGHT EDGE on
+ * a wide screen: the bar around it is `flex: 0 0 auto` too (it is as wide as
+ * the rail's track, which never shrinks), so on a wide window the track is
+ * wider than the toolsets and this group absorbs the spare width. On a narrow
+ * one the track is exactly as wide as its contents, nothing is spare, and the
+ * Hide button sits immediately after the last toolset - the end of the
+ * scrollable rail, where it belongs.
  */
 .drawing-toolbar-scroll {
     align-items: center;
@@ -189,15 +248,36 @@
     gap: 5px;
     isolation: isolate;
     min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    overflow: visible;
     white-space: nowrap;
 }
 
+/*
+ * THE HIDE CONTROL FLOATS OVER THE END OF THE SECTION BAR.
+ *
+ * It is a SIBLING of the scroller, not a child of it, so it is never carried
+ * off the rail by the toolsets it is meant to fold away. It is positioned
+ * against the rail, which is the visible box - `overflow-x: auto` on the
+ * scroller would otherwise make THAT the containing block and send the button
+ * back to the far end of the content.
+ *
+ * Its `--rail-hide-width` of reserved room is added to the bar's right padding,
+ * so the last toolset can be scrolled clear of it and is never covered.
+ */
+.drawing-top-rail .drawing-toolbar {
+    padding-right: calc(8px + var(--rail-hide-width, 42px));
+}
+
+.drawing-top-rail > .drawing-topbar-hide {
+    bottom: 1px;
+    margin: 0;
+    position: absolute;
+    right: 4px;
+    /* Above the scroller and its bars, which are stacked at 60-61. */
+    z-index: 62;
+}
+
 .drawing-style-strip {
-    grid-row: 3;
     align-items: center;
     background: var(--datum-rail);
     border-bottom: 1px solid var(--cad-border);
@@ -218,20 +298,22 @@
      * EACH CONTROL GETS ITS OWN SPACE, AND NOTHING OVERLAPS.
      *
      * This row holds the search field, Undo and Redo, the three property
-     * controls and the display toggles. It used to be a single non-wrapping line
-     * of `flex` items with no minimum widths, which is exactly the arrangement
-     * that lets flex items shrink INTO one another: when the panel narrowed, the
-     * selects and the colour swatch were squeezed below their own content width
-     * and drew over their neighbours. Every child is therefore `flex: 0 0 auto`,
-     * so a control that no longer fits moves to a second line rather than being
-     * crushed - which is why the grid row above is `auto`, not a fixed height.
+     * controls, the display toggles and Fit. It must never let flex items shrink
+     * INTO one another: when the panel narrowed, the selects and the colour
+     * swatch were squeezed below their own content width and drew over their
+     * neighbours. Every child is therefore `flex: 0 0 auto`, so each keeps its
+     * natural width.
+     *
+     * IT DOES NOT WRAP, AND IT IS NOT ITS OWN ROW. It shares the menu's row -
+     * commands on the left, settings on the right, a divider between - and the
+     * overflow is the SHARED TOP RAIL's to scroll (see `.drawing-top-rail` in
+     * `workspace-chrome.css`). So the top of the window stays two lines: the
+     * menu-plus-controls line, then the section bar.
      */
     column-gap: 7px;
-    flex-wrap: wrap;
-    grid-column: 1 / -1;
+    flex-wrap: nowrap;
     min-width: 0;
     padding: 3px 8px;
-    row-gap: 4px;
 }
 
 /*

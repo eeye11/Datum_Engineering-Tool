@@ -2877,6 +2877,8 @@ const enggPipeDuct = {
 	connectedPipe,
 	fittingRuns,
 	elbowFitRadius,
+	elbowFitRadiusFromRuns,
+	elbowArmLimit,
 	elbowAngleDegrees,
 	bendAngleFromArms,
 	adjustedBendRadius,

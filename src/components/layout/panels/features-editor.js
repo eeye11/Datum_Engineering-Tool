@@ -83,8 +83,10 @@ setFeatureObjectLookup(
  * AND THE ONE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS.
  *
  * The Features tab's Bend Radius field goes through the SAME function the
- * canvas radius handle calls, so the two cannot produce different geometry
- * for the same radius.
+ * canvas radius handle calls, so the two cannot produce different geometry for
+ * the same radius. It clamps against the bend's live arms, re-seats every
+ * joined pipe on the new tangent points and keeps their outer ends where they
+ * are - see `applyElbowRadius`.
  */
 setElbowRadiusApply((elbow, radius) =>
     applyElbowRadius(elbow, radius, { objects: drawingState.objects })

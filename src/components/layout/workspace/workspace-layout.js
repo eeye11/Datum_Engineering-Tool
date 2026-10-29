@@ -3,7 +3,7 @@
  */
 
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { drawingFeaturesPanelToggle, drawingToolPanelToggle, drawingTopBarShow, drawingZoomIn, drawingZoomValue, headerHideButton } from "../../../features/workspace/dom.js";
+import { drawingFeaturesPanelToggle, drawingTopBarShow, drawingToolPanelToggle, drawingTopRail, drawingZoomIn, drawingZoomValue, headerHideButton } from "../../../features/workspace/dom.js";
 import { editorState } from "../../../features/workspace/editor-state.js";
 import { updateDrawingZoom } from "./viewport.js";
 
@@ -423,5 +423,263 @@ export function installWorkspaceLayout() {
     drawingTopBarShow?.addEventListener(
         "click",
         () => setTopBarHidden(false)
+    );
+
+    /*
+     * THE SLIVER ITSELF IS THE WAY BACK.
+     *
+     * While the bars are hidden the rail is a 6px line across the top (see
+     * `body.datum-topbar-hidden .drawing-top-rail`), and the whole line is the
+     * control - the bars are `display: none`, so nothing else inside it can be
+     * pressed.
+     *
+     * IT MUST NOT FIRE FOR A PRESS ON THE HIDE BUTTON ITSELF, and that is not a
+     * detail - it was the whole of "Hide does nothing". The Hide button is a
+     * CHILD of the rail, so its click bubbles up into this listener, and by the
+     * time it arrives the class it just set is already on the body. The check
+     * below then read that as "the sliver was pressed, bring the bars back" and
+     * immediately undid the press: the bars flickered and stayed up.
+     *
+     * So a press that ORIGINATED inside the bars is ignored here - it belongs to
+     * the control that was pressed. Only a press on the sliver itself, where
+     * there is no bar to press, brings them back.
+     */
+    drawingTopRail?.addEventListener("click", (event) => {
+        if (!document.body.classList.contains("datum-topbar-hidden")) {
+            return;
+        }
+
+        /*
+         * `headerHideButton` is the one control that is still on screen in the
+         * hidden state's DOM (the bars are `display: none`, the button sits on
+         * the rail), so it is named explicitly; anything inside a bar is already
+         * unreachable and could not have produced this event.
+         */
+        if (headerHideButton && event.target.closest?.("#headerHideButton")) {
+            return;
+        }
+
+        setTopBarHidden(false);
+    });
+
+    installTopRail(drawingTopRail);
+}
+
+/*
+ * ========================================================
+ * THE SHARED TOP RAIL: ONE SCROLLER FOR BOTH BARS
+ * ========================================================
+ *
+ * The menu bar and the toolset bar live in ONE horizontally scrolling box (see
+ * the markup and `.drawing-top-rail` in workspace-chrome.css), so they are
+ * ALREADY synchronised: there is a single scroll offset, not two to keep in
+ * step. Touchpad two-finger pans, `Shift`+wheel, horizontal wheels and the
+ * scrollbar need no script at all.
+ *
+ * TWO SMALL THINGS ARE ADDED HERE.
+ *
+ * 1. SHIFT+WHEEL and plain vertical wheels pan the rail. A wheel with no
+ *    horizontal axis - an ordinary mouse - sends only `deltaY`, and browsers
+ *    disagree about whether Shift turns that into a sideways scroll. This makes
+ *    that one gesture work everywhere, and only while the pointer is over the
+ *    rail.
+ * 2. ONE-FINGER HORIZONTAL SWIPE. Touch already scrolls an `overflow-x` box, so
+ *    nothing is taken away here - a press that turns into a sideways drag pans
+ *    the rail directly. A press that does not move is left alone, so the menu
+ *    labels and toolset buttons keep their ordinary click.
+ *
+ * A TOOLSET BUTTON IS NEVER SCROLLED AWAY BY ACCIDENT. The drag only happens
+ * after the finger has travelled further sideways than `TOUCH_SLOP_PX`, which is
+ * the same threshold a browser uses before it treats a touch as a pan rather
+ * than a tap.
+ */
+const TOUCH_SLOP_PX = 8;
+
+function installTopRail(rail) {
+    if (!rail) {
+        return;
+    }
+
+    const scroller = rail.querySelector(".drawing-top-rail-scroll");
+
+    if (!scroller) {
+        return;
+    }
+
+    /*
+     * CLIP ONLY WHEN THERE IS SOMETHING TO SCROLL.
+     *
+     * `overflow-x: auto` is a clip on both axes, and the menu panels drop from
+     * the bar - under that clip they were cut off at the bar's edge and could
+     * not be seen. So the rail is only made a scroll container while its
+     * content is wider than it: a wide window (the usual case) shows its
+     * dropdowns as ordinary children, and a compressed one scrolls and has the
+     * panels placed against the window instead (see `menu-bar.js`).
+     *
+     * Checked on start-up and on every resize, because the width that matters
+     * is the real one - panels collapsing, fonts landing and the window being
+     * dragged all change it, and no media query can see all three.
+     */
+    const track = scroller.querySelector(".drawing-top-rail-track");
+
+    const syncScrollState = () => {
+        /* Measured unclipped, so the comparison is of real widths. */
+        scroller.classList.remove("drawing-top-rail-scroll--scrollable");
+
+        if (scroller.scrollWidth > scroller.clientWidth) {
+            scroller.classList.add("drawing-top-rail-scroll--scrollable");
+        }
+    };
+
+    let syncQueued = false;
+    const queueSync = () => {
+        if (syncQueued) {
+            return;
+        }
+
+        syncQueued = true;
+        globalThis.requestAnimationFrame(() => {
+            syncQueued = false;
+            syncScrollState();
+            syncRowRule();
+        });
+    };
+
+    /*
+     * WHERE THE DIVIDER BETWEEN THE BARS GOES.
+     *
+     * The line between the menu-and-controls row and the section bar belongs to
+     * the RAIL (see `.drawing-top-rail::after`), because the rail is the box
+     * that does not scroll - the line therefore reaches both edges of the window
+     * at every scroll position. Its distance from the bottom is `--rail-row-one`,
+     * the HEIGHT OF THE FIRST ROW - measured here rather than guessed, because
+     * the row is as tall as its tallest control and that changes with the font,
+     * the theme and the window.
+     *
+     * It is written on the rail as well as on the track: the track keeps the
+     * closing line under the section bar, the rail draws the divider above it.
+     */
+    const syncRowRule = () => {
+        const row =
+            (track || scroller).querySelector(".drawing-menu-controls-bar") ||
+            scroller.firstElementChild?.firstElementChild;
+
+        if (!row || !track) {
+            return;
+        }
+
+        /*
+         * A MEASUREMENT THAT DID NOT LAND IS NOT A MEASUREMENT.
+         *
+         * A row asked for its height before the page has laid it out answers
+         * zero, and calling that the row's height would draw the rule through
+         * the middle of the menu. So a zero falls back to the offset the row
+         * itself reports - which is the same figure once layout has run - and
+         * failing that the token's own default is left in place.
+         */
+        const measured = Math.round(row.getBoundingClientRect().height);
+        const offset = Math.round(row.offsetHeight);
+        const height = measured > 0 ? measured : offset;
+
+        if (height > 0) {
+            track.style.setProperty("--datum-rail-row-one", `${height}px`);
+
+            /*
+             * The rail's own line reads the same figure. It is set on the rail
+             * because that is where the divider is painted, and inherited by
+             * the track inside it, so the two can never disagree.
+             */
+            rail.style.setProperty("--datum-rail-row-one", `${height}px`);
+        }
+    };
+
+    syncScrollState();
+    syncRowRule();
+    window.addEventListener("resize", queueSync, { passive: true });
+
+    if (typeof globalThis.ResizeObserver === "function") {
+        new globalThis.ResizeObserver(queueSync).observe(scroller.firstElementChild ?? scroller);
+    }
+
+    scroller.addEventListener(
+        "wheel",
+        (event) => {
+            /* A deliberate horizontal gesture is the browser's to handle. */
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+                return;
+            }
+
+            if (!event.shiftKey || event.deltaY === 0) {
+                return;
+            }
+
+            /* Nothing to pan: leave the wheel alone rather than swallow it. */
+            if (scroller.scrollWidth <= scroller.clientWidth) {
+                return;
+            }
+
+            scroller.scrollLeft += event.deltaY;
+            event.preventDefault();
+        },
+        { passive: false },
+    );
+
+    let dragging = false;
+    let startX = 0;
+    let startLeft = 0;
+
+    scroller.addEventListener(
+        "touchstart",
+        (event) => {
+            if (event.touches.length !== 1) {
+                dragging = false;
+
+                return;
+            }
+
+            dragging = false;
+            startX = event.touches[0].clientX;
+            startLeft = scroller.scrollLeft;
+        },
+        { passive: true },
+    );
+
+    scroller.addEventListener(
+        "touchmove",
+        (event) => {
+            if (event.touches.length !== 1) {
+                return;
+            }
+
+            const dx = event.touches[0].clientX - startX;
+
+            if (!dragging) {
+                if (Math.abs(dx) < TOUCH_SLOP_PX) {
+                    return;
+                }
+
+                dragging = true;
+            }
+
+            if (scroller.scrollWidth <= scroller.clientWidth) {
+                return;
+            }
+
+            /*
+             * Vertical movement is the page's and stays with it; a sideways
+             * drag is this rail's.
+             */
+            scroller.scrollLeft = startLeft - dx;
+            event.preventDefault();
+        },
+        { passive: false },
+    );
+
+    scroller.addEventListener(
+        "touchend",
+        () => {
+            dragging = false;
+        },
+        { passive: true },
     );
 }

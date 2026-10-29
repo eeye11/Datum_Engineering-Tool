@@ -717,6 +717,26 @@ export function createSourceManager(initialSource) {
                 skippedCount: parsed.skipped.length,
                 hasDrawableContent: parsed.hasDrawableContent
             };
+        },
+
+        /*
+         * Replace the picture with one an OPENER read from a file.
+         *
+         * A loaded sheet's source is the document being opened, not an edit to
+         * the one it replaces. `restore` is the right entry point for that - and
+         * it resets the analysis, the render state and the save status along
+         * with the text, which `setSource` deliberately does not (that is an
+         * EDIT). A caller holding the manager by a fixed name therefore needs
+         * this alias, and it is the same function - there is no second
+         * implementation of restoring here.
+         */
+        loadSource(saved, options = {}) {
+            /*
+             * `this`, not a bare name: the method lives on the manager object
+             * and is reached through it, so the alias and `restore` are the
+             * same function with no second copy of the restore logic.
+             */
+            return this.restore(saved, options);
         }
     };
 

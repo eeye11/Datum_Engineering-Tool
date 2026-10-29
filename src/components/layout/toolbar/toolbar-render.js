@@ -90,15 +90,16 @@ function renderToolbarTool(tool) {
      * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
      *
      * It is not a menu, so `aria-haspopup` goes; and it gets `aria-expanded`
-     * and `aria-controls` whatever the button renderer happened to emit.
+     * and `aria-controls` from the state the section is actually drawn in, so
+     * the button and the section beneath it agree on the FIRST frame and on
+     * every redraw.
      */
     const button = renderToolButton({
         ...tool,
         submenu: true,
+        inlineSection: { id: sectionId, expanded },
         childToolIds: DYNAMICS_TOOL_MENUS[tool.id]?.map(({ id }) => id)
-    })
-        .replace(' aria-haspopup="menu"', '')
-        .replace('aria-expanded="false"', `aria-expanded="${expanded}" aria-controls="${sectionId}"`);
+    }).replace(' aria-haspopup="menu"', '');
 
     const children = DYNAMICS_TOOL_MENUS[tool.id]
         ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
