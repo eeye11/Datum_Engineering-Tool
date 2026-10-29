@@ -73,6 +73,14 @@ export function isConstructionTool(
             toolId === "diesel-cycle" ||
             toolId === "otto-cycle" ||
             toolId === "carnot-cycle" ||
+            [
+                "tank", "control-volume", "turbine-compressor",
+                "piston-cylinder", "piston-cylinder-stoppers",
+                "saturation-curve", "process-plot", "process-path",
+                "constant-temp-pressure-lines", "heat-entering", "heat-leaving",
+                "work-arrow", "electric-work", "mechanical-work",
+                "coordinate-system-2d"
+            ].includes(toolId) ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

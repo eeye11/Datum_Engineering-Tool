@@ -1427,21 +1427,17 @@ export function toggleWorkspaceSetting(
         drawingSnapToggle
     ) {
         /*
-         * SNAP IS THE OBJECT SNAP - the references to existing geometry:
-         * endpoints, midpoints, intersections, centres, quadrants and points on
-         * an entity, plus the horizontal and vertical alignment inference.
-         *
-         * IT IS NO LONGER ALSO THE GRID SNAP. It used to write `grid.snapToGrid`
-         * by way of `snap.enabled`, which made the two systems one switch: with
-         * object snapping off the student lost the grid as well, and could not
-         * have one without the other. Grid snapping belongs to the grid switch
-         * and to the Settings dialog; this switch owns only the object snaps.
+         * The top Snap control enables or disables both grid and object
+         * snapping, including alignment inference. Grid visibility is separate
+         * so the grid can stay visible while placing features freely.
          */
         drawingState.snap.enabled =
             nextEnabled;
 
         drawingState.objectSnap.enabled =
             nextEnabled;
+
+        drawingState.grid.snapToGrid = nextEnabled;
 
         /*
          * Remove stale visual/interaction
@@ -1455,6 +1451,9 @@ export function toggleWorkspaceSetting(
 
         drawingState.interaction.inference =
             null;
+
+        drawingState.interaction.guideline = null;
+        drawingState.interaction.inferredPoint = null;
     }
 
     /*

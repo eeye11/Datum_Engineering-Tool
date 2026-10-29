@@ -130,7 +130,7 @@ export function handleCanvasClick(
     }
 
     if (isProcessPlotTool(drawingState.activeTool)) {
-        addProcessPoint(resolution.rawPointerPoint);
+        addProcessPoint(resolution.effectiveConstructionPoint);
         return;
     }
 

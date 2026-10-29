@@ -1,6 +1,7 @@
 import geometry from "../geometry/feature-geometry.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
+import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
 import { pipeDuctPaths } from "../../features/workspace/model/fluids/pipe-duct.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
@@ -9,6 +10,7 @@ export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (heatTransferTool(object.metadata?.thermodynamicsKind)) return [g.start, g.end].filter(Boolean);
         if (object.type === "pipe-duct") return pipeDuctPaths(g.start, g.end, object.engineering || {}).flat();
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (object.metadata?.thermodynamicsKind === "mechanical-work") return fanPaths(g).flat();

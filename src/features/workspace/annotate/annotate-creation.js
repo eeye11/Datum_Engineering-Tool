@@ -351,11 +351,15 @@ export function commitAnnotate(options) {
 
   enggDrawingState.clearInteraction(drawingState);
 
+  if (heat) {
+    enggDrawingState.setActiveTool(drawingState, "select");
+  }
+
   enggDrawingState.selectObject(drawingState, object.id);
 
   setToolMessage(object.metadata?.thermodynamicsKind === "work-arrow"
     ? "Work arrow placed - edit Direction and Text in Features"
-    : heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
+    : heat ? `${heat.label} arrow placed - Select is active` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();
   renderCurrentDrawing();

@@ -469,7 +469,7 @@ export function updateManipulationDrag(
                   editorState.manipulationDrag
               );
 
-    const point =
+    let point =
         draggingDimension || draggingAnnotate
             ? resolution.rawPointerPoint ||
               resolution.effectiveConstructionPoint
@@ -477,6 +477,11 @@ export function updateManipulationDrag(
 
     if (!point) {
         return;
+    }
+
+    if (editorState.manipulationDrag.object?.metadata?.thermodynamicsKind &&
+        editorState.manipulationDrag.kind !== "body") {
+        point = enggDrawingState.gridSnapPoint(point, drawingState);
     }
 
     /*
@@ -845,6 +850,15 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
+        if (drag.kind === "body" && object.metadata?.thermodynamicsKind) {
+            const original = drag.originals[object.id];
+            const reference = original?.geometry?.start || original?.geometry?.position || original?.geometry?.center;
+            if (reference) {
+                const snapped = enggDrawingState.gridSnapPoint({ x: reference.x + dx, y: reference.y + dy }, drawingState);
+                dx = snapped.x - reference.x;
+                dy = snapped.y - reference.y;
+            }
+        }
         if (drag.kind === "group-resize") {
             const corners = selectionCorners(drag.bounds);
             anchor = corners[(drag.corner + 2) % 4];

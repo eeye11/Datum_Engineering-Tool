@@ -486,12 +486,12 @@ check(
 );
 
 check(
-  "and the Snap toggle no longer writes the grid's setting",
+  "the Snap toggle controls both object and grid snapping",
   /drawingSnapToggle[\s\S]{0,2000}?drawingState\.snap\.enabled\s*=\s*nextEnabled[\s\S]{0,600}?drawingState\.objectSnap\.enabled\s*=\s*nextEnabled/.test(
     viewportSource,
   ) &&
-    !/drawingSnapToggle[\s\S]{0,2000}?grid\.snapToGrid\s*=/.test(viewportSource),
-  "the Snap control owns the object snaps only; grid snap belongs to the grid",
+    /drawingSnapToggle[\s\S]{0,2000}?drawingState\.grid\.snapToGrid\s*=\s*nextEnabled/.test(viewportSource),
+  "the Snap control must disable grid snapping as well as object snapping",
 );
 
 check(
