@@ -2366,7 +2366,6 @@ export function beginOrCompleteGeometry(
         drawingState
     );
 
-    if (object.type === "coordinate-system-2d") activateTool("select");
     setToolMessage("Ready");
 
     renderProperties();

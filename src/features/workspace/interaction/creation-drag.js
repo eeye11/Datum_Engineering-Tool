@@ -79,6 +79,7 @@ import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
+import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
@@ -1231,6 +1232,10 @@ export function finishCreationDrag(
             renderCurrentDrawing();
         } else {
             activateTool("select");
+            enggDrawingState.selectObject(drawingState, path.run.id);
+            setToolMessage("Pipe / Duct placed - drag to move or use the corner dots to resize");
+            renderProperties();
+            renderCurrentDrawing();
         }
 
         return true;

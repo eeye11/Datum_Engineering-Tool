@@ -328,6 +328,7 @@ export function commitRouteSegment(start, end, interaction = {}) {
     }
   }
 
+  enggDrawingState.selectObject(drawingState, run.id);
   enggDrawingState.commitDrawingChange(drawingState, previousObjects);
 
   /*
