@@ -4,6 +4,7 @@
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { coordinateSystemArms } from "../../../shared/geometry/feature-handles.js";
+import { selectionBounds } from "../../../shared/selection/selection-transform.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
@@ -666,6 +667,15 @@ export function objectAtPoint(
                      */
                     if (!geometry.origin) {
                         return false;
+                    }
+
+                    if (drawingState.activeTool === "select" &&
+                        drawingState.selection.selectedObjectIds.includes(object.id)) {
+                        const box = selectionBounds([object], [object.id]);
+                        if (box && point.x >= box.minX - tolerance && point.x <= box.maxX + tolerance &&
+                            point.y >= box.minY - tolerance && point.y <= box.maxY + tolerance) {
+                            return true;
+                        }
                     }
 
                     return (

@@ -1054,7 +1054,7 @@ export {
                     width: width + 6,
                     height: height + 6,
                     fill: "none",
-                    stroke: "#17643b",
+                    stroke: "#3b82f6",
                     "stroke-width": 1.2,
                     "stroke-dasharray": "5 3",
                     "pointer-events": "none",

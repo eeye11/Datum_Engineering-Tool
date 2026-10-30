@@ -273,7 +273,8 @@ export function beginManipulationDrag(
 
     if (
         overlay?.type === "dimension" ||
-        overlay?.type === "annotate"
+        overlay?.type === "annotate" ||
+        overlay?.type === "coordinate-system-2d"
     ) {
         /*
          * ARMED, NOT CLAIMED.
@@ -297,7 +298,7 @@ export function beginManipulationDrag(
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object: overlay,
-            kind: "annotation-offset",
+            kind: overlay.type === "coordinate-system-2d" ? "body" : "annotation-offset",
             moved: false,
             pending: true,
             start: { ...point },
@@ -850,9 +851,9 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
-        if (drag.kind === "body" && (object.metadata?.thermodynamicsKind || object.type === "pipe-duct")) {
+        if (drag.kind === "body" && (object.metadata?.thermodynamicsKind || ["pipe-duct", "coordinate-system-2d"].includes(object.type))) {
             const original = drag.originals[object.id];
-            const reference = original?.geometry?.start || original?.geometry?.position || original?.geometry?.center;
+            const reference = original?.geometry?.start || original?.geometry?.position || original?.geometry?.center || original?.geometry?.origin;
             if (reference) {
                 const snapped = enggDrawingState.gridSnapPoint({ x: reference.x + dx, y: reference.y + dy }, drawingState);
                 dx = snapped.x - reference.x;

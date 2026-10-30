@@ -670,7 +670,7 @@
 .drawing-selection-box {
     fill: none;
     pointer-events: none;
-    stroke: var(--datum-focus);
+    stroke: #3b82f6;
     stroke-dasharray: 4 3;
     stroke-width: 1;
     vector-effect: non-scaling-stroke;
