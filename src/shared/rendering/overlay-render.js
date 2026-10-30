@@ -389,20 +389,6 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             return;
         }
 
-        /*
-         * A MALFORMED CANDIDATE IS SKIPPED, NOT FATAL.
-         *
-         * The snap marker is the least important thing on the overlay - grid,
-         * preview and the drawing itself are above it in importance - so a
-         * candidate with no point must not abort the whole render. It is
-         * dropped, the picture survives, and the next pointer move replaces it
-         * with a well-formed one.
-         */
-        if (!candidate.point || !Number.isFinite(Number(candidate.point.x)) ||
-            !Number.isFinite(Number(candidate.point.y))) {
-            return;
-        }
-
         const screenPoint =
             enggDrawingState
                 .engineeringToScreen(
@@ -640,10 +626,6 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
         const add = (point, kind = "") => {
             if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
             const screen = toScreen(point);
-            if (kind.startsWith("reducer-length-")) {
-                svg.appendChild(createSvgElement("rect", { x: screen.x-3.8, y: screen.y-3.8, width: 7.6, height: 7.6, class: `drawing-manipulation-handle ${kind}` }));
-                return;
-            }
             svg.appendChild(createSvgElement("circle", {
                 cx: screen.x,
                 cy: screen.y,
@@ -652,7 +634,7 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             }));
         };
 
-        const frame = selectionBounds(state.objects, [...selected], state);
+        const frame = selectionBounds(state.objects, [...selected]);
         if (frame) {
             const first = toScreen({ x: frame.minX, y: frame.maxY });
             const last = toScreen({ x: frame.maxX, y: frame.minY });
@@ -1010,40 +992,51 @@ export {
         const selected = new Set(state.selection?.selectedObjectIds || []);
         const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
 
-        state.objects
-            .filter(object =>
-                object?.locked === true &&
-                object?.engineering?.dynamicsType === "dynamics-particle" &&
-                object?.geometry?.position
-            )
-            .forEach(object => {
-                const position = object.geometry.position;
-                const radius = Math.max(2, Number(object.geometry.markerRadius) || 1.6);
-                const badge = toScreen({ x: position.x + radius + 3, y: position.y + radius + 3 });
-                const group = createSvgElement("g", {
-                    "data-fixed-anchor-badge": object.id,
-                    "aria-label": "Fixed particle anchor",
-                    "pointer-events": "none"
-                });
+        /*
+         * ====================================================
+         * THE TARGET THE INPUT IS ABOUT TO PICK
+         * ====================================================
+         *
+         * Drawn BEFORE the selection, so a selected feature's own outline sits
+         * on top, and only for a feature that is not already selected - a
+         * preview of what will be picked adds nothing once it is picked.
+         *
+         * This is the hover a finger does not have. `pointer.js` writes the id
+         * on every move, for every input kind, from the same hit test the press
+         * will use. Nothing is selected by it, and it is gone when the pointer
+         * leaves, so it can never be mistaken for a change to the drawing.
+         */
+        const previewId = state.interaction?.targetPreviewId;
 
-                group.appendChild(createSvgElement("circle", {
-                    cx: badge.x,
-                    cy: badge.y,
-                    r: 7,
-                    fill: "#ffffff",
-                    stroke: "#17643b",
-                    "stroke-width": 1.2
-                }));
-                group.appendChild(createSvgElement("path", {
-                    d: `M ${badge.x - 3} ${badge.y} v-2 a3 3 0 0 1 6 0 v2 M ${badge.x - 4} ${badge.y} h8 v5 h-8 z`,
+        if (previewId && !selected.has(previewId)) {
+            const target = state.objects.find(object => object?.id === previewId);
+            let frame;
+
+            try {
+                frame = target ? selectionBounds([target], [target.id], state) : null;
+            } catch {
+                frame = null;
+            }
+
+            if (frame && Number.isFinite(frame.minX) && Number.isFinite(frame.minY)) {
+                const first = toScreen({ x: frame.minX, y: frame.maxY });
+                const last = toScreen({ x: frame.maxX, y: frame.minY });
+
+                svg.appendChild(createSvgElement("rect", {
+                    x: first.x - 4,
+                    y: first.y - 4,
+                    width: Math.max(8, last.x - first.x + 8),
+                    height: Math.max(8, last.y - first.y + 8),
                     fill: "none",
-                    stroke: "#17643b",
-                    "stroke-width": 1.2,
-                    "stroke-linecap": "round",
-                    "stroke-linejoin": "round"
+                    stroke: "var(--datum-focus, #087E83)",
+                    "stroke-width": 1,
+                    "stroke-dasharray": "3 3",
+                    "stroke-opacity": ".75",
+                    "pointer-events": "none",
+                    "data-target-preview-for": target.id
                 }));
-                svg.appendChild(group);
-            });
+            }
+        }
 
         if (!selected.size) {
             return;
@@ -1055,7 +1048,7 @@ export {
                 let frame;
 
                 try {
-                    frame = selectionBounds([object], [object.id], state);
+                    frame = selectionBounds([object], [object.id]);
                 } catch {
                     frame = null;
                 }

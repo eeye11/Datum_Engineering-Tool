@@ -31,8 +31,6 @@ import {
     writeObjectIntoSource
 } from "../../../shared/rendering/latex/source-synchronization.js";
 import { setSourceGeometryFactories } from "../../../shared/rendering/latex/source-object-sync.js";
-import { setFlowArrowSourceReader } from "../../../shared/rendering/latex/source-object-sync.js";
-import { readFlowArrow } from "../../../shared/rendering/latex/source-readers/fluids-readers.js";
 
 import { drawingCanvas } from "../../../features/workspace/dom.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
@@ -127,12 +125,20 @@ function syncSourceWithDrawing() {
     objects.forEach((object) => {
         if (sourceForObject(object, context) === null) {
             /*
-             * A WRITER TRIED AND FAILED. The object's previous block describes
-             * geometry the object no longer has, so it is taken out rather than
-             * left drawing the old shape - Source and the Drawing Space must not
-             * show an object the model has moved on from. The failure itself is
-             * named in the Source tab's diagnostics. An object no writer claims
-             * at all is not touched: its region is the student's own content.
+             * A HIDDEN OBJECT KEEPS ITS BLOCK. ONLY A WRITER FAILURE REMOVES ONE.
+             *
+             * The Source tab is where the student's drawing IS - the text they
+             * can read, edit and copy - so hiding an object must not take its
+             * code away from them. The block stays exactly as it was written,
+             * and the Source tab DECORATES it as hidden (eye-off in the margin,
+             * a tinted band, muted glyphs); see `setHiddenRegions` in
+             * source-editor.js.
+             *
+             * The Drawing Space is a different question, and it is answered
+             * elsewhere: the canvas skips a hidden object in the live overlay
+             * (`objectsThePictureDoesNotShow`) and the compiled picture is
+             * regenerated without it. "Not drawn" and "not written" are two
+             * separate decisions, and only the first one belongs to visibility.
              */
             if (hasSourceGenerationProblem(object.id) && removeObjectFromSource(manager, object.id)) {
                 changed = true;
@@ -161,6 +167,11 @@ function syncSourceWithDrawing() {
             return;
         }
 
+        /*
+         * A HIDDEN OBJECT IS STILL PRESENT. `present` is the model's list, and a
+         * hidden object is in it - so this removal path, which exists for an
+         * object that has been DELETED, must never touch one.
+         */
         if (removeObjectFromSource(manager, id)) {
             changed = true;
         }
@@ -283,18 +294,7 @@ function handleToolChanged() {
 function handleSelectionChanged(event) {
     const ids = event?.detail?.objectIds || drawingState.selection.selectedObjectIds;
 
-    const selectedDynamicsBody = ids?.some(id => {
-        const object = drawingState.objects.find(candidate => candidate.id === id);
-
-        return (
-            object?.engineering?.dynamicsType === "dynamics-particle" ||
-            object?.engineering?.dynamicsType === "dynamics-rigid-body" ||
-            object?.engineering?.dynamicsType === "dynamics-polar-vector" ||
-            object?.engineering?.dynamicsType === "dynamics-angular-vector"
-        );
-    });
-
-    if (selectedDynamicsBody || (ids && ids.length && activePanelTab() === "objects")) {
+    if (ids && ids.length && activePanelTab() === "objects") {
         setActivePanelTab("features");
     }
 }
@@ -412,15 +412,6 @@ export function installDrawingPanel() {
      * invented by the parser.
      */
     setSourceGeometryFactories(enggDrawingState.geometryFactories);
-
-    /*
-     * AND THE FLOW ARROW'S READER. It reads the attachment an arrow block
-     * carries, and it is registered here - not imported by the parser - because
-     * it reaches the tool library's style primitives, which want a document. The
-     * panel is already inside a document; a test that parses without one simply
-     * leaves arrow blocks unread, as it always did.
-     */
-    setFlowArrowSourceReader(readFlowArrow);
 
     /* Let committed model edits patch just their own source region. */
     enggDrawingState.setSourceSink(handleObjectCommitted);

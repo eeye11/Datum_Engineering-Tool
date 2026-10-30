@@ -36,24 +36,27 @@
  * not add a form here.
  */
 
-import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
+import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import {
     displayNameOf,
     fieldLabel,
     groupsFor,
     iconForObject,
+    isFullyConnectedElbow,
     readField,
     setElbowRunLookup,
+    setElbowReseat,
     setElbowRadiusApply,
-    setFeatureObjectLookup,
     setFluidReconciler,
     reconcileFluidGeometry,
     supportsTransform,
     typeLabelOf,
+    writeElbowAngle,
     writeField
 } from "./feature-schema.js";
-import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
+import { reseatElbowPipes, reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 import { applyElbowRadius } from "../../../features/workspace/interaction/elbow-radius.js";
 
 /*
@@ -68,16 +71,18 @@ setElbowRunLookup(
 );
 
 /*
- * AND THE SAME DOCUMENT ANSWERS A FLOW ARROW FOR ITS HOST.
+ * AND THE OPERATION THAT KEEPS ITS PIPES JOINED WHEN THE RADIUS CHANGES.
  *
- * The Attached Pipe row states the NAME of the run an arrow lives on, and a
- * name is not an identity - the student may rename the pipe after placing the
- * arrow - so the row asks the live document rather than carrying a copy of the
- * name it was placed with.
+ * A radius change moves the tangent points, and every joined pipe must be cut
+ * back or extended to meet them. `reseatElbowPipes` does that, and is handed in
+ * here for the same reason the lookup is: the field module owns the VALUE, the
+ * interaction layer owns the PIPES.
  */
-setFeatureObjectLookup(
-    (id) => (drawingState.objects || []).find((object) => object.id === id) || null
-);
+setElbowReseat((elbow) => {
+    reseatElbowPipes(elbow, drawingState.objects);
+
+    renderCurrentDrawing();
+});
 
 /*
  * AND THE ONE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS.
@@ -107,10 +112,8 @@ import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pan
 import { openColourPicker } from "../../../shared/ui/colour-picker.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
-import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
 
 let host = null;
-let dynamicsGeometryEditSnapshot = null;
 
 function element(id) {
     return globalThis.document.getElementById(id);
@@ -317,101 +320,12 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
-function quantityMarkup(key, definition, label, state, objects) {
-    const unitState = fieldState(objects, definition.unitField);
-    const bounds = [
-        Number.isFinite(definition.min) ? `min="${definition.min}"` : "",
-        Number.isFinite(definition.max) ? `max="${definition.max}"` : "",
-        `step="${definition.step ?? 1}"`
-    ]
-        .filter(Boolean)
-        .join(" ");
-    const units = (definition.unitOptions || [])
-        .map((option) => (
-            `<option value="${escapeHtml(option.value)}"${
-                !unitState?.mixed && option.value === unitState?.value ? " selected" : ""
-            }>${escapeHtml(option.label)}</option>`
-        ))
-        .join("");
-
+function textMarkup(key, label, state) {
     return (
-        `<div class="dfp-row-control dfp-quantity-control${state.mixed ? " is-mixed" : ""}">` +
-        `<input type="number" class="dfp-number" data-feature-field="${escapeHtml(key)}" ` +
-        `aria-label="${escapeHtml(label)}" ${bounds} value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
-        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
-        `>` +
-        `<select class="dfp-select dfp-quantity-unit" data-feature-field="${escapeHtml(definition.unitField)}" ` +
-        `aria-label="${escapeHtml(`${label} unit`)}"${unitState?.mixed ? ' data-mixed="true"' : ""}>` +
-        (unitState?.mixed ? `<option value="" selected disabled>Mixed</option>` : "") +
-        units +
-        `</select>` +
-        `</div>`
-    );
-}
-
-function attachmentMarkup(key, label, state) {
-    const eligible = drawingState.objects.filter((object) => {
-        const type = object?.engineering?.dynamicsType;
-
-        if (key === "dynamics.angularAttachment") {
-            return (
-                type === "dynamics-rigid-body" ||
-                type === "dynamics-coordinate-system" ||
-                object?.type === "rigid-body" ||
-                object?.type === "point" ||
-                object?.type === "coordinate-system-2d"
-            );
-        }
-
-        return (
-            type === "dynamics-particle" ||
-            type === "dynamics-rigid-body" ||
-            type === "dynamics-reference-point" ||
-            type === "dynamics-coordinate-system" ||
-            object?.type === "particle" ||
-            object?.type === "rigid-body" ||
-            object?.type === "point" ||
-            object?.type === "coordinate-system-2d"
-        );
-    });
-    const options = [
-        { value: "origin", label: "Origin Point" },
-        ...eligible.map((object) => ({
-            value: object.id,
-            label: `${object.name || "Unnamed"} (${object.engineering?.dynamicsType === "dynamics-particle"
-                || object.type === "particle"
-                ? "Particle"
-                : object.engineering?.dynamicsType === "dynamics-rigid-body" || object.type === "rigid-body"
-                  ? "Rigid Body"
-                  : "Origin Point"})`
-        }))
-    ];
-
-    if (!state.mixed && !options.some((option) => option.value === state.value)) {
-        options.push({ value: state.value, label: "Unresolved reference" });
-    }
-
-    return rowMarkup(label, choicesMarkup(key, label, options, state), { mixed: state.mixed });
-}
-
-function textMarkup(key, label, state, definition = {}) {
-    /*
-     * A READ-ONLY TEXT ROW STATES A FACT, IT DOES NOT OFFER A CONTROL.
-     *
-     * The Flow Arrow's Attached Pipe is the host it lives on. It is chosen by
-     * pressing on a pipe, so there is nothing to type here - a typed name would
-     * have to be resolved back to some pipe, and the wrong guess would silently
-     * move the arrow. So the field is rendered as the value it is, marked
-     * readOnly, with no edit path that could disagree with the drawing.
-     */
-    const readOnly = definition.readOnly === true;
-
-    return (
-        `<input type="text" class="dfp-text${readOnly ? " is-readonly" : ""}" data-feature-field="${escapeHtml(key)}" ` +
+        `<input type="text" class="dfp-text" data-feature-field="${escapeHtml(key)}" ` +
         `aria-label="${escapeHtml(label)}" ` +
         `value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
-        (readOnly ? ` readonly aria-readonly="true" tabindex="-1"` : "") +
-        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : definition.placeholder ? ` placeholder="${escapeHtml(definition.placeholder)}"` : "") +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
         ` autocomplete="off" spellcheck="false">`
     );
 }
@@ -439,38 +353,15 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "choice") {
-        /*
-         * THE OPTIONS MAY DEPEND ON THE OBJECT. Most choices are a fixed list;
-         * a Flow Profile's unit rows are the units of the QUANTITY that profile
-         * plots, so the definition supplies a function of the object and the
-         * same field can offer m³/s on one profile and kg/s on another.
-         */
-        const list = typeof definition.options === "function"
-            ? definition.options(objects[0])
-            : definition.options || [];
-
-        return rowMarkup(label, choicesMarkup(key, label, list, state), options);
+        return rowMarkup(label, choicesMarkup(key, label, definition.options || [], state), options);
     }
 
     if (definition.kind === "number") {
         return rowMarkup(label, numberMarkup(key, definition, label, state), options);
     }
 
-    if (definition.kind === "quantity") {
-        return (
-            `<div class="dfp-row">` +
-            `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
-            quantityMarkup(key, definition, label, state, objects) +
-            `</div>`
-        );
-    }
-
-    if (definition.kind === "reference") {
-        return attachmentMarkup(key, label, state);
-    }
-
     if (definition.kind === "text") {
-        return rowMarkup(label, textMarkup(key, label, state, definition), options);
+        return rowMarkup(label, textMarkup(key, label, state), options);
     }
 
     return "";
@@ -515,63 +406,48 @@ function transformRowMarkup(axis, label) {
 }
 
 /*
- * ============================================================
- * THE PRESSURE PROFILE'S DATA TABLE
- * ============================================================
+ * AN ABSOLUTE-VALUE TRANSFORM ROW: the elbow's Bend Angle.
  *
- * The graph's numbers are the STUDENT'S, so they are edited as a table of rows:
- * a station and a pressure per row, an Add Point button and a Remove button on
- * every row. Each edit writes the same `engineering.points` the renderer plots
- * from and the source writer emits - so the table, the plotted points and the
- * TikZ are one fact, not three copies.
- *
- * The table is built here rather than as a schema field because it is a LIST, and
- * a list has no single value a generic row could show. Everything else about the
- * profile stays in the schema like every other property.
+ * It differs from `transformRowMarkup` in the one way that matters: the box
+ * shows the object's ACTUAL value rather than a pending change, because Bend
+ * Angle is the only elbow parameter that IS a value. When the elbow's two ends
+ * are held by pipes the value is still shown - it is what the pipes make - but
+ * the box and its steppers are disabled, so it cannot be typed into.
  */
-function profileDataMarkup(object) {
-    const rows = Array.isArray(object?.engineering?.points) ? object.engineering.points : [];
-
-    const axes = enggPressureProfile.axesOf(object);
-
-    const body = rows
-        .map(
-            (row, index) =>
-                `<div class="dfp-row dfp-data-row" data-profile-row="${index}">` +
-                `<input type="number" class="dfp-number" data-profile-cell="position" data-profile-index="${index}" ` +
-                `aria-label="Point ${index + 1} station" value="${Number(row.position)}">` +
-                `<input type="number" class="dfp-number" data-profile-cell="pressure" data-profile-index="${index}" ` +
-                `aria-label="Point ${index + 1} pressure" value="${Number(row.pressure)}">` +
-                `<button type="button" class="dfp-button" data-profile-remove="${index}" ` +
-                `aria-label="Remove point ${index + 1}">Remove</button>` +
-                `</div>`
-        )
-        .join("");
-
-    /*
-     * THE UNITS ARE STATED ONCE, in the column headings - from the same Axes
-     * fields the student can edit - so a number in the table is never bare.
-     */
-    const heading =
-        `<div class="dfp-row dfp-data-heading">` +
-        `<span class="dfp-row-label">${escapeHtml(axes.xTitle)} (${escapeHtml(axes.xUnit)})</span>` +
-        `<span class="dfp-row-label">${escapeHtml(axes.yTitle)} (${escapeHtml(axes.yUnit)})</span>` +
-        `</div>`;
-
+function transformValueRowMarkup(axis, label, value, readonly) {
     return (
-        `<div class="dfp-section" data-feature-group="profile-data">` +
-        `<div class="dfp-section-heading">Data</div>` +
-        heading +
-        body +
-        `<div class="dfp-row">` +
-        `<span class="dfp-row-label">${rows.length} point${rows.length === 1 ? "" : "s"}</span>` +
-        `<button type="button" class="dfp-button" data-profile-add="true">Add Point</button>` +
-        `</div>` +
+        `<div class="dfp-row dfp-transform-row">` +
+        `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
+        `<span class="dfp-row-control">` +
+        `<input type="number" class="dfp-number dfp-transform-input" data-transform-value="${axis}" ` +
+        `aria-label="${escapeHtml(label)}" step="1" min="1" max="180" value="${escapeHtml(String(value))}"` +
+        (readonly ? ` disabled title="Set by the connected pipes"` : "") +
+        `>` +
+        `<span class="dfp-steppers">` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="1" aria-label="Increase ${escapeHtml(label)}"` +
+        (readonly ? " disabled" : "") +
+        `>` +
+        stepIcon("up") +
+        `</button>` +
+        `<button type="button" class="dfp-step" data-transform-step="${axis}" data-direction="-1" aria-label="Decrease ${escapeHtml(label)}"` +
+        (readonly ? " disabled" : "") +
+        `>` +
+        stepIcon("down") +
+        `</button>` +
+        `</span>` +
         `</div>`
     );
 }
 
-function stepIcon(direction) {    const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
+/* The Bend Angle the selection's first elbow currently has, in degrees. */
+function elbowAngleValue(objects) {
+    const elbow = objects.find((object) => object.type === "elbow");
+
+    return elbow ? Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90) : 90;
+}
+
+function stepIcon(direction) {
+    const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
 
     return (
         `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">` +
@@ -677,20 +553,17 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
     });
 
     /*
-     * The Dynamics Particle and Rigid Body have explicit coordinate fields in
-     * their own Transform group. Other movable selections use the shared
-     * relative-offset controls below.
+     * TRANSFORM IS OFFERED WHEN SOMETHING CAN MOVE. A selection of only fixed
+     * objects keeps its Transform rows - so the student can see why nothing
+     * moves, and the arrows say so by doing nothing - but a selection of objects
+     * the model cannot move at all does not get a Transform section that could
+     * never act.
      */
-    const hasExplicitTransform = objects.every(
-        object =>
-            object?.engineering?.dynamicsType === "dynamics-particle" ||
-            object?.engineering?.dynamicsType === "dynamics-rigid-body" ||
-            object?.engineering?.dynamicsType === "dynamics-angular-vector"
-    );
-
-    if (objects.some((object) => supportsTransform(object)) && !hasExplicitTransform) {
+    if (objects.some((object) => supportsTransform(object))) {
         const hasElbow = objects.some((object) => object.type === "elbow");
-
+        const elbowReadonly = objects.some(
+            (object) => object.type === "elbow" && isFullyConnectedElbow(object)
+        );
 
         markup.push(
             `<div class="dfp-section" data-feature-group="transform">` +
@@ -703,7 +576,7 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
                  * orientation is decided by the pipes it joins, so the rotation
                  * row is omitted for an elbow-only selection.
                  */
-                (objects.every((object) => object.type === "elbow" || (object.type === "reducer-expander" && (object.engineering?.startPipeId || object.engineering?.endPipeId)))
+                (objects.every((object) => object.type === "elbow")
                     ? ""
                     : transformRowMarkup("rotate", "Rotate")) +
                 /*
@@ -716,15 +589,24 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
                     ? transformRowMarkup("width", "Pipe Width")
                     : "") +
                 /*
-                 * THE ELBOW'S OWN PARAMETER: BEND RADIUS.
+                 * THE ELBOW'S OWN TWO PARAMETERS, in the order the
+                 * specification gives them: Bend Radius, then Bend Angle.
                  *
-                 * It is a relative adjustment and uses the same row shape as
-                 * X Shift. There is NO Bend Angle row: the angle is the direction
-                 * change the fitting's pipes make, so it is derived on every
-                 * settle rather than typed.
+                 * BEND RADIUS is a relative adjustment and uses the same row
+                 * shape as X Shift. BEND ANGLE is the one ABSOLUTE value, so it
+                 * starts at the elbow's actual angle and is disabled - not
+                 * hidden - when both its ends are held by pipes.
                  */
                 (hasElbow
                     ? transformRowMarkup("bendRadius", "Bend Radius")
+                    : "") +
+                (hasElbow
+                    ? transformValueRowMarkup(
+                          "bendAngle",
+                          "Bend Angle",
+                          elbowAngleValue(objects),
+                          elbowReadonly
+                      )
                     : "") +
                 `</div>`
         );
@@ -750,27 +632,6 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
 
     if (editors) {
         markup.push(editors);
-    }
-
-    /*
-     * THE PRESSURE PROFILE'S DATA TABLE, after its properties.
-     *
-     * A single selected profile is the only case: a table belongs to ONE graph,
-     * and a row that silently picked the first of three would edit something the
-     * student did not choose.
-     */
-    if (objects.length === 1 && enggPressureProfile.isPressureProfileType(objects[0].type)) {
-        /* Put the table between the Object section and Axes, as the requirement
-         * orders them: Object, Data, Axes, Appearance, Transform. */
-        const at = markup.findIndex((section) => section.includes('data-feature-group="profile-axes"'));
-
-        const data = profileDataMarkup(objects[0]);
-
-        if (at >= 0) {
-            markup.splice(at, 0, data);
-        } else {
-            markup.push(data);
-        }
     }
 
     return headerMarkup(objects) + markup.join("");
@@ -900,35 +761,6 @@ function applyIndeterminate(root) {
  * ============================================================ */
 
 /*
- * ONE EDIT TO A PRESSURE PROFILE'S DATA.
- *
- * Snapshotted, applied and committed once - so a row added, a cell changed or a
- * point removed is one entry in History, and Undo puts the table, the plotted
- * line and the source back together. The canvas is redrawn and the pane rebuilt
- * from the model afterwards, so no control keeps a value the model refused.
- */
-function commitProfileData(apply) {
-    const object = selectedObjects().find((candidate) => enggPressureProfile.isPressureProfileType(candidate.type));
-
-    if (!object || object.locked === true) {
-        return false;
-    }
-
-    const previous = enggDrawingState.snapshotDrawing(drawingState);
-
-    if (!apply(object)) {
-        return false;
-    }
-
-    enggDrawingState.commitDrawingChange(drawingState, previous);
-
-    renderCurrentDrawing();
-    refreshFeatures();
-
-    return true;
-}
-
-/*
  * Apply one field to every selected object it applies to. The selection is read
  * fresh here, so an edit always lands on what is selected now.
  */
@@ -963,42 +795,6 @@ function commitField(key, value) {
 
     enggDrawingState.commitDrawingChange(drawingState, previous);
     renderCurrentDrawing();
-
-    return true;
-}
-
-function updateDynamicsGeometry(target) {
-    const value = Number(target.value);
-
-    if (!Number.isFinite(value)) {
-        return;
-    }
-
-    const key = target.dataset.featureField;
-    const objects = selectedObjects().filter(object => readField(object, key) !== value);
-
-    if (!objects.length) {
-        return;
-    }
-
-    if (!dynamicsGeometryEditSnapshot) {
-        dynamicsGeometryEditSnapshot = enggDrawingState.snapshotDrawing(drawingState);
-    }
-
-    objects.forEach((object) => {
-        writeField(object, key, value);
-    });
-
-    renderCurrentDrawing();
-}
-
-function commitDynamicsGeometryEdit() {
-    if (!dynamicsGeometryEditSnapshot) {
-        return false;
-    }
-
-    enggDrawingState.commitDrawingChange(drawingState, dynamicsGeometryEditSnapshot);
-    dynamicsGeometryEditSnapshot = null;
 
     return true;
 }
@@ -1105,20 +901,6 @@ function applySegmentedChoice(button) {
  */
 let transformOffsets = { x: 0, y: 0, rotate: 0, width: 0 };
 let transformOffsetsFor = "";
-const LIVE_DYNAMICS_GEOMETRY_FIELDS = new Set([
-    "dynamics.positionX",
-    "dynamics.positionY",
-    "dynamics.rotation",
-    "dynamics.vectorMagnitude",
-    "dynamics.vectorAngle",
-    "dynamics.vectorComponentX",
-    "dynamics.vectorComponentY",
-    "dynamics.vectorOriginX",
-    "dynamics.vectorOriginY",
-    "dynamics.angularCenterX",
-    "dynamics.angularCenterY",
-    "dynamics.angularMagnitude"
-]);
 
 function transformSelectionKey() {
     return (drawingState.selection?.selectedObjectIds || []).join("|");
@@ -1161,6 +943,27 @@ function stepTransformValue(button) {
     }
 
     /*
+     * BEND ANGLE IS AN ABSOLUTE VALUE, NOT AN OFFSET. Its arrows move the
+     * elbow's actual angle by one degree, so there is no running total to keep:
+     * the box is re-read from the object on the redraw that follows.
+     */
+    if (axis === "bendAngle") {
+        const elbow = selectedObjects().find((object) => object.type === "elbow");
+
+        if (!elbow || isFullyConnectedElbow(elbow)) {
+            return;
+        }
+
+        const current = Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90);
+
+        writeElbowAngle(elbow, current + direction);
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
      * THE OFFSET IS RECORDED BEFORE THE MOVE, NOT AFTER.
      *
      * `applyTransform` redraws the canvas, and the redraw re-renders this pane -
@@ -1193,6 +996,14 @@ function stepTransformValue(button) {
 function commitTransformInput(input) {
     const axis = input?.dataset?.transformInput;
 
+    const absolute = input?.dataset?.transformValue;
+
+    if (absolute === "bendAngle") {
+        commitBendAngle(input);
+
+        return;
+    }
+
     if (!axis) {
         return;
     }
@@ -1210,31 +1021,53 @@ function commitTransformInput(input) {
      *
      * The arrows leave a running total behind because a student nudging an object
      * wants to see how far they have nudged it. A typed amount is a different
-     * thing: it is applied once, and leaving it on screen would suggest the object
-     * is being HELD at that offset.
+     * gesture: it has been applied once, in full, and leaving the number there
+     * would suggest the object is being held at that offset. So the whole box -
+     * this axis and the other two - goes back to zero, and the next gesture
+     * starts from a clean slate.
+     *
+     * The other axes are cleared with it rather than left holding an older total,
+     * because the three rows are one control: a box showing an X total beside a
+     * typed Y would be describing two different moments at once.
      */
-    transformOffsets[axis] =
-        Math.round((transformOffsetFor(axis) + amount) * 1e9) / 1e9;
+    applyTransform(axis, amount);
 
-    if (!applyTransform(axis, amount)) {
-        transformOffsets[axis] = Math.round((transformOffsets[axis] - amount) * 1e9) / 1e9;
-        input.value = "0";
-
-        return;
-    }
-
-    input.value = "0";
-
-    /*
-     * THE THREE TRANSFORM ROWS ARE ONE CONTROL, so the other two are cleared with
-     * it - a box showing an X total beside a typed Y would describe two moments
-     * at once.
-     */
     resetTransformForSelection();
 
     host?.querySelectorAll("[data-transform-input]").forEach((field) => {
         field.value = "0";
     });
+}
+
+function showElbowValue(elbow) {
+    const field = host?.querySelector('[data-transform-value="bendAngle"]');
+
+    if (field && elbow) {
+        field.value = String(Math.round(enggPipeDuct.elbowAngleDegrees(elbow) ?? 90));
+    }
+}
+
+/*
+ * A TYPED BEND ANGLE: an ABSOLUTE value, applied once.
+ *
+ * It is refused for a fully connected elbow - the value there is the pipes' - and
+ * the box is put back to the angle the elbow really has, so a refused entry
+ * cannot leave a number on screen that the fitting does not have.
+ */
+function commitBendAngle(input) {
+    const elbow = selectedObjects().find((object) => object.type === "elbow");
+
+    const degrees = Number(input.value);
+
+    if (!elbow || !Number.isFinite(degrees) || degrees <= 0 || degrees > 180) {
+        showElbowValue(elbow);
+
+        return;
+    }
+
+    writeElbowAngle(elbow, degrees);
+
+    renderCurrentDrawing();
 }
 
 /* ============================================================
@@ -1282,62 +1115,6 @@ export function installFeaturesPane() {
 
         if (step) {
             stepTransformValue(step);
-
-            return;
-        }
-
-        /*
-         * THE PRESSURE PROFILE'S DATA ROWS.
-         *
-         * Add and Remove are ONE edit each - snapshotted, applied and committed
-         * once - so Undo steps a point at a time and the table, the graph and the
-         * source all change together.
-         */
-        const addPoint = event.target.closest?.("[data-profile-add]");
-
-        if (addPoint) {
-            commitProfileData((profile) => enggPressureProfile.addPoint(profile));
-
-            return;
-        }
-
-        const removePoint = event.target.closest?.("[data-profile-remove]");
-
-        if (removePoint) {
-            const index = Number(removePoint.dataset.profileRemove);
-
-            commitProfileData((profile) => enggPressureProfile.removePoint(profile, index));
-        }
-    });
-
-    /*
-     * A TYPED CELL IS COMMITTED ON CHANGE, like every other field in the pane -
-     * and the graph redraws with the new number at once, because both read the
-     * same `engineering.points`.
-     */
-    host.addEventListener("change", (event) => {
-        const cell = event.target.closest?.("[data-profile-cell]");
-
-        if (cell) {
-            const index = Number(cell.dataset.profileIndex);
-            const key = cell.dataset.profileCell;
-            const value = Number(cell.value);
-
-            if (Number.isFinite(value)) {
-                commitProfileData((profile) =>
-                    enggPressureProfile.setPoint(profile, index, { [key]: value })
-                );
-            } else {
-                refreshFeatures();
-            }
-        }
-    });
-
-    host.addEventListener("input", (event) => {
-        const target = event.target;
-
-        if (target.matches?.("[data-feature-field]") && LIVE_DYNAMICS_GEOMETRY_FIELDS.has(target.dataset.featureField)) {
-            updateDynamicsGeometry(target);
         }
     });
 
@@ -1355,13 +1132,6 @@ export function installFeaturesPane() {
         }
 
         const key = target.dataset.featureField;
-
-        if (LIVE_DYNAMICS_GEOMETRY_FIELDS.has(key)) {
-            if (commitDynamicsGeometryEdit()) {
-                refreshFeatures();
-                return;
-            }
-        }
 
         /*
          * CUSTOM THICKNESS FROM THE DROPDOWN is the same mode choice as the
@@ -1449,15 +1219,6 @@ export function installFeaturesPane() {
      * moment the offsets are meant to be forgotten.
      */
     host.addEventListener("focusout", (event) => {
-        if (
-            event.target.matches?.("[data-feature-field]") &&
-            LIVE_DYNAMICS_GEOMETRY_FIELDS.has(event.target.dataset.featureField) &&
-            commitDynamicsGeometryEdit()
-        ) {
-            renderCurrentDrawing();
-            return;
-        }
-
         const leftThePane = !event.relatedTarget || !host.contains(event.relatedTarget);
         const fromTransform = event.target.closest?.("[data-transform-input]") || event.target === host;
 
@@ -1483,7 +1244,6 @@ export function installFeaturesPane() {
     });
 
     globalThis.document.addEventListener("datum:selection-changed", () => {
-        editorState.selectedPlantNode = null;
         resetTransformForSelection();
         renderFeatures();
     });

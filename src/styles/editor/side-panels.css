@@ -41,6 +41,16 @@
     display: flex;
     flex-direction: row;
     gap: 0;
+    /*
+     * ROW 3 IS THE FLEXIBLE ONE - the canvas's own row.
+     *
+     * The workspace's grid is `auto auto minmax(0, 1fr) 24px 22px`: the rail,
+     * the Show row, the panels and canvas together, the 24px sheet bar, the
+     * 22px status bar. The panels share the flexible row with the canvas, so
+     * they are as tall as the drawing. They were on row 4, which is the sheet
+     * bar's fixed 24px - so both rails and the canvas collapsed into a strip
+     * 24 pixels tall and the drawing was invisible.
+     */
     grid-row: 3;
     min-height: 0;
     min-width: 0;
@@ -247,7 +257,9 @@
 
 .drawing-tool-panel,
 .drawing-canvas-area {
+    /* The flexible row - the one the drawing itself occupies. */
     grid-row: 3;
+    min-height: 0;
 }
 
 .drawing-tool-panel {
@@ -611,10 +623,6 @@
     cursor: default;
 }
 
-.drawing-canvas.drawing-can-move {
-    cursor: move;
-}
-
 /*
  * AND NOTHING ELSE IN THE WORKSPACE ASKS FOR A SYSTEM CROSSHAIR EITHER. A
  * geometry handle is a small dot with a move cursor; a crosshair there was the
@@ -623,12 +631,6 @@
 .drawing-geometry-handle-start,
 .drawing-geometry-handle-end {
     cursor: grab;
-}
-
-/* Override tool and handle cursors for the duration of an object move. */
-.drawing-canvas.drawing-object-moving,
-.drawing-canvas.drawing-object-moving * {
-    cursor: move !important;
 }
 
 .drawing-renderer {

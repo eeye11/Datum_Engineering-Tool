@@ -3,7 +3,6 @@
  */
 
 import enggBodyFrames from "../../../shared/geometry/body-frames.js";
-import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
 import enggQuantities from "../../../shared/units/quantities.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
@@ -11,7 +10,7 @@ import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { isProcessPlotTool, processPathInstruction } from "../thermodynamics/process-path.js";
+import { isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
@@ -23,12 +22,10 @@ import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInter
 import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
 import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
-import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
 
 /*
  * The colour every construction preview is drawn in.
@@ -125,18 +122,6 @@ export function updatePreview(
 ) {
     const interaction =
         drawingState.interaction;
-
-    if (drawingState.activeTool === "reducer-expander" && interaction.phase === "inline-place") {
-        interaction.preview = inlinePreviewAt("reducer-expander", resolution.rawPointerPoint || resolution.effectiveConstructionPoint);
-        setToolMessage(interaction.preview?.invalid
-            ? "Not enough room or incompatible pipe ends"
-            : "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it");
-        return;
-    }
-
-    if (interaction.phase === "point-force-value") {
-        return;
-    }
 
     /*
      * THE ANALYSIS AXIS PREVIEW FOLLOWS THE CURSOR.
@@ -555,66 +540,51 @@ export function updatePreview(
             }
         }
     } else if (
-        interaction.phase === "dynamics-span" &&
-        interaction.toolId === "dynamics-polar-vector"
-    ) {
-        const start = interaction.startPoint;
-        const dx = point.x - start.x;
-        const dy = point.y - start.y;
-        const magnitude = Math.hypot(dx, dy);
-        const angle = magnitude > 0
-            ? (Math.atan2(dy, dx) * 180) / Math.PI
-            : 0;
-        const normalizedAngle = (angle + 360) % 360;
-
-        interaction.preview = magnitude > 1e-9
-            ? {
-                  id: "preview-dynamics-polar-vector",
-                  type: "dynamics-polar-vector",
-                  engineering: {
-                      dynamicsType: "dynamics-polar-vector"
-                  },
-                  geometry: {
-                      start: { ...start },
-                      end: { ...point },
-                      vectorMagnitude: magnitude,
-                      vectorAngle: normalizedAngle,
-                      vectorUnit: "m/s"
-                  },
-                  style: {
-                      ...drawingState.styleDefaults,
-                      stroke: PREVIEW_STROKE,
-                      fill: "none",
-                      lineType: "dashed",
-                      opacity: 1
-                  }
-              }
-            : null;
-
-        const feedback = [
-            inferenceLabel(resolution.inference),
-            snapTypeLabel(resolution.snapCandidate?.type)
-        ].filter(Boolean);
-
-        setToolMessage(
-            magnitude > 1e-9
-                ? `Magnitude: ${magnitude.toFixed(1)} mm · Angle: ${normalizedAngle.toFixed(1)}°${feedback.length ? ` · ${feedback.join(" · ")}` : ""}`
-                : "Drag to set vector magnitude and angle"
-        );
-    } else if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        const axes = coordinateSystemFromDrag(interaction.startPoint, point);
-        if (axes) {
-            interaction.preview = createPreview("coordinate-system-2d", axes);
+        /*
+         * THE AXIS PREVIEWS AS THE CROSS IT WILL BECOME.
+         *
+         * The press placed the origin; the pointer says which way the X arm
+         * runs and how long it is. The Y arm is drawn square to it, from the
+         * same two points the commit uses, so the preview and the placed axis
+         * are the same cross - and the perpendicularity the student sees is
+         * the perpendicularity the code will write. A drag too short to give
+         * the axis a direction shows nothing rather than a degenerate cross.
+         */
+        const arm = Math.hypot(
+            point.x - interaction.startPoint.x,
+            point.y - interaction.startPoint.y
+        );
+
+        if (arm > 1e-9) {
+            interaction.preview =
+                createPreview(
+                    "coordinate-system-2d",
+                    {
+                        origin: {
+                            ...interaction.startPoint
+                        },
+
+                        rotation: Math.atan2(
+                            point.y - interaction.startPoint.y,
+                            point.x - interaction.startPoint.x
+                        ),
+
+                        xPositiveLength: arm,
+                        xNegativeLength: arm,
+                        yPositiveLength: arm,
+                        yNegativeLength: arm
+                    }
+                );
 
             if (
                 !resolution.inference &&
                 !resolution.snapCandidate
             ) {
                 setToolMessage(
-                    "Release to place the coordinate system"
+                    "Release to place the X axis"
                 );
             }
         } else {
@@ -643,7 +613,8 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        ["rectangle", "stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        drawingState.activeTool === "rectangle" ||
+        drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -659,7 +630,7 @@ export function updatePreview(
          * press decided where the shape begins, and Shift only says the two
          * extents are equal.
          */
-        const square = drawingState.activeTool === "stress-element" || Boolean(resolution.modifiers?.shift);
+        const square = Boolean(resolution.modifiers?.shift);
 
         interaction.squareConstrained = square;
 
@@ -673,24 +644,8 @@ export function updatePreview(
                 )
             );
 
-        if (drawingState.activeTool === "boundary-stress") {
-            interaction.preview.metadata = { boundaryStress: true };
-            Object.assign(interaction.preview.geometry, { top_normalStart: 1, top_normalEnd: 1 });
-        }
-        if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
-            if (drawingState.activeTool === "reheat-rankine-cycle") {
-                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
-                interaction.preview.geometry.reheat = true;
-            }
-            if (drawingState.activeTool === "vapor-compression-cycle") {
-                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
-                interaction.preview.geometry.refrigeration = true;
-            }
-            if (drawingState.activeTool === "brayton-cycle") {
-                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
-                interaction.preview.geometry.brayton = true;
-            }
         }
 
         setToolMessage(
@@ -733,9 +688,7 @@ export function updatePreview(
         }
 
         setToolMessage(
-            isProcessPlotTool(drawingState.activeTool)
-                ? processPathInstruction()
-                : "Click next point or double-click to finish"
+            "Click next point or double-click to finish"
         );
     } else if (
         drawingState.activeTool === "freeform-polygon"
@@ -758,21 +711,6 @@ export function updatePreview(
                     ]
                 }
             );
-
-        /*
-         * THE PLACED VERTICES ARE MARKED, not only found by hovering.
-         *
-         * Every vertex already committed to the construction gets a dot, and
-         * the first one a ring - it is the close target - which lights up
-         * when the pointer is close enough to close the polygon.
-         */
-        interaction.preview.metadata = {
-            ...(interaction.preview.metadata || {}),
-            vertexMarkers: interaction.points.map(vertex => ({ ...vertex })),
-            closingVertex:
-                interaction.points.length >= 3 &&
-                closingFreeformPolygon(point)
-        };
 
         setToolMessage(
             closingFreeformPolygon(point)
@@ -1964,8 +1902,6 @@ function staticsPreviewType(
             drawingState,
             stored.id
         );
-
-        activateTool("select");
 
         renderProperties();
         renderCurrentDrawing();

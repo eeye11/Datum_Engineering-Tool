@@ -34,9 +34,13 @@ export const drawingSnapToggle = dom?.getElementById("drawingSnapToggle");
  * and `500` is not a length without an mm, so hiding one leaves the value on
  * the sheet wrong rather than plainer.
  *
- * The remaining two are visibility controls and stay: Show Dimensions hides
- * annotations the student placed without touching any measurement, and Show
- * Magnitudes does the same for force, load and moment values.
+ * Show Dimensions is the one that remains: it hides annotations the student
+ * placed without touching any measurement.
+ *
+ * SHOW MAGNITUDES HAS BEEN REMOVED, control and all. Its entry is deleted here
+ * rather than left pointing at a button that no longer exists - `button` would
+ * have been null, and every reader of this table would have had to remember
+ * that. The SETTING survives in the model so an existing file opens unchanged.
  *
  * They are read from the page rather than created here, so that the
  * toolbar owns what the toolbar shows and this module only reacts to it.
@@ -45,10 +49,6 @@ export const drawingDisplayToggles = [
     {
         id: "drawingDimensionsToggle",
         key: "showDimensions"
-    },
-    {
-        id: "drawingMagnitudesToggle",
-        key: "showMagnitudes"
     }
 ].map(entry => ({
     ...entry,

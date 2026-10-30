@@ -6,15 +6,9 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
-    "Boundary Stress": drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="9"/><path ${iconStroke} d="M6 5V1m4 4V1m4 4V1M4 8H1m3 4H1m15-4h3m-3 4h3M6 16v3m4-3v3m4-3v3"/>`),
-    "Stress Element": drawingIcon(`<path ${iconStroke} d="M10 2l8 8-8 8-8-8z"/>`),
-    "Thermodynamic Cycles": drawingIcon(`<path ${iconStroke} d="M16.1 7A6.8 6.8 0 0 0 4.3 5.9L2.5 8M2.5 4v4h4M3.9 13a6.8 6.8 0 0 0 11.8 1.1l1.8-2.1M17.5 16v-4h-4"/>`),
-    "Turbine / Compressor": drawingIcon(`<path ${iconStroke} d="M3 3l14 5v4L3 17z"/>`),
-    "Nozzle / Diffuser": drawingIcon(`<path ${iconStroke} d="M3 3l14 5M3 17l14-5"/>`),
-    "Tank": drawingIcon(`<rect ${iconStroke} x="4" y="2" width="12" height="16" rx="3"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
-    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M2 10h11m0-1h2v2h-2zM13 9C12 6 10 2 13 2S16 6 15 9ZM15 11C16 14 18 18 15 18S12 14 13 11Z"/>`),
+    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
     "Heat Transfer": drawingIcon(`<path ${iconStroke} d="M3 7h13m-4-4 4 4-4 4M17 14H4m4-4-4 4 4 4"/>`),
     "Heat Entering": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
     "Heat Leaving": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -28,6 +22,7 @@ export const toolIcons = {
 	"Dynamics Bodies": drawingIcon(`<circle ${iconStroke} cx="7" cy="8" r="2.6"/><path ${iconStroke} d="M3 16c0-2.4 1.8-4 4-4s4 1.6 4 4"/><rect ${iconStroke} x="11.5" y="6" width="5.5" height="5.5"/>`),
 	"Dynamics Particle": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Dynamics Rigid Body": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Trajectory: drawingIcon(`<path ${iconStroke} d="M3 16C6 16 6 6 10 6s4 10 7 10"/><circle fill="currentColor" cx="3" cy="16" r="1.3"/>`),
 	Kinematics: drawingIcon(`<path ${iconStroke} d="M4 17L16 4m-4 0h4v4"/><path ${iconStroke} stroke-dasharray="2 2" d="M4 9a8 8 0 0 1 5-5"/>`),
 	"Polar Vector": drawingIcon(`<path ${iconStroke} d="M5 15L15 6m-5 0h5v5"/><path ${iconStroke} d="M5 15a10 10 0 0 1 3-6"/>`),
 	"Angular Vector": drawingIcon(`<path ${iconStroke} d="M10 10l5-4m-5 4a6 6 0 1 0 5 2.6"/><path ${iconStroke} d="M12 11l3-1 .5 3"/>`),
@@ -69,7 +64,6 @@ export const toolIcons = {
 	"Fit Whole Page": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><path ${iconStroke} d="M5 12l3-4 3 3 4-4"/>`),
 
 	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
-	Plant: drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="8"/><path ${iconStroke} d="M2 8h3m10 4h3M2 8l1.5-1.5M2 8l1.5 1.5m14 2L16 8.5m1.5 1.5L16 11.5"/>`),
 	/*
 	 * DIMENSION is the one dimension tool.
 	 *
@@ -134,7 +128,7 @@ export const toolIcons = {
 	 */
 	Truss: drawingIcon(`<path ${iconStroke} d="M3 6h14M3 6l14 8M17 6L3 14M3 14h14M8 6v8M12 6v8"/>`),
 	Cable: drawingIcon(`<path ${iconStroke} d="M3 5c5 8 9 8 14 0"/><circle ${iconStroke} cx="3" cy="5" r="1.2"/><circle ${iconStroke} cx="17" cy="5" r="1.2"/>`),
-	"Point Load": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
+	"Point Force": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
 	"Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 4h14M3 4v10M6.5 4v10M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Varying Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 11l7-7h7M3 11v3M6.5 7.5V14M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Applied Moment": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 5.6a4.4 4.4 0 0 1 3.7 2"/><path ${iconStroke} d="M10 14.4a4.4 4.4 0 0 1-3.7-2"/><path ${iconStroke} d="M12.6 5.2l3 1.7-1.7 3"/><path ${iconStroke} d="M7.4 14.8l-3-1.7 1.7-3"/>`),
@@ -229,18 +223,9 @@ export const toolIcons = {
 	"Motion Path": drawingIcon(`<path ${iconStroke} d="M3 14c3-8 8 5 14-6"/><circle ${iconStroke} cx="3" cy="14" r="1"/><circle ${iconStroke} cx="17" cy="8" r="1"/>`),
 	Pipe: drawingIcon(`<path ${iconStroke} d="M4 5v8a3 3 0 0 0 3 3h9M4 5h4M12 16v-5a2 2 0 0 1 2-2h2"/>`),
 	Reservoir: drawingIcon(`<path ${iconStroke} d="M4 6h12v9H4zM4 9h12M7 4v2M13 4v2"/>`),
-	Valve: drawingIcon(`<path ${iconStroke} d="M3 6.5l7 3.5-7 3.5zM17 6.5l-7 3.5 7 3.5z"/>`),
-	/*
-	 * PUMP: a circle with a directional triangle inside it - the triangle's
-	 * point says which way the flow is being pushed, which is what tells a pump
-	 * apart from the Flow Meter beside it at twenty pixels.
-	 */
-	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><path ${iconStroke} d="M7.8 7.2v5.6l4.4-2.8z"/>`),
-	/*
-	 * FLOW ARROW: a single directional arrow - a shaft with one head - because
-	 * the object is a free arrow, not a mark riding a run.
-	 */
-	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h13m-4-4 4 4-4 4"/>`),
+	Valve: drawingIcon(`<path ${iconStroke} d="M3 10h5l2-3 2 3h5M8 14l2-4 2 4M10 7V4"/>`),
+	Pump: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 5v5l3 2M3 10h2M15 10h2"/>`),
+	"Flow Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/>`),
 	Pressure: drawingIcon(`<circle ${iconStroke} cx="10" cy="11" r="6"/><path ${iconStroke} d="M10 11l3-3M7 4h6"/>`),
 
 	/*
@@ -294,28 +279,29 @@ export const toolIcons = {
 	Junction: drawingIcon(`<path ${iconStroke} d="M3 8h14M10 8v8"/><circle ${iconStroke} cx="10" cy="8" r="1.4"/>`),
 
 	/*
-	 * REDUCER / EXPANDER. Two pairs of parallel lines tapering between widths -
-	 * the fitting as it is drawn in a run, rather than a shape in empty space.
+	 * REDUCER / EXPANDER. A run that changes bore: the wide wall narrows to the
+	 * narrow one across the middle, which is the whole difference a reducer
+	 * makes and an expander makes in reverse.
 	 */
-	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 6h4l6 4-6 4H3M10 10h7M3 6v2M3 14v-2M10 4v2M10 14v-2"/>`),
+	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 5h4l6 5-6 5H3zM13 10h4M7 5v10"/>`),
 
 	/*
-	 * RESERVOIR / TANK. A simple open-top vessel: two walls and a floor, with no
-	 * lid and no fluid inside - the OBJECT, not a symbol for fluid.
+	 * RESERVOIR / TANK. The existing Reservoir with a fluid level line across
+	 * it, so a tank reads as a vessel holding something rather than a box.
 	 */
-	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 4v12h12V4"/>`),
+	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 5h12v11H4zM4 11h12M7 5v-2M13 5v-2"/>`),
 
 	/*
-	 * FLOW METER. A circular gauge with a pointer - deliberately a DIAL rather
-	 * than a pipe with a box on it, so it is never confused with the Pump.
+	 * FLOW METER. A meter in a run: the pipe through it, with the dial that
+	 * reads it sitting on top.
 	 */
-	"Flow Meter": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="6"/><path ${iconStroke} d="M10 10l3.4-3.4"/><circle fill="currentColor" cx="10" cy="10" r="1"/>`),
+	"Flow Meter": drawingIcon(`<path ${iconStroke} d="M3 13h14M5 13v-3M15 13v-3"/><circle ${iconStroke} cx="10" cy="6.5" r="3"/><path ${iconStroke} d="M10 6.5l2-1.5"/>`),
 
 	/*
-	 * FLUID LEVEL. A horizontal fluid-level line with a gentle wave - the surface
-	 * in a vessel, not a dimension and not a dashed rule.
+	 * FLUID LEVEL. A surface with the level marked on it: the fluid line, and
+	 * the level's own datum above it.
 	 */
-	"Fluid Level": drawingIcon(`<path ${iconStroke} d="M3 11c2-1.6 3.4 1.6 5.4 0s3.4 1.6 5.4 0 2.4.9 3.2.4M5 6.5v-2M15 6.5v-2M5 6.5h10"/>`),
+	"Fluid Level": drawingIcon(`<path ${iconStroke} d="M3 9h14M3 12h14M3 15h14M5 6v-2M15 6v-2M5 6h10"/>`),
 
 	/*
 	 * PRESSURE TAP. A tap into a run: the pipe wall, and the stem that reads the
@@ -324,43 +310,40 @@ export const toolIcons = {
 	"Pressure Tap": drawingIcon(`<path ${iconStroke} d="M3 13h14M10 13V7"/><circle ${iconStroke} cx="10" cy="5.5" r="1.6"/>`),
 
 	/*
-	 * FLOW INDICATORS & ANNOTATIONS. The group's own heading artwork: the run
-	 * with its direction arrow, now also carrying a level line - how the flow is
-	 * SHOWN, which is everything the group holds.
-	 */
-	"Flow Indicators & Annotations": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M6 10h8M11 7l3 3-3 3"/>`),
-
-	/*
 	 * PIPE DIAMETER. A bore measured across: the pipe's two walls with the
 	 * dimension between them.
 	 */
 	"Pipe Diameter": drawingIcon(`<path ${iconStroke} d="M5 4v12M15 4v12M5 10h10M5 10l2-2M5 10l2 2M15 10l-2-2M15 10l-2 2"/>`),
 
 	/*
-	 * SECTION PLANE. A section line with clear viewing-direction arrows: the
-	 * trace, and the two arrows that say which way the section looks.
+	 * SECTION PLANE. A cutting plane through a run: the plane line with its
+	 * cut arrows, which is how a section is marked.
 	 */
-	"Section Plane": drawingIcon(`<path ${iconStroke} d="M9 3v14" stroke-dasharray="2.6 1.8"/><path ${iconStroke} d="M9 6h7m-3-2.6 3 2.6-3 2.6M9 16h7m-3-2.6 3 2.6-3 2.6"/>`),
+	"Section Plane": drawingIcon(`<path ${iconStroke} d="M4 4v12M4 10h12M4 4h3M4 16h3M16 10l-3-2M16 10l-3 2"/>`),
 
 	/*
-	 * FLOW DIRECTION DIAGRAM. A route with directional arrows along it - the
-	 * annotated run, which is what the diagram is - and NOT a bare arrow, so it
-	 * is told apart from the Flow Arrow.
+	 * FLOW DIRECTION DIAGRAM. A run with its direction marked along it: the two
+	 * walls, and the arrow drawn between them. It is the Flow Arrow ON A PIPE,
+	 * which is the whole content of the diagram - the student draws the arrows,
+	 * the tool does not work them out.
 	 */
-	"Flow Direction Diagram": drawingIcon(`<path ${iconStroke} d="M3 15h6l4-5h4"/><path ${iconStroke} d="M10.5 15h3m-1.6-1.6 1.6 1.6-1.6 1.6M13.5 10h3m-1.6-1.6 1.6 1.6-1.6 1.6"/>`),
+	"Flow Direction Diagram": drawingIcon(`<path ${iconStroke} d="M3 6h14M3 14h14M5 10h9M11 7l3 3-3 3"/>`),
 
 	/*
-	 * PRESSURE PROFILE. Axes with a connected plotted line - a graph of the
-	 * student's own numbers, not a pipe with a curve beneath it.
+	 * PRESSURE PROFILE. A plot against a run: the pipe beneath, and the curve
+	 * that falls along it. Drawn as a CURVE rather than a series of bars so it
+	 * is told apart from the Statics stepped shear diagram at a glance - the same
+	 * distinction the real diagrams have.
 	 */
-	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 13.5 9 10.5l2.5 2 4.5-6"/><circle fill="currentColor" cx="6" cy="13.5" r="1"/><circle fill="currentColor" cx="9" cy="10.5" r="1"/><circle fill="currentColor" cx="11.5" cy="12.5" r="1"/><circle fill="currentColor" cx="16" cy="6.5" r="1"/>`),
+	"Pressure Profile": drawingIcon(`<path ${iconStroke} d="M3 17h14M3 5c3 0 4 4 6 4s3-4 6-4"/>`),
 
 	/*
-	 * FLOW PROFILE. Axes with a stepped flow curve - a second profile graph, told
-	 * apart from the Pressure Profile by its BARS UNDER THE LINE (a flow at a
-	 * station) rather than by a different frame.
+	 * FLOW PROFILE. The same axis-and-curve language as Pressure Profile, with the
+	 * curve inverted - a flow profile rises where a pressure profile falls, and
+	 * the two sit beside each other in the Analysis group, so the icons must not
+	 * be the same shape twice.
 	 */
-	"Flow Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 13V9.5h3V7h3V11h3"/><path ${iconStroke} d="M6 15.5v-1M9 15.5v-1M12 15.5v-1M15 15.5v-1"/>`),
+	"Flow Profile": drawingIcon(`<path ${iconStroke} d="M3 17h14M3 13c3 0 4-4 6-4s3-4 6-4"/>`),
 
 	/*
 	 * FLUID PROPERTY LABEL. A written note about a fluid: the note's corner and
@@ -411,12 +394,11 @@ export const toolIcons = {
 	Fastener: drawingIcon(`<path ${iconStroke} d="M6 4h8M6 7h8M8 7v9M12 7v9M5 16h10"/>`),
 	"Section View": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM4 8h12M8 4v12"/>`),
 	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
-	Gain: drawingIcon(`<path ${iconStroke} d="M4 3v14l12-7z"/><path ${iconStroke} d="M8 10h4"/>`),
-	Sum: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="7"/><path ${iconStroke} d="M8 7h4M10 5v4M8 13h4"/>`),
+	Input: drawingIcon(`<path ${iconStroke} d="M3 10h10M10 6l4 4-4 4"/>`),
+	Output: drawingIcon(`<path ${iconStroke} d="M17 10H7M10 6l-4 4 4 4"/>`),
 	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
 	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
 	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
-	"Signal Line": drawingIcon(`<path ${iconStroke} d="M4 10h12"/><circle ${iconStroke} cx="3" cy="10" r="1"/><circle ${iconStroke} cx="17" cy="10" r="1"/>`),
 	Point: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
 	Function: drawingIcon(`<path ${iconStroke} d="M4 14c2-8 4 4 6-3s4-5 6-5"/>`),
 	Vector: drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
@@ -444,7 +426,7 @@ export const featureIcons = {
 	cable: toolIcons.Cable,
 	shaft: toolIcons.Shaft,
 
-	force: toolIcons["Point Load"],
+	force: toolIcons["Point Force"],
 	moment: toolIcons.Moment,
 
 	load: toolIcons["Distributed Load"],
@@ -471,28 +453,7 @@ export const featureIcons = {
 	     * from the tool that drew it.
 	     */
 	    "pipe-duct": toolIcons["Pipe / Duct"],
-	    elbow: toolIcons.Elbow,
-	    /*
-	     * AND EVERY SCHEMATIC FLOIDS TYPE wears its own tool's artwork too, so a
-	     * Pump in the Objects list is the Pump button and a Pressure Profile is
-	     * the graph button - the same picture wherever the object appears.
-	     */
-	    "reducer-expander": toolIcons["Reducer / Expander"],
-	    "reservoir-tank": toolIcons["Reservoir / Tank"],
-	    pump: toolIcons.Pump,
-	    valve: toolIcons.Valve,
-	    "flow-meter": toolIcons["Flow Meter"],
-	    "fluid-level": toolIcons["Fluid Level"],
-	    "flow-direction-diagram": toolIcons["Flow Direction Diagram"],
-	    "flow-profile": toolIcons["Flow Profile"],
-	    "pressure-profile": toolIcons["Pressure Profile"],
-	    "section-plane": toolIcons["Section Plane"],
-
-	    /*
-	     * A JUNCTION USES THE SAME ART AS ITS TOOL BUTTON, so a generated and a
-	     * hand-placed junction file under one glyph.
-	     */
-	    junction: toolIcons.Junction
+	    elbow: toolIcons.Elbow
 	};
 
 export const drawingToolGroups = [
@@ -510,13 +471,8 @@ export const drawingToolGroups = [
 			{ id: "triangle", label: "Triangle", shortcut: "T" },
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
-			/*
-			 * Arc and Polygon each have two construction methods, shown as an
-			 * expandable list under the tool - the same layout Statics uses for
-			 * its grouped tools (see expandedToolbarSections).
-			 */
-			{ id: "arc", label: "Arc", shortcut: "A", submenu: true },
-			{ id: "polygon", label: "Polygon", shortcut: "G", submenu: true },
+			{ id: "arc", label: "Arc", shortcut: "A" },
+			{ id: "polygon", label: "Polygon", shortcut: "G" },
 			{ id: "freeform-polygon", label: "Freeform Polygon", shortcut: "F" }
 		]
 	},
@@ -667,35 +623,6 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
-	"SOLID MECHANICS": [
-		{
-			id: "solid-mechanics-selection",
-			label: "Selection",
-			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
-		},
-		{
-			id: "solid-mechanics-create",
-			label: "Create",
-			tools: [
-				{ id: "beam", label: "Beam" },
-				{ id: "support", label: "Supports", submenu: true },
-				{ id: "load", label: "Loads", submenu: true }
-			]
-		},
-		{
-			id: "solid-mechanics-analysis",
-			label: "Analysis",
-			tools: [
-				{ id: "stress-element", label: "Stress Element" },
-				{ id: "boundary-stress", label: "Boundary Stress" }
-			]
-		},
-		{
-			id: "solid-mechanics-reference",
-			label: "Reference",
-			tools: [{ id: "coordinate-system", label: "Coordinate System" }]
-		}
-	],
 
 	/*
 	 * ========================================================
@@ -728,41 +655,6 @@ export const disciplineToolGroups = {
 	 */
 	FLUIDS: fluidsToolGroups,
 
-	THERMODYNAMICS: [
-		{
-			id: "thermodynamics-selection",
-			label: "Selection",
-			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
-		},
-		{
-			id: "thermodynamics-create",
-			label: "Create",
-			tools: [
-				{ id: "tank", label: "Tank" },
-				{ id: "steady-state-devices", label: "Steady-State Devices", iconLabel: "Turbine / Compressor", submenu: true },
-				{ id: "control-volume", label: "Control Volume" },
-				{ id: "piston-cylinder", label: "Piston Cylinder", submenu: true },
-				{ id: "process-diagrams", label: "Process Diagrams", submenu: true },
-				{ id: "heat-transfer", label: "Heat Transfer", submenu: true },
-				{ id: "work", label: "Work", submenu: true }
-			]
-		},
-		{
-			id: "thermodynamics-analysis",
-			label: "Analysis",
-			tools: [
-				{ id: "thermodynamic-cycles", label: "Thermodynamic Cycles", submenu: true }
-			]
-		},
-		{
-			id: "thermodynamics-reference",
-			label: "Reference",
-			tools: [
-				{ id: "coordinate-system", label: "Coordinate System" }
-			]
-		}
-	],
-
 	STATICS: [
 		{
 			id: "statics-selection",
@@ -774,6 +666,13 @@ export const disciplineToolGroups = {
 			label: "Create",
 			tools: [
 				{ id: "body", label: "Bodies", submenu: true },
+
+				/*
+				 * A Point Force is a single direct tool, in
+				 * the same way Line and Circle are. It has no
+				 * submenu and opens no popup before drawing.
+				 */
+				{ id: "point-force", label: "Point Force" },
 
 				{ id: "load", label: "Loads", submenu: true },
 				{ id: "moment", label: "Moment" },
@@ -821,7 +720,7 @@ export const disciplineToolGroups = {
 			tools: [
 				{ id: "resultant", label: "Resultant" },
 				{ id: "force-components", label: "Force Components" },
-				{ id: "shear-force-diagram", label: "Shear Force (SFD)", submenu: true },
+				{ id: "shear-force-diagram", label: "Shear Force (SFD)" },
 				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
 				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
 			]
@@ -890,7 +789,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
 	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
-	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Load", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*
 	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,
@@ -914,19 +813,18 @@ export const engineeringTools = {
 		"Pump",
 		"Valve",
 		"Flow Meter",
-		"Flow Indicators & Annotations",
+		"Flow Indicators",
 		"Flow Direction Diagram",
-		"Flow Profile",
 		"Pressure Profile",
 		"Coordinate System",
 		"Reference Point",
 		"Reference Line",
 		"Section Plane"
 	],
-	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "Heat Transfer", "Work"],
+	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
-	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Input", "Output", "Sensor", "Controller", "Signal Line"],
+	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
+	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
+	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

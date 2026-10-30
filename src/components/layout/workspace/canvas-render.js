@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Drawing the editor's canvas.
  */
 
@@ -12,10 +12,9 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { updateHistoryControls } from "../toolbar/tool-activation.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { createSourceMap } from "../../../shared/rendering/latex/drawing-source.js";
-import { exportTransformFor } from "../../../shared/rendering/latex/source-synchronization.js";
-import { IDENTITY_EXPORT } from "../../../shared/rendering/latex/export-transform.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
+import { prepareRenderInput } from "../../../shared/rendering/latex/source-statements.js";
 
 /*
  * ============================================================
@@ -42,11 +41,11 @@ import { validateDrawingSource } from "../../../shared/rendering/latex/source-va
  * not part of the drawing and must never reach an export. Two stacked layers
  * give exactly that, and the lower one is literally the renderer's output.
  *
- * WHILE GEOMETRY IS AHEAD OF THE COMPILER. The live model supplies immediate
- * feedback. If a cached picture contains a moved or deleted feature, that
- * picture is hidden and the complete live sheet is drawn until the new render
- * arrives. This prevents stale ink from appearing as a duplicate. An unchanged
- * model can still show its last good picture during source-only edits/errors.
+ * WHEN COMPILATION IS NOT AVAILABLE. The source is still authoritative. The
+ * cache keeps the last successfully compiled picture, and a source that fails
+ * to compile keeps the previous picture visible while the error is reported -
+ * it is never silently replaced by a model-drawn sheet pretending to be the
+ * source's output.
  */
 
 const PICTURE_LAYER_CLASS = "drawing-source-layer";
@@ -89,15 +88,6 @@ let lastCompileError = null;
 let lastCompileErrorIsRendererFailure = true;
 
 /*
- * WHETHER THE MESSAGE IN HAND IS ONLY A HINT.
- *
- * A draft diagnostic is advice about the text; a renderer failure is the reason
- * the drawing would not build. A hint may be replaced by a real failure - but a
- * real failure is never replaced, and a hint may not overwrite one either.
- */
-let lastCompileErrorIsReplaceable = false;
-
-/*
  * WHAT EACH OBJECT LOOKED LIKE WHEN A SOURCE REVISION WAS WRITTEN.
  *
  * revision -> Map(object id -> serialised object). Recorded the first time a
@@ -106,7 +96,6 @@ let lastCompileErrorIsReplaceable = false;
  * picture does not show yet - see `objectsThePictureDoesNotShow`.
  */
 let modelAtRevision = new Map();
-let transformAtRevision = new Map();
 
 /* The current source's object regions, parsed once per revision. */
 let regionsRevision = null;
@@ -551,16 +540,7 @@ function canvasBounds() {
     const bounds = drawingCanvas.getBoundingClientRect();
 
     if (!bounds.width || !bounds.height) {
-        /*
-         * THE SAME SHAPE THE MEASURED BOX HAS.
-         *
-         * `left` and `top` are carried here too, so a caller that reads the
-         * canvas's window position - `cameraKey` does - gets zeros rather
-         * than an undefined read when the canvas has not been laid out yet.
-         */
         return {
-            left: 0,
-            top: 0,
             width: drawingCanvas.clientWidth || 900,
             height: drawingCanvas.clientHeight || 600
         };
@@ -572,9 +552,8 @@ function canvasBounds() {
 /*
  * WHERE THE WORLD APPEARS IN THE PICTURE.
  *
- * The source writers map model coordinates through the drawing's shared export
- * transform, then TikZ maps millimetres to points. The canvas shows world
- * points through the camera:
+ * The source is written in drawing units (`x=1mm, y=1mm`). The canvas shows
+ * world points through the camera:
  *
  *     screen.x = width / 2 + (x - panX) * k
  *     screen.y = height / 2 - (y - panY) * k
@@ -582,39 +561,41 @@ function canvasBounds() {
  * so a world point (panX, panY) belongs at the canvas centre, and one drawing
  * unit is `k` screen pixels.
  *
- * THE COMPILED SVG IS NOT IN DRAWING UNITS. After the renderer's SVG wrapper
- * cancels the page offset, a model point lands at
+ * THE COMPILED SVG IS NOT IN DRAWING UNITS. TeX writes TeX points, y downward,
+ * and places the page one inch in - so with the picture anchored at its (0,0)
+ * (the canvas asks for that; see server/tikz.js) a world point lands at
  *
- *     svg.x = (x - originX) * factor * POINTS_PER_UNIT
- *     svg.y = -(y - originY) * factor * POINTS_PER_UNIT
+ *     svg.x = PICTURE_ORIGIN + x * POINTS_PER_UNIT
+ *     svg.y = PICTURE_ORIGIN - y * POINTS_PER_UNIT
  *
- * The visible world rectangle uses the same transform, so the compiled drawing
- * sits on the same world coordinates as the snapping, handles and interaction
- * overlay.
+ * The visible world rectangle is converted with exactly that map, so the
+ * compiled drawing sits on the same world coordinates as the snapping, the
+ * handles and every other piece of interaction code. Reading the SVG as if it
+ * were millimetres from the origin - as this used to - drew the picture about
+ * 2.8 times too large and shifted by its bounding box, away from the objects
+ * the student was clicking.
  *
  * It is written as a viewBox rather than an SVG transform so the renderer's own
  * coordinates are never rewritten.
  */
 const POINTS_PER_UNIT = 72.27 / 25.4;
+const PICTURE_ORIGIN = -72.27;
 
-function positionPictureLayer(layer, bounds, state, transform = IDENTITY_EXPORT) {
+function positionPictureLayer(layer, bounds, state) {
     const zoom = Number(state?.camera?.zoom) || 1;
     const k = enggDrawingState.BASE_PIXELS_PER_UNIT * zoom;
     const panX = Number(state?.camera?.panX) || 0;
     const panY = Number(state?.camera?.panY) || 0;
-    const factor = Number(transform?.factor) || 1;
-    const originX = Number(transform?.sourceBounds?.minX) || 0;
-    const originY = Number(transform?.sourceBounds?.minY) || 0;
 
     const viewWidth = Math.max(1, bounds.width / k);
     const viewHeight = Math.max(1, bounds.height / k);
 
-    const left = (panX - viewWidth / 2 - originX) * factor * POINTS_PER_UNIT;
-    const top = -(panY + viewHeight / 2 - originY) * factor * POINTS_PER_UNIT;
+    const left = PICTURE_ORIGIN + (panX - viewWidth / 2) * POINTS_PER_UNIT;
+    const top = PICTURE_ORIGIN - (panY + viewHeight / 2) * POINTS_PER_UNIT;
 
     layer.setAttribute(
         "viewBox",
-        `${left} ${top} ${viewWidth * factor * POINTS_PER_UNIT} ${viewHeight * factor * POINTS_PER_UNIT}`
+        `${left} ${top} ${viewWidth * POINTS_PER_UNIT} ${viewHeight * POINTS_PER_UNIT}`
     );
     layer.setAttribute("x", "0");
     layer.setAttribute("y", "0");
@@ -693,23 +674,14 @@ function rememberModelAt(revision) {
         return;
     }
 
-    const objects = drawingState.objects || [];
-
     modelAtRevision.set(
         revision,
-        new Map(objects.map((object) => [object.id, serialiseObject(object)]))
+        new Map((drawingState.objects || []).map((object) => [object.id, serialiseObject(object)]))
     );
-    transformAtRevision.set(revision, exportTransformFor(drawingState.objects || []));
 
     while (modelAtRevision.size > CACHE_LIMIT) {
-        const oldest = modelAtRevision.keys().next().value;
-        modelAtRevision.delete(oldest);
-        transformAtRevision.delete(oldest);
+        modelAtRevision.delete(modelAtRevision.keys().next().value);
     }
-}
-
-function pictureTransformAt(revision) {
-    return transformAtRevision.get(revision) || exportTransformFor(drawingState.objects || []);
 }
 
 /*
@@ -745,6 +717,25 @@ function objectsThePictureDoesNotShow(pictureRevision, revision) {
     const live = new Set();
 
     objects.forEach((object) => {
+        /*
+         * A HIDDEN OBJECT IS NEVER DRAWN LIVE.
+         *
+         * This set is "objects whose MODEL the compiled picture does not show,
+         * so draw them here instead" - it exists so a feature being dragged or
+         * one with no source region is still visible on the sheet. But hiding an
+         * object CHANGES ITS SERIALISATION (`visible` is part of the stored
+         * object), so it matches this test and was drawn by the overlay: the eye
+         * said "hidden" and the drawing went on showing it, in ADDITION to the
+         * block being removed from the source.
+         *
+         * A hidden object is absent from the source on purpose, so it must be
+         * absent from every layer. `visible` governs DRAWING, and this is a
+         * drawing decision.
+         */
+        if (object.visible === false) {
+            return;
+        }
+
         if (shown.get(object.id) !== serialiseObject(object) || (regions && !regions.has(object.id))) {
             live.add(object.id);
         }
@@ -835,33 +826,137 @@ function showStrokesAtScreenWidth(layer) {
  * answer is already known and the compile is never going to be sent.
  */
 if (typeof globalThis.document !== "undefined" && globalThis.document) {
-    /*
-     * ============================================================
-     * A SOURCE CHANGE CLEARS AN OLDER COMPILER MESSAGE - NOTHING ELSE
-     * ============================================================
-     *
-     * "lastCompileError" is THE COMPILER'S ANSWER about the picture. It is what
-     * "is the drawing showing a failure?" means, and the only things that may
-     * write it are a compile: its rejection, or its success.
-     *
-     * IT IS NOT THE PLACE FOR A DRAFT HINT. "This command is unfinished" is a
-     * statement about the text in the editor, made by the parser before any
-     * compile runs. Recording it here made the drawing report a failure the
-     * compiler never gave, kept the message after the compiler had spoken, and -
-     * because a revision known to fail is not re-sent - stopped later revisions
-     * from rendering at all. The Source tab shows draft diagnostics itself, from
-     * the manager's analysis, where they belong; the canvas reports only what
-     * the renderer said.
-     *
-     * What IS cleared here is an answer about OLDER text: the draft has changed,
-     * so a message from a previous revision describes something no longer on
-     * screen. The compile now scheduled for this revision answers for it.
-     */
-    globalThis.document.addEventListener("datum:source-changed", () => {
+    globalThis.document.addEventListener("datum:source-changed", (event) => {
+        const manager = activeSourceManager();
+        const revision = event?.detail?.revision ?? manager.revision();
+
+        /*
+         * THE RENDER INPUT, NOT THE DRAFT.
+         *
+         * A draft with one unfinished statement is not sent as it stands - TeX
+         * would stop at the mistake and return nothing for the whole sheet, which
+         * is how one half-typed command used to blank the drawing. The manager
+         * prepares the text the renderer gets: every unfinished statement is
+         * replaced by a comment, and every complete one is compiled. So the
+         * report below is about what the RENDERER will do, while the student's
+         * own text keeps its mistake exactly as typed.
+         */
+        /*
+         * THE STUDENT'S OWN DRAFT IS DIAGNOSED, AND THE MANAGER'S PLAN IS SENT.
+         *
+         * These are two different questions and they must not be confused.
+         *
+         *   WHAT IS SENT is the manager's render input: the source with its
+         *   markers dropped and the statements it can safely comment out
+         *   commented. Whether the compiler accepts it is the compiler's answer
+         *   to give - and an attempt that will fail is still worth sending,
+         *   because its failure is the honest diagnosis.
+         *
+         *   WHAT IS REPORTED is the state of the text the student is looking at.
+         *   An unfinished statement in it is a real problem, and it is the
+         *   student's to fix, so it is stated here - marked as a DRAFT
+         *   diagnostic, which the successful compile that follows leaves alone
+         *   (see the clear in `compileCurrentSource`).
+         */
+        const draft = validateDrawingSource(manager.getVisibleSource());
+        const draftError = draft.diagnostics.find((entry) => entry.severity === "error");
+
+        /*
+         * THE RENDERER'S OWN TEXT IS WHAT DECIDES WHETHER TO SEND.
+         *
+         * The manager comments out what it cannot compile, so a draft whose
+         * only problem is an unfinished statement arrives here with that
+         * statement already neutralised - and if the REST of it were not
+         * renderable either, sending it would cost a compile to learn what this
+         * text already says.
+         */
+        const prepared = prepareRenderInput(manager.getVisibleSource());
+        const renderable = validateDrawingSource(prepared.text);
+
+        if (!renderable.ok || prepared.skipped.length) {
+            reportCompileError(
+                revision,
+                draftError?.message ||
+                    renderable.diagnostics.find((entry) => entry.severity === "error")?.message ||
+                    "Invalid TikZ source",
+                { kind: "draft" }
+            );
+
+            redrawKeepingLastPicture();
+
+            return;
+        }
+
+        if (draftError) {
+            reportCompileError(revision, draftError.message, { kind: "draft" });
+            redrawKeepingLastPicture();
+
+            return;
+        }
+
+        /*
+         * A DRAFT WITH NO ERROR OF ITS OWN IS LEFT TO THE COMPILER.
+         *
+         * A statement that merely lacks its `;` is SENDABLE - it is either
+         * half-typed or a command TeX will reject, and only TeX can tell which.
+         * Guessing here would report the second case wrongly, so the compile
+         * runs and the compiler's own message is what the student sees.
+         */
+
+        /*
+         * NOT SENT YET, SO THERE IS NO RENDERER FAILURE TO REPORT. The previous
+         * failure - if any - was about older text, and keeping it here is exactly
+         * how an error outlives the mistake that caused it.
+         */
         lastCompileError = null;
         lastCompileErrorIsRendererFailure = true;
-        lastCompileErrorIsReplaceable = false;
     });
+}
+
+/*
+ * A REDRAW THAT MUST NOT START A COMPILE.
+ *
+ * The canvas's ordinary redraw asks for the current revision to be rendered,
+ * which is right whenever there is something new to render. Here the source has
+ * just been rejected, so a redraw is a presentation update only - and it is the
+ * one thing that keeps the last good picture on screen while the reason for the
+ * rejection stays in view.
+ */
+function redrawKeepingLastPicture() {
+    try {
+        renderCurrentDrawing({ skipCompile: true });
+    } catch {
+        /* Presentation must never be the thing that breaks the report. */
+    }
+
+    /*
+     * AND THE REPORT IS RE-STATED AFTER THE REDRAW.
+     *
+     * A compile of the PREVIOUS revision may still be in flight when this
+     * runs, and when it lands it announces a successful render - correctly, for
+     * that revision. The draft it is now behind is still not renderable, so the
+     * reason is stated again once the picture has settled, which is what keeps
+     * the message attached to the drawing the student is looking at.
+     */
+    const restate = () => {
+        const manager = activeSourceManager();
+        const prepared = prepareRenderInput(manager.getSource());
+        const validation = prepared.skipped.length
+            ? validateDrawingSource(manager.getSource())
+            : validateDrawingSource(prepared.text);
+
+        if (validation.ok) {
+            return;
+        }
+
+        reportCompileError(
+            validation.diagnostics.find((entry) => entry.severity === "error")?.message ||
+                "Invalid TikZ source",
+            { kind: "draft" }
+        );
+    };
+
+    backgroundTimer(() => restate(), SOURCE_RENDER_DELAY_MS + 50);
 }
 
 function cachedPicture(revision) {
@@ -886,7 +981,7 @@ function rememberPicture(revision, svg) {
  * error for a draft that had already been corrected, which is precisely the
  * "error that does not make sense" this pipeline used to produce.
  */
-function reportCompileError(revisionOrMessage, maybeMessage, { kind = "renderer", replaceable = false } = {}) {
+function reportCompileError(revisionOrMessage, maybeMessage, { kind = "renderer" } = {}) {
     const revision = typeof revisionOrMessage === "number" ? revisionOrMessage : null;
     const raw = typeof revisionOrMessage === "number" ? maybeMessage : revisionOrMessage;
     const text = raw instanceof Error ? raw.message : String(raw ?? "");
@@ -903,46 +998,8 @@ function reportCompileError(revisionOrMessage, maybeMessage, { kind = "renderer"
         return;
     }
 
-    /*
-     * A HINT AND A FAILURE ARE NOT INTERCHANGEABLE.
-     *
-     * A hint ("this command is unfinished") may be replaced by a real failure -
-     * the compiler's message is the specific reason the drawing would not build,
-     * and it is what names the actual fault. It may NOT replace one: a hint shown
-     * over a compiler message hides the diagnostic the student needs, and the
-     * compiler is the only thing that knows what TeX objected to.
-     *
-     * A real failure never replaces another real failure either: two complaints
-     * about one draft are two facts, and the first is the one that stopped it.
-     */
-    const incomingIsHint = kind === "draft";
-
-    /* A hint may not hide a real failure. */
-    if (incomingIsHint && lastCompileError && lastCompileErrorIsRendererFailure) {
-        return;
-    }
-
-    /* A real failure replaces a hint, and is never replaced by another failure. */
-    if (
-        !incomingIsHint &&
-        lastCompileError &&
-        !lastCompileErrorIsRendererFailure &&
-        !lastCompileErrorIsReplaceable
-    ) {
-        return;
-    }
-
     lastCompileError = text;
-    lastCompileErrorIsRendererFailure = !incomingIsHint;
-
-    /*
-     * A HINT IS ALWAYS A HINT, whether or not the caller said so.
-     *
-     * `replaceable` is what a REAL failure uses to say "a later, better message
-     * may supersede me". A hint is replaceable by definition, so it is marked as
-     * such however it was reported.
-     */
-    lastCompileErrorIsReplaceable = Boolean(replaceable) || incomingIsHint;
+    lastCompileErrorIsRendererFailure = kind === "renderer";
 
     /*
      * The error is VISIBLE, through the same document event the Source tab
@@ -1010,22 +1067,7 @@ function isTransientFailure(error) {
 function adoptCachedPicture(revision) {
     compiledRevision = revision;
     lastCompiledSvg = cachedPicture(revision);
-
-    /*
-     * A DRAFT DIAGNOSTIC OUTLIVES THE PICTURE.
-     *
-     * This compile was of the RECOVERED input - the unfinished statement was a
-     * comment in it - so it succeeded, and a successful render must clear a
-     * RENDERER failure. It must not clear a problem in the draft: the line the
-     * student typed is still unfinished, and the message about it is still true.
-     * Clearing it here is how the report appeared for a moment and then vanished
-     * while the red line stayed on screen.
-     */
-    if (lastCompileErrorIsRendererFailure || lastCompileErrorIsReplaceable) {
-        lastCompileError = null;
-        lastCompileErrorIsRendererFailure = true;
-        lastCompileErrorIsReplaceable = false;
-    }
+    lastCompileError = null;
 }
 
 /*
@@ -1206,47 +1248,24 @@ async function compileCurrentSource() {
             return false;
         }
 
-        /*
-         * A RECOVERED COMPILE IS STILL A DRAFT WITH A HOLE IN IT.
-         *
-         * The picture above is real - it is the drawing as far as it is
-         * complete - but statements were left out of it, and the student should
-         * know that what is on the sheet is not everything they typed. The
-         * report names the FIRST skipped statement, which is the one to fix
-         * first; a compile that arrives with nothing skipped clears this
-         * message like any other success.
-         */
-        const skipped = manager.skippedStatements();
-
-        if (skipped.length > 0) {
-            const first = skipped[0];
-            const message = first.unsupported
-                ? "A line of the source is kept but the renderer cannot draw it - the picture shows the rest."
-                : `The command on line ${first.startLine + 1} is unfinished - it was left out of the picture.`;
-
-            manager.markFailed(message, revision);
-            reportCompileError(revision, message, { kind: "draft", replaceable: true });
-
-            return false;
-        }
-
         adoptCachedPicture(revision);
 
         manager.markRendered(source, revision);
 
         /*
-         * A SUCCESSFUL COMPILE CLEARS A RENDERER FAILURE AND A HINT.
+         * A SUCCESSFUL COMPILE CLEARS ONLY A RENDERER FAILURE.
          *
-         * A compiler complaint is answered by the picture that compiled, so it
-         * goes. A DRAFT HINT ("this command is unfinished") is about the text the
-         * student is looking at, and the compile succeeding did not fix it - so it
-         * is also cleared only when the hint no longer applies, which the
-         * source-changed handler re-decides.
+         * The message that was set here was about the SOURCE not compiling at
+         * all - the compiler's own complaint - and a picture that compiles is
+         * the answer to it, so it goes. A DRAFT DIAGNOSTIC is a different kind
+         * of message: it describes a mistake the student has not fixed yet, and
+         * the picture beside it is the last good one precisely BECAUSE of that
+         * mistake. Clearing it here would leave the drawing showing a picture
+         * with nothing saying why it is out of date, which is the "the drawing
+         * silently stopped updating" report.
          */
-        if (lastCompileErrorIsRendererFailure || lastCompileErrorIsReplaceable) {
+        if (lastCompileError && lastCompileErrorIsRendererFailure) {
             lastCompileError = null;
-            lastCompileErrorIsRendererFailure = true;
-            lastCompileErrorIsReplaceable = false;
         }
 
         renderCurrentDrawing();
@@ -1290,15 +1309,7 @@ async function compileCurrentSource() {
                 compileCurrentSource();
             }, delay);
 
-            /*
-             * AND NOTHING IS REPORTED TO THE STUDENT. A service that is down or
-             * answering 405 is not something they can act on in their source,
-             * and putting "the renderer returned an error (405)" beside their
-             * code reads as a problem with the code. The retry is scheduled
-             * above; the status bar shows "Updating" until it succeeds. A REAL
-             * rejection - the compiler refusing the TikZ - takes the branch
-             * below and IS reported.
-             */
+            reportCompileError(revision, error);
             manager.markFailed(error, revision, { transient: true });
 
             return false;
@@ -1360,7 +1371,6 @@ export function resetSourcePictureCache() {
 
     compiledCache = new Map();
     modelAtRevision = new Map();
-    transformAtRevision = new Map();
     regionsRevision = null;
     regionsMap = null;
     compiledRevision = null;
@@ -1383,13 +1393,6 @@ export function objectIdAtSourceLine(line) {
 }
 
 export function renderCurrentDrawing() {
-    const manipulation = editorState.manipulationDrag;
-    if (drawingState.activeTool !== "select") {
-        drawingCanvas.classList.remove("drawing-can-move");
-    }
-    drawingCanvas.classList.toggle("drawing-object-moving", Boolean((manipulation?.moved &&
-        ["body", "origin", "position", "center", "annotation-offset"].includes(manipulation.kind)) ||
-        (editorState.selectionDrag?.moved && (editorState.selectionDrag.derived || editorState.selectionDrag.axisLabel))));
     if (pendingFrame) {
         cancelAnimationFrame(pendingFrame);
         pendingFrame = 0;
@@ -1486,19 +1489,10 @@ disappeared while I typed" failure.
     const pictureRevision = cachedPicture(revision) ? revision : (picture ? compiledRevision : null);
 
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
-    const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
-    const shownObjects = modelAtRevision.get(pictureRevision);
-    // A compiled SVG has no per-feature boundaries. If it contains an old
-    // version of a moved/deleted object, temporarily draw the complete live
-    // model instead of painting both the old ink and its new position.
-    const staleGeometry = Boolean(picture && shownObjects &&
-        [...shownObjects.keys()].some(id => liveIds.has(id) ||
-            !drawingState.objects.some(object => object.id === id)));
-    pictureLayer.style.visibility = staleGeometry ? "hidden" : "";
 
     if (picture) {
         showPicture(picture);
-        positionPictureLayer(pictureLayer, bounds, drawingState, pictureTransformAt(pictureRevision));
+        positionPictureLayer(pictureLayer, bounds, drawingState);
     }
 
     if (!cachedPicture(revision)) {
@@ -1513,20 +1507,12 @@ disappeared while I typed" failure.
         overlay.removeChild(overlay.firstChild);
     }
 
-    const liveObjectIds = objectsThePictureDoesNotShow(pictureRevision, revision);
-    const pendingSignalNodeId = drawingState.interaction.signalLineStart?.objectId;
-
-    if (pendingSignalNodeId) {
-        liveObjectIds.add(pendingSignalNodeId);
-    }
-
     enggDrawingRenderer.renderDrawing(
         drawingState,
         overlay,
         {
             overlayOnly: true,
-            liveObjectIds: staleGeometry
-                ? new Set(drawingState.objects.map(object => object.id)) : liveObjectIds
+            liveObjectIds: objectsThePictureDoesNotShow(pictureRevision, revision)
         }
     );
 
@@ -1569,99 +1555,4 @@ disappeared while I typed" failure.
         drawingZoomValue.value =
             `${Math.round(editorState.drawingZoom)}%`;
     }
-
-    /*
-     * ================================================================
-     * A CAMERA CHANGE IS ANNOUNCED HERE
-     * ================================================================
-     *
-     * The inline node-entry prompt is anchored to a point on the sheet, so it
-     * has to move when the sheet is zoomed or panned under it. The camera is
-     * plain numbers, not an observable, but EVERY change to it ends in a
-     * redraw - so the redraw is the one honest announcement there is, and this
-     * is where it is made.
-     *
-     * The comparison is against what was announced last, so a redraw caused by
-     * an edit does not move anything: the prompt is only re-placed when the
-     * view actually changed. `cameraSignal(listener)` returns the unsubscribe,
-     * and a listener that throws is dropped rather than allowed to break the
-     * draw it was called from.
-     */
-    announceCamera();
-}
-
-const cameraListeners = new Set();
-
-let announcedCamera = null;
-
-function cameraKey(state) {
-    const camera = state?.camera || {};
-
-    /*
-     * THE CANVAS MAY NOT BE LAID OUT YET.
-     *
-     * `canvasBounds` returns a plain width/height pair when the canvas has no
-     * box — no `rect` — and that is a normal state during startup and in a
-     * headless viewport. Reading `rect.left` of it threw inside the camera
-     * listener loop, which killed the note/label entry prompts: the listener
-     * died mid-tick, the prompt never followed its node, and the entry was
-     * aborted with "Cannot read properties of undefined (reading 'left')".
-     * The missing part is simply absent, which is what "no box yet" means.
-     */
-    const bounds = canvasBounds();
-
-    return [
-        Number(camera.zoom) || 1,
-        Number(camera.panX) || 0,
-        Number(camera.panY) || 0,
-        Number(bounds?.left) || 0,
-        Number(bounds?.top) || 0,
-        Number(bounds?.width) || 0,
-        Number(bounds?.height) || 0
-    ].join("|");
-}
-
-function announceCamera() {
-    if (!cameraListeners.size) {
-        return;
-    }
-
-    const key = cameraKey(drawingState);
-
-    if (key === announcedCamera) {
-        return;
-    }
-
-    announcedCamera = key;
-
-    [...cameraListeners].forEach((listener) => {
-        try {
-            listener();
-        } catch {
-            cameraListeners.delete(listener);
-        }
-    });
-}
-
-/*
- * Be told when the camera the canvas is drawn with changes.
- *
- * Returns the unsubscribe. A caller that subscribes is responsible for
- * unsubscribing - the node-entry prompt does it in the same `close()` that
- * removes the prompt.
- */
-export function cameraSignal(listener) {
-    if (typeof listener !== "function") {
-        return () => {};
-    }
-
-    cameraListeners.add(listener);
-
-    return () => {
-        cameraListeners.delete(listener);
-    };
-}
-
-export function cameraListenerCount() {
-    return cameraListeners.size;
 }

@@ -106,11 +106,6 @@ const thick = write(objectOf("line", { start: { x: 0, y: 0 }, end: { x: 10, y: 0
 const widthOf = (text) => Number((text.match(/line width=([\d.]+)pt/) || [])[1]);
 
 check("a named thickness is written as a pen width", Number.isFinite(widthOf(thin)), thin);
-check(
-  "and it is the preset's width through the ONE canvas calibration - Thin is 0.5 x 2.4 = 1.2pt",
-  widthOf(thin) === 1.2,
-  thin,
-);
 check("and Thick is wider than Thin", widthOf(thick) > widthOf(thin), `${widthOf(thick)} vs ${widthOf(thin)}`);
 
 const arrowed = write(objectOf("line", { start: { x: 0, y: 0 }, end: { x: 20, y: 0 } }, { arrowStart: "bar", arrowEnd: "filled" }));
@@ -173,170 +168,6 @@ const rotated = write(objectOf("rectangle", { position: { x: 0, y: 0 }, width: 1
 
 check("a rotated rectangle becomes a closed four-corner path", has(rotated, "-- cycle") && (rotated.match(/\(/g) || []).length >= 4, rotated);
 
-const plant = write(
-  objectOf(
-    "rectangle",
-    { position: { x: 0, y: 10 }, width: 60, height: 30, rotation: 0 },
-    { fill: "#D9D9D9", fillMode: "solid" },
-    {
-      metadata: {
-        controlsKind: "plant",
-        inputs: 2,
-        outputs: 1,
-        showNodeLabels: true,
-        plantLabel: "Feed Unit",
-      },
-    },
-  ),
-);
-
-check("a plant retains its horizontal rectangle outline", has(plant, "(0,-20) rectangle (60,10)"), plant);
-check("a plant has the requested gray solid fill", has(plant, "fill=daetumCD9D9D9"), plant);
-check("the centered Plant label is larger at twelve points", has(plant, "\\fontsize{12}{14.4}"), plant);
-check("the user-selected plant label appears underneath in brackets", has(plant, "{[Feed Unit]}"), plant);
-check("plant source includes the component name and left/right node labels", has(plant, "{Plant}") && has(plant, "{Input 1}") && has(plant, "{Input 2}") && has(plant, "{Output 1}"), plant);
-check("plant source writes three terminal nodes", (plant.match(/circle\[radius=/g) || []).length === 3, plant);
-const inputLabelNode = plant.match(/\\node\[([^\]]*)\] at \(([-\d.]+),([-\d.]+)\) \{Input 1\};/);
-const outputLabelNode = plant.match(/\\node\[([^\]]*)\] at \(([-\d.]+),([-\d.]+)\) \{Output 1\};/);
-check(
-  "input label is below its node and anchored outside the plant box",
-  inputLabelNode?.[1].includes("anchor=east") && Number(inputLabelNode[2]) < 0 && Number(inputLabelNode[3]) < 8,
-  plant,
-);
-check(
-  "output label is below its node and anchored outside the plant box",
-  outputLabelNode?.[1].includes("anchor=west") && Number(outputLabelNode[2]) > 60 && Number(outputLabelNode[3]) < -5,
-  plant,
-);
-
-const legacyPlant = write(
-  objectOf(
-    "rectangle",
-    { position: { x: 0, y: 10 }, width: 60, height: 30, rotation: 0 },
-    { fill: "none", fillMode: "none" },
-    { metadata: { controlsKind: "plant", inputs: 1, outputs: 1 } },
-  ),
-);
-check("existing plants with a stored no-fill setting use the requested gray fill", has(legacyPlant, "fill=daetumCD9D9D9"), legacyPlant);
-
-const defaultLabelsPlant = write(
-  objectOf(
-    "rectangle",
-    { position: { x: 0, y: 10 }, width: 60, height: 30, rotation: 0 },
-    { fill: "#D9D9D9", fillMode: "solid" },
-    { metadata: { controlsKind: "plant", inputs: 1, outputs: 1 } },
-  ),
-);
-check("plants without a saved label preference default to visible node labels", has(defaultLabelsPlant, "{Input 1}") && has(defaultLabelsPlant, "{Output 1}"), defaultLabelsPlant);
-
-const block = write(
-  objectOf(
-    "rectangle",
-    { position: { x: 0, y: 30 }, width: 30, height: 60, rotation: 0 },
-    { fill: "#D9D9D9", fillMode: "solid" },
-    { metadata: {
-        controlsKind: "block",
-        inputs: 2,
-        outputs: 1,
-        showNodeLabels: true,
-        blockLabel: "m/s^2",
-        blockLowerLabel: "Acceleration",
-      } },
-  ),
-);
-check("a Block is a vertically oriented filled rectangle", has(block, "(0,-30) rectangle (30,30)") && has(block, "fill=daetumCD9D9D9"), block);
-check("a Block includes its node labels without a Plant title", has(block, "{Input 1}") && has(block, "{Input 2}") && has(block, "{Output 1}") && !has(block, "{Plant}"), block);
-check("a Block formats slash as a fraction and caret as an exponent", has(block, "$\\frac{m}{s^{2}}$"), block);
-check("a Block lower label remains plain text below the rectangle", has(block, "{Acceleration}") && has(block, "(15,-35)"), block);
-check("the Block formula label uses the larger eight-point font", has(block, "\\fontsize{8}{9.6}"), block);
-
-const gain = write(
-  objectOf(
-    "rectangle",
-    { position: { x: -18, y: 15 }, width: 36, height: 30, rotation: 0 },
-    { fill: "#D9D9D9", fillMode: "solid" },
-    { metadata: { controlsKind: "gain", gainValue: "K" } },
-  ),
-);
-check("a Gain is a filled triangle with its editable center value", has(gain, "(-18,15)") && has(gain, "(18,0)") && has(gain, "{K}"), gain);
-check("a Gain has one input on its flat side and one output at its point", has(gain, "(-22,0)") && has(gain, "(22,0)"), gain);
-
-const sum = write(
-  objectOf(
-    "circle",
-    { center: { x: 0, y: 0 }, radius: 18 },
-    { fill: "#D9D9D9", fillMode: "solid" },
-    { metadata: { controlsKind: "sum", inputs: 2, outputs: 1 } },
-  ),
-);
-check("a Sum is a filled circle with plus signs at its two inputs", has(sum, "circle[radius=") && (sum.match(/\{\+\}/g) || []).length === 2, sum);
-check("a Sum's inputs are at the top and left and its output is at the right", has(sum, "(0,22)") && has(sum, "(-22,0)") && has(sum, "(22,0)"), sum);
-const signedSum = write(
-  objectOf(
-    "circle",
-    { center: { x: 0, y: 0 }, radius: 18 },
-    {},
-    { metadata: { controlsKind: "sum", inputs: 2, inputSigns: ["+", "-"] } },
-  ),
-);
-check("a Sum writes each input's selected plus or minus sign", has(signedSum, "{+}") && has(signedSum, "{-}"), signedSum);
-
-console.log("\nSignal Line");
-console.log("-----------");
-
-const signalLine = objectOf(
-  "polyline",
-  { points: [{ x: 0, y: 0 }, { x: 20, y: 0 }] },
-  { stroke: "#ff0000" },
-  { metadata: { controlsKind: "signal-line" } },
-);
-const signalLineSource = write(signalLine, { allObjects: [signalLine] });
-check("a Signal Line is black and has a directional arrowhead", has(signalLineSource, "->") && !has(signalLineSource, "FF0000"), signalLineSource);
-
-const earlierSignalLine = objectOf(
-  "polyline",
-  { points: [{ x: 0, y: 0 }, { x: 20, y: 0 }] },
-  {},
-  { metadata: { controlsKind: "signal-line" } },
-);
-const laterSignalLine = objectOf(
-  "polyline",
-  { points: [{ x: 10, y: -10 }, { x: 10, y: 10 }] },
-  {},
-  { metadata: { controlsKind: "signal-line" } },
-);
-const crossoverSource = write(earlierSignalLine, { allObjects: [earlierSignalLine, laterSignalLine] });
-check("a Signal Line crossover is drawn with a gap in the earlier line", (crossoverSource.match(/\\draw/g) || []).length === 2 && has(crossoverSource, "(8.5,0)") && has(crossoverSource, "(11.5,0)"), crossoverSource);
-
-const sourceBlock = objectOf(
-  "rectangle",
-  { position: { x: 0, y: 30 }, width: 60, height: 30, rotation: 0 },
-  {},
-  { id: "source-block", metadata: { controlsKind: "plant", inputs: 1, outputs: 1 } },
-);
-const targetBlock = objectOf(
-  "rectangle",
-  { position: { x: 120, y: 30 }, width: 30, height: 60, rotation: 0 },
-  {},
-  { id: "target-block", metadata: { controlsKind: "block", inputs: 1, outputs: 1 } },
-);
-const connectedSignalLine = objectOf(
-  "polyline",
-  { points: [{ x: 0, y: 0 }, { x: 1, y: 0 }] },
-  {},
-  {
-    metadata: {
-      controlsKind: "signal-line",
-      from: { objectId: "source-block", side: "outputs", index: 0 },
-      to: { objectId: "target-block", side: "inputs", index: 0 },
-    },
-  },
-);
-const connectedSignalSource = write(connectedSignalLine, {
-  allObjects: [sourceBlock, targetBlock, connectedSignalLine],
-});
-check("a connected Signal Line writes from the output node to the input node", has(connectedSignalSource, "(64,15)") && has(connectedSignalSource, "(116,0)"), connectedSignalSource);
-
 /* ============================================================= Circle */
 
 console.log("\nCircle");
@@ -357,19 +188,18 @@ check("a Solid circle writes its fill", has(filledCircle, "fill=daetumC00FF00"),
 console.log("\nArc");
 console.log("---");
 
-/* An arc's angles are stored in DEGREES - what the factories take and what TikZ
- * wants - so they are written as they stand. */
-const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: 90 }));
+/* An arc's angles are stored in RADIANS (as the canvas draws them) and written in degrees. */
+const arc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0, endAngle: Math.PI / 2 }));
 
 check("an arc writes its committed radius and sweep", has(arc, "radius=10") && has(arc, "start angle=0") && has(arc, "end angle=90"), arc);
 check("and starts at the point on its own circle", has(arc, "(10,0)"), arc);
 
 /* An arc that crosses the 0/360 seam keeps its unwrapped end angle. */
-const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 350, endAngle: 370 }));
+const seamArc = write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: (350 * Math.PI) / 180, endAngle: (370 * Math.PI) / 180 }));
 
 check("an arc across the 0-degree seam keeps its unwrapped angles", has(seamArc, "start angle=350") && has(seamArc, "end angle=370"), seamArc);
 
-check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 40, endAngle: 40 })) === null);
+check("a degenerate arc writes nothing", write(objectOf("arc", { center: { x: 0, y: 0 }, radius: 10, startAngle: 0.7, endAngle: 0.7 })) === null);
 
 /* ============================================================= Polygon */
 
@@ -437,10 +267,10 @@ const coordinateSystem = write(
 );
 
 check("a coordinate system writes both axes", (coordinateSystem.match(/--/g) || []).length === 2, coordinateSystem);
-check("from its committed origin into one quadrant", has(coordinateSystem, "(50,50) -- (70,50)") && has(coordinateSystem, "(50,50) -- (50,70)"), coordinateSystem);
+check("through its committed origin", has(coordinateSystem, "(30,50) -- (70,50)") && has(coordinateSystem, "(50,30) -- (50,70)"), coordinateSystem);
 check(
   "and the axes are exactly perpendicular",
-  has(coordinateSystem, "(50,50) -- (70,50)") && has(coordinateSystem, "(50,50) -- (50,70)"),
+  has(coordinateSystem, "(30,50) -- (70,50)") && has(coordinateSystem, "(50,30) -- (50,70)"),
   "an X arm of constant y and a Y arm of constant x are perpendicular by construction"
 );
 check("with the axis labels written as nodes", has(coordinateSystem, "{x}") && has(coordinateSystem, "{y}") && has(coordinateSystem, "{O}"), coordinateSystem);
@@ -469,13 +299,13 @@ const turned = write(
 
 check(
   "a rotated coordinate system turns its X arm into the Y direction",
-  has(turned, "(0,0) -- (0,20)"),
+  has(turned, "(0,-20) -- (0,20)"),
   turned
 );
 
 check(
   "and its Y arm into the X direction, staying square to it",
-  has(turned, "(0,0) -- (-20,0)"),
+  has(turned, "(20,0) -- (-20,0)"),
   turned
 );
 

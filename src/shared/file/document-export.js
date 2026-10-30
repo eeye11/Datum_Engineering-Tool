@@ -457,23 +457,17 @@ function renderClean(state, bounds) {
   );
 
   /*
-   * THE VIEWBOX IS FITTED INTO WHATEVER BOX THE SVG LANDS IN.
+   * FITTED AND CENTRED INTO WHATEVER BOX IT LANDS IN.
    *
-   * Without this the default is `xMidYMid meet`, which is what is wanted - but
-   * saying it explicitly is what makes the guarantee hold for every consumer.
-   * A preview is rendered into a box shaped like the drawing (a wide plan comes
-   * out 160x42), and the places it is shown - a Recent row's square, a template
-   * card, a written-solution figure - each have their own aspect. `meet` fits
-   * the WHOLE picture inside the box and centres it; without it, an SVG sized
-   * `width: 100%; height: 100%` by a stylesheet is stretched to the box.
-   *
-   * `slice` would crop to fill instead. A thumbnail that crops the drawing is
-   * worse than one with a margin: it shows something that is not the sheet.
+   * `xMidYMid meet` is the SVG equivalent of `object-fit: contain`: the whole
+   * drawing is scaled down until it fits, and what is left over is split evenly
+   * on both sides - so it is centred, and nothing is cropped. It is also the
+   * default, but it is stated here because nothing else does: an inline SVG
+   * whose ratio differs from its box falls back to `xMidYMid meet` only by
+   * accident of the default, and a preview that is stretched into a 46x34
+   * thumbnail is exactly the "cut off and off-centre" being fixed.
    */
-  svg.setAttribute(
-    "preserveAspectRatio",
-    "xMidYMid meet"
-  );
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
 
   /*
    * The width is stated in PIXELS and the height is left to the aspect ratio,
@@ -481,10 +475,21 @@ function renderClean(state, bounds) {
    * a fixed pixel height would keep the drawing at its rendered size and
    * overflow instead.
    */
+  /*
+   * THE FIGURE IS TRANSPARENT, NOT A PAINTED WHITE PAGE.
+   *
+   * This is a PREVIEW - a picture on a panel - not a printed sheet, so it must
+   * not paint a page of its own. A hard-coded `#ffffff` behind it covered the
+   * card's own surface, and over a themed panel that reads as a pale wash
+   * rather than as the drawing's own paper. The background belongs to whatever
+   * is PLACING the figure: an export sets its own, a preview inherits the
+   * panel's. The drawing's own features paint whatever they paint - none of
+   * that is affected by this element's background.
+   */
   svg.style.width = `${bounds.width}px`;
   svg.style.maxWidth = "100%";
   svg.style.height = "auto";
-  svg.style.background = "#ffffff";
+  svg.style.background = "transparent";
 
   return svg;
 }

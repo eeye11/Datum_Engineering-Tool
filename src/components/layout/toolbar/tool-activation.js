@@ -8,28 +8,15 @@ import { annotateInstruction, isAnnotateTool } from "../../../features/workspace
 import { analysisInputMessage, isAnalysisInputTool } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { isDimensionTool } from "../../../features/workspace/annotate/dimension-tool.js";
-import { drawingCanvas, drawingRedo, drawingUndo } from "../../../features/workspace/dom.js";
+import { drawingCanvas, drawingRedo, drawingUndo, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
-import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
 import { beginElbowConstruction, beginRouteConstruction } from "../../../features/workspace/interaction/pipe-duct-tool.js";
-import { beginJunctionConstruction } from "../../../features/workspace/interaction/junction-tool.js";
-import {
-  resumeFlowArrowConstruction
-} from "../../../features/workspace/interaction/flow-arrow-tool.js";
-import {
-  beginInlineToolSession,
-  beginVesselToolSession,
-  beginFluidLevelToolSession,
-  beginFlowDirectionToolSession,
-  beginPressureProfileToolSession,
-  beginFlowProfileToolSession,
-  beginSectionToolSession
-} from "../../../features/workspace/interaction/fluids-schematic-tool.js";
 import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
@@ -73,7 +60,13 @@ export function activateTool(
         toolId ===
         "coordinate-system"
     ) {
-        toolId = "coordinate-system-2d";
+        openCoordinateSystemMenu(
+            toolList.querySelector(
+                '[data-tool-id="coordinate-system"]'
+            )
+        );
+
+        return;
     }
 
     /*
@@ -219,44 +212,10 @@ export function activateTool(
         Boolean(DYNAMICS_ANGLE_TOOLS[requestedTool]) ||
         Boolean(DYNAMICS_BOX_TOOLS[requestedTool]) ||
         requestedTool === "truss" ||
-        requestedTool === "pipe-duct" ||
-        requestedTool === "nozzle-diffuser" ||
-        requestedTool === "rankine-cycle" ||
-        requestedTool === "reheat-rankine-cycle" ||
-        requestedTool === "vapor-compression-cycle" ||
-        requestedTool === "brayton-cycle" ||
-        requestedTool === "diesel-cycle" ||
-        requestedTool === "otto-cycle" ||
-        requestedTool === "carnot-cycle" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
-        requestedTool === "polygon" ||
-
-        /*
-         * AND EVERY FLUIDS ROUTE-STYLE TOOL: each places a feature per
-         * gesture, and re-clicking one keeps it armed so the next placement
-         * needs no second press on the button.
-         */
-        requestedTool === "pipe-duct" ||
-        requestedTool === "junction" ||
-        requestedTool === "elbow" ||
-        requestedTool === "flow-arrow" ||
-
-        /*
-         * AND EVERY SCHEMATIC TOOL: each places its object per gesture, so
-         * re-clicking one keeps it armed rather than cancelling it.
-         */
-        requestedTool === "reducer-expander" ||
-        requestedTool === "pump" ||
-        requestedTool === "valve" ||
-        requestedTool === "flow-meter" ||
-        requestedTool === "reservoir-tank" ||
-        requestedTool === "fluid-level" ||
-        requestedTool === "flow-direction-diagram" ||
-        requestedTool === "pressure-profile" ||
-        requestedTool === "flow-profile" ||
-        requestedTool === "section-plane";
+        requestedTool === "polygon";
 
     const nextTool =
         drawingState.activeTool ===
@@ -342,83 +301,8 @@ export function activateTool(
      * Arming it begins no construction: there is nothing until the student
      * presses, exactly as for a run.
      */
-    /*
-     * THE JUNCTION IS THE THIRD OF THE SAME KIND. Press, drag, release: the
-     * press is the hub and the drag its main run.
-     */
-    if (requestedTool === "junction") {
-        beginJunctionConstruction();
-
-        renderEngineeringTools(
-            activeCategory()
-        );
-
-        renderCurrentDrawing();
-
-        return;
-    }
-
     if (requestedTool === "elbow") {
         beginElbowConstruction();
-
-        renderEngineeringTools(
-            activeCategory()
-        );
-
-        renderCurrentDrawing();
-
-        return;
-    }
-
-    /*
-     * THE FLOW ARROW IS THE FOURTH OF THE SAME KIND - a press, a drag and a
-     * release. Arming it begins no construction: there is nothing until the
-     * student presses ON a pipe, exactly as a run waits for its first press.
-     *
-     * A PLACEMENT THAT ENDED IN SELECT RESUMES HERE. Placing an arrow, pressing
-     * on empty canvas or being refused a duplicate all leave the drawing in
-     * Select - which is the required behaviour, and which means the button is
-     * no longer lit. Pressing Flow Arrow again is therefore NOT a re-click of an
-     * active tool; it is the student asking for the tool again, so it is armed
-     * afresh rather than toggled away. Nothing is created and no message is
-     * printed by either path.
-     */
-    /*
-     * ========================================================
-     * THE SCHEMATIC TOOLS ARM THEMSELVES
-     * ========================================================
-     *
-     * Each of these is its OWN tool id - no shared primitive - because each is
-     * its own object with its own gesture. Arming one sets the active tool to
-     * that id, clears any construction the last tool left behind, and prints
-     * its own instruction; the canvas then routes the press to it.
-     */
-    const schematicTools = {
-    	"reducer-expander": beginInlineToolSession,
-    	"pump": beginInlineToolSession,
-    	"valve": beginInlineToolSession,
-    	"flow-meter": beginInlineToolSession,
-    	"reservoir-tank": beginVesselToolSession,
-    	"fluid-level": beginFluidLevelToolSession,
-    	"flow-direction-diagram": beginFlowDirectionToolSession,
-    	"pressure-profile": beginPressureProfileToolSession,
-    	"flow-profile": beginFlowProfileToolSession,
-    	"section-plane": beginSectionToolSession
-    };
-
-    const beginSchematic = schematicTools[requestedTool];
-
-    if (beginSchematic) {
-    	beginSchematic(toolId);
-
-    	renderEngineeringTools(activeCategory());
-    	renderCurrentDrawing();
-
-    	return;
-    }
-
-    if (requestedTool === "flow-arrow") {
-        resumeFlowArrowConstruction();
 
         renderEngineeringTools(
             activeCategory()
@@ -516,10 +400,6 @@ export function initialToolMessage(
         return "Specify dimension reference - D changes what is measured";
     }
 
-    if (toolId === "signal-line") {
-        return "Select an output node";
-    }
-
     /*
      * A Statics tool carries its own opening instruction, so
      * a direct tool like Point Force tells the student what to
@@ -569,20 +449,8 @@ export function initialToolMessage(
             arc: "Specify arc start point",
             polygon: "Specify polygon centre",
             "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
-            "coordinate-system-2d": "Drag out the area for the axes; width sets X, height sets Y, and rotation stays at 0 degrees",
+            "coordinate-system-2d": "Specify origin",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
-            "boundary-stress": "Drag a plate; set width and height in Features (numbers or symbols), then enter edge equations such as x/a or y/b. Symbolic dimensions use a schematic scale.",
-            "stress-element": "Drag opposite corners to draw a square stress element; use its rotation handle or enter Angle in the Features panel",
-            "tank": "Drag between opposite corners to draw a closed tank",
-            "turbine-compressor": "Drag opposite corners to draw a turbine/compressor casing; select it to move, resize or rotate",
-            "nozzle-diffuser": "Drag opposite corners to draw a nozzle/diffuser; select it to move, resize or rotate",
-            "rankine-cycle": "Drag opposite corners to place a Rankine cycle schematic",
-            "reheat-rankine-cycle": "Drag opposite corners to place an ideal reheat Rankine cycle",
-            "vapor-compression-cycle": "Drag opposite corners to place an ideal vapor-compression refrigeration cycle",
-            "brayton-cycle": "Drag opposite corners to place a Brayton cycle schematic",
-            "diesel-cycle": "Drag opposite corners to place Diesel P-v and T-s diagrams",
-            "otto-cycle": "Drag opposite corners to place the Otto indicator and ideal P-v diagrams",
-            "carnot-cycle": "Drag opposite corners to place a Carnot P-V diagram",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

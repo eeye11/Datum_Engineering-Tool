@@ -43,6 +43,18 @@ import "../../shared/solution/written-references.js";
 import "../../shared/solution/writing-tab.js";
 import { installAutomationHooks } from "../automation-hooks.js";
 import enggErrorLog from "../error-log.js";
+import { hydrateDynamics } from "../../features/workspace/editor-state.js";
+
+/*
+ * START LOADING THE DYNAMICS MODEL NOW.
+ *
+ * The model is imported lazily by `editor-state.js`, because importing it
+ * statically closes a cycle through `drawing-state.js` and leaves the editor
+ * unable to boot. That lazy import is resolved here, at start-up, so the
+ * synchronous click handlers that place a Dynamics feature find it ready and
+ * commit in the same tick as every other tool.
+ */
+void hydrateDynamics();
 import { createDatumApi } from "../../shared/integration/datum-api.js";
 import { installEmbedBridge } from "../../shared/integration/embed-bridge.js";
 import { installMenuBar } from "../../components/layout/menu-bar/menu-bar.js";

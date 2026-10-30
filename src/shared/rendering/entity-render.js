@@ -7,21 +7,16 @@
 import enggDrawingState from "../model/drawing-state.js";
 import { isConnectionType, isSupportType } from "../model/feature-types.js";
 import { createSvgElement } from "./svg-primitives.js";
-import { drawVectorOrSymbol, drawGenericConnection } from "./entities/draw-forces-and-supports.js";
+import { drawDynamicsSymbol } from "./entities/draw-dynamics.js";import { drawVectorOrSymbol, drawGenericConnection } from "./entities/draw-forces-and-supports.js";
 import { drawMoment, drawUniformLoad, drawVaryingLoad } from "./entities/draw-loads.js";
 import { drawDimension, drawAnnotate, drawAnnotation } from "./entities/draw-annotations.js";
 import { drawMemberOrDiagram } from "./entities/draw-members.js";
-import { drawPoint, drawLine, drawCircle, drawSum, drawRectangleOutline, drawPlant, drawGain, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
+import { drawPoint, drawLine, drawCircle, drawRectangleOutline, drawPolyline, drawPolygon, drawTriangle, drawArc, drawCoordinateSystem2d } from "./entities/draw-geometry.js";
 import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
-import drawDynamicsSymbol from "./entities/draw-dynamics.js";
-import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
-import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
+import { drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
+import { drawElbow, drawPipeDuct } from "./entities/draw-fluids.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
-import { isControlBlock, isGain, isSum } from "../model/plant.js";
-import { dieselCycleFeatures } from "../../features/workspace/model/thermodynamics/diesel-cycle.js";
-import { ottoCycleFeatures } from "../../features/workspace/model/thermodynamics/otto-cycle.js";
-import { carnotCycleFeatures } from "../../features/workspace/model/thermodynamics/carnot-cycle.js";
 
 
     /*
@@ -35,18 +30,6 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
      * body. A new feature type adds its renderer to this table.
      */
     const ENTITY_RENDERERS = [
-        /*
-         * THE DYNAMICS SYMBOLS DRAW THEMSELVES.
-         *
-         * A spring, a damper, a vector, a trajectory or a pulley stores its own
-         * geometry and is not any of the generic feature kinds below - without
-         * this entry they matched nothing, so the tools created objects that
-         * were listed in Objects and drew no ink anywhere. A symbol whose
-         * renderer declines (the reference line, point and arc, which are
-         * ordinary construction features wearing a Dynamics label) falls
-         * through to the shared renderers below, which draw it as ever.
-         */
-        { matches: entity => Boolean(entity?.engineering?.dynamicsType), draw: drawDynamicsSymbol },
         /*
          * A resultant and a component analysis are vectors too, so they share
          * this pass rather than getting a symbol of their own. What says which
@@ -63,7 +46,6 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         { matches: entity => entity.type === "connection", draw: drawGenericConnection },
         { matches: entity => entity.type === "point", draw: drawPoint },
         { matches: entity => entity.type === "line", draw: drawLine },
-        { matches: isSum, draw: drawSum },
         { matches: entity => entity.type === "circle", draw: drawCircle },
         { matches: entity => entity.type === "particle", draw: drawParticle },
         /*
@@ -74,13 +56,7 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         { matches: entity => entity.metadata?.thermodynamicsKind === "process-path", draw: drawProcessOverlay },
         { matches: entity => isProcessDiagram(entity), draw: drawSaturationCurve },
         { matches: entity => isPistonCylinder(entity), draw: drawPistonCylinder },
-        { matches: isGain, draw: drawGain },
-        { matches: isControlBlock, draw: drawPlant },
-        { matches: entity => entity.metadata?.thermodynamicsKind === "tank", draw: drawTank },
-        { matches: entity => entity.metadata?.thermodynamicsKind === "rankine-cycle", draw: drawRankineCycle },
-        { matches: entity => entity.metadata?.thermodynamicsKind === "nozzle-diffuser", draw: drawNozzleDiffuser },
-        { matches: entity => entity.metadata?.thermodynamicsKind === "turbine-compressor", draw: drawTurbineCompressor },
-        { matches: entity => (entity.type === "rectangle" && !["tank", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(entity.metadata?.thermodynamicsKind) && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
+        { matches: entity => (entity.type === "rectangle" && !isPistonCylinder(entity) && !isProcessDiagram(entity)) || entity.type === "rigid-body", draw: drawRectangleOutline },
         { matches: entity => entity.type === "rigid-body", draw: drawRigidBody },
         { matches: entity => entity.type === "polyline", draw: drawPolyline },
         { matches: entity => entity.type === "polygon", draw: drawPolygon },
@@ -89,46 +65,22 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         { matches: entity => entity.type === "arc", draw: drawArc },
         { matches: entity => entity.type === "coordinate-system-2d", draw: drawCoordinateSystem2d },
         { matches: entity => entity.type === "pipe-duct", draw: drawPipeDuct },
-        { matches: entity => entity.type === "elbow", draw: drawElbow },
-
-        /* A junction is one fitting: its contour, and any free branch ticks. */
-        { matches: entity => entity.type === "junction", draw: drawJunction },
-
-        /* A flow arrow rides its pipe: one arrowhead on the run's centreline. */
-        { matches: entity => entity.type === "flow-arrow", draw: drawFlowArrow },
-
-        /*
-         * THE REST OF THE FLUIDS SCHEMATIC TOOLS.
-         *
-         * Each is one object with its own model, so each gets one painter. They
-         * are listed AFTER the flow arrow because they are all distinct types -
-         * no two of these tests can match the same feature.
-         */
-        { matches: entity => entity.type === "reducer-expander", draw: drawReducer },
-        { matches: entity => ["pump", "valve", "flow-meter"].includes(entity.type), draw: drawEquipment },
-        { matches: entity => entity.type === "reservoir-tank", draw: drawVessel },
-        { matches: entity => entity.type === "fluid-level", draw: drawFluidLevel },
-        { matches: entity => entity.type === "flow-direction-diagram", draw: drawFlowDirection },
-        { matches: entity => entity.type === "pressure-profile", draw: drawPressureProfile },
-        { matches: entity => entity.type === "flow-profile", draw: drawFlowProfile },
-        { matches: entity => entity.type === "section-plane", draw: drawSectionPlane }
+        { matches: entity => entity.type === "elbow", draw: drawElbow }
     ];
 
-    /*
-     * THE FREE FLOW ARROW IS THE ONE SPLIT.
-     *
-     * `flow-arrow` is used by TWO tools - the free directional arrow and the
-     * pipe-attached indicator - and they are told apart by what they store: an
-     * attachment (a host pipe and a fraction along it) or a free span (two
-     * points). Both are arrows, so both draw; the painter differs.
-     */
-    const FLOW_ARROW_RENDERER = ENTITY_RENDERERS.find((renderer) => renderer.draw === drawFlowArrow);
 
-    if (FLOW_ARROW_RENDERER) {
-        FLOW_ARROW_RENDERER.draw = (context) =>
-            context.entity?.attachment ? drawFlowArrow(context) : drawFreeFlowArrow(context);
-    }
+/*
+ * Which Dynamics symbol an entity is, from its own metadata only.
+ *
+ * The mark may sit on the object (`engineering.dynamicsType`, which is where
+ * the model puts it) or in its `metadata`, which older files used, so both are
+ * read - and nothing else is inferred.
+ */
+function dynamicsKindOf(entity) {
+    const kind = entity?.engineering?.dynamicsType || entity?.metadata?.dynamicsType;
 
+    return typeof kind === "string" && kind ? kind : null;
+}
 
     function appendEntity(
         svg,
@@ -136,11 +88,6 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         state,
         bounds
     ) {
-        if (["diesel-cycle", "otto-cycle", "carnot-cycle"].includes(entity.metadata?.thermodynamicsKind)) {
-            const features = entity.metadata.thermodynamicsKind === "carnot-cycle" ? carnotCycleFeatures(entity.geometry) : entity.metadata.thermodynamicsKind === "otto-cycle" ? ottoCycleFeatures(entity.geometry) : dieselCycleFeatures(entity.geometry);
-            features.forEach(feature => appendEntity(svg, feature, state, bounds));
-            return;
-        }
         const parentSvg = svg;
         svg = createSvgElement("g");
         svg.classList.add("drawing-feature");
@@ -184,20 +131,44 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
             toScreen
         };
 
-        /*
-         * THE FIRST MATCHING RENDERER IS THE ONE THAT DRAWS.
-         *
-         * The table is a DISPATCH - one painter per feature - so the first test
-         * that matches decides, and what that painter does with the feature is
-         * its own decision. A painter that DECLINES (returns true without
-         * appending) hands the feature to the renderers BESIDE it, which is how a
-         * Dynamics reference point - an ordinary `point` with a Dynamics mark -
-         * is drawn by the point painter after the Dynamics painter said it had
-         * nothing of its own to add. The group that was already filled stays in
-         * the context, so the next painter draws into the same feature.
-         */
         for (const renderer of ENTITY_RENDERERS) {
             if (renderer.matches(entity) && renderer.draw(context) === true) {
+                return;
+            }
+        }
+
+        /*
+         * A DYNAMICS SYMBOL IS DRAWN WHOLE, BY ITS OWN RENDERER.
+         *
+         * Its storage type is usually an ordinary one - a spring is a line, a
+         * pulley a circle - so the plain renderer above would draw the bare
+         * primitive and the symbol's own marks (the coils, the rope, the
+         * centre of mass) would never appear. `metadata.dynamicsType` is what
+         * says a Dynamics tool made it, and it is the only test: no Statics or
+         * Geometry object carries it, so nothing else can be captured here.
+         *
+         * TRIED BEFORE the generic passes so the symbol is the picture, and
+         * AFTER them so an object whose type they answer for still gets their
+         * outline (a rigid body's rectangle) under the symbol.
+         */
+        const dynamics = dynamicsKindOf(entity);
+
+        if (dynamics) {
+            /* Filled in the appearance the object was drawn with, or the sheet's ink. */
+            context.style = {
+                ...(state.styleDefaults || {}),
+                ...style
+            };
+
+            svg.setAttribute("data-dynamics", dynamics);
+
+            if (drawDynamicsSymbol(context) === true) {
+                if (context.overlay) svg.appendChild(context.overlay);
+
+                if (svg.childNodes.length) {
+                    parentSvg.appendChild(svg);
+                }
+
                 return;
             }
         }

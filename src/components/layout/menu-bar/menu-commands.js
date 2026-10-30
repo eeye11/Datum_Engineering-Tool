@@ -37,7 +37,7 @@ import {
 } from "../../../features/workspace/commands/clipboard-commands.js";
 import { deleteSelectedObjects } from "../../../features/workspace/commands/delete-command.js";
 import { FILE_ACTIONS } from "../../../features/workspace/commands/document-commands.js";
-import { openCurrentDrawingAsLatex } from "../../../features/workspace/commands/latex-commands.js";
+import { openLatexCodeEditor } from "../../../features/workspace/commands/latex-commands.js";
 import { formatDrawingSource } from "../../../features/workspace/commands/source-commands.js";
 import { fitDrawingToView } from "../workspace/viewport.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -396,17 +396,18 @@ const viewMenu = () => ({
             icon: "ruler",
             run: () =>
                 toggleDisplaySetting("showDimensions", "drawingDimensionsToggle")
-        },
-        {
-            id: "magnitudes",
-            label:
-                display().showMagnitudes === false
-                    ? "Show Magnitudes"
-                    : "Hide Magnitudes",
-            icon: "arrow-up-right",
-            run: () =>
-                toggleDisplaySetting("showMagnitudes", "drawingMagnitudesToggle")
         }
+
+        /*
+         * MAGNITUDES IS GONE FROM THIS MENU, AND FROM THE STYLE STRIP.
+         *
+         * It was a bulk switch over every value label on the sheet, and it has
+         * been removed at the owner's request. The SETTING is left in the model
+         * (`display.showMagnitudes`), because a saved file carries it and a
+         * sheet written while it was off must still open the same way - it
+         * simply no longer has a control of its own. Nothing reads a missing
+         * DOM element here any more, so there is no dangling lookup.
+         */
     ]
 });
 
@@ -456,7 +457,7 @@ const insertMenu = () => ({
             id: "latex-code",
             label: "LaTeX Code…",
             icon: "file-text",
-            run: () => openCurrentDrawingAsLatex()
+            run: () => openLatexCodeEditor()
         }
     ]
 });

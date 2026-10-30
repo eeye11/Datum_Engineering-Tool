@@ -87,7 +87,7 @@ export function settingEntries(toolId) {
     if (features.defaultFixed !== undefined) {
         entries.push({
             key: "defaultFixed",
-            label: "Fixed",
+            label: "Fix",
             kind: "toggle",
             default: Boolean(features.defaultFixed),
             scope: "object"

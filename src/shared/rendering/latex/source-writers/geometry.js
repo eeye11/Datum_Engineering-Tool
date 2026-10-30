@@ -44,14 +44,7 @@ import {
     straightLine,
     textNode
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
-import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
-import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
-import { gainTrianglePoints, isControlBlock, isGain, isPlant, isSum, plantNodeLabel, plantNodePosition, plantStyle, plantValue, sumInputSign, sumInputSignPosition, sumNodePortPosition } from "../../../model/plant.js";
-import { blockLabelLatex } from "../../../model/block-label.js";
-import { isSignalLine, signalLineSegments } from "../../../model/signal-line.js";
-import { stressArrows, stressAngleMark } from "../../../geometry/stress-element.js";
-import { boundaryStressDrawing } from "../../../geometry/boundary-stress.js";
-import { applyObjectComments, ensureObjectId } from "../object-comments.js";
+import { colourDefinition } from "./statics-primitives.js";
 
 function finite(value, fallback = 0) {
     const number = Number(value);
@@ -77,35 +70,36 @@ function finite(value, fallback = 0) {
  * the model it was handed.
  */
 /*
- * THE AUTHORED STYLE, AND NOTHING ELSE.
+ * THE THEME'S DEFAULT INK, resolved through the published theme module.
  *
- * `style.stroke` is the colour the student's object was drawn with; absent, the
- * drawing is BLACK. It is deliberately NOT the interface theme's default ink:
- * that value (`#193335`, a dark teal) is what a NEW object starts from, and
- * writing it into the source made every un-chosen black line a dark teal in TeX
- * - and would have made a saved file change colour when the interface theme
- * did. The colour conversion itself, the pen width and the opacity all come
- * from the shared `tikz-style.js`, through the primitives.
+ * Reached by name rather than imported, for the same reason the Statics
+ * writer does: `theme.js` owns the light/dark default, and a private copy of
+ * the two hex values here would be a second answer to "what colour is a line
+ * when nobody chose one". In a browser it is already loaded; a test that has
+ * not loaded it simply falls back to black.
  */
-const NO_STROKE = /^none$/i;
+function themeInk() {
+    const theme = globalThis.enggTheme;
+
+    try {
+        if (theme && typeof theme.defaultLineColour === "function") {
+            return theme.defaultLineColour();
+        }
+    } catch {
+        /* fall through */
+    }
+
+    return null;
+}
 
 function renderStyle(style = {}) {
     const normalised = { ...style };
 
-    const declared = String(style.stroke ?? "").trim();
+    normalised.stroke = style.stroke || themeInk() || "#000000";
 
-    normalised.stroke = NO_STROKE.test(declared)
-        ? "none"
-        : declared || "#000000";
+    const width = resolveLineWidth(style.lineWidth);
 
-    /*
-     * THE WIDTH STAYS NOMINAL HERE.
-     *
-     * `primitives` receive it with the export transform alongside, and reduce it
-     * by that factor exactly once. Putting the factor on the style as well would
-     * multiply twice - the failure this contract exists to prevent.
-     */
-    normalised.lineWidth = resolveLineWidth(style.lineWidth);
+    normalised.lineWidth = width;
 
     normalised.fill =
         String(style.fillMode ?? "").toLowerCase() === "solid"
@@ -117,76 +111,23 @@ function renderStyle(style = {}) {
     return normalised;
 }
 
-/*
- * THE EXPORT TRANSFORM IN EFFECT, FOR THE OBJECT BEING WRITTEN.
- *
- * Every coordinate this writer emits goes through `pointOf`, so the export
- * reduction and the shift to a local origin are applied THERE - once, in one
- * place - rather than in every shape's own arithmetic. The model coordinates are
- * read unchanged; only what is written comes out normalized.
- *
- * It is set for ONE object's serialization and restored afterwards, so it cannot
- * leak between objects and a second pass over the same drawing starts from the
- * model again - which is what makes repeated generation idempotent.
- */
-let exportTransformInEffect = null;
-
-function withExportTransform(transform, fn) {
-    const previous = exportTransformInEffect;
-
-    exportTransformInEffect = transform && typeof transform.point === "function" ? transform : null;
-
-    try {
-        return fn();
-    } finally {
-        exportTransformInEffect = previous;
-    }
-}
-
 function pointOf(candidate) {
     if (!candidate || typeof candidate !== "object") {
         return { x: 0, y: 0 };
     }
 
-    const x = finite(candidate.x);
-    const y = finite(candidate.y);
-
-    return exportTransformInEffect ? exportTransformInEffect.point(x, y) : { x, y };
-}
-
-/*
- * A LENGTH IN MODEL UNITS, AT THE EXPORT SCALE.
- *
- * A radius, a width or a marker size is a DISTANCE, not a position: it has no
- * origin, so it is multiplied by the factor and never shifted. Scaling it here
- * - next to `pointOf`, where the coordinates are scaled - is what keeps a circle
- * circular and a rectangle's aspect ratio intact in a reduced figure.
- */
-function lengthOf(value) {
-    const number = finite(value);
-
-    return exportTransformInEffect ? exportTransformInEffect.length(number) : number;
-}
-
-/*
- * AN ARC ANGLE IN DEGREES.
- *
- * The model stores degrees - that is what the factory takes and what the canvas
- * draws with. A value outside the degree range is a genuinely radian-valued arc
- * from an older file, and is converted ONCE; a degree value passes unchanged.
- * `5156.62` is what the old unconditional multiplication made of a right angle.
- */
-function toDegrees(value) {
-    const angle = finite(value);
-
-    return Math.abs(angle) > 2 * Math.PI ? angle : (angle * 180) / Math.PI;
+    return {
+        x: finite(candidate.x),
+        y: finite(candidate.y)
+    };
 }
 
 function pointsOf(geometry) {
     return Array.isArray(geometry?.points) ? geometry.points.map(pointOf) : [];
 }
 
-/* The polygon's vertices, derived from centre, radius, sides and rotation. */function polygonPoints(geometry) {
+/* The polygon's vertices, derived from centre, radius, sides and rotation. */
+function polygonPoints(geometry) {
     const centre = pointOf(geometry?.center);
     const radius = finite(geometry?.radius);
     const sides = Math.max(3, Math.round(finite(geometry?.sides, 3)));
@@ -255,7 +196,8 @@ function crossMarker(at, style, size) {
     ].join("\n");
 }
 
-const SHAPES = {    line(object) {
+const SHAPES = {
+    line(object) {
         const start = pointOf(object.geometry?.start);
         const end = pointOf(object.geometry?.end);
         const style = renderStyle(object.style);
@@ -269,8 +211,7 @@ const SHAPES = {    line(object) {
          */
         return straightLine(start, end, style, {
             arrowStart: style.arrowStart || "none",
-            arrowEnd: style.arrowEnd || "none",
-            transform: exportTransformInEffect
+            arrowEnd: style.arrowEnd || "none"
         });
     },
 
@@ -286,35 +227,13 @@ const SHAPES = {    line(object) {
          */
         const drawn =
             style.markerStyle === "cross"
-                ? crossMarker(at, style, lengthOf(size))
-                : marker({ at, style, size: lengthOf(size) });
+                ? crossMarker(at, style, size)
+                : marker({ at, style, size });
 
         return [coordinate(`${safeName(object)}`, at.x, at.y), drawn].join("\n");
     },
 
-    polyline(object, context = {}) {
-        if (isSignalLine(object)) {
-            const style = renderStyle({
-                stroke: "#000000",
-                lineWidth: "thin",
-                lineType: "solid",
-                opacity: 1
-            });
-
-            return signalLineSegments(object, context.allObjects || [])
-                .map(segment => straightLine(
-                    pointOf(segment.start),
-                    pointOf(segment.end),
-                    style,
-                    {
-                        arrowEnd: segment.hasArrow ? "open-arrow" : "none",
-                        transform: exportTransformInEffect
-                    }
-                ))
-                .filter(Boolean)
-                .join("\n");
-        }
-
+    polyline(object) {
         const points = pointsOf(object.geometry);
 
         if (points.length < 2) {
@@ -355,273 +274,46 @@ const SHAPES = {    line(object) {
     },
 
     rectangle(object) {
-        if (object.metadata?.boundaryStress) {
-            const drawing = boundaryStressDrawing(object.geometry);
-            const escape = text => text.replace(/[\\{}$&#%_^~]/g, char => ({ "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" }[char] || `\\${char}`));
-            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), renderStyle(object.style)),
-                ...drawing.paths.map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" }))),
-                ...drawing.labels.map(item => textNode({ at: pointOf(item.point), text: escape(item.text), style: { stroke: item.colour } }))].join("\n");
-        }
-        if (object.metadata?.stressElement) {
-            const style = renderStyle(object.style);
-            const mark = stressAngleMark(object.geometry);
-            const referenceStyle = renderStyle({ ...object.style, stroke: "#909090", fill: "none", lineType: "solid" });
-            const angleCommands = mark ? [
-                polyline(mark.reference.map(pointOf), referenceStyle),
-                polyline(mark.face.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
-                polyline(mark.perpendicular.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
-                polyline(mark.arc.map(pointOf), referenceStyle),
-                ...mark.axes.map((axis, index) => textNode({ at: pointOf(axis.point), text: ["$x$", "$x'$", "$y'$"][index], style: { stroke: "#909090" } })),
-                textNode({ at: pointOf(mark.labelPoint), text: `$${mark.text.replace("°", "^{\\circ}")}$`, style: { stroke: style.stroke } })
-            ] : [];
-            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), style),
-                ...angleCommands,
-                ...stressArrows(object.geometry).map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" })))].join("\n");
-        }
-        if (isGain(object)) {
-            const style = renderStyle(plantStyle(object.style));
-            const vertices = gainTrianglePoints(object);
-
-            if (vertices.length !== 3) {
-                return null;
-            }
-
-            const centre = {
-                x: vertices.reduce((sum, vertex) => sum + vertex.x, 0) / vertices.length,
-                y: vertices.reduce((sum, vertex) => sum + vertex.y, 0) / vertices.length
-            };
-            const commands = [
-                closedShape(vertices.map(pointOf), style),
-                textNode({
-                    at: pointOf(centre),
-                    text: plantValue(object, "gainValue"),
-                    style,
-                    fontSize: lengthOf(8)
-                })
-            ];
-
-            for (const [side, port] of [
-                ["inputs", {
-                    x: (vertices[0].x + vertices[1].x) / 2,
-                    y: (vertices[0].y + vertices[1].y) / 2
-                }],
-                ["outputs", vertices[2]]
-            ]) {
-                const terminal = plantNodePosition(object, side, 0);
-                commands.push(
-                    straightLine(pointOf(port), pointOf(terminal), style),
-                    circlePrimitive({
-                        centre: pointOf(terminal),
-                        radius: lengthOf(1.25),
-                        style: { ...style, fill: style.stroke }
-                    })
-                );
-            }
-
-            return commands.filter(Boolean).join("\n");
-        }
-
-        /*
-         * THE CORNER IS COMPUTED IN MODEL SPACE, THEN TRANSFORMED ONCE.
-         *
-         * `position` is the TOP-LEFT corner with y growing upward, so the
-         * rectangle runs DOWN from it. The other corner is therefore computed
-         * from the MODEL position and the MODEL height, and only the finished
-         * pair is passed through `pointOf` - transforming `position` first and
-         * then subtracting an export-scaled height would offset the corner
-         * twice and leave the rectangle at a different size from its own
-         * neighbours.
-         */
-        const position = {
-            x: finite(object.geometry?.position?.x),
-            y: finite(object.geometry?.position?.y)
-        };
-
+        const position = pointOf(object.geometry?.position);
         const width = finite(object.geometry?.width);
         const height = finite(object.geometry?.height);
         const rotation = finite(object.geometry?.rotation);
-        const style = renderStyle(isControlBlock(object) ? plantStyle(object.style) : object.style);
-        let rectangle;
+        const style = renderStyle(object.style);
 
         /*
-         * `position` IS THE TOP-LEFT CORNER, with y growing upward, so the
-         * rectangle runs DOWN from it - exactly as the canvas draws it. Adding
-         * the height drew every rectangle one height too high.
-         *
          * A rotated rectangle is not a rectangle to TikZ, so it is drawn as a
-         * closed path through the model's own corners (rotated about the
-         * centre, as `rectangleCorners` defines them) rather than being squared
-         * up. A rotation of zero takes the exact `rectangle` operation, which
-         * closes without a seam.
+         * closed path through its four corners rather than being silently
+         * squared up. A rotation of zero takes the exact `rectangle` operation,
+         * which closes without a seam.
          */
         if (rotation !== 0) {
-            /*
-             * A rotated rectangle's corners are computed in MODEL space - that is
-             * where the rotation lives - and then passed through `pointOf` into
-             * export space, exactly as every other coordinate is. Transforming
-             * them here keeps the corners in the same figure as the rest.
-             */
-            const corners = enggFeatureGeometry.rectangleCorners(object.geometry);
+            const radians = (rotation * Math.PI) / 180;
+            const cos = Math.cos(radians);
+            const sin = Math.sin(radians);
 
-            rectangle = corners.length === 4 ? closedShape(corners.map(pointOf), style) : null;
-        } else {
-            rectangle = rectanglePrimitive({
-                from: pointOf({ x: position.x, y: position.y - height }),
-                to: pointOf({ x: position.x + width, y: position.y }),
-                style
-            });
-        }
-
-        if (!isControlBlock(object) || !rectangle) {
-            return rectangle;
-        }
-
-        const centre = {
-            x: position.x + width / 2,
-            y: position.y - height / 2
-        };
-        const radians = (rotation * Math.PI) / 180;
-        const rotate = (x, y) => ({
-            x: centre.x + x * Math.cos(radians) - y * Math.sin(radians),
-            y: centre.y + x * Math.sin(radians) + y * Math.cos(radians)
-        });
-        const commands = [rectangle];
-
-        if (isPlant(object)) {
-            commands.push(textNode({
-                at: pointOf(centre),
-                text: "Plant",
-                style,
-                fontSize: lengthOf(12)
+            const corners = [
+                { x: 0, y: 0 },
+                { x: width, y: 0 },
+                { x: width, y: height },
+                { x: 0, y: height }
+            ].map(corner => ({
+                x: position.x + corner.x * cos - corner.y * sin,
+                y: position.y + corner.x * sin + corner.y * cos
             }));
-        }
-        const userLabel = plantValue(object, "plantLabel");
 
-        if (isPlant(object) && userLabel.trim()) {
-            commands.push(
-                textNode({
-                    at: pointOf({ x: centre.x, y: centre.y - 6 }),
-                    text: `[${userLabel}]`,
-                    style,
-                    fontSize: lengthOf(4)
-                })
-            );
+            return closedShape(corners, style);
         }
 
-        const blockLabel = plantValue(object, "blockLabel");
-
-        if (blockLabel.trim()) {
-            commands.push(
-                textNode({
-                    at: pointOf(centre),
-                    text: `$${blockLabelLatex(blockLabel)}$`,
-                    style,
-                    fontSize: lengthOf(8)
-                })
-            );
-        }
-
-        const blockLowerLabel = plantValue(object, "blockLowerLabel");
-
-        if (blockLowerLabel.trim()) {
-            commands.push(
-                textNode({
-                    at: pointOf({ x: centre.x, y: centre.y - height / 2 - 5 }),
-                    text: blockLowerLabel,
-                    style,
-                    fontSize: lengthOf(4)
-                })
-            );
-        }
-
-        for (const side of ["inputs", "outputs"]) {
-            const count = plantValue(object, side);
-            const isInput = side === "inputs";
-            const x = isInput ? -width / 2 : width / 2;
-            const outward = isInput ? -1 : 1;
-            const margin = Math.min(height * 0.15, 2);
-            const usableHeight = Math.max(0, height - margin * 2);
-
-            for (let index = 0; index < count; index += 1) {
-                const y = count === 1
-                    ? 0
-                    : height / 2 - margin - index * usableHeight / (count - 1);
-                const port = rotate(x, y);
-                const terminal = rotate(x + outward * 4, y);
-
-                commands.push(
-                    straightLine(pointOf(port), pointOf(terminal), style),
-                    circlePrimitive({
-                        centre: pointOf(terminal),
-                        radius: lengthOf(1.25),
-                        style: { ...style, fill: style.stroke }
-                    })
-                );
-
-                if (plantValue(object, "showNodeLabels")) {
-                    const labelPoint = rotate(x + outward * 7, y);
-                    commands.push(
-                        textNode({
-                            at: pointOf({ x: labelPoint.x, y: labelPoint.y - 5 }),
-                            text: plantNodeLabel(object, side, index),
-                            anchor: outward * Math.cos(radians) < 0 ? "east" : "west",
-                            style,
-                            fontSize: lengthOf(4)
-                        })
-                    );
-                }
-            }
-        }
-
-        return commands.filter(Boolean).join("\n");
+        return rectanglePrimitive({
+            from: position,
+            to: { x: position.x + width, y: position.y + height },
+            style
+        });
     },
 
     circle(object) {
-        if (isSum(object)) {
-            const style = renderStyle(plantStyle(object.style));
-            const centre = pointOf(object.geometry?.center);
-            const radius = lengthOf(object.geometry?.radius);
-
-            if (radius <= 0) {
-                return null;
-            }
-
-            const commands = [circlePrimitive({ centre, radius, style })];
-            for (let index = 0; index < plantValue(object, "inputs"); index += 1) {
-                const terminal = plantNodePosition(object, "inputs", index);
-                const port = sumNodePortPosition(object, "inputs", index);
-                const signPosition = sumInputSignPosition(object, index);
-                commands.push(
-                    straightLine(pointOf(port), pointOf(terminal), style),
-                    circlePrimitive({
-                        centre: pointOf(terminal),
-                        radius: lengthOf(1.25),
-                        style: { ...style, fill: style.stroke }
-                    }),
-                    textNode({
-                        at: pointOf(signPosition),
-                        text: sumInputSign(object, index),
-                        style,
-                        fontSize: lengthOf(6)
-                    })
-                );
-            }
-
-            const outputTerminal = plantNodePosition(object, "outputs", 0);
-            const outputPort = sumNodePortPosition(object, "outputs", 0);
-            commands.push(
-                straightLine(pointOf(outputPort), pointOf(outputTerminal), style),
-                circlePrimitive({
-                    centre: pointOf(outputTerminal),
-                    radius: lengthOf(1.25),
-                    style: { ...style, fill: style.stroke }
-                })
-            );
-            return commands.filter(Boolean).join("\n");
-        }
-
         const centre = pointOf(object.geometry?.center);
-        const radius = lengthOf(object.geometry?.radius);
+        const radius = finite(object.geometry?.radius);
 
         if (radius <= 0) {
             return null;
@@ -632,24 +324,9 @@ const SHAPES = {    line(object) {
 
     arc(object) {
         const centre = pointOf(object.geometry?.center);
-        const radius = lengthOf(object.geometry?.radius);
-
-        /*
-         * THE MODEL STORES AN ARC'S ANGLES IN DEGREES, and TikZ takes degrees.
-         *
-         * The factories take the angle the student drew (`arc(centre, r, 0, 90)`),
-         * and the geometry keeps it as given - so the conversion here was WRONG
-         * IN BOTH DIRECTIONS: it multiplied an already-degree value by 180/pi,
-         * turning a quarter circle into `end angle=5156.62`. The arc still looked
-         * right on the live overlay, which draws from the model directly, and was
-         * only wrong once the compiled picture arrived.
-         *
-         * `toDegrees` therefore accepts EITHER: a value the model stored in
-         * degrees is written as it stands, and a value past the degree range - a
-         * genuinely radian-valued arc from an older file - is converted once.
-         */
-        const startAngle = toDegrees(object.geometry?.startAngle);
-        const endAngle = toDegrees(object.geometry?.endAngle);
+        const radius = finite(object.geometry?.radius);
+        const startAngle = finite(object.geometry?.startAngle);
+        const endAngle = finite(object.geometry?.endAngle);
 
         if (radius <= 0 || startAngle === endAngle) {
             return null;
@@ -699,7 +376,9 @@ const SHAPES = {    line(object) {
         };
 
         const xPositive = arm(geometry.xPositiveLength);
+        const xNegative = arm(geometry.xNegativeLength);
         const yPositive = arm(geometry.yPositiveLength);
+        const yNegative = arm(geometry.yNegativeLength);
 
         const fallback = arm(geometry.axisLength) || 25;
 
@@ -728,28 +407,30 @@ const SHAPES = {    line(object) {
             y: origin.y + dx * sin + dy * cos
         });
 
-        if (showX) {
+        if (showX && (xPositive > 0 || xNegative > 0)) {
             const posX = xPositive > 0 ? xPositive : fallback;
+            const negX = xNegative > 0 ? xNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(0, 0),
+                    rotate(-negX, 0),
                     rotate(posX, 0),
                     style,
-                    { arrow: "end" }
+                    { arrow: "both" }
                 )
             );
         }
 
-        if (showY) {
+        if (showY && (yPositive > 0 || yNegative > 0)) {
             const posY = yPositive > 0 ? yPositive : fallback;
+            const negY = yNegative > 0 ? yNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(0, 0),
+                    rotate(0, -negY),
                     rotate(0, posY),
                     style,
-                    { arrow: "end" }
+                    { arrow: "both" }
                 )
             );
         }
@@ -775,11 +456,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x + 7 * sin,
-                            y: tip.y - 7 * cos
+                            x: tip.x + 3 * cos + 3 * sin,
+                            y: tip.y + 3 * sin - 3 * cos
                         },
                         text: xText,
-                        anchor: "center",
+                        anchor: "west",
                         style: { stroke: style.stroke }
                     })
                 );
@@ -794,11 +475,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x - 7 * cos,
-                            y: tip.y - 7 * sin
+                            x: tip.x - 3 * sin + 3 * cos,
+                            y: tip.y + 3 * cos + 3 * sin
                         },
                         text: yText,
-                        anchor: "center",
+                        anchor: "south west",
                         style: { stroke: style.stroke }
                     })
                 );
@@ -839,7 +520,7 @@ function safeName(object) {
  * source is still being implemented is handled: its object exists, its region
  * is untouched, and nothing is fabricated.
  */
-export function geometrySourceWriter(object, context = {}) {
+export function geometrySourceWriter(object) {
     if (!object || typeof object !== "object") {
         return null;
     }
@@ -850,79 +531,85 @@ export function geometrySourceWriter(object, context = {}) {
         return null;
     }
 
-    /*
-     * THE OBJECT IS WRITTEN INSIDE ITS EXPORT TRANSFORM.
-     *
-     * `context.transform` is the drawing's export context. It is in effect for
-     * THIS object only: every coordinate comes out normalized and every length
-     * reduced by the one export factor, and no other object can inherit it.
-     * Without one the object is written at its authored size - which is what a
-     * single-object preview and a test want.
-     */
-    return withExportTransform(context?.transform || null, () => {
-        const written = shape(object, context);
+    const written = shape(object);
 
-        if (typeof written !== "string" || !written.trim()) {
-            return written;
-        }
+    if (written === null || written === undefined) {
+        return null;
+    }
 
-        /*
-         * THE COLOUR DEPENDENCIES GO WITH THE COMMAND THAT USES THEM.
-         *
-         * A hex colour is written as `daetumC<hex>` and NEEDS its
-         * `\definecolor` line, or the picture fails with "Undefined color".
-         * `strokeOptionsWithPrelude` already hands the definitions back beside
-         * the options, but the shapes return only the command - so every
-         * coloured object used to be written into the source without the one
-         * line that makes its colour exist, and the whole sheet failed to
-         * compile with an error that pointed at nothing the student could fix.
-         *
-         * The definitions are gathered from the command's own option group and
-         * emitted ABOVE it: one definition per colour, in a deterministic order,
-         * so the same drawing always writes the same text.
-         */
-        const definitions = colourDefinitionsIn(written);
-        const body = definitions.length ? `${definitions.join("\n")}\n${written}` : written;
-
-        /*
-         * THE OBJECT'S HEADER. Its id is minted once and reused, so moving or
-         * restyling the shape rewrites its region and never changes who it is.
-         */
-        const id = ensureObjectId(object, object.type);
-
-        return applyObjectComments({ ...object, id }, body, { type: object.type });
-    });
+    return withColourDefinitions(String(written));
 }
 
 /*
- * THE COLOUR NAMES A COMMAND USES THAT DO NOT EXIST IN xcolor YET.
+ * ============================================================
+ * A COLOUR IS DEFINED WHEREVER IT IS USED
+ * ============================================================
  *
- * Reads the command's `[...]` option group for `draw=`/`color=`/`fill=` values
- * of DAETUM's own form (`daetumC193335`) and returns the `\definecolor` line each
- * one needs, in a stable order. A name the student wrote themselves is left to
- * them: rewriting `red` into a definition would change a drawing that already
- * compiles.
+ * The writer names a colour `daetumC193335` rather than spelling a hex value
+ * inline, because TikZ wants a NAME. That name means nothing to TeX until a
+ * `\definecolor` line has declared it - and without one the whole sheet fails
+ * to compile, which is exactly how a coloured line used to break the Source
+ * tab while an uncoloured one worked.
+ *
+ * The definitions are derived from the COMMANDS THIS WRITER JUST PRODUCED, not
+ * from the object's style fields: whatever name actually reached the source is
+ * the name that must be declared, and a style key that was ignored cannot
+ * introduce a definition nothing refers to.
  */
-function colourDefinitionsIn(command) {
-    const optionGroup = /^\\[A-Za-z]+\*?\s*\[([^\]]*)\]/.exec(command);
-
-    if (!optionGroup) {
-        return [];
+function withColourDefinitions(written) {
+    if (!written.includes("daetumC")) {
+        return written;
     }
 
-    const names = new Set();
+    const names = [];
+    const pattern = /daetumC[0-9A-Fa-f]{6}/g;
+    let match;
 
-    optionGroup[1].replace(
-        /(?:draw|color|fill|text)\s*=\s*(\{)?\s*(daetumC[0-9A-Fa-f]{6})\b/g,
-        (match, brace, name) => {
-            names.add(name);
-            return match;
+    while ((match = pattern.exec(written)) !== null) {
+        if (!names.includes(match[0])) {
+            names.push(match[0]);
         }
+    }
+
+    if (!names.length) {
+        return written;
+    }
+
+    const already = colourDefinitionsIn(written);
+    const declared = new Set(
+        already.map((line) => (/\{([^}]+)\}/.exec(line) || [])[1]).filter(Boolean)
     );
 
-    return [...names]
-        .map((name) => definitionForName(name))
+    const missing = names
+        .filter((name) => !declared.has(name))
+        .map((name) => colourDefinition(name, name.slice("daetumC".length)))
         .filter(Boolean);
+
+    return missing.length ? [...missing, written].join("\n") : written;
+}
+
+/*
+ * THE COLOUR DEFINITIONS A PICTURE USES, as `\definecolor` lines.
+ *
+ * The same reading the Statics writer uses, so one helper answers "what
+ * preamble does this picture need" for every kind of feature.
+ */
+export function colourDefinitionsIn(source) {
+    const definitions = new Map();
+
+    String(source ?? "")
+        .split("\n")
+        .forEach((line) => {
+            const match = line.match(/^\s*\\definecolor\{([^}]+)\}\{([^}]+)\}\{([^}]+)\}/);
+
+            if (match) {
+                definitions.set(match[1], { model: match[2], value: match[3] });
+            }
+        });
+
+    return [...definitions].map(
+        ([name, { model, value }]) => `\\definecolor{${name}}{${model}}{${value}}`
+    );
 }
 
 /*

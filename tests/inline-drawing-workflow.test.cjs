@@ -353,7 +353,12 @@ async function run() {
 
   console.log("\n  back to the solution, where the student left it\n");
 
-  document.getElementById("drawingReturnToSolution").click();
+  /*
+   * THE WORKSPACE TAB IS THE WAY BACK. The sheet bar used to carry a second
+   * "Return to the written solution" button beside its tabs; it has been
+   * removed, so the return is the same door the student arrived through.
+   */
+  document.querySelector('.tab[data-tab="writing"]').click();
 
   await wait(30);
 

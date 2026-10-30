@@ -75,8 +75,10 @@ import { refreshDocumentHeader } from "./commands/document-commands.js";
 import { installDrawOrderControls } from "./commands/draw-order.js";
 import { installToolbarWiring } from "../../components/layout/toolbar/toolbar-wiring.js";
 import { installWorkspaceLayout } from "../../components/layout/workspace/workspace-layout.js";
+import { installTouchInputClass } from "../../components/layout/workspace/touch-capability.js";
 import { installDrawingPanel } from "../../components/layout/panels/drawing-panel.js";
 import { installCanvasEvents } from "./interaction/canvas-events.js";
+import { installConstructionActions } from "./interaction/construction-actions.js";
 import { installKeyboardShortcuts } from "./interaction/keyboard-shortcuts.js";
 import { editableHandlesFor } from "./interaction/handles.js";
 import { setHandleResolver } from "../../shared/rendering/overlay-render.js";
@@ -104,6 +106,26 @@ installDocumentCommands();
 installDrawOrderControls();
 installToolbarWiring();
 installWorkspaceLayout();
+
+/*
+ * THE DEVICE'S OWN SIZING, BEFORE ANYTHING IS DRAWN.
+ *
+ * A device that can be touched gets slightly larger controls (see
+ * `.datum-touch-input` in responsive.css). Set here, ahead of the first render,
+ * so no control is ever laid out at the wrong size and then resized under the
+ * student's finger.
+ */
+installTouchInputClass();
+
+/*
+ * FINISH AND CANCEL, ON SCREEN, FOR THE TOOLS THAT NEED THEM.
+ *
+ * A progressive construction is finished by a double-click and given up with
+ * Escape - both unreachable on a tablet. The pair wired here calls the SAME two
+ * functions, and appears only while something is genuinely in progress.
+ */
+installConstructionActions();
+
 installDrawingPanel();
 installCanvasEvents();
 installKeyboardShortcuts();

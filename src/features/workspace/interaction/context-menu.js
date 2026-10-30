@@ -405,3 +405,52 @@ export function installContextMenu() {
         }
     );
 }
+
+/*
+ * ========================================================
+ * THE FEATURE MENU, FROM SOMETHING OTHER THAN A RIGHT CLICK
+ * ========================================================
+ *
+ * A finger has no right button and a pencil has a barrel button only sometimes,
+ * so the SAME menu has to be reachable from another gesture. This is that way
+ * in: a long hold on the drawing, or a pen's barrel button.
+ *
+ * IT IS THE SAME MENU, not a touch-shaped second one. It selects what the
+ * contact is on and then calls `openFeatureContextMenu` - the function the
+ * right-click path calls - with the same two coordinates and the same
+ * has-selection answer. So a menu item behaves identically whichever gesture
+ * opened it, and an action added to the menu tomorrow appears to all three.
+ *
+ * The visible controls remain the primary route: this is an additional door,
+ * never the only one.
+ */
+export function openCanvasContextMenuAt(clientX, clientY) {
+    if (!drawingCanvas) {
+        return false;
+    }
+
+    closeFeatureContextMenu();
+
+    const rawPoint = canvasPointFromEvent(
+        { clientX, clientY },
+        false
+    );
+
+    const object = rawPoint
+        ? objectAtPoint(rawPoint, { inputKind: "touch" })
+        : null;
+
+    /* The pressed feature becomes the selection, exactly as a right-click does. */
+    if (object && !drawingState.selection.selectedObjectIds.includes(object.id)) {
+        enggDrawingState.selectObject(drawingState, object.id);
+
+        renderProperties();
+        renderCurrentDrawing();
+    }
+
+    const hasSelection = drawingState.selection.selectedObjectIds.length > 0;
+
+    openFeatureContextMenu(clientX, clientY, hasSelection);
+
+    return true;
+}

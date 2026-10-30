@@ -861,15 +861,6 @@
                     -->
                     <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><rect x="2" y="6" width="16" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M5 6v4M7.5 6v2.5M10 6v4M12.5 6v2.5M15 6v4"/></svg>
                     </button>
-                    <button class="drawing-status-toggle active" id="drawingMagnitudesToggle" type="button" data-toggle-name="Magnitudes" aria-pressed="true" title="Magnitudes: on" aria-label="Magnitudes">
-                    <!--
-                    MAGNITUDES: A FORCE ARROW WITH ITS VALUE.
-
-                    A force arrow with an F label above it
-                    represents showing or hiding force magnitudes.
-                    -->
-                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><text x="9" y="9" text-anchor="middle" fill="currentColor" font-family="Georgia, serif" font-size="11" font-style="italic">F</text><path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 14h14M13.5 10.5L17 14l-3.5 3.5"/></svg>
-                    </button>
 
                     <!--
                     FIT: A ONE-SHOT ACTION, NOT A TOGGLE.
@@ -1023,26 +1014,18 @@
                     </div>
                 </div>
 
+                <!--
+                    THE SHEET TABS, AND NOTHING ELSE.
+
+                    There used to be a "Return to the written solution" button
+                    pinned to the right of this row. It has been removed: the
+                    workspace tabs at the top of the window already switch
+                    between Written Solution and Engineering Drawing, so it was
+                    a second door onto the same room - and it cost the sheet bar
+                    a strip of its own. See `.drawing-sheet-bar-row`.
+                -->
                 <div class="drawing-sheet-bar-row">
                     <div class="drawing-sheet-bar" id="drawingSheetTabs" role="tablist" aria-label="Drawing sheets"></div>
-
-                    <!--
-                        BACK TO THE WRITTEN SOLUTION.
-
-                        Shown on this tab because it is where it means
-                        something, and it returns to the written solution the
-                        drawing was opened FROM: the same document, the same
-                        reference selected, the same caret. It is not a second
-                        tab switch - it is the return half of Enter Drawing.
-                    -->
-                    <button
-                        type="button"
-                        class="drawing-return-to-solution"
-                        id="drawingReturnToSolution"
-                        title="Return to the written solution, at the drawing you were editing"
-                    >
-                        <span aria-hidden="true">←</span> Written Solution
-                    </button>
                 </div>
 
                 <!--
@@ -1125,6 +1108,44 @@
                         <span>Ready</span>
                         <span id="drawingCoordinates">X: 0.0 Y: 0.0 mm</span>
                         <span id="drawingToolMessage">Ready</span>
+                    </div>
+
+                    <!--
+                        FINISH AND CANCEL, AS CONTROLS RATHER THAN IDIOMS.
+
+                        A progressive construction - a pipe run, a polyline, a
+                        truss, a load - is finished by a DOUBLE-CLICK and given
+                        up with ESCAPE. Both are excellent with a keyboard and a
+                        mouse, and both are unreachable on a tablet: a finger has
+                        no Escape key and no way to say "double-click" that is
+                        not indistinguishable from two clicks.
+
+                        So the SAME TWO actions are on screen beside the
+                        instruction, calling the SAME TWO functions the keyboard
+                        reaches - Finish is the double-click's own behaviour,
+                        Cancel is Escape's. Shown only while something is
+                        genuinely in progress, and never required: the keyboard
+                        and double-click still work exactly as before.
+                    -->
+                    <div
+                        class="drawing-construction-actions"
+                        id="drawingConstructionActions"
+                        role="group"
+                        aria-label="Construction"
+                        hidden
+                    >
+                        <button
+                            type="button"
+                            class="drawing-construction-action"
+                            id="drawingConstructionFinish"
+                            title="Finish this construction"
+                        >Finish</button>
+                        <button
+                            type="button"
+                            class="drawing-construction-action"
+                            id="drawingConstructionCancel"
+                            title="Cancel this construction"
+                        >Cancel</button>
                     </div>
                     <div class="drawing-zoom-controls" aria-label="Zoom controls">
                         <button id="drawingZoomOut" type="button" aria-label="Zoom out">-</button>

@@ -128,7 +128,7 @@ const setValue = (element, value) => {
     factories.line({ x: 10, y: 20 }, { x: 60, y: 20 }, {
       style: {
         stroke: "#112233",
-        lineWidth: "thin",
+        lineWidth: 0.5,
         lineType: "solid",
         arrowStart: "none",
         arrowEnd: "filled"
@@ -156,9 +156,21 @@ const setValue = (element, value) => {
     swatch("stroke")?.querySelector(".dfp-colour-text")?.textContent,
   );
   check("Thickness shows the object's width as its preset", field("lineWidth")?.value === "thin", field("lineWidth")?.value);
-  check("Fixed is offered", Boolean(field("fixed")));
+  check("Fix is offered", Boolean(field("fixed")));
   check("Transform is offered", Boolean(group("transform")) && Boolean(body.querySelector('[data-transform-input="x"]')));
-  check("no Construction section is invented", !body.textContent.toLowerCase().includes("construction"));
+  /*
+   * NO "CONSTRUCTION" SECTION. The check is for a HEADING or a control, not
+   * for the word appearing anywhere: the Line style option list offers a
+   * "Construction" line type, which is a style the student may choose rather
+   * than a section of the panel.
+   */
+  check(
+    "no Construction section is invented",
+    !group("construction") &&
+      ![...body.querySelectorAll(".dfp-section-heading")].some((heading) =>
+        /construction/i.test(heading.textContent),
+      ),
+  );
   check("no numerical geometry fields are shown", !field("sides") && !field("length") && !field("angle"));
 
   console.log("\nEditing a Line");
@@ -166,14 +178,14 @@ const setValue = (element, value) => {
 
   setValue(field("lineType"), "dashed");
   check("the line style is written to the model", line.style.lineType === "dashed", line.style.lineType);
-  check("and only that key changed", line.style.stroke === "#112233" && line.style.lineWidth === "thin");
+  check("and only that key changed", line.style.stroke === "#112233" && line.style.lineWidth === 0.5);
   check("the End Arrow survived the style edit", line.style.arrowEnd === "filled");
 
   setValue(field("arrowStart"), "bar");
   check("Begin Arrow writes independently", line.style.arrowStart === "bar" && line.style.arrowEnd === "filled");
 
   setValue(field("lineWidth"), "thick");
-  check("Thickness writes the preset's width", line.style.lineWidth === 1, String(line.style.lineWidth));
+  check("Thickness writes the preset's width", line.style.lineWidth === 2, String(line.style.lineWidth));
   check("and the arrow heads are untouched", line.style.arrowStart === "bar" && line.style.arrowEnd === "filled");
 
   /*
@@ -182,7 +194,7 @@ const setValue = (element, value) => {
    * the numeric field. The value the student then types is what moves.
    */
   setValue(field("lineWidth"), "custom");
-  check("choosing Custom leaves the stored width alone", line.style.lineWidth === 1, String(line.style.lineWidth));
+  check("choosing Custom leaves the stored width alone", line.style.lineWidth === 2, String(line.style.lineWidth));
   check("Thickness is a dropdown, as a six-way choice should be", field("lineWidth")?.tagName === "SELECT", field("lineWidth")?.tagName);
   check("choosing Custom reveals a width field", Boolean(field("customWidth")), String(field("lineWidth")?.value));
   setValue(field("customWidth"), "1.75");
@@ -190,7 +202,7 @@ const setValue = (element, value) => {
 
   field("fixed").checked = true;
   fire(field("fixed"), "change");
-  check("Fixed locks the object", line.locked === true);
+  check("Fix locks the object", line.locked === true);
 
   field("fixed").checked = false;
   fire(field("fixed"), "change");
@@ -316,7 +328,7 @@ const setValue = (element, value) => {
 
   const line2 = add(
     factories.line({ x: 0, y: 0 }, { x: 30, y: 0 }, {
-      style: { stroke: "#445566", lineWidth: "medium", lineType: "dotted", arrowStart: "open", arrowEnd: "none" }
+      style: { stroke: "#445566", lineWidth: 1.25, lineType: "dotted", arrowStart: "open", arrowEnd: "none" }
     })
   );
 
@@ -657,12 +669,5 @@ const setValue = (element, value) => {
    * alive after the last check, so `npm test` waits on a file that has already
    * finished. Closing the window releases them.
    */
-  try {
-    window.close();
-  } catch {
-    /*
-     * A jsdom that refuses to close a window is not a test failure: the checks
-     * above have already run, and the harness's own after-hook exits anyway.
-     */
-  }
+  window.close();
 })();

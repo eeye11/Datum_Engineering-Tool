@@ -163,13 +163,13 @@ function drawingPage() {
             }>`,
             "The same setting as the Dimensions control on the style strip.",
         )}
-        ${row(
-            "Magnitudes visible",
-            `<input type="checkbox" data-settings-display="showMagnitudes" ${
-                display.showMagnitudes !== false ? "checked" : ""
-            }>`,
-            "The same setting as the Magnitudes control on the style strip.",
-        )}
+        <!--
+            MAGNITUDES HAS NO CONTROL ANY MORE - neither on the style strip nor in
+            this dialog. A preference with no control is a setting the student can
+            neither see nor change, so the row went with the button it mirrored.
+            The stored value is untouched: a sheet saved while it was off still
+            opens the way it was saved.
+        -->
 
         <h4>Application theme</h4>
         ${row(
@@ -443,7 +443,6 @@ function wire(pageId, dialog) {
              */
             const ids = {
               showDimensions: "drawingDimensionsToggle",
-              showMagnitudes: "drawingMagnitudesToggle",
             };
 
             const button = document.getElementById(ids[key]);

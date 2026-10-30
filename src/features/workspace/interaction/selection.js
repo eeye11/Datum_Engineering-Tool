@@ -62,8 +62,6 @@ function startDerivedAnnotationDrag(
     if (!picked || !point) {
         return false;
     }
-    const source = drawingState.objects.find(object => object.id === picked.sourceFeatureId);
-    if (!source || source.locked) return false;
 
     /*
      * SELECT THE LABEL, so its tight editor box appears while it is dragged
@@ -78,8 +76,6 @@ function startDerivedAnnotationDrag(
 
     editorState.selectionDrag = {
         pointerId: event.pointerId,
-        previousObjects: enggDrawingState.snapshotDrawing(drawingState),
-        originalGeometry: structuredClone(source.geometry),
         start: point,
         current: point,
         moved: false,
@@ -207,13 +203,6 @@ export function beginAnnotationDrag(
         );
 
     if (!picked) {
-        return false;
-    }
-
-    const selectedIds = drawingState.selection.selectedObjectIds;
-    if (selectedIds.includes(picked.sourceFeatureId)) {
-        // A force and its label are one selected feature, even when it is
-        // the only feature inside the selection rectangle.
         return false;
     }
 
@@ -683,7 +672,10 @@ export function finishSelectionDrag(
     if (currentSelection.derived) {
         if (currentSelection.moved) {
             const previous =
-                currentSelection.previousObjects;
+                enggDrawingState
+                    .snapshotDrawing(
+                        drawingState
+                    );
 
             /*
              * The offset is already on the feature from the move handler;
@@ -700,8 +692,9 @@ export function finishSelectionDrag(
             );
         } else {
             /*
-             * A click without a drag preserves the label's previous location,
-             * including any offset from an earlier move.
+             * A click with no movement: the box goes back where it
+             * naturally falls, so a nudge that was abandoned does not leave
+             * the label a pixel out of place forever.
              */
             const source =
                 objectsByIds([
@@ -710,7 +703,16 @@ export function finishSelectionDrag(
                 ])[0];
 
             if (source?.geometry) {
-                source.geometry = structuredClone(currentSelection.originalGeometry);
+                /*
+                 * Only THIS label's slot is cleared - one point of a
+                 * varying load, or the whole feature for a single-magnitude
+                 * one - so abandoning a nudge on one label cannot reset the
+                 * positions of the others.
+                 */
+                enggAnnotationModel.resetDerivedAnnotation(
+                    source,
+                    currentSelection.derived.annotation
+                );
             }
 
             setToolMessage(

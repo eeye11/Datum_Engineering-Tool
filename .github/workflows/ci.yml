@@ -31,9 +31,14 @@ jobs:
           # without a summary leaves a single line saying nothing about which
           # check failed. Splitting the reporter's output makes that visible
           # in the run's log and its annotations.
+          #
+          # THE TESTS ARE NAMED BY GLOB, NOT BY DIRECTORY. `node --test tests/`
+          # treats the path as a MODULE to load, so the runner reported one
+          # file-level failure and never ran a single test - the job failed in
+          # seconds with nothing to read.
           node --test --test-reporter=spec --test-reporter-destination=stdout \
             --test-reporter=github --test-reporter-destination=github \
-            tests/ 2>&1 | tee test-report.log
+            "tests/*.test.cjs" 2>&1 | tee test-report.log
 
       - name: Build
         run: npm run build

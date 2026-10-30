@@ -7,7 +7,7 @@ import enggErrorLog from "../../../app/error-log.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import enggDocumentFile from "../../../shared/file/document-file.js";
 import enggDocumentManagement from "../../../shared/file/document-management.js";
-import enggLatexDocument, { LATEX_EXTENSION, LATEX_MEDIA_TYPE, drawingFromPicture, embeddedPictureSource, hasEmbeddedDocument, pictureViewFromText, readEmbeddedEnvelope, writeLatexDocument, writeStandaloneFromSource } from "../../../shared/file/latex/latex-document.js";
+import { LATEX_EXTENSION, LATEX_MEDIA_TYPE, hasEmbeddedDocument, readEmbeddedEnvelope, writeLatexDocument, writeStandaloneFromSource } from "../../../shared/file/latex/latex-document.js";
 import { openLatexCodeEditor } from "./latex-commands.js";
 import enggRecovery from "../../../shared/file/document-recovery.js";
 import enggFileSave from "../../../shared/file/file-save.js";
@@ -311,47 +311,12 @@ export function refreshDocumentHeader() {
  */
 function beginDocumentLoad() {
     documentLoading = true;
-
-    /*
-     * AND THE EDITOR STATE IS TOLD TOO. Some of the reconstruction paths read
-     * the state rather than this module's flag - the source manager's origin, a
-     * caller checking `documentIsLoading` - so the two are kept in step by the
-     * one pair of functions that opens and closes a load.
-     */
-    editorState.documentLoading = true;
 }
 
 function endDocumentLoad() {
     documentLoading = false;
-    editorState.documentLoading = false;
 
     markDocumentClean();
-}
-
-/*
- * ========================================================
- * TWO OPENS AT ONCE: THE SECOND ONE WINS
- * ========================================================
- *
- * A ticket for one attempt to open a file. Taking one supersedes every load
- * already in flight: those reads may still finish, but `loadDrawing` will see
- * that their ticket is not the current one and drop them without touching the
- * document.
- *
- * It lives on the editor state rather than in this module because the state is
- * the one object every workspace module shares; the loading FLAG stays local
- * here because only this module reads it.
- */
-function beginOpenVariant() {
-    const variant = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-
-    editorState.documentLoadVariant = variant;
-
-    return variant;
-}
-
-function isCurrentOpenVariant(variant) {
-    return variant !== null && variant !== undefined && variant === editorState.documentLoadVariant;
 }
 
 function documentFile() {
@@ -476,52 +441,6 @@ function refreshDocumentTitle() {
  * format module wraps it; nothing here decides what the file is
  * called or how it is versioned.
  */
-/*
- * THE PICTURES A SAVE WRITES, ONE PER SHEET: THE SOURCE TAB'S OWN TEXT.
- *
- * A saved .tex must hold the drawing's ACTUAL code, because that is the copy a
- * `.tex` reader gets when the embedded document is missing or damaged, and
- * because it is what the student sees and edits on the Source tab. The export
- * of one sheet's source - its picture, its comments and its view record - is
- * produced by the Source tab's exporter, and the active sheet's LIVE draft is
- * used where it is loaded, so even unsaved Source-tab typing reaches the file.
- *
- * `null` when the source manager cannot be reached at all, so the writer falls
- * back to its measured pictures rather than to empty ones.
- */
-function savePictures() {
-    try {
-        const sheets = editorState.sheetCollection.sheets || [];
-        const active = activeSheet();
-        const manager = activeSourceManager();
-        const live =
-            active && manager && typeof manager.getSource === "function"
-                ? manager.getSource()
-                : null;
-
-        return sheets.map((sheet) => {
-            const source =
-                active && sheet.id === active.id && typeof live === "string"
-                    ? live
-                    : sheet?.source && typeof sheet.source.source === "string"
-                        ? sheet.source.source
-                        : "";
-
-            if (!/\\begin\s*\{tikzpicture\}/.test(source)) {
-                return "";
-            }
-
-            return writeStandaloneFromSource(source, {
-                title: sheet.name || "Sheet"
-            });
-        });
-    } catch (error) {
-        enggErrorLog.reportError("save pictures", error, {});
-
-        return null;
-    }
-}
-
 export function serializeDocumentBody() {
     /*
      * The editor holds the ACTIVE sheet, so it is written back before
@@ -631,10 +550,8 @@ function downloadDocumentFile(name) {
         );
 
     const text = writeLatexDocument(serializeDocumentBody(), {
-        title: displayNameFor(fileName),
-        pictures: savePictures()
+        title: displayNameFor(fileName)
     });
-
 
     downloadBlob(
         new Blob([text], { type: enggDocumentFile.MEDIA_TYPE }),
@@ -1476,16 +1393,7 @@ function runPrintPass(svg) {
 export async function saveDrawing() {
     const saved =
         await enggFileSave.save(
-            serializeDocumentBody(),
-
-            /*
-             * THE SHEETS' OWN CODE GOES WITH THE DOCUMENT.
-             *
-             * A save is the .tex a student can read and compile AND the file
-             * DAETUM reopens; the pictures are the sheets' Source-tab text (see
-             * `savePictures`), so both halves of the file agree.
-             */
-            { pictures: savePictures() }
+            serializeDocumentBody()
         );
 
     /*
@@ -1576,9 +1484,6 @@ async function saveDrawingAs(options = {}) {
                  * only when the chosen format is an image.
                  */
                 renderImage: renderSheetImageBlob,
-
-                /* The same sheet code a Save writes; see `savePictures`. */
-                pictures: savePictures(),
 
                 /*
                  * THE PDF ROUTE, handed in for the same reason.
@@ -1755,32 +1660,8 @@ function sizeOfFile(file) {
 
 export function loadDrawing(
     payload,
-    fileName,
-    options = {}
+    fileName
 ) {
-    /*
-     * ONLY THE NEWEST OPEN MAY COMMIT.
-     *
-     * Opening is read-then-apply, and the read is asynchronous whenever the
-     * file came from the operating system. Two Opens in quick succession - a
-     * double-clicked Import, a slow disk under a second attempt - can finish out
-     * of order, and the older read would then replace the newer document.
-     *
-     * When the caller took a variant (`beginDocumentLoad`), a load whose variant
-     * is no longer current is DROPPED, silently and completely: it installs
-     * nothing, reports nothing, and leaves the document the user asked for last
-     * alone. A caller with no variant - the template preview, a test - is never
-     * superseded and is answered exactly as before.
-     */
-    if (
-        options.variant !== undefined &&
-        options.variant !== null &&
-        editorState.documentLoadVariant !== null &&
-        options.variant !== editorState.documentLoadVariant
-    ) {
-        return false;
-    }
-
     const result =
         enggDocumentFile.readDocument(
             payload
@@ -1822,23 +1703,6 @@ export function loadDrawing(
      * is answered with an empty source rather than an error: an old drawing is
      * still a perfectly good drawing.
      */
-    /*
-     * EVERYTHING THE LOAD REPLACES IS CAPTURED BEFORE ANYTHING IS REPLACED.
-     *
-     * Opening is a safe operation only if a load that FAILS leaves the document
-     * it found. The sheets and the written solution are replaced in the middle
-     * of the reconstruction, and an exception after that point - a malformed
-     * sheet, an unsupported object, a renderer that cannot draw it - would
-     * otherwise leave half of the old document and half of the new one, or an
-     * empty canvas over intact-looking state. So the two live objects a load
-     * installs are kept here, as copies, and put back below when it throws.
-     */
-    const previousCollection =
-        editorState.sheetCollection;
-
-    const previousSolution =
-        enggSolutionState.getSource();
-
     restoreSolutionSource(data[enggSolutionState.SOLUTION_DOCUMENT_KEY]);
 
     const previous =
@@ -1863,38 +1727,6 @@ export function loadDrawing(
      */
     try {
         applyLoadedDocument(data, fileName, previous, result);
-    } catch (error) {
-        /*
-         * A LOAD THAT THREW IS A LOAD THAT DID NOT HAPPEN.
-         *
-         * The reason is reported (with the file's name, so it can be
-         * investigated), and the document is put back as it was: the sheets
-         * that were open, the written solution, and - because the sheets' own
-         * content is what the editor shows - the active sheet's objects, view
-         * and source. `loadSheetIntoEditor` is the same path a load used, so the
-         * restore cannot disagree with a switch of tabs.
-         */
-        reportFileProblem(
-            `"${fileName || "That file"}" could not be rebuilt into a drawing ` +
-                `(${error instanceof Error ? error.message : String(error)}). ` +
-                "Your current drawing has not been changed.",
-            { fileName, failure: "reconstruction" }
-        );
-
-        enggErrorLog.reportError("open file", error, { fileName });
-
-        try {
-            editorState.sheetCollection = previousCollection;
-            restoreSolutionSource(previousSolution || "");
-            loadSheetIntoEditor(activeSheet());
-            renderProperties();
-            renderCurrentDrawing();
-        } catch (rollbackError) {
-            /* A restore that fails too is logged; the load has still ended. */
-            enggErrorLog.reportError("restore after failed open", rollbackError, { fileName });
-        }
-
-        return false;
     } finally {
         /*
          * THE LOAD ALWAYS ENDS, EVEN IF IT THREW.
@@ -2074,13 +1906,6 @@ export function importDrawingFile() {
      * Save behaves as it always has.
      */
     if (enggFileSave.supportsOpenPicker()) {
-        /*
-         * THIS OPEN OWNS THE DOCUMENT. Any load still in flight from an
-         * earlier attempt is superseded here, before the panel even appears, so
-         * a slow first read can never land on top of this one.
-         */
-        const variant = beginOpenVariant();
-
         return enggFileSave
             .openWithPicker()
             .then(async (chosen) => {
@@ -2090,25 +1915,14 @@ export function importDrawingFile() {
                 }
 
                 /*
-                 * THE HANDLE IS REMEMBERED ONLY ONCE THE FILE HAS OPENED.
-                 *
-                 * It used to be remembered before the read, on the theory that
-                 * a document "has its save target from the moment it is open".
-                 * It does not: a file that is refused - empty, damaged, a
-                 * format this build cannot read - leaves the PREVIOUS document
-                 * on screen, and that document then belonged to the new handle.
-                 * The next Save would have written the old drawing over the
-                 * file the user had just failed to open, destroying the file
-                 * they were trying to recover. So the target changes with the
-                 * document, and only when there is a new document.
+                 * The handle is remembered BEFORE the file is read, so the
+                 * document has its save target from the moment it is open -
+                 * even if the read then fails, the target is the file the user
+                 * actually chose.
                  */
-                const opened = await openChosenFile(chosen.file, variant);
+                enggFileSave.setFileHandle(chosen.handle);
 
-                if (opened && isCurrentOpenVariant(variant)) {
-                    enggFileSave.setFileHandle(chosen.handle);
-                }
-
-                return opened;
+                return await openChosenFile(chosen.file);
             })
             .catch((error) => {
                 /*
@@ -2134,31 +1948,7 @@ export function importDrawingFile() {
             globalThis.document.createElement("input");
 
         input.type = "file";
-
-        /*
-         * EVERY FORM A SUPPORTED DRAWING ARRIVES IN.
-         *
-         * The residue of a download is part of this: a `.tex` saved to a
-         * Windows folder is often `beam.tex`, but one that has been through a
-         * mail client or a chat is `beam (1).tex` and sometimes
-         * `beam.tex.txt`. All of them are the same file, and all of them are
-         * accepted here - what the file CONTAINS is what decides whether it
-         * opens, and a name is only a hint (see `isLatexFile`).
-         */
-        input.accept = [
-            `.${LATEX_EXTENSION}`,
-            `.${LATEX_EXTENSION}.txt`,
-            ".txt",
-            LATEX_MEDIA_TYPE,
-            "application/x-tex",
-            "application/tex",
-            "text/x-tex",
-            "text/tex",
-            "text/plain",
-            `.${enggDocumentFile.LEGACY_EXTENSION}`,
-            enggDocumentFile.LEGACY_MEDIA_TYPE,
-            "application/json"
-        ].join(",");
+        input.accept = `.${LATEX_EXTENSION},${LATEX_MEDIA_TYPE},text/x-tex,.${enggDocumentFile.LEGACY_EXTENSION},${enggDocumentFile.LEGACY_MEDIA_TYPE},application/json`;
 
         /*
          * Cancelling raises `cancel` in every browser that fires it, and no
@@ -2178,20 +1968,9 @@ export function importDrawingFile() {
                 return;
             }
 
-            /*
-             * SAME-FILE-TWICE IS ORDERED, NOT JUST TOLERATED.
-             *
-             * Choosing the same file again is a change event even though the
-             * name has not changed, so it is opened again as a fresh document -
-             * and `value` is cleared so a THIRD choose of that same file still
-             * fires. The read is tagged with this open's variant, so an earlier
-             * attempt still reading cannot land after this one.
-             */
-            const variant = beginOpenVariant();
+            openChosenFile(file).then(resolve);
 
             input.value = "";
-
-            openChosenFile(file, variant).then(resolve);
         });
 
         input.click();
@@ -2206,7 +1985,7 @@ export function importDrawingFile() {
  * become a document - importing, opening a recent and recovering all reach it
  * rather than each growing a copy of the parse.
  */
-function openChosenFile(file, variant = null) {
+function openChosenFile(file) {
     return new Promise((resolve) => {
         /*
          * A FILE THAT CANNOT BE READ AT ALL, REPORTED BEFORE READING.
@@ -2233,7 +2012,7 @@ function openChosenFile(file, variant = null) {
         const reader = new FileReader();
 
         reader.addEventListener("load", () => {
-            resolve(applyOpenedText(String(reader.result), file.name, file, variant));
+            resolve(applyOpenedText(String(reader.result), file.name, file));
         });
 
         reader.addEventListener("error", () => {
@@ -2295,125 +2074,25 @@ function openChosenFile(file, variant = null) {
  * instead and never becomes the document.
  */
 function isLatexFile(name, text) {
-    return (
-        /\.tex$/i.test(String(name || "")) ||
-        hasEmbeddedDocument(text) ||
-
-        /*
-         * A .tex RENAMED TO SOMETHING ELSE IS STILL A DRAWING.
-         *
-         * A file's identity is what it CONTAINS, not only what it is called: a
-         * drawing downloaded from a chat client arrives as `beam (1).tex.txt`, and
-         * JSON.parse would refuse its first line with a message about braces
-         * that says nothing about the real problem. So a text that holds LaTeX's
-         * document markers is treated as LaTeX whatever its name says - which is
-         * also what "do not assume validity from the extension" requires.
-         */
-        /^\s*(?:%.*\n\s*)*\\documentclass\b/m.test(String(text || "")) ||
-        /^\s*(?:%.*\n\s*)*\\begin\s*\{tikzpicture\}/m.test(String(text || ""))
-    );
+    return /\.tex$/i.test(String(name || "")) || hasEmbeddedDocument(text);
 }
 
-/*
- * The drawing a `.tex` holds, as the code editor should show it.
- *
- * A DAETUM picture carries `%% DAETUM_OBJECT_BEGIN ...` markers around each
- * feature. They are bookkeeping, not drawing code, so they are dropped here -
- * the same markers `writeStandaloneFromSource` drops on export, and for the same
- * reason: the editor is for code a person reads and edits, and a marker line is
- * neither.
- */
-function pictureFromLatex(text) {
-    const picture = embeddedPictureSource(text);
-
-    if (!picture) {
-        return null;
-    }
-
-    return picture
-        .split(/\r?\n/)
-        .filter((line) => !/^\s*%\s*DAETUM_OBJECT_(BEGIN|END)/.test(line))
-        .join("\n")
-        .trim();
-}
-
-function applyOpenedLatex(text, name, file, variant = null) {
+function applyOpenedLatex(text, name, file) {
     const base = String(name || "drawing").replace(/\.tex$/i, "") || "drawing";
     const embedded = readEmbeddedEnvelope(text);
 
-    /*
-     * A DAMAGED ENVELOPE IS NOT AUTOMATICALLY A DEAD FILE.
-     *
-     * The comment block is the best copy of the drawing, not the only one: the
-     * `tikzpicture`s printed above it are the same sheets as ordinary LaTeX. So
-     * a file whose data will not decode, or decodes to a document this build
-     * refuses, is offered to the LaTeX code editor with the picture it does
-     * hold - rather than being declared unopenable while its drawing sits in
-     * plain sight in the same file.
-     *
-     * THE CURRENT DRAWING IS STILL NOT TOUCHED by that route: the code editor
-     * only OFFERS the picture (its "Insert into drawing" adds it as one
-     * undoable step), and nothing is applied before the user asks.
-     */
     if (embedded.found && !embedded.ok) {
-        const refused = reportFileProblem(embedded.detail, {
+        return reportFileProblem(`${embedded.detail} Your current drawing has not been changed.`, {
             fileName: name,
-            failure: embedded.failure || "damaged-envelope"
+            failure: embedded.failure
         });
-
-        openLatexCode(
-            text,
-            base,
-            `${embedded.detail} Its drawing code is shown below instead, and neither ` +
-                "your current drawing nor this file has been changed.",
-            { daetumPicture: true }
-        );
-
-        return refused;
     }
 
     if (!embedded.found) {
-        /*
-         * A .tex WITHOUT DAETUM'S DATA IS A DRAWING TOO.
-         *
-         * Hand-written LaTeX, an Overleaf export, a picture copied out of a
-         * note - all of them are ordinary TikZ, and the application already
-         * knows how to read that syntax (`latex-reader.js`, the Source tab's
-         * own reader). Offering them only to the CODE EDITOR answered "open"
-         * with text, leaving the canvas on the previous drawing - which is the
-         * reported failure of "existing LaTeX files cannot be opened".
-         *
-         * So the picture is READ and its supported constructs become the
-         * document. What the reader cannot draw is reported, line by line, by
-         * the same diagnostics the Source tab shows; the source itself is kept
-         * whole in the sheet, so nothing the student wrote is discarded.
-         */
-        const rebuilt = openLatexDrawing(text, base, file, variant);
-
-        if (rebuilt) {
-            return true;
-        }
-
-        /*
-         * A TEXT THAT DRAWS NOTHING THIS BUILD CAN READ IS STILL A FILE THE
-         * STUDENT MIGHT WANT TO SEE. It is offered to the code editor, exactly
-         * as before - nothing is applied, and the current drawing is untouched.
-         */
-        return openLatexCode(
-            text,
-            base,
-            `"${base}.tex" was not written by DAETUM and held no drawing this build ` +
-                "could read, so it is shown here as code. Choose \u201cInsert into " +
-                "drawing\u201d to add what it draws to the current sheet."
-        );
+        return openLatexCode(text, base);
     }
 
-    /*
-     * A VALIDATION FAILURE IS REPORTED BEFORE ANYTHING IS APPLIED, and the
-     * current drawing is left exactly as it was - the guarantee `loadDrawing`
-     * makes for every file this build cannot read.
-     */
-    const opened = loadDrawing(embedded.envelope, base, { variant });
+    const opened = loadDrawing(embedded.envelope, base);
 
     if (opened) {
         enggRecentFiles.remember({
@@ -2423,207 +2102,21 @@ function applyOpenedLatex(text, name, file, variant = null) {
             document: opened,
             preview: renderDocumentPreview(opened)
         });
-
-        return true;
     }
 
-    /*
-     * A FILE THIS BUILD REFUSED IS REPORTED, NOT QUIETLY TURNED INTO CODE.
-     *
-     * A DAETUM file can still be refused after its data decoded - a version from
-     * a newer build, or a document with no pages. That is not a hand-written
-     * `.tex`: handing its picture to the code editor would answer "your drawing
-     * is fine" with a DIFFERENT, read-only representation, while the reason it
-     * could not be opened went unmentioned. `loadDrawing` has already reported
-     * the actual problem, and the current drawing is untouched; the file's code
-     * is offered as a separate answer, clearly labelled as the fallback it is.
-     */
-    /*
-     * THE DATA WAS REFUSED, BUT THE PICTURE IS STILL THE DRAWING.
-     *
-     * A file written by a NEWER build carries a version this one will not
-     * trust as a document. Its pictures are ordinary TikZ in the format this
-     * build already reads, and a student who cannot update right now still has
-     * a drawing sitting in plain sight. It is reconstructed by the same reader
-     * a hand-written `.tex` uses - and the refusal itself has already been
-     * reported, so the student knows the file's full state could not be kept.
-     * The current drawing is replaced only once the reconstruction succeeded.
-     */
-    if (embedded.ok === false || embedded.found) {
-        if (openLatexDrawing(text, base, file, variant)) {
-            return true;
-        }
-    }
-
-    openLatexCode(
-        text,
-        base,
-        "This DAETUM file could not be opened, so its drawing code is shown " +
-            "below instead; neither your current drawing nor this file has been " +
-            "changed. The reason it was refused is in the status line.",
-        { daetumPicture: true }
-    );
-
-    return false;
-}
-
-/*
- * OPEN A `.tex` THAT CARRIES NO USABLE DAETUM DOCUMENT AS A DRAWING.
- *
- * Returns true only when a drawing was actually installed. LaTeX written by
- * hand, exported from Overleaf, or printed by a build whose embedded data this
- * one cannot use is still a picture, and the reader that powers the Source tab
- * already understands the TikZ constructs DAETUM itself emits.
- *
- * THE ORDER IS THE BRIEF'S, AND IT IS THE ORDER THAT PROTECTS THE DRAWING:
- *
- *   1. read the source            writing nothing
- *   2. parse it                   `drawingFromPicture` -> the existing reader
- *   3. refuse an empty result     nothing to install is not a document
- *   4. BUILD THE DOCUMENT OFFLINE - its sheet, its objects, its source
- *   5. commit it                  `loadDrawing`, the one path that replaces a
- *                                 document and puts the old one back if it
- *                                 throws
- *
- * Steps 1-4 touch nothing live, so a file that fails anywhere up to the commit
- * leaves the student's current drawing exactly as it was. This is what makes a
- * failed Open safe rather than merely reported.
- */
-function openLatexDrawing(text, base, file, variant = null) {
-    const source = String(text ?? "");
-    const rebuilt = enggLatexDocument.drawingFromPicture(source);
-
-    if (!rebuilt.ok) {
-        return false;
-    }
-
-    /*
-     * WHAT THE FILE STATES IS KEPT. The picture exactly as read - its own
-     * comments, whitespace and supported commands - becomes the sheet's source,
-     * so the student can carry on editing it and Save writes it back. Reading
-     * it was never the point of the exercise: it is the SAME text the Source
-     * tab would show, so what is drawn and what is written cannot diverge.
-     */
-    const sheet = {
-        id: `sheet_${Date.now().toString(36)}`,
-        name: base || "Sheet 1",
-        version: 2,
-        units: "mm",
-        objects: rebuilt.objects,
-        snap: { enabled: true, spacing: 1 },
-        objectSnap: { enabled: true, tolerancePx: 10, inferenceTolerancePx: 24 },
-        styleDefaults: {
-            stroke: "#000000",
-            fill: "none",
-            lineWidth: 0.5,
-            lineType: "solid",
-            opacity: 1
-        },
-        viewport: { zoom: 1, panX: 0, panY: 0 },
-        grid: enggSheets.resolveGridSnap({ visible: true, spacing: 7.5 }),
-        source: { source: rebuilt.source, renderedSource: rebuilt.source, dirty: false }
-    };
-
-    const body = {
-        version: 2,
-        units: "mm",
-        camera: { zoom: 1, panX: 0, panY: 0 },
-        grid: { ...sheet.grid },
-        snap: { ...sheet.snap },
-        objectSnap: { ...sheet.objectSnap },
-        styleDefaults: { ...sheet.styleDefaults },
-        objects: [],
-        sheets: [sheet],
-        activeSheetId: sheet.id
-    };
-
-    /*
-     * THE COMMIT, THROUGH THE ENVELOPE THE FORMAT MODULE ALREADY VALIDATES.
-     * Building the document as a real envelope means a rebuilt drawing is
-     * loaded by exactly the same loader, validations and rollback as a saved
-     * one - there is no second way into the editor.
-     */
-    const opened = loadDrawing(enggDocumentFile.createDocument(body), base, { variant });
-
-    if (!opened) {
-        return false;
-    }
-
-    enggRecentFiles.remember({
-        name: enggDocumentFile.withExtension(base),
-        file,
-        handle: enggFileSave.currentFileHandle(),
-        document: opened,
-        preview: renderDocumentPreview(opened)
-    });
-
-    /*
-     * WHAT COULD NOT BE DRAWN IS SAID, NOT HIDDEN. The reader reports every
-     * construct it skipped with its line, and the status line carries the first
-     * of them - so a opening a file DAETUM only partly understands is a
-     * statement of what it understood, never a silent partial drawing.
-     */
-    const diagnostics = rebuilt.diagnostics.filter((entry) => entry.severity !== "info");
-
-    if (diagnostics.length) {
-        const first = diagnostics[0];
-
-        setToolMessage(
-            `Opened ${base}.tex: ${rebuilt.features.length} feature` +
-                `${rebuilt.features.length === 1 ? "" : "s"}, but line ${first.line} ` +
-                `could not be read (${first.message}). The rest is shown; the ` +
-                "source is kept as it is."
-        );
-    }
-
-    return true;
+    return Boolean(opened);
 }
 
 /*
  * A .tex without DAETUM's data - LaTeX written by hand or by another program.
  * The LaTeX reader turns the drawing commands it understands into features.
  */
-function openLatexCode(text, base, notice, { daetumPicture = false } = {}) {
-    /*
-     * THE PICTURE, NOT THE WHOLE DOCUMENT.
-     *
-     * A saved `.tex` is a complete LaTeX file: a preamble, a `standalone`
-     * class, a comment header and the document body. Handing all of that to the
-     * code editor would put `\documentclass` and `\begin{document}` on lines
-     * the reader has to explain it cannot draw, and a DAETUM file would arrive
-     * with its whole embedded comment block as "not understood".
-     *
-     * `openLatexCodeEditor` already strips DAETUM's own markers and colour
-     * definitions; it is given the PICTURE here as well, so what the editor
-     * shows, previews and inserts is the drawing and nothing else. A file with
-     * no picture at all is handed over whole, because then the wrapper IS the
-     * only evidence of what the file was.
-     */
-    const picture = pictureFromLatex(text);
-
-    /*
-     * THE PICTURE'S PRINT TRANSFORM GOES WITH IT.
-     *
-     * A DAETUM picture is printed at whatever scale fitted the page, so read
-     * without that record every reopened drawing would come back smaller than
-     * it was. The record is the `%% DAETUM-PICTURE-VIEW` line the writer puts
-     * beside each sheet; a picture that has none is read at its own
-     * coordinates, exactly as before.
-     */
+function openLatexCode(text, base) {
     openLatexCodeEditor({
-        text: picture ?? text,
-        notice,
-        view: pictureViewFromText(text),
-
-        /*
-         * A PICTURE THIS APPLICATION WROTE IS READ AS ONE.
-         *
-         * Its numbers are drawing units and it draws itself at that size, so
-         * it must not be read with LaTeX's centimetre default (see
-         * `readLatexDrawing`). That is true whether it came from a whole file
-         * or from the `.tex` export of a single sheet.
-         */
-        daetumPicture: daetumPicture || Boolean(picture)
+        text,
+        notice:
+            `"${base}.tex" was not written by DAETUM, so it is shown here as code. ` +
+            "The preview shows what DAETUM can draw from it; Insert into drawing adds it to the current sheet."
     });
 
     setToolMessage(`Opened ${base}.tex in the LaTeX code editor`);
@@ -2631,9 +2124,9 @@ function openLatexCode(text, base, notice, { daetumPicture = false } = {}) {
     return true;
 }
 
-function applyOpenedText(text, name, file, variant = null) {
+function applyOpenedText(text, name, file) {
     if (isLatexFile(name, text)) {
-        return applyOpenedLatex(text, name, file, variant);
+        return applyOpenedLatex(text, name, file);
     }
 
     let parsed;
@@ -2716,31 +2209,46 @@ async function openRecentFile(entry) {
     const handle = enggRecentFiles.handleFor(entry.key);
 
     if (handle) {
+        let file;
+
         try {
-            const file = await handle.getFile();
-
-            const opened = await openChosenFile(file);
-
-            if (opened) {
-                return true;
-            }
+            file = await handle.getFile();
         } catch (error) {
             /*
-             * The file is gone, or access was refused. This is the normal case
-             * for a recently used file on a drive that is no longer attached,
-             * so it is reported rather than thrown - and the entry is MARKED
-             * missing rather than deleted, so the row stays in the list with a
-             * working menu and can be removed, or reopened after the file comes
-             * back.
+             * THE HANDLE IS STALE - but that is NOT the end of the attempt.
+             *
+             * `getFile()` throws when the file has been moved, renamed or
+             * deleted, or when the handle belongs to a drive that is no longer
+             * attached. That used to `return` here with "could not be found",
+             * WITHOUT trying the copy of the document stored beside the entry -
+             * which is the whole reason a recent can be reopened in a browser
+             * that has no file-system access at all. The result was that a file
+             * sitting happily in the recents list refused to open, and the same
+             * file opened fine from Open a drawing.
+             *
+             * The handle is a CONVENIENCE: it is the best copy available when
+             * it works. It is not the only one, so a stale one falls through to
+             * the stored document below, and only a recents entry with neither
+             * is reported missing.
              */
-            enggRecentFiles.markMissing(entry.key);
+            file = null;
+        }
 
-            return reportFileProblem(
-                `${entry.fileName} could not be found. It may have been moved, ` +
-                    "renamed or deleted - or the drive it is on may not be " +
-                    "connected. Import it again to reopen it.",
-                { fileName: entry.fileName, failure: "missing-file" }
-            );
+        if (file) {
+            try {
+                const opened = await openChosenFile(file);
+
+                if (opened) {
+                    return true;
+                }
+            } catch (error) {
+                /* The FILE was readable but its contents were not usable - the
+                 * loader's own diagnostics have already said why, so the stored
+                 * copy is still worth trying. */
+                enggErrorLog.reportError("read recent file", error, {
+                    fileName: entry.fileName
+                });
+            }
         }
     }
 
@@ -2776,11 +2284,12 @@ async function openRecentFile(entry) {
      */
     enggRecentFiles.markMissing(entry.key);
 
-    setToolMessage(
-        `${entry.fileName} has to be imported again to be reopened.`
+    return reportFileProblem(
+        `${entry.fileName} could not be found. It may have been moved, ` +
+            "renamed or deleted - or the drive it is on may not be " +
+            "connected. Import it again to reopen it.",
+        { fileName: entry.fileName, failure: "missing-file" }
     );
-
-    return false;
 }
 
 /*
@@ -3606,23 +3115,6 @@ export function installDocumentCommands() {
     enggDrawingExport.setBoundsProvider(
         drawnBoundsPoints
     );
-
-    /*
-     * AND THE SOURCE PIPELINE MEASURES THE SAME WAY.
-     *
-     * The export transform - the one that fits a drawing into a written
-     * solution - needs the extent of the WHOLE drawing, including the sketch,
-     * the supports and the graph. That is exactly what `drawnBoundsPoints`
-     * already answers, and it is the measurement Fit All itself uses. Publishing
-     * it under one name means the export scale and the Fit All viewport are
-     * derived from the SAME bounds: a drawing that fills the screen when fitted
-     * also fills the figure, and neither can disagree about how big it is.
-     *
-     * The provider is asked at zoom 1 - it takes the zoom as a parameter - so
-     * the answer describes the DRAWING and not the current view. The student's
-     * manual zoom never reaches the export.
-     */
-    globalThis.enggDrawnBoundsProvider = drawnBoundsPoints;
 
     /*
      * Teach the reference system where sheets are and how a feature is

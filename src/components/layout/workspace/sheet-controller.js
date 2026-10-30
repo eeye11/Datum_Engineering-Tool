@@ -758,12 +758,6 @@ export const enggDrawingSheets = {
     get collection() {
         return editorState.sheetCollection;
     },
-    /* The prefix every sheet id is minted with; one source, so a caller that
-       needs to name a sheet before creating it (Enter Drawing) mints an id the
-       sheet factory will keep rather than replace. */
-    get sheetIdPrefix() {
-        return enggSheets.SHEET_ID_PREFIX;
-    },
     activeSheet,
     activeSheetId: () => editorState.sheetCollection.activeSheetId,
     activateSheet,

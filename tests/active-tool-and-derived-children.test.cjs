@@ -199,7 +199,7 @@ check(
 
 check(
   "the components record their one force",
-  /registerDependency\(\s*(resolved|stored)/.test(analysis),
+  /registerDependency\(\s*resolved/.test(analysis),
 );
 
 check(

@@ -4,6 +4,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggBodyFrames from "../geometry/body-frames.js";
 import enggFeatureGeometry from "../geometry/feature-geometry.js";
 import enggDrawingState from "../model/drawing-state.js";
+import { INPUT_TOLERANCES } from "../../features/workspace/interaction/input-tolerances.js";
 
 /*
  * ========================================================
@@ -268,8 +269,28 @@ function getTolerancePx(state) {
         );
     }
 
+    /*
+     * THE CATCH BAND FOLLOWS THE DEVICE, NOT THE DRAWING.
+     *
+     * Five pixels is the MOUSE's band and stays exactly that: a cursor can be
+     * placed on a joint, and a wider band would make every snap sticky again. A
+     * finger cannot, so while a finger or a stylus is the input the band is the
+     * one from the shared input table - still measured in SCREEN pixels, so it
+     * behaves identically at every zoom.
+     *
+     * The kind is read from `state.interaction.pointerKind`, which the canvas
+     * stamps on every pointer move - there is ONE place that knows what is being
+     * aimed with, and this reads it.
+     */
+    const kind = state?.interaction?.pointerKind;
+
+    const forInput =
+        kind === "touch" || kind === "pen"
+            ? INPUT_TOLERANCES[kind].snapTolerancePx
+            : SNAP_TOLERANCE_PX;
+
     return (
-        SNAP_TOLERANCE_PX *
+        Math.max(SNAP_TOLERANCE_PX, forInput) *
         getToolToleranceMultiplier(
             state
         )
@@ -310,7 +331,16 @@ function getInferenceTolerancePx(state) {
         return configured;
     }
 
-    return ALIGNMENT_TOLERANCE_PX;
+    /* Alignment is a DIRECTION, so it was always the wider band. A finger, with
+     * nothing on screen to aim with, gets the shared table's wider figure. */
+    const kind = state?.interaction?.pointerKind;
+
+    const forInput =
+        kind === "touch" || kind === "pen"
+            ? INPUT_TOLERANCES[kind].inferenceTolerancePx
+            : ALIGNMENT_TOLERANCE_PX;
+
+    return Math.max(ALIGNMENT_TOLERANCE_PX, forInput);
 }
 
 function normalizeAngle(angle) {
@@ -1207,19 +1237,6 @@ function addObjectCandidates(
      * The one span published is the centreline itself, which is what gives a
      * run its midpoint and quarter points.
      */
-    if (object.type === "reducer-expander") {
-        const direction = geometry.direction, centre = geometry.position;
-        const length = Number(object.engineering?.transitionLength);
-        const magnitude = direction && Math.hypot(direction.x, direction.y);
-        if (centre && magnitude > 0 && length > 0) {
-            [-1,1].forEach(sign => addCandidate(candidates, "endpoint", object.id, {
-                x: centre.x + sign*direction.x/magnitude*length/2,
-                y: centre.y + sign*direction.y/magnitude*length/2
-            }));
-        }
-        return;
-    }
-
     if (object.type === "pipe-duct") {
         if (geometry.start && geometry.end) {
             addCandidate(
@@ -1479,6 +1496,79 @@ function addObjectCandidates(
      * body that can only be snapped at its centre cannot be
      * attached to at a corner at all.
      */
+    /*
+     * DYNAMICS SYMBOLS PUBLISH THE POINTS THEY ARE DRAWN FROM. The two
+     * terminals of a spring, a damper or a branch pair; the tail and tip of
+     * a vector; the ends of a trajectory; the centre and the rim of a pulley.
+     * These are the points a student actually aims at when connecting one
+     * symbol to another, so they go through the SAME candidate list every
+     * other snap uses - there is no second snapping system for Dynamics.
+     *
+     * A Dynamics Particle and Rigid Body are ordinary located bodies and are
+     * handled by the block below, exactly like their Statics counterparts.
+     */
+    const dynamicsKind = object.engineering?.dynamicsType;
+
+    if (
+        dynamicsKind === "dynamics-particle" ||
+        dynamicsKind === "dynamics-rigid-body"
+    ) {
+        /* Fall through to the located-body handling below. */
+    } else if (typeof dynamicsKind === "string") {
+        const centre =
+            geometry.position ||
+            geometry.center ||
+            geometry.origin;
+
+        if (centre && dynamicsKind === "dynamics-angular-vector") {
+            addCandidate(
+                candidates,
+                "center",
+                object.id,
+                centre
+            );
+        }
+
+        if (centre && dynamicsKind === "dynamics-pulley") {
+            addCandidate(
+                candidates,
+                "center",
+                object.id,
+                centre
+            );
+        }
+
+        if (centre && dynamicsKind === "dynamics-coordinate-system") {
+            addCandidate(
+                candidates,
+                "endpoint",
+                object.id,
+                centre
+            );
+        }
+
+        if (geometry.start && geometry.end) {
+            segmentCandidates(
+                candidates,
+                object.id,
+                geometry.start,
+                geometry.end,
+                false
+            );
+        }
+
+        if (centre && dynamicsKind !== "dynamics-coordinate-system") {
+            addCandidate(
+                candidates,
+                "center",
+                object.id,
+                centre
+            );
+        }
+
+        return;
+    }
+
     if (
         LOCATED_STATICS_BODIES.includes(
             object.type

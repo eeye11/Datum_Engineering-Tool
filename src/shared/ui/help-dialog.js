@@ -114,10 +114,10 @@ const PAGES = {
             <h4>Arrows and magnitudes</h4>
             <p>
                 A force or load arrow is as long as you <em>draw</em> it. Its
-                value - 20 N, 5 kN/m, <em>v</em> - is the label beside it,
-                shown or hidden by the <strong>Magnitudes</strong> control.
-                Changing the value never changes how long the arrow is drawn,
-                and dragging the arrow never changes the value.
+                value - 20 N, 5 kN/m, <em>v</em> - is the label beside it, and
+                it is moved by dragging the label itself. Changing the value
+                never changes how long the arrow is drawn, and dragging the
+                arrow never changes the value.
             </p>
 
             <h4>Selection</h4>

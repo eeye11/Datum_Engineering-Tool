@@ -25,23 +25,41 @@ import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import { selectionBounds, selectionMembers } from "../../../shared/selection/selection-transform.js";
+import { pointerKind } from "./pointer-gesture.js";
 
+/*
+ * ========================================================
+ * THE POINTER'S SHAPE, WHILE SELECT IS ARMED
+ * ========================================================
+ *
+ * What the cursor WOULD do if pressed: move a feature, resize a corner, grab a
+ * handle. The hit tests behind it take the live input kind, so a finger is
+ * offered the same targets a cursor is - the shape is only drawn for a pointer
+ * that has one.
+ */
 function updateMoveCursor(event) {
     let movable = false;
+
+    const kind = pointerKindOf(event);
+
     if (allowsDirectManipulation() && !event.shiftKey &&
         !editorState.modifySession && !isConstructionInProgress()) {
         const point = canvasPointFromEvent(event, false);
-        const hit = handleAtPoint(point);
-        const object = objectAtPoint(point);
+        const hit = handleAtPoint(point, { inputKind: kind });
+        const object = objectAtPoint(point, { inputKind: kind });
         const target = hit?.object || object;
+
         movable = Boolean(target && !target.locked && !isDerivedFeature(target));
-        if (pickDerivedMagnitude(point)) {
+
+        if (pickDerivedMagnitude(point, { inputKind: kind })) {
             movable = true;
         }
 
         const ids = drawingState.selection.selectedObjectIds;
+
         if (ids.length > 1) {
             const box = selectionBounds(drawingState.objects, ids, drawingState);
+
             if (box && point.x >= box.minX && point.x <= box.maxX &&
                 point.y >= box.minY && point.y <= box.maxY) {
                 movable = selectionMembers(drawingState.objects, ids)
@@ -49,11 +67,13 @@ function updateMoveCursor(event) {
             }
         }
     }
+
     if (allowsDirectManipulation() &&
         (editorState.manipulationDrag || editorState.selectionDrag?.derived ||
             editorState.selectionDrag?.axisLabel)) {
         movable = true;
     }
+
     drawingCanvas?.classList.toggle("drawing-can-move", movable);
 }
 
@@ -75,6 +95,67 @@ function updateMoveCursor(event) {
  * Only SELECTED features are read, so this is the ordinary "align to what I
  * have chosen" gesture rather than a rule that reaches into the whole sheet.
  */
+
+/* The device behind an event, for every tolerance that depends on it. */
+function pointerKindOf(event) {
+    return pointerKind(event || { pointerType: "mouse" });
+}
+
+/*
+ * ========================================================
+ * WHAT THE PRESS WOULD PICK, SHOWN BEFORE THE PRESS
+ * ========================================================
+ *
+ * A mouse has a cursor to say what it is over. A finger has nothing on screen -
+ * the contact point is under the hand - so a tap would be a guess. The feature
+ * a tap would select is therefore outlined on the frame of the move, for every
+ * input kind, through the SAME hit tests the press will use.
+ *
+ * It never selects, never snaps and never writes to an object: it stores an id
+ * on the interaction and the overlay draws an outline from it.
+ */
+function updateTargetPreview(event, resolution) {
+    const kind = pointerKindOf(event);
+
+    const previewable =
+        drawingState.activeTool === "select" &&
+        !editorState.manipulationDrag &&
+        !editorState.selectionDrag &&
+        !editorState.creationDrag &&
+        !editorState.panSession &&
+        !editorState.modifySession &&
+        !isConstructionInProgress();
+
+    let targetId = null;
+
+    if (previewable) {
+        const point = resolution?.rawPointerPoint || canvasPointFromEvent(event, false);
+
+        if (point) {
+            const handle = handleAtPoint(point, { inputKind: kind });
+
+            /*
+             * A HANDLE FIRST. If the pointer is on a handle of the selected
+             * object, the press will grab THAT - outlining the body instead
+             * would say the opposite of what is about to happen.
+             */
+            if (handle?.object && !handle.object.locked) {
+                targetId = handle.object.id;
+            } else {
+                const object = objectAtPoint(point, { inputKind: kind });
+
+                if (object && !object.locked && object.visible !== false) {
+                    targetId = object.id;
+                }
+            }
+        }
+    }
+
+    if (drawingState.interaction.targetPreviewId !== targetId) {
+        drawingState.interaction.targetPreviewId = targetId;
+    }
+}
+
 function selectedForceAnchorPoints() {
     const selection =
         drawingState.selection?.selectedObjectIds || [];
@@ -690,35 +771,12 @@ function resolvePointerPoint(
 export function resolvePointerEvent(
     event
 ) {
-    const resolution = resolvePointerPoint(
+    return resolvePointerPoint(
         canvasPointFromEvent(
             event,
             false
         )
     );
-
-    const pipeStart = drawingState.activeTool === "pipe-duct" &&
-        (editorState.creationDrag?.pipeDuct
-            ? editorState.creationDrag.start
-            : drawingState.interaction.routeSegmentStart);
-    if (!pipeStart) return resolution;
-
-    // Lock the run to the start's horizontal axis in both the preview and
-    // the release. This is a drawing constraint, independent of snap settings.
-    const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-    const constrained = { x: point.x, y: pipeStart.y };
-    if (point.y !== constrained.y) {
-        return {
-            ...resolution,
-            effectiveConstructionPoint: constrained,
-            snappedPoint: null,
-            inferredPoint: null,
-            snapCandidate: null,
-            inference: null,
-            guideline: null
-        };
-    }
-    return { ...resolution, effectiveConstructionPoint: constrained };
 }
 
 /*
@@ -730,7 +788,6 @@ export function resolvePointerEvent(
  */
 function freeThermodynamicsMove(drag, rawPoint) {
     if (
-        drag?.object?.type === "coordinate-system-2d" ||
         drag?.kind?.startsWith("process-label-") ||
         drag?.kind?.startsWith("process-bend-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
@@ -1172,17 +1229,6 @@ export function updateInteractionFeedback(
                       )
                 : null;
 
-        /*
-         * THE DIMENSIONS THE READING IS IN.
-         *
-         * The unit is the DIAGRAM's own - a bending moment in kN-m, a shear force
-         * in kN - so it is read from the diagram's `geometry.diagramType`, the
-         * same field the quantity symbol above comes from. A pointer that is not
-         * over a diagram has no diagram type, and states no unit rather than
-         * borrowing one.
-         */
-        const geometry = onDiagram?.geometry || {};
-
         const quantity =
             {
                 sfd: "V",
@@ -1190,17 +1236,12 @@ export function updateInteractionFeedback(
                 afd: "N",
             }[onDiagram?.geometry?.diagramType];
 
-        /*
-         * THE UNIT FOLLOWS THE DIAGRAM TYPE, like the quantity does - a bending
-         * moment in kN-m and a shear force in kN - so the two are read from the
-         * same `geometry.diagramType` in the same place.
-         */
         const unit =
             {
                 sfd: "kN",
                 bmd: "kN\u00b7m",
                 afd: "kN",
-            }[geometry.diagramType];
+            }[onDiagram?.geometry?.diagramType];
 
         drawingCoordinates.textContent =
             `X: ${Number(readable.x).toFixed(1)} ` +
@@ -1390,6 +1431,7 @@ export function updateDrawingCoordinates(
     event
 ) {
     updateMoveCursor(event);
+
     /*
      * Always calculate from the current
      * pointer event.
@@ -1415,10 +1457,27 @@ export function updateDrawingCoordinates(
         ctrl: Boolean(event?.ctrlKey || event?.metaKey)
     };
 
+    /*
+     * WHICH DEVICE IS AIMING - the one fact the snap engine needs to widen or
+     * narrow its catch band. Stamped here, on the frame's resolution, because
+     * this is the single place every pointer move passes through.
+     */
+    resolution.pointerKind = pointerKindOf(event);
+
     enggDrawingState.setInteraction(
         drawingState,
         resolution
     );
+
+    /*
+     * THE TARGET UNDER THE INPUT, SHOWN BEFORE IT IS COMMITTED TO.
+     *
+     * A mouse has a cursor to show what it is over; a finger has nothing on
+     * screen, so a tap would be a guess. The feature a tap would select is
+     * therefore outlined on the frame of the move, for every input kind, from
+     * the same hit test the press will use. It previews; it never selects.
+     */
+    updateTargetPreview(event, resolution);
 
     scheduleGuidelineExpiry(
         resolution.guideline

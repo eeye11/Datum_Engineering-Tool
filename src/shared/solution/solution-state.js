@@ -27,7 +27,7 @@
  */
 
 import enggErrorLog from "../../app/error-log.js";
-import { parseDrawingBlocks } from "./drawing-blocks.js";
+import { parseDrawingBlocks } from "./embedded-drawings.js";
 
 /* ---------------------------------------------------------- */
 /* STRUCTURE                                                   */
@@ -217,10 +217,11 @@ export function parseFigures(source) {
         return low;
     };
 
-    const blocks = parseDrawingBlocks(text).map((block, index) => ({
-        id: block.blockId || `drawing${index}`,
+    const embedded = parseDrawingBlocks(text).map((block, index) => ({
+        id: `drawing${index}`,
         kind: "drawing",
         label: `Drawing ${index + 1}`,
+        lines: block.lines,
         line: lineFor(block.index)
     }));
 
@@ -240,7 +241,7 @@ export function parseFigures(source) {
         line: text.slice(0, match.index).split(/\r?\n/).length - 1
     }));
 
-    return [...blocks, ...reproducible, ...floats].sort((a, b) => a.line - b.line);
+    return [...embedded, ...reproducible, ...floats].sort((a, b) => a.line - b.line);
 }
 
 /*

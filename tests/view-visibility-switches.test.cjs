@@ -46,9 +46,8 @@ check(
 );
 
 check(
-  "nor do dimensions or magnitudes",
-  !/id: "dimensions",[\s\S]{0,240}?checked:/.test(menu) &&
-    !/id: "magnitudes",[\s\S]{0,240}?checked:/.test(menu),
+  "nor do dimensions",
+  !/id: "dimensions",[\s\S]{0,240}?checked:/.test(menu),
 );
 
 console.log("\n  the label names what the command WILL DO\n");
@@ -65,11 +64,19 @@ check(
   ),
 );
 
+/*
+ * MAGNITUDES IS NO LONGER A VIEW COMMAND.
+ *
+ * The control and the menu item were removed, so the question is no longer how
+ * a command reads - it is that there is no command. The SETTING survives in the
+ * model (`display.showMagnitudes`), which is why this checks the MENU and not
+ * the model: a saved file written while magnitudes were off must still open the
+ * same way.
+ */
 check(
-  "and so do magnitudes",
-  /showMagnitudes === false[\s\S]{0,80}?"Show Magnitudes"[\s\S]{0,40}?"Hide Magnitudes"/.test(
-    menu,
-  ),
+  "magnitudes is not a view command any more",
+  !/id: "magnitudes"/.test(menu) && !/Show Magnitudes|Hide Magnitudes/.test(menu),
+  "the control and its menu item were both removed",
 );
 
 console.log("\n  and the label reads the state the TOOLBAR writes\n");
@@ -116,14 +123,12 @@ check(
 );
 
 /*
- * DIMENSIONS AND MAGNITUDES are the other way round: they ARE on
- * `state.display`, and they share the toolbar toggle's own writer, so the menu
- * and the button cannot disagree.
+ * DIMENSIONS is the other way round: it IS on `state.display`, and it shares the
+ * toolbar toggle's own writer, so the menu and the button cannot disagree.
  */
 check(
-  "dimensions and magnitudes go through the shared display setter",
-  /toggleDisplaySetting\("showDimensions"/.test(menu) &&
-    /toggleDisplaySetting\("showMagnitudes"/.test(menu),
+  "dimensions goes through the shared display setter",
+  /toggleDisplaySetting\("showDimensions"/.test(menu),
 );
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

@@ -454,11 +454,6 @@
  * no heavy rule - so the line numbers read as a margin rather than a second
  * panel. Sized to its widest line number by its own content; the numbers are
  * right-aligned so 9 and 10 do not shift the column.
- *
- * THE MARGIN ALSO CARRIES ONE MARK: the eye-off beside a hidden object's header.
- * It is held in a fixed-width column that exists on EVERY row, so adding it never
- * moves the numbers - a margin whose digits jump when an object is hidden would
- * be a distraction at the exact moment the student is looking for it.
  */
 .drawing-source-gutter {
   background: var(--source-editor-gutter-bg);
@@ -472,54 +467,6 @@
   padding: 4px 5px 4px 7px;
   text-align: right;
   user-select: none;
-}
-
-.drawing-source-gutter-row {
-  align-items: center;
-  display: flex;
-  gap: 3px;
-  justify-content: flex-end;
-  white-space: nowrap;
-}
-
-/* Every row reserves the icon's width - see the note on the gutter above. */
-.drawing-source-gutter-row::before {
-  content: "";
-  display: block;
-  flex: 0 0 auto;
-  height: 10px;
-  width: 10px;
-}
-
-.drawing-source-gutter-row.is-hidden-header::before {
-  content: none;
-}
-
-/*
- * THE HIDDEN OBJECT'S EYE. A stroked eye-off in the margin, in the body ink so
- * it reads as a state mark and not a warning. It is decoration: the number is
- * still the row's text and the icon is never read out, and margins too narrow to
- * carry it still show the block's tint, rule and inset eye.
- */
-.drawing-source-gutter-hidden {
-  color: var(--datum-ink);
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 10px;
-  width: 10px;
-}
-
-.drawing-source-gutter-hidden svg {
-  height: 100%;
-  width: 100%;
-}
-
-.drawing-source-gutter-number {
-  flex: 0 0 auto;
-}
-
-.drawing-source-gutter-row.is-hidden-header .drawing-source-gutter-number {
-  color: var(--datum-ink);
 }
 
 .drawing-source-gutter-row.selected {
@@ -631,42 +578,44 @@
     color: transparent;
 }
 
-.drawing-source-line {
-  min-height: 1.5em;
-
-    /*
-     * A BAND MUST COVER THE WHOLE LINE, NOT THE GLYPHS IT HAPPENS TO HOLD.
-     *
-     * The decor layer is `position: absolute` over a scroll box, so with
-     * `white-space: pre` it sizes to its LONGEST line rather than to the
-     * viewport. Without an explicit width, a short line's block - and therefore
-     * its background - stopped at its last character, so selecting an object
-     * lit a stub of colour under the text instead of a full row. `min-width:
-     * 100%` makes every line at least the editor's own width, and the band then
-     * spans whichever is wider: the viewport, or the longest line.
-     *
-     * THE LEFT EDGE IS STRETCHED INTO THE WELL'S OWN PADDING, not by moving the
-     * glyphs. A hidden block's marker needs a strip inside the text's start, and
-     * a selection should reach the well's edge rather than stop short of it. A
-     * negative margin does both without changing the line's position, so the
-     * decor stays exactly under the text layer and the caret and the selection
-     * are measured against unchanged glyphs.
-     */
-  margin-left: -6px;
-  min-width: 100%;
-  padding-left: 6px;
-  width: max-content;
-}
-
 /*
- * THE TEXT LAYER'S LINES CARRY NO BOX. They are the glyphs themselves, drawn at
- * the same origin as the real text, so the decor layer's inner strip must not
- * be repeated here or the two would no longer sit on top of one another.
+ * A LINE IS AS WIDE AS THE EDITOR, NOT AS WIDE AS ITS TEXT.
+ *
+ * The band behind a selected object, an error, or a hidden block is the line's
+ * own `background`. A block `<div>` in normal flow is exactly as wide as its
+ * containing box - but this layer is as wide as its CONTENT, because it scrolls
+ * with the code. So a line whose text stopped at column 40 had a background that
+ * stopped there too, and every band ended partway across the editor.
+ *
+ * `width: max-content` makes the line's box as wide as its own text, and
+ * `min-width: 100%` makes it at least the whole visible width - so a short line
+ * still paints a band across the pane, while a long line widens its box and
+ * scrolls. The decoration is only ever a background, so nothing here can affect
+ * the text itself.
+ *
+ * `100%` is resolved against the CONTENT box of the scrolling layer, which is
+ * the visible width only while the line is the widest thing in it - hence both
+ * declarations together rather than either alone.
  */
-.drawing-source-text .drawing-source-line {
-  background: none;
-  margin-left: 0;
-  padding-left: 0;
+.drawing-source-line {
+    display: block;
+    min-height: 1.5em;
+    /*
+     * THE BAND SPANS THE PANE, NOT JUST THE LINE'S CHARACTERS.
+     *
+     * A background on the line is what makes the object band, the error mark and
+     * the hidden-block tint. A block box is as wide as its CONTAINING box, and
+     * these layers are as wide as their content - so without a floor, a line of
+     * fifteen characters painted a band fifteen characters long, and every
+     * highlight visibly stopped partway across the editor.
+     *
+     * `40ch` is a floor in CHARACTERS, which is the unit the editor is set in:
+     * it is wide enough that an ordinary line's band reaches the right edge of
+     * the panel at any panel width, and a genuinely long line is wider still and
+     * scrolls with its text.
+     */
+    min-width: 40ch;
+    width: max-content;
 }
 
 /*
@@ -797,6 +746,49 @@
 }
 
 /*
+ * THE GUTTER'S EYE-OFF, beside the hidden block's header line.
+ *
+ * THE MARGIN IS WHERE A READER LOOKS to find out which block a line belongs to,
+ * so that is where the marker of the block's state belongs too. It is the same
+ * eye the Objects list uses, so "hidden" cannot come to look like two different
+ * things in two panes of one panel.
+ *
+ * Drawn in the GUTTER'S OWN INK - not a new accent - because it is a state note
+ * in the margin, not a feature of the code. Every line of the block is marked;
+ * the icon appears once, on the header, so the margin still reads as a line
+ * count rather than as a column of eyes.
+ */
+.drawing-source-gutter-row.is-hidden {
+    color: var(--source-editor-hidden-mark);
+}
+
+.ds-hidden-gutter-mark {
+    align-items: center;
+    display: inline-flex;
+    height: 1em;
+    margin-right: 3px;
+    vertical-align: -0.15em;
+    width: 1em;
+}
+
+.ds-hidden-gutter-mark svg {
+    height: 100%;
+    width: 100%;
+}
+
+/*
+ * A HIDDEN BLOCK THAT IS ALSO SELECTED keeps every hidden mark.
+ *
+ * The selection wash is `background`, and these rules key on `is-hidden` alone -
+ * so the tint, the left-edge rule and the muted glyphs all survive a selection.
+ * Stated explicitly here because it is the one place the two states could have
+ * cancelled each other, and a reader should not have to work that out.
+ */
+.drawing-source-text .drawing-source-line.is-hidden.selected {
+    opacity: 0.68;
+}
+
+/*
  * ============================================================
  * SYNTAX FOR THE TEXT LAYER
  * ============================================================
@@ -876,21 +868,45 @@
     background: color-mix(in srgb, var(--datum-green) 24%, transparent);
 }
 
-/* The caret itself: a one-pixel rule, at the caret's real offset. */
+/*
+ * THE CARET ITSELF: a one-pixel rule, at the caret's real offset.
+ *
+ * IT IS STEADY, NOT BLINKING, AND THAT IS DELIBERATE.
+ *
+ * A blinking caret is drawn from this layer only when `paintSelection` last
+ * ran, and that layer is repainted on a selection change rather than on a
+ * timer. So a blink animation here is not a blink: it fades the one caret out
+ * and leaves NOTHING in its place until the next keystroke, which is exactly
+ * how "the editor has no cursor" happens. A steady rule is honest about where
+ * the insertion point is at every moment, and it cannot be mistaken for a
+ * caret that has gone away.
+ *
+ * A slightly wider rule than a hairline, and the editor's own ink, so it is
+ * visible against the code at this size.
+ */
+/*
+ * THE PAINTED CARET IS HIDDEN; THE BROWSER'S OWN IS THE VISIBLE ONE.
+ *
+ * There must be exactly ONE cursor, and it must never disappear. Two rules in
+ * this file fight over that, and both were wrong:
+ *
+ *   - with this layer VISIBLE and `caret-color: transparent`, the caret lived in
+ *     the painted layer - which is repainted on a selection change and not on a
+ *     timer, so it vanished and did not come back until the next keystroke;
+ *   - with this layer visible AND `caret-color` set, there were TWO cursors a
+ *     pixel or two apart, which is what it looked like.
+ *
+ * The textarea's own caret is the one the browser guarantees: it blinks, it
+ * follows the real insertion point through IME and composition, and it cannot
+ * be left behind by a missed repaint. So the textarea draws it, in the
+ * editor's ink - the only thing that had to be undone was its `color` being
+ * transparent, which the native caret inherits when `caret-color` says so.
+ *
+ * The layer that held the mark stays, because the SELECTION BLOCKS and the
+ * bracket mark live in it - it simply no longer carries a caret.
+ */
 .drawing-source-caret {
-    animation: drawing-source-caret-blink 1.06s steps(1, end) infinite;
-    background: var(--source-editor-ink);
-    position: absolute;
-    width: 1.5px;
-}
-
-@keyframes drawing-source-caret-blink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .drawing-source-caret { animation: none; }
+    display: none;
 }
 
 /* A matched bracket outline, above the glyphs, on the pair under the caret. */
@@ -949,7 +965,16 @@
     border: 0;
     bottom: 0;
     box-sizing: border-box;
-    caret-color: transparent;
+    /*
+     * ONE CARET, AND IT IS THE PAINTED ONE.
+     *
+     * ONLY THE TEXT IS TRANSPARENT. The caret is NOT: it is the browser's own,
+     * in the editor's ink, and it is the single cursor the student sees. Making
+     * `caret-color` transparent as well removed the last cursor in the box - the
+     * painted one is hidden (see `.drawing-source-caret`), so there was nothing
+     * left to show where the insertion point was.
+     */
+    caret-color: var(--source-editor-ink);
     color: transparent;
     /*
      * THE POINTER SAYS WHAT THE CLICK WILL DO.
@@ -1236,10 +1261,6 @@
     flex: 1 1 auto;
     min-width: 0;
     width: 1px;
-}
-
-.dfp-row-control > .dfp-quantity-unit {
-    flex: 0 0 40%;
 }
 
 /* A segmented group is as wide as its track and shares it evenly. */
@@ -1590,4 +1611,62 @@
 /* An emptied pane is a pane with nothing in it - not an instruction. */
 .drawing-features-body:empty {
     padding: 0;
+}
+
+/*
+ * THE GUTTER ROW: a number, and an eye when the block is hidden.
+ *
+ * The eye sits BEFORE the number so the numbers stay right-aligned in one
+ * column - a mark inserted after them would push every number below it out of
+ * line, which is the one thing a line-number margin must never do.
+ */
+.drawing-source-gutter-row {
+  align-items: center;
+  display: flex;
+  gap: 3px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.drawing-source-gutter-row::before {
+  content: "";
+  display: block;
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.drawing-source-gutter-row.is-hidden-header::before {
+  content: none;
+}
+
+.drawing-source-gutter-hidden {
+  color: var(--datum-ink);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 10px;
+  width: 10px;
+}
+
+.drawing-source-gutter-hidden svg {
+  height: 100%;
+  width: 100%;
+}
+
+.drawing-source-gutter-number {
+  flex: 0 0 auto;
+}
+
+.drawing-source-gutter-row.is-hidden-header .drawing-source-gutter-number {
+  color: var(--datum-ink);
+}
+
+.drawing-source-text .drawing-source-line {
+  background: none;
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.dfp-row-control > .dfp-quantity-unit {
+    flex: 0 0 40%;
 }

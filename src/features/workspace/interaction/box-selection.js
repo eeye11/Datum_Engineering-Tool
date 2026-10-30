@@ -13,6 +13,60 @@ import { drawingState } from "../editor-state.js";
 import { isRectangleLike, objectPoints } from "./hit-testing.js";
 import { isPointLikeType, isSpanShapedType } from "../../../shared/model/feature-types.js";
 
+/*
+ * Whether a selection rectangle touches a RING (a circle's outline).
+ *
+ * A Dynamics pulley and a rotation symbol are drawn as a ring, so the test
+ * is the ring's ink: a corner of the box inside the band between the inner
+ * and outer radius, or any box EDGE crossing the circle. A box drawn inside
+ * the ring's hole touches no ink and correctly selects nothing.
+ */
+function ringIntersectsSelection(
+    centre,
+    radius,
+    selectionBox
+) {
+    if (!centre || !(radius > 0)) {
+        return false;
+    }
+
+    const corners = [
+        { x: selectionBox.minX, y: selectionBox.minY },
+        { x: selectionBox.maxX, y: selectionBox.minY },
+        { x: selectionBox.maxX, y: selectionBox.maxY },
+        { x: selectionBox.minX, y: selectionBox.maxY }
+    ];
+
+    const band = Math.max(2, radius * 0.15);
+
+    if (
+        corners.some(
+            corner =>
+                Math.abs(distance(corner, centre) - radius) <= band
+        )
+    ) {
+        return true;
+    }
+
+    /* A box wholly inside the hole touches nothing. */
+    const farthest = Math.max(
+        ...corners.map(corner => distance(corner, centre))
+    );
+
+    if (farthest < radius - band) {
+        return false;
+    }
+
+    /* An axis-aligned box around the centre with a radius smaller than
+       half a side still reaches the ring - checked by the four crossings. */
+    return (
+        selectionBox.minX <= centre.x + radius &&
+        selectionBox.maxX >= centre.x - radius &&
+        selectionBox.minY <= centre.y + radius &&
+        selectionBox.maxY >= centre.y - radius
+    );
+}
+
 function pointInsideSelection(
     point,
     selectionBox
@@ -616,11 +670,6 @@ export function objectIntersectsSelection(
 
     const geometry = object.geometry;
 
-    if (enggAnnotationModel.derivedAnnotations(object, drawingState)
-        .some(annotation => annotationBoxIntersectsSelection(annotation, selectionBox))) {
-        return true;
-    }
-
     /*
      * A rigid body, and a rectangle, are areas rather than
      * outlines: a rectangle drawn wholly inside a large rigid
@@ -710,6 +759,39 @@ export function objectIntersectsSelection(
                     member.end,
                     selectionBox
                 )
+        );
+    }
+
+    /*
+     * A DYNAMICS SYMBOL IS SWEPT UP AS THE SPAN OR RING IT IS DRAWN AS.
+     *
+     * A spring, a damper and a branch pair run between their two terminals;
+     * a rotation symbol and a pulley are a ring about their centre. The
+     * tests follow that ink, so a selection rectangle that crosses a drawn
+     * symbol selects it - and it selects the ONE symbol, never a part of
+     * it.
+     */
+    const dynamicsKind = object.engineering?.dynamicsType;
+
+    if (
+        dynamicsKind === "dynamics-pulley" ||
+        dynamicsKind === "dynamics-angular-vector"
+    ) {
+        return (
+            geometry.center &&
+            ringIntersectsSelection(
+                geometry.center,
+                Math.abs(Number(geometry.radius) || 0),
+                selectionBox
+            )
+        );
+    }
+
+    if (typeof dynamicsKind === "string" && geometry.start && geometry.end) {
+        return segmentIntersectsSelection(
+            geometry.start,
+            geometry.end,
+            selectionBox
         );
     }
 

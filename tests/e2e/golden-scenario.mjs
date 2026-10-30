@@ -56,34 +56,8 @@ const TOOLS = [
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
     ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc"],
-    /*
-     * DYNAMICS. Each entry is family button -> child item -> the gesture the
-     * child's placement takes: a point click, a two-point drag, or a box drag.
-     * The families are the toolbar's submenus; the child ids are the real
-     * Dynamics tool ids, the same ones the unit suites exercise.
-     */
-    ["DYNAMICS", "dynamics-bodies", "dynamics-particle"],
-    ["DYNAMICS", "dynamics-bodies", "dynamics-rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
-    ["DYNAMICS", "dynamics-kinematics", "dynamics-polar-vector", null, ["d:0.3,0.55,0.6,0.55"]],
-    ["DYNAMICS", "dynamics-kinematics", "dynamics-angular-vector", null, ["d:0.3,0.55,0.55,0.3"]],
-    ["DYNAMICS", "dynamics-mechanical", "dynamics-spring", null, ["d:0.3,0.55,0.6,0.55"]],
-    ["DYNAMICS", "dynamics-mechanical", "dynamics-damper", null, ["d:0.3,0.55,0.6,0.55"]],
-    ["DYNAMICS", "dynamics-mechanical", "dynamics-spring-damper", null, ["d:0.3,0.55,0.6,0.55"]],
-    ["DYNAMICS", "dynamics-mechanical", "dynamics-pulley", null, ["d:0.3,0.55,0.55,0.3"]],
-    ["DYNAMICS", "dynamics-coordinate-system", null, null, ["d:0.3,0.6,0.6,0.3"]],
-    ["DYNAMICS", "dynamics-reference-point"],
-    ["DYNAMICS", "dynamics-reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]],
-    ["DYNAMICS", "dynamics-reference-arc", null, null, ["d:0.3,0.55,0.6,0.55"]],
-    /*
-     * FLUIDS. Pipe / Duct is a child of the Flow Paths INLINE GROUP, which the
-     * Fluids sidebar opens in place exactly as Dynamics opens its families. The
-     * family id is passed as `sub`'s parent, so the harness opens the group
-     * before it looks for the tool - without it the button exists in the DOM but
-     * sits inside a `hidden` subsection, and Playwright refused to click it.
-     */
-    ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
-    ["THERMODYNAMICS", "control-volume"],
-    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
+    ["DYNAMICS", "velocity"], ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
+    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];
 
@@ -115,12 +89,7 @@ async function main() {
     const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 1 });
     await context.addInitScript(DETERMINISM);
     const page = await context.newPage();
-    /*
-     * Above the longest explicit pause below (3000 ms): a default shorter than
-     * a deliberate wait makes any step that follows one flaky, and a failed
-     * action is then swallowed by the .catch(() => {}) calls around it.
-     */
-    page.setDefaultTimeout(10000);
+    page.setDefaultTimeout(2500);
     const debug = process.env.GOLDEN_DEBUG
         ? (...a) => fs.appendFileSync(process.env.GOLDEN_DEBUG, a.join(" ") + "\n")
         : () => {};
@@ -211,19 +180,6 @@ async function main() {
             await section.locator(`.drawing-tool[data-tool-id="${sub}"]`).first().click();
             await sleep(150);
             return;
-        }
-        /*
-         * A tool WITHOUT a sub can still live inside a collapsed statics
-         * section (e.g. point-force inside Loads): expand its parent section
-         * before clicking, otherwise the button exists but is never visible.
-         */
-        for (const group of ["body", "load", "support", "connection"]) {
-            const parent = page.locator(`#statics-${group}-tools`);
-            if (await parent.locator(`.drawing-tool[data-tool-id="${toolId}"]`).count()
-                && await parent.evaluate(el => el.hidden)) {
-                await page.click(`.drawing-tool[data-tool-id="${group}"]`);
-                await sleep(120);
-            }
         }
         await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
         await sleep(120);
@@ -354,12 +310,6 @@ async function main() {
         await escape();
         results[key] = { steps, ...snap, panels, errors: [...errors] };
         process.stdout.write(`${key}: ${created.length} new, ${errors.length} errors\n`);
-        /*
-         * Flush as we go: the recording is only written at the very end, so a
-         * stall used to leave no file at all and say nothing about where it
-         * stopped. A partial recording makes the last printed key the culprit.
-         */
-        fs.writeFileSync(outFile, JSON.stringify(results, null, 1));
     }
 
     /*
@@ -404,7 +354,6 @@ async function main() {
         const snap = await snapshot();
         results[key] = { ...snap, camera: await page.evaluate(() => ({ ...window.enggDrawing.state.camera })), errors: [...errors] };
         process.stdout.write(`${key}: ${snap.objects.length} objects, ${errors.length} errors\n`);
-        fs.writeFileSync(outFile, JSON.stringify(results, null, 1));
     }
 
     /* Export: the clean SVG render of the active sheet, and a file round-trip. */

@@ -201,6 +201,16 @@ export function removeObjectRegion(source, objectId) {
  */
 export function rebuildDrawingSourceFromObjects(source, objects, { write = null } = {}) {
   const text = String(source ?? "");
+
+  /*
+   * A HIDDEN OBJECT'S BLOCK STAYS IN THE TEXT.
+   *
+   * Hiding is a DRAWING decision, and the Source tab is the student's own text -
+   * so a hidden object keeps its block, its formatting and its place, and the
+   * Source tab decorates it as hidden. Nothing here removes it; only a deleted
+   * object loses its region.
+   */
+
   const known = new Set(mappedObjectIds(text));
 
   const additions = (objects || [])

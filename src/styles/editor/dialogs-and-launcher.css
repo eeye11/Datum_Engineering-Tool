@@ -542,7 +542,17 @@ dialog.plant-options-dialog::backdrop {
 
 .datum-open-thumb {
     align-items: center;
-    background: var(--datum-panel);
+    /*
+     * NO BACKGROUND AT ALL.
+     *
+     * The box is a window onto the drawing, not a card of its own. It carried
+     * `var(--datum-panel)`, which in the light theme is the pale mint panel -
+     * so every thumbnail sat on a wash of colour that was not part of the
+     * picture, and a drawing with white space around it read as a green-tinted
+     * rectangle. The drawing's own content is the only colour in here; the box
+     * is transparent, and the border stays so the target is still visible.
+     */
+    background: transparent;
     border: 1px solid var(--datum-border);
     border-radius: 4px;
 
@@ -635,7 +645,8 @@ dialog.plant-options-dialog::backdrop {
 
 .datum-open-template-preview {
     align-items: center;
-    background: var(--datum-panel);
+    /* No wash of its own - the drawing is the only colour in the window. */
+    background: transparent;
     border: 1px solid var(--datum-border);
     border-radius: 4px;
     display: flex;

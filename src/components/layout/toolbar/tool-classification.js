@@ -38,11 +38,6 @@
  */
 
 import { isDragCreationTool } from "../../../features/workspace/interaction/creation-drag.js";
-import {
-    DYNAMICS_SPAN_TOOLS,
-    DYNAMICS_ANGLE_TOOLS,
-    DYNAMICS_BOX_TOOLS
-} from "../../../features/workspace/dynamics/dynamics-tools.js";
 
 /*
  * The tools whose interaction is a SINGLE POINT.
@@ -55,6 +50,14 @@ import {
  */
 export const POINT_TOOLS = [
     /*
+     * The two Dynamics tools that are placed at one point. They are listed
+     * here for the same reason a Statics particle is: a bare click on empty
+     * space places the marker and keeps the tool armed, and it must not be
+     * read as "I am finished with this tool".
+     */
+    "dynamics-particle",
+    "dynamics-reference-point",
+    /*
      * A Point Force's application point is one click when it is attached to a
      * body; placed in free space it drags a vector. Either way its FIRST input
      * is a point the student aims at, and it is not a path tool.
@@ -62,22 +65,6 @@ export const POINT_TOOLS = [
     "point",
     "particle",
     "reference-point",
-    "gain",
-    "sum",
-
-    /*
-     * THE DYNAMICS PLACEMENT TOOLS PLACE ON ONE CLICK TOO.
-     *
-     * A Dynamics Particle and a Dynamics Reference Point are finished by a
-     * single aimed click, exactly as their Statics and Geometry twins are.
-     * Left out of this list, a bare click was read as "I am finished with
-     * this tool" and dropped the student into Select before anything could
-     * be placed - the tool armed, previewed its instruction and then ate its
-     * own first click. Asked beside the twins they mirror, so the three stay
-     * in step by construction.
-     */
-    "dynamics-particle",
-    "dynamics-reference-point",
 
     /*
      * The supports place at a single location on the member they are propped
@@ -204,116 +191,49 @@ export function clickKeepsTool(toolId) {
  * next leg, exactly as a polyline or a truss is kept.
  */
 export const MULTI_STEP_TOOLS = [
+    /*
+     * EVERY DYNAMICS SYMBOL IS ONE GESTURE. They are therefore deliberately
+     * absent: a Dynamics tool finished by a drag exits to Select on a bare
+     * click, which is what the drag pipeline already decides for a one-step
+     * drag tool.
+     */
     "triangle",
     "polygon",
     "arc",
     "reference-arc",
     "polyline",
-    "signal-line",
     "truss",
     "distributed-load",
     "varying-distributed-load",
     "pipe-duct"
 ];
 
-/*
- * THE DYNAMICS SPAN, BOX AND ANGLE TOOLS TAKE CLICK-MOVE-CLICK TOO.
- *
- * A spring, a vector, a pulley or a body anchors on its first point and is
- * finished by the second - so a bare click is a REAL STEP of the tool's
- * workflow, not a request to stop.
- *
- * READ LAZILY, NOT AT MODULE LOAD. The Dynamics tool tables live in a module
- * that reaches back into the toolbar's menu code, and this module is part of
- * that toolbar: importing the tables here closed a cycle that broke module
- * initialisation for the whole application. Asked of the tables at call time
- * instead, so a tool added to the Dynamics library is covered here without
- * another edit and the cycle stays open.
- */
-let dynamicsMenuToolIds = null;
-
-function dynamicsMultiStepIds() {
-    if (!dynamicsMenuToolIds) {
-        dynamicsMenuToolIds = [
-            ...Object.keys(DYNAMICS_SPAN_TOOLS),
-            ...Object.keys(DYNAMICS_ANGLE_TOOLS),
-            ...Object.keys(DYNAMICS_BOX_TOOLS)
-        ];
-    }
-
-    return dynamicsMenuToolIds;
-}
-
 export function isMultiStepTool(toolId) {
-    return dynamicsMultiStepIds().includes(toolId ?? null) ||
-    MULTI_STEP_TOOLS.includes(toolId ?? null);
+    return MULTI_STEP_TOOLS.includes(
+        toolId ?? null
+    );
 }
 
 /*
- * The tools that take click-move-click as well as press-drag-release.
+ * THE GEOMETRY TOOLS THAT TOOK CLICK-MOVE-CLICK.
  *
- * A bare click with one of these armed is the shape's FIRST POINT, exactly as in
- * a CAD program - the second click completes it, and Esc or Select leaves the
- * tool. The Annotate and Thermodynamics path tools keep the exit-on-click rule
- * until their owners choose otherwise.
+ * IT IS NOW EMPTY, AND THAT IS THE POINT.
+ *
+ * Line, Rectangle and Circle used to sit here, which meant a bare click with one
+ * armed was read as the shape's FIRST POINT and the tool stayed armed. The
+ * effect was a student who clicked once on empty canvas, saw nothing happen, and
+ * had no obvious way out except finding the Select button. Every creation tool
+ * that draws a SHAPE from two points now works by press-drag-release: hold, drag,
+ * release. A bare click is therefore not the first point of anything - it is the
+ * student saying they are finished, so it exits to Select and selects whatever
+ * was under it.
+ *
+ * THE POINT TOOLS ARE NOT AFFECTED. A Point, a Particle, a Reference Point and
+ * the single-click Statics placements are listed in `POINT_TOOLS` above and keep
+ * their place-and-stay-armed behaviour, because for them a click IS the whole
+ * creation.
  */
-export const CLICK_CLICK_TOOLS = [
-    "line",
-    "rectangle",
-    "circle",
-
-    /*
-     * THE MULTI-POINT GEOMETRY TOOLS START ON A CLICK TOO.
-     *
-     * A Triangle, an Arc and a Polygon already kept every click AFTER their
-     * first point (they are multi-step tools), but their very first bare
-     * click reached `finishCreationClick` with the phase still idle and was
-     * read as "leave the tool". So they could be dragged but never clicked.
-     * Listing them here makes the first click their first point, exactly as
-     * for a Line - and a drag still works as before.
-     *
-     * The Coordinate System is the same two points (origin, then X
-     * direction), so a click places its origin and a second click its axis.
-     */
-    "triangle",
-    "arc",
-    "polygon",
-
-    /*
-     * THE STATICS TWO-POINT TOOLS.
-     *
-     * Every Statics tool whose feature (or whose first step) is a start and an
-     * end takes the click workflow as well as the drag: the bodies drawn as a
-     * span, the Point Force, the connections, a load's span, the reference
-     * line and arc, and the coordinate system's origin and X direction. The
-     * single-click placements (particle, supports, moment, reference point)
-     * and the flow tools (truss) already take clicks and are not listed.
-     */
-    "beam",
-    "cable",
-    "shaft",
-    "point-force",
-    "pin-connection",
-    "fixed-connection",
-    "slider-connection",
-    "distributed-load",
-    "varying-distributed-load",
-    "reference-line",
-    "reference-arc",
-    "coordinate-system-2d",
-
-    /*
-     * PIPE / DUCT KEEPS ITS CLICK TOO.
-     *
-     * A run is drawn by press-drag-release, so its TRAILING click has always to
-     * reach the router as "nothing" - and the router's construction branch only
-     * touches the geometry phase machine, which a run does not use. Treating a
-     * bare click on a run as the end of the tool is what keeps a path alive: the
-     * student's click after releasing a leg must neither place a run nor drop
-     * them out of the tool mid-path.
-     */
-    "pipe-duct"
-];
+export const CLICK_CLICK_TOOLS = [];
 
 export function isClickClickTool(toolId) {
     return CLICK_CLICK_TOOLS.includes(

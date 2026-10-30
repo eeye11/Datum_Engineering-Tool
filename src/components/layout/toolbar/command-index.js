@@ -1324,16 +1324,6 @@ const ALIASES = {
       ],
     },
     {
-      target: "command:view:magnitudes",
-      terms: [
-        "magnitudes",
-        "show magnitudes",
-        "values on arrows",
-        "hide values",
-        "show values",
-      ],
-    },
-    {
       /* Changing an object's colour is done in its Features panel. */
       target: "panel:features",
       terms: [

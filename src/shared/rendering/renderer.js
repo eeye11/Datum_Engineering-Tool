@@ -5,7 +5,7 @@ import { ensureSvg, setActiveTheme, setActiveZoom, SVG_NAMESPACE } from "./svg-p
 import { appendFeatureLabel } from "./annotation-render.js";
 import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysisFrameExtents, analysisPlotMarks, analysisSketchMarks, analysisValueAt, equationLabels } from "./analysis-render.js";
 import { appendEntity } from "./entity-render.js";
-import { renderCrosshair, renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
+import { renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
 import { renderPreview } from "./preview-render.js";
 
 
@@ -57,11 +57,7 @@ import { renderPreview } from "./preview-render.js";
     function renderDrawing(
         state,
         canvas,
-        {
-            overlayOnly = false,
-            liveObjectIds = null,
-            textEntryObjectId = state?.textEntryObjectId || null
-        } = {}
+        { overlayOnly = false, liveObjectIds = null } = {}
     ) {
         if (!canvas) {
             return;
@@ -158,48 +154,29 @@ import { renderPreview } from "./preview-render.js";
          * names the objects whose model differs from the compiled picture on
          * screen - one being moved, or just edited and still compiling - and the
          * overlay draws those, so each object is seen where it really is.
-         *
-         * AND THE OBJECT WHOSE TEXT IS BEING TYPED. A node-entry prompt is
-         * anchored to the object it writes into, and the whole point of the
-         * prompt is that the object stays visible while it is open - so that
-         * object is drawn by the overlay for as long as the entry lasts, whether
-         * or not the picture on screen already shows it. `textEntryObjectId` is
-         * set and cleared by the editor; nothing is written to the model.
          */
-        const textEntryId = state.textEntryObjectId || null;
-
-        const live = new Set(liveObjectIds || []);
-
-        if (textEntryId) {
-            live.add(textEntryId);
-        }
-
-        const drawn = overlayOnly
-            ? (live.size
-                ? state.objects.filter((entity) => entity && live.has(entity.id))
+        const drawn = (overlayOnly
+            ? (liveObjectIds && liveObjectIds.size
+                ? state.objects.filter((entity) => entity && liveObjectIds.has(entity.id))
                 : [])
-            : state.objects;
+            : state.objects
+        ).filter(
+            /*
+             * A HIDDEN OBJECT IS DRAWN BY NOTHING.
+             *
+             * `visible` governs DRAWING - see `setObjectVisible` in the model -
+             * and this is the one place every model-painted feature passes
+             * through, so the rule is enforced here rather than at each caller.
+             * The compiled picture excludes a hidden object because its source
+             * region is gone; this is the matching half for the live layer.
+             */
+            (entity) => entity && entity.visible !== false
+        );
 
-        /*
-         * A HIDDEN OBJECT IS NOT DRAWN.
-         *
-         * `visible: false` is the model's own flag for this, and the hit test and
-         * the source writer already honour it - so honouring it HERE as well is
-         * what makes the canvas, the pick and the source agree about what is on
-         * the sheet. The object itself stays in `state.objects` with its id,
-         * geometry, style and connections intact; only this pass skips it.
-         *
-         * The filter is applied INSIDE the loop rather than by replacing `drawn`,
-         * so the loop still walks the sheet's own list and the overlay case above
-         * is unaffected.
-         */
-        drawn.forEach(
+        if (drawn.length) {
+            drawn.forEach(
                 entity => {
                     try {
-                        if (entity?.visible === false) {
-                            return;
-                        }
-
                         appendEntity(
                             svg,
                             entity,
@@ -216,8 +193,9 @@ import { renderPreview } from "./preview-render.js";
                 }
             );
 
-        if (renderFailures.length) {
-            reportRenderFailures(renderFailures);
+            if (renderFailures.length) {
+                reportRenderFailures(renderFailures);
+            }
         }
 
         /*
@@ -253,10 +231,25 @@ import { renderPreview } from "./preview-render.js";
          * the snap marker remains visually on top.
          */
         const activePreview = state.interaction.preview;
-        for (const preview of state.interaction.previewObjects || []) {
+
+        /*
+         * ONLY PREVIEWS THAT EXIST ARE DRAWN.
+         *
+         * An empty slot in the list is not a preview, and rendering it would
+         * hand `undefined` to every preview routine - which throws, inside the
+         * shared renderer, and takes the rest of the frame with it. A list of
+         * ghosts is built from the modified objects and can hold nothing while
+         * a modify tool waits; an absent preview is simply nothing to draw.
+         */
+        for (const preview of (state.interaction.previewObjects || [])) {
+            if (!preview) {
+                continue;
+            }
+
             state.interaction.preview = preview;
             renderPreview(svg, state, bounds);
         }
+
         state.interaction.preview = activePreview;
         renderPreview(svg, state, bounds);
 
@@ -289,18 +282,34 @@ import { renderPreview } from "./preview-render.js";
          * not redrawn in a highlight colour - the picture belongs to the
          * source - so it is marked instead.
          */
-        renderSelectionOutline(svg, state, bounds);
-
-        renderSelectionHandles(svg, state, bounds);
 
         /*
-         * AND THE CONSTRUCTION CROSSHAIR, while one is running.
+         * ONE EDITOR AID CANNOT TAKE THE OTHERS DOWN.
          *
-         * It is drawn by the editor rather than asked for from the operating
-         * system, so it is the same size at every DPI and cannot appear over the
-         * panel or the Source editor - see `renderCrosshair`.
+         * Everything above this point is the DRAWING and is already protected:
+         * a feature that cannot be painted is reported and skipped. The aids
+         * are the same kind of work - a handle list, a selection frame, a
+         * magnitude's pick box - and each is resolved from the model, so each
+         * can be the one thing in a frame that does not resolve. Containing
+         * them individually is what stops a broken handle from also removing
+         * the manipulation grips of every other selected object, which reads as
+         * "the drawing disappeared".
          */
-        renderCrosshair(svg, state, bounds);
+        const guardedOverlay = (draw) => {
+            try {
+                draw();
+            } catch (error) {
+                renderFailures.push({
+                    id: null,
+                    type: "overlay",
+                    error
+                });
+            }
+        };
+
+        guardedOverlay(() => renderSelectionOutline(svg, state, bounds));
+
+        guardedOverlay(() => renderSelectionHandles(svg, state, bounds));
     }
 
     const enggDrawingRenderer = {

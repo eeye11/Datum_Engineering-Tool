@@ -94,7 +94,7 @@ test("Pipe / Duct is registered under Create -> Flow Paths and is not planned", 
 
   assert.deepEqual(
     menu.map((item) => item.label),
-    ["Pipe / Duct", "Elbow", "Junction", "Reducer / Expander"]
+    ["Pipe / Duct", "Elbow", "Junction"]
   );
 
   assert.equal(
@@ -112,7 +112,7 @@ test("Flow Indicators comes directly after Flow Paths in Create", () => {
 
   assert.deepEqual(
     create.tools.map((tool) => tool.label),
-    ["Flow Paths", "Flow Indicators & Annotations", "Reservoir / Tank", "Pump", "Valve", "Flow Meter"]
+    ["Flow Paths", "Flow Indicators", "Reducer / Expander", "Reservoir / Tank", "Pump", "Valve", "Flow Meter"]
   );
 });
 
@@ -329,11 +329,11 @@ test("the legacy cross-section properties are gone", () => {
   assert.ok(!headings.includes("Cross Section"), "Cross Section must be removed");
 });
 
-test("the default separation is five times the original value", () => {
+test("the default separation is twice the previous value", () => {
   const m = modules();
 
-  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SEPARATION, 20);
-  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SPACING, 20);
+  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SEPARATION, 4);
+  assert.equal(m.pipe.DEFAULT_SCHEMATIC_SPACING, 4);
 });
 
 test("the Transform carries X Shift, Y Shift, Rotate and Pipe Width", () => {

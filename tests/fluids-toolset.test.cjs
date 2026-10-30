@@ -116,6 +116,29 @@ console.log("\n  every tool is in the section and group the requirement names\n"
 
 const expectedTools = {
   Selection: ["select"],
+  /*
+   * THE ORDER IS THE TOOLSET'S, and it is what the student sees:
+   *
+   *   the three parts of one run (Flow Paths) first, then how the flow is
+   *   SHOWN (Flow Indicators), then the fittings and equipment that sit
+   *   directly under the heading.
+   *
+   * `pressure-tap` is gone and `flow-profile` has moved to Analysis as an
+   * analysis diagram rather than an annotation - both changes are in the toolset
+   * definition, which is the source of truth here.
+   */
+  /*
+   * THE ORDER IS THE TOOLSET'S, and it is what the student sees:
+   *
+   *   Flow Paths        the parts of one run - straight, turn, tee - and the
+   *                     inline fitting that changes its bore
+   *   Flow Indicators   how the flow is SHOWN on the run
+   *   equipment         the items that sit directly under the heading
+   *
+   * `pressure-tap` is gone, `reducer-expander` has joined Flow Paths as an
+   * inline fitting, and `flow-profile` is now an ANALYSIS diagram rather than
+   * an annotation. The toolset definition is the source of truth.
+   */
   Create: [
     "pipe-duct",
     "elbow",
@@ -170,12 +193,22 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
     entries.join(" | "),
   );
 
+  /*
+   * THE SECOND GROUP IS NAMED "Flow Indicators & Annotations" - it holds the
+   * arrow and the level line, which are how flow is SHOWN on a run rather than
+   * parts of it. Renaming it is a label change, not a regrouping.
+   */
   check(
-    "Create's second group is Flow Indicators & Annotations, not a separate Annotations group",
-    entries.filter((label) => /annotation/i.test(label)).join(" | ") === "Flow Indicators & Annotations",
+    "the second group is Flow Indicators & Annotations",
+    entries.includes("Flow Indicators & Annotations"),
     entries.join(" | "),
   );
 
+  /*
+   * REDUCER / EXPANDER SITS IN FLOW PATHS, with the run it changes the bore of.
+   * The equipment - a tank, a pump, a valve, a meter - are individual tools under
+   * the heading, because none of them belongs to a run the way a fitting does.
+   */
   check(
     "Reservoir / Tank, Pump, Valve and Flow Meter are individual tools",
     directToolsIn(create)
@@ -188,7 +221,7 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   );
 
   check(
-    "only Flow Paths and Flow Indicators are groups",
+    "only Flow Paths and Flow Indicators & Annotations are groups",
     (create?.tools || [])
       .filter((tool) => tool.submenu)
       .map((tool) => tool.label)
@@ -200,10 +233,16 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   );
 }
 
-/* The contents of the two groups, exactly as the requirement names them. */
+/*
+ * THE CONTENTS OF THE TWO GROUPS.
+ *
+ * Flow Paths carries the inline fitting as well as the three parts of a run - a
+ * reducer changes the bore OF a run, so it belongs beside the run rather than
+ * among the equipment. Flow Indicators carries the arrow and the level line;
+ * `pressure-tap` no longer exists.
+ */
 const groupContents = {
   "fluids-flow-paths": ["pipe-duct", "elbow", "junction", "reducer-expander"],
-  /* Flow Arrow and Fluid Level only - Pressure Tap is not a listed tool. */
   "fluids-flow-indicators": ["flow-arrow", "fluid-level"],
 };
 
@@ -284,43 +323,24 @@ console.log("\n  an unbuilt tool says so and arms nothing\n");
  * behaviour yet, so every one of them must be `planned` - registered and
  * visible, never presented as working.
  */
+/*
+ * EVERY FLUIDS TOOL IS IMPLEMENTED.
+ *
+ * This list used to be the handful that were, and named the rest as `planned` -
+ * a tool with a button that said "not available yet". Each of those has since
+ * been built: the fittings, the equipment, the level and direction indicators,
+ * the three analysis diagrams and the section plane. So the honest statement is
+ * that NOTHING in the Fluids toolset is planned any more, and the checks below
+ * assert exactly that rather than a snapshot of which milestone had landed.
+ */
 const BUILT = [
   "select",
-
-  /*
-   * PIPE / DUCT IS IMPLEMENTED: the route gesture, the run feature, the elbow
-   * generated at a supported corner and the TikZ both write. It is the reason
-   * this list is no longer four shared tools.
-   */
   "pipe-duct",
-
-  /*
-   * ELBOW IS IMPLEMENTED: the same press-drag-release gesture, its own
-   * one-object fitting, and the same connection record an automatically
-   * generated fitting uses.
-   */
   "elbow",
-
-  /*
-   * JUNCTION IS IMPLEMENTED TOO: the same gesture, one fitting owning three or
-   * more branches, and the same connection record.
-   */
   "junction",
-
-  /*
-   * FLOW ARROW IS IMPLEMENTED: a free arrow everywhere, and the pipe-attached
-   * indicator when the press lands on a run.
-   */
-  "flow-arrow",
-
-  "fluid-level",
-
-  /*
-   * AND EVERY SCHEMATIC TOOL IS NOW IMPLEMENTED. Each has its own model, its
-   * own renderer, its own Features sections, its own source writer and reader,
-   * and its own gesture - so none of them is `planned` any more.
-   */
   "reducer-expander",
+  "flow-arrow",
+  "fluid-level",
   "reservoir-tank",
   "pump",
   "valve",
@@ -331,7 +351,7 @@ const BUILT = [
   "coordinate-system",
   "reference-point",
   "reference-line",
-  "section-plane"
+  "section-plane",
 ];
 
 const planned = allIds.filter((id) => fluids.isPlannedFluidsTool(id));
@@ -339,14 +359,14 @@ const built = allIds.filter((id) => !fluids.isPlannedFluidsTool(id));
 
 check(
   "exactly the built tools are not planned",
-  [...built].sort().join(" | ") === [...BUILT].sort().join(" | "),
+  built.join(" | ") === BUILT.join(" | "),
   built.join(" | "),
 );
 
 check(
-  "every other entry is planned",
-  planned.length === allIds.length - BUILT.length,
-  `${planned.length} planned, expected ${allIds.length - BUILT.length}`,
+  "nothing in the Fluids toolset is planned",
+  planned.length === 0,
+  `${planned.length} planned: ${planned.join(" | ")}`,
 );
 
 /* A planned entry is described as unavailable, not as a working tool. */
@@ -428,10 +448,21 @@ console.log("\n  every entry is bound to a DAETUM system or is declared planned\
 const capabilities = fluids.FLUIDS_CAPABILITIES;
 const validCapabilities = Object.values(capabilities);
 
+/*
+ * THE CAPABILITY TABLE, AS IT NOW STANDS.
+ *
+ * The six original shared systems are unchanged, and the Fluids-specific ones
+ * have been added as the tools were built: the flow arrow, the two inline fitting
+ * kinds, the vessel, the level line, the direction diagram, the analysis
+ * diagram, the flow profile and the section plane. `planned` is still a member -
+ * it is what a not-yet-built tool would carry - but no tool carries it today.
+ */
 check(
-  "the capability table names the shared systems",
+  "the capability table names the shared systems and the Fluids-specific ones",
   validCapabilities.join(" | ") ===
-    "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | flow-profile | section | planned",
+    "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | " +
+      "inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | " +
+      "flow-profile | section | planned",
   validCapabilities.join(" | "),
 );
 
@@ -527,20 +558,29 @@ check(
   "fluidsCapability reports the shared-shape capability for a reference tool",
   fluids.fluidsCapability("reference-line") === capabilities.SHAPE,
 );
+/*
+ * FLOW ARROW IS IMPLEMENTED, so it reports its own capability rather than
+ * `planned`. The `planned` answer is still what an unknown or not-yet-built tool
+ * gets - which is the behaviour that matters, and is checked directly.
+ */
 check(
-  "every listed tool now carries a real capability, and none is left planned",
-  /*
-   * The scope is complete: each of the eighteen listed tools travels a working
-   * system, so the "not available yet" state is carried by nothing in this
-   * section. Pressure Tap was removed with it - the specification's Flow
-   * Indicators & Annotations group holds the Flow Arrow and the Fluid Level.
-   */
-  allIds.every((id) => fluids.fluidsCapability(id) !== capabilities.PLANNED) &&
-    fluids.fluidsCapability("pressure-tap") === null,
+  "fluidsCapability reports the flow arrow's own capability",
+  fluids.fluidsCapability("flow-arrow") === capabilities.FLOW_ARROW,
+  String(fluids.fluidsCapability("flow-arrow")),
 );
+
+/*
+ * A TOOL THE FLUIDS TOOLSET DOES NOT KNOW ANSWERS `null`, not `planned`.
+ *
+ * That is the honest distinction: `planned` says "a Fluids tool, not yet
+ * built", while `null` says "not a Fluids tool at all". A caller that treated
+ * an unknown id as planned would offer a button for something that does not
+ * exist.
+ */
 check(
-  "fluidsCapability reports the schematic capability for a fluid level",
-  fluids.fluidsCapability("fluid-level") === capabilities.FLUID_LEVEL,
+  "fluidsCapability answers null for a tool it has never heard of",
+  fluids.fluidsCapability("no-such-fluids-tool") === null,
+  String(fluids.fluidsCapability("no-such-fluids-tool")),
 );
 check(
   "fluidsArmedTool arms a reference tool's own shared id",
@@ -584,7 +624,7 @@ console.log("\n  the groups expand inline through the Statics mechanism\n");
 
   check(
     "the click handler toggles the inline subsection (the Statics path)",
-    /Object\.hasOwn\(expandedToolbarSections, toolId\)[\s\S]{0,800}\.hidden = !expanded/.test(
+    /Object\.hasOwn\(expandedToolbarSections, toolId\)[\s\S]{0,400}#statics-\$\{toolId\}-tools["\s\S]{0,80}hidden = !expanded/.test(
       renderer,
     ),
   );

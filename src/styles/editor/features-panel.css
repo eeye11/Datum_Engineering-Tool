@@ -41,6 +41,15 @@
     height: 22px;
     justify-content: space-between;
     grid-column: 1 / -1;
+    /*
+     * THE FIFTH ROW, NOT THE SIXTH.
+     *
+     * The workspace is `auto auto minmax(0, 1fr) 24px 22px`: the rail, the
+     * Show row, the panels and canvas, the sheet bar, then this bar. It was
+     * pinned to row 6 - one past the end - so the grid invented a sixth row for
+     * it and left the real fifth row empty: a bare strip of background between
+     * the sheet bar and the status line.
+     */
     grid-row: 5;
     line-height: 1;
     padding: 0 7px;

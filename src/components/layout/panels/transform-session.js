@@ -1,4 +1,3 @@
-import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
 /*
  * ============================================================
  * THE FEATURES PANEL'S TRANSFORM
@@ -38,23 +37,7 @@ import { drawingState } from "../../../features/workspace/editor-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { setPipeWidth, adjustElbowRadius } from "./feature-schema.js";
-import { propagatePipeWidth, reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
-
-/*
- * A TRANSFORM THAT CARRIES PIPEWORK CARRIES ITS JOINTS TOO.
- *
- * A shift, a turn or a resize moves the runs' ends like any drag does, so each
- * moved run is put through the ONE reconciler afterwards: a join the move made
- * earns its fitting, a join it broke loses it, and a corner it only flattened stays
- * attached.
- */
-function reconcileMovedFluids(targets) {
-    (targets || []).forEach((object) => {
-        if (object?.type === "pipe-duct") {
-            reconcileFluidConnections(object, drawingState.objects);
-        }
-    });
-}
+import { propagatePipeWidth } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 
 /*
  * THE FITTING'S CONNECTED ENDS FIND THEIR PIPES THROUGH HERE.
@@ -173,17 +156,10 @@ export function shiftSelection(deltaX, deltaY) {
     detachSourceSync();
 
     targets.forEach((object) => {
-        if (enggReducer.isReducerType(object.type)) {
-            const centre = object.geometry.position;
-            enggReducer.slideReducerTo(object, { x: centre.x + deltaX, y: centre.y + deltaY }, state.objects);
-            return;
-        }
         enggFeatureGeometry.translateObject(object, deltaX, deltaY, (id) =>
             state.objects.find((candidate) => candidate.id === id) || null
         );
     });
-
-    reconcileMovedFluids(targets);
 
     enggDrawingState.commitDrawingChange(state, previous);
 
@@ -236,7 +212,7 @@ function rotationEditsFor(object, pivot, radians) {
  */
 export function rotateSelection(degrees) {
     const state = drawingState;
-    const targets = transformableObjects().filter(object => object.type !== "reducer-expander" || !enggReducer.connectedPipeIds(object).some(Boolean));
+    const targets = transformableObjects();
 
     if (!state || !targets.length || !Number.isFinite(degrees)) {
         return 0;
@@ -274,8 +250,6 @@ export function rotateSelection(degrees) {
     detachSourceSync();
 
     targets.forEach((object) => rotationEditsFor(object, pivot, radians));
-
-    reconcileMovedFluids(targets);
 
     enggDrawingState.commitDrawingChange(state, previous);
 

@@ -13,10 +13,6 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { commitCreatedFeature } from "./creation-commit.js";
-import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
-import { dieselCycleFeatures } from "../model/thermodynamics/diesel-cycle.js";
-import { ottoCycleFeatures } from "../model/thermodynamics/otto-cycle.js";
-import { carnotCycleFeatures } from "../model/thermodynamics/carnot-cycle.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
@@ -25,11 +21,6 @@ import { LOAD_BUILD_PHASES, beginDistributedLoadConstruction, continueDistribute
 import { commitMomentPlacement } from "./preview.js";
 import { beginStaticsAttachment, continueStaticsAttachment, staticsBodyAtPoint } from "../statics/statics-attachment.js";
 import { createStaticsFeature } from "../statics/statics-creation.js";
-import { createDynamicsFeature } from "./dynamics-creation.js";
-
-/* The one Dynamics creation entry point, shared with the span gesture. */
-export { createDynamicsFeature };
-import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../dynamics/dynamics-tools.js";
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "../statics/statics-tools.js";
 import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -37,6 +28,9 @@ import { TRUSS_STAGES, continueTrussConstruction } from "../statics/truss-tool.j
 import { attachableStaticsType } from "../../../shared/model/feature-types.js";
 import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { commitDynamicsFeature } from "../editor-state.js";
+import { createDynamicsPreview } from "../dynamics/dynamics-model.js";
+import { DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction } from "../dynamics/dynamics-tools.js";
 
 /*
  * Build the polygon definition for the active
@@ -364,16 +358,6 @@ export function commitFreeformPolygon(
             drawingState
         );
 
-    /*
-     * The construction ends with the commit, as every other tool's does.
-     * Left running, the finished polygon's vertices stayed in progress: the
-     * preview kept drawing them and the next click extended the old shape
-     * instead of starting a new one.
-     */
-    enggDrawingState.clearInteraction(
-        drawingState
-    );
-
     commitCreatedFeature(
         object,
         previousObjects
@@ -481,6 +465,101 @@ export function beginOrCompleteGeometry(
         resolution.effectiveConstructionPoint;
 
     if (!point) {
+        return;
+    }
+
+    /*
+     * A DYNAMICS SPAN HOLDS ITS FIRST ANCHOR.
+     *
+     * A spring, a damper, a reference line or a reference arc is a start and
+     * an end, so the first click holds the anchor and previews the symbol; the
+     * second completes it in the branch further down. Asked of the Dynamics
+     * library's own table, so a tool declared there needs no entry here.
+     */
+    if (
+        dynamicsSpanTool(
+            drawingState.activeTool
+        ) &&
+        (
+            interaction.phase ===
+                "dynamics-span" ||
+            interaction.phase === "idle"
+        ) &&
+        !interaction.startPoint &&
+        !(resolution && resolution.commitOnly)
+    ) {
+        const first = interaction.startPoint || point;
+
+        enggDrawingState.setInteraction(
+            drawingState,
+            {
+                phase: "dynamics-span",
+                toolId: drawingState.activeTool,
+                startPoint: {
+                    ...first
+                },
+                preview: createDynamicsPreview(
+                    drawingState.activeTool,
+                    [
+                        first,
+                        point
+                    ],
+                    {
+                        ...drawingState.styleDefaults
+                    }
+                )
+            }
+        );
+
+        setToolMessage(
+            dynamicsSpanInstruction(
+                drawingState.activeTool
+            )
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * A DYNAMICS CLICK-PLACED TOOL (a particle, a coordinate system, a
+     * reference point) completes on ONE click, where that click landed, and
+     * the tool stays armed for the next placement.
+     */
+    if (
+        DYNAMICS_PLACEMENT_TOOLS[
+            drawingState.activeTool
+        ] &&
+        interaction.phase !== "dynamics-span"
+    ) {
+        commitDynamicsFeature(
+            drawingState.activeTool,
+            point,
+            point,
+            {
+                ...drawingState.styleDefaults
+            }
+        );
+
+        enggDrawingState.setInteraction(
+            drawingState,
+            {
+                phase: "dynamics-point",
+                toolId: drawingState.activeTool,
+                preview: null,
+                previewObjects: []
+            }
+        );
+
+        setToolMessage(
+            dynamicsInstruction(
+                drawingState.activeTool
+            )
+        );
+
+        renderCurrentDrawing();
+
         return;
     }
 
@@ -824,102 +903,6 @@ export function beginOrCompleteGeometry(
             return;
         }
 
-        /*
-         * ========================================================
-         * A DYNAMICS TOOL TAKES ITS POINTS THE WAY IT DECLARED
-         * ========================================================
-         *
-         * A placement tool (a Particle, Reference Point or default-size Rigid
-         * Body) commits on the FIRST click and goes on offering the next one,
-         * like a Statics placement tool. Everything else - a span, a box or a
-         * centre-out angle tool - anchors on this click and is committed by the
-         * next one, through the `dynamics-*` phases handled further down.
-         */
-        if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
-            const toolId = drawingState.activeTool;
-            const target = toolId === "dynamics-angular-vector" ? objectAtPoint(point) : null;
-            createDynamicsFeature(
-                toolId,
-                point,
-                point,
-                {},
-                target && (
-                    target.engineering?.dynamicsType === "dynamics-rigid-body" ||
-                    target.type === "rigid-body" ||
-                    target.type === "point" ||
-                    target.type === "coordinate-system-2d"
-                )
-                    ? { attachedTo: target.id }
-                    : null
-            );
-
-            if (
-                toolId === "dynamics-particle" ||
-                toolId === "dynamics-rigid-body" ||
-                toolId === "dynamics-angular-vector"
-            ) {
-                activateTool("select");
-            }
-
-            renderCurrentDrawing();
-            return;
-        }
-
-        if (
-            DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
-            DYNAMICS_BOX_TOOLS[drawingState.activeTool]
-        ) {
-            enggDrawingState.setInteraction(
-                drawingState,
-                {
-                    ...resolution,
-
-                    phase: "dynamics-span",
-
-                    toolId: drawingState.activeTool,
-
-                    startPoint: point,
-
-                    currentPoint: point,
-
-                    points: [
-                        point
-                    ]
-                }
-            );
-
-            setToolMessage("Specify second point");
-
-            renderCurrentDrawing();
-            return;
-        }
-
-        if (DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) {
-            enggDrawingState.setInteraction(
-                drawingState,
-                {
-                    ...resolution,
-
-                    phase: "dynamics-angle",
-
-                    toolId: drawingState.activeTool,
-
-                    startPoint: point,
-
-                    currentPoint: point,
-
-                    points: [
-                        point
-                    ]
-                }
-            );
-
-            setToolMessage("Specify the radius");
-
-            renderCurrentDrawing();
-            return;
-        }
-
         if (
             drawingState.activeTool ===
             "polygon"
@@ -1049,7 +1032,7 @@ export function beginOrCompleteGeometry(
                         ? "Specify radius"
 
                     : (drawingState.activeTool === "rectangle" ||
-                        ["stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+                        drawingState.activeTool === "control-volume" ||
                         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
                         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool))
                         ? "Specify opposite corner"
@@ -1061,10 +1044,6 @@ export function beginOrCompleteGeometry(
                     : drawingState.activeTool ===
                         "triangle"
                         ? "Specify second point"
-
-                    : drawingState.activeTool ===
-                        "coordinate-system-2d"
-                        ? "Specify X axis direction"
 
                     : "Specify second point"
             );
@@ -1512,34 +1491,56 @@ export function beginOrCompleteGeometry(
 
         return;
     } else if (
-        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
-            DYNAMICS_BOX_TOOLS[drawingState.activeTool] ||
-            DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) &&
-        (interaction.phase === "dynamics-span" ||
-            interaction.phase === "dynamics-angle")
+        dynamicsSpanTool(
+            drawingState.activeTool
+        ) &&
+        (
+            interaction.phase ===
+                "dynamics-span" ||
+            interaction.phase === "idle"
+        ) &&
+        interaction.startPoint &&
+        !(resolution && resolution.commitOnly)
     ) {
         /*
-         * THE SECOND POINT COMMITS. The tool id the gesture armed with is
-         * the one that creates - not necessarily the tool armed NOW - so a
-         * student who switched tools mid-drag cannot commit a hybrid.
+         * THE SECOND POINT COMMITS ONE OBJECT, through the same builder the
+         * preview used, and the tool stays armed for the next one. A Dynamics
+         * feature is one row in Objects, one selection, one undo entry and one
+         * source region, so nothing here counts objects or copies geometry.
          */
-        const gestureTool = interaction.toolId || drawingState.activeTool;
-
-        const object = createDynamicsFeature(
-            gestureTool,
-            interaction.points[0],
-            point
+        commitDynamicsFeature(
+            drawingState.activeTool,
+            interaction.startPoint,
+            point,
+            {
+                ...drawingState.styleDefaults
+            }
         );
 
-        if (object) {
-            enggDrawingState.clearInteraction(drawingState);
-
-            if (gestureTool === "dynamics-polar-vector") {
-                activateTool("select");
+        /*
+         * THE COMMIT COMPLETES THE SPAN, so the phase returns to `idle` and the
+         * tool stays armed for the next one. Leaving it at `dynamics-span`
+         * made the NEXT click look like a first anchor again, so a second
+         * symbol could never be finished without re-arming the tool.
+         */
+        enggDrawingState.setInteraction(
+            drawingState,
+            {
+                phase: "idle",
+                startPoint: null,
+                preview: null,
+                previewObjects: []
             }
-        }
+        );
+
+        setToolMessage(
+            dynamicsInstruction(
+                drawingState.activeTool
+            )
+        );
 
         renderCurrentDrawing();
+
         return;
     } else if (
         STATICS_SPAN_TOOLS[
@@ -1751,14 +1752,8 @@ export function beginOrCompleteGeometry(
             const suggested =
                 Number(geometry.magnitude) || 0;
 
-            // Keep the completed arrow visible while its value is pending.
-            // It enters the document only after confirmation, as one undo step.
-            drawingState.interaction.phase = "point-force-value";
-            drawingState.interaction.preview = object;
-            renderCurrentDrawing();
-
             openLoadValuePopup({
-                title: "Point Load",
+                title: "Point Force",
                 label: "Magnitude",
                 value: suggested.toFixed(2),
                 unit: enggLoadProfile.DEFAULT_FORCE_UNIT,
@@ -1774,9 +1769,6 @@ export function beginOrCompleteGeometry(
                 units: enggLoadProfile.FORCE_UNITS,
 
                 onOpen: () => {
-                    // Keep the completed arrow visible until the value is accepted.
-                    drawingState.interaction.previewObjects = [object];
-                    renderCurrentDrawing();
                     setToolMessage(
                         "Enter the force magnitude"
                     );
@@ -1867,8 +1859,6 @@ export function beginOrCompleteGeometry(
                         valueKey: "magnitude"
                     });
 
-                    enggDrawingState.clearInteraction(drawingState);
-
                     commitCreatedFeature(
                         object,
                         previousObjects
@@ -1885,10 +1875,8 @@ export function beginOrCompleteGeometry(
                 },
 
                 onCancel: () => {
-                    enggDrawingState.clearInteraction(drawingState);
-                    activateTool("select");
                     setToolMessage(
-                        "Point load cancelled"
+                        "Point force cancelled"
                     );
 
                     renderCurrentDrawing();
@@ -1994,28 +1982,56 @@ export function beginOrCompleteGeometry(
         "coordinate-system-2d"
     ) {
         /*
+         * ========================================================
          * THE COORDINATE SYSTEM IS DRAWN BY ONE GESTURE
+         * ========================================================
          *
          * The press is the origin and the release is the positive X
-         * direction; Y is derived perpendicular, so the axes are square
-         * from a single drag. The arm length is the distance dragged.
-         * A degenerate drag (no length) is refused with a message.
+         * direction. The Y axis is derived from the X axis - it is drawn
+         * perpendicular to it - so the student gets square axes from a
+         * single drag and never has to place a third point or type an
+         * angle. The angle is taken from the two committed points, not
+         * from the pointer's snapped position on its own, so grid snapping
+         * cannot skew the axes out of square: whatever direction the
+         * release lands in, Y is exactly 90 degrees from X.
+         *
+         * The arm length is the distance the student dragged. Both the
+         * positive and negative arms use it, so the origin sits in the
+         * middle of the cross the way a coordinate system is drawn on
+         * paper. There are no ticks, units or scale factors here - this
+         * places the AXES, nothing else.
          */
-        const axes = coordinateSystemFromDrag(first, point);
+        const arm = Math.hypot(
+            point.x - first.x,
+            point.y - first.y
+        );
 
-        if (!axes) {
-            setToolMessage("Drag to set the coordinate system size");
+        if (arm <= 1e-9) {
+            setToolMessage(
+                "Drag from the origin to set the X axis"
+            );
 
             return;
         }
 
         object =
             enggDrawingState.geometryFactories.coordinateSystem2D(
-                axes.origin,
                 {
-                    ...axes,
-                    xAxisLength: axes.xPositiveLength,
-                    yAxisLength: axes.yPositiveLength,
+                    x: first.x,
+                    y: first.y
+                },
+                {
+                    rotation: Math.atan2(
+                        point.y - first.y,
+                        point.x - first.x
+                    ),
+
+                    xAxisLength: arm,
+                    yAxisLength: arm,
+                    xPositiveLength: arm,
+                    xNegativeLength: arm,
+                    yPositiveLength: arm,
+                    yNegativeLength: arm,
 
                     name: "Coordinate System",
 
@@ -2055,7 +2071,8 @@ export function beginOrCompleteGeometry(
                 }
             );
     } else if (
-        ["rectangle", "stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
+        drawingState.activeTool === "rectangle" ||
+        drawingState.activeTool === "control-volume" ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -2069,8 +2086,8 @@ export function beginOrCompleteGeometry(
          * constrain.
          */
         const square =
-            drawingState.activeTool === "stress-element" ||
-            (drawingState.activeTool === "rectangle" && interaction.squareConstrained === true);
+            drawingState.activeTool === "rectangle" &&
+            interaction.squareConstrained === true;
 
         const rectangle =
             rectangleGeometry(
@@ -2080,21 +2097,9 @@ export function beginOrCompleteGeometry(
             );
 
         const isControlVolume = drawingState.activeTool === "control-volume";
-        const isStressElement = drawingState.activeTool === "stress-element";
-        const isBoundaryStress = drawingState.activeTool === "boundary-stress";
-        const isTank = drawingState.activeTool === "tank";
-        const isDiesel = drawingState.activeTool === "diesel-cycle";
-        const isOtto = drawingState.activeTool === "otto-cycle";
-        const isCarnot = drawingState.activeTool === "carnot-cycle";
-        const isReheat = drawingState.activeTool === "reheat-rankine-cycle";
-        const isRefrigeration = drawingState.activeTool === "vapor-compression-cycle";
-        const isBrayton = drawingState.activeTool === "brayton-cycle";
-        const isRankine = drawingState.activeTool === "rankine-cycle" || isReheat || isRefrigeration || isBrayton || isDiesel || isOtto || isCarnot;
-        const isNozzle = drawingState.activeTool === "nozzle-diffuser" || isRankine;
-        const isTurbineCompressor = drawingState.activeTool === "turbine-compressor";
         const isDiagram = ["saturation-curve", "process-plot"].includes(drawingState.activeTool);
         const isPiston = ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool);
-        if ((isBoundaryStress || isStressElement || isNozzle || isTurbineCompressor || isTank || isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
+        if ((isControlVolume || isPiston || isDiagram) && (rectangle.width <= 1e-9 || rectangle.height <= 1e-9)) {
             setToolMessage("Specify opposite corner to enclose an area");
             return;
         }
@@ -2117,31 +2122,13 @@ export function beginOrCompleteGeometry(
                     style: {
                         ...drawingState.styleDefaults,
                         ...(isControlVolume ? { stroke: "#ff0000", lineType: "dashed", fill: "none" } : {}),
-                        ...(isStressElement || isBoundaryStress || isNozzle || isTurbineCompressor || isTank || isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
+                        ...(isPiston || isDiagram ? { lineType: "solid", fill: "none" } : {})
                     },
 
                     engineering:
                         currentEngineeringMetadata()
                 }
             );
-        if (isTank) {
-            object.name = "Tank";
-            object.metadata = { thermodynamicsKind: "tank" };
-        }
-        if (isNozzle) {
-            object.name = isBrayton ? "Brayton Cycle" : isRefrigeration ? "Ideal Vapor-Compression Refrigeration Cycle" : isReheat ? "Ideal Reheat Rankine Cycle" : isRankine ? "Rankine Cycle" : "Nozzle / Diffuser";
-            object.metadata = { thermodynamicsKind: isRankine ? "rankine-cycle" : "nozzle-diffuser" };
-            if (isReheat) object.geometry.reheat = true;
-            if (isRefrigeration) object.geometry.refrigeration = true;
-            if (isBrayton) object.geometry.brayton = true;
-            if (isDiesel) object.metadata = { thermodynamicsKind: "diesel-cycle" };
-            if (isOtto) object.metadata = { thermodynamicsKind: "otto-cycle" };
-            if (isCarnot) object.metadata = { thermodynamicsKind: "carnot-cycle" };
-        }
-        if (isTurbineCompressor) {
-            object.name = "Turbine / Compressor";
-            object.metadata = { ...object.metadata, thermodynamicsKind: "turbine-compressor" };
-        }
         if (isPiston && drawingState.activeTool === "piston-cylinder-stoppers") {
             object.geometry.hasStoppers = true;
             object.geometry.stopperFraction = 0.8;
@@ -2149,16 +2136,6 @@ export function beginOrCompleteGeometry(
         if (isDiagram) {
             object.name = drawingState.activeTool === "process-plot" ? "Process Plot" : "Saturation Curve";
             object.metadata = { thermodynamicsKind: drawingState.activeTool };
-        }
-        if (isStressElement) {
-            object.name = "Stress Element";
-            object.metadata = { ...object.metadata, stressElement: true };
-        }
-        if (isBoundaryStress) {
-            object.name = "Boundary Stress";
-            object.metadata = { ...object.metadata, boundaryStress: true };
-            Object.assign(object.geometry, { top_normalStart: 1, top_normalEnd: 1 });
-            object.style = { ...object.style, fill: "none", lineType: "solid" };
         }
     } else if (
         ["polyline", "freeform-polygon"].includes(drawingState.activeTool)
@@ -2326,65 +2303,18 @@ export function beginOrCompleteGeometry(
             drawingState
         );
 
-        if (["diesel-cycle", "otto-cycle", "carnot-cycle"].includes(object.metadata?.thermodynamicsKind)) {
-            const previous = enggDrawingState.snapshotDrawing(drawingState);
-            const isOtto = object.metadata.thermodynamicsKind === "otto-cycle";
-            const isCarnot = object.metadata.thermodynamicsKind === "carnot-cycle";
-            const seeds = isCarnot ? carnotCycleFeatures(object.geometry) : isOtto ? ottoCycleFeatures(object.geometry) : dieselCycleFeatures(object.geometry);
-            const objects = seeds.map(seed => enggDrawingState.createGeometryObject(seed.type, seed.geometry, {
-                name: seed.name || seed.text || "Cycle Annotation", style: seed.style, metadata: seed.metadata,
-                content: seed.type === "annotate" ? { annotateKind: seed.annotateKind, text: seed.text } : undefined
-            }));
-            const ids = new Map(seeds.map((seed, index) => [seed.id, objects[index].id]));
-            objects.forEach((item, index) => {
-                if (seeds[index].parentId) item.parentId = ids.get(seeds[index].parentId);
-                enggDrawingState.addObject(drawingState, item);
-            });
-            enggDrawingState.selectObjects(drawingState, objects.map(item => item.id));
-            enggDrawingState.commitDrawingChange(drawingState, previous);
-            activateTool("select");
-            setToolMessage(isCarnot ? "Carnot diagram created - select the process path to edit its states or bends" : isOtto ? "Otto diagrams created - select a process path to edit its points or bends" : "Diesel P-v and T-s diagrams created - select a process path to edit its states or bends");
-            renderProperties();
-            renderCurrentDrawing();
-            return;
-        }
-
         // A control volume is a boundary around a region, so commit its
         // drawn size without asking for a physical dimension or scale.
-        if (object.metadata?.boundaryStress) {
+        if (["control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            activateTool("select");
-            setToolMessage("Boundary stress plate created - edit the top, right, bottom and left edge distributions in Features");
-            renderProperties();
-            renderCurrentDrawing();
-            return;
-        }
-        if (object.metadata?.stressElement) {
-            commitCreatedFeature(object);
-            activateTool("select");
-            setToolMessage("Stress element created - drag its rotation handle or enter Angle in the Features panel");
-            renderProperties();
-            renderCurrentDrawing();
-            return;
-        }
-        if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
-            commitCreatedFeature(object);
-            if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
+            if (["piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
                 // The finished cylinder remains selected, with its handles
                 // immediately available instead of starting another drawing.
                 activateTool("select");
             }
-            setToolMessage(object.metadata.thermodynamicsKind === "rankine-cycle"
-                ? "Cycle created - drag to move or use corner dots to resize"
-                : object.metadata.thermodynamicsKind === "nozzle-diffuser"
-                ? "Nozzle/diffuser created - drag to move, use corner dots to resize or the rotation handle to turn"
-                : object.metadata.thermodynamicsKind === "turbine-compressor"
-                ? "Turbine/compressor created - drag to move, use corner dots to resize or the rotation handle to turn"
-                : object.metadata.thermodynamicsKind === "tank"
-                ? "Tank created - drag a corner to resize, or drag the tank to move"
-                : object.metadata.thermodynamicsKind === "piston-cylinder"
+            setToolMessage(object.metadata.thermodynamicsKind === "piston-cylinder"
                 ? (object.geometry.hasStoppers
-                    ? "Drag the centre dot to move the piston above or below the stops, a stopper dot to adjust the stops, or a corner to resize"
+                    ? "Drag a stopper dot to adjust the stops, the centre dot to move the piston, or a corner to resize"
                     : "Drag the centre dot to adjust piston height, a corner to resize, or the cylinder to move")
                 : object.metadata.thermodynamicsKind === "saturation-curve"
                     ? "Saturation curve created - drag the corner dots to resize"
@@ -2413,12 +2343,7 @@ export function beginOrCompleteGeometry(
             previousObjects
         );
 
-        if (object.type === COORDINATE_SYSTEM_TYPE) {
-            activateTool("select");
-            setToolMessage("Coordinate system created - drag either axis or the origin to move it");
-        } else {
-            setToolMessage("Ready");
-        }
+        setToolMessage("Ready");
 
         renderProperties();
         renderCurrentDrawing();
@@ -2533,11 +2458,9 @@ function createPointFeature(
         object.id
     );
 
-    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
-        activateTool("select");
-    } else {
-        setToolMessage("Specify point");
-    }
+    setToolMessage(
+        "Specify point"
+    );
 
     renderProperties();
     renderCurrentDrawing();
@@ -2573,13 +2496,13 @@ export function add2DCoordinateSystem(
                     COORDINATE_SYSTEM_LENGTH,
 
                 xNegativeLength:
-                    0,
+                    COORDINATE_SYSTEM_LENGTH,
 
                 yPositiveLength:
                     COORDINATE_SYSTEM_LENGTH,
 
                 yNegativeLength:
-                    0,
+                    COORDINATE_SYSTEM_LENGTH,
 
                 /*
                  * THE AXIS LABELS ARE STORED VALUES, NOT PLACEHOLDERS.
@@ -2633,10 +2556,34 @@ export function add2DCoordinateSystem(
         previousObjects
     );
 
-    enggDrawingState.selectObject(drawingState, coordinateSystem.id);
-    activateTool("select");
-    setToolMessage("Coordinate system created - drag either axis or the origin to move it");
+    enggDrawingState.clearSelection(
+        drawingState
+    );
+
+    setToolMessage(
+        "Specify origin"
+    );
 
     renderProperties();
     renderCurrentDrawing();
+}
+
+/* ============================================================
+ * THE DYNAMICS GESTURES
+ * ============================================================
+ *
+ * Asked of the Dynamics library's own tables rather than of a list here, so a
+ * tool declared there is drawn, completed and described without another edit.
+ */
+
+/* A Dynamics tool drawn from a first point to a second. */
+function dynamicsSpanTool(toolId) {
+    return Boolean(toolId && DYNAMICS_SPAN_TOOLS[toolId]);
+}
+
+/* The wording for a span's second step: where the far end goes. */
+function dynamicsSpanInstruction(toolId) {
+    return `Click the other end of the ${String(
+        DYNAMICS_SPAN_TOOLS[toolId] || "symbol"
+    ).toLowerCase()}`;
 }

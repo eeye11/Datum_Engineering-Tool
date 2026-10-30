@@ -5,11 +5,153 @@
 import enggDrawingState from "../../shared/model/drawing-state.js";
 import enggDrawingSnap from "../../shared/snapping/object-snap.js";
 import enggSheets from "../../components/layout/workspace/sheets.js";
-import enggPipeDuct from "./model/fluids/pipe-duct.js";
-import enggPipeAssembly from "./model/fluids/pipe-assembly.js";
-import enggFlowArrow from "./model/fluids/flow-arrow.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
+
+/*
+ * ============================================================
+ * A COMMITTED DYNAMICS FEATURE
+ * ============================================================
+ *
+ * The one entry point for adding a Dynamics symbol to the document, used by
+ * the creation pipeline and by anything that places one directly (a test, an
+ * automation hook). It delegates to the model's own builder - the same one the
+ * live preview is made with - and then adds the single object that came out
+ * and selects it, so a spring is one row in Objects, not a set of lines.
+ *
+ * NOT a second implementation: the builder, the mark and the name all come
+ * from `dynamics-model.js`.
+ *
+ * THE MODEL IS IMPORTED LAZILY, BECAUSE A STATIC IMPORT IS A CYCLE.
+ *
+ * The Dynamics model reads `drawing-state.js`, and that module reaches back
+ * here - so importing it at the top of this file evaluates the model while
+ * `drawingState` is still uninitialised and every caller dies with "Cannot
+ * access 'drawingState' before initialization". The model is therefore loaded
+ * on first use, and the accumulated result is cached so the round trip
+ * happens once rather than on every click.
+ */
+let dynamicsModel = null;
+let dynamicsModelLoading = null;
+
+/*
+ * BEGIN LOADING THE MODEL, WITHOUT WAITING FOR IT.
+ *
+ * The click handlers that place a Dynamics feature are synchronous, so they
+ * cannot await the first import. This starts the import at boot instead - once
+ * for the whole session - and by the time a student has armed a tool and
+ * clicked, the model is already resolved and `commitDynamicsFeature` can place
+ * the feature in the same tick, exactly as a Line is placed.
+ *
+ * The PROMISE and the RESOLVED MODULE are kept apart. Storing the promise in
+ * `dynamicsModel` would leave every synchronous commit looking at a pending
+ * thenable and silently placing nothing.
+ */
+export function hydrateDynamics() {
+    if (!dynamicsModelLoading) {
+        dynamicsModelLoading = import("./dynamics/dynamics-model.js").then((model) => {
+            dynamicsModel = model;
+
+            return model;
+        });
+    }
+
+    return dynamicsModelLoading;
+}
+
+async function loadDynamicsModel() {
+    return dynamicsModel || (await hydrateDynamics());
+}
+
+/*
+ * PLACE A DYNAMICS FEATURE NOW.
+ *
+ * Returns the committed object, or null when the model has not finished
+ * loading or the builder declined the points. The creation pipeline calls
+ * this, and treats a null as "nothing to commit" rather than as an error -
+ * the model is loaded at boot, so null means the geometry was degenerate.
+ */
+export function commitDynamicsFeature(toolId, first, second, style = {}) {
+    if (!dynamicsModel) {
+        /*
+         * NOT LOADED YET. Start it now so the next click succeeds, and report
+         * honestly that this one placed nothing rather than throwing from a
+         * pointer handler.
+         */
+        void hydrateDynamics();
+
+        return null;
+    }
+
+    return commitDynamicsObject(
+        toolId,
+        dynamicsModel.createDynamicsObject(toolId, [first, second].filter(Boolean), style)
+    );
+}
+
+export async function createDynamicsFeature(toolId, first, second, style = {}) {
+    const model = await loadDynamicsModel();
+
+    return commitDynamicsObject(
+        toolId,
+        model.createDynamicsObject(toolId, [first, second].filter(Boolean), style)
+    );
+}
+
+/*
+ * THE ONE PLACE A DYNAMICS OBJECT JOINS THE DOCUMENT.
+ *
+ * Whether the builder ran synchronously or behind the lazy import, the result
+ * is stored the same way: named by its tool, refused while it is degenerate,
+ * added once, and selected. Both commit paths call this, so a test and a click
+ * can never produce objects that differ.
+ */
+function commitDynamicsObject(toolId, object) {
+    if (!object) {
+        return null;
+    }
+
+    /*
+     * THE OBJECT'S TYPE IS THE TOOL'S. The readers of a stored feature ask
+     * `type` which symbol it is, so a Dynamics object that kept an ordinary
+     * type (a line, a circle) was a Dynamics object no check could find.
+     */
+    object.type = toolId;
+
+    /*
+     * AN ANCHOR SETTLED FROM A PART OF ITSELF IS NOT A LENGTH.
+     *
+     * A span tool whose hold has not yet been given its second end is handed
+     * its first point twice, which would make the object degenerate - a
+     * zero-length spring. It is refused here, where every caller passes
+     * through, so the preview stays empty until the second point exists.
+     */
+    if (
+        object.geometry?.start &&
+        object.geometry?.end &&
+        Math.hypot(
+            Number(object.geometry.end.x) - Number(object.geometry.start.x),
+            Number(object.geometry.end.y) - Number(object.geometry.start.y)
+        ) < 1e-9
+    ) {
+        return null;
+    }
+
+    const added = enggDrawingState.addObject(drawingState, object);
+
+    if (drawingState.selection) {
+        drawingState.selection.selectedObjectIds = [object.id];
+    }
+
+    return added || object;
+}
+
+/*
+ * The creation pipeline's name for the same operation. A Dynamics feature is
+ * committed through one function, whether its points arrived as two clicks or
+ * as a preview's own builder, so there is no second way to place one.
+ */
+export const createDynamicsCreation = createDynamicsFeature;
 
 export const drawingSnap = enggDrawingSnap;
 
@@ -47,7 +189,7 @@ export const editorState = {
      * SHEETS
      * ========================================================
      */
-
+    
     /*
      * The document's sheets.
      *
@@ -69,32 +211,6 @@ export const editorState = {
      * need no sheet awareness whatsoever.
      */
     sheetCollection: enggSheets.createCollection(),
-
-    /*
-     * ========================================================
-     * A DOCUMENT IS BEING INSTALLED
-     * ========================================================
-     *
-     * True from the moment an opened file starts being applied until it has
-     * finished, and closed however that ends (see `beginDocumentLoad` in
-     * document-commands.js). While it is true the document is being RESTORED,
-     * not edited: the ordinary "this changed" notifications are suppressed, so
-     * a file that arrives does not land marked as having unsaved changes.
-     */
-    documentLoading: false,
-
-    /*
-     * THE ONLY VARIANT OF A DOCUMENT THAT MAY BE INSTALLED AT ONCE.
-     *
-     * Opening reads a file, and then applies what it read. That is two steps
-     * with an await between them when the file arrives from the operating
-     * system's picker, so a second Open - a double-click, a slow read while
-     * another file is chosen - could otherwise finish FIRST and be replaced by
-     * the older answer. Each load takes a ticket from here and only the newest
-     * one is allowed to commit; a superseded read is dropped rather than
-     * overwriting the document the user asked for last.
-     */
-    documentLoadVariant: null,
 
     coordinateSystemMenu: null,
 
@@ -120,7 +236,17 @@ export const editorState = {
 
     selectionClickSuppressed: false,
 
-    selectedPlantNode: null,
+    /*
+     * A TOUCH OR PEN PRESS, HELD UNTIL THE GESTURE IS CLASSIFIED.
+     *
+     * A mouse press is dispatched the moment it happens: a cursor cannot wobble
+     * while it is held still. A finger can, so a touch press on an editing
+     * target is recorded here first and only run once the shared gesture tracker
+     * says the press travelled far enough to be a drag. A press that never
+     * travels leaves the browser's own click to run the ordinary selection,
+     * which is what a tap is.
+     */
+    touchPress: null,
 
     selectionDrag: null,
 
@@ -220,7 +346,7 @@ export const editorState = {
      * View tools change only the camera. Both reuse the
      * existing selection, snapping and camera systems.
      */
-
+    
     /*
      * The id of the global toolbar tool currently running,
      * so its button can stay visibly highlighted and be
@@ -228,52 +354,3 @@ export const editorState = {
      */
     activeGlobalTool: null
 };
-
-/*
- * ========================================================
- * THE FLUIDS MODEL MAY LOOK AN OBJECT UP - BUT NOT IMPORT ONE
- * ========================================================
- *
- * The pipe / duct model has to measure a bend's arms from the runs it joins, and
- * the Feature schema has to re-seat a fitting on its pipes. Both live in modules
- * the interaction layer IMPORTS, so neither may import the live document back:
- * that is an import cycle, and a cycle around a state object is how a module ends
- * up reading `undefined` at load time.
- *
- * So the document is published once, here - the one module that owns it. Every
- * Fluids reader asks through this lookup, which is the same pattern the Features
- * pane already uses for its elbow run lookup (`setElbowRunLookup`).
- *
- * IT IS A FUNCTION, NOT A COPY. It reads `drawingState.objects` when it is
- * called, so a caller always sees the sheet as it is now rather than the sheet as
- * it was when the module loaded - and Undo, a sheet switch or a reopened file
- * needs no re-wiring.
- */
-const lookupEditorObject = (id) =>
-    (id ? (drawingState.objects || []).find((object) => object.id === id) || null : null);
-
-enggPipeDuct.setObjectLookup(lookupEditorObject);
-
-/*
- * AND THE FLOW ARROW'S HOST.
- *
- * An arrow never stores a point: it stores the pipe it is attached to and how
- * far along that pipe it sits. Resolving the pipe is the ONE thing it cannot do
- * by itself without importing the document, so it is published the same way as
- * the run lookup above. Everything derived from the attachment - its position,
- * its direction, whether it can be drawn at all - is then computed against the
- * pipe AS IT IS NOW, which is what keeps the arrow centred on its run through
- * every move, resize and reconnection of that run.
- */
-enggFlowArrow.setHostLookup(lookupEditorObject);
-
-/*
- * AND THE WHOLE SHEET, FOR THE ASSEMBLY GROUPING.
- *
- * A connection graph is read from EVERY object at once, so a per-id lookup is not
- * enough: the assembly reconciler needs the list. It is published the same way and
- * for the same reason, and it too reads the live document at call time.
- */
-enggPipeAssembly.setObjectListLookup(() => drawingState.objects || []);
-
-export const objectOnSheet = lookupEditorObject;

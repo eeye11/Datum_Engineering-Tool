@@ -7,7 +7,7 @@ import enggAnnotate from "../model/annotations/annotate-model.js";
 import { isIdleForEditing } from "../annotate/annotation-tool.js";
 import { finishProcessPath, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { installAxisLabelEditor } from "../thermodynamics/axis-label-editor.js";
-import { beginCreationDrag, finishCreationDrag, moveCreationDrag } from "./creation-drag.js";
+import { beginCreationDrag, cancelCreationDrag, finishCreationDrag, moveCreationDrag } from "./creation-drag.js";
 import { handleCanvasClick, openNoteEditorFor, openTableCellEditorFor, syncSelectionInteraction } from "./canvas-click.js";
 import { isEditableAnnotate } from "../annotate/annotate-creation.js";
 import { openDimensionValuePrompt } from "../annotate/dimension-tool.js";
@@ -17,55 +17,379 @@ import { isConstructionTool } from "../../../components/layout/toolbar/construct
 import { drawingCanvas, drawingCoordinates } from "../dom.js";
 import { beginManipulationDrag, finishManipulationDrag, updateManipulationDrag } from "./drag.js";
 import { drawingState, editorState } from "../editor-state.js";
-import { objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
-import { cancelManipulationDrag } from "./handles.js";
+import { objectAtPoint } from "./hit-testing.js";
 import { updateDrawingCoordinates } from "./pointer.js";
 import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { closeCoordinateSystemMenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
-import { zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport.js";
+import { applyTwoFingerGesture, zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruction } from "./pipe-duct-tool.js";
+import { createGestureTracker, pointerKind } from "./pointer-gesture.js";
+import { isIncidentalContact, isPenDown, notePenDown, notePenUp, resetPen } from "./palm.js";
+import { openCanvasContextMenuAt } from "./context-menu.js";
+import { cancelManipulationDrag, handleAtPoint } from "./handles.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
-import { handleAtPoint, isConstructionInProgress } from "./handles.js";
-import { isDerivedFeature } from "../../../shared/model/feature-types.js";
-import { selectionBounds, selectionCorners, selectionMembers } from "../../../shared/selection/selection-transform.js";
 
-// Use the same unsnapped hit targets as dragging, so the cursor shows
-// exactly where a press can move the selection.
-function updateManipulationCursor(event) {
-    let cursor = "";
-    if (allowsDirectManipulation() && !editorState.modifySession && !isConstructionInProgress() && !event.shiftKey) {
-        const drag = editorState.manipulationDrag;
-        const point = canvasPointFromEvent(event, false);
-        const selectedIds = drawingState.selection.selectedObjectIds;
-        const hit = handleAtPoint(point);
-        const object = objectAtPoint(point);
-        const movable = item => item && !item.locked && !isDerivedFeature(item);
-        const bounds = selectedIds.length > 1 && selectionBounds(drawingState.objects, selectedIds);
-        const specialHandle = hit && /^(piston-height|stopper-height|process-label-|process-bend-)/.test(hit.handle.kind);
-        if (drag) {
-            cursor = drag.kind === "body" ? "move" : "crosshair";
-        } else if (bounds && !specialHandle && selectionMembers(drawingState.objects, selectedIds).every(movable)) {
-            const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
-            const corner = selectionCorners(bounds).findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
-            if (corner >= 0) cursor = corner % 2 === 0 ? "nesw-resize" : "nwse-resize";
-            else if (point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY) cursor = "move";
-        }
-        if (!cursor && !isDerivedFeature(object) && !object?.locked) {
-            if (hit && movable(hit.object)) {
-                const kind = hit.handle.kind;
-                if (/^corner[0-3]$/.test(kind)) cursor = Number(kind.slice(-1)) % 2 === 0 ? "nwse-resize" : "nesw-resize";
-                else if (["piston-height", "stopper-height"].includes(kind)) cursor = "ns-resize";
-                else if (["position", "center", "origin"].includes(kind) || kind.startsWith("process-label-")) cursor = "move";
-                else cursor = "crosshair";
-            } else if (movable(object)) {
-                cursor = selectedIds.includes(object.id) || ["dimension", "annotate"].includes(object.type) ? "move" : "pointer";
-            }
-        }
+/*
+ * THE CANVAS'S ONE GESTURE TRACKER.
+ *
+ * One per page, beside the canvas it belongs to, in the same way the pan session
+ * and the drag records live on `editorState`. It holds no document state, so a
+ * new document does not need a new tracker - only `reset()` when the surface
+ * loses the pointer entirely.
+ */
+const canvasGesture = createGestureTracker();
+
+/* Read through the module rather than cached, so the pen state is never stale. */
+function isPenDownNow() {
+    return isPenDown();
+}
+
+let longPressTimer = null;
+
+/*
+ * ========================================================
+ * A DOUBLE TAP IS A DOUBLE CLICK
+ * ========================================================
+ *
+ * A finger has no `dblclick`, and the application's "open this" gesture - edit a
+ * dimension, open an annotation's text - must stay reachable on a tablet. Two
+ * taps are therefore replayed as the SAME `dblclick` the mouse produces, so
+ * there is one implementation of the behaviour.
+ *
+ * It deliberately does NOT zoom. Pinch already zooms, and giving a double tap a
+ * second meaning would make object editing unreachable by finger.
+ */
+let lastTap = null;
+
+const DOUBLE_TAP_MS = 400;
+const DOUBLE_TAP_SLOP_PX = 24;
+
+function noteTap(event) {
+    if (pointerKind(event) === "mouse") {
+        /* The browser's own `dblclick` already reports this one. */
+        return;
     }
-    drawingCanvas.style.cursor = cursor;
+
+    const now = Date.now();
+    const previous = lastTap;
+
+    lastTap = { x: event.clientX, y: event.clientY, at: now, kind: pointerKind(event) };
+
+    if (!previous || previous.kind !== pointerKind(event)) {
+        return;
+    }
+
+    if (now - previous.at > DOUBLE_TAP_MS) {
+        return;
+    }
+
+    if (Math.hypot(event.clientX - previous.x, event.clientY - previous.y) > DOUBLE_TAP_SLOP_PX) {
+        return;
+    }
+
+    lastTap = null;
+
+    replayDoubleClick(event);
+}
+
+/*
+ * THE SAME HANDLER THE MOUSE REACHES. A synthetic event is dispatched rather
+ * than a second copy of the rules, so "what a double-click does" cannot diverge
+ * between a mouse and a finger.
+ */
+function replayDoubleClick(pointer) {
+    const Mouse = globalThis.MouseEvent || globalThis.window?.MouseEvent;
+
+    if (typeof Mouse !== "function") {
+        return;
+    }
+
+    const event = new Mouse("dblclick", {
+        bubbles: true,
+        cancelable: true,
+        clientX: pointer.clientX,
+        clientY: pointer.clientY,
+        detail: 2
+    });
+
+    drawingCanvas.dispatchEvent(event);
+}
+
+function cancelLongPress() {
+    if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+    }
+}
+
+/*
+ * A STILL FINGER OR PEN, HELD ON THE DRAWING, OPENS THE FEATURE MENU.
+ *
+ * The one duration and the one movement allowance are the tracker's, so a hold
+ * cannot drift from the gesture rules; movement, a second finger, a release and
+ * a cancellation all end it.
+ */
+function beginLongPress(event) {
+    cancelLongPress();
+
+    if (pointerKind(event) === "mouse" || canvasGesture.navigating) {
+        return;
+    }
+
+    const pressed = {
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+        clientX: event.clientX,
+        clientY: event.clientY
+    };
+
+    longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+
+        if (!canvasGesture.longPressDue(pressed)) {
+            return;
+        }
+
+        canvasGesture.markLongPressed(pressed);
+
+        /* The menu owns the press; the click behind it would close it at once. */
+        editorState.selectionClickSuppressed = true;
+        editorState.creationDragConsumedClick = true;
+
+        openCanvasContextMenuAt(pressed.clientX, pressed.clientY);
+    }, canvasGesture.config.longPressMs);
+}
+
+/*
+ * ABANDON WHATEVER THE GESTURE HAD BEGUN, KEEPING WHAT WAS COMMITTED.
+ *
+ * The same rollback Escape and each tool's own Cancel use, so a multi-step
+ * construction keeps its committed stages and drops only the unfinished preview.
+ */
+function cancelInterruptedGesture() {
+    try {
+        cancelCreationDrag();
+    } catch {}
+
+    try {
+        cancelManipulationDrag();
+    } catch {}
+
+    try {
+        cancelInteraction();
+    } catch {}
+
+    editorState.panSession = null;
+    editorState.selectionDrag = null;
+    editorState.touchPress = null;
+
+    renderCurrentDrawing();
+}
+
+/*
+ * THE CANVAS'S ONE PRESS DISPATCH.
+ *
+ * The body the `pointerdown` listener has always run, named so a held touch
+ * press can reach it too. Calling it is, for every purpose, the same as that
+ * listener running - the mouse reaches it from the listener, a finger from
+ * `dispatchHeldTouchPress` once its drag is recognised, and neither can run it
+ * twice for one press.
+ */
+function runPointerPress(event) {
+    /* An armed eyedropper pre-empts every other canvas interaction. */
+    if (editorState.eyedropperActive) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        pickColourFromFeature(event);
+
+        return;
+    }
+
+    /* A magnitude label is grabbed by its own text. */
+    if (beginAnnotationDrag(event)) {
+        return;
+    }
+
+    /*
+     * A CREATION IS STARTED BY THE PRESS: for a two-point tool the press is its
+     * first point, and the release completes it.
+     */
+    if (beginCreationDrag(event)) {
+        captureForDragTools(event);
+
+        return;
+    }
+
+    if (beginManipulationDrag(event)) {
+        return;
+    }
+
+    beginSelectionDrag(event);
+}
+
+/*
+ * PIPE / DUCT AND POLAR VECTOR CAPTURE THE POINTER FOR THEIR DRAGS.
+ *
+ * Their whole gesture is the drag, so capture belongs on the press - the release
+ * must arrive even if the pointer leaves the canvas. The other geometry and
+ * Statics tools defer their press, so capturing on theirs would redirect the
+ * click that IS their first point.
+ */
+function captureForDragTools(event) {
+    if (
+        drawingState.activeTool === "pipe-duct" ||
+        drawingState.activeTool === "dynamics-polar-vector"
+    ) {
+        try {
+            drawingCanvas.setPointerCapture(event.pointerId);
+        } catch {}
+    }
+}
+
+/*
+ * Would this press begin a SELECTION or a DRAG on an existing feature?
+ *
+ * Asked before the press is dispatched so that only a press which could pick
+ * something is held for classification. A press on empty canvas, or with a
+ * creation tool armed, is the tool's own input and reaches its handler at once.
+ */
+function pressStartsManipulation(event) {
+    if (!allowsDirectManipulation() || editorState.eyedropperActive) {
+        return false;
+    }
+
+    const inputKind = pointerKind(event);
+    const point = canvasPointFromEvent(event, false);
+
+    if (!point) {
+        return false;
+    }
+
+    if (handleAtPoint(point, { inputKind })) {
+        return true;
+    }
+
+    const object = objectAtPoint(point, { inputKind });
+
+    return Boolean(object && !object.locked && object.visible !== false);
+}
+
+/* Only touch and pen are held; a mouse press must reach its handler at once. */
+function shouldHoldTouchPress(event) {
+    const kind = pointerKind(event);
+
+    if (kind !== "touch" && kind !== "pen") {
+        return false;
+    }
+
+    return pressStartsManipulation(event);
+}
+
+/*
+ * KEEP THE PRESS, so it can be dispatched once the gesture is known.
+ *
+ * A snapshot rather than the event itself: a DOM event is only guaranteed
+ * readable while it is being dispatched, and this is kept across frames.
+ */
+function holdTouchPress(event) {
+    editorState.touchPress = {
+        event: {
+            pointerId: event.pointerId,
+            pointerType: event.pointerType,
+            clientX: event.clientX,
+            clientY: event.clientY,
+            button: event.button,
+            buttons: event.buttons,
+            shiftKey: event.shiftKey,
+            altKey: event.altKey,
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            target: event.target,
+            preventDefault() {},
+            stopPropagation() {}
+        },
+        dispatched: false
+    };
+}
+
+/* Run the held press through the ordinary press path, from the PRESS's point. */
+function dispatchHeldTouchPress() {
+    const held = editorState.touchPress;
+
+    if (!held || held.dispatched) {
+        return false;
+    }
+
+    held.dispatched = true;
+
+    runPointerPress(held.event);
+
+    return true;
+}
+
+/*
+ * What one frame of a touch or pen gesture means.
+ *
+ * The tracker already knows the input's slop, whether a second finger took over
+ * and whether a long press is still possible; this does the one thing the frame
+ * means.
+ */
+/*
+ * THE ERASER HOLDS AN OBJECT, IT DOES NOT DELETE ONE.
+ *
+ * An eraser tip is a destructive input, and a browser cannot distinguish a
+ * deliberate press from an accidental one. So the eraser SELECTS what it is on
+ * and says so; deleting stays the established Delete key or menu command,
+ * acting on a selection the student can see.
+ */
+function deleteWhatTheTipTouched(event) {
+    const point = canvasPointFromEvent(event, false);
+    const object = point ? objectAtPoint(point, { inputKind: "pen" }) : null;
+
+    if (!object || object.locked) {
+        setToolMessage("Eraser: nothing to remove here");
+
+        return;
+    }
+
+    enggDrawingState.selectObject(drawingState, object.id);
+
+    renderCurrentDrawing();
+
+    setToolMessage("Eraser: selected - press Delete to remove");
+}
+
+function classifyTouchFrame(event) {
+    if (canvasGesture.navigating) {
+        return;
+    }
+
+    const decision = canvasGesture.move(event);
+
+    if (decision.kind !== "drag-start") {
+        return;
+    }
+
+    if (!editorState.touchPress) {
+        return;
+    }
+
+    dispatchHeldTouchPress();
+
+    /*
+     * AND THE POINTER IS CAPTURED, so a finger that leaves the canvas mid-drag
+     * still receives its own moves and its own release. The existing pointerup
+     * and pointercancel handlers give it back.
+     */
+    captureForDragTools(event);
+
+    try {
+        drawingCanvas.setPointerCapture(event.pointerId);
+    } catch {}
 }
 
 /*
@@ -77,11 +401,18 @@ export function installCanvasEvents() {
         drawingCanvas
     ) {
         installAxisLabelEditor();
-        drawingCanvas.addEventListener("mouseleave", () => {
-            drawingCanvas.classList.remove("drawing-can-move");
-        });
+        /*
+         * THE FRAME'S RESOLUTION RUNS ON `pointermove`, FOR EVERY INPUT.
+         *
+         * It used to be `mousemove`, which is exactly what a finger and a stylus
+         * never fire - so on a tablet the preview, the snap indicator and the
+         * status text were a frame stale, or never arrived. A pointer move is
+         * delivered for all three kinds, and a mouse's `pointermove` and
+         * `mousemove` describe the same frame - so the handler is MOVED, not
+         * duplicated, and a mouse sees it exactly once.
+         */
         drawingCanvas.addEventListener(
-            "mousemove",
+            "pointermove",
             updateDrawingCoordinates
         );
 
@@ -89,14 +420,6 @@ export function installCanvasEvents() {
             "click",
             handleCanvasClick
         );
-        drawingCanvas.addEventListener("click", updateManipulationCursor);
-        drawingCanvas.addEventListener("pointermove", updateManipulationCursor);
-        drawingCanvas.addEventListener("pointerup", event => {
-            queueMicrotask(() => updateManipulationCursor(event));
-        });
-        drawingCanvas.addEventListener("pointerleave", () => {
-            drawingCanvas.style.cursor = "";
-        });
 
         drawingCanvas.addEventListener(
             "dblclick",
@@ -378,109 +701,52 @@ export function installCanvasEvents() {
             "pointerdown",
             event => {
                 /*
-                 * An armed eyedropper pre-empts every other
-                 * canvas interaction, so it works no matter
-                 * which tool happens to be active.
-                 */
-                if (editorState.eyedropperActive) {
-                    event.preventDefault();
-                    event.stopPropagation();
-
-                    pickColourFromFeature(
-                        event
-                    );
-
-                    return;
-                }
-
-                /*
-                 * A MAGNITUDE LABEL IS GRABBED BY ITS OWN TEXT.
+                 * A TOUCH OR PEN PRESS ON AN EDITING TARGET IS HELD FIRST.
                  *
-                 * The text of "500 N" is a direct-manipulation target: a
-                 * press on it SELECTS the label and BEGINS moving it in one
-                 * gesture. This is tried before a creation tool's own press, so
-                 * dragging a number never starts a new feature through it; a
-                 * press that is not on a label falls straight through.
-                 */
-                if (
-                    beginAnnotationDrag(
-                        event
-                    )
-                ) {
-                    return;
-                }
-
-                /*
-                 * A CREATION IS STARTED BY THE PRESS.
+                 * A mouse cannot wobble while it is held still, so its press is
+                 * the tool's press the moment it happens. A finger can - a few
+                 * pixels of settled weight are normal - so a touch press on
+                 * something that can be grabbed is recorded here and dispatched
+                 * only once the shared gesture tracker says it travelled far
+                 * enough to be a drag. A press that never travels leaves the
+                 * browser's own click to run the ordinary selection, which is
+                 * what a tap is.
                  *
-                 * For a tool that takes its two points from one gesture,
-                 * the press IS the first point - so the feature begins
-                 * here, the pointer move updates its preview through the
-                 * existing pipeline, and the release commits it. Attempted
-                 * before direct manipulation and selection because a
-                 * creation tool's press is its own input, not a selection;
-                 * a press that lands on an existing feature is left to
-                 * those handlers by the tool question itself.
+                 * The handlers below are otherwise unchanged: the same
+                 * `runPointerPress` runs for both, so a finger and a mouse reach
+                 * one implementation of every tool.
                  */
-                if (
-                    beginCreationDrag(
-                        event
-                    )
-                ) {
-                    /*
-                     * PIPE / DUCT AND POLAR VECTOR CAPTURE THE POINTER FOR
-                     * THEIR DRAGS.
-                     *
-                     * A run is defined by press, drag and release - and the
-                     * release must commit even when the pointer has travelled
-                     * off the canvas element while dragging. Pointer capture
-                     * is how every other drag in the application keeps its
-                     * release: the element that captured the pointer keeps
-                     * receiving its move and up events wherever the cursor
-                     * goes.
-                     *
-                     * Both are completed by one drag and have no first-click
-                     * workflow. The other geometry and Statics tools defer
-                     * their press, so a press that never travels stays an
-                     * ordinary click and capture would redirect that click.
-                     */
-                    if (
-                        drawingState.activeTool === "pipe-duct" ||
-                        drawingState.activeTool === "dynamics-polar-vector"
-                    ) {
-                        try {
-                            drawingCanvas.setPointerCapture(
-                                event.pointerId
-                            );
-                        } catch {}
-                    }
+                if (shouldHoldTouchPress(event)) {
+                    holdTouchPress(event);
 
                     return;
                 }
 
-                if (
-                    beginManipulationDrag(
-                        event
-                    )
-                ) {
-                    return;
-                }
+                runPointerPress(event);
+            }
+        );
 
-                beginSelectionDrag(
-                    event
-                );
+        /*
+         * ========================================================
+         * ONE GESTURE TRACKER, WIRED TO THE EXISTING TOOL PIPELINE
+         * ========================================================
+         *
+         * Every pointer move is classified by the shared tracker, which decides
+         * what the gesture MEANS (tap, drag, pan, pinch) from the input's own
+         * tolerances. What it decides is then dispatched to the handler that
+         * already existed for that meaning, so a finger reaches the same code a
+         * cursor does.
+         */
+        drawingCanvas.addEventListener(
+            "pointermove",
+            event => {
+                classifyTouchFrame(event);
             }
         );
 
         drawingCanvas.addEventListener(
             "pointermove",
             event => {
-                if (!editorState.manipulationDrag && !editorState.creationDrag) {
-                    const point = canvasPointFromEvent(event, false);
-                    const target = drawingState.activeTool === "select" ? boundarySelectionAtPoint(point) || objectAtPoint(point) : null;
-                    drawingCanvas.classList.toggle("drawing-can-move", Boolean(target && !target.locked &&
-                        (target.metadata?.boundaryStress || ["coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
-                }
                 /*
                  * A DRAG-TO-CREATE KEEPS ITS PREVIEW LIVE.
                  *
@@ -526,10 +792,12 @@ export function installCanvasEvents() {
                 /*
                  * GIVE THE POINTER BACK FIRST, WHATEVER THE RELEASE DOES.
                  *
-                 * Pipe-duct and Polar Vector presses capture the pointer so
-                 * their drags survive leaving the canvas. The capture is
-                 * released HERE, before the gesture is classified, so neither
-                 * path can leave the canvas holding a capture after release.
+                 * A pipe-duct press captures the pointer so its drag survives
+                 * leaving the canvas. The capture is released HERE, before the
+                 * gesture is classified, so it is dropped whether the release
+                 * commits a run or turns out to be an ordinary click - neither
+                 * path may leave the canvas holding a capture the gesture has
+                 * finished with.
                  */
                 if (
                     drawingCanvas.hasPointerCapture(
@@ -600,20 +868,15 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointercancel",
             event => {
-                if (editorState.manipulationDrag) {
-                    cancelManipulationDrag();
-                    renderCurrentDrawing();
-                }
-                drawingCanvas.classList.remove("drawing-object-moving", "drawing-can-move");
                 editorState.creationDrag = null;
 
                 /*
                  * A CANCELLED DRAG MUST NOT KEEP THE CAPTURE.
                  *
-                 * Pipe-duct and Polar Vector presses capture the pointer; if
-                 * the gesture is cancelled before release the capture has to
-                 * be dropped here, or the canvas would keep swallowing that
-                 * pointer's events and the next gesture would never begin.
+                 * A pipe-duct press captures the pointer; if the gesture is
+                 * cancelled before the release the capture has to be dropped
+                 * here, or the canvas would keep swallowing that pointer's
+                 * events and the next gesture would never begin.
                  */
                 if (
                     event &&
@@ -663,6 +926,271 @@ export function installCanvasEvents() {
                 }
             }
         );
+
+        /*
+         * ========================================================
+         * THE DRAWING SURFACE OWNS ITS TOUCH GESTURES
+         * ========================================================
+         *
+         * `touch-action: none` is scoped to the CANVAS ELEMENT and nowhere else.
+         * It tells the browser that this one surface is driven by the
+         * application's own pointer handling rather than by its scroll/zoom
+         * recogniser - without it a pinch on a tablet zooms the PAGE. Panels,
+         * menus and the Source editor keep native scrolling, which is why this
+         * is set here and not in a global stylesheet rule.
+         */
+        drawingCanvas.style.touchAction = "none";
+
+        /*
+         * EVERY PRESS, OF EVERY KIND, IS CLASSIFIED HERE, FIRST.
+         *
+         * Registered before the tool handlers so a second finger can take the
+         * gesture over before any tool has been handed the movement. A mouse is
+         * left exactly as it was: its press goes on to the handlers below,
+         * untouched.
+         */
+        drawingCanvas.addEventListener(
+            "pointerdown",
+            event => {
+                /*
+                 * A CONTACT THE PALM RULE HAS DECLINED IS RECORDED, NOT USED.
+                 * Marking it incidental keeps it out of the pair measure, so a
+                 * resting hand beside a pen cannot become half of a pinch and
+                 * cancel the stroke.
+                 */
+                const decision = canvasGesture.press(event, {
+                    incidental: isIncidentalContact(event),
+                    keepPrimary: pointerKind(event) === "touch" && isPenDownNow()
+                });
+
+                if (decision.kind === "navigate-begin") {
+                    cancelLongPress();
+
+                    /*
+                     * TWO FINGERS: whatever the first finger had begun is
+                     * abandoned, not committed - through the tool's own cancel,
+                     * so a multi-step construction keeps its committed stages.
+                     */
+                    cancelInterruptedGesture();
+
+                    try {
+                        drawingCanvas.setPointerCapture(event.pointerId);
+                    } catch {}
+
+                    setToolMessage("Two fingers: move to pan, spread to zoom");
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            },
+            { capture: true }
+        );
+
+        /* A second finger is navigating; the tool must not see it. */
+        drawingCanvas.addEventListener(
+            "pointerdown",
+            event => {
+                if (canvasGesture.navigating) {
+                    return;
+                }
+
+                /* An incidental palm contact while a pen is down is not a press. */
+                if (isIncidentalContact(event)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    return;
+                }
+
+                beginLongPress(event);
+            },
+            { capture: true }
+        );
+
+        /*
+         * ========================================================
+         * MULTI-TOUCH NAVIGATION: PAN AND PINCH
+         * ========================================================
+         *
+         * Two fingers never touch the document. A step of the gesture is a
+         * midpoint and a spread, applied to the CAMERA - the same camera the
+         * wheel, the Hand tool and a middle-button drag move - so a pinch cannot
+         * create, select or move anything, because it never reaches the object
+         * model.
+         */
+        drawingCanvas.addEventListener("pointermove", event => {
+            /* A hold ends the moment the finger travels; the tracker decides how far. */
+            cancelLongPress();
+
+            if (!canvasGesture.navigating) {
+                return;
+            }
+
+            const decision = canvasGesture.move(event);
+
+            if (decision.kind !== "navigate") {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            applyTwoFingerGesture(decision);
+        });
+
+        drawingCanvas.addEventListener("pointerup", event => {
+            cancelLongPress();
+
+            if (!canvasGesture.navigating && !canvasGesture.primary) {
+                return;
+            }
+
+            const decision = canvasGesture.release(event);
+
+            if (decision.kind === "tap") {
+                noteTap(event);
+
+                return;
+            }
+
+            if (decision.kind !== "navigate-end") {
+                return;
+            }
+
+            try {
+                if (drawingCanvas.hasPointerCapture(event.pointerId)) {
+                    drawingCanvas.releasePointerCapture(event.pointerId);
+                }
+            } catch {}
+
+            /* When the last finger lifts, the next one is an edit again. */
+            if (!canvasGesture.navigating) {
+                const finished = canvasGesture.reset();
+
+                if (finished.navigating) {
+                    setToolMessage("Ready");
+                }
+            }
+        });
+
+        /*
+         * THE PLATFORM TOOK THE POINTER AWAY. A cancelled gesture must be rolled
+         * back, never committed: nothing was released on purpose.
+         */
+        drawingCanvas.addEventListener("pointercancel", event => {
+            cancelLongPress();
+
+            const decision = canvasGesture.release(event, { cancelled: true });
+
+            if (decision.kind === "cancelled") {
+                cancelInterruptedGesture();
+            }
+
+            if (decision.kind === "navigate-end") {
+                canvasGesture.reset();
+            }
+
+            if (event.pointerType === "pen") {
+                notePenUp();
+            }
+        });
+
+        /* A lost capture is a cancel: the element no longer receives the moves. */
+        drawingCanvas.addEventListener("lostpointercapture", event => {
+            if (canvasGesture.primary && canvasGesture.primary.id === event.pointerId) {
+                const decision = canvasGesture.release(event, { cancelled: true });
+
+                if (decision.kind === "cancelled") {
+                    cancelInterruptedGesture();
+                }
+            }
+        });
+
+        /*
+         * THE PEN'S CONTACT LIFETIME, for the palm rule - the canvas is the only
+         * place a resting hand can do damage.
+         */
+        drawingCanvas.addEventListener(
+            "pointerdown",
+            event => {
+                if (pointerKind(event) === "pen") {
+                    notePenDown();
+                }
+            },
+            { capture: true }
+        );
+
+        drawingCanvas.addEventListener(
+            "pointerup",
+            event => {
+                if (pointerKind(event) === "pen") {
+                    notePenUp();
+                }
+            },
+            { capture: true }
+        );
+
+        drawingCanvas.addEventListener(
+            "pointerleave",
+            event => {
+                /* A pen that leaves the surface without a release has ended. */
+                if (pointerKind(event) === "pen" && event.buttons === 0) {
+                    notePenUp();
+                }
+            },
+            { capture: true }
+        );
+
+        /*
+         * ========================================================
+         * A STYLUS'S EXTRA BUTTONS - ONLY WHEN THE DEVICE HAS THEM
+         * ========================================================
+         *
+         * A pen reports its side buttons through `button` on the pointer event,
+         * not through any capability query, so the rule is: IF a value arrives
+         * that only a barrel button or the eraser can produce, act on it;
+         * otherwise do nothing at all.
+         *
+         *   button 2 (barrel)   the SAME feature menu a right-click opens
+         *   button 5 (eraser)   SELECTS what the tip is on - never a silent
+         *                       delete, because a browser cannot tell a
+         *                       deliberate press from an accidental one
+         *   button 1 (middle)   the existing middle-button pan, unchanged
+         */
+        drawingCanvas.addEventListener(
+            "pointerdown",
+            event => {
+                if (pointerKind(event) !== "pen") {
+                    return;
+                }
+
+                if (event.button === 2) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    editorState.selectionClickSuppressed = true;
+                    editorState.creationDragConsumedClick = true;
+
+                    openCanvasContextMenuAt(event.clientX, event.clientY);
+
+                    return;
+                }
+
+                if (event.button === 5) {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    deleteWhatTheTipTouched(event);
+                }
+            },
+            { capture: true }
+        );
+
+        /* A torn-down surface leaves no gesture, no pen and no capture behind. */
+        globalThis.window?.addEventListener?.("pagehide", () => {
+            canvasGesture.reset();
+            resetPen();
+        });
 
         drawingCanvas.addEventListener(
             "wheel",

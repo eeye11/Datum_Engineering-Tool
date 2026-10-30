@@ -9,7 +9,7 @@ import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import { handleAnnotateClick, isAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
 import { commitAnalysisAxis, handleAnalysisInputClick } from "../statics/analysis-tools.js";
 import { handleAnnotationClick, isAnnotationTool } from "../annotate/annotation-tool.js";
-import { cameraSignal, renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { pickColourFromFeature } from "../../../components/layout/panels/colour-picker.js";
 import { isConstructionTool, shouldClickSelectExistingObject } from "../../../components/layout/toolbar/construction-tools.js";
 import { handleDimensionClick } from "../annotate/dimension-placement.js";
@@ -17,18 +17,15 @@ import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
-import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
 import { resolvePointerEvent } from "./pointer.js";
-import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../components/layout/toolbar/tool-classification.js";
+import { shouldExitToSelectOnClick } from "../../../components/layout/toolbar/tool-classification.js";
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
-import { placeBlock, placeGain, placePlant, placeSum } from "../controls/plant-tool.js";
-import { plantNodeAtPoint } from "../../../shared/model/plant.js";
-import { handleSignalLineClick } from "../controls/signal-line-tool.js";
 
 export function handleCanvasClick(
     event
@@ -123,66 +120,17 @@ export function handleCanvasClick(
             event
         );
 
-    if (drawingState.activeTool === "signal-line") {
-        handleSignalLineClick(resolution.effectiveConstructionPoint);
-        return;
-    }
-
-    if (drawingState.activeTool === "plant") {
-        placePlant(resolution.effectiveConstructionPoint);
-        return;
-    }
-
-    if (drawingState.activeTool === "block") {
-        placeBlock(resolution.effectiveConstructionPoint);
-        return;
-    }
-    if (drawingState.activeTool === "gain") {
-        placeGain(resolution.effectiveConstructionPoint);
-        return;
-    }
-    if (drawingState.activeTool === "sum") {
-        placeSum(resolution.effectiveConstructionPoint);
-        return;
-    }
-
-    // Also cover clicks delivered without a pointerdown creation session.
-    // Select the note before a click-to-create tool consumes its first point.
-    if (drawingState.interaction.phase === "idle" && ["line", "rectangle", "circle"].includes(drawingState.activeTool) &&
-        isEditableAnnotate(objectAtPoint(resolution.rawPointerPoint || canvasPointFromEvent(event, false)))) {
-        activateTool("select");
-        selectFromCanvasClick(event);
-        return;
-    }
-
     if (isProcessPlotTool(drawingState.activeTool)) {
         addProcessPoint(resolution.rawPointerPoint);
         return;
     }
 
-    /*
-     * THE COORDINATE SYSTEM TAKES CLICK-MOVE-CLICK AS WELL AS ITS DRAG.
-     *
-     * The first click is the origin and the second the positive X
-     * direction - the same two points the drag supplies, through the same
-     * construction step. A click used to place a fixed-size system on its
-     * own, so two clicks placed two of them.
-     */
     if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        /*
-         * CLICK-MOVE-CLICK, LIKE THE DRAG.
-         *
-         * The first click is the origin and the second the positive X
-         * direction - the same two points the press and release of a drag
-         * supply - so both workflows go through the one construction path
-         * and produce the same axes. This used to place a fixed-length cross
-         * on a single click, with no way to say which way the axes ran.
-         */
-        beginOrCompleteGeometry(
-            resolution
+        add2DCoordinateSystem(
+            resolution.effectiveConstructionPoint
         );
 
         return;
@@ -292,16 +240,16 @@ export function handleCanvasClick(
 
     /*
      * ========================================================
-     * A BARE CLICK WITH A ONE-GESTURE TOOL LEAVES THE TOOL
+     * A BARE CLICK WITH A ONE-GESTURE PATH TOOL LEAVES THE TOOL
      * ========================================================
      *
      * A Beam and an Arrow are made by ONE press-drag-release - their gesture
-     * arrives through the drag path, which has already classified it on release
-     * (see creation-drag.js `finishCreationClick`). What remains here is the
-     * click that reaches this router WITHOUT a creation session behind it - an
-     * edge case such as a release whose session was already dropped - and it is
-     * answered the same way: back to Select, selecting whatever was under the
-     * cursor.
+     * arrives through the drag path, which
+     * has already armed the press and will have committed on release. So a
+     * plain `click` reaching here is NOT the first point of a shape: it is the
+     * student finishing with the tool. It exits to Select and selects whatever
+     * was under the cursor, which is the automatic way out that stops a tool
+     * trapping someone who has just drawn something.
      *
      * IT IS PLACED BEFORE the construction branch below, because that branch
      * would otherwise consume the click as a first point. It is placed AFTER the
@@ -309,100 +257,13 @@ export function handleCanvasClick(
      * EXPLICIT REQUIRED INPUT - a dimension collecting references, a label or a
      * leader attaching, a Resultant being told which force - must keep receiving
      * the click. The classification decides this; see tool-classification.js.
-     *
-     * A TOOL MID-WAY THROUGH ITS OWN STEPS IS NOT "FINISHED". A Triangle waiting
-     * for its third corner, a Polygon for its side count, an Arc for its next
-     * point, a load for its span - those clicks are real decisions, so they go
-     * to the construction pipeline below exactly as before.
      */
     if (
         shouldExitToSelectOnClick(
             drawingState.activeTool
-        ) &&
-        drawingState.interaction.phase ===
-            "idle"
+        )
     ) {
         exitToolToSelect(
-            event
-        );
-
-        return;
-    }
-
-    /*
-     * ========================================================
-     * AN EXISTING OBJECT UNDER THE POINTER IS SELECTED, WHATEVER TOOL IS ARMED
-     * ========================================================
-     *
-     * Answered BEFORE the construction branch, because a construction tool takes
-     * every click it is offered - including one on a feature that already exists.
-     * With a Line armed, clicking an existing run started a new line through it
-     * instead of selecting it.
-     *
-     * IT IS THE SAME RULE SELECT USES: the hit test is `objectAtPoint` and the
-     * selection goes through `selectFromCanvasClick`, so clicking an object
-     * means the same thing whichever tool is armed.
-     *
-     * A RUNNING CONSTRUCTION IS EXEMPT. `shouldClickSelectExistingObject` asks
-     * the interaction state, not a tool list, so a half-built shape keeps the
-     * click it is waiting for - and a click on EMPTY space fails the hit test
-     * here and falls through to the tool below.
-     */
-    if (
-        shouldClickSelectExistingObject(
-            event
-        )
-    ) {
-        if (
-            drawingState.activeTool !==
-            "select"
-        ) {
-            activateTool("select");
-        }
-
-        selectFromCanvasClick(
-            event
-        );
-
-        return;
-    }
-
-    /*
-     * ========================================================
-     * EMPTY CANVAS WITH NOTHING STARTED RETURNS TO SELECT
-     * ========================================================
-     *
-     * Every other handler above has had its turn, and the click is on empty
-     * canvas - no object was under the pointer, no dimension or annotation was
-     * taking references, and the interaction is idle. That gesture means one
-     * thing in every category: clear the selection and go back to Select.
-     *
-     * ASKED OF THE INTERACTION, NOT OF A TOOL LIST. A tool added tomorrow gets
-     * this without being named, and a tool that DOES want the click - a
-     * dimension collecting references, a construction part-way through its
-     * points, a press-drag-release - has already consumed it above.
-     *
-     * THE ONE EXCEPTION IS A CLICK-CLICK SHAPE'S FIRST CORNER. A Line,
-     * Rectangle or Circle is drawn click-move-click, so with nothing started an
-     * empty click is the point the student is aiming at and goes to the
-     * construction branch below. Those tools are named in CLICK_CLICK_TOOLS, so
-     * the distinction is stated once, beside the classification that owns it.
-     */
-    if (
-        drawingState.activeTool !==
-            "select" &&
-        drawingState.interaction.phase ===
-            "idle" &&
-        !(
-            CLICK_CLICK_TOOLS.includes(
-                drawingState.activeTool
-            ) &&
-            !drawingState.interaction.startPoint
-        )
-    ) {
-        activateTool("select");
-
-        selectFromCanvasClick(
             event
         );
 
@@ -574,47 +435,6 @@ export function handleCanvasClick(
         return;
     }
 
-    /*
-     * ========================================================
-     * EMPTY CANVAS CLEARS THE SELECTION AND RETURNS TO SELECT
-     * ========================================================
-     *
-     * The rule is one line long and it applies to EVERY tool, because it is
-     * reached only after every tool has had its turn above: a dimension asking
-     * for a reference, a Beam taking its first point, an annotation placing its
-     * anchor and a construction mid-flight have all already consumed the click
-     * and returned. What is left is a click on empty space that no tool wanted.
-     *
-     * Clicking away is the application's "I am finished here": the selection
-     * empties, the Features tab goes back to nothing, and the tool returns to
-     * Select. Before this, only the Select tool answered an empty click that
-     * way - with any other tool active the click went to the tool, which either
-     * started a stray feature or did nothing at all, and the student was left
-     * in a mode they had not asked for.
-     *
-     * AN ACTIVE GESTURE IS NOT INTERRUPTED, and that is structural rather than
-     * something this branch checks: a press-drag-release reaches its tool
-     * through the DRAG path (`creation-drag.js`), not through this router, and
-     * a construction, dimension or annotation that is part-way through its own
-     * steps has consumed the click in the branches above.
-     *
-     * This last branch is therefore the CATCH-ALL for a tool that had no meaning
-     * for the click at all - which is what makes the rule hold for every
-     * category, including one added tomorrow.
-     */
-    if (
-        drawingState.activeTool !==
-        "select"
-    ) {
-        activateTool("select");
-
-        selectFromCanvasClick(
-            event
-        );
-
-        return;
-    }
-
     if (
         drawingState.activeTool ===
         "select"
@@ -658,15 +478,10 @@ function selectFromCanvasClick(
             false
         );
 
-    const tolerance = 6 / Math.max(drawingState.camera.zoom, 0.25);
-    const plantNode = [...drawingState.objects]
-        .reverse()
-        .map((candidate) => ({
-            object: candidate,
-            node: plantNodeAtPoint(candidate, rawPoint, tolerance)
-        }))
-        .find((candidate) => candidate.node);
-    const object = plantNode?.object || objectAtPoint(rawPoint);
+    const object =
+        objectAtPoint(
+            rawPoint
+        );
 
     /*
      * Shift extends the selection: clicking an
@@ -714,10 +529,6 @@ function selectFromCanvasClick(
             drawingState
         );
     }
-
-    editorState.selectedPlantNode = plantNode
-        ? { objectId: plantNode.object.id, ...plantNode.node }
-        : null;
 
     renderProperties();
 
@@ -799,105 +610,7 @@ export function openDimensionEditorFor(object) {
  * one. The guard is the model's own `isGenerated`, so a new generated
  * kind is refused automatically rather than by remembering to list it.
  */
-/*
- * ========================================================
- * THE TEXT ENTRY IS ANCHORED TO THE OBJECT, NOT TO THE SCREEN
- * ========================================================
- *
- * A written annotation's editor is the inline node-entry prompt, positioned at
- * the place its text will occupy. Two things make that correct and are done
- * here, once, for every route into the editor:
- *
- *   THE OBJECT STAYS VISIBLE. `editorState.textEntryObjectId` names it while
- *   the prompt is open, and the overlay draws that object even when the
- *   compiled picture already shows it - so the feature the student is
- *   labelling is on the sheet, undimmed, for the whole interaction.
- *
- *   THE PROMPT FOLLOWS THE CAMERA. `cameraSignal` asks `renderCurrentDrawing`
- *   to call back on every camera change, so a zoom or pan while typing moves
- *   the prompt with its node instead of leaving it behind.
- */
-function beginTextEntry(object) {
-    const previous = editorState.textEntryObjectId;
-
-    editorState.textEntryObjectId = object?.id || null;
-
-    if (previous !== editorState.textEntryObjectId) {
-        renderCurrentDrawing();
-    }
-}
-
-function endTextEntry() {
-    if (editorState.textEntryObjectId === null) {
-        return;
-    }
-
-    editorState.textEntryObjectId = null;
-
-    renderCurrentDrawing();
-}
-
-/*
- * WHERE A TABLE CELL'S WORDS SIT.
- *
- * The table's own placement is the centre of its grid; a cell is right and
- * down from there by whole rows and columns. The renderer sizes a cell to 12px
- * text with tight padding, and this is the same rule, so the prompt appears
- * over the cell the double-click landed in rather than at the table's corner.
- *
- * IT IS A POSITION, NOT A GEOMETRY WRITE - nothing about the table changes.
- */
-const TABLE_CELL_WIDTH_PX = 56;
-const TABLE_CELL_HEIGHT_PX = 20;
-
-function tableCellPoint(table, cellIndex) {
-    const geometry = table?.geometry || {};
-    const placement = geometry.position;
-    const cells = geometry.cells;
-
-    if (
-        !placement ||
-        !Number.isFinite(Number(placement.x)) ||
-        !Number.isFinite(Number(placement.y)) ||
-        !Array.isArray(cells)
-    ) {
-        return null;
-    }
-
-    const columns = Math.max(1, Number(geometry.columns) || 1);
-    const rows = Math.max(1, Math.ceil(cells.length / columns));
-
-    const scale =
-        enggDrawingState.BASE_PIXELS_PER_UNIT *
-        (drawingState.camera?.zoom || 1);
-
-    const row = Math.floor(cellIndex / columns);
-    const column = cellIndex % columns;
-
-    const width = columns * TABLE_CELL_WIDTH_PX;
-    const height = rows * TABLE_CELL_HEIGHT_PX;
-
-    return {
-        x:
-            placement.x +
-            ((column + 0.5) * TABLE_CELL_WIDTH_PX - width / 2) / scale,
-        y:
-            placement.y -
-            ((row + 0.5) * TABLE_CELL_HEIGHT_PX - height / 2) / scale
-    };
-}
-
-/*
- * OPEN THE NOTE EDITOR FOR A WRITTEN FEATURE.
- *
- * `atPoint` is the place on the sheet the student just clicked to put it, in
- * drawing units. A note placed by one click is written where that click landed
- * even before its text exists, so passing the point makes the prompt open
- * exactly there rather than at a default the model guessed. Omitting it - a
- * double-click on something already on the sheet - anchors to the feature's own
- * text position, which is what the student is looking at.
- */
-export function openNoteEditorFor(object, atPoint = null) {
+export function openNoteEditorFor(object) {
     /*
      * AN ANNOTATE FEATURE'S TEXT IS ALSO THE STUDENT'S OWN.
      *
@@ -910,8 +623,6 @@ export function openNoteEditorFor(object, atPoint = null) {
         if (!isEditableAnnotate(object)) {
             return false;
         }
-
-        beginTextEntry(object);
 
         enggNoteEditor?.open({
             text: object.text || "",
@@ -929,15 +640,7 @@ export function openNoteEditorFor(object, atPoint = null) {
 
             title: `Edit ${enggAnnotate?.ANNOTATE_KINDS?.[object.annotateKind]?.label || "Annotation"}`,
 
-            /* The node the prompt hangs on, and the words shown while typing. */
-            object,
-            point: atPoint,
-            state: drawingState,
-            cameraSignal,
-
             onApply: (text) => {
-                endTextEntry();
-
                 const previousObjects =
                     enggDrawingState.snapshotDrawing(drawingState);
 
@@ -955,8 +658,6 @@ export function openNoteEditorFor(object, atPoint = null) {
             },
 
             onCancel: () => {
-                endTextEntry();
-
                 setToolMessage("Annotation edit cancelled");
 
                 renderCurrentDrawing();
@@ -973,19 +674,10 @@ export function openNoteEditorFor(object, atPoint = null) {
         return false;
     }
 
-    beginTextEntry(object);
-
     enggNoteEditor?.open({
         text: object.text || "",
 
-        object,
-        point: atPoint,
-        state: drawingState,
-        cameraSignal,
-
         onApply: (text) => {
-            endTextEntry();
-
             const previousObjects = enggDrawingState.snapshotDrawing(
                 drawingState
             );
@@ -1004,8 +696,6 @@ export function openNoteEditorFor(object, atPoint = null) {
         },
 
         onCancel: () => {
-            endTextEntry();
-
             setToolMessage("Note edit cancelled");
 
             renderCurrentDrawing();
@@ -1044,27 +734,13 @@ export function openTableCellEditorFor(table, cellIndex) {
 
     const current = geometry.cells[cellIndex] ?? "";
 
-    beginTextEntry(table);
-
     enggNoteEditor?.open({
         text: current,
         multiline: false,
         placeholder: "Enter text",
         title: "Edit Cell",
 
-        object: table,
-        state: drawingState,
-        cameraSignal,
-
-        /*
-         * A CELL'S WORDS SIT IN THE CELL, not at the table's placement - so the
-         * prompt is anchored to the cell the double-click landed in.
-         */
-        point: tableCellPoint(table, cellIndex),
-
         onApply: (text) => {
-            endTextEntry();
-
             const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
 
             /*
@@ -1086,8 +762,6 @@ export function openTableCellEditorFor(table, cellIndex) {
         },
 
         onCancel: () => {
-            endTextEntry();
-
             setToolMessage("Cell edit cancelled");
 
             renderCurrentDrawing();

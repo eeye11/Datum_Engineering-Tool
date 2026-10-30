@@ -119,46 +119,21 @@ export function extraTikzLibraries(input) {
  * where the object model - and so hit testing, snapping and the selection
  * outline - says it is.
  *
- * So the canvas asks for the picture's bounding box to be reset to the single
- * point (0,0) at the very end of the picture. The drawing itself is untouched;
- * only where TeX places it changes, and the SVG's own origin (its viewBox
- * corner) is then the drawing's (0,0). The Source text is not edited - this is
- * the compile wrapper's business, like the preamble.
- */
-const ORIGIN_ANCHOR = String.raw`\pgfresetboundingbox\useasboundingbox (0,0);`;
-
-/*
- * WHERE THE CONVERTER PUTS THE ORIGIN.
+ * So the canvas asks for the picture's bounding box to be reset - at the very
+ * end of the picture, to the origin STATED TWICE, as the two corners of a box.
+ * The drawing itself is untouched; only where TeX places it changes, and the
+ * SVG's own origin (its viewBox corner) is then the drawing's (0,0). The
+ * Source text is not edited - this is the compile wrapper's business, like the
+ * preamble.
  *
- * TeX's DVI puts the (1in, 1in) page origin - the point every picture is
- * measured from - at 72.27pt from the page corner, and the converter keeps
- * that convention, so a picture whose bounding box was reset to (0,0) draws
- * its own (0,0) at (-72.27, -72.27) in SVG units. The measurement is the
- * same for every picture (verified against several world positions,
- * including negative ones), so one translation seats any picture exactly.
- * The SVG keeps the reset bounding box (width and height 0), which the
- * Drawing Space replaces with its own camera anyway.
+ * TWO CORNERS, NOT ONE POINT. `\useasboundingbox (0,0);` lets the box take
+ * its size from that one coordinate, and with the memory filled with INI
+ * sentinel bytes an empty x coordinate reads as 127 and an empty y as -127 -
+ * the sheet then sits 127 pt right and 127 pt up in the compiled SVG. The
+ * same point written as an explicit 1x1 mm box has both corners stated, so
+ * there is nothing left for TeX to guess.
  */
-const TEAX_ONE_INCH_PT = 72.27;
-
-export function seatPictureAtOrigin(svg) {
-    const text = String(svg);
-
-    /*
-     * A reset bounding box announces itself by a zero width and height; a
-     * picture that was not anchored (an ordinary render) is left untouched.
-     */
-    if (!/<svg\b[^>]*\bwidth="0"/.test(text)) {
-        return text;
-    }
-
-    /* The translation must wrap EVERYTHING the picture draws. */
-    return text.replace(
-        /(<svg\b[^>]*>)([\s\S]*)(<\/svg>)/,
-        (_all, open, inner, close) =>
-            `${open}<g transform="translate(${TEAX_ONE_INCH_PT} ${TEAX_ONE_INCH_PT})">${inner}</g>${close}`
-    );
-}
+const ORIGIN_ANCHOR = String.raw`\pgfresetboundingbox\useasboundingbox (0,0) rectangle (0,0);`;
 
 export function anchorPictureAtOrigin(body) {
     const text = String(body);
@@ -209,8 +184,7 @@ export function renderTikz(tikz, { debug = false, anchorOrigin = false } = {}) {
 
     const job = queue.then(async () => {
         const dvi = await engine.tex(documentFor(tikz, { anchorOrigin }), { showConsole: debug });
-        const svg = await engine.dvi2svg(dvi);
-        return anchorOrigin ? seatPictureAtOrigin(svg) : svg;
+        return engine.dvi2svg(dvi);
     });
 
     // The next job waits for this one whether it succeeds or not.

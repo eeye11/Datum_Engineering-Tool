@@ -166,14 +166,15 @@ import enggCanvasPalette from "./canvas-palette.js";
         Object.entries(attributes).forEach(
             ([key, value]) => {
                 /*
-                 * AN UNRESOLVED COORDINATE IS OMITTED, NOT WRITTEN.
+                 * AN UNRESOLVED VALUE IS NOT WRITTEN.
                  *
-                 * `setAttribute(key, undefined)` stores the STRING 'undefined',
-                 * which a shape's cy then reads back as - a visible, wrong
-                 * coordinate drawn at the sheet's origin. A value that could
-                 * not be resolved leaves the attribute absent, which is both
-                 * honest (no attribute = no value) and what the test for this
-                 * regression asks for.
+                 * `setAttribute("cx", undefined)` stores the literal string
+                 * "undefined", which is not a number: the browser then discards
+                 * the element's position (or refuses the whole attribute) with
+                 * no error anywhere. A coordinate that could not be resolved is
+                 * therefore omitted, so the shape keeps the SVG default and is
+                 * visibly wrong rather than silently absent - and a caller's
+                 * `null` no longer becomes geometry.
                  */
                 if (value === undefined || value === null) {
                     return;
@@ -181,7 +182,7 @@ import enggCanvasPalette from "./canvas-palette.js";
 
                 element.setAttribute(
                     key,
-                    value
+                    String(value)
                 );
             }
         );
@@ -426,18 +427,10 @@ import enggCanvasPalette from "./canvas-palette.js";
             )
         );
 
-        if (style.fillMode === "solid" && style.fillOpacityEnabled === true) {
-            element.setAttribute("fill-opacity", "0.35");
-        }
-
         element.setAttribute(
             "stroke-width",
             scaledStrokeWidth(lineWidth)
         );
-
-        if (Number.isFinite(style.fillOpacity)) {
-            element.setAttribute("fill-opacity", Math.max(0, Math.min(1, style.fillOpacity)));
-        }
 
         if (
             style.opacity != null

@@ -489,7 +489,44 @@ export function createSourceManager(initialSource) {
                 return 0;
             }
 
-            let visibleOffset = 0;
+            /*
+             * THE TWO COORDINATE SYSTEMS, KEPT APART.
+             *
+             * `lineStart` walks the CANONICAL text, marker lines included.
+             * `visibleOffset` counts only characters the editor SHOWS, so a marker
+             * line contributes nothing to it. They are therefore NOT the same
+             * distance from the start of the text once any marker has been passed
+             * - which is why an offset has to be resolved as "how far into THIS
+             * line", added to THIS line's canonical start, rather than by treating
+             * the visible count as a canonical position.
+             */
+            /*
+             * THE MAP IS BUILT FROM THE CANONICAL TEXT AND THE VISIBLE TEXT IT
+             * CURRENTLY STANDS FOR, and the two are walked together. A marker
+             * line exists in the canonical text and not in the visible one, so
+             * the offset of a character in the visible text is found by
+             * COUNTING THE VISIBLE CHARACTERS BEFORE IT and then reading the
+             * canonical character at that position in the visible rendition.
+             *
+             * Walking the canonical text and skipping marker lines - the
+             * previous approach - got the visible count right but returned a
+             * CANONICAL index computed from it, so every marker passed shifted
+             * the answer by the marker's own length and an offset inside a
+             * command resolved to the header above it.
+             */
+            const visibleText = visibleDrawingSource(canonical);
+
+            if (target >= visibleText.length) {
+                return canonical.length;
+            }
+
+            /* The visible character at `target`, by its line and column. */
+            const beforeVisible = visibleText.slice(0, target);
+            const column = target - (beforeVisible.lastIndexOf("\n") + 1);
+            const wantedLine = beforeVisible.split("\n").length - 1;
+
+            /* The same line in the canonical text: skip the hidden ones. */
+            let shownIndex = 0;
             let lineStart = 0;
 
             while (lineStart <= canonical.length) {
@@ -497,13 +534,15 @@ export function createSourceManager(initialSource) {
                 const lineEnd = newline < 0 ? canonical.length : newline;
                 const line = canonical.slice(lineStart, lineEnd);
 
-                const glyphs = isObjectMarkerLine(line) ? 0 : line.length + (newline < 0 ? 0 : 1);
+                const shown = isObjectMarkerLine(line) === false;
 
-                if (glyphs > 0 && visibleOffset + glyphs >= target) {
-                    return Math.min(lineStart + (target - visibleOffset), canonical.length);
+                if (shown && shownIndex === wantedLine) {
+                    return Math.min(lineStart + column, canonical.length);
                 }
 
-                visibleOffset += glyphs;
+                if (shown) {
+                    shownIndex += 1;
+                }
 
                 if (newline < 0) {
                     break;

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ============================================================
  * THE SOURCE TAB
  * ============================================================
@@ -50,15 +50,14 @@
 
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { sourceGenerationProblems } from "../../../shared/rendering/latex/source-diagnostics.js";
-import { parseDrawingSource, isObjectMarkerLine, isObjectNameComment } from "../../../shared/rendering/latex/drawing-source.js";
+import { parseDrawingSource, isObjectMarkerLine } from "../../../shared/rendering/latex/drawing-source.js";
 import {
     adoptUnclaimedStatements,
-    adoptFollowedStatements,
     removeObjectBlock,
     sourceForObjectRegion
 } from "../../../shared/rendering/latex/source-object-sync.js";
 import { applyParsedSourceToDrawing } from "../../../shared/rendering/latex/source-model-apply.js";
-import { sourceForObject, writeObjectIntoSource } from "../../../shared/rendering/latex/source-synchronization.js";
+import { sourceForObject } from "../../../shared/rendering/latex/source-synchronization.js";
 import { activePanelTab, setActivePanelTab } from "./panel-tabs.js";
 import { createSourceEditor } from "./source-editor.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -511,20 +510,7 @@ export function visibleRegionForObject(objectId) {
         return null;
     }
 
-    /*
-     * THE BLOCK'S READABLE HEADER, `% DAETUM OBJECT: Pipe 1`.
-     *
-     * A block's header is the run of comment lines above its first command, and
-     * the OBJECT line inside it is the ONE line of the header the editor SHOWS -
-     * so it is the line the hidden object's eye belongs beside. Only Lines that
-     * exist in the canonical text and are comment lines are considered, so a
-     * legacy BEGIN marker (which has no readable name) falls back to the first
-     * command line rather than to a header the editor never draws.
-     */
     const canonicalLines = canonical.replace(/\r\n/g, "\n").split("\n");
-
-    const nameAt = block.lines.findIndex((line) => isObjectNameComment(line));
-    const headerCanonical = nameAt < 0 ? -1 : block.beginLine + nameAt;
 
     /*
      * EVERY HEADER LINE IS INVISIBLE IN THE EDITOR - not just the legacy pair.
@@ -540,47 +526,35 @@ export function visibleRegionForObject(objectId) {
      */
     const markerLines = (from, to) => canonicalLines.slice(from, to).filter(isObjectMarkerLine).length;
 
-    /* One-based visible line numbers. */
+    /*
+     * ONE-BASED VISIBLE LINE NUMBERS - THE WHOLE BLOCK, HEADER INCLUDED.
+     *
+     * `to` is EXCLUSIVE, so `markerLines(0, block.beginLine)` counts everything
+     * BEFORE the block and no part of it. The band therefore started one line
+     * too low and finished one line too short: selecting an object lit the lines
+     * under its header and left its own opening line - and the `\draw` that
+     * actually makes the feature - outside the band. The offset is the block's
+     * own span, `[beginLine, endLine]`, which is what the parser reports.
+     *
+     * Counted over the WHOLE block, so the header lines INSIDE it are taken out
+     * as well - those exist in the canonical text and are not shown in the
+     * editor, so every one of them moves the visible band up by a line.
+     *
+     * The trailing marker is not subtracted separately any more: it is already
+     * inside the block's span and covered by the same count.
+     */
     const beginLine = block.beginLine + 1 - markerLines(0, block.beginLine);
     const endLine = Math.max(
         beginLine,
-        block.endLine + 1 - markerLines(0, block.endLine) - (block.unclosed ? 0 : 1)
+        block.endLine + 1 - markerLines(0, block.endLine + 1)
     );
 
     const visibleLines = visible.split("\n").length;
 
     return {
         beginLine: Math.max(1, Math.min(beginLine, visibleLines)),
-        endLine: Math.max(1, Math.min(endLine, visibleLines)),
-        /*
-         * The header's own visible line, for the hidden state's gutter mark. A
-         * block with no readable header keeps the eye on its first line, so the
-         * mark never disappears - the block is recognised by the model, not by
-         * the wording of a comment.
-         */
-        headerLine:
-            headerCanonical < 0
-                ? Math.max(1, Math.min(beginLine, visibleLines))
-                : Math.max(1, Math.min(headerCanonical + 1 - markerLines(0, headerCanonical), visibleLines))
+        endLine: Math.max(1, Math.min(endLine, visibleLines))
     };
-}
-
-/*
- * THE BLOCKS OF THE OBJECTS THAT ARE HIDDEN.
- *
- * `visible: false` is the model's one convention for a hidden object, and the
- * canvas already draws nothing for it. This is the Source tab's half of the same
- * fact: the block is still in the text - the text is what is saved - so it is
- * marked as hidden rather than removed, and marked DECORATIVELY, so its comment
- * colour, its code and its copy behaviour are exactly as they are.
- *
- * A block whose region cannot be found is simply not decorated.
- */
-function hiddenObjectRegions() {
-    return (drawingState.objects || [])
-        .filter((object) => object && object.visible === false)
-        .map((object) => visibleRegionForObject(object.id))
-        .filter(Boolean);
 }
 
 /*
@@ -601,7 +575,25 @@ function syncHighlightFromSelection({ reveal = null } = {}) {
         .filter(Boolean);
 
     editor.setHighlightedRegions(regions);
-    editor.setHiddenRegions(hiddenObjectRegions());
+
+    /*
+     * AND THE HIDDEN OBJECTS, WHICH ARE NOT A SELECTION.
+     *
+     * A block the model has marked hidden is decorated as such - eye-off in the
+     * margin, a tinted band, slightly muted geometry - so that a hidden object
+     * can be told apart from an ordinary comment by looking at the code rather
+     * than by remembering which row was switched off. It is a DECORATION: the
+     * text is untouched, so the block stays editable, selectable and copyable.
+     *
+     * Driven from the MODEL's visibility rather than from a class written once,
+     * so showing or hiding an object repaints the state on the next sync.
+     */
+    editor.setHiddenRegions(
+        (drawingState.objects || [])
+            .filter((object) => object && object.visible === false)
+            .map((object) => visibleRegionForObject(object.id))
+            .filter(Boolean)
+    );
 
     const shouldReveal =
         reveal === null
@@ -620,15 +612,21 @@ function syncHighlightFromSelection({ reveal = null } = {}) {
  *
  * A selection that sits wholly inside ONE object's block selects that object. A
  * selection that crosses a boundary is the student gathering code to copy, not
- * choosing an object, and guessing at it would fight them; a bare caret selects
- * nothing, so clicking a line does not change the drawing's selection.
+ * choosing an object, and guessing at it would fight them.
+ *
+ * A BARE CARET SELECTS THE BLOCK IT SITS IN. Clicking a line of an object's
+ * code used to select nothing at all, because the caret is an empty selection -
+ * so the one gesture a student makes to say "this object" was the one gesture
+ * that did nothing. Caret-only is now the NARROWEST case of "wholly inside one
+ * block" rather than an exception to it: click any line of the block, the
+ * block's object is selected, and the Objects and Features tabs follow.
+ *
+ * A click on a line that belongs to NO block - the picture's own opening or
+ * closing, a comment the student typed, a blank line - still selects nothing,
+ * because there is no object it could mean.
  */
 function syncSelectionFromSource(info) {
     if (!editor || selectionSource === "canvas" || !info) {
-        return;
-    }
-
-    if (info.start === info.end) {
         return;
     }
 
@@ -644,7 +642,16 @@ function syncSelectionFromSource(info) {
         parseDrawingSource(source).find((block) => line >= block.beginLine && line <= block.endLine) || null;
 
     const first = blockAt(lineOf(start));
-    const last = blockAt(lineOf(Math.max(start, end - 1)));
+
+    /*
+     * A CARET IS A ONE-LINE RANGE. Everything below then asks the same question
+     * for a click that it asks for a drag - "is this wholly inside one block?" -
+     * so the two gestures cannot disagree about what they select.
+     */
+    const last =
+        start === end
+            ? first
+            : blockAt(lineOf(Math.max(start, end - 1)));
 
     if (!first || !last || first.id !== last.id) {
         return;
@@ -681,140 +688,6 @@ function syncSelectionFromSource(info) {
  * NOTHING HERE RECORDS HISTORY. Typing in Source is one action; the undo entry
  * is the edit, recorded by the tab's own history entry, not one per object.
  */
-/*
- * THE TEXT ADOPTION READS.
- *
- * Adoption sees WHAT THE STUDENT TYPED, not what the manager stored. The stored
- * text is already the result of an earlier restore, so reading it back would
- * re-wrap DAETUM's own previous output - which is how a picture acquired a
- * blank line on every keystroke. A caller with no recorded edit (a reopened
- * document) falls back to the stored source, which is then the student's text.
- */
-function adoptionBasis(manager) {
-    return manager.getTypedSource() || manager.getSource();
-}
-
-/*
- * THE CARET'S LINE, IN THE TEXT ADOPTION READS.
- *
- * The editor shows the text with the machinery headers stripped, so the caret's
- * line in what the student sees is NOT the same line in the canonical text. This
- * maps it through the manager's own visible<->stored correspondence - the same
- * one the editor uses to place the caret after an adoption - so a command is
- * claimed only when the student is actually in it.
- */
-function caretLineIn(manager) {
-    const editor = document.querySelector("#drawingSourceEditor textarea");
-
-    if (!editor || typeof editor.selectionStart !== "number") {
-        return null;
-    }
-
-    /**
-     * THE CARET SITS WHERE THE STUDENT LEFT IT.
-     *
-     * The Source editor keeps the caret while the pane is showing it, and the
-     * pane's own refresh does not move it - so the caret is the student's
-     * position even when the document's focus has gone to a button in the same
-     * pane. A caret at the very end is where typing goes next: that is where the
-     * next command will be, so the LAST command is the one being written.
-     */
-    const visibleLine = editor.value.slice(0, editor.selectionStart).split("\n").length - 1;
-
-    /**
-     * THE LINE THE STUDENT'S CARET IS ON, IN THE SOURCE.
-     *
-     * The editor's text has the headers stripped, so its line numbering and the
-     * source's differ. The manager owns that correspondence; when it does not
-     * expose it, the line is used as it stands - which is right for the very
-     * first command, the one a student types.
-     */
-    if (typeof manager.visibleLineToSourceLine === "function") {
-        const mapped = manager.visibleLineToSourceLine(visibleLine);
-
-        if (Number.isFinite(mapped)) {
-            return mapped;
-        }
-
-        return null;
-    }
-
-    return visibleLine;
-}
-
-/*
- * A WHOLE PICTURE ARRIVING AT ONCE.
- *
- * When the student PASTES or OPENS a picture - no caret in the editor, or a
- * change far larger than a keystroke - every unclaimed command in it is adopted,
- * so the whole picture becomes editable. That is the case adoption exists for.
- */
-function adoptWholePicture(manager, candidates) {
-    const basis = adoptionBasis(manager);
-
-    const adopted = adoptUnclaimedStatements(basis, { candidates });
-
-    if (adopted === manager.getSource() || parseDrawingSource(adopted).length === 0) {
-        return null;
-    }
-
-    return adopted;
-}
-
-/*
- * WHICH ADOPTION THIS DRAFT EARNS, AND THE TEXT IT WROTE.
- *
- * Returns the source to store, or null when none of it could be adopted - so the
- * caller writes a block only when adoption really changed something.
- *
- * THE CARET DECIDES HOW MUCH IS THE STUDENT'S NEW CODE:
- *
- *   caret inside a command   THAT COMMAND is adopted; the rest of the picture is
- *                            left exactly as written, so typing grows the model
- *                            one editable feature at a time.
- *
- *   no caret in the editor   the student threw a picture at the drawing - pasted
- *                            it, or opened a file - and every unclaimed command
- *                            in it is adopted, so the whole picture is editable.
- *
- * Adoption itself refuses an empty picture, one that will not compile, and one
- * that already carries DAETUM's own blocks (see `adoptUnclaimedStatements`).
- */
-export function newVoiceAdopt(manager, candidates) {
-    const basis = adoptionBasis(manager);
-    const caret = caretLineIn(manager);
-
-    /**
-     * A PICTURE WITH NO BLOCKS IS ADOPTED WHOLE - that is the case this exists
-     * for: nothing in it could be clicked on the canvas.
-     */
-    const whole = adoptWholePicture(manager, candidates);
-
-    if (whole !== null) {
-        return whole;
-    }
-
-    /**
-     * AND A LINE TYPED INTO AN EXISTING DRAWING IS ADOPTED AT THE CARET, so what
-     * the student writes becomes a feature they can click, drag and delete.
-     */
-    if (!Number.isFinite(caret)) {
-        return null;
-    }
-
-    return adoptFollowedStatements(basis, { caretLine: caret, candidates });
-}
-
-/**
- * ADOPTION IS FOR A PICTURE THAT HAS NO BLOCKS AT ALL.
- *
- * A source that already carries DAETUM object blocks is the document's own:
- * its commands belong to the objects those blocks name, so anything outside them
- * is preserved VERBATIM. And a picture still being typed is left alone: one that
- * will not compile cannot be adopted without rewriting text the model only half
- * understands, and the student's latest text is never rewritten.
- */
-
 function applySourceToObjects() {
     const manager = activeSourceManager();
 
@@ -853,43 +726,10 @@ function applySourceToObjects() {
             }))
             .filter((candidate) => typeof candidate.source === "string" && candidate.source.trim());
 
-        /**
-         * WHICH ADOPTION THIS DRAFT EARNS, AND THE TEXT IT WROTE.
-         *
-         *   A PICTURE WITH NO BLOCKS   every unclaimed command is the student's
-         *                              new code, and each becomes its own object -
-         *                              so a picture typed or pasted whole is
-         *                              editable on the canvas.
-         *
-         *   A LINE TYPED INTO A
-         *   DRAWING THAT HAS BLOCKS    the command under the caret is adopted, so
-         *                              what the student is writing becomes a
-         *                              feature they can click, drag and delete.
-         *
-         * Adoption itself refuses a picture that will not compile (see
-         * `adoptUnclaimedStatements`), so a draft DAETUM cannot improve on is
-         * returned unchanged and its text stays exactly as typed.
-         */
-        const basis = adoptionBasis(manager);
+        const adopted = adoptUnclaimedStatements(manager.getSource(), { candidates });
 
-        const caret = caretLineIn(manager);
-
-        /*
-         * A PICTURE WITH NO BLOCKS IS ADOPTED WHOLE, and that is the case this
-         * exists for: nothing in it could be clicked on the canvas, so its
-         * commands are wrapped and become objects. The caret only decides which
-         * command is the student's NEW one once there are blocks to distinguish
-         * it from.
-         */
-        const hasBlocks = parseDrawingSource(manager.getSource()).length > 0;
-
-        const followed =
-            hasBlocks && Number.isFinite(caret)
-                ? adoptFollowedStatements(basis, { caretLine: caret, candidates })
-                : adoptUnclaimedStatements(basis, { candidates });
-
-        if (followed !== basis && parseDrawingSource(followed).length > 0) {
-            manager.setSource(followed, { origin: "adopt" });
+        if (adopted !== manager.getSource()) {
+            manager.setSource(adopted, { origin: "adopt" });
         }
     }
 
@@ -917,13 +757,6 @@ function applySourceToObjects() {
         editable: true,
         removeMissing: false
     });
-
-    if (result.changed && !result.invalid.length && result.reducerSyncIds?.length) {
-        const ids = new Set([...result.reducerSyncIds, ...result.updated]);
-        drawingState.objects.filter(object => ids.has(object.id)).forEach(object => {
-            writeObjectIntoSource(manager, object, { state: drawingState, allObjects: drawingState.objects });
-        });
-    }
 
     if (result.changed) {
         /*
@@ -1035,27 +868,6 @@ export function renderSourceTab() {
                  * the source now is.
                  */
                 applySourceToObjects();
-
-                /*
-                 * THE EDITOR SHOWS A NEW STORED FORM ONLY WHEN ADOPTION MADE ONE.
-                 *
-                 * Adoption turns hand-typed commands into blocks, so the stored
-                 * text is the student's code with its headers and the editor must
-                 * take that back. An ORDINARY KEYSTROKE changes nothing but the
-                 * draft, and re-assigning the stored form there reset the caret
-                 * and the browser's undo stack under the student - so the refresh
-                 * is limited to the case that needs it: the draft had no blocks
-                 * at all and adoption has just created them.
-                 */
-                const stored = manager.getVisibleSource();
-
-                if (
-                    editor &&
-                    stored !== editor.getValue() &&
-                    parseDrawingSource(editor.getValue()).length === 0
-                ) {
-                    editor.setValue(stored, { preserveCaret: true });
-                }
 
                 const analysis = manager.analysis();
 
@@ -1293,7 +1105,7 @@ export function installSourceTab() {
                     const newline = canonicalText.indexOf("\n", lineStart);
                     const lineEnd = newline < 0 ? canonicalText.length : newline;
                     const line = canonicalText.slice(lineStart, lineEnd);
-                    const isMarker = isObjectMarkerLine(line);
+                    const isMarker = /^\s*%\s*DAETUM_OBJECT_(BEGIN|END)\b/.test(line);
 
                     if (!isMarker) {
                         if (canonical >= lineStart && canonical <= lineStart + line.length) {

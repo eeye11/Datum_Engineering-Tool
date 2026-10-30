@@ -330,29 +330,25 @@ elbowCases.forEach(([name, previous, vertex, next]) => {
 });
 
 /* ============================================================
- * 5. THE SPACING IS NOT A DIMENSION
- * ============================================================
- *
- * The panel DOES expose the spacing now - as the Transform's Pipe Width Change,
- * a change from the drawing default rather than a dimension of the cross
- * section. What must remain true is the distinction that test was written to
- * protect: the DIMENSIONS (diameter, width, height) never move the walls.
- */
+ * 5. THE PANEL EXPOSES NO SPACING FIELD
+ * ============================================================ */
 
-console.log("\n  the spacing is a drawing style, not a dimension\n");
+console.log("\n  the panel exposes no spacing field\n");
 
 const fs = require("fs");
 const path = require("path");
 
+const panelSource = fs.readFileSync(
+  path.join(__dirname, "..", "src", "components", "layout", "panels", "feature-schema.js"),
+  "utf8"
+);
+
 check(
-  "the panel's Pipe Width is a relative offset, not an absolute boundary separation",
-  /pipeWidth/.test(
-    fs.readFileSync(
-      path.join(__dirname, "..", "src", "components", "layout", "panels", "feature-schema.js"),
-      "utf8"
-    )
+  "no panel field asks for a boundary separation or schematic spacing",
+  !/boundarySeparation|schematic/i.test(
+    panelSource.replace(/\/\*[\s\S]*?\*\//g, " ")
   ),
-  "Pipe Width is the supported way to alter the spacing"
+  "a spacing field must not be exposed per feature"
 );
 
 check(

@@ -142,19 +142,16 @@ if (typeof updateFeatureProperty === "function") {
     { x: 0, y: 0 },
     { x: 100, y: 0 }
   );
-  updateFeatureProperty(pipeToEdit, "pipeWidth", 6);
-
+  updateFeatureProperty(pipeToEdit, "diameter", 450, 450);
   check(
-    "a new run carries no cross-section dimension to edit",
-    pipeToEdit.engineering.diameter === undefined,
+    "diameter property updates to 450 in engineering metadata",
+    pipeToEdit.engineering.diameter === 450,
     `diameter=${pipeToEdit.engineering.diameter}`
   );
-
   const sepAfterEdit = enggPipeDuct.boundarySeparation(pipeToEdit.engineering);
-
   check(
-    "Pipe Width widens the walls by exactly the change",
-    sepAfterEdit === enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + 6,
+    "boundary separation remains DEFAULT_SCHEMATIC_SEPARATION after editing diameter",
+    sepAfterEdit === enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION,
     `sep=${sepAfterEdit}`
   );
 }

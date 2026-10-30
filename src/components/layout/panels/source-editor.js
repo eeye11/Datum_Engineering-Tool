@@ -50,8 +50,20 @@
  * uses - so a wrapped line, a tab and an emoji all measure the same in all four.
  */
 
-import { isObjectNameComment } from "../../../shared/rendering/latex/drawing-source.js";
-import { EYE_OFF_MARK_ICON } from "./objects-list.js";
+/*
+ * THE HIDDEN-OBJECT MARK, in the gutter.
+ *
+ * The SAME picture the Objects list uses for its eye, so "hidden" cannot come to
+ * look like one thing in the panel and another beside the code. It is an inline
+ * SVG rather than a glyph, so the margin cannot fall back to a box on a machine
+ * without the icon font.
+ */
+const HIDDEN_EYE_ICON =
+    '<svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">' +
+    '<path d="M2 10s3-5 8-5 8 5 8 5-3 5-8 5-8-5-8-5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>' +
+    '<circle cx="10" cy="10" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
+    '<path d="M4 4l12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>' +
+    '</svg>';
 
 const CLASS = {
     root: "drawing-source-editor-root",
@@ -60,7 +72,6 @@ const CLASS = {
     scroll: "drawing-source-scroll",
     decor: "drawing-source-decor",
     text: "drawing-source-text",
-    hiddenRow: "drawing-source-gutter-hidden",
     caret: "drawing-source-caret-layer",
     input: "drawing-source-input",
     line: "drawing-source-line"
@@ -111,20 +122,8 @@ function highlightLine(line) {
     const commentAt = commentStart(line);
 
     if (commentAt === 0) {
-        /*
-         * EVERY COMMENT IS THE SAME MUTED GREY.
-         *
-         * A student's note, an object's `% DAETUM OBJECT:` header, a tool's own
-         * remark - all of them are `ds-comment`, so there is ONE comment colour
-         * and it is never re-decided per object, per tool or per visibility.
-         *
-         * THE OBJECT'S NAME LINE IS ALSO `ds-marker`, which only sets it UPRIGHT
-         * and heavier than prose: it is the line that says which object the code
-         * below belongs to and must stay easy to find while scrolling. It draws
-         * in the same comment ink, so being a header is a weight, not a colour.
-         */
-        if (isObjectNameComment(line)) {
-            return `<span class="ds-comment ds-marker">${escaped}</span>`;
+        if (/DAETUM_OBJECT_(BEGIN|END)/.test(line)) {
+            return `<span class="ds-marker">${escaped}</span>`;
         }
 
         return `<span class="ds-comment">${escaped}</span>`;
@@ -321,12 +320,15 @@ export function createSourceEditor(host, options = {}) {
     let selectedRegions = [];
 
     /*
-     * THE HIDDEN OBJECTS' BLOCKS, in the same { beginLine, endLine } form.
+     * THE HIDDEN OBJECTS' BLOCKS, in the same visible line numbers.
      *
-     * They are DECORATION, not selection: they are painted from their own list
-     * so a hidden object that is also selected keeps its mark, its tint and its
-     * header icon - the hidden state must not depend on what the student has
-     * clicked. Resolved by the tab, exactly as the selection is.
+     * A hidden object is still IN the source while its row says hidden - or, on
+     * the paths where its block has been removed, there is simply nothing to
+     * mark. So this is a DISPLAY of the model's visibility, applied as a
+     * decoration over whatever text the block happens to occupy, and it is
+     * kept separate from `selectedRegions` on purpose: selecting a hidden object
+     * must not remove its hidden-state marker, and marking it hidden must not
+     * look like a selection.
      */
     let hiddenRegions = [];
 
@@ -352,51 +354,15 @@ export function createSourceEditor(host, options = {}) {
      * measure each line box exactly, so a wrapped line is as tall here as it is
      * there.
      */
-    /*
-     * The one-based visible lines a list of regions covers, as a set for cheap
-     * membership while a layer is built.
-     */
-    function lineSet(regions) {
-        const set = new Set();
-
-        regions.forEach((region) => {
-            for (let line = region.beginLine; line <= region.endLine; line += 1) {
-                set.add(line);
-            }
-        });
-
-        return set;
-    }
-
-    /*
-     * THE HEADER LINE OF A BLOCK is the line of its readable `% DAETUM OBJECT:`
-     * comment, which the tab reports with the region. Where a caller gives no
-     * header, the block's first line is the best answer there is.
-     */
-    function hiddenHeaderLines(regions) {
-        const headers = new Set();
-
-        regions.forEach((region) => headers.add(region.headerLine ?? region.beginLine));
-
-        return headers;
-    }
-
-    /*
-     * THE DECORATION LAYER: one block per line, whose background carries the
-     * object band, the hidden block's tint and edge, and the error mark. The text
-     * is the same as the text layer's, but made INVISIBLE rather than omitted -
-     * the glyphs are still needed to measure each line box exactly, so a wrapped
-     * line is as tall here as it is there.
-     *
-     * IT IS ALWAYS REBUILT FROM THE FULL TEXT and never depends on what is
-     * already in it, so it can be redrawn on every render - after a keystroke
-     * that moved every line, or when only the hidden state changed.
-     */
     function renderDecor(text) {
         const split = lines(text);
-        const regions = lineSet(selectedRegions);
-        const hidden = lineSet(hiddenRegions);
-        const hiddenHeaders = hiddenHeaderLines(hiddenRegions);
+        const regions = new Set();
+
+        selectedRegions.forEach((region) => {
+            for (let line = region.beginLine; line <= region.endLine; line += 1) {
+                regions.add(line);
+            }
+        });
 
         decor.innerHTML = split
             .map((line, index) => {
@@ -407,40 +373,11 @@ export function createSourceEditor(host, options = {}) {
                     classes.push("selected");
                 }
 
-                if (hidden.has(number)) {
-                    classes.push("is-hidden");
-                }
-
-                if (hiddenHeaders.has(number)) {
-                    classes.push("is-hidden-header");
-                }
-
-                /*
-                 * `&nbsp;` FOR AN EMPTY LINE. A trailing or only space in a
-                 * `white-space: pre` block can measure as no width at all, and
-                 * the band would then be zero-width on a blank line that belongs
-                 * to the selected object. A non-breaking space always has the
-                 * line's own character width, so the row keeps its height and
-                 * its band.
-                 */
                 return `<div class="${classes.join(" ")}" data-line="${number}">${
-                    line ? escapeHtml(line) : "&nbsp;"
+                    line ? escapeHtml(line) : " "
                 }</div>`;
             })
             .join("");
-
-        /*
-         * THE EYE AT THE BLOCK'S EDGE. The gutter carries one beside the comment
-         * header; this one rides the header's own line, just inside the block's
-         * left edge, so a hidden object is recognisable from the code itself and
-         * not only from the margin.
-         */
-        hiddenHeaders.forEach((number) => {
-            decor.querySelector(`[data-line="${number}"]`)?.insertAdjacentHTML(
-                "afterbegin",
-                `<span class="ds-hidden-mark">${EYE_OFF_MARK_ICON}</span>`
-            );
-        });
 
         paintErrorRanges();
     }
@@ -486,31 +423,75 @@ export function createSourceEditor(host, options = {}) {
     }
 
     function renderText(text) {
-        const hidden = lineSet(hiddenRegions);
-
         textLayer.innerHTML = lines(text)
-            .map((line, index) => {
-                /*
-                 * A HIDDEN OBJECT'S CODE IS SET BACK, not recoloured: the same
-                 * syntax spans (so a command is still a command, a coordinate
-                 * still a coordinate) under one class that mutes them slightly.
-                 * The comment lines keep `--source-editor-comment` either way.
-                 */
-                const classes = [CLASS.line];
-
-                if (hidden.has(index + 1)) {
-                    classes.push("is-hidden");
-                }
-
-                return `<div class="${classes.join(" ")}">${line ? highlightLine(line) : " "}</div>`;
-            })
+            .map((line) => `<div class="${CLASS.line}">${line ? highlightLine(line) : " "}</div>`)
             .join("");
+
+        paintHiddenBlocks();
+    }
+
+    /*
+     * THE HIDDEN BLOCK'S BAND, painted on BOTH text layers.
+     *
+     * It has to be on the DECOR layer for the background and the left-edge rule,
+     * because that layer is what draws behind the glyphs. It has to be on the
+     * TEXT layer as well, because the mute is a COLOUR ON THE GLYPHS - which is
+     * a separate layer by design. Two marks, one state, and neither touches the
+     * source text: this is a decoration over whatever characters the block
+     * occupies, so the code stays editable and copy-pasteable exactly as it was.
+     */
+    function paintHiddenBlocks() {
+        [decor, textLayer].forEach((layer) => {
+            layer.querySelectorAll("." + CLASS.line).forEach((line) => line.classList.remove("is-hidden", "is-hidden-header"));
+        });
+
+        if (!hiddenRegions.length) {
+            return;
+        }
+
+        hiddenRegions.forEach((region) => {
+            [decor, textLayer].forEach((layer) => {
+                for (let line = region.beginLine; line <= region.endLine; line += 1) {
+                    const element = layer.querySelector(`[data-line="${line}"]`) || layer.children[line - 1];
+
+                    if (!element) {
+                        continue;
+                    }
+
+                    element.classList.add("is-hidden");
+
+                    if (line === region.beginLine) {
+                        element.classList.add("is-hidden-header");
+                    }
+                }
+            });
+        });
     }
 
     function renderGutter(text) {
         const count = lines(text).length;
-        const selected = lineSet(selectedRegions);
-        const hiddenHeaders = hiddenHeaderLines(hiddenRegions);
+        const selected = new Set();
+
+        selectedRegions.forEach((region) => {
+            for (let line = region.beginLine; line <= region.endLine; line += 1) {
+                selected.add(line);
+            }
+        });
+
+        /*
+         * AND THE HIDDEN BLOCKS, so the margin can carry the eye-off mark.
+         *
+         * The mark goes on EVERY line of a hidden block, so it reads as the
+         * block's own state rather than as a mark on one line - and a hidden
+         * block that is also selected keeps both: the two are different facts.
+         */
+        const hidden = new Set();
+
+        hiddenRegions.forEach((region) => {
+            for (let line = region.beginLine; line <= region.endLine; line += 1) {
+                hidden.add(line);
+            }
+        });
 
         const fragment = ownerDocument.createDocumentFragment();
 
@@ -519,28 +500,26 @@ export function createSourceEditor(host, options = {}) {
 
             row.className = CLASS.gutterRow;
 
-            /*
-             * THE EYE BESIDE A HIDDEN OBJECT'S HEADER. The number is kept as its
-             * own element and the icon sits before it, so the margin does not
-             * re-align; every row reserves the icon's width in the stylesheet,
-             * so the digits never move when an object is hidden or shown.
-             */
-            if (hiddenHeaders.has(line)) {
-                row.classList.add("is-hidden-header");
+            if (hidden.has(line)) {
+                row.classList.add("is-hidden");
+            }
 
+            /*
+             * THE EYE-OFF IS AN ICON, NOT A DIGIT, on the header line only -
+             * the line a reader looks at to identify the block. The number
+             * stays on every other line, so the margin is still a line count.
+             */
+            if (hidden.has(line) && !hidden.has(line - 1)) {
                 const mark = ownerDocument.createElement("span");
 
-                mark.className = CLASS.hiddenRow;
-                mark.innerHTML = EYE_OFF_MARK_ICON;
+                mark.className = "ds-hidden-gutter-mark";
+                mark.setAttribute("aria-hidden", "true");
+                mark.innerHTML = HIDDEN_EYE_ICON;
+
                 row.append(mark);
             }
 
-            /* The number itself, in its own element so the icon shares the row. */
-            const number = ownerDocument.createElement("span");
-
-            number.className = "drawing-source-gutter-number";
-            number.textContent = String(line);
-            row.append(number);
+            row.append(ownerDocument.createTextNode(String(line)));
 
             if (selected.has(line)) {
                 row.classList.add("selected");
@@ -592,161 +571,302 @@ export function createSourceEditor(host, options = {}) {
         return low;
     }
 
-    /*
-     * ============================================================
-     * MEASURING A CHARACTER OFFSET, IN THE TEXT LAYER
-     * ============================================================
-     *
-     * The text layer is one block per LINE, and each block contains the line's
-     * syntax spans. A character offset therefore has to be resolved in two
-     * steps: which line it is on, and where in that line.
-     *
-     * THE OLD MEASUREMENT WALKED TEXT NODES ACROSS THE WHOLE LAYER and ignored
-     * the line breaks between them, so every offset after the first newline
-     * pointed into the wrong line - a drag-selection painted nothing, or a band
-     * somewhere else. This walks within ONE line block, where an offset is a
-     * character count and nothing else, and it measures the box that block
-     * occupies.
-     */
-    function offsetInLine(lineIndex, column) {
-        const lineElement = textLayer.children[lineIndex];
+    /* The client rectangle of a text offset, measured in the text layer. */
+    function offsetPoint(starts, offset) {
+        const text = currentText;
+        const line = lineIndexAt(starts, offset);
+        const lineStart = starts[line];
+        const column = offset - lineStart;
+
+        /*
+         * A PROBE AT THE OFFSET, MEASURED IN A HIDDEN COPY OF ITS OWN LINE.
+         * Using the text layer's own spans keeps the measurement identical to
+         * the rendering, whatever the syntax highlighting put there.
+         */
+        const probe = ownerDocument.createElement("span");
+
+        probe.textContent = text.slice(lineStart, offset).replace(/\n$/, "") || "\u200b";
+
+        /* The probe is appended to a zero-width line so its left edge is the line's. */
+        probe.style.whiteSpace = "pre";
+        probe.style.display = "inline";
+
+        const lineElement = textLayer.children[line];
 
         if (!lineElement) {
             return null;
         }
 
-        const box = scroll.getBoundingClientRect();
+        const anchor = ownerDocument.createElement("span");
 
-        /* A position inside the line's own text, at `column` characters. */
-        const positionAt = (wanted) => {
-            const walker = ownerDocument.createTreeWalker(lineElement, 4 /* NodeFilter.SHOW_TEXT */);
+        anchor.textContent = "\u200b";
+        anchor.style.display = "inline";
+        lineElement.append(probe, anchor);
 
-            let seen = 0;
-            let node = walker.nextNode();
+        const lineBox = lineElement.getBoundingClientRect();
+        const probeBox = probe.getBoundingClientRect();
+        const anchorBox = anchor.getBoundingClientRect();
 
-            while (node) {
-                const length = node.data.length;
+        lineElement.removeChild(probe);
+        lineElement.removeChild(anchor);
 
-                if (wanted <= seen + length) {
-                    return { node, offset: wanted - seen };
-                }
-
-                seen += length;
-                node = walker.nextNode();
-            }
-
-            /* Past its end: the end of its last text node, or the block itself. */
-            let last = null;
-            const inner = ownerDocument.createTreeWalker(lineElement, 4);
-
-            let cursor = inner.nextNode();
-
-            while (cursor) {
-                last = cursor;
-                cursor = inner.nextNode();
-            }
-
-            return last ? { node: last, offset: last.data.length } : { node: lineElement, offset: 0 };
+        return {
+            left: probeBox.right,
+            right: anchorBox.left,
+            top: lineBox.top,
+            bottom: lineBox.bottom,
+            line,
+            column
         };
+    }
+
+    /*
+     * Rectangles for one range, in scroll box coordinates.
+     *
+     * A range is drawn as a DOM Range and its `getClientRects`, which is exact
+     * for wrapped lines, tabs and widened glyphs - and needs no line arithmetic
+     * of its own. The box is taken from the text layer (the element the glyphs
+     * are in), so the rectangle is where the characters are, not where a
+     * surrogate count says they should be.
+     */
+    function rectsForRange(start, end) {
+        const first = textLayer.children[lineIndexAt(lineStarts(currentText), start)];
+        const last = textLayer.children[lineIndexAt(lineStarts(currentText), end)];
+
+        if (!first) {
+            return [];
+        }
 
         const range = ownerDocument.createRange();
-        const from = positionAt(column);
-        const to = positionAt(column + 1);
+
+        /*
+         * THE END OF A LINE IS ITS LAST TEXT NODE'S LENGTH - NOT ITS CHILD COUNT.
+         *
+         * A `Range` offset means DIFFERENT THINGS depending on what it is
+         * counted in: on a TEXT node it is a character index, and on an ELEMENT
+         * it is a CHILD index. This used `childNodes.length`, which is one past
+         * the last child index of an element - so `setEnd` threw
+         * "There is no child at offset 4", the catch below returned an empty
+         * list, and NO selection block was ever painted. The selection was real,
+         * the textarea knew its range, and nothing appeared: the whole of
+         * "selecting has no highlight".
+         *
+         * Counting into the last text node is both correct for a text node and
+         * the end of the line's characters, which is what the block should
+         * cover. `lastChild || lastNode` keeps a line with no text at all - a
+         * blank line - measurable rather than throwing.
+         */
+        const endNode = (last || first).lastChild || last || first;
 
         try {
-            range.setStart(from.node, Math.min(from.offset, from.node.data?.length ?? 0));
-            range.setEnd(to.node, Math.min(to.offset, to.node.data?.length ?? 0));
+            range.setStart(first.firstChild || first, 0);
+            range.setEnd(
+                endNode,
+                endNode.nodeType === 3 /* TEXT_NODE */ ? endNode.data.length : endNode.childNodes.length - 0
+            );
+        } catch {
+            return [];
+        }
+
+        /*
+         * Narrow the range to the characters themselves. A DOM range over the
+         * elements' contents is coarse; walking the text nodes to the exact
+         * offsets is what makes a selection start at the right glyph.
+         */
+        const precise = preciseRangeFor(start, end);
+
+        /*
+         * A RANGE THAT CANNOT BE MEASURED GIVES NO BLOCKS, NOT AN EXCEPTION.
+         *
+         * `getClientRects` on a range whose endpoints have since moved can throw
+         * as well as return nothing, and a throw here escaped `paintSelection`
+         * and left the caret layer empty - the same invisible-selection symptom
+         * from a second direction. A missing highlight is a cosmetic fault; an
+         * exception on every selection change is not.
+         */
+        let rects;
+
+        try {
+            rects = precise ? [...precise.getClientRects()] : [...range.getClientRects()];
+        } catch {
+            rects = [];
+        }
+
+        const box = scroll.getBoundingClientRect();
+
+        return rects
+            .filter((rect) => rect.width > 0 || rect.height > 0)
+            .map((rect) => ({
+                left: rect.left - box.left,
+                top: rect.top - box.top,
+                width: rect.width,
+                height: rect.height
+            }));
+    }
+
+    /*
+     * A Range over the exact character offsets, found by walking text nodes.
+     *
+     * THE LINE BREAKS COUNT, EVEN THOUGH NO NODE HOLDS THEM.
+     *
+     * The source's text is rendered one `<div>` per line, so the newline between
+     * two lines is not IN any text node - it is the boundary BETWEEN them. A
+     * walk that sums only text-node lengths therefore runs out of characters
+     * before the end of the text: an offset at the end of a line, or anywhere on
+     * a later line, lands past the last node it can reach, and `setEnd` clamps to
+     * that node's length. The visible result is a highlight that stops partway
+     * along a line - an object's band, or a selection, ending short of the text
+     * it is supposed to cover.
+     *
+     * So a line boundary is counted as ONE character (the newline it stands for),
+     * exactly as the textarea counts it. A range that ends on that boundary is
+     * moved back to the END OF THE PREVIOUS LINE'S TEXT - the last real
+     * character - because there is nothing after it on that line to highlight.
+     */
+    function preciseRangeFor(start, end) {
+        const walker = ownerDocument.createTreeWalker(textLayer, 4 /* NodeFilter.SHOW_TEXT */);
+        const range = ownerDocument.createRange();
+
+        /* Every text node, with the offset its first character sits at. */
+        const nodes = [];
+        let node = walker.nextNode();
+
+        while (node) {
+            nodes.push(node);
+            node = walker.nextNode();
+        }
+
+        if (!nodes.length) {
+            return null;
+        }
+
+        /*
+         * The offset of each node's first character is reconstructed from the
+         * LINES, not from the node lengths: a line's text lives in the nodes
+         * inside its `<div>`, and one newline sits between it and the next.
+         */
+        const starts = lineStarts(currentText);
+        const positions = [];
+        let running = 0;
+
+        nodes.forEach((textNode) => {
+            positions.push(running);
+            running += textNode.data.length;
+        });
+
+        /*
+         * A node lying on line L starts, in the FULL text, at L's start offset
+         * plus its position within that line. The line index is found from the
+         * node's line element, which is what carries the newline accounting.
+         */
+        const lineIndexOfNode = (textNode) => {
+            let element = textNode.parentElement;
+
+            while (element && element !== textLayer) {
+                if (element.parentElement === textLayer) {
+                    return [...textLayer.children].indexOf(element);
+                }
+
+                element = element.parentElement;
+            }
+
+            return -1;
+        };
+
+        const findPosition = (character, isEnd) => {
+            for (let index = nodes.length - 1; index >= 0; index -= 1) {
+                const textNode = nodes[index];
+                const lineIndex = lineIndexOfNode(textNode);
+                const lineStart = lineIndex >= 0 && starts[lineIndex] !== undefined ? starts[lineIndex] : 0;
+                const nodeStart = lineStart + positions[index];
+                const nodeEnd = nodeStart + textNode.data.length;
+
+                if (character >= nodeStart && character <= nodeEnd) {
+                    return { node: textNode, offset: Math.min(character - nodeStart, textNode.data.length) };
+                }
+            }
+
+            /*
+             * NOT INSIDE ANY NODE - the character is a line break, or past the
+             * end. `isEnd` decides which way to fall back: an end takes the last
+             * character it can reach, a start takes the first node's beginning.
+             */
+            if (isEnd) {
+                const last = nodes[nodes.length - 1];
+
+                return { node: last, offset: last.data.length };
+            }
+
+            return { node: nodes[0], offset: 0 };
+        };
+
+        const from = findPosition(start, false);
+        const to = findPosition(Math.max(start, end), true);
+
+        if (!from.node || !to.node) {
+            return null;
+        }
+
+        try {
+            range.setStart(from.node, Math.min(from.offset, from.node.data.length));
+            range.setEnd(to.node, Math.min(to.offset, to.node.data.length));
         } catch {
             return null;
         }
 
-        const rects = [...range.getClientRects()];
-
-        if (!rects.length) {
-            return null;
-        }
-
-        const first = rects[0];
-        const last = rects[rects.length - 1];
-
-        return {
-            /* The caret's own edge: the start of the character at `column`. */
-            caretLeft: first.left - box.left,
-            /* The character's box, which is what a selection block covers. */
-            left: first.left - box.left,
-            width: Math.max(1, last.right - first.left),
-            top: first.top - box.top,
-            height: first.height
-        };
-    }
-
-    /* The line and column a character offset falls on. */
-    function positionOf(offset) {
-        const starts = lineStarts(currentText);
-        const line = lineIndexAt(starts, offset);
-
-        return { line, column: Math.max(0, offset - starts[line]) };
-    }
-
-    /*
-     * RECTANGLES FOR ONE RANGE, ONE PER LINE IT SPANS.
-     *
-     * Each rectangle is measured within its line block, so a multi-line
-     * selection is a stack of exact bands - never one rectangle covering lines
-     * the selection does not include.
-     */
-    function rectsForRange(start, end) {
-        if (end <= start) {
-            return [];
-        }
-
-        const from = positionOf(start);
-        const to = positionOf(Math.max(start, end - 1));
-        const rects = [];
-
-        for (let line = from.line; line <= to.line; line += 1) {
-            const lineElement = textLayer.children[line];
-
-            if (!lineElement) {
-                continue;
-            }
-
-            const lineText = (currentText.split("\n")[line] || "");
-            const firstColumn = line === from.line ? from.column : 0;
-            const lastColumn = line === to.line ? Math.max(firstColumn, to.column) : lineText.length;
-
-            const first = offsetInLine(line, firstColumn);
-            const last = offsetInLine(line, Math.max(firstColumn, lastColumn));
-
-            if (!first || !last) {
-                continue;
-            }
-
-            rects.push({
-                left: first.left,
-                top: first.top,
-                width: Math.max(
-                    last.left + Math.max(1, last.width) - first.left,
-                    first.width
-                ),
-                height: first.height
-            });
-        }
-
-        return rects;
-    }
-
-    /* The measurement of a caret position, for the caret and the bracket marks. */
-    function extentOf(offset) {
-        const { line, column } = positionOf(offset);
-
-        return offsetInLine(line, column);
+        return range;
     }
 
     function paintSelection() {
         caretLayer.replaceChildren();
 
-        const { start, end, forward } = orderedSelection(textarea);
+        /*
+         * THE SELECTION IS MEASURED AGAINST THE TEXT ON SCREEN NOW.
+         *
+         * `currentText` is the text the layers were last RENDERED from, and the
+         * two can differ for a moment - the browser updates `value` and the
+         * selection together, on its own schedule, and `selectionchange` can
+         * arrive before the input event that redraws. Measuring the selection
+         * against the older string walked past the end of the text layer, threw
+         * an IndexSizeError, and left the caret layer EMPTY: the selection was
+         * real, the textarea knew it, and NOTHING was painted. That is the
+         * "selecting has no highlight" failure, and it hit every selection the
+         * code did not itself drive (a click, Shift+click, Ctrl+A, a
+         * double-click) while a mouse DRAG - which repaints after the input
+         * event - worked.
+         *
+         * So the measurement uses the live value, and the text layer is brought
+         * up to date first if it has fallen behind. A selection can then never
+         * be measured against text that is not there.
+         */
+        /*
+         * THE RANGE IS READ BEFORE ANY REDRAW, AND RESTORED AFTER IT.
+         *
+         * `render()` rebuilds the text layer, and rebuilding the DOM under a
+         * focused textarea can move its selection - so a range read AFTER the
+         * redraw is not the range the student made. That is why a selection
+         * painted only a caret: the two ends had collapsed to the same offset by
+         * the time they were read, `start !== end` was false, and no block was
+         * drawn. Reading first and asserting the range afterwards makes the
+         * highlight independent of what the redraw did.
+         */
+        const selection = orderedSelection(textarea);
+
+        if (currentText !== textarea.value) {
+            render();
+
+            try {
+                textarea.setSelectionRange(
+                    Math.min(selection.start, textarea.value.length),
+                    Math.min(selection.end, textarea.value.length),
+                    selection.forward ? "forward" : "backward"
+                );
+            } catch {
+                /* A selection that cannot be restored is not worth throwing for. */
+            }
+        }
+
+        const { start, end, forward } = selection;
 
         if (start !== end) {
             rectsForRange(start, end).forEach((rect) => {
@@ -769,15 +889,16 @@ export function createSourceEditor(host, options = {}) {
          */
         if (ownerDocument.activeElement === textarea) {
             const focus = forward ? end : start;
-            const point = extentOf(focus);
+            const point = offsetPoint(lineStarts(currentText), focus);
 
             if (point) {
+                const box = scroll.getBoundingClientRect();
                 const caret = ownerDocument.createElement("div");
 
                 caret.className = "drawing-source-caret";
-                caret.style.left = `${point.caretLeft}px`;
-                caret.style.top = `${point.top}px`;
-                caret.style.height = `${point.height}px`;
+                caret.style.left = `${point.right - box.left}px`;
+                caret.style.top = `${point.top - box.top}px`;
+                caret.style.height = `${point.bottom - point.top}px`;
                 caretLayer.append(caret);
             }
         }
@@ -785,8 +906,10 @@ export function createSourceEditor(host, options = {}) {
         const brace = start === end ? matchedBracket(currentText, start) : null;
 
         if (brace !== null && ownerDocument.activeElement === textarea) {
+            const box = scroll.getBoundingClientRect();
+
             [start, brace].forEach((offset) => {
-                const mark = extentOf(offset);
+                const mark = offsetPoint(lineStarts(currentText), offset + (offset === start ? 0 : 1));
 
                 if (!mark) {
                     return;
@@ -795,9 +918,9 @@ export function createSourceEditor(host, options = {}) {
                 const element = ownerDocument.createElement("div");
 
                 element.className = "drawing-source-bracket";
-                element.style.left = `${mark.caretLeft - 2}px`;
-                element.style.top = `${mark.top}px`;
-                element.style.height = `${mark.height}px`;
+                element.style.left = `${mark.right - box.left - 4}px`;
+                element.style.top = `${mark.top - box.top}px`;
+                element.style.height = `${mark.bottom - mark.top}px`;
                 caretLayer.append(element);
             });
         }
@@ -1037,6 +1160,32 @@ export function createSourceEditor(host, options = {}) {
     const handleSelection = () => {
         paintSelection();
 
+        /*
+         * AND AGAIN ON THE NEXT FRAME, WHICH IS WHEN THE RANGE IS FINAL.
+         *
+         * A click that selects - Shift+click, a double-click, `Ctrl+A` - fires
+         * `select` and `mouseup` BEFORE the browser has committed the new
+         * selection, so reading `selectionStart`/`selectionEnd` synchronously
+         * gives the OLD, collapsed range: the paint then draws a caret and no
+         * block, and the student sees nothing selected. The drag case escaped
+         * this only because a drag delivers enough events that a later one lands
+         * after the commit.
+         *
+         * One frame later the range is always settled, so the same paint runs
+         * again from the committed value. `paintSelection` is idempotent - it
+         * clears the layer and rebuilds it - so this cannot double up or
+         * flicker.
+         */
+        const view = ownerDocument.defaultView;
+
+        if (typeof view?.requestAnimationFrame === "function") {
+            view.requestAnimationFrame(() => {
+                if (ownerDocument.activeElement === textarea) {
+                    paintSelection();
+                }
+            });
+        }
+
         const caretLine = currentText.slice(0, textarea.selectionStart).split("\n").length;
 
         gutter.querySelectorAll(".drawing-source-gutter-row.active").forEach((row) => {
@@ -1156,6 +1305,49 @@ export function createSourceEditor(host, options = {}) {
     textarea.addEventListener("select", handleSelection);
     textarea.addEventListener("keydown", handleKeyDown);
 
+    /*
+     * THE END OF A DRAG IS A SELECTION CHANGE TOO.
+     *
+     * A textarea fires `select` when its selection changes, but NOT reliably
+     * while the pointer is still down and dragging - so a drag-select could end
+     * with a real selection in the textarea and NOTHING painted in the caret
+     * layer: the highlight only appeared on the next click or keypress. The end
+     * of the drag is the moment the selection is final, so it is listened for
+     * explicitly.
+     */
+    textarea.addEventListener("mouseup", handleSelection);
+
+    /*
+     * AND `selectionchange`, FOR THE PATHS THAT GO THROUGH THE DOCUMENT.
+     *
+     * A double-click, a triple-click and `Ctrl+A` change the textarea's
+     * selection through the document's own selection object, and some browsers
+     * do not deliver `select` for those. The document event is the one signal
+     * that covers every way the selection can change.
+     */
+    const handleDocumentSelectionChange = () => {
+        if (ownerDocument.activeElement === textarea) {
+            paintSelection();
+
+            /*
+             * The same one-frame deferral as `handleSelection`, for the paths
+             * that reach the document's own selection object (`Ctrl+A`, a
+             * triple-click) before the textarea's range is committed.
+             */
+            const view = ownerDocument.defaultView;
+
+            if (typeof view?.requestAnimationFrame === "function") {
+                view.requestAnimationFrame(() => {
+                    if (ownerDocument.activeElement === textarea) {
+                        paintSelection();
+                    }
+                });
+            }
+        }
+    };
+
+    ownerDocument.addEventListener("selectionchange", handleDocumentSelectionChange);
+
     /* -------- accumulate typing so the caller sees whole words, quickly -------- */
 
     /*
@@ -1274,6 +1466,22 @@ export function createSourceEditor(host, options = {}) {
          * The object regions to band, one-based VISIBLE line numbers.
          * `[{ beginLine, endLine }]`; an empty list clears the band.
          */
+        /**
+         * Mark the blocks of hidden objects. Same shape as the selection band.
+         *
+         * Separate from `setHighlightedRegions` because the two mean different
+         * things and must be able to hold at once - a hidden object can also be
+         * the selected one.
+         */
+        setHiddenRegions(regions) {
+            hiddenRegions = (regions || []).filter(
+                (region) => region && Number.isFinite(region.beginLine) && Number.isFinite(region.endLine)
+            );
+
+            paintHiddenBlocks();
+            renderGutter(currentText);
+        },
+
         setHighlightedRegions(regions) {
             selectedRegions = (regions || []).filter(
                 (region) => region && Number.isFinite(region.beginLine) && Number.isFinite(region.endLine)
@@ -1281,22 +1489,6 @@ export function createSourceEditor(host, options = {}) {
 
             renderDecor(currentText);
             renderGutter(currentText);
-        },
-
-        /* The hidden objects' blocks to decorate, exactly as the selection is. */
-        setHiddenRegions(regions) {
-            hiddenRegions = (regions || []).filter(
-                (region) => region && Number.isFinite(region.beginLine) && Number.isFinite(region.endLine)
-            );
-
-            /*
-             * ONLY THE HIDDEN STATE IS REDRAWN. The text layer and the caret are
-             * untouched, so a visibility change never re-lays-out the glyphs,
-             * never moves the caret and never rewrites a line of the text.
-             */
-            renderDecor(currentText);
-            renderGutter(currentText);
-            renderText(currentText);
         },
 
         /* Compatibility with the old single-object API. */
@@ -1462,7 +1654,9 @@ export function createSourceEditor(host, options = {}) {
             textarea.removeEventListener("click", handleSelection);
             textarea.removeEventListener("keyup", handleSelection);
             textarea.removeEventListener("select", handleSelection);
+            textarea.removeEventListener("mouseup", handleSelection);
             textarea.removeEventListener("keydown", handleKeyDown);
+            ownerDocument.removeEventListener("selectionchange", handleDocumentSelectionChange);
 
             if (typingTimer) {
                 clearTimeout(typingTimer);

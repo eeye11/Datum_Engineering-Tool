@@ -478,26 +478,16 @@ function openDialog(options) {
 
   if (explicitChoices) {
     /*
-     * THE CHOICE IS TAKEN, THEN THE DIALOG CLOSES - IN THAT ORDER.
-     *
-     * It used to be the other way round, and that made a two-step question
-     * impossible: `closeDialog()` removes EVERY `.engg-dialog-backdrop` in the
-     * page (the "one dialog at a time" guarantee), so a handler that opened the
-     * next dialog was immediately wiped out by the previous one's teardown. The
-     * student picked "insert an existing drawing" and got nothing.
-     *
-     * Closing FIRST also means the handler sees a clean page: if it opens its
-     * own dialog, that dialog is the active one and is not removed underneath
-     * it.
+     * The result the dialog resolves with is the chosen button's id, so a
+     * caller reads the answer directly rather than inferring it from which
+     * of two booleans came back.
      */
     choose = (id) => {
-      const handler = options.onChoose;
+      if (typeof options.onChoose === "function") {
+        options.onChoose(id);
+      }
 
       closeDialog();
-
-      if (typeof handler === "function") {
-        handler(id);
-      }
     };
 
     explicitChoices.forEach((choice) => {

@@ -1,5 +1,3 @@
-import enggReducer from "../model/fluids/reducer-expander.js";
-import { propagatePipeWidth as propagateWidth } from "../model/fluids/pipe-width.js";
 /*
  * ========================================================
  * DRAWING PIPE / DUCT BY CLICK, HOLD, DRAG AND RELEASE
@@ -64,22 +62,11 @@ import { propagatePipeWidth as propagateWidth } from "../model/fluids/pipe-width
  */
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
-import {
-  applyElbowRadius,
-  elbowLiveLegs,
-  elbowMaxBendRadius,
-  setElbowRadiusCollaborators
-} from "./elbow-radius.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import {
-  createJunctionForInteriorConnection,
-  setJunctionElbowBuilder
-} from "./junction-tool.js";
-import { reconcilePipeAssemblies } from "../model/fluids/pipe-assembly.js";
 
 /*
  * The interaction phase a Pipe / Duct run under construction uses.
@@ -108,19 +95,6 @@ export const ROUTE_PHASE = "pipe-duct-construct";
 export const CONTINUATION_TOLERANCE = 1e-6;
 
 /*
- * HOW FAR A JOINED RUN'S LINE MAY MISS ITS BEND'S CORNER, in world units.
- *
- * A joined pipe is re-cut onto its bend's tangent points on every settle, so its
- * held end is exact to within rounding rather than bit-exact - and a bend whose
- * two ends carry different widths places its two tangent points a fraction of a
- * unit either side of the corner. This is the tolerance for "the run's line still
- * passes through the corner'', stated in DRAWING units because it bounds that
- * re-seating error; it has nothing to do with a student's intention, which is
- * what `CONTINUATION_TOLERANCE` answers.
- */
-export const JOINED_LINE_OFFSET_TOLERANCE = 0.05;
-
-/*
  * ========================================================
  * BEGIN
  * ========================================================
@@ -137,7 +111,7 @@ export const JOINED_LINE_OFFSET_TOLERANCE = 0.05;
 export function beginRouteConstruction() {
   /*
    * THE RUN TOOL IS THE ACTIVE TOOL, so the sidebar button that started it is
-   * the one that lights. Without this the message said "Press and dragâ€¦" while
+   * the one that lights. Without this the message said "Press and drag…" while
    * no button was marked, and Escape had no active tool to return from.
    */
   enggDrawingState.setActiveTool(drawingState, "pipe-duct");
@@ -338,7 +312,34 @@ export function commitRouteSegment(start, end, interaction = {}) {
    * removes the run AND any elbow generated with it in one step - the coherent
    * operation the requirement asks for.
    */
+  /* TEMPORARY DIAGNOSTIC - gate DATUM_TRACE_D4=1. Removed after the run. */
+  const T = globalThis.process?.env?.DATUM_TRACE_D4 === "1";
+  const tid = interaction.previousRun?.id;
+  const look = (label) => {
+    if (!T || !tid) return;
+    const live = (drawingState.objects || []).find((o) => o.id === tid);
+    console.log(`[D4] ${label}`,
+      "live.stroke=", live?.style?.stroke,
+      "live.isPrevRef=", live === interaction.previousRun,
+      "prevRef.stroke=", interaction.previousRun?.style?.stroke,
+      "live.name=", live?.name);
+  };
+
+  look("1. before snapshot");
   const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
+  look("2. after snapshot");
+  if (T && tid) {
+    const list = Array.isArray(previousObjects)
+      ? previousObjects
+      : previousObjects?.objects || previousObjects?.sheets?.[0]?.objects || [];
+
+    const inSnap = list.find((o) => o.id === tid);
+
+    console.log("[D4] 2b. snapshot shape =", Array.isArray(previousObjects) ? "array" : Object.keys(previousObjects || {}).join(","),
+      "| copy.stroke=", inSnap?.style?.stroke,
+      "| sameRefAsLive?", inSnap === (drawingState.objects || []).find((o) => o.id === tid),
+      "| snapCount=", list.length);
+  }
 
   const run = enggPipeDuct.createPipeDuct(start, end, {
     style: { ...drawingState.styleDefaults },
@@ -355,28 +356,15 @@ export function commitRouteSegment(start, end, interaction = {}) {
 
   /*
    * ========================================================
-   * THE JOINTS THIS LEG MAKES - EVERY KIND
+   * THE JOINS THIS LEG MAKES - EVERY ONE OF THEM
    * ========================================================
    *
    * The leg may meet the run it CONTINUES (the drawing session's own
    * `previousRun`), and it may equally land on a pipe that was drawn earlier, or
    * on one created after the session began. Both are JOINS, and a join is the
    * only thing that earns a fitting - so the leg goes through exactly the same
-   * reconciliation a dragged pipe does. The session's continuation is therefore
-   * an optimisation, not the rule: what decides is the geometry.
-   *
-   * TWO KINDS OF JOIN EXIST, AND BOTH ARE ASKED HERE:
-   *
-   *   END TO END       a corner, which earns an Elbow
-   *   END TO INTERIOR  a branch, which SPLITS THE HOST and earns a Junction
-   *
-   * Only the first used to be tested, so a branch drawn to the middle of a host
-   * produced two overlapping runs with no junction and no split - the second
-   * reported failure.
-   *
-   * THE JUNCTION PASS RUNS FIRST. Making one re-cuts the runs' ends and replaces
-   * the host with two halves, so a bend fitted before it would be fitted to runs
-   * that no longer exist in that shape.
+   * endpoint discovery a dragged pipe does. The session's continuation is
+   * therefore an optimisation, not the rule: what decides is the geometry.
    *
    * THE SAME WIDTH IS ADOPTED FIRST, so two runs joined end-to-end already agree
    * by the time a fitting reads their widths.
@@ -384,34 +372,6 @@ export function commitRouteSegment(start, end, interaction = {}) {
   if (previousRun) {
     adoptPipeWidth(previousRun, run);
   }
-
-  /*
-   * THE DOCUMENT'S OWN COPY OF THIS RUN. `addObject` may store a named copy, so
-   * the local `run` is not necessarily the instance on the sheet - and the
-   * interior scan must exclude the run by ID, not by identity, or it finds the
-   * run's own centreline under its own endpoint.
-   */
-  const sheetRun = (drawingState.objects || []).find((object) => object.id === run.id) || run;
-
-  const interiorJunction = createJunctionForInteriorConnection(sheetRun, drawingState.objects);
-
-  if (interiorJunction) {
-    created.push(interiorJunction);
-  }
-
-  /*
-   * AND THE SAME QUESTION FROM THE OTHER SIDE - a leg drawn so that its START
-   * lands in a host's middle is the same connection as one whose END does.
-   */
-  (drawingState.objects || [])
-    .filter((object) => object.type === "pipe-duct" && object.id !== run.id)
-    .forEach((other) => {
-      const extra = createJunctionForInteriorConnection(other, drawingState.objects);
-
-      if (extra && !created.some((made) => made.id === extra.id)) {
-        created.push(extra);
-      }
-    });
 
   const joined = [];
 
@@ -436,17 +396,17 @@ export function commitRouteSegment(start, end, interaction = {}) {
   /* The fitting this leg earned, for the status line only. */
   const elbow = joined[0] || null;
 
-  /*
-   * AND THE ASSEMBLY GROUPING, NOW THAT THE LEG'S JOINTS ARE SETTLED.
-   *
-   * A leg that joined a system makes it a bigger system, and one drawn on its own
-   * makes no system at all - either way the Objects tree must say so. This runs
-   * BEFORE the commit so the parent and the children are saved, undone and
-   * written as one change, exactly as the runs and fittings are.
-   */
-  reconcilePipeAssemblies(drawingState.objects);
+  if (T) {
+    console.log("[D4] 3a. joined fittings =", joined.length,
+      "| elbow=", elbow?.id, "| stroke=", elbow?.style?.stroke);
+  }
 
+  look("3. after route + fitting creation");
+  if (T) console.log("[D4] 3b. elbow stroke at creation =", elbow?.style?.stroke);
+
+  look("4. before commitDrawingChange");
   enggDrawingState.commitDrawingChange(drawingState, previousObjects);
+  look("5. after commitDrawingChange");
 
   /*
    * THE DOCUMENT OWNS THE OBJECTS FROM HERE.
@@ -470,12 +430,6 @@ export function commitRouteSegment(start, end, interaction = {}) {
     ? drawingState.objects.find((object) => object.id === elbow.id) || elbow
     : null;
 
-  const junction = drawingState.objects.find(
-    (object) =>
-      object.type === "junction" &&
-      (object.engineering?.connections || []).includes(run.id)
-  );
-
   /*
    * THE PATH CONTINUES FROM THIS RUN's FAR END. Held on the interaction so the
    * next drag from that point joins on; a drag from anywhere else starts a new
@@ -495,11 +449,9 @@ export function commitRouteSegment(start, end, interaction = {}) {
   });
 
   setToolMessage(
-    junction
-      ? `${committedRun.name} and ${junction.name} created - drag to continue, or Enter to finish`
-      : elbow
-        ? `${committedRun.name} and ${committedElbow.name} created - drag to continue, or Enter to finish`
-        : `${committedRun.name} created - drag to continue, or Enter to finish`
+    elbow
+      ? `${committedRun.name} and ${committedElbow.name} created - drag to continue, or Enter to finish`
+      : `${committedRun.name} created - drag to continue, or Enter to finish`
   );
 
   renderProperties();
@@ -770,8 +722,8 @@ export function adoptPipeWidth(source, target) {
     return false;
   }
 
-  const width = Number(source.engineering?.schematicWidth) || 0;
-  const current = Number(target.engineering?.schematicWidth) || 0;
+  const width = Number(source.engineering?.separation) || 0;
+  const current = Number(target.engineering?.separation) || 0;
 
   if (width === current) {
     return false;
@@ -780,9 +732,9 @@ export function adoptPipeWidth(source, target) {
   target.engineering = { ...(target.engineering || {}) };
 
   if (width === 0) {
-    delete target.engineering.schematicWidth;
+    delete target.engineering.separation;
   } else {
-    target.engineering.schematicWidth = width;
+    target.engineering.separation = width;
   }
 
   return true;
@@ -1142,23 +1094,7 @@ export function cornerOf(elbow, objects = drawingState.objects) {
       armOfRun(second, secondPort)
     );
 
-    const supported = enggPipeDuct.supportedElbowAngle(angleDegrees);
-
-    /*
-     * A DEGENERATE CORNER KEEPS THE FITTING'S LAST VALID ANGLE.
-     *
-     * `supportedElbowAngle` refuses a straight continuation and a fold-back - the
-     * two corners no rounded bend can join. A pipe swung to one of them is still
-     * JOINED, though: both seats hold and both lines still pass through the same
-     * corner. Answering null there retired a perfectly good fitting and re-cut
-     * both pipes square at the corner, which is how the pipe on the far side of
-     * an elbow came to run straight into (and past) its own bend. The existing
-     * "an invalid update preserves the last valid geometry" rule applies
-     * instead: the bend stays at the angle it had until the pipes bend again.
-     */
-    const angle = supported === null ? enggPipeDuct.elbowAngleDegrees(elbow) : supported;
-
-    const effectiveDegrees = supported === null ? angle : angleDegrees;
+    const angle = enggPipeDuct.supportedElbowAngle(angleDegrees);
 
     return angle === null
       ? null
@@ -1169,7 +1105,7 @@ export function cornerOf(elbow, objects = drawingState.objects) {
           firstEnd: firstPort,
           secondEnd: secondPort,
           angle,
-          angleDegrees: effectiveDegrees
+          angleDegrees
         };
   }
 
@@ -1305,6 +1241,9 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
     };
   };
 
+  const reachFirst = Math.hypot(a.joined.x - a.point.x, a.joined.y - a.point.y);
+  const reachSecond = Math.hypot(b.joined.x - b.point.x, b.joined.y - b.point.y);
+
   let vertex = known;
 
   if (!vertex) {
@@ -1326,18 +1265,6 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
   const onB = offsetOf(b, vertex);
 
   /*
-   * HOW FAR EACH RUN REACHES, measured ALONG ITS OWN LINE from the corner.
-   *
-   * The line points OUTWARD from the join, so the corner lies behind its far
-   * point and the reach is `-along`. Measuring the chord between the join and the
-   * far point instead gave 92 for a line 100 long, because a swung pipe's far end
-   * is off the line the corner is on - so a run that genuinely reaches the corner
-   * read as not reaching it.
-   */
-  const reachFirst = -onA.along;
-  const reachSecond = -onB.along;
-
-  /*
    * A SETTLED PAIR IS MEASURED AGAINST ITS OWN SEATS.
    *
    * Each run was cut back to a tangent point when it was seated, and that seat is
@@ -1353,15 +1280,6 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
    */
   const trim = Number(elbow?.engineering?.bendTrim) || 0;
 
-  /*
-   * A SEATED RUN IS ONE THE BEND STILL HOLDS: ITS HELD END IS AT ITS SEAT.
-   *
-   * The seat is the point one trim out from the corner, so a run that has been
-   * SWUNG about its joint still passes (the seat is a property of its own line),
-   * while a run dragged off the join fails - its held end is now somewhere else
-   * entirely. The line tests below then decide whether the pair still makes a
-   * corner, which is a separate question.
-   */
   const seatsHold = (line) => {
     const held = line.joined;
 
@@ -1369,54 +1287,28 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
       return false;
     }
 
-    return Math.hypot(held.x - vertex.x, held.y - vertex.y) <= trim + CONTINUATION_TOLERANCE * 4;
+    const seat = {
+      x: vertex.x + line.direction.x * trim,
+      y: vertex.y + line.direction.y * trim
+    };
+
+    return Math.hypot(held.x - seat.x, held.y - seat.y) <= CONTINUATION_TOLERANCE;
   };
 
   const settled = trim > 0 && seatsHold(a) && seatsHold(b);
 
   /*
-   * A JOINED RUN IS HELD AT ITS SEAT, ONE TRIM OUT FROM THE CORNER - NOT AT THE
-   * CORNER ITSELF.
-   *
-   * `along` is measured from the run's far point toward the join, so for a seated
-   * run it is `-trim` rather than `0`. Requiring it to be non-negative demanded
-   * that the run reach the corner, which no seated run does: it stops a trim
-   * short by construction. A pipe is therefore joined when the corner lies
-   * SOMEWHERE ALONG its line - behind its far end by no more than its own reach,
-   * and no further in than its seat.
-   */
-  /*
-   * A SEATED RUN NEED NOT PASS THROUGH THE OLD CORNER AT ALL.
-   *
-   * Its held end is the tangent point of the bend that WAS THERE, and the corner
-   * the pair makes now is where its own line meets the other run's. So for a
-   * seated pair the across-offsets are a rounding allowance only; an UNSEATED
-   * pair - one whose corner really has to be intersected from its two ends - is
-   * the case the offset test exists for.
-   */
-  const acrossTolerance = settled
-    ? Math.max(JOINED_LINE_OFFSET_TOLERANCE, trim * 2)
-    : JOINED_LINE_OFFSET_TOLERANCE;
-
-  /*
-   * THE CORNER MUST LIE ON BOTH LINES, BETWEEN EACH RUN'S FAR END AND ITS SEAT.
-   *
-   * In `along` (measured from the far point, outward-positive) that is:
-   *
-   *     -reach  <=  along  <=  0        or a trim further in for a seated run
-   *
-   * A corner BEYOND the far end means the pipe has been pulled back along its
-   * own line; one further in than the run reaches means it no longer arrives at
-   * the join. Both are genuine disconnections. A pipe merely SWUNG about its seat
-   * keeps the corner exactly on its line, at `along = 0`, and passes.
+   * BOTH RUNS MUST STILL POINT AT THE CORNER. A line that does not pass through
+   * it has been swung away; one that passes it BEHIND its far end, or further in
+   * than the run reaches, has been dragged off the join along its own axis.
    */
   const linesAgree =
-    onA.across <= acrossTolerance &&
-    onB.across <= acrossTolerance &&
-    onA.along <= CONTINUATION_TOLERANCE &&
-    onB.along <= CONTINUATION_TOLERANCE &&
-    -onA.along <= reachFirst + trim + CONTINUATION_TOLERANCE &&
-    -onB.along <= reachSecond + trim + CONTINUATION_TOLERANCE;
+    onA.across <= CONTINUATION_TOLERANCE * 50 &&
+    onB.across <= CONTINUATION_TOLERANCE * 50 &&
+    onA.along >= -CONTINUATION_TOLERANCE &&
+    onB.along >= -CONTINUATION_TOLERANCE &&
+    onA.along <= reachFirst + 2 * (reachFirst + 1) &&
+    onB.along <= reachSecond + 2 * (reachSecond + 1);
 
   if (!settled && !linesAgree) {
     return null;
@@ -1450,10 +1342,98 @@ export function lineCorner(first, firstEnd, second, secondEnd, elbow, known = nu
  * width they had - which is what lets a fitting divide two widths.
  *
  * It never changes appearance and never moves a centreline: only
- * `engineering.schematicWidth` is written, so the walls open around the same line.
+ * `engineering.separation` is written, so the walls open around the same line.
  */
 export function propagatePipeWidth(run, objects = drawingState.objects) {
-  return propagateWidth(run, objects);
+  if (!run?.id || !Array.isArray(objects)) {
+    return [];
+  }
+
+  const runs = objects.filter((object) => enggPipeDuct.isPipeDuctType(object.type));
+  const elbows = objects.filter(
+    (object) => enggPipeDuct.isElbowType(object.type) && Array.isArray(object.engineering?.connections)
+  );
+
+  /* An end that carries a fitting stops the walk there. */
+  const joinedAt = (candidate, end) =>
+    elbows.some((elbow) => {
+      const ids = elbow.engineering.connections;
+
+      if (!ids.includes(run.id) || !ids.includes(candidate.id)) {
+        return false;
+      }
+
+      const shared = elbow.geometry?.position;
+      const point = candidate.geometry?.[end];
+
+      return (
+        shared &&
+        point &&
+        Math.hypot(shared.x - point.x, shared.y - point.y) <= CONTINUATION_TOLERANCE
+      );
+    });
+
+  const visited = new Set([run.id]);
+  const queue = [run];
+
+  /*
+   * THE WIDTH IS READ WHEN THE RUN IS REACHED, not from the run the walk began
+   * at. The walk may start from either side of a join, and the side the student
+   * widened is the one whose value must spread.
+   */
+  const widthOf = (candidate) => Number(candidate.engineering?.separation) || 0;
+
+  while (queue.length) {
+    const current = queue.pop();
+
+    ["start", "end"].forEach((end) => {
+      if (joinedAt(current, end)) {
+        return;
+      }
+
+      const point = current.geometry?.[end];
+
+      if (!point) {
+        return;
+      }
+
+      runs.forEach((candidate) => {
+        if (visited.has(candidate.id)) {
+          return;
+        }
+
+        const other = ["start", "end"].find(
+          (candidateEnd) =>
+            candidate.geometry?.[candidateEnd] &&
+            Math.hypot(
+              candidate.geometry[candidateEnd].x - point.x,
+              candidate.geometry[candidateEnd].y - point.y
+            ) <= CONTINUATION_TOLERANCE
+        );
+
+        if (!other) {
+          return;
+        }
+
+        visited.add(candidate.id);
+        queue.push(candidate);
+
+        const source = widthOf(current);
+
+        if ((Number(candidate.engineering?.separation) || 0) !== source) {
+          candidate.engineering = { ...(candidate.engineering || {}) };
+
+          if (source === 0) {
+            delete candidate.engineering.separation;
+          } else {
+            candidate.engineering.separation = source;
+          }
+        }
+      });
+    });
+  }
+
+  return [...visited].filter((id) => id !== run.id);
 }
 
 /*
@@ -1652,7 +1632,6 @@ export function reconcileFluidConnections(run, objects = drawingState.objects) {
     return { created: [], removed: [], updated: [] };
   }
 
-  enggReducer.reconcilePipe(run, list);
   const result = reconcileRun(run, list);
 
   if (paired) {
@@ -1846,60 +1825,6 @@ export function refreshFluidConnections(run, objects = drawingState.objects) {
 
 
 /*
- * WHERE TWO SEATED RUNS' LINES NOW MEET.
- *
- * `cornerOf` states a joined pair as two SEATS and the DIRECTION each run takes
- * away from the corner. Swinging one pipe's free end turns its direction about its
- * seat - so the corner the pair makes now is where those two lines cross, which is
- * exactly what this intersects.
- *
- * It returns the corner moved onto that intersection, or null when the lines are
- * parallel (a straight-through state, where no single corner can be named and the
- * fitting's last valid geometry stands).
- */
-function intersectSeatedCorner(corner) {
-  const seatA = corner?.seatFirst;
-  const seatB = corner?.seatSecond;
-  const directionA = corner?.lineFirst?.direction;
-  const directionB = corner?.lineSecond?.direction;
-
-  if (!seatA || !seatB || !directionA || !directionB) {
-    return null;
-  }
-
-  const cross = directionA.x * directionB.y - directionA.y * directionB.x;
-
-  if (Math.abs(cross) < 1e-9) {
-    return null;
-  }
-
-  const qx = seatB.x - seatA.x;
-  const qy = seatB.y - seatA.y;
-
-  const offset = (qx * directionB.y - qy * directionB.x) / cross;
-
-  const vertex = {
-    x: seatA.x + directionA.x * offset,
-    y: seatA.y + directionA.y * offset
-  };
-
-  /*
-   * THE CORNER MUST BE ON THE STUDENT'S SIDE OF BOTH SEATS. The directions point
-   * OUTWARD from the join, so a corner behind either seat means that run was
-   * pulled away along its own line rather than turned - and the fitting's own
-   * record is the safer answer.
-   */
-  const ahead = (seat, direction) =>
-    (vertex.x - seat.x) * direction.x + (vertex.y - seat.y) * direction.y > 1e-6;
-
-  if (ahead(seatA, directionA) || ahead(seatB, directionB)) {
-    return null;
-  }
-
-  return { ...corner, vertex };
-}
-
-/*
  * THE TWO RUNS IN THE FITTING'S ORDER: the one the bend ARRIVES from, then the one
  * it LEAVES along.
  *
@@ -2050,35 +1975,11 @@ export function updateElbowForPair(elbow, first = null, second = null, joint = n
     return false;
   }
 
-  /*
-   * A JOINED PAIR IS READ FROM ITS LINES BEFORE ITS FITTING'S RECORD.
-   *
-   * `joiningCornerOf` asks whether two ends COINCIDE, and a SEATED run's ends do
-   * not: each has been cut back to its own tangent point, a trim apart from the
-   * corner. It also reads the pair's stored geometry, which for an unseated run
-   * is still where the pipes were originally drawn - so a swung pipe was rebuilt
-   * around the corner it used to make.
-   *
-   * `cornerOf` reads each run's CURRENT line, refuses a pipe that has left the
-   * join, and states both seats and the corner they now make together. That is
-   * what lets an elbow FOLLOW a pipe the student has turned. The rail record and
-   * the raw join remain the fallbacks for a pair `cornerOf` cannot read.
-   */
-  let corner = joint || cornerOf(elbow, objects) || joiningCornerOf(runs[0], runs[1]);
+  const corner = joint || joiningCornerOf(runs[0], runs[1]) || cornerFromRails(elbow, runs);
 
   if (!corner) {
     return false;
   }
-
-  /*
-   * THE CORNER MOVES WITH THE PIPES, NOT WITH THE OLD RECORD.
-   *
-   * A seated run's seat is its stored held end and its line is the direction from
-   * that seat out toward its own free end. Swinging the free end turns the pipe
-   * about its seat, so the corner the pair makes NOW is where the two lines
-   * cross - which `cornerOf` states as two seats and two directions.
-   */
-  corner = intersectSeatedCorner(corner) || corner;
 
   const angleDegrees = enggPipeDuct.cornerAngleDegrees(
     corner.before,
@@ -2086,19 +1987,10 @@ export function updateElbowForPair(elbow, first = null, second = null, joint = n
     corner.after
   );
 
-  const supported = enggPipeDuct.supportedElbowAngle(angleDegrees);
+  const angle = enggPipeDuct.supportedElbowAngle(angleDegrees);
 
-  if (supported === null) {
-    /*
-     * A DEGENERATE CORNER IS NOT A LOST CONNECTION. A swing that passes through
-     * the other pipe's direction makes the corner momentarily straight or folded;
-     * the fitting keeps the last valid angle it had (the existing "invalid update
-     * preserves the last valid geometry" rule), so the settle can still re-seat
-     * both pipes and the join survives until the pipes bend again.
-     */
-    if (!corner.seatFirst) {
-      return false;
-    }
+  if (angle === null) {
+    return false;
   }
 
   /*
@@ -2220,13 +2112,8 @@ export function updateElbowForPair(elbow, first = null, second = null, joint = n
    * its joint has changed the angle without changing the join. A degenerate
    * reading keeps the corner's own angle rather than inventing a bend.
    */
-  const bendAngle = trueAngle ?? supported ?? enggPipeDuct.elbowAngleDegrees(elbow);
-
-  const bendAngleDegrees = trueAngle !== null
-    ? trueAngleDegrees
-    : supported !== null
-      ? angleDegrees
-      : enggPipeDuct.elbowAngleDegrees(elbow);
+  const bendAngle = trueAngle ?? angle;
+  const bendAngleDegrees = trueAngle !== null ? trueAngleDegrees : angleDegrees;
 
   elbow.geometry = {
     ...(elbow.geometry || {}),
@@ -4236,37 +4123,5 @@ const enggPipeDuctTool = {
   finishElbowConstruction,
   cancelElbowConstruction
 };
-
-/*
- * THE ELBOW BUILDER, for a junction reduced to a corner.
- *
- * `generateElbowFor` is the one function that fits a bend at a corner, so a
- * junction whose branches drop to two becomes an ordinary Elbow in every
- * respect. `junction-tool.js` and this module import each other, so the builder
- * is published through the slot that module reads at call time.
- */
-setJunctionElbowBuilder(generateElbowFor);
-
-/*
- * THE RADIUS OPERATION'S REGENERATION ROUTINES, handed in once.
- *
- * `elbow-radius.js` owns the ORDER of a radius change - clamp, write, re-seat,
- * re-seam, settle, prove - but the routines that regenerate a joint live here,
- * because this is the module that owns the runs. Handing them in keeps ONE
- * implementation of each, so a typed radius and a dragged one cannot regenerate
- * differently.
- */
-setElbowRadiusCollaborators({
-  applyManualElbowConnections,
-  reseatElbowPipes,
-  updateElbowForPair
-});
-
-/*
- * AND THE RADIUS OPERATION ITSELF, RE-EXPORTED RATHER THAN REDEFINED. The one
- * implementation lives in `elbow-radius.js`, where the panel, the handle and the
- * transform all reach it; callers that already hold this module keep working.
- */
-export { applyElbowRadius, elbowLiveLegs, elbowMaxBendRadius };
 
 export default enggPipeDuctTool;

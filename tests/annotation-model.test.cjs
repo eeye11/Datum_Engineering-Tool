@@ -179,8 +179,8 @@ const suggested = model.suggestPlacement(
   state(force())
 );
 check(
-  "is beside the arrow, not on it",
-  Math.abs(suggested.x) < 1 && suggested.y > 0,
+  "is beyond the arrow, not on it",
+  suggested.y < -30,
   true
 );
 

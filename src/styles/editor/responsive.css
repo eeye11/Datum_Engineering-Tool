@@ -374,3 +374,167 @@
     border-color: var(--datum-green-soft);
     color: var(--datum-green);
 }
+
+/*
+ * =========================================================
+ * TOUCH DEVICES: LARGER TARGETS, SAME DESIGN
+ * =========================================================
+ *
+ * `installTouchInputClass` puts `.datum-touch-input` on the document element
+ * when the device reports a touchscreen. The rules below are the ONLY thing
+ * that class controls: the SIZE of the controls a finger has to hit.
+ *
+ * WHY IT IS A CLASS AND NOT A MEDIA QUERY. `@media (pointer: coarse)` describes
+ * the PRIMARY pointer, so a laptop with a mouse and a touchscreen reports
+ * `fine` and would never get the larger targets - the worst answer on exactly
+ * the machines this is for.
+ *
+ * WHY THE LAYOUT RULES ABOVE ARE NOT TOUCHED. Those follow AVAILABLE WIDTH, and
+ * must keep doing so: a narrow desktop window and a tablet of the same width
+ * look and behave identically, which is what keeps the interface predictable.
+ * Sizing follows the DEVICE; layout follows the WIDTH. Two questions, two rules,
+ * and neither can quietly take over the other.
+ *
+ * THE NUMBERS. About 40-48 CSS px for anything used constantly - the tool
+ * buttons, the inspector's tabs, the property fields, the zoom controls - and
+ * proportionally less for a compact control that only needs to be reachable.
+ * Nothing is REDRAWN: a control's box grows, its icon and its type do not, so
+ * the existing dark-green and academic-gold design is untouched.
+ */
+
+/*
+ * ONLY THE CONTROLS THAT ARE ACTUALLY TOO SMALL.
+ *
+ * AN EARLIER VERSION OF THIS BLOCK GREW EVERYTHING, and it was wrong in a way
+ * that is easy to see and hard to forgive: on a touchscreen LAPTOP - which
+ * reports touch points - every tool button, every category heading and every
+ * object row was forced to 40 px. The tool list doubled in height, the Sidebar
+ * scrolled forever and the drawing lost its room. A desktop with a touchscreen
+ * is still a desktop, driven by a mouse most of the time.
+ *
+ * So the rule is now: grow a control only if its resting size is genuinely too
+ * small for a fingertip. The tool rows are already ~30 px and the category
+ * headings ~20 px of TEXT - growing those bought nothing and cost the canvas.
+ * What is left is the small round controls, where the difference between 14 px
+ * and 30 px is the difference between hitting and missing.
+ */
+
+/* ---- the side-panel collapse arrows: a 22px strip, hard to hit ---- */
+
+.datum-touch-input .drawing-panel-toggle {
+    min-width: 32px;
+}
+
+/* ---- the zoom row's two round buttons ---- */
+
+.datum-touch-input .drawing-zoom-controls button {
+    min-height: 26px;
+    min-width: 30px;
+}
+
+/* ---- property rows: keep the field, grow only what is tiny ---- */
+
+.datum-touch-input .drawing-property-grid input,
+.datum-touch-input .drawing-property-grid select {
+    min-height: 26px;
+}
+
+/*
+ * A SMALL ROUND CONTROL - a colour swatch, a checkbox, a unit step - is given a
+ * real target without being redrawn: the box grows and the visual stays the size
+ * it is. These are the controls a finger could not hit at all before.
+ */
+.datum-touch-input .drawing-property-grid input[type="color"],
+.datum-touch-input .drawing-property-grid input[type="checkbox"],
+.datum-touch-input .drawing-property-grid button {
+    min-height: 26px;
+    min-width: 26px;
+}
+
+/* ---- the Objects list's eye: 16px of ink in a 20px row ---- */
+
+.datum-touch-input .drawing-objects-visibility {
+    min-height: 24px;
+    min-width: 28px;
+}
+
+/* ---- the status bar's Finish / Cancel ---- */
+
+.datum-touch-input .drawing-construction-action {
+    min-height: 30px;
+    min-width: 56px;
+}
+
+/*
+ * =========================================================
+ * THE SOURCE EDITOR IS LEFT ALONE
+ * =========================================================
+ *
+ * Deliberately NO rule for `.drawing-source-input`, `.drawing-source-editor` or
+ * the pane: the editor is a text surface, and its type size, line height and
+ * padding are what keep the caret, the selection blocks and the syntax layer
+ * aligned to each other. Changing any of them for touch would move the caret off
+ * its characters. Touch already works there because the textarea is a native
+ * form control - selecting, scrolling and the on-screen keyboard are the
+ * browser's own - and that is the point of not touching it.
+ */
+
+/* =========================================================
+ * FINISH / CANCEL, IN THE STATUS BAR
+ * =========================================================
+ *
+ * The pair sits beside the instruction it belongs to, on the status bar's own
+ * line, and is absent while nothing is being built. It is a VISIBLE control, not
+ * a replacement: the double-click and Escape still do exactly what they did.
+ *
+ * Sized to be pressed by a finger at every width - 26px is comfortable for a
+ * cursor and too small for a fingertip, and the pair only ever appears while the
+ * student is mid-construction, which is precisely when they are least able to
+ * hunt for a small target.
+ */
+.drawing-construction-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 4px;
+    margin-left: auto;
+    padding-left: 8px;
+}
+
+.drawing-construction-actions[hidden] {
+    display: none;
+}
+
+.drawing-construction-action {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    min-height: 26px;
+    padding: 2px 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.drawing-construction-action:hover {
+    background: var(--datum-green-wash);
+    border-color: var(--datum-green-soft);
+    color: var(--datum-green-ink);
+}
+
+.drawing-construction-action:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/* Cancel is the quieter of the two: it gives work up, and must not invite it. */
+#drawingConstructionCancel {
+    color: var(--datum-muted);
+    font-weight: 500;
+}
+

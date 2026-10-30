@@ -98,21 +98,11 @@ for (const tool of [
 
 console.log("\n  a one-gesture path tool exits on a bare click\n");
 
-for (const tool of ["arrow"]) {
+for (const tool of ["beam", "point-force", "arrow"]) {
   check(
     `${tool} exits to Select on a click`,
     shouldExitToSelectOnClick(tool) === true,
     "the tool must not trap the student",
-  );
-}
-
-console.log("\n  the Statics two-point tools take click-move-click\n");
-
-for (const tool of ["beam", "point-force", "pin-connection", "reference-line"]) {
-  check(
-    `${tool} keeps a bare click as its first point`,
-    shouldExitToSelectOnClick(tool) === false,
-    "a click is the start of the feature, as with a Line",
   );
 }
 
@@ -157,14 +147,7 @@ console.log("\n  the click router uses the classification\n");
 
 check(
   "a bare click on a one-gesture tool returns to Select",
-  /shouldExitToSelectOnClick\([\s\S]{0,80}?exitToolToSelect/.test(canvasClick) ||
-    /finishCreationClick\(\s*session\s*\)/.test(
-      fs.readFileSync(locate("creation-drag.js"), "utf8"),
-    ) ||
-    /activateTool\("select"\)[\s\S]{0,400}?selectObject/.test(
-      fs.readFileSync(locate("creation-drag.js"), "utf8"),
-    ),
-  "the tool must hand the canvas back to Select",
+  /shouldExitToSelectOnClick\([\s\S]{0,80}?exitToolToSelect/.test(canvasClick),
 );
 
 check(

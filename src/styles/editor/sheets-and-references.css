@@ -26,9 +26,27 @@
 .drawing-sheet-bar-row {
     background: var(--datum-panel);
     border-top: 1px solid var(--datum-border);
+    /*
+     * ONE ROW, TWO TENANTS: THE SHEET TABS AND THE WAY BACK.
+     *
+     * Left as a block, the two children stacked - the tabs filled the bar and
+     * the Written Solution button was pushed BELOW it, into the status bar's
+     * band, where it sat in a strip of empty space. They are one horizontal
+     * line: the tabs scrolling on the left, the return button pinned right.
+     */
+    align-items: center;
+    display: flex;
+    gap: 6px;
     grid-column: 2;
     grid-row: 4;
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+/* The tabs take the room; the button never shrinks away to nothing. */
+.drawing-sheet-bar-row > .drawing-sheet-bar {
+    flex: 1 1 auto;
     min-width: 0;
 }
 

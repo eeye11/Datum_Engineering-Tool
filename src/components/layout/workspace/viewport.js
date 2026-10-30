@@ -3,23 +3,19 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
-import { coordinateSystemArms } from "../../../shared/geometry/feature-handles.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
 import enggAnnotationModel from "../../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../../features/workspace/model/annotations/annotate-model.js";
 import { resistorPoints } from "../../../features/workspace/model/thermodynamics/resistor.js";
-import { stressArrowPaths, stressAngleMark } from "../../../shared/geometry/stress-element.js";
-import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
-import { fanPaths } from "../../../features/workspace/model/thermodynamics/fan.js";
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
-import { analysisSketchMarks } from "../../../shared/rendering/analysis-render.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import { arcSelectionPoints, distributedLoadArrowScreenLength } from "../../../features/workspace/interaction/box-selection.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
+import { COORDINATE_SYSTEM_LENGTH } from "../../../features/workspace/constants.js";
 import { renderedPointsForObjects } from "../../../features/workspace/commands/document-commands.js";
 import { drawingCanvas, drawingGridToggle, drawingSnapToggle } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -535,17 +531,6 @@ function dimensionBoundsPoints(object) {
  * Fit and the renderer cannot disagree about how much room a mark takes.
  */
 function annotateBoundsPoints(object) {
-    if (object?.metadata?.boundaryStress && object.visible !== false) {
-        const drawing = boundaryStressDrawing(object.geometry);
-        return drawing.paths.flatMap(path => path.points).concat(drawing.labels.map(label => label.point));
-    }
-    if (object?.metadata?.stressElement && object.visible !== false) {
-        const mark = stressAngleMark(object.geometry);
-        return stressArrowPaths(object.geometry).flat().concat(mark ? [...mark.reference, ...mark.face, ...mark.perpendicular, ...mark.arc, mark.labelPoint, ...mark.axes.map(axis => axis.point)] : []);
-    }
-    if (object?.metadata?.thermodynamicsKind === "mechanical-work" && object.visible !== false) {
-        return fanPaths(object.geometry).flat();
-    }
     if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
         return resistorPoints(object.geometry);
     }
@@ -830,6 +815,45 @@ function geometryRenderedBounds(
         return arcSelectionPoints(geometry);
     }
 
+    /*
+     * A DYNAMICS SYMBOL IS MEASURED BY THE SPACE IT OCCUPIES.
+     *
+     * A spring, a damper or a branch pair is a band along its span, widened
+     * to cover its coils and its parallel branches; a rotation symbol or a
+     * pulley is its wheel. Measuring only the stored anchors would crop a
+     * Fit to the line between them and leave the drawn symbol hanging
+     * outside the view.
+     */
+    const dynamicsKind = object.engineering?.dynamicsType;
+
+    if (dynamicsKind === "dynamics-pulley" || dynamicsKind === "dynamics-angular-vector") {
+        const centre = geometry.center;
+        const radius = Math.abs(Number(geometry.radius) || 0);
+
+        if (!centre) {
+            return [];
+        }
+
+        const reach =
+            dynamicsKind === "dynamics-pulley"
+                ? radius + Math.abs(Number(geometry.ropeDrop) || radius * 2.4)
+                : radius;
+
+        return [
+            { x: centre.x - reach, y: centre.y - reach },
+            { x: centre.x + reach, y: centre.y + reach }
+        ];
+    }
+
+    if (typeof dynamicsKind === "string" && geometry.start && geometry.end) {
+        const band =
+            Math.abs(Number(geometry.amplitude) || 0) +
+            Math.abs(Number(geometry.branchSpacing) || 0) +
+            Math.abs(Number(geometry.bodyWidth) || 0) + 1;
+
+        return segmentBoundCorners(geometry.start, geometry.end, band);
+    }
+
     if (object.type === "circle") {
         const radius =
             Math.abs(Number(geometry.radius) || 0);
@@ -945,32 +969,6 @@ function geometryRenderedBounds(
                 ? analysisFrameExtents()
                 : null;
 
-        /*
-         * THE STUDENT'S OWN STROKES ARE PART OF WHAT IS FITTED.
-         *
-         * A sketch can be drawn far above or below the axis - deliberately, to
-         * show a spike - and its ink is then the outermost thing the diagram
-         * occupies. Measuring only the frame (which is a fixed band around the
-         * axis) let a Fit crop the very curve the student drew, and let the
-         * export compute its scale from a smaller extent than the drawing has.
-         *
-         * `analysisSketchMarks` is the renderer's OWN projection - the marks the
-         * canvas paints - so the room reserved is the room the ink takes.
-         */
-        if (typeof analysisSketchMarks === "function") {
-            try {
-                analysisSketchMarks(object).forEach((mark) => {
-                    (Array.isArray(mark?.points) ? mark.points : []).forEach((at) => {
-                        if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) {
-                            points.push({ x: at.x, y: at.y });
-                        }
-                    });
-                });
-            } catch (error) {
-                /* A diagram with no drawable sketch contributes its frame only. */
-            }
-        }
-
         if (!frame) {
             return points;
         }
@@ -1007,7 +1005,21 @@ function geometryRenderedBounds(
     }
 
     if (object.type === "coordinate-system-2d") {
-        return coordinateSystemArms(geometry).flatMap(arm => [arm.start, arm.end]);
+        const axisLength =
+            geometry.axisLength ??
+            geometry.xAxisLength ??
+            COORDINATE_SYSTEM_LENGTH;
+
+        return [
+            {
+                x: geometry.origin.x - axisLength,
+                y: geometry.origin.y - axisLength
+            },
+            {
+                x: geometry.origin.x + axisLength,
+                y: geometry.origin.y + axisLength
+            }
+        ];
     }
 
     /*
@@ -1280,8 +1292,74 @@ function syncActiveSheetViewport() {
 }
 
 /*
- * Set the zoom, from a PERCENTAGE.
+ * ========================================================
+ * A TWO-FINGER GESTURE: PAN AND PINCH, IN ONE PLACE
+ * ========================================================
  *
+ * A gesture step is a midpoint (where the fingers are) and a ratio (how far
+ * apart they are compared with the last step). Both are applied HERE, together,
+ * because they are one movement of one pair of fingers:
+ *
+ *   PAN    the midpoint moved, so the drawing follows it;
+ *   PINCH  the spread changed, so the zoom scales by that ratio - and the
+ *          drawing point that was under the midpoint STAYS under it.
+ *
+ * NOTHING HERE TOUCHES THE DRAWING. The camera is not part of the document's
+ * geometry, so a pinch can never change a dimension, a position or a
+ * connection - and a pan does not create, select or move an object. The viewport
+ * is written back onto the SHEET (not marked dirty) so reopening a document
+ * remembers how it was being looked at, exactly as a mouse zoom does.
+ */
+export function applyTwoFingerGesture({ panX = 0, panY = 0, zoomRatio = 1, midX, midY } = {}) {
+    const bounds = drawingCanvas.getBoundingClientRect();
+    const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
+
+    /*
+     * PAN, measured from the midpoint. A finger moving right takes the drawing
+     * right with it, so the camera's pan goes LEFT - the sign rule the hand tool
+     * and the middle button already use.
+     */
+    if (panX || panY) {
+        enggDrawingState.panCamera(
+            drawingState,
+            drawingState.camera.panX - panX / scale,
+            drawingState.camera.panY + panY / scale
+        );
+    }
+
+    /*
+     * PINCH, about the midpoint - which is what `zoomAtCanvasPoint` does: it
+     * holds the point under a screen position still. The state model clamps, so
+     * a fast pinch cannot ask for a zoom outside the supported range. A ratio of
+     * exactly 1 is not a pinch and is not applied.
+     */
+    const pinching =
+        Number.isFinite(zoomRatio) &&
+        zoomRatio > 0 &&
+        zoomRatio !== 1 &&
+        Number.isFinite(midX) &&
+        Number.isFinite(midY);
+
+    if (pinching) {
+        zoomAtCanvasPoint(
+            drawingState.camera.zoom * zoomRatio,
+            { clientX: bounds.left + midX, clientY: bounds.top + midY }
+        );
+    } else {
+        syncActiveSheetViewport();
+        renderCurrentDrawing();
+    }
+
+    return {
+        zoom: drawingState.camera.zoom,
+        panX: drawingState.camera.panX,
+        panY: drawingState.camera.panY
+    };
+}
+
+/*
+ * Set the zoom, from a PERCENTAGE.
+
  * Everything that changes the zoom goes through here, so there is one
  * answer to "what does this become". The percentage is handed to the
  * state model's own sanitiser as a factor, which is where rounding and

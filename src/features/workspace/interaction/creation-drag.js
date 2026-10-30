@@ -72,7 +72,7 @@
  * mark exactly once.
  */
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
-import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
+import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool } from "../annotate/annotate-creation.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
@@ -94,57 +94,6 @@ import {
     pipeEndAt,
     commitElbowGesture
 } from "./pipe-duct-tool.js";
-import { JUNCTION_PHASE, commitJunctionGesture, junctionGesturePreview } from "./junction-tool.js";
-import {
-    beginFlowArrowSession,
-    beginFreeArrowSession,
-    moveFlowArrowSession,
-    moveFreeArrowSession,
-    commitFlowArrowSession,
-    commitFreeArrowSession
-} from "./flow-arrow-tool.js";
-import {
-    VESSEL_PHASE,
-    LEVEL_PHASE,
-    DIRECTION_PHASE,
-    PROFILE_PHASE,
-    FLOW_PROFILE_PHASE,
-    SECTION_PHASE,
-    commitInlineAt,
-    commitVesselDrag,
-    commitFluidLevelAt,
-    commitFlowDirectionAt,
-    commitProfileDrag,
-    commitFlowProfileDrag,
-    commitSectionDrag,
-    schematicPreviewAt
-} from "./fluids-schematic-tool.js";
-
-void LEVEL_PHASE;
-void DIRECTION_PHASE;
-
-/*
- * THE SCHEMATIC TOOLS, AS THE CANVAS SEES THEM.
- *
- * A DRAG tool takes a press and a release and commits at the release; a CLICK
- * tool commits at the press itself, because its object is placed by one point
- * and there is nothing to drag out.
- */
-const SCHEMATIC_DRAG_TOOLS = {
-    "reservoir-tank": VESSEL_PHASE,
-    "pressure-profile": PROFILE_PHASE,
-    "flow-profile": FLOW_PROFILE_PHASE,
-    "section-plane": SECTION_PHASE
-};
-
-const SCHEMATIC_CLICK_TOOLS = [
-    "reducer-expander",
-    "pump",
-    "valve",
-    "flow-meter",
-    "fluid-level",
-    "flow-direction-diagram"
-];
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
@@ -178,19 +127,7 @@ import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-rese
 const DRAG_GEOMETRY_TOOLS = [
     "line",
     "rectangle",
-    "stress-element",
-    "boundary-stress",
     "control-volume",
-    "tank",
-    "turbine-compressor",
-    "nozzle-diffuser",
-    "rankine-cycle",
-    "reheat-rankine-cycle",
-    "vapor-compression-cycle",
-    "brayton-cycle",
-    "diesel-cycle",
-    "otto-cycle",
-    "carnot-cycle",
     "saturation-curve",
     "process-plot",
     "piston-cylinder",
@@ -405,24 +342,6 @@ export function isDragCreationTool(
     }
 
     /*
-     * AND THE JUNCTION IS ONE TOO: the press places its hub and the drag sets
-     * its main-run direction. Without this it is armed but inert - the press
-     * never reaches its session below, so nothing is created.
-     */
-    if (toolId === "junction") {
-        return true;
-    }
-
-    /*
-     * AND THE FLOW ARROW IS ONE TOO: the press attaches to the pipe under it
-     * and the drag slides the arrow along that pipe's centreline. Without this
-     * it is armed but inert - the press never reaches its session below.
-     */
-    if (toolId === "flow-arrow") {
-        return true;
-    }
-
-    /*
      * The progressive tools keep their own click-driven construction.
      */
     if (PROGRESSIVE_TOOLS.includes(toolId)) {
@@ -560,16 +479,6 @@ export function beginCreationDrag(
     const idle =
         phase === "idle";
 
-    // Written notes are editing targets, including a cycle's temperature
-    // labels. An armed geometry tool must not start a shape through the text.
-    if (idle && ["line", "rectangle", "circle"].includes(drawingState.activeTool)) {
-        const pointed = objectAtPoint(canvasPointFromEvent(event, false));
-        if (isEditableAnnotate(pointed)) {
-            activateTool("select");
-            return false;
-        }
-    }
-
     const continues =
         DRAG_CONTINUE_PHASES.includes(phase);
 
@@ -674,13 +583,6 @@ export function beginCreationDrag(
 
         const { start, previous } = resolveRouteStart(pressPoint);
 
-        // Publish the anchor immediately, including for a fast gesture whose
-        // release arrives before the first pointermove is delivered.
-        enggDrawingState.setInteraction(drawingState, {
-            routeSegmentStart: start,
-            startPoint: start
-        });
-
         editorState.creationDrag = {
             pointerId: event.pointerId,
             pipeDuct: true,
@@ -712,142 +614,6 @@ export function beginCreationDrag(
      * run, if there is one, is remembered so the release can attach to it. The
      * second end is resolved on the release, through the same snapping.
      */
-    /*
-     * A JUNCTION IS PLACED THE SAME WAY, AND MEASURES THE SAME WAY: the press
-     * is the HUB and the drag DIRECTION is the main run. The DISTANCE means
-     * nothing and is deliberately never stored.
-     */
-    if (drawingState.activeTool === "junction") {
-        if (event.button !== 0) {
-            return false;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const pressPoint =
-            resolution.effectiveConstructionPoint ||
-            resolution.rawPointerPoint;
-
-        editorState.creationDrag = {
-            pointerId: event.pointerId,
-            junction: true,
-            start: pressPoint
-                ? { x: pressPoint.x, y: pressPoint.y }
-                : null,
-            startScreen: {
-                x: event.clientX,
-                y: event.clientY
-            },
-            moved: false
-        };
-
-        return true;
-    }
-
-    /*
-     * THE FLOW ARROW'S PRESS IS AN ATTACHMENT, NOT A POINT.
-     *
-     * A press on a valid Pipe / Duct arms a session naming that pipe and the
-     * fraction along it the press landed at; a press anywhere else starts
-     * nothing, and `beginFlowArrowSession` returning false leaves this press to
-     * the ordinary selection path - the same answer a bare click gives.
-     */
-    if (drawingState.activeTool === "flow-arrow") {
-        if (event.button !== 0) {
-            return false;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        /*
-         * ON A PIPE: the attached flow-direction indicator, as before.
-         */
-        if (beginFlowArrowSession(event, resolution)) {
-            return true;
-        }
-
-        /*
-         * ANYWHERE ELSE: a FREE arrow, drawn from the press to the release.
-         *
-         * This is what makes the tool produce a real object everywhere - the
-         * arrow has its own geometry, its own row in the Objects list, handles,
-         * a Features tab, a source block and an Undo entry - rather than
-         * marking the sheet with a preview that nothing can select.
-         */
-        if (beginFreeArrowSession(event, resolution)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /*
-     * A SCHEMATIC CLICK TOOL PLACES ON THE PRESS.
-     *
-     * The inline fittings, the equipment, the level and the direction arrow are
-     * all placed by ONE point - where the student clicked - so the object is
-     * committed at the press and there is no drag to finish. The pointer's RAW
-     * position is used: these tools decide which pipe or vessel was clicked, and
-     * a construction snap must not move that decision onto something else.
-     */
-    if (SCHEMATIC_CLICK_TOOLS.includes(drawingState.activeTool)) {
-        if (event.button !== 0) {
-            return false;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const point = resolution.rawPointerPoint || resolution.effectiveConstructionPoint;
-
-        if (!point) {
-            return false;
-        }
-
-        const tool = drawingState.activeTool;
-
-        if (tool === "fluid-level") {
-            commitFluidLevelAt(point);
-        } else if (tool === "flow-direction-diagram") {
-            commitFlowDirectionAt(point);
-        } else {
-            commitInlineAt(tool, point);
-        }
-
-        return true;
-    }
-
-    /*
-     * A SCHEMATIC DRAG TOOL TAKES ITS WHOLE OBJECT FROM THE ONE GESTURE.
-     *
-     * The press is the first corner (a vessel, a graph frame) or the first end
-     * (a section trace); the release is the other. Nothing is written until the
-     * release, so Escape leaves no half-built object behind.
-     */
-    if (SCHEMATIC_DRAG_TOOLS[drawingState.activeTool]) {
-        if (event.button !== 0) {
-            return false;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const pressPoint = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-
-        editorState.creationDrag = {
-            pointerId: event.pointerId,
-            schematicTool: drawingState.activeTool,
-            phase: SCHEMATIC_DRAG_TOOLS[drawingState.activeTool],
-            start: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
-            style: { ...(drawingState.styleDefaults || {}) },
-            startScreen: {
-                x: event.clientX,
-                y: event.clientY
-            },
-            moved: false
-        };
-
-        return true;
-    }
-
     if (drawingState.activeTool === "elbow") {
         if (event.button !== 0) {
             return false;
@@ -1242,64 +1008,6 @@ export function moveCreationDrag(event) {
      * a click and still commits nothing - the honest outcome for a tool that
      * was not given a length.
      */
-    /*
-     * THE FREE FLOW ARROW PREVIEWS THE ARROW IT WILL COMMIT.
-     *
-     * It is drawn through the free-arrow painter (no attachment), from the press
-     * to the cursor, and its release always creates one - a press with no travel
-     * releases the default-length arrow, so the tool never leaves the student
-     * with a preview and nothing placed.
-     */
-    if (session.freeArrow) {
-        if (!session.moved) {
-            const dx = event.clientX - session.startScreen.x;
-            const dy = event.clientY - session.startScreen.y;
-
-            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-
-        if (point) {
-            moveFreeArrowSession(session, point);
-        }
-
-        return;
-    }
-
-    /*
-     * A SCHEMATIC DRAG PREVIEWS THE OBJECT IT WILL CREATE.
-     *
-     * The preview is built by the SAME function the commit uses - see
-     * `schematicPreviewAt` - so a vessel's box, a graph's frame or a section
-     * trace does not change shape when the button is released.
-     */
-    if (session.schematicTool) {
-        if (!session.moved) {
-            const dx = event.clientX - session.startScreen.x;
-            const dy = event.clientY - session.startScreen.y;
-
-            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-
-        session.currentPoint = point || null;
-
-        enggDrawingState.setInteraction(drawingState, {
-            fluidsTool: session.schematicTool,
-            phase: session.phase,
-            preview: schematicPreviewAt(session.schematicTool, session, point),
-            snapGeometry: session.start && point ? [{ start: session.start, end: point }] : []
-        });
-
-        return;
-    }
-
     if (session.pipeDuct) {
         if (!session.moved) {
             const dx = event.clientX - session.startScreen.x;
@@ -1350,43 +1058,6 @@ export function moveCreationDrag(event) {
      * the shared resolver before it is published, which is what lets a dragged
      * elbow land exactly on a pipe endpoint and connect.
      */
-    /* A junction previews its contour while the drag sets its main run. */
-    if (session.junction) {
-        if (!session.moved) {
-            const dx = event.clientX - session.startScreen.x;
-            const dy = event.clientY - session.startScreen.y;
-
-            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-        }
-
-        const resolution = resolvePointerEvent(event);
-
-        const point =
-            resolution.effectiveConstructionPoint ||
-            resolution.rawPointerPoint ||
-            session.start;
-
-        session.currentPoint = point;
-
-        const main = enggPipeDuct.directionOf(session.start, point) || { x: 1, y: 0 };
-
-        const interaction = {
-            fluidsTool: "junction",
-            phase: JUNCTION_PHASE,
-            junctionStart: session.start,
-            junctionMainDirection: main,
-            junctionEngineering: drawingState.interaction.junctionEngineering,
-            snapGeometry: session.start ? [{ start: session.start, end: point }] : [],
-            snapToolId: "junction"
-        };
-
-        interaction.preview = junctionGesturePreview(interaction, point);
-
-        enggDrawingState.setInteraction(drawingState, interaction);
-
-        return;
-    }
-
     if (session.elbow) {
         if (!session.moved) {
             const dx = event.clientX - session.startScreen.x;
@@ -1425,28 +1096,6 @@ export function moveCreationDrag(event) {
         enggDrawingState.setInteraction(drawingState, interaction);
 
         setToolMessage(elbowInstruction());
-
-        return;
-    }
-
-    /*
-     * THE FLOW ARROW SLIDES ALONG ITS PIPE WHILE IT IS DRAGGED.
-     *
-     * The cursor is projected onto the host's centreline every frame, so the
-     * preview is always ON the pipe whatever the pointer does. The projection
-     * is what makes the movement parallel to the pipe's edges: the fraction
-     * along the run is the only degree of freedom the drag has.
-     */
-    if (session.flowArrow) {
-        const resolution = resolvePointerEvent(event);
-
-        const point =
-            resolution.effectiveConstructionPoint ||
-            resolution.rawPointerPoint;
-
-        if (point) {
-            moveFlowArrowSession(session, point);
-        }
 
         return;
     }
@@ -1566,15 +1215,6 @@ export function finishCreationDrag(
         return false;
     }
 
-    // A pipe's release is authoritative: coalesced or missing move events
-    // must not turn a real drag into a click that silently draws nothing.
-    if (session.pipeDuct && !session.moved) {
-        session.moved = Math.hypot(
-            event.clientX - session.startScreen.x,
-            event.clientY - session.startScreen.y
-        ) >= DRAG_THRESHOLD_PX;
-    }
-
     /*
      * A CLICK WITH A DRAG TOOL LEAVES THE TOOL.
      *
@@ -1624,91 +1264,10 @@ export function finishCreationDrag(
         renderCurrentDrawing();
     }
 
-    if (session.freeArrow && !session.moved) {
-        enggDrawingState.setInteraction(drawingState, {
-            fluidsTool: "flow-arrow",
-            preview: null,
-            phase: "idle"
-        });
-        renderCurrentDrawing();
-    }
-
-    /*
-     * A SCHEMATIC DRAG THAT NEVER MOVED LEAVES NOTHING BEHIND.
-     *
-     * A vessel, a graph frame or a section trace needs two points; a press with
-     * no travel has only one, so the preview is dropped and the tool stays armed
-     * for a real drag. The trailing click is consumed by the caller, so nothing
-     * is placed at the click either - the gesture simply did not make a shape.
-     */
-    if (session.schematicTool && !session.moved) {
-        enggDrawingState.setInteraction(drawingState, {
-            fluidsTool: session.schematicTool,
-            preview: null,
-            phase: "idle"
-        });
-
-        renderCurrentDrawing();
-
-        return true;
-    }
-
     if (!session.moved) {
         return false;
     }
 
-    /*
-     * A SCHEMATIC DRAG COMMITS AT THE RELEASE.
-     *
-     * The release is the object's other corner (or its other end), resolved
-     * through the same snapping the preview used - so the box the student saw is
-     * the box they get.
-     */
-    if (session.schematicTool) {
-        const resolution = resolvePointerEvent(event);
-
-        const end = resolution.effectiveConstructionPoint || resolution.rawPointerPoint || session.currentPoint;
-
-        if (session.schematicTool === "reservoir-tank") {
-            commitVesselDrag(session.start, end);
-        } else if (session.schematicTool === "pressure-profile") {
-            commitProfileDrag(session.start, end);
-        } else if (session.schematicTool === "flow-profile") {
-            commitFlowProfileDrag(session.start, end);
-        } else if (session.schematicTool === "section-plane") {
-            commitSectionDrag(session.start, end);
-        }
-
-        enggDrawingState.setInteraction(drawingState, { preview: null, phase: "idle" });
-
-        renderCurrentDrawing();
-
-        return true;
-    }
-
-    /*
-     * ========================================================
-     * THE FREE FLOW ARROW COMMITS AT THE RELEASE
-     * ========================================================
-     *
-     * A press that travelled draws the arrow the student dragged; a press that
-     * did not is still a placement, and creates the default-length arrow - so the
-     * tool always produces a real, editable object rather than a mark on the
-     * sheet that cannot be selected, saved or undone.
-     */
-    if (session.freeArrow) {
-        const resolution = resolvePointerEvent(event);
-
-        const point =
-            resolution.effectiveConstructionPoint ||
-            resolution.rawPointerPoint ||
-            session.previewEnd ||
-            null;
-
-        commitFreeArrowSession(session, point);
-
-        return true;
-    }
     /*
      * ========================================================
      * PIPE / DUCT COMMITS ITS RUN AT THE RELEASE
@@ -1719,8 +1278,10 @@ export function finishCreationDrag(
      * continues a previous run through a genuine turn - at ANY angle - and the
      * whole thing is one undoable operation (see pipe-duct-tool.js).
      *
-     * A completed pipe returns to Select so the next gesture can select or
-     * move it. A failed, zero-length run leaves the drawing tool armed.
+     * The tool STAYS ARMED and keeps the run's far endpoint as the next leg's
+     * start, so dragging on from there carries the path - which is the
+     * continuous drawing the task asks for, expressed as an operation sequence
+     * rather than a container.
      */
     if (session.pipeDuct) {
         const resolution = resolvePointerEvent(event);
@@ -1748,8 +1309,6 @@ export function finishCreationDrag(
                 snapGeometry: []
             });
             renderCurrentDrawing();
-        } else {
-            activateTool("select");
         }
 
         return true;
@@ -1763,37 +1322,6 @@ export function finishCreationDrag(
      * exactly where the indicator showed it would. The tool stays armed, so a
      * student can place another elbow straight away.
      */
-    /*
-     * THE JUNCTION COMMITS AT THE RELEASE. The hub is the press; the MAIN RUN
-     * is the direction the pointer travelled. The distance is never stored.
-     */
-    if (session.junction) {
-        const resolution = resolvePointerEvent(event);
-
-        const point =
-            resolution.effectiveConstructionPoint ||
-            resolution.rawPointerPoint ||
-            session.currentPoint ||
-            session.start;
-
-        const created = commitJunctionGesture(session.start, point, {
-            junctionEngineering: drawingState.interaction.junctionEngineering
-        });
-
-        if (!created) {
-            enggDrawingState.setInteraction(drawingState, {
-                fluidsTool: "junction",
-                preview: null,
-                phase: "idle",
-                snapGeometry: []
-            });
-
-            renderCurrentDrawing();
-        }
-
-        return true;
-    }
-
     if (session.elbow) {
         const resolution = resolvePointerEvent(event);
 
@@ -1818,18 +1346,6 @@ export function finishCreationDrag(
 
             renderCurrentDrawing();
         }
-
-        return true;
-    }
-
-    /*
-     * THE FLOW ARROW COMMITS AT THE RELEASE, wherever the drag settled.
-     *
-     * One arrow at the fraction the pointer projected to, as one undoable
-     * change. The tool stays armed: the next press places another.
-     */
-    if (session.flowArrow) {
-        commitFlowArrowSession(session);
 
         return true;
     }
@@ -1878,5 +1394,55 @@ export function finishCreationDrag(
      * completable - it may have been cancelled mid-drag - so the click is
      * consumed either way.
      */
+    return true;
+}
+
+/*
+ * ========================================================
+ * DROP A CREATION THAT WAS INTERRUPTED
+ * ========================================================
+ *
+ * A touch gesture can be taken away mid-flight: a second finger lands and the
+ * interaction becomes navigation, a call arrives, the browser cancels the
+ * pointer. Whatever the press had begun must be ROLLED BACK, and the rule for
+ * rolling back is the one Escape and the tools' own Cancel already use - not a
+ * second, touch-shaped copy of it.
+ *
+ * WHAT IS ROLLED BACK, AND WHAT IS NOT.
+ *
+ *   - the SESSION is dropped, so no later release can commit it;
+ *   - the TRAILING CLICK is marked consumed, because the browser still fires a
+ *     click for that release and it must not be read as a new first point;
+ *   - the LIVE PREVIEW is cleared for the tools whose whole object IS the
+ *     gesture, so no half-drawn ghost is left on the sheet;
+ *   - a construction that was genuinely part-way through is NOT abandoned -
+ *     its committed stages stay, and the student can finish it with a click or
+ *     give it up with Escape.
+ *
+ * It never touches the document, the selection or the history: nothing was
+ * committed, so there is nothing to undo.
+ */
+export function cancelCreationDrag() {
+    const session = editorState.creationDrag;
+
+    if (!session) {
+        return false;
+    }
+
+    editorState.creationDrag = null;
+    editorState.creationDragConsumedClick = true;
+
+    if (
+        session.pipeDuct ||
+        session.elbow ||
+        session.junction ||
+        session.schematicTool ||
+        session.freeArrow
+    ) {
+        enggDrawingState.setInteraction(drawingState, { preview: null });
+    }
+
+    renderCurrentDrawing();
+
     return true;
 }

@@ -291,9 +291,21 @@ body.datum-topbar-hidden .drawing-workspace {
  * touch screens at the same time as it stays visually small.
  */
 .drawing-topbar-hide {
-    position: relative;
-    align-self: center;
-    margin-left: auto;
+    /*
+     * PINNED TO THE RAIL'S RIGHT EDGE, NOT FLOWED IN THE ROW.
+     *
+     * The button is a direct child of `.drawing-top-rail` - it sits OUTSIDE the
+     * scroller so eleven toolsets cannot push it off the edge - and the rail is
+     * `position: relative`. So it is placed against the rail's right edge, which
+     * is the window's right edge at every scroll position. Left in the rail's
+     * block flow with `margin-left: auto`, it was pushed to the LEFT instead:
+     * the rail is full width, so there was nothing for the auto margin to fill.
+     */
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 0;
     margin-right: 0;
     z-index: 61;
     align-items: center;
@@ -736,7 +748,16 @@ body.datum-topbar-hidden .drawing-top-rail::after {
      * still respected and a compressed window still scrolls rather than
      * squeezing the bars.
      */
-    grid-template-columns: minmax(0, 1fr);
+    /*
+     * THE TRACK IS AT LEAST THE VIEWPORT AND AT MOST THE CONTENT.
+     *
+     * `minmax(max-content, 1fr)` is what makes both bars fit on a wide screen
+     * (the track is the rail's width) AND overflow instead of wrapping on a narrow
+     * one (the track is the content's width). A plain `1fr` collapses to the
+     * viewport, so the content simply overflowed an unfitted box and the shared
+     * horizontal scroll had nothing to scroll.
+     */
+    grid-template-columns: minmax(max-content, 1fr);
 
     /*
      * `width: 100%` PLUS A `max-content` FLOOR - stated as two properties, not
@@ -751,7 +772,8 @@ body.datum-topbar-hidden .drawing-top-rail::after {
      * into account when it decides whether there is anything to scroll.
      */
     min-width: max-content;
-    width: 100%;
+    /* The viewport width at minimum, the content width at most. */
+    width: max(min-content, 100%);
 
     /*
      * NO `overflow` HERE, AND THAT IS LOAD-BEARING.
@@ -1600,20 +1622,23 @@ body.datum-topbar-hidden .drawing-top-rail::after {
 }
 
 /*
- * WITHOUT HOVER THERE IS NO "DISCOVER ON HOVER". A touch screen applies the
- * highlight on contact only (via :active), never through :hover, so a row is
- * never lit by a finger that was only passing over it while scrolling.
+ * WITHOUT HOVER THERE IS NO "DISCOVER ON HOVER".
+ *
+ * A touch screen applies the highlight on CONTACT only, never through :hover -
+ * but many browsers synthesise a `:hover` from a touch and leave it behind, so
+ * a row stays lit by a finger that was only passing over it while scrolling.
+ *
+ * THIS USED TO BE A `@media (hover: none)` QUERY, and it is now the capability
+ * class instead. The rest of this application's layout is deliberately
+ * WIDTH-DRIVEN - a resized desktop window and a tablet of the same size behave
+ * identically - and a device query here would be a second, independent rule
+ * about the hardware. `installTouchInputClass` already states the one fact that
+ * matters ("this device can be touched") on the document element, so the rule
+ * reads that and the layout keeps following the width alone.
  */
-@media (hover: none) {
-    .datum-search-result:hover {
-        background: transparent;
-        color: var(--datum-ink);
-    }
-
-    .datum-search-result.datum-search-active {
-        background: var(--datum-green-tint);
-        color: var(--datum-green-ink);
-    }
+.datum-touch-input .datum-search-result:hover:not([aria-selected="true"]):not(.datum-search-active) {
+    background: transparent;
+    color: var(--datum-ink);
 }
 
 .datum-search-result:hover,

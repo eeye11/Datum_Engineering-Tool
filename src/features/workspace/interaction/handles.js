@@ -7,16 +7,6 @@ import { coordinateSystemArms, rigidBodyHandles, rotationHandleFor } from "../..
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
-import enggJunction from "../model/fluids/junction.js";
-import enggFlowArrow from "../model/fluids/flow-arrow.js";
-import enggReducer from "../model/fluids/reducer-expander.js";
-import enggEquipment from "../model/fluids/inline-equipment.js";
-import enggVessel from "../model/fluids/reservoir-tank.js";
-import enggFluidLevel from "../model/fluids/fluid-level.js";
-import enggFlowArrows from "../model/fluids/flow-arrows.js";
-import enggPressureProfile from "../model/fluids/pressure-profile.js";
-import enggFlowProfile from "../model/fluids/flow-profile.js";
-import enggSectionPlane from "../model/fluids/section-plane.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { drawingCanvas } from "../dom.js";
@@ -25,12 +15,12 @@ import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
+import { tolerancesFor } from "./input-tolerances.js";
 import { translateObject } from "../geometry/transforms.js";
-import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
+import { selectionBounds } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
 import { DYNAMICS_SIZES } from "../dynamics/dynamics-tools.js";
-import { isSum, plantNodePosition, plantValue } from "../../../shared/model/plant.js";
 
 /*
  * Which view the Features panel is showing.
@@ -64,7 +54,6 @@ export function cancelManipulationDrag() {
 
     editorState.manipulationDrag =
         null;
-    drawingCanvas.classList.remove("drawing-object-moving");
 
     /*
      * A CANCELLED DRAG LEAVES NO SNAP STATE BEHIND.
@@ -127,18 +116,29 @@ export function cancelManipulationDrag() {
                         id: object.id,
                         style: object.style
                     }
-                    : drag.elbowRuns?.[object.id]
-                    ? {
-                        /* A pipe the drag re-cut is restored with the fitting. */
-                        ...JSON.parse(JSON.stringify(drag.elbowRuns[object.id])),
-                        id: object.id,
-                        style: object.style
-                    }
                     : object
         );
 }
 
 const MANIPULATION_PICK_PX = 9;
+
+/*
+ * A HANDLE IS SMALLER THAN A FINGER.
+ *
+ * The 9 px above is the MOUSE's reach and is unchanged. A handle is drawn as a
+ * 3.8 px dot, which a fingertip covers several times over, so the input's own
+ * table (input-tolerances.js) supplies the wider reach for touch and the precise
+ * one for a pen. Only the PICK widens - the dot keeps its size.
+ */
+function handlePickPixels(options) {
+    return Math.max(
+        MANIPULATION_PICK_PX,
+        tolerancesFor(
+            options?.inputKind || options?.pointerType || "mouse",
+            options
+        ).handlePickRadiusPx
+    );
+}
 
 /*
  * The features attached to a given body.
@@ -557,14 +557,19 @@ function elbowRadiusHandlePoint(object) {
         return null;
     }
 
-    /*
-     * THE CENTRE OF CURVATURE ITSELF - not the middle of the arc, not the
-     * midpoint between the tangent points, and not a point on the wall. It is
-     * the centre of the circle the bend's arc is drawn on, so dragging it
-     * along the bisector IS the radius, and the dot always shows where the
-     * circle is centred after the change.
-     */
-    return { x: curves.centre.x, y: curves.centre.y };
+    const sweep = ((curves.endAngle - curves.startAngle + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+    const middle = curves.startAngle + sweep / 2;
+
+    const separation = Number(object?.engineering?.startSeparation) > 0
+        ? Number(object.engineering.startSeparation)
+        : enggPipeDuct.boundarySeparation(object?.engineering || {});
+
+    const radius = curves.radius + separation / 2;
+
+    return {
+        x: curves.centre.x + radius * Math.cos(middle),
+        y: curves.centre.y + radius * Math.sin(middle)
+    };
 }
 
 function elbowAngleHandle(object) {
@@ -572,53 +577,7 @@ function elbowAngleHandle(object) {
         return [];
     }
 
-    const corner = object?.geometry?.position;
-
-    if (!corner) {
-        return [];
-    }
-
-    const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * (drawingState.camera?.zoom || 1);
-
-    const reach = 10 / Math.max(scale, 1e-6);
-
-    const bisector = elbowBisectorOf(object);
-
-    const curves = enggPipeDuct.elbowCurvesFor(object);
-
-    const centreDistance = curves
-        ? Math.hypot(curves.centre.x - corner.x, curves.centre.y - corner.y)
-        : Infinity;
-
-    const offset = bisector ? Math.min(reach, centreDistance * 0.5) : 0;
-
-    const point = {
-        x: corner.x + (bisector ? bisector.x * offset : 0),
-        y: corner.y + (bisector ? bisector.y * offset : 0)
-    };
-
-    return [{ kind: "elbow-angle", point }];
-}
-
-/* The inward bisector of an elbow's two arms, or null. */
-function elbowBisectorOf(object) {
-    const geometry = object?.geometry || {};
-
-    if (typeof enggPipeDuct.elbowBisector === "function") {
-        return enggPipeDuct.elbowBisector(object);
-    }
-
-    const inArm = enggPipeDuct.directionOf(geometry.position, geometry.previous);
-    const outArm = enggPipeDuct.directionOf(geometry.position, geometry.next);
-
-    if (!inArm || !outArm) {
-        return null;
-    }
-
-    const sum = { x: inArm.x + outArm.x, y: inArm.y + outArm.y };
-    const length = Math.hypot(sum.x, sum.y);
-
-    return length < 1e-9 ? null : { x: sum.x / length, y: sum.y / length };
+    return [{ kind: "elbow-angle", point: { ...object.geometry.position } }];
 }
 
 /* How an elbow's ends are attached, from the pair of ids it records. */
@@ -640,27 +599,10 @@ function manipulationHandles(
     const g =
         object.geometry || {};
 
-    if (object.type === "pipe-duct") {
-        return [
-                { kind: "start", point: g.start },
-                { kind: "end", point: g.end }
-            ];
-    }
-
-    if (object.metadata?.boundaryStress) {
-        const bounds = selectionBounds([object], [object.id]);
-        return bounds ? selectionCorners(bounds).map((point, index) => ({ kind: `corner${index}`, point })) : [];
-    }
-
-    if (object.metadata?.thermodynamicsKind === "work-arrow" && g.start && g.end) {
-        return [{ kind: "annotate-attachment", point: g.start }, { kind: "annotate-endpoint", point: g.end },
-            ...(g.position ? [{ kind: "position", point: g.position }] : [])];
-    }
-
     if (object.metadata?.thermodynamicsKind === "process-path") {
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom;
-        return (object.metadata.closed ? (g.points || []).slice(0, object.metadata.stateCount || -1) : (g.points || [])).flatMap((point, index) => [
-            ...(index < (object.metadata.stateCount ?? g.points.length) ? [{ kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) }] : []),
+        return (g.points || []).flatMap((point, index) => [
+            { kind: `process-label-${index}`, point: processLabelPoint(g, index, scale) },
             { kind: `vertex${index}`, point },
             ...(index < g.points.length - 1 ? [{ kind: `process-bend-${index}`, point: processBendPoint(g, index) }] : [])
         ]);
@@ -882,299 +824,6 @@ function manipulationHandles(
     }
 
     /*
-     * ========================================================
-     * THE SCHEMATIC FLUIDS TOOLS' HANDLES
-     * ========================================================
-     *
-     * Each handle has ONE purpose, and it writes the same model its Features
-     * row writes - so a drag and a typed value are the same edit.
-     *
-     * The inline objects are placed by their host, so they get a POSITION handle
-     * that SLIDES ALONG the host (never a free X/Y), and their size handles are
-     * the parameters that belong to them (a transition length, a symbol radius).
-     * A fluid level has one vertical handle; a direction arrow slides along its
-     * pipe; a profile has a handle per data point and eight frame handles.
-     */
-    if (enggReducer.isReducerType(object.type)) {
-        const walls = enggReducer.wallsOf(object);
-
-        return walls
-            ? [
-                  { kind: "reducer-slide", point: walls.axis.centre },
-                  { kind: "reducer-length-start", point: walls.start.centre },
-                  { kind: "reducer-length-end", point: walls.end.centre },
-                  { kind: "width-start", point: walls.start.a },
-                  { kind: "width-end", point: walls.end.a }
-              ]
-            : [];
-    }
-
-    if (enggEquipment.isEquipmentType(object.type)) {
-        const frame = enggEquipment.frameOf(object);
-
-        if (!frame) {
-            return [];
-        }
-
-        const inline = enggEquipment.isInline(object);
-
-        const handles = [{ kind: inline ? "equipment-slide" : "equipment-body", point: frame.center }];
-
-        const sizeAt = enggEquipment.localToWorld(frame, { x: enggEquipment.symbolRadiusOf(object), y: 0 });
-
-        handles.push({ kind: "equipment-size", point: sizeAt });
-
-        /*
-         * A STANDALONE SYMBOL TURNS; an inline one lies along its pipe, so it has
-         * no rotation grip - turning it there would break the run it joins.
-         */
-        if (!inline) {
-            const radius = enggEquipment.symbolRadiusOf(object);
-
-            handles.push({
-                kind: "equipment-rotate",
-                point: enggEquipment.localToWorld(frame, { x: 0, y: radius * 1.5 })
-            });
-        }
-
-        return handles;
-    }
-
-    if (enggVessel.isVesselType(object.type)) {
-        const rect = enggVessel.vesselRect(object);
-
-        if (!rect) {
-            return [];
-        }
-
-        const [topLeft, topRight, bottomRight, bottomLeft] = rect.corners;
-
-        return [
-            { kind: "vessel-corner0", point: topLeft },
-            { kind: "vessel-corner1", point: topRight },
-            { kind: "vessel-corner2", point: bottomRight },
-            { kind: "vessel-corner3", point: bottomLeft },
-            { kind: "equipment-body", point: rect.centre }
-        ];
-    }
-
-    if (enggFluidLevel.isFluidLevelType(object.type)) {
-        const segment = enggFluidLevel.levelSegment(object);
-
-        return segment
-            ? [
-                  {
-                      kind: "level-height",
-                      point: {
-                          x: (segment.start.x + segment.end.x) / 2,
-                          y: (segment.start.y + segment.end.y) / 2
-                      }
-                  }
-              ]
-            : [];
-    }
-
-    if (enggFlowArrows.isFlowDirectionType(object.type)) {
-        const fraction = enggFlowArrows.directionFractionOf(object);
-        const at = enggFlowArrows.directionPointAt(object, fraction);
-
-        return at ? [{ kind: "direction-slide", point: at.point }] : [];
-    }
-
-    /*
-     * A FLOW PROFILE GETS THE SAME GRIPS as a Pressure Profile - eight frame
-     * handles and one per data point - because it is the same frame model and
-     * the same data-to-drawing mapping. A point's handle writes the ROW its
-     * index names, so the table and the plotted point are one fact.
-     */
-    if (enggFlowProfile.isFlowProfileType(object.type)) {
-        const frame = enggFlowProfile.profileFrame(object);
-
-        if (!frame) {
-            return [];
-        }
-
-        const corners = [
-            { x: frame.position.x, y: frame.position.y },
-            { x: frame.position.x + frame.width, y: frame.position.y },
-            { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
-            { x: frame.position.x, y: frame.position.y + frame.height }
-        ];
-
-        const centre = {
-            x: frame.position.x + frame.width / 2,
-            y: frame.position.y + frame.height / 2
-        };
-
-        const points = enggFlowProfile.plottedPoints(object).map((plot) => ({
-            kind: `profile-point${plot.index}`,
-            point: { x: plot.x, y: plot.y }
-        }));
-
-        return [
-            ...corners.map((point, index) => ({ kind: `profile-corner${index}`, point })),
-            { kind: "equipment-body", point: centre },
-            ...points
-        ];
-    }
-
-    if (enggPressureProfile.isPressureProfileType(object.type)) {
-        const frame = enggPressureProfile.profileFrame(object);
-
-        if (!frame) {
-            return [];
-        }
-
-        const corners = [
-            { x: frame.position.x, y: frame.position.y },
-            { x: frame.position.x + frame.width, y: frame.position.y },
-            { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
-            { x: frame.position.x, y: frame.position.y + frame.height }
-        ];
-
-        const centre = {
-            x: frame.position.x + frame.width / 2,
-            y: frame.position.y + frame.height / 2
-        };
-
-        /*
-         * A HANDLE PER DATA POINT, named by the row index - so the drag writes
-         * the SAME row the Features table shows, whatever the table's order.
-         */
-        const points = enggPressureProfile.plottedPoints(object).map((plot) => ({
-            kind: `profile-point${plot.index}`,
-            point: { x: plot.x, y: plot.y }
-        }));
-
-        return [
-            ...corners.map((point, index) => ({ kind: `profile-corner${index}`, point })),
-            { kind: "equipment-body", point: centre },
-            ...points
-        ];
-    }
-
-    if (enggSectionPlane.isSectionPlaneType(object.type)) {
-        const span = enggSectionPlane.sectionSpan(object);
-
-        if (!span) {
-            return [];
-        }
-
-        const centre = { x: (span.start.x + span.end.x) / 2, y: (span.start.y + span.end.y) / 2 };
-
-        /*
-         * A SECTION MARK HAS FOUR GRIPS AND THEY DO FOUR DIFFERENT THINGS:
-         *
-         *   the two ends   set the trace's length AND its angle
-         *   the body       moves the whole marker
-         *   the rotation   turns it about its middle, without moving it
-         *
-         * The rotation grip stands off the middle along the trace's normal, so it
-         * is never mistaken for an end or for the body. The viewing direction is
-         * NOT a grip - it is the Object section's Reverse, and reversing arrows
-         * must not move the trace, which a drag cannot promise.
-         */
-        const normal = { x: -span.direction.y, y: span.direction.x };
-        const reach = Math.max(4, Math.min(span.length * 0.5, 12));
-
-        return [
-            { kind: "start", point: span.start },
-            { kind: "end", point: span.end },
-            { kind: "section-body", point: centre },
-            {
-                kind: "section-rotate",
-                point: { x: centre.x + normal.x * reach, y: centre.y + normal.y * reach }
-            }
-        ];
-    }
-
-    /*
-     * A FREE FLOW ARROW IS A SPAN: its tail and its tip. The attached one above
-     * keeps the two handles it has always had.
-     */
-    if (enggFlowArrows.isFreeFlowArrowType(object.type) && !object.attachment && g.start && g.end) {
-        return [
-            { kind: "start", point: g.start },
-            { kind: "end", point: g.end }
-        ];
-    }
-
-    /*
-     * A FLOW ARROW IS GRABBED BY ITS TIP AND BY ITS SIZE.
-     *
-     * The POSITION handle is the arrow's TIP: dragging it slides the whole arrow
-     * along its host pipe's centreline, because the tip is constrained to the
-     * run by the drag handler and the rest of the arrow follows the anchor. There
-     * is deliberately no rotation handle and no free-body handle: the arrow's
-     * orientation is its pipe's, and moving the pipe is the pipe's own edit.
-     *
-     * The SIZE handle sits at the tip too, offset ACROSS the run, so the two are
-     * distinguishable on the canvas: the position handle is where the arrow
-     * points, the size handle is beside it. Dragging the size handle changes
-     * `attachment.size` and nothing else - the pipe is never touched.
-     */
-    if (object.type === "flow-arrow") {        const shape = enggFlowArrow.flowArrowShape(object);
-
-        if (!shape) {
-            return [];
-        }
-
-        /*
-         * THE SIZE HANDLE SITS BEHIND THE TAIL, ON THE ARROW'S OWN AXIS.
-         *
-         * The arrow is a shaft with a small head, so the distance from the
-         * anchor to the tail IS the size that will be committed - which makes
-         * the handle honest: dragging it out lengthens the arrow, dragging it
-         * in shortens it, and the head stays a quarter of whatever it becomes.
-         *
-         * It is offset slightly ACROSS the run as well, so it is distinguishable
-         * from the stem it sits on.
-         */
-        const back = { x: -shape.axis.x, y: -shape.axis.y };
-
-        return [
-            { kind: "flow-arrow-position", point: shape.anchor },
-            {
-                kind: "flow-arrow-size",
-                point: {
-                    x: shape.shaft.start.x + back.x * 4 + shape.across.x * 4,
-                    y: shape.shaft.start.y + back.y * 4 + shape.across.y * 4
-                }
-            }
-        ];
-    }
-
-    /*
-     * A JUNCTION IS GRABBED BY ITS HUB AND BY EACH BRANCH'S PORT.
-     *
-     * The hub moves the whole fitting. Each port is BOTH the point a pipe
-     * connects to AND the point that sets that branch's angle: dragging it
-     * around the hub turns the branch. There is deliberately no handle that
-     * changes a branch's LENGTH - the arms are connection stubs.
-     *
-     * The main run's two ports turn the FITTING, because their direction IS
-     * the reference every branch angle is measured from.
-     */
-    if (object.type === "junction" && g.position) {
-        const handles = [{ kind: "position", point: g.position }];
-
-        (g.branches || []).forEach((branch) => {
-            const port = enggJunction.branchPort(object, branch);
-
-            if (!port) {
-                return;
-            }
-
-            handles.push({
-                kind: branch.id === g.mainBranchId ? "junction-main" : "junction-branch-" + branch.id,
-                point: port
-            });
-        });
-
-        return handles;
-    }
-
-    /*
      * AN ELBOW IS GRABBED BY WHAT DEFINES ITS BEND.
      *
      * The corner moves the fitting; each end is a point the student can drag
@@ -1343,24 +992,6 @@ function manipulationHandles(
                     point: g.position
                 }
             ];
-    }
-
-    if (object.type === "circle" && isSum(object)) {
-        return [
-            ...Array.from({ length: plantValue(object, "inputs") }, (_, index) => ({
-                kind: `sum-node-inputs-${index}`,
-                point: plantNodePosition(object, "inputs", index)
-            })),
-            { kind: "sum-node-outputs-0", point: plantNodePosition(object, "outputs", 0) },
-            { kind: "center", point: g.center },
-            {
-                kind: "radius",
-                point: {
-                    x: g.center.x + g.radius,
-                    y: g.center.y
-                }
-            }
-        ];
     }
 
     if (object.type === "circle") {
@@ -1550,8 +1181,6 @@ function supportsRotationHandle(
         return false;
     }
 
-    if (enggReducer.isReducerType(object.type)) return !enggReducer.connectedPipeIds(object).some(Boolean);
-
     return ![
         "dimension",
         "annotation",
@@ -1565,40 +1194,7 @@ function supportsRotationHandle(
          * parameters - X Shift, Y Shift, Bend Radius and Bend Angle - none of
          * which is a rotation.
          */
-        "elbow",
-
-        /*
-         * A JUNCTION HAS NO ROTATION HANDLE EITHER: its orientation is its
-         * MAIN RUN, which the branches are measured from.
-         */
-        "junction",
-
-        /*
-         * A FLOW PROFILE IS A FLAT GRAPH - its frame is axis-aligned, and a turn
-         * would rotate the tick text with it. It is listed with the objects that
-         * do not turn, so a handler cannot appear for it.
-         */
-        "flow-profile",
-
-        /*
-         * A FLOW ARROW HAS NO ROTATION HANDLE. Its orientation IS its pipe's,
-         * and turning it would describe a flow direction the run does not have.
-         * The one way to change what it says is Reverse Direction, which is a
-         * half turn with a meaning - and it is a plain boolean rather than an
-         * angle, so it cannot leave the arrow at some angle off its run.
-         */
-        "flow-arrow",
-
-        /*
-         * AND THE SCHEMATIC TOOLS THAT TURN WITH THEIR HOST. A reducer's axis is
-         * its pipe's, a fluid level is horizontal inside its vessel and a
-         * direction arrow points along its run - so none of them offers a free
-         * turn. A pressure profile, a section trace and a VESSEL do turn, which
-         * is why they are not here.
-         */
-        "reducer-expander",
-        "fluid-level",
-        "flow-direction-diagram"
+        "elbow"
     ].includes(object.type);
 }
 
@@ -1698,14 +1294,15 @@ export function rectangleCorners(
  * Handles take priority over object bodies.
  */
 export function handleAtPoint(
-    point
+    point,
+    options = {}
 ) {
     const scale =
         enggDrawingState.BASE_PIXELS_PER_UNIT *
         drawingState.camera.zoom;
 
     const tolerance =
-        MANIPULATION_PICK_PX /
+        handlePickPixels(options) /
         Math.max(scale, 1e-6);
 
     let best = null;
@@ -1730,9 +1327,7 @@ export function handleAtPoint(
 
             if (
                 !selected &&
-                object.type !== "dimension" &&
-                object.metadata?.thermodynamicsKind !== "process-path" &&
-                !isSum(object)
+                object.type !== "dimension" && object.metadata?.thermodynamicsKind !== "process-path"
             ) {
                 return;
             }

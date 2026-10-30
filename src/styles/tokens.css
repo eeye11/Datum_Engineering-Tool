@@ -421,6 +421,30 @@
     --source-editor-comment: var(--precision-slate-500);
     --source-editor-brace: var(--precision-slate-400);
     --source-editor-marker: #8a5a00;
+
+    /*
+     * A HIDDEN OBJECT'S BLOCK, IN THE SOURCE TAB.
+     *
+     * Four values, all DERIVED from the palette rather than being new colours:
+     *
+     *   band    the block's background - a wash of the panel's own slate, barely
+     *           a step away from the editor's paper, so it reads as a region
+     *           rather than as a highlighted one
+     *   edge    the 2px rule down the block's left side, two steps deeper so it
+     *           is a definite mark at a glance
+     *   ink     the muted geometry - between the code ink and the comment grey,
+     *           so the block is visibly quieter while every character stays
+     *           readable
+     *   mark    the eye-off icon in the margin
+     *
+     * A COMMENT IS UNCHANGED BY THIS: it keeps `--source-editor-comment` and no
+     * band, no edge, no icon. That is the whole distinction the student needs -
+     * grey words in the flow versus a marked, tinted region.
+     */
+    --source-editor-hidden-band: var(--precision-slate-100);
+    --source-editor-hidden-edge: var(--precision-slate-400);
+    --source-editor-hidden-ink: var(--precision-slate-600);
+    --source-editor-hidden-mark: var(--precision-slate-500);
 }
 
 /*
@@ -681,6 +705,13 @@
     --source-editor-comment: var(--precision-night-500);
     --source-editor-brace: var(--precision-night-bd-strong);
     --source-editor-marker: #e8c07a;
+
+    /* A hidden block, mirrored from the light palette: a lift off the well,
+     * a deeper edge, and ink between the code and the comment grey. */
+    --source-editor-hidden-band: var(--precision-night-900);
+    --source-editor-hidden-edge: var(--precision-night-bd-strong);
+    --source-editor-hidden-ink: var(--precision-night-400);
+    --source-editor-hidden-mark: var(--precision-night-500);
 }
 
 /*
@@ -895,5 +926,10 @@
         --source-editor-comment: var(--precision-night-500);
         --source-editor-brace: var(--precision-night-bd-strong);
         --source-editor-marker: #e8c07a;
+
+        --source-editor-hidden-band: var(--precision-night-900);
+        --source-editor-hidden-edge: var(--precision-night-bd-strong);
+        --source-editor-hidden-ink: var(--precision-night-400);
+        --source-editor-hidden-mark: var(--precision-night-500);
     }
 }

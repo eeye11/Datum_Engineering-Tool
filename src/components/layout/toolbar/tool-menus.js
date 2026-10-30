@@ -11,7 +11,6 @@ import { renderProperties } from "../panels/feature-panel.js";
 import { currentEngineeringMetadata, polygonFromCursor, polygonSideCount } from "../../../features/workspace/geometry/geometry-creation.js";
 import { createPreview } from "../../../features/workspace/geometry/preview.js";
 import { STATICS_TOOL_MENUS } from "../../../features/workspace/statics/statics-tools.js";
-import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { setToolMessage } from "./toolbar-render.js";
 
 export function activeCategory() {
@@ -37,7 +36,6 @@ export function toolDefinitionForLabel(label) {
     return {
         id:
             toolIdByLabel[label] ||
-            (label === "Supports" ? "support" : null) ||
             label
                 .toLowerCase()
                 .replace(
@@ -56,13 +54,10 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
-        (tool.id === "thermodynamic-cycles" && ["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(drawingState.activeTool)) ||
-        (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct", "nozzle-diffuser"].includes(drawingState.activeTool)) ||
-        (tool.id === "work" && ["work-arrow", "electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
+        (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
-        tool.childToolIds?.includes(drawingState.activeTool) ||
         STATICS_TOOL_MENUS[tool.id]?.some(
             item =>
                 item.id ===
@@ -96,21 +91,6 @@ export function renderToolButton(tool) {
             drawingState.activeTool,
             drawingState.interaction
                 ?.fluidsTool
-        ) ||
-
-        /*
-         * A FLUIDS INLINE GROUP stands for its contents, exactly as a Statics
-         * submenu parent does: while one of the tools opened beneath Flow Paths
-         * or Flow Indicators is running, the group that holds it stays lit.
-         * Asked of the group table, so a child added there is covered without
-         * another edit here.
-         */
-        Boolean(
-            FLUIDS_TOOL_MENUS[tool.id]?.some(
-                item =>
-                    item.id ===
-                    (drawingState.interaction?.fluidsTool || drawingState.activeTool)
-            )
         );
 
     const shortcut =
@@ -122,23 +102,11 @@ export function renderToolButton(tool) {
      * Tools that open a submenu advertise it, so the
      * affordance matches the existing coordinate-system
      * and polygon buttons.
-     *
-     * A FLUIDS GROUP IS THE EXCEPTION: it expands IN PLACE rather than opening
-     * a popup, so it must not promise a menu. Its `aria-expanded` and
-     * `aria-controls` are written by the inline section that renders it.
      */
-    /*
-     * A GROUP THAT EXPANDS IN PLACE SAYS WHETHER IT IS OPEN.
-     *
-     * The inline section is rendered underneath the button with `hidden` set
-     * from the same state, so the button must state it too - otherwise a
-     * collapsed group looks identical to an open one, and nothing on the page
-     * records what a press would do. `inlineSection` carries the id the button
-     * controls and whether it is showing.
-     */
-    const coordinateAttributes = tool.inlineSection
-        ? ` aria-expanded="${tool.inlineSection.expanded}" aria-controls="${tool.inlineSection.id}"`
-        : tool.submenu && !FLUIDS_TOOL_MENUS[tool.id]
+    const coordinateAttributes =
+        tool.id ===
+            "coordinate-system" ||
+        tool.submenu
             ? ' aria-haspopup="menu" aria-expanded="false"'
             : "";
 
@@ -152,8 +120,7 @@ export function renderToolButton(tool) {
             class="drawing-tool${active ? " active" : ""}"
             type="button"
             data-tool-id="${tool.id}"
-            ${tool.disabled ? 'disabled aria-disabled="true"' : ""}
-            title="${tool.id === "force-components" ? "Force Components: draw an arrow with Loads > Point Load first, then click that arrow to show X and Y components" : tool.label}${shortcut}"
+            title="${tool.label}${shortcut}"
             aria-label="${tool.label}${shortcut}"
             aria-pressed="${active}"
             ${coordinateAttributes}
@@ -571,7 +538,7 @@ export const ARC_CREATION_MODES = [
 ];
 
 export function activateArcMode(toolId, mode) {
-    return armCreationMode(toolId, "arcMode", mode);
+    armCreationMode(toolId, "arcMode", mode);
 }
 
 /*
@@ -596,7 +563,7 @@ function armCreationMode(toolId, key, mode) {
         }
     );
 
-    return import("./tool-activation.js").then(
+    import("./tool-activation.js").then(
         ({ activateTool }) => {
             activateTool(toolId);
 
@@ -621,13 +588,8 @@ function armCreationMode(toolId, key, mode) {
  * records the method and arms the Polygon tool, exactly as the Arc
  * modes do.
  */
-export const POLYGON_CREATION_MODES = [
-    { id: "sides", label: "By Sides" },
-    { id: "centre", label: "By Centre" }
-];
-
-export function activatePolygonMode(mode) {
-    return armCreationMode("polygon", "polygonMode", mode);
+function activatePolygonMode(mode) {
+    armCreationMode("polygon", "polygonMode", mode);
 }
 
 export function openArcMenu(button) {

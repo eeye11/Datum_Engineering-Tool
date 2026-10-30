@@ -15,9 +15,7 @@ import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
-import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
-import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
 
 
     /*
@@ -46,16 +44,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         state,
         bounds
     ) {
-        if (state.interaction.preview?.type === "reducer-expander") {
-            const preview = state.interaction.preview;
-            appendEntity(svg, { ...preview, isPreview: true, style: previewStyle(preview) }, state, bounds);
-            return;
-        }
-        if (state.interaction.phase === "point-force-value" && state.interaction.preview) {
-            appendEntity(svg, { ...state.interaction.preview, isPreview: true }, state, bounds);
-            return;
-        }
-        if (["diesel-cycle", "otto-cycle", "carnot-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
+        if (["process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -462,13 +451,11 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
-                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
+                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
-                geometry: state.activeTool === "electric-work" && state.interaction.annotateEnd
-                    ? resistorGeometryFromDrag(state.interaction.annotateStart, state.interaction.annotateEnd)
-                    : {
+                geometry: {
                     start: state.interaction.annotateStart,
                     end: state.interaction.annotateEnd
                 },
@@ -505,23 +492,15 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             state.interaction
                 .preview;
 
-        /*
-         * A FLOW ARROW PREVIEW CARRIES AN ANCHOR, NOT A SHAPE. It is drawn from
-         * the anchor and direction the gesture resolved for this frame, so it
-         * needs none of the geometry dispatch below and must not be filtered out
-         * for lacking a `geometry` object it was never meant to have.
-         */
-        const isFlowArrowPreview = preview?.type === "flow-arrow";
-
         if (
             !preview ||
-            (!preview.geometry && !isFlowArrowPreview)
+            !preview.geometry
         ) {
             return;
         }
 
         const geometry =
-            preview.geometry || {};
+            preview.geometry;
 
         const scale =
             enggDrawingState
@@ -612,113 +591,23 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         }
 
         /*
-         * A FREE FLOW ARROW BEING DRAWN.
-         *
-         * It has no attachment - just two points - so it is painted by the same
-         * free-arrow painter the committed object uses, which is what keeps the
-         * preview and the release the same arrow. The preview id keeps it out of
-         * selection and hit testing, and the 0.72 opacity makes it read as "not
-         * placed yet".
-         */
-        if (
-            preview.type === "flow-arrow" &&
-            !preview.anchor &&
-            preview.geometry?.start &&
-            preview.geometry?.end
-        ) {
-            const group = createSvgElement("g");
-
-            group.classList.add("drawing-flow-arrow-preview");
-            group.setAttribute("opacity", "0.72");
-
-            appendEntity(
-                group,
-                { ...preview, isPreview: true, style: { ...(preview.style || {}), stroke: style.stroke } },
-                state,
-                bounds
-            );
-
-            svg.appendChild(group);
-
-            return;
-        }
-
-        /*
-         * A FLOW ARROW BEING PLACED: ITS HEAD, ON THE PIPE'S CENTRELINE.
-         *
-         * Drawn through the model's own `arrowHeadPoints`, which is the shape
-         * the committed arrow and the TikZ both use - so the head under the
-         * pointer is the head the release will produce. The wash below makes it
-         * read as a preview; the shape is the real one.
-         *
-         * The preview carries the RESOLVED anchor and direction for the frame,
-         * so a drag along the pipe moves it and a drag across the pipe does
-         * not: `moveFlowArrowSession` projects the pointer onto the run and
-         * publishes the result here.
-         */
-        if (preview.type === "flow-arrow" && preview.anchor && preview.direction) {            /*
-             * THE SAME SHAFT-AND-HEAD THE COMMITTED ARROW DRAWS, from the same
-             * model function - so what the student sees under the pointer is
-             * what the release produces. A preview drawn as a bare triangle
-             * would be showing a different symbol from the one being placed.
-             */
-            const shape = enggFlowArrow.arrowShape(preview.anchor, preview.direction, preview.size);
-
-            if (shape) {
-                const group = createSvgElement("g");
-
-                group.classList.add("drawing-flow-arrow-preview");
-                group.setAttribute("opacity", String(style.opacity));
-
-                const tail = toScreen(shape.shaft.start);
-                const base = toScreen(shape.shaft.end);
-
-                group.appendChild(
-                    createSvgElement("line", {
-                        x1: tail.x,
-                        y1: tail.y,
-                        x2: base.x,
-                        y2: base.y,
-                        stroke: style.stroke,
-                        "stroke-width": 1.5,
-                        "stroke-linecap": "round"
-                    })
-                );
-
-                const tip = toScreen(shape.tip);
-                const first = toScreen(shape.barbFirst);
-                const second = toScreen(shape.barbSecond);
-
-                group.appendChild(
-                    createSvgElement("path", {
-                        d: `M ${tip.x} ${tip.y} L ${first.x} ${first.y} L ${second.x} ${second.y} Z`,
-                        fill: "none",
-                        stroke: style.stroke,
-                        "stroke-width": 1.5,
-                        "stroke-linejoin": "round"
-                    })
-                );
-
-                svg.appendChild(group);
-            }
-
-            return;
-        }
-
-        /*
          * A PIPE / DUCT SEGMENT BEING ROUTED: its two walls, dashed, from the
          * same `boundaryLines` the committed run is drawn with.
          */
         if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
-            enggPipeDuct.pipeDuctPaths(
+            enggPipeDuct.boundaryLines(
                 geometry.start,
                 geometry.end,
                 geometry.engineering || preview.engineering || {}
-            ).forEach((path) => {
-                const points = path.map(toScreen);
-                svg.appendChild(createSvgElement("path", {
-                    d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
-                    fill: "none",
+            ).forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(createSvgElement("line", {
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
                     stroke: style.stroke,
                     "stroke-width": 1.5,
                     "stroke-dasharray": "6 4",
@@ -1192,18 +1081,11 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             preview.type ===
             "polygon"
         ) {
-            /*
-             * A Freeform Polygon previews its OWN vertices. `polygonVertices`
-             * builds a regular polygon from centre, radius and sides, which a
-             * freeform preview does not have - so it drew a zero-size shape
-             * and the outline never appeared while the student drew.
-             */
             const polygonPoints =
-                (
-                    Array.isArray(geometry.points)
-                        ? geometry.points.filter(Boolean)
-                        : enggDrawingState.polygonVertices(geometry)
-                )
+                enggDrawingState
+                    .polygonVertices(
+                        geometry
+                    )
                     .map(toScreen)
                     .map(
                         point =>
@@ -1235,47 +1117,6 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                     polygon
                 );
             }
-
-            /*
-             * A Freeform Polygon's placed vertices: a dot on each, and a
-             * ring on the first (the close target), filled when the pointer
-             * would close the shape.
-             */
-            const markers =
-                preview.metadata?.vertexMarkers || [];
-
-            markers.forEach((vertex, index) => {
-                const screen =
-                    toScreen(vertex);
-
-                if (index === 0) {
-                    svg.appendChild(
-                        createSvgElement("circle", {
-                            cx: screen.x,
-                            cy: screen.y,
-                            r: preview.metadata.closingVertex ? 7 : 6,
-                            fill: preview.metadata.closingVertex
-                                ? style.stroke
-                                : "none",
-                            "fill-opacity": 0.25,
-                            stroke: style.stroke,
-                            "stroke-width": 1.5,
-                            "data-freeform-vertex": "first"
-                        })
-                    );
-                }
-
-                svg.appendChild(
-                    createSvgElement("circle", {
-                        cx: screen.x,
-                        cy: screen.y,
-                        r: 3,
-                        fill: style.stroke,
-                        stroke: "none",
-                        "data-freeform-vertex": String(index)
-                    })
-                );
-            });
 
             return;
         }
@@ -1409,8 +1250,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                 style,
                 state,
                 bounds,
-                true,
-                -(Number(geometry.rotation) || 0)
+                true
             );
             return;
         }

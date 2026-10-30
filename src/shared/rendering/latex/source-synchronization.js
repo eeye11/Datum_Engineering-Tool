@@ -197,10 +197,16 @@ export function writeObjectIntoSource(manager, object, context = {}) {
 
   if (commands === null) {
     /*
-     * Nothing to write. The object exists in the model but has no source
-     * yet, which is the normal state for a tool whose source is still being
-     * implemented. The source is left exactly as it is rather than being
-     * given a placeholder that would misrepresent the drawing.
+     * A HIDDEN OBJECT'S BLOCK IS LEFT EXACTLY AS IT IS.
+     *
+     * `sourceForObject` answers null for a hidden object because it must not be
+     * DRAWN - but the Source tab is the student's text, and taking the block
+     * away would delete code they can read, edit and copy. "Not drawn" and
+     * "not written" are separate decisions: the canvas skips a hidden object in
+     * `objectsThePictureDoesNotShow`, and the Source tab decorates its block as
+     * hidden. Neither needs the text to change.
+     *
+     * A tool with no writer yet is left alone for the same reason.
      */
     return false;
   }
