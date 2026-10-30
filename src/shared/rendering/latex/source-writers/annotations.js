@@ -37,6 +37,7 @@ import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
 import { workArrowPoints } from "../../../../features/workspace/model/thermodynamics/work-arrow.js";
+import { heatTransferTool, heatArrowLabel } from "../../../../features/workspace/model/thermodynamics/heat-transfer.js";
 import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
@@ -166,7 +167,7 @@ function multiLineNode(at, text, colour, options = [], mathSubscript = null, mat
   const lines = String(text ?? "").split("\n");
   const math = lines.length === 1 && annotationSubscript(text, { mathSubscript, mathSymbol, mathSuffix });
   const content = math
-    ? `$${math.base}_{${math.subscript}}$${texText(math.suffix)}`
+    ? `$${math.base.includes("\u0307") ? `\\dot{${math.base.replace("\u0307", "")}}` : math.base}${math.subscript ? `_{${texText(math.subscript)}}` : ""}${math.superscript ? `^{${texText(math.superscript)}}` : ""}$${texText(math.suffix)}`
     : lines.map((line) => texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
@@ -329,7 +330,7 @@ function serializePen(object) {
     }
   }
 
-  const blockArrow = object.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+  const blockArrow = object.metadata?.thermodynamicsKind === "work-arrow" || heatTransferTool(object.metadata?.thermodynamicsKind) ? workArrowPoints(geometry) : [];
   if (blockArrow.length) {
     commands.push(pathThrough([...blockArrow, blockArrow[0]], colour, [`fill=${colour}`, "line join=miter"]));
   } else if (path.length >= 2) {
@@ -337,7 +338,8 @@ function serializePen(object) {
   }
 
   const text = String(object.text ?? "");
-  const textAt = valid(geometry.position) ? geometry.position : valid(geometry.end) ? geometry.end : null;
+  const heatLabel = heatTransferTool(object.metadata?.thermodynamicsKind) ? heatArrowLabel(geometry) : null;
+  const textAt = heatLabel?.position || (valid(geometry.position) ? geometry.position : valid(geometry.end) ? geometry.end : null);
 
   if (text.trim() && textAt) {
     const fontSize = fontFor(object.style);
@@ -354,10 +356,10 @@ function serializePen(object) {
       );
     }
 
-    if (kind !== "arrow" || object.metadata?.thermodynamicsKind === "work-arrow") {
+    if (kind !== "arrow" || object.metadata?.thermodynamicsKind === "work-arrow" || heatLabel) {
       commands.push(
         multiLineNode({ x: finite(textAt.x), y: finite(textAt.y) }, text, colour, [
-          "anchor=center",
+          `anchor=${heatLabel?.anchor || "center"}`,
           `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * 1.2, 2)}}\\selectfont`
         ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
       );

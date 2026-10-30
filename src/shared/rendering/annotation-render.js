@@ -11,6 +11,7 @@ import { annotationSubscript } from "../../features/workspace/model/annotations/
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import { workArrowPoints } from "../../features/workspace/model/thermodynamics/work-arrow.js";
+import { heatTransferTool, heatArrowLabel } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 
@@ -308,7 +309,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 toScreen(point)
             );
 
-        const blockArrow = entity.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+        const blockArrow = entity.metadata?.thermodynamicsKind === "work-arrow" || heatTransferTool(entity.metadata?.thermodynamicsKind) ? workArrowPoints(geometry) : [];
         if (blockArrow.length) {
             svg.appendChild(createSvgElement("polygon", {
                 points: blockArrow.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
@@ -440,7 +441,12 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          * head, or at its own placement - whichever the kind has. A kind
          * with no text (an arrow, a bare table) draws none.
          */
-        const textAt = anchor || end;
+        const heatLabel = heatTransferTool(entity.metadata?.thermodynamicsKind) ? heatArrowLabel(geometry) : null;
+        const textAt = heatLabel ? toScreen(heatLabel.position) : anchor || end;
+        if (heatLabel && textAt) {
+            if (heatLabel.anchor === "north") textAt.y += fontSize * 0.7;
+            if (heatLabel.anchor === "south") textAt.y -= fontSize * 0.7;
+        }
 
         /*
          * WHAT IS DRAWN IS THE CONTENT, OR THE PLACEHOLDER WHEN THERE IS
@@ -508,7 +514,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     textStroke,
                     fontSize,
                     lineHeight,
-                    entity.style?.align,
+                    heatLabel ? (heatLabel.anchor === "east" ? "right" : heatLabel.anchor === "west" ? "left" : "center") : entity.style?.align,
                     entity.metadata?.mathSubscript,
                     entity.metadata?.mathSymbol,
                     entity.metadata?.mathSuffix
@@ -567,9 +573,16 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 const math = lines.length === 1 && annotationSubscript(line, { mathSubscript, mathSymbol, mathSuffix });
                 if (math) {
                     textNode.textContent = math.base;
-                    const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
-                    subscript.textContent = math.subscript;
-                    textNode.appendChild(subscript);
+                    if (math.subscript) {
+                        const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                        subscript.textContent = math.subscript;
+                        textNode.appendChild(subscript);
+                    }
+                    if (math.superscript) {
+                        const superscript = createSvgElement("tspan", { "baseline-shift": "super", "font-size": "70%" });
+                        superscript.textContent = math.superscript;
+                        textNode.appendChild(superscript);
+                    }
                     if (math.suffix) {
                         const suffix = createSvgElement("tspan", {});
                         suffix.textContent = math.suffix;

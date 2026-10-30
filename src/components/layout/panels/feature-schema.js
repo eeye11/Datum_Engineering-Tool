@@ -779,6 +779,20 @@ const FIELDS = {
         label: "Show Name"
     },
 
+    heatQuantity: {
+        kind: "choice", label: "Heat quantity",
+        applies: object => ["heat-entering", "heat-leaving"].includes(object.metadata?.thermodynamicsKind),
+        read: object => object.metadata?.heatQuantity || "total",
+        options: [{ value: "total", label: "Total heat (Q)" }, { value: "specific", label: "Specific heat transfer (q)" }, { value: "rate", label: "Heat-transfer rate (Q̇)" }],
+        write: (object, value) => {
+            if (!["total", "specific", "rate"].includes(value)) return false;
+            const symbol = value === "specific" ? "q" : value === "rate" ? "Q̇" : "Q";
+            const direction = object.metadata.thermodynamicsKind === "heat-entering" ? "in" : "out";
+            object.text = `${symbol}_${direction}`;
+            object.metadata = { ...object.metadata, heatQuantity: value, mathSymbol: symbol, mathSubscript: direction };
+            return true;
+        }
+    },
     workDirection: {
         kind: "choice", label: "Direction",
         applies: object => object.metadata?.thermodynamicsKind === "work-arrow",
@@ -874,6 +888,7 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
+    { id: "heat-arrow", heading: "Heat Arrow", fields: ["heatQuantity"] },
     { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },

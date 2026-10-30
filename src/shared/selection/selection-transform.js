@@ -11,7 +11,7 @@ export function selectionBounds(objects, selectedIds) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
-        if (heatTransferTool(object.metadata?.thermodynamicsKind)) return [g.start, g.end].filter(Boolean);
+        if (heatTransferTool(object.metadata?.thermodynamicsKind)) return workArrowPoints(g);
         if (object.type === "pipe-duct") return pipeDuctPaths(g.start, g.end, object.engineering || {}).flat();
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (object.metadata?.thermodynamicsKind === "work-arrow") return workArrowPoints(g);

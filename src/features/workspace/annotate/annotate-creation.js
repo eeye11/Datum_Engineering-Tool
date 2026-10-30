@@ -328,8 +328,10 @@ export function commitAnnotate(options) {
   }
   if (heat) {
     object.name = heat.label;
+    const direction = drawingState.activeTool === "heat-entering" ? "in" : "out";
+    object.text = `Q_${direction}`;
     object.style.stroke = heat.colour;
-    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
+    object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool, heatQuantity: "total", mathSymbol: "Q", mathSubscript: direction };
   }
 
   /*

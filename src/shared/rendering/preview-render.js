@@ -13,7 +13,6 @@ import { appendDimensionEntity } from "./dimension-render.js";
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
 import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
-import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
 import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
@@ -46,11 +45,6 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
         bounds
     ) {
         if (["diesel-cycle", "otto-cycle", "carnot-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
-            appendEntity(svg, state.interaction.preview, state, bounds);
-            return;
-        }
-        if (isProcessDiagram(state.interaction.preview) &&
-            state.interaction.preview.metadata?.thermodynamicsKind !== "process-plot") {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -453,7 +447,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
-                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
+                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) || heatTransferTool(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
