@@ -1386,7 +1386,8 @@ export function renderCurrentDrawing() {
     const manipulation = editorState.manipulationDrag;
     drawingCanvas.classList.toggle(
         "drawing-object-moving",
-        Boolean(manipulation?.moved && [
+        Boolean((manipulation?.moved ||
+            (manipulation?.kind === "body" && manipulation.object?.metadata?.thermodynamicsKind === "control-volume")) && [
             "body", "annotation-offset", "position", "center", "origin"
         ].includes(manipulation.kind))
     );

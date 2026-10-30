@@ -650,17 +650,19 @@ export function resolvePointerEvent(
         )
     );
 
-    const pipeStart = drawingState.activeTool === "pipe-duct" &&
+    const isPipe = drawingState.activeTool === "pipe-duct";
+    const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+    const pipePoint = isPipe ? enggDrawingState.gridSnapPoint(point, drawingState) : point;
+    const pipeStart = isPipe &&
         (editorState.creationDrag?.pipeDuct
             ? editorState.creationDrag.start
             : drawingState.interaction.routeSegmentStart);
-    if (!pipeStart) return resolution;
+    if (!isPipe) return resolution;
 
     // Lock the run to the start's horizontal axis in both the preview and
     // the release. This is a drawing constraint, independent of snap settings.
-    const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-    const constrained = { x: point.x, y: pipeStart.y };
-    if (point.y !== constrained.y) {
+    const constrained = { x: pipePoint.x, y: pipeStart ? pipeStart.y : pipePoint.y };
+    if (point.x !== constrained.x || point.y !== constrained.y) {
         return {
             ...resolution,
             effectiveConstructionPoint: constrained,

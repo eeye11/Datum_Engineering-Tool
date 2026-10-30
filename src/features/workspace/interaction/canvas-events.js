@@ -60,7 +60,7 @@ function updateManipulationCursor(event) {
                 else if (["position", "center", "origin"].includes(kind) || kind.startsWith("process-label-")) cursor = "move";
                 else cursor = "crosshair";
             } else if (movable(object)) {
-                cursor = selectedIds.includes(object.id) || ["dimension", "annotate"].includes(object.type) ? "move" : "pointer";
+                cursor = selectedIds.includes(object.id) || ["dimension", "annotate"].includes(object.type) || object.metadata?.thermodynamicsKind === "control-volume" ? "move" : "pointer";
             }
         }
     }

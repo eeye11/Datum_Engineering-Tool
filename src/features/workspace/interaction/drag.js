@@ -741,10 +741,10 @@ function applyManipulation(
         const corner = corners[index];
         // Keep the initial grab offset: pressing near a dot must not make
         // the corner jump to the pointer on the first frame.
-        const target = {
+        const target = enggDrawingState.gridSnapPoint({
             x: corner.x + point.x - drag.start.x,
             y: corner.y + point.y - drag.start.y
-        };
+        }, drawingState);
         const sx = Math.max(0.01, (target.x - anchor.x) / (corner.x - anchor.x));
         const sy = Math.max(0.01, (target.y - anchor.y) / (corner.y - anchor.y));
         const transform = value => ({ x: anchor.x + (value.x - anchor.x) * sx, y: anchor.y + (value.y - anchor.y) * sy });
@@ -850,7 +850,7 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
-        if (drag.kind === "body" && object.metadata?.thermodynamicsKind) {
+        if (drag.kind === "body" && (object.metadata?.thermodynamicsKind || object.type === "pipe-duct")) {
             const original = drag.originals[object.id];
             const reference = original?.geometry?.start || original?.geometry?.position || original?.geometry?.center;
             if (reference) {

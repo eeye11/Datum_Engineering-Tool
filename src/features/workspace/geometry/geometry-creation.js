@@ -2319,11 +2319,8 @@ export function beginOrCompleteGeometry(
         // drawn size without asking for a physical dimension or scale.
         if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
-                // The finished cylinder remains selected, with its handles
-                // immediately available instead of starting another drawing.
-                activateTool("select");
-            }
+            // Keep the placed feature selected and ready to move or resize.
+            activateTool("select");
             setToolMessage(object.metadata.thermodynamicsKind === "rankine-cycle"
                 ? "Cycle created - drag to move or use corner dots to resize"
                 : object.metadata.thermodynamicsKind === "nozzle-diffuser"
