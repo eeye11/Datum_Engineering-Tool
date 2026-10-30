@@ -135,23 +135,23 @@ const expectedTools = {
    *   Flow Indicators   how the flow is SHOWN on the run
    *   equipment         the items that sit directly under the heading
    *
-   * `pressure-tap` is gone, `reducer-expander` has joined Flow Paths as an
-   * inline fitting, and `flow-profile` is now an ANALYSIS diagram rather than
-   * an annotation. The toolset definition is the source of truth.
+   * `pressure-tap` is gone and `reducer-expander` stands directly under
+   * Create as an inline fitting of its own. The toolset definition is the
+   * source of truth.
    */
   Create: [
     "pipe-duct",
     "elbow",
     "junction",
-    "reducer-expander",
     "flow-arrow",
     "fluid-level",
+    "reducer-expander",
     "reservoir-tank",
     "pump",
     "valve",
     "flow-meter",
   ],
-  Analysis: ["flow-direction-diagram", "flow-profile", "pressure-profile"],
+  Analysis: ["flow-direction-diagram", "pressure-profile"],
   Reference: [
     "coordinate-system",
     "reference-point",
@@ -182,8 +182,8 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   check(
     "Create lists its groups and tools in the required order",
     entries.join(" | ") ===
-      "Flow Paths | Flow Indicators & Annotations | Reservoir / Tank | " +
-        "Pump | Valve | Flow Meter",
+      "Flow Paths | Flow Indicators & Annotations | Reducer / Expander | " +
+        "Reservoir / Tank | Pump | Valve | Flow Meter",
     entries.join(" | "),
   );
 
@@ -205,16 +205,16 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
   );
 
   /*
-   * REDUCER / EXPANDER SITS IN FLOW PATHS, with the run it changes the bore of.
-   * The equipment - a tank, a pump, a valve, a meter - are individual tools under
-   * the heading, because none of them belongs to a run the way a fitting does.
+   * REDUCER / EXPANDER STANDS UNDER CREATE with the equipment, not inside
+   * Flow Paths - it is an inline fitting, but it is offered as its own tool
+   * so a student can reach it without opening the group.
    */
   check(
-    "Reservoir / Tank, Pump, Valve and Flow Meter are individual tools",
+    "Reducer / Expander, Reservoir / Tank, Pump, Valve and Flow Meter are individual tools",
     directToolsIn(create)
       .map((tool) => tool.id)
       .join(" | ") ===
-      "reservoir-tank | pump | valve | flow-meter",
+      "reducer-expander | reservoir-tank | pump | valve | flow-meter",
     directToolsIn(create)
       .map((tool) => tool.id)
       .join(" | "),
@@ -236,13 +236,11 @@ Object.entries(expectedTools).forEach(([section, ids]) => {
 /*
  * THE CONTENTS OF THE TWO GROUPS.
  *
- * Flow Paths carries the inline fitting as well as the three parts of a run - a
- * reducer changes the bore OF a run, so it belongs beside the run rather than
- * among the equipment. Flow Indicators carries the arrow and the level line;
- * `pressure-tap` no longer exists.
+ * Flow Paths carries the three parts of a run. Flow Indicators carries the
+ * arrow and the level line; `pressure-tap` no longer exists.
  */
 const groupContents = {
-  "fluids-flow-paths": ["pipe-duct", "elbow", "junction", "reducer-expander"],
+  "fluids-flow-paths": ["pipe-duct", "elbow", "junction"],
   "fluids-flow-indicators": ["flow-arrow", "fluid-level"],
 };
 
@@ -257,16 +255,16 @@ Object.entries(groupContents).forEach(([groupId, ids]) => {
 });
 
 /* ============================================================
- * 3. EIGHTEEN TOOLS, NO MORE AND NO FEWER
+ * 3. SEVENTEEN TOOLS, NO MORE AND NO FEWER
  * ============================================================ */
 
-console.log("\n  the eighteen listed tools\n");
+console.log("\n  the seventeen listed tools\n");
 
 const allIds = groups.flatMap((group) => toolsIn(group).map((tool) => tool.id));
 
 check(
-  "there are exactly eighteen tools",
-  allIds.length === 18,
+  "there are exactly seventeen tools",
+  allIds.length === 17,
   `found ${allIds.length}: ${allIds.join(", ")}`,
 );
 
@@ -294,7 +292,7 @@ check(
 
 check(
   "the flat registry holds one entry per tool",
-  Object.keys(fluids.FLUIDS_TOOLS).length === 18,
+  Object.keys(fluids.FLUIDS_TOOLS).length === 17,
   Object.keys(fluids.FLUIDS_TOOLS).join(", "),
 );
 
@@ -338,15 +336,14 @@ const BUILT = [
   "pipe-duct",
   "elbow",
   "junction",
-  "reducer-expander",
   "flow-arrow",
   "fluid-level",
+  "reducer-expander",
   "reservoir-tank",
   "pump",
   "valve",
   "flow-meter",
   "flow-direction-diagram",
-  "flow-profile",
   "pressure-profile",
   "coordinate-system",
   "reference-point",
@@ -454,15 +451,15 @@ const validCapabilities = Object.values(capabilities);
  * The six original shared systems are unchanged, and the Fluids-specific ones
  * have been added as the tools were built: the flow arrow, the two inline fitting
  * kinds, the vessel, the level line, the direction diagram, the analysis
- * diagram, the flow profile and the section plane. `planned` is still a member -
- * it is what a not-yet-built tool would carry - but no tool carries it today.
+ * diagram and the section plane. `planned` is still a member - it is what a
+ * not-yet-built tool would carry - but no tool carries it today.
  */
 check(
   "the capability table names the shared systems and the Fluids-specific ones",
   validCapabilities.join(" | ") ===
     "select | shape | route | dimension | annotate | flow-arrow | inline-fitting | " +
       "inline-equipment | vessel | fluid-level | flow-direction | analysis-diagram | " +
-      "flow-profile | section | planned",
+      "section | planned",
   validCapabilities.join(" | "),
 );
 
@@ -610,7 +607,7 @@ console.log("\n  the groups expand inline through the Statics mechanism\n");
 
   check(
     "the inline subsection is the shared Statics one, not a popup",
-    /FLUIDS_TOOL_MENUS\[tool\.id\]\s*\?\s*FLUIDS_TOOL_MENUS\[tool\.id\]\.map\(renderToolButton\)/.test(
+    /FLUIDS_TOOL_MENUS\[tool\.id\][\s\S]{0,700}?FLUIDS_TOOL_MENUS\[tool\.id\]\.map\(renderToolButton\)/.test(
       renderer,
     ) && /class="drawing-inline-tools"/.test(renderer),
     "the children must be rendered as buttons inside .drawing-inline-tools",

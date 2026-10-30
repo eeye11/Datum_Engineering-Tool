@@ -695,7 +695,7 @@ export function blockContents(source, map) {
          * arrow's attachment, a schematic's own model line - so a reader that
          * needs to know WHAT the block is must see both.
          */
-        header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart)).join("\n"),
+        header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart - 1)).join("\n"),
         body: lines.slice(bodyStart, bodyEnd).join("\n"),
         statements: inside.map((statement) => {
           const statementText = text.slice(statement.start, statement.end);

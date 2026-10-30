@@ -193,7 +193,7 @@ test("non-Fluids icons are unchanged", async () => {
   [
     ["line", "Line"],
     ["beam", "Beam"],
-    ["force", "Point Load"],
+    ["force", "Point Force"],
     ["dimension", "Dimension"],
   ].forEach(([type, label]) => {
     assert.equal(

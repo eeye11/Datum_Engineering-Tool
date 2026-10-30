@@ -16,7 +16,7 @@
 import fs from "fs";
 import { chromium } from "@playwright/test";
 
-const baseUrl = process.argv[2] || "http://localhost:8123/";
+const baseUrl = process.argv[2] || "http://localhost:5174/";
 const outFile = process.argv[3] || "golden.json";
 const only = process.argv[4] ? new RegExp(process.argv[4]) : null;
 
@@ -56,7 +56,7 @@ const TOOLS = [
     ["STATICS", "axial-force-diagram", "plot", "beam", ["c:0.4,0.6", "c:0.5,0.3", "Enter"]],
     ["STATICS", "coordinate-system", "2D Coordinate System"], ["STATICS", "reference-point"],
     ["STATICS", "reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]], ["STATICS", "reference-arc"],
-    ["DYNAMICS", "velocity"], ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
+    ["DYNAMICS", "dynamics-bodies", "dynamics-particle"], ["DYNAMICS", "dynamics-bodies", "dynamics-pulley"], ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];

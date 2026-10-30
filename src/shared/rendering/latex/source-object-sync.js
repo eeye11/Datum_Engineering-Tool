@@ -50,7 +50,6 @@ import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js"
 import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
 import {
   readFreeFlowArrow,
-  baseStyleFromSource,
   schematicReaderFor
 } from "./source-readers/fluids-schematic-readers.js";
 
@@ -167,7 +166,7 @@ function factoryTable() {
 function createObjectFromShape(type, shape, previous) {
   const table = factoryTable();
 
-  if (!table && type !== "pipe-duct") {
+  if (!table) {
     return null;
   }
 
@@ -207,8 +206,8 @@ function createObjectFromShape(type, shape, previous) {
       case "pipe-duct": {
         const engineering = {
           ...enggPipeDuct.defaultPipeEngineering(),
-          ...(Number.isFinite(shape.schematicWidth) && Math.abs(shape.schematicWidth) > 1e-9
-            ? { schematicWidth: Number(shape.schematicWidth.toFixed(6)) }
+          ...(Number.isFinite(shape.separation) && Math.abs(shape.separation) > 1e-9
+            ? { separation: Number(shape.separation.toFixed(6)) }
             : {})
         };
 
@@ -308,13 +307,11 @@ function pipeFromWalls(shapes) {
   };
 
   return {
-    type: "pipe-duct",
     start,
     end,
 
-    /* The wall spacing itself, which is what the model stores. */
-    separation,
-    schematicWidth: separation
+    /* The change from the drawing default, which is what the model stores. */
+    separation: separation - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION
   };
 }
 
@@ -664,7 +661,6 @@ const SCHEMATIC_TYPES = new Set([
   "fluid-level",
   "flow-direction-diagram",
   "pressure-profile",
-  "flow-profile",
   "section-plane"
 ]);
 
@@ -754,8 +750,6 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
      * report: the object keeps its last valid form and the block is listed as
      * unsupported with its own line numbers.
      */
-    const blockText = [block.header || "", block.body].filter(Boolean).join("\n");
-
     const mayBeArrow =
       (previous == null || previous?.type === "flow-arrow") &&
 
@@ -765,12 +759,11 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
        * enough to attempt a read; a block that fails the read falls through to
        * the ordinary report like any other unsupported edit.
        */
-      /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(blockText);
+      /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(block.body);
 
     const arrow = mayBeArrow
-      ? readFlowArrowBlock(blockText, {
+      ? readFlowArrowBlock(block.body, {
           previous,
-          objects,
           hostExists: (hostId) =>
             byId.has(hostId) || objects.some((object) => object?.id === hostId)
         })
@@ -798,6 +791,7 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
      * above the geometry, so asking only the body would never see it. The header
      * is where the block says what it is - which is exactly the question.
      */
+    const blockText = [block.header || "", block.body].filter(Boolean).join("\n");
 
     const schematicReader = previous == null || isSchematicType(previous?.type)
       ? schematicReaderFor(blockText)
@@ -806,7 +800,7 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
     const schematic = schematicReader
       ? schematicReader(blockText, {
           previous,
-          hostExists: (hostId) => byId.has(hostId) || contents.blocks.some(candidate => candidate.id === hostId)
+          hostExists: (hostId) => byId.has(hostId) || objects.some((object) => object?.id === hostId)
         })
       : null;
 
@@ -844,14 +838,8 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
       return;
     }
 
-    if (schematicReader && /DAETUM\s+REDUCER:/.test(blockText)) {
-      invalid.push({ id: block.id, beginLine: block.beginLine, endLine: block.endLine,
-        message: 'Reducer / Expander keeps its last valid form: invalid dimensions, route, or connections.' });
-      return;
-    }
-
     /* A FREE FLOW ARROW: a shaft plus a head, with no attachment to anything. */
-    const attachedBlock = /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(blockText);
+    const attachedBlock = /^[ \t]*%[ \t]*DAETUM[ \t]+(ATTACH|HOST)[ \t]*:/m.test(block.body);
 
     const freeArrow =
       !attachedBlock &&
@@ -902,17 +890,13 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
      * `pipeFromWalls` - and a pair that does not make a pipe falls through to
      * the ordinary report rather than being silently taken as two lines.
      */
-    const pipeBody = block.body.replace(/^[ \t]*\\definecolor\{[^}]*\}\{[^}]*\}\{[^}]*\}[ \t]*$/gm, "");
-    const pipeShapes = splitStatements(pipeBody).map(statement => shapeFromStatement(pipeBody.slice(statement.start,statement.end)));
-    const walls = previous == null || previous?.type === "pipe-duct"
-      ? pipeFromWalls(pipeShapes)
+    const walls = previous === null || previous?.type === "pipe-duct"
+      ? pipeFromWalls(shapes)
       : null;
 
     if (walls) {
-      walls.sourceStyle = baseStyleFromSource(block.body, previous?.style);
       if (!previous) {
         const object = createPipeFromWalls(walls);
-        if (object) object.style = walls.sourceStyle;
 
         if (object) {
           created.push({ id: block.id, object, block });

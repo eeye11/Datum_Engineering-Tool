@@ -1,5 +1,3 @@
-import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
-import { propagatePipeWidth } from "../../../features/workspace/model/fluids/pipe-width.js";
 /*
  * ============================================================
  * APPLYING A PARSE TO THE DRAWING
@@ -199,11 +197,14 @@ function mergeShapeIntoObject(object, shape) {
    * pipe on the canvas. A block whose walls are exactly the default separation
    * stores no change at all, so the run keeps tracking the drawing default.
    */
-  if (shape.type === "pipe-duct" && Number.isFinite(shape.schematicWidth)) {
-    if (shape.sourceStyle) object.style = { ...object.style, ...shape.sourceStyle };
+  if (shape.type === "pipe-duct" && Number.isFinite(shape.separation)) {
     object.engineering = { ...(object.engineering || {}) };
 
-    object.engineering.schematicWidth = Number(shape.schematicWidth.toFixed(6));
+    if (Math.abs(shape.separation) < 1e-9) {
+      delete object.engineering.separation;
+    } else {
+      object.engineering.separation = Number(shape.separation.toFixed(6));
+    }
   }
 
   /*
@@ -308,12 +309,7 @@ export function applyParsedSourceToDrawing({
 
   /* The objects that existed before the edit, for the elbow report below. */
   const before = new Set(state.objects.map((object) => object.id));
-  const beforeGeometry = new Map(state.objects.map(object => [object.id, JSON.stringify(object)]));
 
-  const reducerEdits = [];
-  parsed.updates.forEach(entry => {
-    if (entry.schematic?.type === "reducer-expander") reducerEdits.push({ entry, previousMode: enggReducer.modeOf(entry.object, state.objects) });
-  });
   parsed.updates.forEach((entry) => {
     if (mergeShapeIntoObject(entry.object, entry.schematic ? { schematic: entry.schematic } : entry.shape)) {
       updated.push(entry.object.id);
@@ -357,18 +353,6 @@ export function applyParsedSourceToDrawing({
     }
   });
 
-  reducerEdits.forEach(({ entry, previousMode }) => {
-    const object = entry.object, schematic = entry.schematic;
-    if (previousMode !== schematic.engineering.mode) {
-      object.engineering.mode = previousMode;
-      enggReducer.setMode(object, schematic.engineering.mode, state.objects);
-    } else {
-      Object.entries(schematic.terminalEdits || {}).forEach(([side,width]) => enggReducer.setEndWidth(object, side, width, state.objects));
-    }
-    object.engineering.mode = enggReducer.modeOf(object, state.objects);
-    enggReducer.keepConnectedEndsSeated(object, state.objects);
-  });
-
   if (parsed.removed.length && removeMissing) {
     parsed.removed.forEach((id) => {
       model.removeObject(state, id);
@@ -389,7 +373,6 @@ export function applyParsedSourceToDrawing({
     .map((id) => state.objects.find((object) => object.id === id))
     .filter((object) => object?.type === "pipe-duct")
     .forEach((run) => {
-      propagatePipeWidth(run, state.objects);
       reconcileFluidConnections(run, state.objects);
     });
 
@@ -407,19 +390,7 @@ export function applyParsedSourceToDrawing({
     }
   });
 
-  const changedIds = new Set([...created, ...updated]);
-  const reducerSyncIds = new Set();
-  state.objects.filter(object => object.type === "reducer-expander").forEach(fitting => {
-    const ids = [fitting.id, ...enggReducer.connectedPipeIds(fitting).filter(Boolean)];
-    if (ids.some(id => changedIds.has(id) || beforeGeometry.get(id) !== JSON.stringify(state.objects.find(object => object.id === id)))) {
-      ids.forEach(id => reducerSyncIds.add(id));
-    }
-  });
-  state.objects.forEach(object => {
-    if (before.has(object.id) && beforeGeometry.get(object.id) !== JSON.stringify(object) && !updated.includes(object.id)) updated.push(object.id);
-  });
   return {
-    reducerSyncIds: [...reducerSyncIds],
     created,
     updated,
     removed,

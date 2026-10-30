@@ -1709,3 +1709,16 @@ function settleElbowConnections(drag, event) {
     renderCurrentDrawing();
     renderProperties();
 }
+
+/*
+ * THE DRAG APPLIED EXACTLY AS THE POINTER DRIVES IT, from a test.
+ *
+ * The endpoint tests drive the pipe-duct branch of `applyManipulation` through
+ * the same entry the pointer loop uses - a manipulation record shaped as
+ * `beginManipulationDrag` arms one and the point the drag resolves to - so the
+ * behaviour a test asserts is the behaviour a handle drag performs, with no
+ * second, drift-prone copy of the arithmetic in the test.
+ */
+export function applyManipulationForTest(drag, point) {
+    applyManipulation(drag, point);
+}

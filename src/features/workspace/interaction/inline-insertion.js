@@ -173,69 +173,6 @@ export function findInsertionTarget(rawPoint, objects = drawingState.objects, to
 	return best;
 }
 
-/* Gap targets use visible terminal centres and stable port references. */
-export function portOccupied(run, port, objects = drawingState.objects) {
-    return objects.some(object => {
-        if (object.id === run.id) return false;
-        if (object.type === "reducer-expander") {
-            const ids = enggReducer.connectedPipeIds(object), ports = enggReducer.portsOf(object);
-            return (ids[0] === run.id && ports.start === port) || (ids[1] === run.id && ports.end === port);
-        }
-        if (object.type === "junction") {
-            return (object.geometry?.branches || []).some(branch => branch.connected === run.id &&
-                (!branch.connectedPort || branch.connectedPort === port));
-        }
-        if (object.type === "elbow" && object.engineering?.connections?.includes(run.id)) {
-            return enggPipeDuct.elbowHeldEndOf(run, object) === port;
-        }
-        if (enggEquipment.isEquipmentType(object.type)) {
-            const ids = object.engineering?.pipeIds || [];
-            const ports = object.engineering?.ports || {};
-            return ids.some((id, index) => id === run.id && ports[index === 0 ? "a" : "b"] === port);
-        }
-        if (object.engineering?.connections?.includes(run.id) || object.engineering?.pipeIds?.includes(run.id)) {
-            const position = object.geometry?.position;
-            return !position || Math.hypot(position.x - run.geometry[port].x, position.y - run.geometry[port].y) < 4;
-        }
-        return object.type === "pipe-duct" && ["start", "end"].some(end =>
-            Math.hypot(object.geometry[end].x - run.geometry[port].x, object.geometry[end].y - run.geometry[port].y) < 1e-5);
-    });
-}
-
-export function findReducerTarget(point, objects = drawingState.objects) {
-    if (!finitePoint(point)) return null;
-    const visibleObjects = objects.filter(object => object.visible !== false);
-    const direct = findInsertionTarget(point, visibleObjects);
-    if (direct?.interior) return direct;
-    const pipes = visibleObjects.filter(object => enggPipeDuct.isPipeDuctType(object.type));
-    let best = null;
-    for (let i = 0; i < pipes.length; i++) for (let j = i + 1; j < pipes.length; j++) {
-        const first = pipes[i], second = pipes[j];
-        for (const a of ["start", "end"]) for (const b of ["start", "end"]) {
-            const from = first.geometry[a], to = second.geometry[b];
-            const direction = unitVector(from, to);
-            if (!direction) continue;
-            const length = Math.hypot(to.x-from.x,to.y-from.y);
-            const outwardA = unitVector(first.geometry[a === "start" ? "end" : "start"], from);
-            const outwardB = unitVector(second.geometry[b === "start" ? "end" : "start"], to);
-            if (!outwardA || !outwardB) continue;
-            const aligned = outwardA.x*direction.x+outwardA.y*direction.y >= 0.999999 && outwardB.x*direction.x+outwardB.y*direction.y <= -0.999999;
-            if (!aligned && (length > 4*Math.max(enggPipeDuct.boundarySeparation(first.engineering),enggPipeDuct.boundarySeparation(second.engineering)) ||
-                outwardA.x*direction.x+outwardA.y*direction.y <= 0 || outwardB.x*direction.x+outwardB.y*direction.y >= 0)) continue;
-            const distance = (point.x-from.x)*direction.x+(point.y-from.y)*direction.y;
-            const cross = Math.abs((point.x-from.x)*direction.y-(point.y-from.y)*direction.x);
-            if (distance < 0 || distance > length || cross > INLINE_GRAB_UNITS) continue;
-            if (!best || cross < best.distance) best = {
-                run: first, second, port: a, secondPort: b, gap: true,
-                point: { x:(from.x+to.x)/2,y:(from.y+to.y)/2 }, direction, length, distance: cross,
-                invalid: !aligned || length < enggReducer.MIN_TRANSITION_LENGTH || first.locked || second.locked ||
-                    portOccupied(first,a,objects) || portOccupied(second,b,objects)
-            };
-        }
-    }
-    return best || direct;
-}
-
 /* ============================================================
  * PLANNING
  * ============================================================
@@ -250,15 +187,6 @@ export function planInsertion(kind, target, options = {}) {
 	}
 
 	const run = target.run;
-	if (kind === enggReducer.REDUCER_TYPE && (run.locked || target.invalid)) return null;
-	if (kind === enggReducer.REDUCER_TYPE && target.gap) {
-        const increasing = enggPipeDuct.boundarySeparation(run.engineering) < enggPipeDuct.boundarySeparation(target.second.engineering);
-        const reverse = options.mode && (options.mode === "expand") !== increasing;
-        const first = reverse ? target.second : run, second = reverse ? run : target.second;
-        return { kind, placement: "gap", host: first, first, second, centre: target.point,
-            direction: reverse ? { x: -target.direction.x, y: -target.direction.y } : target.direction,
-            reach: target.length / 2, ports: { first: reverse ? target.secondPort : target.port, second: reverse ? target.port : target.secondPort }, options };
-    }
 	const start = run.geometry?.start;
 	const end = run.geometry?.end;
 
@@ -281,9 +209,7 @@ export function planInsertion(kind, target, options = {}) {
 	 * leaves less than that in a segment turns into an ENDPOINT placement, so no
 	 * zero-length pipe is ever created.
 	 */
-	const reach = kind === enggReducer.REDUCER_TYPE && options.transitionLength == null
-        ? Math.max(enggReducer.MIN_TRANSITION_LENGTH / 2, Math.min(enggPipeDuct.boundarySeparation(run.engineering) * 1.5, length / 4))
-        : insertionReach(kind, options);
+	const reach = insertionReach(kind, options);
 
 	const distanceIn = (at.x - start.x) * direction.x + (at.y - start.y) * direction.y;
 	const distanceFromEnd = length - distanceIn;
@@ -293,11 +219,8 @@ export function planInsertion(kind, target, options = {}) {
 	const endpoint = interior ? null : distanceIn <= distanceFromEnd ? "start" : "end";
 
 	if (endpoint) {
-        if (kind === enggReducer.REDUCER_TYPE && portOccupied(run, endpoint)) return null;
 		return planEndpoint(kind, run, endpoint, options);
 	}
-
-	if (kind === enggReducer.REDUCER_TYPE && (distanceIn <= reach + 1 || distanceFromEnd <= reach + 1)) return null;
 
 	const cutStart = {
 		x: at.x - direction.x * reach,
@@ -322,8 +245,8 @@ export function planInsertion(kind, target, options = {}) {
 	  const first = splitHalf(run, start, cutStart, true);
 	  const second = splitHalf(run, cutEnd, end, false);
 
-	  /* The selected configuration decides which half receives the narrower default. */
-	  applyReducerWidth(kind, options.mode === "expand" ? first : second);
+	  /* THE REDUCER'S NEW WIDTH LANDS ON THE SECOND, END-SIDE SEGMENT. */
+	  applyReducerWidth(kind, second, options);
 
 	  const frame = { centre: at, rotation };
 
@@ -343,12 +266,49 @@ export function planInsertion(kind, target, options = {}) {
 	  };
 	}
 
-/* Initial drawing default: retain the wide width and narrow the other side to 75%. */
-function applyReducerWidth(kind, segment) {
-    if (kind !== enggReducer.REDUCER_TYPE || !segment) return;
-    segment.engineering = { ...segment.engineering,
-        schematicWidth: enggPipeDuct.boundarySeparation(segment.engineering) * 0.75 };
-}
+	/*
+	 * THE TAPER'S WIDTH CHANGE, APPLIED TO THE NEW SEGMENT.
+	 *
+	 * Reduce makes the run NARROWER across the fitting, Expand makes it WIDER. The
+	 * change is written on the SEGMENT (its own `separation`), so the fitting - whose
+	 * taper is derived from both pipes - follows on the next read and can never
+	 * disagree with the pipe it is bolted to.
+	 *
+	 * A width the student set on the tool is honoured; otherwise a sensible schematic
+	 * step of one drawing unit is used, in the direction the mode names. Neither is
+	 * an engineering recommendation.
+	 */
+	export const REDUCER_WIDTH_STEP = 2;
+
+	function applyReducerWidth(kind, segment, options = {}) {
+	  if (kind !== enggReducer.REDUCER_TYPE || !segment) {
+	    return null;
+	  }
+
+	  const hostWidth = enggPipeDuct.boundarySeparation(segment.engineering || {});
+
+	  const requested = Number(options.pipeWidth);
+
+	  const mode = enggReducer.normaliseMode(options.mode);
+
+	  const target =
+	    Number.isFinite(requested) && enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION + requested > 0
+	      ? requested
+	      : mode === enggReducer.REDUCER_MODES.reduce
+	        ? -(hostWidth - Math.max(1, hostWidth - REDUCER_WIDTH_STEP)) || -REDUCER_WIDTH_STEP
+	        : REDUCER_WIDTH_STEP;
+
+	  segment.engineering = {
+	    ...(segment.engineering || {}),
+	    separation: target === 0 ? undefined : Number(target.toFixed(4))
+	  };
+
+	  if (segment.engineering.separation === undefined) {
+	    delete segment.engineering.separation;
+	  }
+
+	  return segment;
+	}
 
 /* Everything the caller gets on a press at (or too near) an end. */
 function planEndpoint(kind, run, endpoint, options) {
@@ -384,8 +344,7 @@ function planEndpoint(kind, run, endpoint, options) {
 	      );
 
 	/* THE REDUCER'S NEW WIDTH LANDS ON THE CONTINUATION. */
-	const first = kind === enggReducer.REDUCER_TYPE ? splitHalf(run, start, end, true) : run;
-    applyReducerWidth(kind, options.mode === "expand" ? first : continuation);
+	applyReducerWidth(kind, continuation, options);
 
 	const frame = { centre, rotation };
 
@@ -394,10 +353,10 @@ function planEndpoint(kind, run, endpoint, options) {
 		placement: "endpoint",
 		host: run,
 		endpoint,
-		first,
+		first: run,
 		second: continuation,
 		frame,
-		direction: kind === enggReducer.REDUCER_TYPE ? outward : direction,
+		direction,
 		rotation,
 		reach,
 		centre,
@@ -497,17 +456,6 @@ export function insertInline(kind, plan, extra = {}) {
 		return null;
 	}
 
-    if (kind === enggReducer.REDUCER_TYPE) {
-        const host = drawingState.objects.find(object => object.id === plan.host.id);
-        if (!host || host.locked) return null;
-        if (plan.placement === "gap" && (portOccupied(host, plan.ports.first) || portOccupied(plan.second, plan.ports.second))) return null;
-        if (plan.placement === "endpoint" && portOccupied(host, plan.endpoint)) return null;
-        if (plan.placement === "inline") {
-            const probe = enggReducer.createReducer({ centre: plan.centre, direction: plan.direction, transitionLength: plan.reach*2, startPipeId: plan.first.id, endPipeId: plan.second.id });
-            if (!enggReducer.canSeat(probe, plan.centre, plan.reach*2, [plan.first,plan.second])) return null;
-        }
-    }
-
 	/*
 	 * WHAT THE ONE UNDO ENTRY WILL RESTORE.
 	 *
@@ -565,7 +513,7 @@ export function insertInline(kind, plan, extra = {}) {
 		 */
 		first.geometry = JSON.parse(JSON.stringify(plan.first.geometry));
 		first.style = { ...(host.style || {}) };
-		first.engineering = { ...(plan.first.engineering || {}) };
+		first.engineering = { ...(host.engineering || {}) };
 
 		/*
 		 * THE NEW HALF IS A NEW OBJECT: its own geometry, style and engineering,
@@ -582,9 +530,7 @@ export function insertInline(kind, plan, extra = {}) {
 		syncSpan(fresh);
 
 		objects.splice(index, 1, first, fresh);
-        transferFarConnections(objects, host.id, fresh.id, fresh.geometry.end);
-	} else if (plan.placement !== "gap") {
-        if (kind === enggReducer.REDUCER_TYPE) committedHost.engineering = { ...plan.first.engineering };
+	} else {
 		/*
 		 * THE ENDPOINT PLACEMENT: the host is edited in place, and the
 		 * continuation is AND IS NOT THE HOST - it is added as its own object.
@@ -645,40 +591,6 @@ export function insertInline(kind, plan, extra = {}) {
 	return { symbol: committedSymbol, created: [committedSymbol, ...created] };
 }
 
-/* The original ID stays on the start half; far-terminal references follow the end half. */
-function transferFarConnections(objects, oldId, newId, far) {
-    objects.forEach(object => {
-        const eng = object.engineering;
-        if (!eng || object.id === oldId || object.id === newId) return;
-        if (object.type === "reducer-expander") {
-            const ports = enggReducer.portsOf(object);
-            for (const side of ["start","end"]) {
-                const key = side === "start" ? "startPipeId" : "endPipeId";
-                if (eng[key] === oldId && ports[side] === "end") eng[key] = newId;
-            }
-            eng.connections = enggReducer.connectedPipeIds(object).filter(Boolean);
-        } else if (eng.pipeIds) {
-            eng.pipeIds = eng.pipeIds.map((id,index) => id === oldId && eng.ports?.[index === 0 ? "a" : "b"] === "end" ? newId : id);
-            eng.connections = eng.pipeIds.filter(Boolean);
-        } else if (object.type === "junction") {
-            for (const branch of object.geometry?.branches || []) {
-                if (branch.connected === oldId && branch.connectedPort === "end") branch.connected = newId;
-            }
-            eng.connections = (object.geometry?.branches || []).map(branch => branch.connected || null);
-        } else if (object.type === "elbow" && eng.connections?.includes(oldId)) {
-            const at = object.geometry?.position;
-            const held = eng.ports?.[oldId];
-            if (held === "end" || (!held && at && Math.hypot(at.x-far.x,at.y-far.y) < Math.hypot(at.x-objects.find(o=>o.id===oldId).geometry.start.x,at.y-objects.find(o=>o.id===oldId).geometry.start.y))) {
-                eng.connections = eng.connections.map(id => id === oldId ? newId : id);
-                if (held) {
-                    eng.ports = { ...eng.ports, [newId]: held };
-                    delete eng.ports[oldId];
-                }
-            }
-        }
-    });
-}
-
 /* A segment that already has an id: added as-is, keeping its own identity. */
 function commitSegment(segment, created) {
 	const object = {
@@ -700,13 +612,13 @@ function buildSymbol(kind, plan, extra) {
 			...extra,
 			centre: plan.centre,
 			direction: plan.direction,
-			mode: plan.placement === "gap" ? (enggPipeDuct.boundarySeparation(plan.first.engineering) < enggPipeDuct.boundarySeparation(plan.second.engineering) ? "expand" : "reduce") : extra.mode || plan.options?.mode,
-			transitionLength: plan.reach * 2,
-			startPipeId: plan.first.id,
+			mode: extra.mode,
+			transitionLength: extra.transitionLength,
+			startPipeId: plan.placement === "inline" ? plan.first.id : plan.host.id,
 			endPipeId: plan.second?.id || null,
 			ports: {
-				start: plan.ports.first || plan.endpoint,
-				end: plan.ports.second || "start"
+				start: plan.placement === "inline" ? "end" : plan.endpoint === "start" ? "end" : "start",
+				end: plan.placement === "inline" ? "start" : plan.endpoint === "start" ? "start" : "end"
 			},
 			style: { ...(drawingState.styleDefaults || {}) }
 		});
@@ -755,11 +667,8 @@ function buildSymbol(kind, plan, extra) {
  */
 function wireConnections(symbol) {
 	if (enggReducer.isReducerType(symbol.type)) {
-        enggReducer.keepConnectedEndsSeated(symbol, drawingState.objects);
-        const widths = enggReducer.endWidthsOf(symbol, drawingState.objects);
-        enggReducer.setEndWidth(symbol, "start", widths.start, drawingState.objects);
-        enggReducer.setEndWidth(symbol, "end", widths.end, drawingState.objects);
-        return;
+		enggReducer.keepConnectedEndsSeated(symbol, drawingState.objects);
+		return;
 	}
 
 	enggEquipment.seatConnectedPipes(symbol, drawingState.objects);
@@ -795,13 +704,13 @@ function wireConnections(symbol) {
  * what the requirement asks for when there is nothing to insert into.
  */
 export function insertStandalone(kind, centre, extra = {}) {
-	if ((!enggEquipment.isEquipmentType(kind) && kind !== enggReducer.REDUCER_TYPE) || !finitePoint(centre)) {
+	if (!enggEquipment.isEquipmentType(kind) || !finitePoint(centre)) {
 		return null;
 	}
 
 	const previousObjects = enggDrawingState.snapshotDrawing(drawingState);
 
-	const symbol = kind === enggReducer.REDUCER_TYPE ? enggReducer.createReducer({ ...extra, centre, direction: { x: 1, y: 0 }, style: { ...drawingState.styleDefaults } }) : enggEquipment.createEquipment(kind, {
+	const symbol = enggEquipment.createEquipment(kind, {
 		...extra,
 		centre,
 		rotation: Number(extra.rotation) || 0,
@@ -846,12 +755,11 @@ export function symbolPreviewFor(kind, plan, extra = {}) {
 			engineering: {
 				mode: enggReducer.normaliseMode(extra.mode),
 				transitionLength: plan.reach * 2,
-				startPipeId: plan.first?.id || null,
-				endPipeId: plan.second?.id || null,
+				startPipeId: null,
+				endPipeId: null,
 				ports: { start: "end", end: "start" }
 			},
 			style: { ...(drawingState.styleDefaults || {}) },
-			previewRuns: [plan.first, plan.second].filter(Boolean),
 			preview: true
 		};
 	}

@@ -64,103 +64,96 @@ export const DEFAULT_ARROW_LENGTH = SCHEMATIC_UNIT * 6;
  * ============================================================ */
 
 export function finitePoint(point) {
-  return (
-    Boolean(point) &&
-    Number.isFinite(Number(point.x)) &&
-    Number.isFinite(Number(point.y))
-  );
+	return Boolean(point) && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y));
 }
 
 export function finiteNumber(value, fallback = 0) {
-  const number = Number(value);
+	const number = Number(value);
 
-  return Number.isFinite(number) ? number : fallback;
+	return Number.isFinite(number) ? number : fallback;
 }
 
 export function copyPoint(point) {
-  return finitePoint(point) ? { x: Number(point.x), y: Number(point.y) } : null;
+	return finitePoint(point) ? { x: Number(point.x), y: Number(point.y) } : null;
 }
 
 export function add(a, b) {
-  return { x: a.x + b.x, y: a.y + b.y };
+	return { x: a.x + b.x, y: a.y + b.y };
 }
 
 export function subtract(a, b) {
-  return { x: a.x - b.x, y: a.y - b.y };
+	return { x: a.x - b.x, y: a.y - b.y };
 }
 
 export function scale(vector, factor) {
-  return { x: vector.x * factor, y: vector.y * factor };
+	return { x: vector.x * factor, y: vector.y * factor };
 }
 
 export function midpoint(a, b) {
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+	return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 
 export function lengthOf(vector) {
-  return Math.hypot(Number(vector?.x) || 0, Number(vector?.y) || 0);
+	return Math.hypot(Number(vector?.x) || 0, Number(vector?.y) || 0);
 }
 
 export function distanceBetween(a, b) {
-  return Math.hypot(
-    Number(a?.x || 0) - Number(b?.x || 0),
-    Number(a?.y || 0) - Number(b?.y || 0),
-  );
+	return Math.hypot(Number(a?.x || 0) - Number(b?.x || 0), Number(a?.y || 0) - Number(b?.y || 0));
 }
 
 /* A unit vector along `a -> b`, or null when the two points coincide. */
 export function unitVector(a, b) {
-  if (!finitePoint(a) || !finitePoint(b)) {
-    return null;
-  }
+	if (!finitePoint(a) || !finitePoint(b)) {
+		return null;
+	}
 
-  const dx = Number(b.x) - Number(a.x);
-  const dy = Number(b.y) - Number(a.y);
-  const length = Math.hypot(dx, dy);
+	const dx = Number(b.x) - Number(a.x);
+	const dy = Number(b.y) - Number(a.y);
+	const length = Math.hypot(dx, dy);
 
-  if (length < 1e-12) {
-    return null;
-  }
+	if (length < 1e-12) {
+		return null;
+	}
 
-  return { x: dx / length, y: dy / length };
+	return { x: dx / length, y: dy / length };
 }
 
 /* The normal to a unit vector, turned a quarter turn anticlockwise. */
 export function normalOf(direction) {
-  return { x: -direction.y, y: direction.x };
+	return { x: -direction.y, y: direction.x };
 }
 
 export function pointAlong(from, direction, distance) {
-  return {
-    x: from.x + direction.x * distance,
-    y: from.y + direction.y * distance,
-  };
+	return {
+		x: from.x + direction.x * distance,
+		y: from.y + direction.y * distance
+	};
 }
 
 /* The angle a direction makes with +x, in degrees - the Rotate value. */
 export function angleOfDirection(direction) {
-  if (!direction) {
-    return 0;
-  }
+	if (!direction) {
+		return 0;
+	}
 
-  return (Math.atan2(direction.y, direction.x) * 180) / Math.PI;
+	return (Math.atan2(direction.y, direction.x) * 180) / Math.PI;
 }
 
 export function directionAtAngle(degrees) {
-  const radians = (Number(degrees) * Math.PI) / 180;
+	const radians = (Number(degrees) * Math.PI) / 180;
 
-  return { x: Math.cos(radians), y: Math.sin(radians) };
+	return { x: Math.cos(radians), y: Math.sin(radians) };
 }
 
 /* Round to a stable number of places, so float noise never reaches the source. */
 export function tidy(value, places = 6) {
-  const number = Number(value);
+	const number = Number(value);
 
-  if (!Number.isFinite(number)) {
-    return 0;
-  }
+	if (!Number.isFinite(number)) {
+		return 0;
+	}
 
-  return Number(number.toFixed(places));
+	return Number(number.toFixed(places));
 }
 
 /* ============================================================
@@ -173,36 +166,36 @@ export function tidy(value, places = 6) {
  * hit test and the handles all place the symbol the same way.
  */
 export function localToWorld(frame, local) {
-  const angle = ((Number(frame?.rotation) || 0) * Math.PI) / 180;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+	const angle = ((Number(frame?.rotation) || 0) * Math.PI) / 180;
+	const cos = Math.cos(angle);
+	const sin = Math.sin(angle);
 
-  const x = Number(local?.x) || 0;
-  const y = Number(local?.y) || 0;
+	const x = Number(local?.x) || 0;
+	const y = Number(local?.y) || 0;
 
-  return {
-    x: (frame?.center?.x || 0) + x * cos - y * sin,
-    y: (frame?.center?.y || 0) + x * sin + y * cos,
-  };
+	return {
+		x: (frame?.center?.x || 0) + x * cos - y * sin,
+		y: (frame?.center?.y || 0) + x * sin + y * cos
+	};
 }
 
 export function worldToLocal(frame, world) {
-  const angle = ((Number(frame?.rotation) || 0) * Math.PI) / 180;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+	const angle = ((Number(frame?.rotation) || 0) * Math.PI) / 180;
+	const cos = Math.cos(angle);
+	const sin = Math.sin(angle);
 
-  const dx = (Number(world?.x) || 0) - (frame?.center?.x || 0);
-  const dy = (Number(world?.y) || 0) - (frame?.center?.y || 0);
+	const dx = (Number(world?.x) || 0) - (frame?.center?.x || 0);
+	const dy = (Number(world?.y) || 0) - (frame?.center?.y || 0);
 
-  return {
-    x: dx * cos + dy * sin,
-    y: -dx * sin + dy * cos,
-  };
+	return {
+		x: dx * cos + dy * sin,
+		y: -dx * sin + dy * cos
+	};
 }
 
 /* A symbol's local points, placed in the drawing. */
 export function placedPoints(frame, localPoints = []) {
-  return localPoints.map((local) => localToWorld(frame, local));
+	return localPoints.map((local) => localToWorld(frame, local));
 }
 
 /* ============================================================
@@ -211,100 +204,86 @@ export function placedPoints(frame, localPoints = []) {
 
 /* The foot of the perpendicular from `point` onto the line through a and b. */
 export function projectOntoLine(point, a, b) {
-  if (!finitePoint(point) || !finitePoint(a) || !finitePoint(b)) {
-    return null;
-  }
+	if (!finitePoint(point) || !finitePoint(a) || !finitePoint(b)) {
+		return null;
+	}
 
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const lengthSquared = dx * dx + dy * dy;
+	const dx = b.x - a.x;
+	const dy = b.y - a.y;
+	const lengthSquared = dx * dx + dy * dy;
 
-  if (lengthSquared < 1e-12) {
-    return {
-      foot: { x: a.x, y: a.y },
-      t: 0,
-      distance: distanceBetween(point, a),
-    };
-  }
+	if (lengthSquared < 1e-12) {
+		return { foot: { x: a.x, y: a.y }, t: 0, distance: distanceBetween(point, a) };
+	}
 
-  const t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared;
+	const t = ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared;
 
-  const foot = { x: a.x + dx * t, y: a.y + dy * t };
+	const foot = { x: a.x + dx * t, y: a.y + dy * t };
 
-  return { foot, t, distance: Math.hypot(point.x - foot.x, point.y - foot.y) };
+	return { foot, t, distance: Math.hypot(point.x - foot.x, point.y - foot.y) };
 }
 
 /* The distance from a point to a SEGMENT (not its infinite line). */
 export function distanceToSegment(point, a, b) {
-  const projection = projectOntoLine(point, a, b);
+	const projection = projectOntoLine(point, a, b);
 
-  if (!projection) {
-    return Infinity;
-  }
+	if (!projection) {
+		return Infinity;
+	}
 
-  if (projection.t >= 0 && projection.t <= 1) {
-    return projection.distance;
-  }
+	if (projection.t >= 0 && projection.t <= 1) {
+		return projection.distance;
+	}
 
-  return Math.min(distanceBetween(point, a), distanceBetween(point, b));
+	return Math.min(distanceBetween(point, a), distanceBetween(point, b));
 }
 
 /* Whether a point is inside a closed polygon (even-odd rule). */
 export function pointInPolygon(point, polygon = []) {
-  if (!finitePoint(point) || polygon.length < 3) {
-    return false;
-  }
+	if (!finitePoint(point) || polygon.length < 3) {
+		return false;
+	}
 
-  let inside = false;
+	let inside = false;
 
-  for (
-    let index = 0, previous = polygon.length - 1;
-    index < polygon.length;
-    previous = index, index += 1
-  ) {
-    const a = polygon[index];
-    const b = polygon[previous];
+	for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+		const a = polygon[index];
+		const b = polygon[previous];
 
-    if (!finitePoint(a) || !finitePoint(b)) {
-      continue;
-    }
+		if (!finitePoint(a) || !finitePoint(b)) {
+			continue;
+		}
 
-    const crosses = a.y > point.y !== b.y > point.y;
+		const crosses = a.y > point.y !== b.y > point.y;
 
-    if (
-      crosses &&
-      point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y || 1e-12) + a.x
-    ) {
-      inside = !inside;
-    }
-  }
+		if (crosses && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y || 1e-12) + a.x) {
+			inside = !inside;
+		}
+	}
 
-  return inside;
+	return inside;
 }
 
 /* The distance from a point to a closed polygon's outline. */
 export function distanceToPolygonOutline(point, polygon = []) {
-  let best = Infinity;
+	let best = Infinity;
 
-  polygon.forEach((corner, index) => {
-    const next = polygon[(index + 1) % polygon.length];
+	polygon.forEach((corner, index) => {
+		const next = polygon[(index + 1) % polygon.length];
 
-    if (!finitePoint(next)) {
-      return;
-    }
+		if (!finitePoint(next)) {
+			return;
+		}
 
-    best = Math.min(best, distanceToSegment(point, corner, next));
-  });
+		best = Math.min(best, distanceToSegment(point, corner, next));
+	});
 
-  return best;
+	return best;
 }
 
 /* Whether a point is on a closed polygon, inside it or within `tolerance`. */
 export function polygonContainsPoint(point, polygon = [], tolerance = 0) {
-  return (
-    pointInPolygon(point, polygon) ||
-    distanceToPolygonOutline(point, polygon) <= tolerance
-  );
+	return pointInPolygon(point, polygon) || distanceToPolygonOutline(point, polygon) <= tolerance;
 }
 
 /* ============================================================
@@ -321,38 +300,33 @@ export function polygonContainsPoint(point, polygon = [], tolerance = 0) {
  * "they meet at a point".
  */
 export function segmentIntersection(a, b, c, d) {
-  if (
-    !finitePoint(a) ||
-    !finitePoint(b) ||
-    !finitePoint(c) ||
-    !finitePoint(d)
-  ) {
-    return null;
-  }
+	if (!finitePoint(a) || !finitePoint(b) || !finitePoint(c) || !finitePoint(d)) {
+		return null;
+	}
 
-  const rx = b.x - a.x;
-  const ry = b.y - a.y;
-  const sx = d.x - c.x;
-  const sy = d.y - c.y;
+	const rx = b.x - a.x;
+	const ry = b.y - a.y;
+	const sx = d.x - c.x;
+	const sy = d.y - c.y;
 
-  const denominator = rx * sy - ry * sx;
+	const denominator = rx * sy - ry * sx;
 
-  if (Math.abs(denominator) < 1e-12) {
-    return null;
-  }
+	if (Math.abs(denominator) < 1e-12) {
+		return null;
+	}
 
-  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / denominator;
-  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / denominator;
+	const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / denominator;
+	const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / denominator;
 
-  if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) {
-    return null;
-  }
+	if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) {
+		return null;
+	}
 
-  return {
-    t: Math.min(1, Math.max(0, t)),
-    u: Math.min(1, Math.max(0, u)),
-    point: { x: a.x + rx * t, y: a.y + ry * t },
-  };
+	return {
+		t: Math.min(1, Math.max(0, t)),
+		u: Math.min(1, Math.max(0, u)),
+		point: { x: a.x + rx * t, y: a.y + ry * t }
+	};
 }
 
 /* ============================================================
@@ -368,30 +342,27 @@ export function segmentIntersection(a, b, c, d) {
  * the application, and this is the one place it is normalised.
  */
 export function rectangleCorners(position, width, height, rotation = 0) {
-  const x = Number(position?.x) || 0;
-  const y = Number(position?.y) || 0;
-  const w = Number(width) || 0;
-  const h = Number(height) || 0;
+	const x = Number(position?.x) || 0;
+	const y = Number(position?.y) || 0;
+	const w = Number(width) || 0;
+	const h = Number(height) || 0;
 
-  const cos = Math.cos(rotation);
-  const sin = Math.sin(rotation);
+	const cos = Math.cos(rotation);
+	const sin = Math.sin(rotation);
 
-  const place = (dx, dy) => ({
-    x: x + dx * cos - dy * sin,
-    y: y + dx * sin + dy * cos,
-  });
+	const place = (dx, dy) => ({ x: x + dx * cos - dy * sin, y: y + dx * sin + dy * cos });
 
-  return [place(0, 0), place(w, 0), place(w, h), place(0, h)];
+	return [place(0, 0), place(w, 0), place(w, h), place(0, h)];
 }
 
 /* A rectangle's centre. */
 export function rectangleCentre(position, width, height, rotation = 0) {
-  const corners = rectangleCorners(position, width, height, rotation);
+	const corners = rectangleCorners(position, width, height, rotation);
 
-  return {
-    x: (corners[0].x + corners[2].x) / 2,
-    y: (corners[0].y + corners[2].y) / 2,
-  };
+	return {
+		x: (corners[0].x + corners[2].x) / 2,
+		y: (corners[0].y + corners[2].y) / 2
+	};
 }
 
 /* ============================================================
@@ -406,44 +377,44 @@ export const DASH_PATTERN_LEVEL = "on 3pt off 2pt";
 export const DASH_PATTERN_SECTION = "on 3pt off 2pt";
 
 const enggFluidsShared = {
-  SCHEMATIC_UNIT,
-  DEFAULT_SYMBOL_RADIUS,
-  DEFAULT_TRANSITION_LENGTH,
-  DEFAULT_CONTINUATION_LENGTH,
-  DEFAULT_VESSEL_WIDTH,
-  DEFAULT_VESSEL_HEIGHT,
-  DEFAULT_PROFILE_WIDTH,
-  DEFAULT_PROFILE_HEIGHT,
-  DEFAULT_SECTION_LENGTH,
-  DEFAULT_ARROW_LENGTH,
-  DASH_PATTERN_LEVEL,
-  DASH_PATTERN_SECTION,
-  finitePoint,
-  finiteNumber,
-  copyPoint,
-  add,
-  subtract,
-  scale,
-  midpoint,
-  lengthOf,
-  distanceBetween,
-  unitVector,
-  normalOf,
-  pointAlong,
-  angleOfDirection,
-  directionAtAngle,
-  tidy,
-  localToWorld,
-  worldToLocal,
-  placedPoints,
-  projectOntoLine,
-  distanceToSegment,
-  pointInPolygon,
-  distanceToPolygonOutline,
-  polygonContainsPoint,
-  segmentIntersection,
-  rectangleCorners,
-  rectangleCentre,
+	SCHEMATIC_UNIT,
+	DEFAULT_SYMBOL_RADIUS,
+	DEFAULT_TRANSITION_LENGTH,
+	DEFAULT_CONTINUATION_LENGTH,
+	DEFAULT_VESSEL_WIDTH,
+	DEFAULT_VESSEL_HEIGHT,
+	DEFAULT_PROFILE_WIDTH,
+	DEFAULT_PROFILE_HEIGHT,
+	DEFAULT_SECTION_LENGTH,
+	DEFAULT_ARROW_LENGTH,
+	DASH_PATTERN_LEVEL,
+	DASH_PATTERN_SECTION,
+	finitePoint,
+	finiteNumber,
+	copyPoint,
+	add,
+	subtract,
+	scale,
+	midpoint,
+	lengthOf,
+	distanceBetween,
+	unitVector,
+	normalOf,
+	pointAlong,
+	angleOfDirection,
+	directionAtAngle,
+	tidy,
+	localToWorld,
+	worldToLocal,
+	placedPoints,
+	projectOntoLine,
+	distanceToSegment,
+	pointInPolygon,
+	distanceToPolygonOutline,
+	polygonContainsPoint,
+	segmentIntersection,
+	rectangleCorners,
+	rectangleCentre
 };
 
 export default enggFluidsShared;

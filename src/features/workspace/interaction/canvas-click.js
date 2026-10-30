@@ -625,6 +625,16 @@ export function openNoteEditorFor(object) {
         }
 
         enggNoteEditor?.open({
+            object,
+
+            /*
+             * THE PROMPT NEEDS THE STATE to project the feature's text point
+             * through the live camera. Without it the anchor cannot resolve
+             * and the editor falls back to the full-screen modal, which
+             * covers the drawing the annotation belongs to.
+             */
+            state: drawingState,
+
             text: object.text || "",
 
             /*
@@ -675,6 +685,12 @@ export function openNoteEditorFor(object) {
     }
 
     enggNoteEditor?.open({
+        object,
+
+        /* Same anchor rule as the annotate branch above: the editor is placed
+         * at the annotation's text point, not opened as a full-screen modal. */
+        state: drawingState,
+
         text: object.text || "",
 
         onApply: (text) => {
@@ -735,6 +751,8 @@ export function openTableCellEditorFor(table, cellIndex) {
     const current = geometry.cells[cellIndex] ?? "";
 
     enggNoteEditor?.open({
+        object: table,
+        state: drawingState,
         text: current,
         multiline: false,
         placeholder: "Enter text",

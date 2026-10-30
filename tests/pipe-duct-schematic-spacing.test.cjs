@@ -343,11 +343,20 @@ const panelSource = fs.readFileSync(
   "utf8"
 );
 
+/*
+ * The check strips comments, then asserts no PANEL FIELD offers a spacing.
+ * The panel's CODE legitimately names the model's constant when it validates a
+ * Pipe Width change (one arithmetic, shared), so only field declarations
+ * count - a `key:` naming separation or spacing, in the schema tables.
+ */
+const fieldDeclarations = panelSource
+  .replace(/\/\*[\s\S]*?\*\//g, " ")
+  .replace(/\/\/[^\n]*/g, " ")
+  .match(/^\s*(?:key|label)\s*:\s*["'`][^"'`]*["'`]/gm) || [];
+
 check(
   "no panel field asks for a boundary separation or schematic spacing",
-  !/boundarySeparation|schematic/i.test(
-    panelSource.replace(/\/\*[\s\S]*?\*\//g, " ")
-  ),
+  !fieldDeclarations.some((line) => /boundary.?separation|schematic/i.test(line)),
   "a spacing field must not be exposed per feature"
 );
 

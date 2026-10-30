@@ -120,14 +120,6 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 	FLUID_LEVEL: "fluid-level",
 	FLOW_DIRECTION: "flow-direction",
 	ANALYSIS_DIAGRAM: "analysis-diagram",
-
-	/*
-	 * FLOW PROFILE is an ANALYSIS DIAGRAM like the Pressure Profile - it is the
-	 * same plotting frame, filled in by the student - but it is its own entry so
-	 * the sidebar, the activation layer and the tests can name it without
-	 * guessing it follows on from another tool.
-	 */
-	FLOW_PROFILE: "flow-profile",
 	SECTION: "section",
 
 	PLANNED: "planned"
@@ -221,6 +213,7 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 			 * heading and arms on the press - there is no Equipment dropdown
 			 * between the student and a Pump.
 			 */
+			{ id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.INLINE_FITTING },
 			{ id: "reservoir-tank", label: "Reservoir / Tank", capability: FLUIDS_CAPABILITIES.VESSEL },
 			{ id: "pump", label: "Pump", capability: FLUIDS_CAPABILITIES.INLINE_EQUIPMENT },
 			{ id: "valve", label: "Valve", capability: FLUIDS_CAPABILITIES.INLINE_EQUIPMENT },
@@ -229,24 +222,18 @@ export const FLUIDS_CAPABILITIES = Object.freeze({
 	},
 
 	/*
-	 * ANALYSIS: THREE DIAGRAMS, AND NOT A SOLVER.
+	 * ANALYSIS: TWO DIAGRAMS, AND NOT A SOLVER.
 	 *
-	 * All three are DRAWING tools: the student places a diagram and fills it in
-	 * themselves, exactly as they place a Shear Force Diagram in Statics. None
-	 * reads the drawing and reports a result, and none will: a flow direction
-	 * diagram, a flow profile and a pressure profile are the student's own
-	 * reasoning, drawn.
-	 *
-	 * FLOW PROFILE SITS BESIDE THE OTHER PROFILES, not in the Flow Indicators
-	 * group. It is an analysis diagram, and grouping it with the flow arrows
-	 * would say it was an annotation.
+	 * Both are DRAWING tools: the student places a diagram and draws it
+	 * themselves, exactly as they place a Shear Force Diagram in Statics. Neither
+	 * reads the drawing and reports a result, and neither will: a flow direction
+	 * diagram and a pressure profile are the student's own reasoning, drawn.
 	 */
 	{
 		id: "fluids-analysis",
 		label: "Analysis",
 		tools: [
 			{ id: "flow-direction-diagram", label: "Flow Direction Diagram", capability: FLUIDS_CAPABILITIES.FLOW_DIRECTION },
-			{ id: "flow-profile", label: "Flow Profile", capability: FLUIDS_CAPABILITIES.FLOW_PROFILE },
 			{ id: "pressure-profile", label: "Pressure Profile", capability: FLUIDS_CAPABILITIES.ANALYSIS_DIAGRAM }
 		]
 	},
@@ -325,8 +312,7 @@ export const FLUIDS_TOOL_MENUS = {
 		 * and the drag sets the main run - the distance is never stored - and it
 		 * commits one fitting owning three or more branches.
 		 */
-		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.ROUTE },
-        { id: "reducer-expander", label: "Reducer / Expander", capability: FLUIDS_CAPABILITIES.INLINE_FITTING }
+		{ id: "junction", label: "Junction", capability: FLUIDS_CAPABILITIES.ROUTE }
 	],
 
 	"fluids-flow-indicators": [
