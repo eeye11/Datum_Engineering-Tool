@@ -548,6 +548,8 @@ export const drawingToolGroups = [
  * each thing. `dimension` is the single dimension tool: the retired Smart
  * Dimension and Variable Dimension tools are no longer part of it.
  */
+toolIcons.Angle = drawingIcon(`<path ${iconStroke} d="M3 4v13h14M3 11h6v6"/>`);
+
 export const annotateToolGroups = [
 	{
 		id: "annotate-selection",
@@ -589,7 +591,7 @@ export const annotateToolGroups = [
 	{
 		id: "annotate-dimensions",
 		label: "Dimensions",
-		tools: [{ id: "dimension", label: "Dimension" }]
+		tools: [{ id: "dimension", label: "Dimension" }, { id: "angle", label: "Angle" }]
 	},
 	{
 		id: "annotate-text",
@@ -808,7 +810,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
-	ANNOTATE: ["Dimension", "Note / Text", "Label", "Callout", "Symbol", "Table"],
+	ANNOTATE: ["Dimension", "Angle", "Note / Text", "Label", "Callout", "Symbol", "Table"],
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*

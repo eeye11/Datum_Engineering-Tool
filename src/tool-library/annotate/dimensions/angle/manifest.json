@@ -1,0 +1,9 @@
+{
+  "id": "annotate.dimensions.angle",
+  "label": "Angle",
+  "category": "annotate",
+  "group": "dimensions",
+  "libraryPath": "src/tool-library/annotate/dimensions/angle",
+  "template": "template.tex",
+  "implemented": true
+}

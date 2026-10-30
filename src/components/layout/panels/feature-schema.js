@@ -530,6 +530,25 @@ function noteStyleField(key, kind, label, extra = {}) {
 }
 
 const FIELDS = {
+    dimensionTextSize: {
+        kind:"number",label:"Text size (px)",min:6,max:64,step:1,
+        applies:object=>object.type === "dimension",
+        read:object=>object.style?.fontSize || 11,
+        write:(object,value)=>{
+            const size=Number(value);if(!Number.isFinite(size)||size<6||size>64)return false;
+            object.style={...object.style,fontSize:size};return true;
+        }
+    },
+    calloutShape: {
+        kind:"choice",label:"Balloon shape",
+        applies:object=>object.type === "annotate" && object.annotateKind === "callout",
+        options:[{value:"rectangle",label:"Rectangle"},{value:"circle",label:"Circle"}],
+        read:object=>object.style?.calloutShape || "rectangle",
+        write:(object,value)=>{
+            if(!["rectangle","circle"].includes(value))return false;
+            object.style={...object.style,calloutShape:value};return true;
+        }
+    },
     calloutReference: {
         kind:"readonly", label:"Reference",
         applies:object => object.type === "annotate" && object.annotateKind === "callout",
@@ -1044,14 +1063,14 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
-    { id:"dimension", heading:"Dimension", fields:["dimensionContent","dimensionMeasurement","dimensionReferences","dimensionStatus"] },
+    { id:"dimension", heading:"Dimension", fields:["dimensionContent","dimensionTextSize","dimensionMeasurement","dimensionReferences","dimensionStatus"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
     { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
-    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text", "calloutReference"] },
+    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text", "calloutShape", "calloutReference"] },
     { id: "note-format", heading: "Text formatting", fields: ["noteFont", "noteSize", "noteBold", "noteItalic", "noteUnderline", "noteAlign", "noteIndent", "noteSpacing"] },
 
     /*

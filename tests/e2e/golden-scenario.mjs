@@ -29,6 +29,7 @@ const TOOLS = [
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
     ["ANNOTATE", "dimension", null, "line", ["c:0.25,0.6", "c:0.7,0.6", "c:0.475,0.45"]],
+    ["ANNOTATE", "angle", null, "angle", ["edge:0", "edge:1", "c:0.35,0.45"]],
     ["ANNOTATE", "note", null, null, ["c:0.3,0.55"]],
     ["ANNOTATE", "label", null, "line", ["c:0.475,0.6"]],
     ["ANNOTATE", "callout", null, "line", ["c:0.475,0.6", "c:0.6,0.35"]],
@@ -323,12 +324,29 @@ async function main() {
         debug("newSheet", key); await newSheet(); debug("sheet ok");
         if (seed === "beam") await seedBeam();
         if (seed === "line") await seedLine();
+        if (seed === "angle") {
+            await seedLine();
+            await chooseTool("GEOMETRY", "line");
+            await drag(P(0.25,0.6),P(0.25,0.2)); await escape();
+        }
         if (seed === "forces") await seedForces();
         const before = await page.evaluate(() => window.enggDrawing.state.objects.map(o => o.id));
         await chooseTool(category, toolId, sub);
         const steps = [];
         for (const action of actions || SPOTS) {
-            if (typeof action === "string" && action.startsWith("type:")) {
+            if (typeof action === "string" && action.startsWith("edge:")) {
+                // Pick the actual drawn edge; grid snapping can move seeded
+                // geometry several pixels away from the original pointer.
+                const point = await page.evaluate(index => {
+                    const state=window.enggDrawing.state;
+                    const line=state.objects.filter(object=>object.type === "line")[index];
+                    const canvas=document.querySelector(".drawing-canvas"),rect=canvas.getBoundingClientRect();
+                    const world={x:(line.geometry.start.x+line.geometry.end.x)/2,y:(line.geometry.start.y+line.geometry.end.y)/2};
+                    const screen=window.enggDrawing.model.engineeringToScreen(world,{width:canvas.clientWidth,height:canvas.clientHeight},state);
+                    return {x:rect.left+screen.x,y:rect.top+screen.y};
+                },Number(action.slice(5)));
+                await click(point);
+            } else if (typeof action === "string" && action.startsWith("type:")) {
                 await page.keyboard.type(action.slice(5)); await sleep(100);
             } else if (typeof action === "string" && action.startsWith("d:")) {
                 const [x1, y1, x2, y2] = action.slice(2).split(",").map(Number);
@@ -356,11 +374,14 @@ async function main() {
             const added = snap.objects.filter(object => created.includes(object.id));
             assert.equal(added.length, 1, `${key} should create exactly one annotation`);
             const object = added[0];
-            if (toolId === "dimension") {
+            if (toolId === "dimension" || toolId === "angle") {
                 assert.equal(object.type, "dimension");
                 assert.equal(object.content, VALUES.magnitude);
                 assert.equal(object.sourceRefs.length, 2);
-                assert.notEqual(object.dimensionType, "angular");
+                if (toolId === "angle") {
+                    assert.equal(object.dimensionType, "angular");
+                    assert.ok(snap.svg.includes("drawing-right-angle-marker"), "Perpendicular lines should draw a square marker");
+                } else assert.notEqual(object.dimensionType, "angular");
             } else {
                 assert.equal(object.annotateKind, toolId);
                 if (toolId === "note") assert.equal(object.text, "Example note");

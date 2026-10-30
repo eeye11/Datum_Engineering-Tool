@@ -1678,6 +1678,7 @@ const geometryFactories = {
              */
             {
                 id: created.id,
+                ...(options.name ? {name:options.name} : {}),
                 content: {
                     dimensionType:
                         created.dimensionType,

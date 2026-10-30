@@ -1,3 +1,4 @@
+import { handleAngleClick } from "./angle-tool.js";
 import { dimensionEndpointAt, endpointPosition, endpointDimensionType } from "./dimension-endpoints.js";
 /*
  * Placing a dimension: reference selection and the placement click.
@@ -35,6 +36,10 @@ export function handleDimensionClick(
     resolution,
     event
 ) {
+    if (drawingState.activeTool === "angle") {
+        handleAngleClick(canvasPointFromEvent(event, false) || resolution.rawPointerPoint || resolution.effectiveConstructionPoint);
+        return;
+    }
     if (drawingState.activeTool === "dimension") {
         const raw = canvasPointFromEvent(event, false) || resolution.rawPointerPoint || resolution.effectiveConstructionPoint || resolution.snappedPoint;
         if (!raw) return;

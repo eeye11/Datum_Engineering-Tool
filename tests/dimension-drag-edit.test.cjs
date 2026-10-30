@@ -48,7 +48,7 @@ console.log("\n  the dimension's grab point is its text\n");
   /*
    * A horizontal line 100 long, measured by a linear dimension placed 20
    * above it. The dimension line runs above the geometry and the number sits
-   * on that line, so the text anchor is the midpoint of the dimension line -
+   * on that line, so the text anchor is centered above the dimension line -
    * NOT either end of it.
    */
   const line = {
@@ -91,13 +91,11 @@ console.log("\n  the dimension's grab point is its text\n");
     const [lineStart] = graphics.line;
 
     check(
-      "the text anchor is the midpoint of the dimension line",
+      "the text anchor is centered above the dimension line",
       Math.abs(
         graphics.textAnchor.x - (graphics.line[0].x + graphics.line[1].x) / 2
       ) < 1e-6 &&
-        Math.abs(
-          graphics.textAnchor.y - (graphics.line[0].y + graphics.line[1].y) / 2
-        ) < 1e-6,
+        graphics.textAnchor.y > Math.max(graphics.line[0].y, graphics.line[1].y),
       `anchor ${JSON.stringify(graphics.textAnchor)}, line ${JSON.stringify(
         graphics.line
       )}`,

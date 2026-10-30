@@ -1,3 +1,4 @@
+import { attachSymbolInsert, symbolPickerContains } from "./text-symbol-insert.js";
 /*
  * ============================================================
  * THE LOAD MAGNITUDE POPUP
@@ -191,12 +192,13 @@ export function openLoadValuePopup({
     document.body.appendChild(popup);
 
     const input = popup.querySelector("[data-load-input]");
+    if (expression) attachSymbolInsert(input);
     const select = popup.querySelector("[data-load-unit]");
     const errorEl = popup.querySelector("[data-load-error]");
 
     input.value = value === null || value === undefined
         ? ""
-        : formatValue(value);
+        : expression ? String(value) : formatValue(value);
 
     openPopup = popup;
 
@@ -488,7 +490,7 @@ export function openLoadValuePopup({
                 return;
             }
 
-            if (!popup.contains(event.target)) {
+            if (!popup.contains(event.target) && !symbolPickerContains(event.target)) {
                 document.removeEventListener(
                     "pointerdown",
                     onOutside

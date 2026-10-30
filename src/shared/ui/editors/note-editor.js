@@ -1,3 +1,4 @@
+import { attachTextSymbols, symbolPickerContains, isSymbolPickerOpen } from "./text-symbol-insert.js";
 import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../typography/note-text-style.js";
 /*
  * The Note editor.
@@ -358,6 +359,7 @@ function openInline(options, anchor) {
   openDialog = host;
 
   const input = host.querySelector("#noteText");
+  attachTextSymbols(host);
 
   const preview = options.object ? createPreview(options.object) : null;
 
@@ -425,7 +427,7 @@ function openInline(options, anchor) {
   let finished = false;
 
   const outside = (event) => {
-    if (finished || host.contains(event.target)) {
+    if (finished || host.contains(event.target) || symbolPickerContains(event.target)) {
       return;
     }
 
@@ -505,6 +507,7 @@ function openCanvasText(options) {
   input.value = options.text || "";
   input.rows = 1;
   host.append(input);
+  attachTextSymbols(host);
   document.body.append(host);
   openDialog = host;
   let finished = false;
@@ -547,10 +550,10 @@ function openCanvasText(options) {
     else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); finish(); }
   });
   host.addEventListener("pointerdown", event => event.stopPropagation());
-  const outside = event => { if (!host.contains(event.target)) finish(); };
+  const outside = event => { if (!host.contains(event.target) && !symbolPickerContains(event.target)) finish(); };
   document.addEventListener("pointerdown", outside, true);
   stopOutsidePress = () => document.removeEventListener("pointerdown", outside, true);
-  input.addEventListener("blur", () => finish());
+  input.addEventListener("blur", () => { if (!isSymbolPickerOpen()) finish(); });
   if (typeof options.cameraSignal === "function") stopFollowing = enggInlineEntry.followCamera(options.cameraSignal, place);
   place();
   input.focus();
@@ -651,6 +654,7 @@ function openModal(options) {
   document.body.appendChild(dialog);
 
   openDialog = dialog;
+  attachTextSymbols(dialog);
 
   const closeIt = () => {
     close();

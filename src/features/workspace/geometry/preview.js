@@ -380,6 +380,7 @@ export function updatePreview(
                     x: point.x,
                     y: point.y
                 };
+
         }
 
         reportConstructionStatus(

@@ -466,7 +466,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 const height = balloon ? bottomRight.y-topLeft.y : lines.length * lineHeight + 4;
 
                 svg.appendChild(
-                    createSvgElement("rect", {
+                    createSvgElement(entity.style?.calloutShape === "circle" && kind === "callout" ? "circle" : "rect", {
+                        cx:textAt.x, cy:textAt.y, r:width/2,
                         x: textAt.x - width / 2,
                         y: textAt.y - height / 2,
                         width,

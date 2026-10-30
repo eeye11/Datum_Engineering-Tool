@@ -1,4 +1,5 @@
-﻿/*
+import { attachTextSymbols } from "../../../shared/ui/editors/text-symbol-insert.js";
+/*
  * ============================================================
  * THE FEATURES PANE - THE SELECTION'S OWN PROPERTIES
  * ============================================================
@@ -760,6 +761,7 @@ export function renderFeatures() {
     if (objects.length) {
         host.dataset.featuresContext = "selection";
         host.innerHTML = featuresMarkupForSelection(objects);
+        attachTextSymbols(host);
         applyIndeterminate(host);
 
         return;

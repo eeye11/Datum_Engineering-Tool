@@ -1040,8 +1040,9 @@ export function calloutBox(annotation, state = {}) {
   const scale = 2.4 * zoom;
   const font = noteFontPixels(annotation.style, zoom);
   const text = displayTextOf(annotation);
-  const width = Math.max(20, noteTextWidth(text, annotation.style, font) + 10) / scale;
-  const height = Math.max(20, String(text).split("\n").length * font * 1.2 + 6) / scale;
+  let width = Math.max(20, noteTextWidth(text, annotation.style, font) + 10) / scale;
+  let height = Math.max(20, String(text).split("\n").length * font * 1.2 + 6) / scale;
+  if (annotation.style?.calloutShape === "circle") width = height = Math.hypot(width,height);
   return {minX:at.x-width/2,maxX:at.x+width/2,minY:at.y-height/2,maxY:at.y+height/2};
 }
 

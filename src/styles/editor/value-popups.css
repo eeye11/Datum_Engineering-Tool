@@ -426,3 +426,20 @@
     overflow: hidden;
     white-space: pre;
 }
+
+.drawing-insert-symbol {
+    display: inline-block;
+    padding: 3px 7px;
+    margin-top: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.drawing-canvas-text-editor > .drawing-insert-symbol {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    white-space: nowrap;
+    background: var(--datum-surface);
+    color: var(--datum-ink);
+    border: 1px solid var(--datum-green);
+}

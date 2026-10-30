@@ -110,6 +110,7 @@ export function isPointTool(toolId) {
 export const REQUIRED_INPUT_TOOLS = [
     /* The dimension tool collects references until Enter. */
     "dimension",
+    "angle",
 
     /* The reference-based annotate kinds attach to a feature. */
     "label",

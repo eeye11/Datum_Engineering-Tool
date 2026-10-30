@@ -371,7 +371,7 @@ function preferredCircularType(object, point, offered) {
  * `point` is the resolved model point of the click, used only to decide WHICH
  * segment - never as the measurement itself.
  */
-function dimensionReferenceForFeature(
+export function dimensionReferenceForFeature(
     object,
     point
 ) {
@@ -841,7 +841,7 @@ export function inferDimensionDescriptor(
  * Null when either end cannot be resolved, so a dimension over a segment that
  * no longer exists is refused rather than measured from a stray point.
  */
-function referenceSpan(lineRef) {
+export function referenceSpan(lineRef) {
     const direct = twoPointSpanOf(lineRef?.object);
 
     if (direct) {

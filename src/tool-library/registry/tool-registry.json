@@ -207,6 +207,13 @@
               "parentId": "annotate",
               "kind": "tool",
               "libraryPath": "src/tool-library/annotate/dimensions/dimension"
+            },
+            {
+              "id": "annotate.dimensions.angle",
+              "label": "Angle",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/dimensions/angle"
             }
           ]
         },

@@ -338,7 +338,9 @@ function serializePen(object) {
 
     if (kind === "callout") {
       const box = enggAnnotate.calloutBox(object);
-      commands.push(`\\draw[${colour}, fill=white] ${point(box.minX,box.minY)} rectangle ${point(box.maxX,box.maxY)};`);
+      commands.push(object.style?.calloutShape === "circle"
+        ? `\\draw[${colour}, fill=white] ${point((box.minX+box.maxX)/2,(box.minY+box.maxY)/2)} circle[radius=${num((box.maxX-box.minX)/2)}];`
+        : `\\draw[${colour}, fill=white] ${point(box.minX,box.minY)} rectangle ${point(box.maxX,box.maxY)};`);
     }
 
     if (kind !== "arrow") {
@@ -663,7 +665,9 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
   }
 
   const textAt =
-    frame && valid(frame.center)
+    frame && valid(frame)
+      ? frame
+      : frame && valid(frame.center)
       ? frame.center
       : Array.isArray(line) && line.length === 2
         ? {
@@ -674,7 +678,7 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
 
   if (textAt && String(graphics.text ?? "").trim()) {
     commands.push(
-      `\\node[anchor=center, text=${colour}] at ${point(finite(textAt.x), finite(textAt.y))} {${graphics.text}};`
+      `\\node[anchor=center, font=\\fontsize{${num((frame?.fontSize || 11)*0.75)}}{${num((frame?.fontSize || 11)*0.9)}}\\selectfont, text=${colour}${frame?.angle ? `, rotate=${num(frame.angle)}` : ""}] at ${point(finite(textAt.x), finite(textAt.y))} {${texText(graphics.text)}};`
     );
   }
 
