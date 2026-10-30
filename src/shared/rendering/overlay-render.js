@@ -9,7 +9,8 @@ import { rigidBodyHandles } from "../geometry/feature-handles.js";
 import enggDrawingState from "../model/drawing-state.js";
 import { axisLabelPositions } from "../geometry/axis-labels.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
-import { createSvgElement, paintColour } from "./svg-primitives.js";
+import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
+import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 import { SVG_NAMESPACE } from "../../features/workspace/constants.js";
 import { selectionBounds, selectionCorners } from "../selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
@@ -649,7 +650,7 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
         };
 
         const frame = selectionBounds(state.objects, [...selected]);
-        if (frame) {
+        if (frame && selected.size > 1) {
             const first = toScreen({ x: frame.minX, y: frame.maxY });
             const last = toScreen({ x: frame.maxX, y: frame.minY });
             svg.appendChild(createSvgElement("rect", {
@@ -1005,7 +1006,7 @@ export {
     function renderSelectionOutline(svg, state, bounds) {
         const selected = new Set(state.selection?.selectedObjectIds || []);
 
-        if (!selected.size) {
+        if (!selected.size || selected.size > 1) {
             return;
         }
 
@@ -1028,6 +1029,21 @@ export {
 
                 const first = toScreen({ x: frame.minX, y: frame.maxY });
                 const last = toScreen({ x: frame.maxX, y: frame.minY });
+
+                if (object.metadata?.thermodynamicsKind === "work-arrow" && object.geometry?.position) {
+                    const label = toScreen(object.geometry.position);
+                    const fontSize = zoomedFontHere(Number(object.style?.fontSize) || 12);
+                    const lines = String(enggAnnotate.displayTextOf(object) || "").split("\n");
+                    const textWidth = Math.max(1, ...lines.map(line => line.length)) * fontSize * 0.62;
+                    const textHeight = lines.length * fontSize * 1.2;
+                    const align = object.style?.align;
+                    const left = label.x - (align === "center" ? textWidth / 2 : align === "right" ? textWidth : 0);
+                    // Include the label and its subscript, with breathing room around both.
+                    first.x = Math.min(first.x, left - 3);
+                    first.y = Math.min(first.y, label.y - textHeight / 2 - 3);
+                    last.x = Math.max(last.x, left + textWidth + 3);
+                    last.y = Math.max(last.y, label.y + textHeight / 2 + fontSize * 0.3 + 3);
+                }
 
                 const width = Math.max(2, last.x - first.x);
                 const height = Math.max(2, last.y - first.y);

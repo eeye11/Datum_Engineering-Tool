@@ -308,7 +308,7 @@ export function commitAnnotate(options) {
   if (kind === "arrow" && drawingState.activeTool === "work-arrow") {
     object.name = "Work Arrow";
     object.text = "W in";
-    object.style = { ...object.style, stroke: "#dc2626", align: "center" };
+    object.style = { ...object.style, stroke: "#1e3a8a", align: "center" };
     object.metadata = { ...object.metadata, thermodynamicsKind: "work-arrow", workDirection: "in", mathSymbol: "W", mathSubscript: "in" };
     const start = object.geometry.start, end = object.geometry.end;
     if (start && end) {
@@ -351,14 +351,14 @@ export function commitAnnotate(options) {
 
   enggDrawingState.clearInteraction(drawingState);
 
-  if (heat) {
+  if (heat || object.metadata?.thermodynamicsKind === "work-arrow") {
     enggDrawingState.setActiveTool(drawingState, "select");
   }
 
   enggDrawingState.selectObject(drawingState, object.id);
 
   setToolMessage(object.metadata?.thermodynamicsKind === "work-arrow"
-    ? "Work arrow placed - edit Direction and Text in Features"
+    ? "Work arrow placed - Select is active; edit Direction and Text in Features"
     : heat ? `${heat.label} arrow placed - Select is active` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();

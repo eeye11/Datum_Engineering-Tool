@@ -463,7 +463,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
                     end: state.interaction.annotateEnd
                 },
                 style: {
-                    stroke: heatTransferTool(state.activeTool)?.colour || "#1f5c38",
+                    stroke: state.activeTool === "work-arrow" ? "#1e3a8a" : heatTransferTool(state.activeTool)?.colour || "#1f5c38",
                     fontSize: 12,
                     arrowhead: "closed"
                 }
