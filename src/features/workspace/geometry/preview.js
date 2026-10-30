@@ -551,29 +551,24 @@ export function updatePreview(
          * the perpendicularity the code will write. A drag too short to give
          * the axis a direction shows nothing rather than a degenerate cross.
          */
-        const arm = Math.hypot(
-            point.x - interaction.startPoint.x,
-            point.y - interaction.startPoint.y
-        );
+        const axisBox = rectangleGeometry(interaction.startPoint, point);
 
-        if (arm > 1e-9) {
+        if (axisBox.width > 1e-9 && axisBox.height > 1e-9) {
             interaction.preview =
                 createPreview(
                     "coordinate-system-2d",
                     {
                         origin: {
-                            ...interaction.startPoint
+                            x: axisBox.position.x,
+                            y: axisBox.position.y - axisBox.height
                         },
 
-                        rotation: Math.atan2(
-                            point.y - interaction.startPoint.y,
-                            point.x - interaction.startPoint.x
-                        ),
+                        rotation: 0,
 
-                        xPositiveLength: arm,
-                        xNegativeLength: arm,
-                        yPositiveLength: arm,
-                        yNegativeLength: arm
+                        xPositiveLength: axisBox.width,
+                        xNegativeLength: 0,
+                        yPositiveLength: axisBox.height,
+                        yNegativeLength: 0
                     }
                 );
 
@@ -582,7 +577,7 @@ export function updatePreview(
                 !resolution.snapCandidate
             ) {
                 setToolMessage(
-                    "Release to place the X axis"
+                    "Release to place the coordinate system"
                 );
             }
         } else {

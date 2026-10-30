@@ -650,7 +650,7 @@ export function resolvePointerEvent(
         )
     );
 
-    if (drawingState.activeTool === "process-plot") {
+    if (["process-plot", "coordinate-system-2d"].includes(drawingState.activeTool)) {
         const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
         const snapped = enggDrawingState.gridSnapPoint(point, drawingState);
         if (snapped.x === point.x && snapped.y === point.y) return resolution;

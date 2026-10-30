@@ -43,7 +43,7 @@ export function activate2DCoordinateSystemTool() {
         "idle";
 
     setToolMessage(
-        "Specify origin"
+        "Drag opposite corners to size the coordinate system"
     );
 
     renderEngineeringTools(
@@ -435,7 +435,7 @@ export function initialToolMessage(
             arc: "Specify arc start point",
             polygon: "Specify polygon centre",
             "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
-            "coordinate-system-2d": "Specify origin",
+            "coordinate-system-2d": "Drag opposite corners to size the coordinate system",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "tank": "Drag between opposite corners to draw a closed tank",
             "turbine-compressor": "Drag opposite corners to draw a turbine/compressor casing; select it to move, resize or rotate",

@@ -51,7 +51,7 @@ export function coordinateSystemArms(
             : 25;
 
     const read = value =>
-        Number.isFinite(Number(value)) && Number(value) > 0
+        Number.isFinite(Number(value)) && Number(value) >= 0
             ? Number(value)
             : fallback;
 

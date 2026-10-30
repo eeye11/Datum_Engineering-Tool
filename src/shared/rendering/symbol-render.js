@@ -376,8 +376,8 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
 
         const readLength = value =>
             Math.max(
-                1,
-                Number.isFinite(Number(value)) && Number(value) > 0
+                0,
+                Number.isFinite(Number(value)) && Number(value) >= 0
                     ? Number(value)
                     : fallbackLength
             ) * scale;

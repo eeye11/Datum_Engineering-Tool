@@ -491,29 +491,29 @@ const SHAPES = {    line(object) {
         });
 
         if (showX && (xPositive > 0 || xNegative > 0)) {
-            const posX = xPositive > 0 ? xPositive : fallback;
-            const negX = xNegative > 0 ? xNegative : fallback;
+            const posX = xPositive;
+            const negX = xNegative;
 
             commands.push(
                 straightLine(
                     rotate(-negX, 0),
                     rotate(posX, 0),
                     style,
-                    { arrow: "both" }
+                    { arrow: posX > 0 && negX > 0 ? "both" : posX > 0 ? "end" : "start" }
                 )
             );
         }
 
         if (showY && (yPositive > 0 || yNegative > 0)) {
-            const posY = yPositive > 0 ? yPositive : fallback;
-            const negY = yNegative > 0 ? yNegative : fallback;
+            const posY = yPositive;
+            const negY = yNegative;
 
             commands.push(
                 straightLine(
                     rotate(0, -negY),
                     rotate(0, posY),
                     style,
-                    { arrow: "both" }
+                    { arrow: posY > 0 && negY > 0 ? "both" : posY > 0 ? "end" : "start" }
                 )
             );
         }

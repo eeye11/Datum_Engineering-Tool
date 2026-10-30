@@ -11,7 +11,6 @@ import enggAnnotationModel from "../../features/workspace/model/annotations/anno
 import { arcPathData, createSvgElement, paintColour } from "./svg-primitives.js";
 import { appendDimensionEntity } from "./dimension-render.js";
 import { appendAnnotateEntity, appendAnnotationEntity } from "./annotation-render.js";
-import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
 import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
@@ -1180,14 +1179,24 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             preview.type ===
             "coordinate-system-2d"
         ) {
-            appendCoordinateSystem(
-                svg,
-                geometry,
-                style,
-                state,
-                bounds,
-                true
-            );
+            const origin = geometry.origin;
+            if (!origin) return;
+            const angle = Number(geometry.rotation) || 0;
+            const xLength = Number(geometry.xPositiveLength) || 0;
+            const yLength = Number(geometry.yPositiveLength) || 0;
+            const corner = (x, y) => toScreen({
+                x: origin.x + x * Math.cos(angle) - y * Math.sin(angle),
+                y: origin.y + x * Math.sin(angle) + y * Math.cos(angle)
+            });
+            svg.appendChild(createSvgElement("polygon", {
+                points: [corner(0, 0), corner(xLength, 0), corner(xLength, yLength), corner(0, yLength)]
+                    .map(point => `${point.x},${point.y}`).join(" "),
+                fill: "none",
+                stroke: style.stroke,
+                "stroke-width": 1.5,
+                "stroke-dasharray": "6 4",
+                opacity: style.opacity
+            }));
             return;
         }
 

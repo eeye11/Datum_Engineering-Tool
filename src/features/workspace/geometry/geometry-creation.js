@@ -1956,20 +1956,16 @@ export function beginOrCompleteGeometry(
          * cannot skew the axes out of square: whatever direction the
          * release lands in, Y is exactly 90 degrees from X.
          *
-         * The arm length is the distance the student dragged. Both the
-         * positive and negative arms use it, so the origin sits in the
-         * middle of the cross the way a coordinate system is drawn on
-         * paper. There are no ticks, units or scale factors here - this
+         * The arm length is the distance the student dragged. Only the
+         * positive X and Y arms are drawn, starting at the shared origin.
+         * There are no ticks, units or scale factors here - this
          * places the AXES, nothing else.
          */
-        const arm = Math.hypot(
-            point.x - first.x,
-            point.y - first.y
-        );
+        const axisBox = rectangleGeometry(first, point);
 
-        if (arm <= 1e-9) {
+        if (axisBox.width <= 1e-9 || axisBox.height <= 1e-9) {
             setToolMessage(
-                "Drag from the origin to set the X axis"
+                "Specify opposite corner to enclose the axes"
             );
 
             return;
@@ -1978,21 +1974,18 @@ export function beginOrCompleteGeometry(
         object =
             enggDrawingState.geometryFactories.coordinateSystem2D(
                 {
-                    x: first.x,
-                    y: first.y
+                    x: axisBox.position.x,
+                    y: axisBox.position.y - axisBox.height
                 },
                 {
-                    rotation: Math.atan2(
-                        point.y - first.y,
-                        point.x - first.x
-                    ),
+                    rotation: 0,
 
-                    xAxisLength: arm,
-                    yAxisLength: arm,
-                    xPositiveLength: arm,
-                    xNegativeLength: arm,
-                    yPositiveLength: arm,
-                    yNegativeLength: arm,
+                    xAxisLength: axisBox.width,
+                    yAxisLength: axisBox.height,
+                    xPositiveLength: axisBox.width,
+                    xNegativeLength: 0,
+                    yPositiveLength: axisBox.height,
+                    yNegativeLength: 0,
 
                     name: "Coordinate System",
 
@@ -2360,6 +2353,7 @@ export function beginOrCompleteGeometry(
             previousObjects
         );
 
+        if (object.type === "coordinate-system-2d") activateTool("select");
         setToolMessage("Ready");
 
         renderProperties();
@@ -2372,9 +2366,8 @@ export function beginOrCompleteGeometry(
         drawingState
     );
 
-    setToolMessage(
-        "Ready"
-    );
+    if (object.type === "coordinate-system-2d") activateTool("select");
+    setToolMessage("Ready");
 
     renderProperties();
     renderCurrentDrawing();
