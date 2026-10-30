@@ -650,6 +650,14 @@ export function resolvePointerEvent(
         )
     );
 
+    if (drawingState.activeTool === "process-plot") {
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+        const snapped = enggDrawingState.gridSnapPoint(point, drawingState);
+        if (snapped.x === point.x && snapped.y === point.y) return resolution;
+        return { ...resolution, effectiveConstructionPoint: snapped,
+            snappedPoint: null, inferredPoint: null, snapCandidate: null, inference: null, guideline: null };
+    }
+
     const isPipe = drawingState.activeTool === "pipe-duct";
     const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
     const pipePoint = isPipe ? enggDrawingState.gridSnapPoint(point, drawingState) : point;

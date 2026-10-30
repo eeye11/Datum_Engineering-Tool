@@ -628,7 +628,7 @@ export function updatePreview(
          * press decided where the shape begins, and Shift only says the two
          * extents are equal.
          */
-        const square = Boolean(resolution.modifiers?.shift);
+        const square = drawingState.activeTool === "rectangle" && Boolean(resolution.modifiers?.shift);
 
         interaction.squareConstrained = square;
 

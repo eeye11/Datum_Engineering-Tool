@@ -9,8 +9,15 @@ export function isProcessDiagram(object) {
 }
 
 export function processDiagramPaths(geometry, object) {
-    const paths = saturationPaths(geometry);
-    return isSaturationCurve(object) ? paths : paths.slice(0, 3);
+    if (isSaturationCurve(object)) return saturationPaths(geometry);
+    // The visible axes follow the drawn bounds, so snapped corners put the
+    // axis lines themselves on the grid rather than an invisible inset box.
+    const point = (x, y) => cylinderPoint(geometry, x, y);
+    return [
+        [point(0, 1), point(0, 0), point(1, 0)],
+        [point(-0.012, 0.975), point(0, 1), point(0.012, 0.975), point(-0.012, 0.975)],
+        [point(0.975, -0.012), point(1, 0), point(0.975, 0.012), point(0.975, -0.012)]
+    ];
 }
 
 // Schematic coordinates, not substance property data.

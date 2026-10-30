@@ -49,7 +49,8 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
-        if (isProcessDiagram(state.interaction.preview)) {
+        if (isProcessDiagram(state.interaction.preview) &&
+            state.interaction.preview.metadata?.thermodynamicsKind !== "process-plot") {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
