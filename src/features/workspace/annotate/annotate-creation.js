@@ -1,3 +1,4 @@
+import { calloutReferenceAt } from "../model/annotations/callout-reference.js";
 /*
  * ========================================================
  * CREATING AN ANNOTATE FEATURE
@@ -200,10 +201,6 @@ function defaultsFor(kind) {
     };
   }
 
-  if (kind === "symbol") {
-    return { symbolId: "datum" };
-  }
-
   return {};
 }
 
@@ -254,7 +251,7 @@ export function commitAnnotate(options) {
 
       /*
        * A CHOSEN SYMBOL, when the caller supplied one - the Symbol tool's picker
-       * passes it here. `defaultsFor` supplies "datum" otherwise, so a symbol
+       * passes it here. The model supplies "datum" otherwise, so a symbol
        * added by any other route still has a glyph.
        */
       symbolId: options.symbolId || undefined,
@@ -287,6 +284,15 @@ export function commitAnnotate(options) {
    */
   if (kind === "note") {
     object.text = "";
+  }
+  if (kind === "callout") {
+    if (!String(options.text || "").trim()) {
+      const numbers = drawingState.objects.filter(item => item.annotateKind === "callout")
+        .map(item => Number(item.text)).filter(Number.isFinite);
+      object.text = String(Math.max(0, ...numbers) + 1);
+    }
+    object.anchorRef = calloutReferenceAt(options.start, drawingState, options.targetFeatureId);
+    object.targetFeatureId = object.anchorRef?.featureId || null;
   }
 
   /*
@@ -393,7 +399,7 @@ function returnToSelect() {
 function annotatePlacedMessage(kind) {
   return (
     {
-      note: "Note placed - type its text in the panel",
+      note: "Type your note on canvas — Enter finishes; Shift+Enter adds a line",
       label: "Label placed - it will follow its feature",
       leader: "Leader placed",
       callout: "Callout placed",

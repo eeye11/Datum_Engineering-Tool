@@ -229,43 +229,28 @@
               "parentId": "annotate",
               "kind": "tool",
               "libraryPath": "src/tool-library/annotate/text/label"
-            }
-          ]
-        },
-        {
-          "id": "leaders",
-          "label": "Leaders",
-          "kind": "group",
-          "libraryPath": "src/tool-library/annotate/leaders",
-          "tools": [
-            {
-              "id": "annotate.leaders.leader",
-              "label": "Leader",
-              "parentId": "annotate",
-              "kind": "tool",
-              "libraryPath": "src/tool-library/annotate/leaders/leader"
             },
-            {
-              "id": "annotate.leaders.callout",
-              "label": "Callout",
-              "parentId": "annotate",
-              "kind": "tool",
-              "libraryPath": "src/tool-library/annotate/leaders/callout"
-            }
-          ]
-        },
-        {
-          "id": "symbols",
-          "label": "Symbols",
-          "kind": "group",
-          "libraryPath": "src/tool-library/annotate/symbols",
-          "tools": [
             {
               "id": "annotate.symbols.symbol",
               "label": "Symbol",
               "parentId": "annotate",
               "kind": "tool",
               "libraryPath": "src/tool-library/annotate/symbols/symbol"
+            }
+          ]
+        },
+        {
+          "id": "leaders",
+          "label": "Callouts",
+          "kind": "group",
+          "libraryPath": "src/tool-library/annotate/leaders",
+          "tools": [
+            {
+              "id": "annotate.leaders.callout",
+              "label": "Callout",
+              "parentId": "annotate",
+              "kind": "tool",
+              "libraryPath": "src/tool-library/annotate/leaders/callout"
             }
           ]
         },

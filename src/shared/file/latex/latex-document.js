@@ -35,6 +35,7 @@ import enggDrawingExport from "../document-export.js";
 import { describeFeature } from "./feature-description.js";
 import { createPalette, num, svgToTikz, unmappedCharacters } from "./svg-to-tikz.js";
 import enggExportTransform from "../../../shared/rendering/latex/export-transform.js";
+import { pictureSource } from "../../../shared/rendering/latex/drawing-source.js";
 
 export const LATEX_EXTENSION = "tex";
 export const LATEX_MEDIA_TYPE = "application/x-tex";
@@ -647,7 +648,16 @@ function syncExportTransform(objects, limits) {
  * palette, so two sheets sharing a colour define it once.
  */
 function sheetSourcePicture(source, palette) {
-    const lines = String(source || "").split("\n");
+    /*
+     * THE PICTURE, NOT THE STUDENT'S SOURCE TAB TEXT.
+     *
+     * `pictureSource` removes every comment DAETUM generated - the legacy
+     * markers, the readable `% DAETUM OBJECT:` name line and the identity
+     * fields - while leaving every command and every comment the STUDENT wrote
+     * character for character. This is an export into their own `.tex`, so
+     * nothing of DAETUM's bookkeeping belongs in it.
+     */
+    const lines = pictureSource(source).split("\n");
 
     const kept = [];
     const definitions = [];
@@ -735,7 +745,7 @@ export function readSheetLatex(sheet) {
             : "";
 
     if (sourceHasCommands(stored)) {
-        return stored.trim();
+        return pictureSource(stored).trim();
     }
 
     return cleanSheetPicture(

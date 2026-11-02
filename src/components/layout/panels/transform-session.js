@@ -1,3 +1,4 @@
+import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
 /*
  * ============================================================
  * THE FEATURES PANEL'S TRANSFORM
@@ -36,9 +37,51 @@ import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
+import { setPipeWidth, adjustElbowRadius } from "./feature-schema.js";
+import { propagatePipeWidth, reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
+
+/*
+ * A TRANSFORM THAT CARRIES PIPEWORK CARRIES ITS JOINTS TOO.
+ *
+ * A shift, a turn or a resize moves the runs' ends like any drag does, so each
+ * moved run is put through the ONE reconciler afterwards: a join the move made
+ * earns its fitting, a join it broke loses it, and a corner it only flattened stays
+ * attached.
+ */
+function reconcileMovedFluids(targets) {
+    (targets || []).forEach((object) => {
+        if (object?.type === "pipe-duct") {
+            reconcileFluidConnections(object, drawingState.objects);
+        }
+    });
+}
+
+/*
+ * THE FITTING'S CONNECTED ENDS FIND THEIR PIPES THROUGH HERE.
+ *
+ * `feature-schema.js` declares fields and must not depend on the live document,
+ * so a run lookup is injected: a connected elbow re-anchored by a panel edit
+ * then lands on exactly the runs its connection record names.
+ *
+ * IT IS WIRED IN `features-editor.js`, not here. `feature-schema.js` takes part
+ * in an import cycle with this module, and calling its setter at MODULE SCOPE
+ * reached the setter before its own binding had initialised - a temporal dead
+ * zone throw at load. The editor pane is the module that actually edits fields,
+ * so it is where the lookup belongs.
+ */
 
 /* The increment every arrow applies, and the precision the fields are read at. */
 export const TRANSFORM_STEP = 0.1;
+
+/*
+ * THE PIPE WIDTH INCREMENT.
+ *
+ * One click of Pipe Width opens or closes the two walls by the default
+ * separation - one whole pipe width - because a tenth of that would be an
+ * invisible nudge on a line a few units apart. Typed values are applied as
+ * given, so a student who wants a precise width still has it.
+ */
+export const PIPE_WIDTH_STEP = 4;
 
 /* Floating-point noise is a display problem, not a geometry problem. */
 export function tidy(value) {
@@ -130,10 +173,17 @@ export function shiftSelection(deltaX, deltaY) {
     detachSourceSync();
 
     targets.forEach((object) => {
+        if (enggReducer.isReducerType(object.type)) {
+            const centre = object.geometry.position;
+            enggReducer.slideReducerTo(object, { x: centre.x + deltaX, y: centre.y + deltaY }, state.objects);
+            return;
+        }
         enggFeatureGeometry.translateObject(object, deltaX, deltaY, (id) =>
             state.objects.find((candidate) => candidate.id === id) || null
         );
     });
+
+    reconcileMovedFluids(targets);
 
     enggDrawingState.commitDrawingChange(state, previous);
 
@@ -186,7 +236,7 @@ function rotationEditsFor(object, pivot, radians) {
  */
 export function rotateSelection(degrees) {
     const state = drawingState;
-    const targets = transformableObjects();
+    const targets = transformableObjects().filter(object => object.type !== "reducer-expander" || !enggReducer.connectedPipeIds(object).some(Boolean));
 
     if (!state || !targets.length || !Number.isFinite(degrees)) {
         return 0;
@@ -224,6 +274,8 @@ export function rotateSelection(degrees) {
     detachSourceSync();
 
     targets.forEach((object) => rotationEditsFor(object, pivot, radians));
+
+    reconcileMovedFluids(targets);
 
     enggDrawingState.commitDrawingChange(state, previous);
 
@@ -268,7 +320,145 @@ export function applyTransform(axis, amount) {
         return rotateSelection(value);
     }
 
+    /*
+     * PIPE WIDTH IS A TRANSFORM, NOT A MEASUREMENT.
+     *
+     * Like the three above it is a CHANGE applied to the selection, and it is
+     * the same operation the Features field performs - one arithmetic, in
+     * `setPipeWidth`. Non-pipe objects answer zero, so a mixed selection moves
+     * its pipes and leaves everything else alone.
+     */
+    if (axis === "width") {
+        return adjustPipeWidth(value);
+    }
+
+    /*
+     * BEND RADIUS IS THE SAME KIND OF CONTROL, FOR A FITTING.
+     *
+     * The amount is a CHANGE to each selected elbow's current radius, clamped to
+     * the bend's arms, and each connected end is re-anchored on its pipe - so a
+     * typed value or an arrow click moves the tangent points along the pipes
+     * rather than detaching the fitting. Nothing else is touched: an elbow has
+     * no stroke width to change here, and Pipe Width is a run's own property.
+     */
+    if (axis === "bendRadius") {
+        return adjustElbowRadiusSelection(value);
+    }
+
+    /*
+     * BEND ANGLE IS AN ABSOLUTE VALUE, so "apply a transform of +5" is not a
+     * thing it has. Its row writes it directly; the axis answers 0 here rather
+     * than inventing an interpretation.
+     */
+    if (axis === "bendAngle") {
+        return 0;
+    }
+
     return 0;
+}
+
+/* ============================================================
+ * PIPE WIDTH
+ * ============================================================ */
+
+/*
+ * Open or close every selected run by `change`, as ONE undoable operation.
+ *
+ * The centreline is never touched: the run keeps its two endpoints, so its
+ * length and orientation are exactly what they were and only the distance
+ * between the walls moves. Fixed runs are refused with the rest of the
+ * transformable set - Fix is absolute, so it holds the width too.
+ */
+export function adjustPipeWidth(change) {
+    const state = drawingState;
+    const amount = Number(change);
+
+    if (!state || !Number.isFinite(amount) || amount === 0) {
+        return 0;
+    }
+
+    const targets = transformableObjects().filter((object) => object.type === "pipe-duct");
+
+    if (!targets.length) {
+        return 0;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(state);
+
+    detachSourceSync();
+
+    let changed = 0;
+
+    targets.forEach((object) => {
+        const current = Number(object.engineering?.separation) || 0;
+
+        if (setPipeWidth(object, current + amount)) {
+            changed += 1;
+
+            /*
+             * THE CHANGE SPREADS ALONG THE DIRECTLY CONNECTED RUN, because a
+             * pipe is one piece of pipework however many segments it was drawn
+             * with. The walk stops at an elbow, so the run on the far side of a
+             * fitting keeps its own width - see `propagatePipeWidth`.
+             */
+            propagatePipeWidth(object, state.objects);
+        }
+    });
+
+    if (!changed) {
+        return 0;
+    }
+
+    enggDrawingState.commitDrawingChange(state, previous);
+
+    renderCurrentDrawing();
+
+    return changed;
+}
+
+/* ============================================================
+ * BEND RADIUS
+ * ============================================================
+ *
+ * One relative change, applied to every selected elbow that is not Fixed, as
+ * ONE undoable operation. Fixed fittings are refused with the rest of the
+ * transformable set - Fix is absolute, so it holds the bend too.
+ */
+export function adjustElbowRadiusSelection(change) {
+    const state = drawingState;
+    const amount = Number(change);
+
+    if (!state || !Number.isFinite(amount) || amount === 0) {
+        return 0;
+    }
+
+    const targets = transformableObjects().filter((object) => object.type === "elbow");
+
+    if (!targets.length) {
+        return 0;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(state);
+
+    detachSourceSync();
+
+    let changed = 0;
+
+    targets.forEach((object) => {
+        if (adjustElbowRadius(object, amount)) {
+            changed += 1;
+        }
+    });
+
+    if (!changed) {
+        return 0;
+    }
+
+    enggDrawingState.commitDrawingChange(state, previous);
+
+    renderCurrentDrawing();
+
+    return changed;
 }
 
 export default {
@@ -276,6 +466,8 @@ export default {
     tidy,
     transformableObjects,
     shiftSelection,
-    rotateSelection,
-    applyTransform
-};
+    	rotateSelection,
+    	 	applyTransform,
+    	 	adjustPipeWidth,
+    	 	adjustElbowRadiusSelection
+    	};

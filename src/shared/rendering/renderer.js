@@ -66,6 +66,7 @@ import { renderPreview } from "./preview-render.js";
         if (!canvas) {
             return;
         }
+        state = { ...state, textEntryObjectId };
 
         /*
          * THE ZOOM THIS FRAME IS DRAWN AT, recorded once so every font scale
@@ -166,7 +167,7 @@ import { renderPreview } from "./preview-render.js";
          * or not the picture on screen already shows it. `textEntryObjectId` is
          * set and cleared by the editor; nothing is written to the model.
          */
-        const textEntryId = state.textEntryObjectId || null;
+        const textEntryId = textEntryObjectId || null;
 
         const live = new Set(liveObjectIds || []);
 
@@ -180,10 +181,26 @@ import { renderPreview } from "./preview-render.js";
                 : [])
             : state.objects;
 
-        if (drawn.length) {
-            drawn.forEach(
+        /*
+         * A HIDDEN OBJECT IS NOT DRAWN.
+         *
+         * `visible: false` is the model's own flag for this, and the hit test and
+         * the source writer already honour it - so honouring it HERE as well is
+         * what makes the canvas, the pick and the source agree about what is on
+         * the sheet. The object itself stays in `state.objects` with its id,
+         * geometry, style and connections intact; only this pass skips it.
+         *
+         * The filter is applied INSIDE the loop rather than by replacing `drawn`,
+         * so the loop still walks the sheet's own list and the overlay case above
+         * is unaffected.
+         */
+        drawn.forEach(
                 entity => {
                     try {
+                        if (entity?.visible === false) {
+                            return;
+                        }
+
                         appendEntity(
                             svg,
                             entity,
@@ -200,9 +217,8 @@ import { renderPreview } from "./preview-render.js";
                 }
             );
 
-            if (renderFailures.length) {
-                reportRenderFailures(renderFailures);
-            }
+        if (renderFailures.length) {
+            reportRenderFailures(renderFailures);
         }
 
         /*

@@ -131,6 +131,20 @@ function atPrecision(value, precision) {
 
 /*
  * ============================================================
+ * VOLUMETRIC FLOW RATE
+ * ============================================================
+ *
+ * WHAT A STUDENT STATES ON A FLOW PROFILE'S Y AXIS. The base is m³/s, which is
+ * the SI statement of a volume per second; every other row is an exact
+ * multiple of it, so converting between them is one division.
+ *
+ * THE LITRE ROWS ARE CONVERTED FROM THE SECANT, not from a litre-per-minute
+ * factor of its own: 1 L/s is a thousandth of a cubic metre per second and
+ * 60 L/min is the same litre per second, so both come from the same base
+ * figure rather than from two independently written constants.
+ */
+/*
+ * ============================================================
  * A DIMENSION
  * ============================================================
  *
@@ -222,6 +236,88 @@ const QUANTITY_UNITS = {
         factor: 4.4482216152605 * 0.3048,
         customary: true
       }
+    }
+  },
+
+  /*
+   * ============================================================
+   * VOLUMETRIC FLOW RATE
+   * ============================================================
+   *
+   * WHAT A STUDENT STATES ON A FLOW PROFILE'S Y AXIS. The base is m³/s, which is
+   * the SI statement of a volume per second; every other row is an exact
+   * multiple of it, so converting between them is one division.
+   *
+   * THE LITRE ROWS ARE CONVERTED FROM THE SECANT, not from a litre-per-minute
+   * factor of its own: 1 L/s is a thousandth of a cubic metre per second and
+   * 60 L/min is the same litre per second, so both come from the same base
+   * figure rather than from two independently written constants.
+   */
+  flowRate: {
+    base: "m³/s",
+    units: {
+      "m³/s": { label: "m³/s", factor: 1 },
+      "L/s": { label: "L/s", factor: 0.001 },
+      "L/min": { label: "L/min", factor: 0.001 / 60 },
+      "m³/h": { label: "m³/h", factor: 1 / 3600 },
+      "ft³/s": { label: "ft³/s", factor: 0.3048 * 0.3048 * 0.3048, customary: true },
+      "gpm": { label: "gpm", factor: 0.003785411784 / 60, customary: true }
+    }
+  },
+
+  /*
+   * ============================================================
+   * MASS FLOW RATE
+   * ============================================================
+   *
+   * kg/s is the base; the gram rows are its thousandths and the tonne row its
+   * thousand, so a mass flow stated in any of them converts through one base.
+   */
+  massFlowRate: {
+    base: "kg/s",
+    units: {
+      "kg/s": { label: "kg/s", factor: 1 },
+      "g/s": { label: "g/s", factor: 0.001 },
+      "kg/h": { label: "kg/h", factor: 1 / 3600 },
+      "t/h": { label: "t/h", factor: 1000 / 3600 },
+      "lb/s": { label: "lb/s", factor: 0.45359237, customary: true }
+    }
+  },
+
+  /*
+   * ============================================================
+   * SPEED
+   * ============================================================
+   *
+   * A VELOCITY VALUE without a direction - an average flow speed on a profile,
+   * not a vector. Its factors are the length factors over the second, so
+   * "1 m/s" is exactly a thousand millimetres per second.
+   */
+  speed: {
+    base: "m/s",
+    units: {
+      "m/s": { label: "m/s", factor: 1 },
+      "mm/s": { label: "mm/s", factor: 0.001 },
+      "km/h": { label: "km/h", factor: 1 / 3.6 },
+      "ft/s": { label: "ft/s", factor: 0.3048, customary: true }
+    }
+  },
+
+  /*
+   * ============================================================
+   * A STUDENT-DEFINED QUANTITY
+   * ============================================================
+   *
+   * A flow profile may plot something the presets do not name - a head, a
+   * loss coefficient, a mixing ratio. Those numbers are DIMENSIONLESS as far as
+   * DAETUM is concerned: it carries no unit of its own and accepts exactly one
+   * unit token, the empty one, so a student cannot attach "N" to a number the
+   * application has no way to check.
+   */
+  custom: {
+    base: "",
+    units: {
+      "": { label: "", factor: 1 }
     }
   },
 
@@ -622,9 +718,11 @@ const enggQuantities = {
 
   QUANTITY_UNITS,
   unitsFor,
+  isUnitFor,
+  defaultUnitFor,
+  canonicalUnitFor,
   conversionFactor,
   convertValue,
-  isUnitFor,
   readQuantity,
 };
 

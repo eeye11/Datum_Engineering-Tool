@@ -1207,6 +1207,19 @@ function addObjectCandidates(
      * The one span published is the centreline itself, which is what gives a
      * run its midpoint and quarter points.
      */
+    if (object.type === "reducer-expander") {
+        const direction = geometry.direction, centre = geometry.position;
+        const length = Number(object.engineering?.transitionLength);
+        const magnitude = direction && Math.hypot(direction.x, direction.y);
+        if (centre && magnitude > 0 && length > 0) {
+            [-1,1].forEach(sign => addCandidate(candidates, "endpoint", object.id, {
+                x: centre.x + sign*direction.x/magnitude*length/2,
+                y: centre.y + sign*direction.y/magnitude*length/2
+            }));
+        }
+        return;
+    }
+
     if (object.type === "pipe-duct") {
         if (geometry.start && geometry.end) {
             addCandidate(

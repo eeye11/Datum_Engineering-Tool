@@ -385,7 +385,7 @@ async function run() {
   check("the preview draws it as a figure", Boolean(figure));
   check(
     "identified by the block, so a click can select its reference",
-    figure?.dataset.blockId === `dwg_${reference?.[1]}`,
+    figure?.dataset.blockId === `dwg${reference?.[1]}`,
     figure?.dataset.blockId,
   );
 

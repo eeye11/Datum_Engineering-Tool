@@ -157,7 +157,13 @@ export const FEATURE_TYPES = Object.freeze({
      * swept up. So both are declared here.
      */
     "pipe-duct": { body: true, spanShaped: true },
-    elbow: { spanShaped: true }
+    elbow: { spanShaped: true },
+
+    /*
+     * A JUNCTION IS AN `area`: a closed fitting with a contour of its own, so a
+     * selection box catches it when the box reaches the shape.
+     */
+    junction: { area: true }
 });
 
 const traitOf = (type, trait) => Boolean(FEATURE_TYPES[type]?.[trait]);

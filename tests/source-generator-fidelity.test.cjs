@@ -451,9 +451,15 @@ check("including the sketch's curve", hasPoint(documentSource, curveBend), docum
 check("with no teal anywhere", !documentSource.includes("193335"));
 check("and no command with two widths", commandsOf(documentSource).every((line) => (line.match(/line width=/g) || []).length <= 1));
 check(
-  "the visible source is a picture without markers",
+  "the visible source is a picture without identity markers",
+  /*
+   * THE TAB SHOWS NAMES, NOT MACHINERY. The readable `% DAETUM OBJECT:` line
+   * stays - it is the label a student reads against the code - while the
+   * markers that locate a block are gone.
+   */
   manager.getVisibleSource().trimStart().startsWith(sourceModule.PICTURE_BEGIN) &&
-    !/DAETUM/i.test(manager.getVisibleSource()),
+    !/DAETUM (ID|TYPE|PART|PARENT|ATTACH)\b/.test(manager.getVisibleSource()) &&
+    !/DAETUM_OBJECT_(BEGIN|END)/.test(manager.getVisibleSource()),
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

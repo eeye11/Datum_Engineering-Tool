@@ -130,8 +130,15 @@ function createDimension({
   orientation = ORIENTATIONS.auto,
   style = {},
   label = null,
+  dimensionKind = "smart",
+  mode = "driven",
+  content = "",
+  drivingValue = null,
   name,
 } = {}) {
+  if (dimensionKind === "variable" && !String(content ?? "").trim()) {
+    throw new Error("Variable dimension content is required.");
+  }
   const normalisedRefs = normaliseReferences(refs);
 
   return {
@@ -160,6 +167,10 @@ function createDimension({
      * dimension asserts.
      */
     label,
+    dimensionKind: dimensionKind === "variable" ? "variable" : "smart",
+    mode: mode === "driving" && dimensionKind !== "variable" ? "driving" : "driven",
+    content: String(content ?? "").trim(),
+    drivingValue,
 
     /*
      * Where the dimension is DRAWN, in drawing units - deliberately
@@ -236,8 +247,9 @@ function normaliseReferences(refs) {
   const list = Array.isArray(refs) ? refs : [refs];
 
   return list
-    .filter((reference) => reference?.featureId)
+    .filter((reference) => reference?.featureId || (reference?.kind === "canvas-point" && Number.isFinite(reference.point?.x) && Number.isFinite(reference.point?.y)))
     .map((reference) => {
+      if (reference.kind === "canvas-point") return {kind:"canvas-point", point:{...reference.point}};
       if (reference.kind === REFERENCE_KINDS.property) {
         return {
           kind: REFERENCE_KINDS.property,
@@ -560,6 +572,7 @@ function resolveReferencePoint(
   reference,
   state
 ) {
+  if (reference?.kind === "canvas-point") return reference.point || null;
   const object = findObject(
     state,
     reference.featureId
@@ -1157,6 +1170,9 @@ function formatMeasurement(
   dimension,
   state
 ) {
+  if (dimension?.dimensionKind === "variable") {
+    return isResolved(dimension, state) ? String(dimension.content || "") : null;
+  }
   const override =
     typeof dimension?.label === "string"
       ? dimension.label.trim()

@@ -1,6 +1,8 @@
 export default async function run(page) {
   await page.waitForTimeout(1200);
-  await page.evaluate(() => document.querySelector('.tab[data-tab="drawing"]')?.click());
+  await page.evaluate(() =>
+    document.querySelector('.tab[data-tab="drawing"]')?.click(),
+  );
   await page.waitForTimeout(1200);
 
   const canvas = await page.locator(".drawing-canvas").boundingBox();
@@ -22,7 +24,9 @@ export default async function run(page) {
   await page.mouse.click(canvas.x + 460, canvas.y + 340);
   await page.waitForTimeout(2000);
 
-  await page.evaluate(() => document.querySelector('.tab[data-tab="writing"]')?.click());
+  await page.evaluate(() =>
+    document.querySelector('.tab[data-tab="writing"]')?.click(),
+  );
   await page.waitForTimeout(400);
   await page.evaluate(() => {
     const e = document.getElementById("solutionEditor");
@@ -40,7 +44,9 @@ export default async function run(page) {
   await page.waitForTimeout(400);
 
   const names = await page.evaluate(() =>
-    [...document.querySelectorAll(".engg-dialog button")].map((b) => b.textContent.trim()),
+    [...document.querySelectorAll(".engg-dialog button")].map((b) =>
+      b.textContent.trim(),
+    ),
   );
 
   await page.evaluate(() =>
@@ -58,7 +64,9 @@ export default async function run(page) {
     return {
       text: fig?.innerText?.slice(0, 200) || null,
       viewBox: svg?.getAttribute("viewBox") || null,
-      size: rect ? { w: Math.round(rect.width), h: Math.round(rect.height) } : null,
+      size: rect
+        ? { w: Math.round(rect.width), h: Math.round(rect.height) }
+        : null,
       shapes: svg ? svg.querySelectorAll("path, line, polyline").length : 0,
     };
   });

@@ -81,7 +81,58 @@ const COMMENT_OBJECT = /^[ \t]*%[ \t]*DAETUM[ \t]+OBJECT[ \t]*:[ \t]*(.*?)[ \t]*
 const COMMENT_FIELD = new RegExp(`^[ \\t]*%[ \\t]*${COMMENT_PREFIX}[ \\t]+([A-Z]+)[ \\t]*:[ \\t]*(.*?)[ \\t]*$`);
 
 /* The fields that START a block, in the order they are looked for. */
-const HEADER_FIELDS = new Set([COMMENT_FIELDS.object, COMMENT_FIELDS.id, COMMENT_FIELDS.type, COMMENT_FIELDS.part, COMMENT_FIELDS.parent]);
+const HEADER_FIELDS = new Set([
+  COMMENT_FIELDS.id,
+  COMMENT_FIELDS.type,
+  COMMENT_FIELDS.part,
+  COMMENT_FIELDS.parent,
+
+  /*
+   * A FEATURE'S OWN MACHINERY, written as one compact line. A Flow Arrow's
+   * attachment names the pipe it sits on and how far along - which is how it is
+   * FOUND again, not what it is - so it is stripped from the source the student
+   * reads, exactly as the object's id is.
+   */
+  "ATTACH",
+
+  /*
+   * THE SCHEMATIC TOOLS' OWN MODEL LINES - AND THE ARROW'S `DIRECTION`.
+   *
+   * A reducer's two connections, an inline symbol's placement and size, a
+   * vessel's style, a level's host and height, a directional annotation's pipe,
+   * a profile's table and limits and a section mark's identifier are all the
+   * same kind of fact: the geometry does not say them, and DAETUM must have them
+   * back to rebuild the object. Each is one compact `FIELD: key=value ...` line,
+   * stripped from the source the student reads exactly as the id is.
+   *
+   * THE DIRECTIONAL ANNOTATION WRITES `DIRECTION`, which a Flow Arrow saved by an
+   * older build also used as its third line. Only ONE line may be stripped in
+   * practice, and the arrow's attachment is now written as `ATTACH` - so a
+   * `DIRECTION` line is the annotation's. An old arrow's `DIRECTION` line inside
+   * a block is left where it is, which is harmless: TeX ignores a comment.
+   */
+  "REDUCER",
+  "INLINE",
+  "VESSEL",
+  "LEVEL",
+  "PROFILE",
+  "SECTION",
+
+  /*
+   * THE OLDER, ONE-FIELD-PER-LINE FORM. Documents saved before the compact line
+   * still carry these, and they must be stripped too or an old arrow would show
+   * three lines of pipe identity above its code.
+   */
+  "HOST",
+  "ALONG"
+]);
+
+/*
+ * EVERY FIELD A GENERATED HEADER IS MADE OF - which is one more than the set
+ * above, because the readable OBJECT line names the object rather than locating
+ * it. See `isObjectNameComment`.
+ */
+const HEADER_ALL_FIELDS = new Set([COMMENT_FIELDS.object, ...HEADER_FIELDS]);
 
 /*
  * Whether ONE line is a marker comment. Exported so the Source tab can map an
@@ -98,6 +149,51 @@ export function isObjectMarkerLine(line) {
   const field = COMMENT_FIELD.exec(text);
 
   return Boolean(field && HEADER_FIELDS.has(field[1]));
+}
+
+/*
+ * THE COMMENT THAT NAMES AN OBJECT TO THE READER - `% DAETUM OBJECT: Pipe 1`.
+ *
+ * THIS IS NOT A MARKER, and the two are deliberately different questions.
+ *
+ * A marker is a line DAETUM uses to find an object's region again, and it is
+ * stripped from the visible source because it is machinery. The OBJECT line is
+ * not machinery: it is the one line that tells the student WHICH OBJECT the
+ * code below it draws, and a source tab that hid it showed a wall of commands
+ * with no way to tell a pipe from a flow arrow.
+ *
+ * So the identity fields a block needs to be found (ID, TYPE, PART, PARENT)
+ * still count as markers; the readable name does not.
+ */
+export function isObjectNameComment(line) {
+  const text = String(line ?? "");
+
+  if (OBJECT_BEGIN.test(text) || OBJECT_END.test(text)) {
+    return false;
+  }
+
+  const field = COMMENT_FIELD.exec(text);
+
+  return Boolean(field && field[1] === COMMENT_FIELDS.object);
+}
+
+/*
+ * THE FIELDS AN OBJECT'S SOURCE HEADER IS WRITTEN WITH.
+ *
+ * One list, used by the reader that strips headers, by the restore that puts
+ * them back, and by the writer that generates them - so the three cannot
+ * disagree about which lines a header is made of.
+ */
+export function isObjectHeaderFieldLine(line) {
+  const text = String(line ?? "");
+
+  if (OBJECT_BEGIN.test(text) || OBJECT_END.test(text)) {
+    return true;
+  }
+
+  const field = COMMENT_FIELD.exec(text);
+
+  return Boolean(field && HEADER_ALL_FIELDS.has(field[1]));
 }
 
 /* The closing marker's id, and whether it was spelled the legacy way. */
@@ -352,6 +448,7 @@ export function parseDrawingSource(source) {
       current.parent = String(field[2] || "");
       current.headerEndLine = index;
     }
+    if (HEADER_FIELDS.has(key)) current.headerEndLine = index;
   }
 
   /*
@@ -537,11 +634,15 @@ export function objectRegion(source, id) {
  *   - the Source tab, which is the drawing's own code, and
  *   - Written Solution, which receives a plain `tikzpicture`.
  *
- * So the visible form is the stored form with the marker comments removed.
- * The commands are untouched, character for character, and so is the student's
- * own formatting between them - a stripped source is literally the same text
- * minus whole lines that only named an object. The blank line that separated a
- * header from its commands goes with it, so no gap is left where a header was.
+ * So the visible form is the stored form with the MACHINERY removed - the ID,
+ * TYPE, PART and PARENT lines that let DAETUM find a block again.
+ *
+ * THE READABLE NAME STAYS. `% DAETUM OBJECT: Pipe 1` is not machinery: it is
+ * the one line that says which object the commands below it draw. Stripping it
+ * too produced exactly the reported symptom - a Source tab full of anonymous
+ * `\draw` commands with no indication of what any of them was, even though
+ * every writer had been emitting a header all along. The name line is the
+ * object's LABEL in the source, so it stays, immediately above its block.
  *
  * WHEN THE VISIBLE FORM COMES BACK, its markers are re-attached by
  * `restoreObjectMarkersFrom`. The object ids can only be recovered from the
@@ -561,17 +662,47 @@ export function objectRegion(source, id) {
  * identity in the document and out of the drawing.
  */
 export function visibleDrawingSource(source) {
+  return stripObjectComments(source, { keepName: true });
+}
+
+/*
+ * THE PICTURE ALONE - NOTHING OF DAETUM AT ALL.
+ *
+ * `visibleDrawingSource` keeps the readable `% DAETUM OBJECT: Plane 1` line,
+ * because in the Source tab it is the label a student reads against the code.
+ * An EXPORT is a different reader: it goes into a `.tex` the student hands in,
+ * where a DAETUM comment is noise they did not write and cannot use.
+ *
+ * So the export path strips every comment DAETUM generated - the name line
+ * included - and keeps the student's own comments and every command exactly as
+ * they are. Two readers, one implementation: `keepName` is the only difference.
+ */
+export function pictureSource(source) {
+  return stripObjectComments(source, { keepName: false });
+}
+
+function stripObjectComments(source, { keepName }) {
   const lines = linesOf(source);
   const kept = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
 
+    /*
+     * THE LEGACY BEGIN/END PAIR is pure machinery and always goes. The readable
+     * `OBJECT` line names the feature, so it is KEPT even though it is a header
+     * field; the fields that identify the region go.
+     */
     if (OBJECT_BEGIN.test(line) || OBJECT_END.test(line)) {
       continue;
     }
 
     if (isObjectMarkerLine(line)) {
+      continue;
+    }
+
+    /* The name line: kept for the editor, stripped for an export. */
+    if (!keepName && isObjectNameComment(line)) {
       continue;
     }
 
@@ -662,6 +793,10 @@ export function restoreObjectMarkersFrom(visible, previous) {
       name: block.name,
       part: block.part,
       parent: block.parent,
+      modelHeaders: linesOf(previous).slice(block.beginLine, block.bodyStartLine).filter(line => {
+        const field = COMMENT_FIELD.exec(line);
+        return field && HEADER_FIELDS.has(field[1]) && ![COMMENT_FIELDS.id, COMMENT_FIELDS.type, COMMENT_FIELDS.part, COMMENT_FIELDS.parent].includes(field[1]);
+      }),
       body: linesOf(previous)
         .slice(block.bodyStartLine, block.bodyEndLine + 1)
         .join("\n")
@@ -676,24 +811,42 @@ export function restoreObjectMarkersFrom(visible, previous) {
   const lines = linesOf(text);
   const closing = lines.lastIndexOf(PICTURE_END);
 
+  /*
+   * AN UNCLOSED PICTURE IS NOT RESTORED INTO.
+   *
+   * A draft the student is midway through - no `\end{tikzpicture}` yet - must be
+   * stored EXACTLY as typed. Writing headers into it would put DAETUM's own
+   * markers into text the student is still editing, which is both wrong to look
+   * at and wrong to undo. The stored source keeps whatever the draft says, and
+   * the next complete draft is restored normally.
+   */
   if (closing < 0) {
     return text;
   }
 
   /*
-   * A TEXT THAT ALREADY CARRIES HEADERS IS NOT "VISIBLE". Its blocks are its
-   * own, and re-attaching ids over them would claim source the student owns.
+   * A TEXT THAT ALREADY CARRIES IDENTITY FIELDS IS NOT "VISIBLE". Its blocks are
+   * its own, and re-attaching ids over them would claim source the student owns.
+   *
+   * THE NAME LINE IS NOT SUCH A FIELD. The editor shows `% DAETUM OBJECT: Pipe 1`
+   * against every block, so the visible text ALWAYS carries name lines - testing
+   * for a header would have returned the text unclaimed on every single edit, and
+   * a drawing edit made afterwards would have appended a second region instead of
+   * updating the first. The test is therefore for the fields that LOCATE a block,
+   * which only the canonical form has.
    */
   if (lines.some((line) => isObjectMarkerLine(line))) {
     return text;
   }
 
   /* The header a block had, written again when its id is re-attached. */
-  const headerFor = (block) =>
-    objectCommentHeader(
+  const headerFor = (block) => [
+    ...objectCommentHeader(
       { id: block.id, type: block.type, name: block.name },
       { type: block.type, part: block.part, parent: block.parent }
-    );
+    ),
+    ...block.modelHeaders
+  ];
 
   const raw = lines.slice(0, closing);
 
@@ -806,12 +959,20 @@ export function restoreObjectMarkersFrom(visible, previous) {
   let position = firstCommand;
 
   /*
-   * NO REGION BEGINS ABOVE THE PICTURE, and no marker from the student's text
-   * survives: a stale header left in a body would split the block it belongs to.
+   * NO REGION BEGINS ABOVE THE PICTURE, and no stale header from the student's
+   * text survives: a header left in a body would split the block it belongs to.
+   *
+   * EVERY OBJECT COMMENT IS DROPPED HERE - the name line included - because the
+   * region's own `headerFor(block)` writes the block's header fresh. Keeping the
+   * name line in the body put it IN FRONT OF that new header, so every edit
+   * added another `% DAETUM OBJECT:` line - the duplicated comment the
+   * requirement forbids after a repeated edit.
    */
+  const isDroppedHeaderLine = (line) => isObjectMarkerLine(line) || isObjectNameComment(line);
+
   const emitRange = (from, to) => {
     result.push(
-      ...raw.slice(Math.max(from, firstCommand), to).filter((line) => !isObjectMarkerLine(line))
+      ...raw.slice(Math.max(from, firstCommand), to).filter((line) => !isDroppedHeaderLine(line))
     );
   };
 
@@ -836,7 +997,7 @@ export function restoreObjectMarkersFrom(visible, previous) {
     }
 
     result.push(...headerFor(region.block));
-    result.push(...raw.slice(start, region.end).filter((line) => !isObjectMarkerLine(line)));
+    result.push(...raw.slice(start, region.end).filter((line) => !isDroppedHeaderLine(line)));
 
     position = region.end;
   }

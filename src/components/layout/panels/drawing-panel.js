@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ============================================================
  * THE DRAWING INSPECTOR (OBJECTS | FEATURES | SOURCE)
  * ============================================================
@@ -11,6 +11,8 @@
  *  - Source: the editable TikZ/LaTeX source that generates the drawing.
  */
 
+import { renderEngineeringTools } from "../toolbar/toolbar-render.js";
+import { activeCategory } from "../toolbar/tool-menus.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
@@ -31,6 +33,8 @@ import {
     writeObjectIntoSource
 } from "../../../shared/rendering/latex/source-synchronization.js";
 import { setSourceGeometryFactories } from "../../../shared/rendering/latex/source-object-sync.js";
+import { setFlowArrowSourceReader } from "../../../shared/rendering/latex/source-object-sync.js";
+import { readFlowArrow } from "../../../shared/rendering/latex/source-readers/fluids-readers.js";
 
 import { drawingCanvas } from "../../../features/workspace/dom.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
@@ -41,7 +45,7 @@ import { installObjectsPane } from "./objects-pane.js";
 import { installFeaturesPane, renderFeatures } from "./features-pane.js";
 import { installSourceTab, refreshSourceSelection } from "./source-tab.js";
 import { notifyDrawingChanged } from "./source-canvas-bridge.js";
-import { requestSourceRender } from "../workspace/canvas-render.js";
+import { requestSourceRender, renderCurrentDrawing } from "../workspace/canvas-render.js";
 
 /* ============================================================
  * MODEL -> SOURCE SYNC
@@ -265,6 +269,8 @@ function handleObjectsReplaced() {
  * ============================================================ */
 
 function handleToolChanged() {
+    renderEngineeringTools(activeCategory());
+    renderCurrentDrawing();
     renderFeatures();
 }
 
@@ -399,6 +405,15 @@ export function installDrawingPanel() {
      * invented by the parser.
      */
     setSourceGeometryFactories(enggDrawingState.geometryFactories);
+
+    /*
+     * AND THE FLOW ARROW'S READER. It reads the attachment an arrow block
+     * carries, and it is registered here - not imported by the parser - because
+     * it reaches the tool library's style primitives, which want a document. The
+     * panel is already inside a document; a test that parses without one simply
+     * leaves arrow blocks unread, as it always did.
+     */
+    setFlowArrowSourceReader(readFlowArrow);
 
     /* Let committed model edits patch just their own source region. */
     enggDrawingState.setSourceSink(handleObjectCommitted);

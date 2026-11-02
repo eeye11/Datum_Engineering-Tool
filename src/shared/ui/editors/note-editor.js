@@ -1,3 +1,4 @@
+import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../typography/note-text-style.js";
 /*
  * The Note editor.
  *
@@ -490,8 +491,78 @@ function openInline(options, anchor) {
  * resolvable position (or a page with no canvas) falls back to it, because a
  * prompt anchored to a guessed point is worse than a centred one.
  */
+/* A note is edited on its own canvas location, with no separate prompt. */
+function openCanvasText(options) {
+  const host = document.createElement("div");
+  host.className = "drawing-canvas-text-editor";
+  host.dataset.inline = "true";
+  host.setAttribute("role", "group");
+  host.setAttribute("aria-label", options.object?.annotateKind === "callout" ? "Edit callout marker" : "Edit note on canvas");
+  const input = document.createElement("textarea");
+  input.id = "noteText";
+  input.setAttribute("aria-label", options.object?.annotateKind === "callout" ? "Callout text" : "Note text");
+  input.placeholder = "";
+  input.value = options.text || "";
+  input.rows = 1;
+  host.append(input);
+  document.body.append(host);
+  openDialog = host;
+  let finished = false;
+  const place = () => {
+    const at = enggInlineEntry.clientPointForObject(options.object, {state:options.state});
+    if (!at) return;
+    const zoom = options.state?.camera?.zoom || 1;
+    const typography = noteTextStyle(options.object?.style);
+    const font = noteFontPixels(options.object?.style, zoom);
+    const lines = input.value.split("\n");
+    const width = Math.max(options.object?.annotateKind === "callout" ? 24 : 140, noteTextWidth(input.value, typography, font) + 12);
+    const height = Math.max(font * typography.lineSpacing, lines.length * font * typography.lineSpacing) + 6;
+    const align = typography.align;
+    at.x += typography.indent * 2.4 * zoom;
+    host.style.left = `${at.x - (align === "center" ? width/2 : align === "right" ? width : 0) - 3}px`;
+    host.style.top = `${at.y - height/2}px`;
+    host.style.width = `${width}px`;
+    host.style.height = `${height}px`;
+    input.style.fontSize = `${font}px`;
+    input.style.lineHeight = `${font * typography.lineSpacing}px`;
+    input.style.fontFamily = typography.fontFamily;
+    input.style.fontWeight = typography.bold ? "bold" : "normal";
+    input.style.fontStyle = typography.italic ? "italic" : "normal";
+    input.style.textDecoration = typography.underline ? "underline" : "none";
+    input.style.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
+  };
+  const finish = (cancel = false) => {
+    if (finished) return;
+    finished = true;
+    const text = input.value;
+    close();
+    if (cancel) options.onCancel?.();
+    else options.onApply?.(text);
+  };
+  closeCurrent = () => finish(true);
+  input.addEventListener("input", () => { options.onInput?.(input.value); place(); });
+  input.addEventListener("keydown", event => {
+    event.stopPropagation();
+    if (event.key === "Escape") { event.preventDefault(); finish(true); }
+    else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); finish(); }
+  });
+  host.addEventListener("pointerdown", event => event.stopPropagation());
+  const outside = event => { if (!host.contains(event.target)) finish(); };
+  document.addEventListener("pointerdown", outside, true);
+  stopOutsidePress = () => document.removeEventListener("pointerdown", outside, true);
+  input.addEventListener("blur", () => finish());
+  if (typeof options.cameraSignal === "function") stopFollowing = enggInlineEntry.followCamera(options.cameraSignal, place);
+  place();
+  input.focus();
+  if (options.object?.annotateKind === "callout") input.select();
+  else input.setSelectionRange(input.value.length, input.value.length);
+  return host;
+}
+
 function open(options = {}) {
+  if (openDialog) closeCurrent?.();
   close();
+  if (options.canvasText && options.object) return openCanvasText(options);
 
   const explicitAnchor =
     options.anchor && typeof options.anchor !== "function"

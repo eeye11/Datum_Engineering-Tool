@@ -559,7 +559,7 @@ function annotateBoundsPoints(object) {
         return [];
     }
 
-    const points = model.boundsOf(object);
+    const points = model.boundsOf(object, drawingState);
 
     /*
      * WHETHER MAGNITUDES AND DIMENSIONS ARE HIDDEN applies to the marks

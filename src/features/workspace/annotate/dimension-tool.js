@@ -2,26 +2,23 @@
  * The Dimension tool: choosing and committing a measurement.
  */
 
+import { referenceSummary } from "../model/dimensions/dimension-driving.js";
+import { openDimensionEditor } from "../../../shared/ui/editors/dimension-editor.js";
+
 import enggMeasurement from "../../../shared/geometry/measurement-core.js";
 import enggFluidsTools from "../model/fluids/fluids-tools.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import enggDimensionCandidates from "../model/dimensions/dimension-candidates.js";
-import { openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { distanceToSegment, objectAtPoint } from "../interaction/hit-testing.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
-/*
- * Is this the dimension tool?
- *
- * There is ONE dimension tool. It picks references and then a placement point,
- * and the measurement type - linear, aligned, angular, radius, diameter or arc
- * length - is read from what the student picked. The retired Smart Dimension
- * and Variable Dimension tools are not routed here any more.
- */
+/* Dimension uses reference picking, placement, and user-entered magnitude.
+ * The legacy `dimension` id remains supported for existing callers. */
 /*
  * THE FLUIDS MEASUREMENTS REUSE THE SAME ENGINE. A Pressure Tap, a Pipe
  * Diameter and a Section Plane are measurements of something already drawn,
@@ -33,7 +30,7 @@ export function isDimensionTool(
     toolId
 ) {
     return (
-        toolId === "dimension" ||
+        ["dimension", "smart-dimension", "variable-dimension"].includes(toolId) ||
         enggFluidsTools.fluidsCapability(toolId) ===
             enggFluidsTools.FLUIDS_CAPABILITIES.DIMENSION
     );
@@ -172,39 +169,35 @@ export function commitDimension(
     refs,
     placement
 ) {
-    /*
-     * A DIMENSION IS AN ANNOTATION AND COMMITS IMMEDIATELY.
-     *
-     * DAETUM geometry is schematic: there is no world scale to establish and no
-     * "actual length" prompt, so the placement click is the whole gesture.
-     */
-    return commitDimensionNow({
-        dimensionType,
-        refs,
-        placement
-    });
+    if (["dimension", "smart-dimension", "variable-dimension"].includes(drawingState.activeTool)) {
+        enggDrawingState.clearInteraction(drawingState);
+        const savedRefs = structuredClone(refs);
+        const savedPlacement = { ...placement };
+        openLoadValuePopup({
+            title: "Dimension", label: "Magnitude (include units if needed)", value: "",
+            expression: true, requireContent: true,
+            onConfirm: answer => commitDimensionNow({
+                dimensionType, refs: savedRefs, placement: savedPlacement,
+                dimensionKind: "variable", content: answer.text.trim()
+            }),
+            onCancel: () => {
+                enggDrawingState.clearInteraction(drawingState);
+                setToolMessage("Dimension cancelled");
+                renderCurrentDrawing();
+            }
+        });
+        return null;
+    }
+    return commitDimensionNow({ dimensionType, refs, placement });
 }
 
-/*
- * Commit a dimension from the reference picking and placement already made.
- *
- * One implementation, so the placement path and any other caller create a
- * dimension in exactly the same way.
- *
- * ========================================================
- * NOTHING IS STORED AS DRIVING OR DRIVEN
- * ========================================================
- *
- * The retired Driving/Driven mode made a dimension either an annotation or a
- * constraint that resized the geometry it measured. A dimension is now an
- * annotation only: it reads the geometry when it is asked for its text and
- * never writes to it. There is therefore no mode to choose, no redundancy rule
- * that would switch one on, and no state on the feature that records it.
- */
+/* Preserve references, undo history, and save data for authored dimensions. */
 function commitDimensionNow({
     dimensionType,
     refs,
-    placement
+    placement,
+    dimensionKind = "smart",
+    content = ""
 }) {
     const previousObjects =
         enggDrawingState.snapshotDrawing(
@@ -214,7 +207,9 @@ function commitDimensionNow({
     const object = enggDrawingState.geometryFactories.dimension({
         dimensionType,
         refs,
-        placement
+        placement,
+        dimensionKind,
+        content
     });
 
     enggDrawingState.addObject(
@@ -259,97 +254,30 @@ function commitDimensionNow({
     return object;
 }
 
-/*
- * ========================================================
- * DOUBLE-CLICKING A DIMENSION EDITS ITS VALUE
- * ========================================================
- *
- * The SAME popup every other value in the application is entered through - the
- * component a Length, a Force and a moment magnitude use.
- *
- * THE EDITED VALUE IS ANNOTATION TEXT. It is stored as the feature's `label`
- * and shows in place of the measured number; it does not move geometry and
- * there is no drawing scale to calibrate. The dimension keeps its REFERENCES
- * whatever is typed - the popup changes what the dimension SAYS, never what it
- * is attached to.
- */
+/* Reopen content or measured/driving properties without replacing references. */
 export function openDimensionValuePrompt(object) {
-    if (!object) {
-        return false;
-    }
-
-    const current =
-        typeof object.label === "string" ? object.label : "";
-
-    openLoadValuePopup({
-        title: "Dimension",
-        label: "Value",
-        value: current,
-
-        /*
-         * FREE TEXT. A dimension's text is annotation - 250 mm, 2.5 m, L, 2a -
-         * so there is no unit list to choose from and nothing is converted:
-         * what is typed is what the dimension says.
-         */
-        expression: true,
-
-        onConfirm: (confirmed) => {
-            const previous =
-                enggDrawingState.snapshotDrawing(drawingState);
-
-            const answer = readStaticsValue(
-                confirmed.text ?? "",
-                confirmed.unit
-            );
-
-            if (answer.kind === "unknown") {
-                object.label = null;
-            } else if (answer.kind === "number") {
-                const numberText = formatDimensionLabelValue(answer.value);
-
-                object.label = `${numberText}${answer.unit ? ` ${answer.unit}` : ""}`.trim();
-            } else if (answer.kind === "symbol") {
-                object.label = answer.text;
-            }
-
-            enggDrawingState.commitDrawingChange(
-                drawingState,
-                previous
-            );
-
-            setToolMessage(
-                `Dimension updated - ${
-                    enggDimensionModel.formatMeasurement(
-                        object,
-                        drawingState
-                    ) || "Unknown"
-                }`
-            );
-
-            renderProperties();
-            renderCurrentDrawing();
-        },
-
-        onCancel: () => {
-            setToolMessage("Dimension edit cancelled");
-
-            renderCurrentDrawing();
+    if (!object || object.type !== "dimension") return false;
+    openDimensionEditor({
+        value: object.dimensionKind === "variable" ? object.content : enggDimensionModel.formatMeasurement(object, drawingState),
+        references: referenceSummary(object, drawingState),
+        onApply: ({ value }) => {
+            const current = drawingState.objects.find(candidate => candidate.id === object.id);
+            if (!current) return { ok: false, error: "This dimension was deleted." };
+            const previous = enggDrawingState.snapshotDrawing(drawingState);
+            current.dimensionKind = "variable";
+            current.content = value;
+            current.mode = "driven";
+            current.drivingValue = null;
+            current.label = null;
+            delete current.dimensionError;
+            enggDrawingState.commitDrawingChange(drawingState, previous);
+            renderProperties(); renderCurrentDrawing();
+            setToolMessage("Dimension updated");
+            return { ok: true };
         }
     });
-
     return true;
 }
-
-function formatDimensionLabelValue(value) {
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) {
-        return "";
-    }
-
-    return String(Number(numeric.toFixed(6)));
-}
-
 
 /*
  * WHICH FEATURE IS BEING DIMENSIONED

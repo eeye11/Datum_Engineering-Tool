@@ -7,6 +7,7 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { normaliseJunctionRemoval } from "../interaction/junction-tool.js";
 
 export function deleteSelectedObjects() {
     const selectedIds = [
@@ -31,6 +32,17 @@ export function deleteSelectedObjects() {
         new Set(
             selectedIds
         );
+
+    /*
+     * THE JUNCTIONS ABOUT TO GO, captured BEFORE the removal: a junction is
+     * dropped with the first of its pipes, so by the time its id comes back
+     * the object is gone.
+     */
+    const removedJunctions = new Map(
+        (drawingState.objects || [])
+            .filter((object) => object.type === "junction")
+            .map((object) => [object.id, JSON.parse(JSON.stringify(object))])
+    );
 
     /*
      * ========================================================
@@ -71,6 +83,18 @@ export function deleteSelectedObjects() {
             drawingState,
             selectedSet
         );
+
+    /*
+     * A DELETED JUNCTION LEAVES ITS PIPES BEHIND AND SETTLED: merged when they
+     * are one line, an Elbow when they make a corner. Before the commit, so
+     * Undo restores the whole operation.
+     */
+    removedIds
+        .map((id) => removedJunctions.get(id))
+        .filter(Boolean)
+        .forEach((junction) => {
+            normaliseJunctionRemoval(junction, drawingState.objects, { dryRun: false });
+        });
 
     /*
      * Settle the analysis objects that were reading what has just gone.

@@ -1,9 +1,11 @@
+import enggCanvasPalette from "./canvas-palette.js";
 /*
  * Annotations: derived magnitude labels, the Annotate features (notes,
  * leaders, callouts, symbols, tables) and feature labels.
  *
  * Part of the renderer (see renderer.js), split out by concern.
  */
+import { noteTextStyle } from "../typography/note-text-style.js";
 import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
@@ -420,7 +422,12 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          * head, or at its own placement - whichever the kind has. A kind
          * with no text (an arrow, a bare table) draws none.
          */
-        const textAt = anchor || end;
+        const typography = noteTextStyle(style);
+        const note = entity.annotateKind === "note";
+        const baseTextAt = kind === "callout" ? end || anchor : anchor || end;
+        const textAt = note && geometry.position
+            ? toScreen({...geometry.position, x:geometry.position.x + typography.indent})
+            : baseTextAt;
 
         /*
          * WHAT IS DRAWN IS THE CONTENT, OR THE PLACEHOLDER WHEN THERE IS
@@ -441,7 +448,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             ? "#9aa4aa"
             : stroke;
 
-        if (textAt && text) {
+        if (textAt && text && !(entity.annotateKind === "note" && state.textEntryObjectId === entity.id)) {
             const lines = String(text).split("\n");
 
             /*
@@ -452,8 +459,11 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
              * so the two cannot come apart.
              */
             if (kind === "callout" || kind === "tolerance") {
-                const width = widestLineWidth(lines, fontSize) + 8;
-                const height = lines.length * lineHeight + 4;
+                const balloon = kind === "callout" ? model.calloutBox(entity, state) : null;
+                const topLeft = balloon ? toScreen({x:balloon.minX,y:balloon.maxY}) : null;
+                const bottomRight = balloon ? toScreen({x:balloon.maxX,y:balloon.minY}) : null;
+                const width = balloon ? bottomRight.x-topLeft.x : widestLineWidth(lines, fontSize) + 8;
+                const height = balloon ? bottomRight.y-topLeft.y : lines.length * lineHeight + 4;
 
                 svg.appendChild(
                     createSvgElement("rect", {
@@ -461,7 +471,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                         y: textAt.y - height / 2,
                         width,
                         height,
-                        fill: "#ffffff",
+                        fill: enggCanvasPalette.CANVAS_BACKGROUND[enggCanvasPalette.activeCanvasTheme()],
                         stroke,
                         "stroke-width": 0.8
                     })
@@ -480,15 +490,16 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     stroke,
                     fontSize
                 );
-            } else {
+            } else if (!(kind === "callout" && state.textEntryObjectId === entity.id)) {
                 appendAnnotateText(
                     svg,
                     lines,
                     textAt,
                     textStroke,
                     fontSize,
-                    lineHeight,
-                    entity.style?.align
+                    note ? zoomedFontHere(fontSize) * typography.lineSpacing : lineHeight,
+                    kind === "callout" ? "center" : entity.style?.align,
+                    note ? typography : {}
                 );
             }
         }
@@ -513,7 +524,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         stroke,
         fontSize,
         lineHeight,
-        align
+        align,
+        typography = {}
     ) {
         const anchorName =
             align === "center"
@@ -532,7 +544,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             y: firstY,
             fill: stroke,
             "font-size": zoomedFontHere(fontSize),
-            "font-family": "Arial, sans-serif",
+            "font-family": typography.fontFamily || "Arial, sans-serif",
+            "font-weight": typography.bold ? "bold" : "normal",
+            "font-style": typography.italic ? "italic" : "normal",
+            "text-decoration": typography.underline ? "underline" : "none",
             "text-anchor": anchorName
         });
 

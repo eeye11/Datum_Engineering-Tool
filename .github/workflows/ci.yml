@@ -27,13 +27,9 @@ jobs:
 
       - name: Unit and integration tests
         run: |
-          # Node runs each test file in its own process, so a file that dies
-          # without a summary leaves a single line saying nothing about which
-          # check failed. Splitting the reporter's output makes that visible
-          # in the run's log and its annotations.
-          node --test --test-reporter=spec --test-reporter-destination=stdout \
-            --test-reporter=github --test-reporter-destination=github \
-            tests/ 2>&1 | tee test-report.log
+          # Keep the readable test output and propagate failures through tee.
+          set -o pipefail
+          node --test --test-reporter=spec tests/*.test.cjs 2>&1 | tee test-report.log
 
       - name: Build
         run: npm run build

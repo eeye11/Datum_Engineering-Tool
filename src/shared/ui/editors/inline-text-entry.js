@@ -117,7 +117,11 @@ export function worldToClient(point, options = {}) {
 
   const state = options.state || null;
   const camera = options.camera || state?.camera || {};
-  const projection = createProjection(camera, bounds, options.basePixelsPerUnit);
+  const projection = createProjection(
+    camera,
+    bounds,
+    options.basePixelsPerUnit,
+  );
 
   const local = projection.toPixels(point || centreOf(bounds));
 

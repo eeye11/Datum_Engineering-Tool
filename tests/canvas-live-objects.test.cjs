@@ -15,6 +15,8 @@ const assert = require("node:assert/strict");
 
 const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 const { locate } = require("./helpers/source-path.cjs");
+const POINTS_PER_UNIT = 72.27 / 25.4;
+const PICTURE_ORIGIN = 0;
 
 const { window, document, error } = bootApp();
 
@@ -48,6 +50,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let model;
 let drawingState;
 let canvasRender;
+let exportTransformFor;
 let canvas;
 
 before(async () => {
@@ -56,6 +59,7 @@ before(async () => {
   model = require(locate("drawing-state.js")).default;
   ({ drawingState } = require(locate("editor-state.js")));
   canvasRender = require(locate("canvas-render.js"));
+  ({ exportTransformFor } = require(locate("source-synchronization.js")));
   canvas = document.querySelector(".drawing-canvas");
 
   await wait(300);
@@ -76,7 +80,8 @@ async function answerEveryCompile() {
 
     await wait(50);
 
-    if (!pending.length && canvas.querySelector(":scope > svg.drawing-source-layer path")) {
+    if (!pending.length && canvas.querySelector(":scope > svg.drawing-source-layer path") &&
+        canvasRender.renderedSourceRevision() === require(locate("drawing-source-manager.js")).activeSourceManager().revision()) {
       return;
     }
   }
@@ -101,12 +106,37 @@ test("once the picture shows it, the overlay steps aside", async () => {
   assert.deepEqual(liveIds(), []);
 });
 
+test("the compiled picture maps export coordinates back through the model camera", () => {
+  const layer = canvas.querySelector(":scope > svg.drawing-source-layer");
+  const transform = exportTransformFor(drawingState.objects);
+  const [left, top, viewWidth, viewHeight] = layer.getAttribute("viewBox").split(/\s+/).map(Number);
+  const width = Number(layer.getAttribute("width"));
+  const height = Number(layer.getAttribute("height"));
+  const modelBounds = { width, height };
+
+  const pictureX = PICTURE_ORIGIN + 10 * POINTS_PER_UNIT;
+  const pictureY = PICTURE_ORIGIN;
+  const projectedPoint = {
+    x: (pictureX - left) * width / viewWidth,
+    y: (pictureY - top) * height / viewHeight
+  };
+  const modelPoint = {
+    x: transform.sourceBounds.minX + 10 / transform.factor,
+    y: transform.sourceBounds.minY
+  };
+  const expectedPoint = model.engineeringToScreen(modelPoint, modelBounds, drawingState);
+
+  assert.ok(Math.abs(projectedPoint.x - expectedPoint.x) < 1);
+  assert.ok(Math.abs(projectedPoint.y - expectedPoint.y) < 1);
+});
+
 test("an object being moved is drawn where it is, not where the picture last saw it", () => {
   line.geometry.start = { x: -20, y: 30 };
   line.geometry.end = { x: 20, y: 30 };
   canvasRender.renderCurrentDrawing();
 
   assert.deepEqual(liveIds(), [line.id]);
+  assert.equal(canvas.querySelector(":scope > svg.drawing-source-layer").style.visibility,"hidden");
 });
 
 /*
@@ -159,4 +189,26 @@ test("and every declared width is a nominal preset at the drawing's one factor",
       `a declared width of ${width}pt is ${nominal.toFixed(3)}pt nominal at factor ${factor.toFixed(4)}`,
     );
   }
+});
+
+test('while an old picture is hidden, unchanged neighbours stay visible and compilation restores the picture', async () => {
+  const snapshot = model.snapshotDrawing(drawingState);
+  const neighbour = model.addObject(drawingState, model.geometryFactories.line({x:60,y:0},{x:100,y:0},{}));
+  model.commitDrawingChange(drawingState,snapshot);
+  canvasRender.renderCurrentDrawing();
+  await answerEveryCompile();
+  canvasRender.renderCurrentDrawing();
+  const current = drawingState.objects.find(object=>object.id===line.id);
+  const beforeMove=model.snapshotDrawing(drawingState);
+  current.geometry.start.y+=20;
+  current.geometry.end.y+=20;
+  canvasRender.renderCurrentDrawing();
+  assert.equal(canvas.querySelector(':scope > svg.drawing-source-layer').style.visibility,'hidden');
+  assert.ok(liveIds().includes(neighbour.id),'unchanged neighbour remains visible during the drag');
+  model.commitDrawingChange(drawingState,beforeMove);
+  canvasRender.renderCurrentDrawing();
+  await answerEveryCompile();
+  canvasRender.renderCurrentDrawing();
+  assert.equal(canvas.querySelector(':scope > svg.drawing-source-layer').style.visibility,'');
+  assert.deepEqual(liveIds(),[],'the updated compiled picture takes over without duplicate ink');
 });

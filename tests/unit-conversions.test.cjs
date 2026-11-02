@@ -9,7 +9,7 @@
  * in one unit into the same physical value in another.
  *
  * The distinction is worth the second file because the table is now the one
- * place every quantity is defined, across eleven categories - so a wrong factor
+ * place every quantity is defined, across fifteen categories - so a wrong factor
  * here would be a wrong factor in every panel that reads it.
  */
 
@@ -192,8 +192,8 @@ check(
 console.log("\n  every category the application states a quantity in\n");
 
 check(
-  "eleven categories are defined",
-  Object.keys(q.QUANTITY_UNITS).length === 11,
+  "fifteen categories are defined",
+  Object.keys(q.QUANTITY_UNITS).length === 15,
   Object.keys(q.QUANTITY_UNITS).join(","),
 );
 

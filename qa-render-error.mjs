@@ -1,27 +1,47 @@
 /*
- * Why does a referenced drawing fail to appear in the written solution?
+ * Enter a drawing into the written solution, then look at what the preview does.
  *
- * The reference path asks the TikZ service to compile the SHEET'S OWN SOURCE and
- * inserts the returned SVG. This compares, on the same page:
- *
- *   - the sheet's stored source (what is sent to the service),
- *   - the service's answer for it,
- *   - the figure the written solution ends up showing.
+ * The question is the error message the student sees in the rendered figure -
+ * so the run records the console, the render request's response, and the
+ * figure's own text.
  */
 export default async function run(page) {
-  await page.evaluate(() => document.querySelector('.tab[data-tab="writing"]')?.click());
-  await page.waitForTimeout(600);
+  await page.evaluate(() =>
+    document.querySelector('.tab[data-tab="writing"]')?.click(),
+  );
+  await page.waitForTimeout(700);
 
+  const requests = [];
+
+  page.on("response", async (response) => {
+    if (response.url().includes("/api/render-tikz")) {
+      let body = null;
+
+      try {
+        body = await response.text();
+      } catch {
+        body = "<unreadable>";
+      }
+
+      requests.push({
+        status: response.status(),
+        body: String(body).slice(0, 400),
+      });
+    }
+  });
+
+  /* Make a drawing with something on it, through the real workflow. */
   await page.evaluate(() => {
     const editor = document.getElementById("solutionEditor");
 
     editor.value = "The free body diagram is shown below.\n";
     editor.dispatchEvent(new Event("input", { bubbles: true }));
     editor.setSelectionRange(editor.value.length, editor.value.length);
-
-    document.getElementById("solutionEnterDrawing")?.click();
   });
 
+  await page.evaluate(() =>
+    document.getElementById("solutionEnterDrawing")?.click(),
+  );
   await page.waitForTimeout(400);
 
   await page.evaluate(() => {
@@ -32,58 +52,60 @@ export default async function run(page) {
 
   await page.waitForTimeout(1500);
 
-  const sheets = await page.evaluate(() => globalThis.datum?.listSheets?.() || []);
+  /* Draw a line on the new sheet so it is not empty. */
+  const drew = await page.evaluate(() => {
+    const state = document.querySelector('.tab[data-tab="drawing"]');
+    state?.click();
 
-  await page.evaluate(() => document.querySelector('.tab[data-tab="drawing"]')?.click());
-  await page.waitForTimeout(600);
-
-  const stored = await page.evaluate(() => {
-    const area = document.querySelector("#drawingSourceEditor textarea");
-
-    return area ? area.value.slice(0, 900) : null;
+    return true;
   });
 
-  await page.evaluate(() => document.querySelector('.tab[data-tab="writing"]')?.click());
+  await page.waitForTimeout(600);
+
+  const added = await page.evaluate(() => {
+    /* The drawing model is exposed by the workspace for automation. */
+    const model = globalThis.enggDrawingState;
+    const app = globalThis.enggDrawing;
+
+    if (!model || !app?.state) {
+      return { ok: false, reason: "no model on the page" };
+    }
+
+    const object = model.geometryFactories.line(
+      { x: 0, y: 0 },
+      { x: 120, y: 0 },
+      {},
+    );
+
+    model.addObject(app.state, object);
+    model.commitDrawingChange(app.state, model.snapshotDrawing(app.state));
+
+    return { ok: true, objects: app.state.objects.length };
+  });
+
+  await page.waitForTimeout(1200);
+
+  await page.evaluate(() =>
+    document.querySelector('.tab[data-tab="writing"]')?.click(),
+  );
   await page.waitForTimeout(2500);
 
   const preview = await page.evaluate(() => {
     const node = document.getElementById("solutionPreview");
-    const figure = node?.querySelector(".drawing-reference-figure");
+    const figure = node?.querySelector(
+      ".linked-drawing-figure, .drawing-reference-figure",
+    );
 
     return {
-      previewText: node?.innerText?.slice(0, 700),
-      figureHtml: figure?.innerHTML?.slice(0, 900) || null,
+      source: document.getElementById("solutionEditor")?.value,
+      previewText: node?.innerText?.slice(0, 600),
+      figureHtml: figure?.innerHTML?.slice(0, 800) || null,
       svgCount: node?.querySelectorAll("svg").length,
-      referenceCount: document.querySelectorAll(".solution-drawing-chip").length,
+      classes: [
+        ...(node?.querySelectorAll('[class*="drawing-reference"]') || []),
+      ].map((el) => el.className),
     };
   });
 
-  const answered = await page.evaluate(async (tikz) => {
-    if (!tikz) {
-      return { skipped: true };
-    }
-
-    const response = await fetch("/api/render-tikz", {
-      body: JSON.stringify({ tikz }),
-      headers: { "Content-Type": "application/json" },
-      method: "POST",
-    });
-
-    let payload = null;
-
-    try {
-      payload = await response.json();
-    } catch {
-      payload = { unreadable: true };
-    }
-
-    return {
-      status: response.status,
-      success: payload?.success,
-      error: payload?.error,
-      svgStart: String(payload?.svg || "").slice(0, 200),
-    };
-  }, stored);
-
-  return { sheets, stored, preview, answered };
+  return { drew, added, requests, preview };
 }

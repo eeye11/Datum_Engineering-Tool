@@ -640,6 +640,10 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
         const add = (point, kind = "") => {
             if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
             const screen = toScreen(point);
+            if (kind.startsWith("reducer-length-")) {
+                svg.appendChild(createSvgElement("rect", { x: screen.x-3.8, y: screen.y-3.8, width: 7.6, height: 7.6, class: `drawing-manipulation-handle ${kind}` }));
+                return;
+            }
             svg.appendChild(createSvgElement("circle", {
                 cx: screen.x,
                 cy: screen.y,
