@@ -565,6 +565,36 @@
     min-width: 0;
 }
 
+/*
+ * SINGLE / MULTIPLE PLACEMENT, under the armed Statics tool: a compact
+ * two-way switch in the toolbar's own colours.
+ */
+.drawing-placement-mode {
+    display: flex;
+    gap: 2px;
+    margin: 2px 0 6px 28px;
+    padding: 2px;
+    border: 1px solid var(--datum-border);
+    border-radius: 6px;
+    width: max-content;
+}
+
+.drawing-placement-mode button {
+    border: 0;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font: inherit;
+    font-size: 0.78rem;
+    color: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+.drawing-placement-mode button.active {
+    background: var(--datum-focus);
+    color: var(--datum-surface);
+}
+
 .drawing-tool[aria-expanded="false"] .drawing-tool-caret {
     transform: rotate(0deg);
 }

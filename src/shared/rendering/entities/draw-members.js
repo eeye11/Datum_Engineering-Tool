@@ -55,7 +55,18 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
          * their two ends, but each is drawn to read as the
          * member it represents rather than as a plain line.
          */
-    export function drawMemberOrDiagram({ svg, parentSvg, entity, geometry, style, toScreen }) {
+    /* A member's dash-dot centreline, from end to end along its axis. */
+function memberCentreline(from, to, style) {
+    const line = createSvgElement("line", { x1: from.x, y1: from.y, x2: to.x, y2: to.y });
+
+    applyStyle(line, { ...style, lineType: "center" });
+
+    line.setAttribute("stroke-width", "1");
+
+    return line;
+}
+
+export function drawMemberOrDiagram({ svg, parentSvg, entity, geometry, style, toScreen }) {
             const start = geometry.start;
             const end = geometry.end;
 
@@ -110,7 +121,16 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                 const solid = String(style.fillMode || "").toLowerCase() === "solid";
                 const fillColour = /^#[0-9a-fA-F]{6}$/.test(String(style.fill || "")) ? style.fill : style.stroke;
 
-                svg.appendChild(
+                /*
+                 * THE OUTLINE AND THE CENTRELINE ARE THE STUDENT'S CHOICE. The
+                 * bar's outline is drawn unless Show Outline is off; a dash-dot
+                 * centreline along the member's axis when Show Centreline is on.
+                 */
+                if (geometry.showCentreline === true) {
+                    svg.appendChild(memberCentreline(from, to, style));
+                }
+
+                if (geometry.showOutline !== false) svg.appendChild(
                     createSvgElement("polygon", {
                         points: [
                             `${from.x + nx * depth},${from.y + ny * depth}`,
@@ -1081,9 +1101,18 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                  * as the bar so it stays centred through a move,
                  * a resize or a rotation.
                  */
-                const diameter = 8;
+                /*
+                 * THE SHAFT'S OWN DIAMETER, IN MODEL UNITS, as the source draws
+                 * it - the fixed 8 px ignored the Diameter the student set.
+                 */
+                const shaftLength = Math.hypot(end.x - start.x, end.y - start.y);
+                const shaftScale = shaftLength > 1e-9 ? length / shaftLength : 1;
+                const storedDiameter = Number(geometry.diameter);
+                const diameter = storedDiameter > 0 ? (storedDiameter / 2) * shaftScale : 8;
+                const outlined = geometry.showOutline !== false;
 
-                svg.appendChild(
+
+                if (outlined) svg.appendChild(
                     createSvgElement("polygon", {
                         points: [
                             `${from.x + nx * diameter},${from.y + ny * diameter}`,
@@ -1097,7 +1126,7 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                     })
                 );
 
-                [from, to].forEach(point => {
+                (outlined ? [from, to] : []).forEach(point => {
                     svg.appendChild(
                         createSvgElement("line", {
                             x1: point.x + nx * diameter,
@@ -1140,7 +1169,10 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                     lineType: "center"
                 });
 
-                svg.appendChild(centreline);
+                /* A shaft's centreline is on by default; Show Centreline turns it off. */
+                if (geometry.showCentreline !== false) {
+                    svg.appendChild(centreline);
+                }
             }
 
             parentSvg.appendChild(svg);

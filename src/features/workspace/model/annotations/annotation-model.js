@@ -1719,30 +1719,27 @@ function forceUnitOf(object) {
  * is a reading of the force, not a new fact about it.
  */
 function forceComponentText(geometry) {
-  const magnitude = Number(geometry.magnitude);
-  const angle = Number(geometry.angle);
+  /*
+   * THE COMPONENTS ARE NOT WORKED OUT FOR THE STUDENT. Each line is the symbol,
+   * with the value the student typed (`statedFx`, `statedFy`) when there is one.
+   */
+  return [
+    statedLine("Fx", geometry.statedFx, "N"),
+    statedLine("Fy", geometry.statedFy, "N")
+  ].join("\n");
+}
 
-  if (
-    !Number.isFinite(magnitude) ||
-    !Number.isFinite(angle)
-  ) {
-    return null;
+/* "Fx", or "Fx = 30 N" once the student has stated it. */
+function statedLine(label, value, unit) {
+  const text = String(value ?? "").trim();
+
+  if (!text) {
+    return label;
   }
 
-  const radians = (angle * Math.PI) / 180;
-
-  return [
-    quantity(
-      "Fx",
-      magnitude * Math.cos(radians),
-      "N"
-    ),
-    quantity(
-      "Fy",
-      magnitude * Math.sin(radians),
-      "N"
-    )
-  ].join("\n");
+  return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(text)
+    ? quantity(label, Number(text), unit)
+    : `${label} = ${text}`;
 }
 
 function momentText(object) {
@@ -1988,7 +1985,10 @@ function resultantText(object) {
    * Read through the shared rule, so a resultant carries the same Label
    * and Question Mark controls as the force it was derived from.
    */
-  return featureValueText(object, "magnitude", "R", "N");
+  /*
+   * Not the computed magnitude: the value the STUDENT stated, or "R" alone.
+   */
+  return statedLine("R", object?.geometry?.statedValue, "N");
 }
 
 function humanise(type) {

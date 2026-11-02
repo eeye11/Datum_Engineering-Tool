@@ -1517,6 +1517,11 @@ export function beginOrCompleteGeometry(
             drawingState.activeTool ===
             "reference-line";
 
+        /* A Vector is a line with a filled head at its end, named and labelled. */
+        const isVector =
+            drawingState.activeTool ===
+            "vector";
+
         /*
          * The feature type the active tool creates. It is
          * resolved before it is used, because the attachment
@@ -1554,7 +1559,9 @@ export function beginOrCompleteGeometry(
                 lineType:
                     isReferenceLine
                         ? "construction"
-                        : drawingState.styleDefaults.lineType
+                        : drawingState.styleDefaults.lineType,
+
+                ...(isVector ? { arrowStart: "none", arrowEnd: "filled" } : {})
             },
 
             engineering: {
@@ -1573,7 +1580,10 @@ export function beginOrCompleteGeometry(
             name:
                 isReferenceLine
                     ? "Reference Line"
-                    : undefined,
+                    : isVector
+                        ? "Vector"
+                        : undefined,
+
 
             /*
              * The first click's snap is what establishes
@@ -1650,6 +1660,11 @@ export function beginOrCompleteGeometry(
             );
 
             return;
+        }
+
+        /* A vector is known by its symbol: "v" until the student renames it. */
+        if (isVector && !object.label) {
+            object.label = "v";
         }
 
         /*

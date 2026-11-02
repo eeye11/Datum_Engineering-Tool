@@ -165,6 +165,21 @@ check(
     };
     return model.textFor(probe, scene(resultant));
   })(),
+  /* The symbol alone: the resultant's value is the student's to state. */
+  "R"
+);
+check(
+  "and the value the student states",
+  (() => {
+    resultant.geometry.statedValue = "50";
+    const probe = {
+      annotationKind: "resultant-value",
+      textMode: "auto",
+      text: "",
+      sourceFeatureId: resultant.id
+    };
+    return model.textFor(probe, scene(resultant));
+  })(),
   "R = 50.0 N"
 );
 

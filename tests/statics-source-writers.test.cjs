@@ -418,7 +418,13 @@ const resultant = write(
 );
 
 check("a resultant is its calculated arrow", has(resultant, "(0,0) -- (30,40)"), resultant);
-check("with its label and magnitude", has(resultant, "{R}") && has(resultant, "R = 50"), resultant);
+check("with its label, and no value the app worked out", has(resultant, "{R}") && !has(resultant, "R = 50"), resultant);
+
+const statedResultant = write(
+  objectOf("resultant", { start: { x: 0, y: 0 }, end: { x: 30, y: 40 }, magnitude: 50, angle: 53.13, statedValue: "50" }),
+);
+
+check("and the value once the student states it", has(statedResultant, "R = 50"), statedResultant);
 
 const components = write(
   objectOf("force-components", {

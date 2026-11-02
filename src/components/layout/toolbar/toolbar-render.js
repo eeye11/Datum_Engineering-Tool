@@ -8,7 +8,7 @@ import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { STATICS_TOOL_MENUS, activateAnalysisMode, activateCoordinateMode, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_TOOL_MENUS, activateAnalysisMode, activateCoordinateMode, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu, placementModeOf, setPlacementMode, staticsToolOwnsCanvasClicks } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
@@ -470,6 +470,90 @@ export function renderEngineeringTools(
                 );
             }
         );
+
+    appendPlacementModeControl(safeCategory);
+}
+
+/*
+ * ============================================================
+ * SINGLE OR MULTIPLE, BENEATH THE ARMED STATICS TOOL
+ * ============================================================
+ *
+ * While a Statics placement tool is armed, a two-way switch sits directly under
+ * its button: Single places one feature and returns to Select (the default, and
+ * the rule every category shares), Multiple keeps placing until Escape. It is
+ * shown only for the tool that is armed, so the toolbar stays as it was
+ * otherwise. A Truss is finished as a whole and an analysis diagram is placed
+ * once, so neither offers it.
+ */
+const NO_PLACEMENT_MODE = new Set([
+    "truss",
+    "resultant",
+    "force-components",
+    "shear-force-diagram",
+    "bending-moment-diagram",
+    "axial-force-diagram"
+]);
+
+function appendPlacementModeControl(category) {
+    const toolId = drawingState.activeTool;
+
+    if (
+        category !== "STATICS" ||
+        !staticsToolOwnsCanvasClicks(toolId) ||
+        NO_PLACEMENT_MODE.has(toolId)
+    ) {
+        return;
+    }
+
+    const button = [...toolList.querySelectorAll(`.drawing-tool[data-tool-id="${toolId}"]`)]
+        .find((candidate) => !candidate.closest("[hidden]"));
+
+    if (!button) {
+        return;
+    }
+
+    const mode = placementModeOf(toolId);
+
+    const control = document.createElement("div");
+
+    control.className = "drawing-placement-mode";
+    control.setAttribute("role", "radiogroup");
+    control.setAttribute("aria-label", "Placement");
+
+    control.innerHTML = [
+        { value: "single", label: "Single" },
+        { value: "multiple", label: "Multiple" }
+    ]
+        .map(
+            (option) =>
+                `<button type="button" role="radio" data-placement-mode="${option.value}" ` +
+                `aria-checked="${option.value === mode}" class="${option.value === mode ? "active" : ""}">${option.label}</button>`
+        )
+        .join("");
+
+    control.addEventListener("click", (event) => {
+        const choice = event.target.closest?.("[data-placement-mode]");
+
+        if (!choice) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        setPlacementMode(toolId, choice.dataset.placementMode);
+
+        setToolMessage(
+            choice.dataset.placementMode === "multiple"
+                ? "Multiple placement - keep clicking to place more, Esc to finish"
+                : "Single placement - the tool returns to Select after one"
+        );
+
+        renderEngineeringTools(category);
+    });
+
+    button.insertAdjacentElement("afterend", control);
 }
 
 export function setToolMessage(

@@ -280,6 +280,7 @@ export const CLICK_CLICK_TOOLS = [
     "distributed-load",
     "varying-distributed-load",
     "reference-line",
+    "vector",
     "reference-arc",
     "coordinate-system-2d",
 

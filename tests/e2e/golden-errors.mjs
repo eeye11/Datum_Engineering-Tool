@@ -28,4 +28,38 @@ for (const [key, step] of failing) {
 }
 
 console.log(`\n${steps.length - failing.length}/${steps.length} steps ran without a page error`);
-process.exit(failing.length ? 1 : 0);
+
+/*
+ * AND A TOOL THAT SHOULD CREATE SOMETHING, DID.
+ *
+ * A page error is not the only way a tool breaks: a click the router answered
+ * before the tool saw it creates nothing and throws nothing. These steps draw a
+ * feature by a fixed gesture on every machine, so an empty result is a fault.
+ * (A recording made before `created` was stored has nothing to check.)
+ */
+const MUST_CREATE = [
+    "STATICS/body/particle",
+    "STATICS/body/rigid-body",
+    "STATICS/body/beam",
+    "STATICS/body/truss",
+    "STATICS/body/cable",
+    "STATICS/body/shaft",
+    "STATICS/point-force",
+    "STATICS/load/distributed-load",
+    "STATICS/load/varying-distributed-load",
+    "STATICS/moment",
+    "STATICS/support/pin-support",
+    "STATICS/support/roller-support",
+    "STATICS/support/fixed-support",
+    "STATICS/support/smooth-support",
+    "STATICS/reference-point",
+    "STATICS/reference-line"
+];
+
+const empty = MUST_CREATE.filter((key) => recording[key] && recording[key].created === 0);
+
+empty.forEach((key) => console.log(`✗ ${key} created nothing`));
+
+console.log(`${MUST_CREATE.length - empty.length}/${MUST_CREATE.length} Statics creation steps created a feature`);
+
+process.exit(failing.length || empty.length ? 1 : 0);

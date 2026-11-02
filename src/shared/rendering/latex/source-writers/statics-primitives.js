@@ -1217,6 +1217,25 @@ function momentNodes(object) {
     return nodes;
 }
 
+/*
+ * A VALUE THE STUDENT TYPED, as TeX: a number is written with its unit, any
+ * other text (a symbol, an expression) as typed, and nothing at all as null -
+ * so the label shows only its symbol until the student has worked it out.
+ */
+function statedQuantityTex(value, unit) {
+    const text = String(value ?? "").trim();
+
+    if (!text) {
+        return null;
+    }
+
+    if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(text)) {
+        return `${formatNumber(Number(text))}${unit ? `\\ ${unit}` : ""}`;
+    }
+
+    return texText(text);
+}
+
 function resultantNodes(object) {
     const geometry = object?.geometry || {};
     const style = object?.style || {};
@@ -1237,13 +1256,18 @@ function resultantNodes(object) {
         nodes.push(labelNode({ at, text: label, colour, font, anchor: direction.x >= 0 ? "west" : "east" }));
     }
 
-    const magnitude = Number(geometry.magnitude);
+    /*
+     * THE VALUE IS THE STUDENT'S, NOT THE APP'S. The arrow is drawn from the
+     * forces it combines, but the number beside it is only what the student
+     * worked out and typed (`statedValue`); with none, the symbol stands alone.
+     */
+    const stated = statedQuantityTex(geometry.statedValue, unitOf(object));
 
-    if (valuesShown(object) && Number.isFinite(magnitude)) {
+    if (valuesShown(object) && stated) {
         nodes.push(
             labelNode({
                 at: { x: at.x, y: at.y - font * 0.45 },
-                text: `$R = ${formatNumber(magnitude)}\\ ${unitOf(object)}$`,
+                text: `$R = ${stated}$`,
                 colour,
                 font,
                 anchor: direction.x >= 0 ? "west" : "east",
@@ -1287,18 +1311,18 @@ function componentNodes(object) {
     };
 
     if (geometry.showX !== false) {
-        const fx = Number(geometry.forceX);
-        const text = valuesShown(object) && Number.isFinite(fx)
-            ? `$F_x = ${formatNumber(fx)}\\ ${unit}$`
+        const fx = statedQuantityTex(geometry.statedFx, unit);
+        const text = valuesShown(object) && fx
+            ? `$F_x = ${fx}$`
             : "$F_x$";
 
         place(geometry.horizontal, text);
     }
 
     if (geometry.showY !== false) {
-        const fy = Number(geometry.forceY);
-        const text = valuesShown(object) && Number.isFinite(fy)
-            ? `$F_y = ${formatNumber(fy)}\\ ${unit}$`
+        const fy = statedQuantityTex(geometry.statedFy, unit);
+        const text = valuesShown(object) && fy
+            ? `$F_y = ${fy}$`
             : "$F_y$";
 
         place(geometry.vertical, text);

@@ -224,9 +224,18 @@ const components = model.createAnnotation({
   sourceFeatureId: "force-1"
 });
 const angled = force({ magnitude: 200, angle: 30 });
+/*
+ * The components are NAMED, not worked out: Fx and Fy until the student types
+ * the values they calculated (`statedFx`, `statedFy`).
+ */
 check(
-  "resolve the force's own arrow",
+  "name the force's components without working them out",
   model.textFor(components, state(angled)),
+  "Fx\nFy"
+);
+check(
+  "and state the values the student typed",
+  model.textFor(components, state(force({ magnitude: 200, angle: 30, statedFx: "173.2", statedFy: "100" }))),
   "Fx = 173.2 N\nFy = 100.0 N"
 );
 

@@ -145,6 +145,17 @@ export const STATICS_CHILD_TOOLS = {
     },
 
     /*
+     * A VECTOR is a LINE child too, with a filled head at its end: a position
+     * vector r, a unit vector u, a direction. It is not a force - it carries no
+     * magnitude in newtons - so it reuses the line rather than the force, and
+     * its name is the label the student gives it.
+     */
+    vector: {
+        label: "Vector",
+        type: "line"
+    },
+
+    /*
      * A Reference Arc is an ARC child for the same reason a
      * Reference Line is a LINE child.
      *
@@ -609,13 +620,60 @@ export function bodyPlacementLocations(
  */
 /*
  * ============================================================
- * AFTER A STATICS FEATURE IS PLACED, THE TOOL STAYS ARMED
+ * A STATICS TOOL OWNS ITS CANVAS CLICKS
  * ============================================================
  *
- * A student drawing a free-body diagram places several particles, several
- * supports, several loads - so a placement tool keeps going until they press
- * Escape or pick another tool, as the Geometry tools do. The feature just
- * made stays selected, so its Features tab is open for it.
+ * The shared click router answers some clicks for every category - a click on
+ * an existing feature selects it, an empty click returns to Select. A Statics
+ * tool needs exactly those clicks as its input: a support, load, force or
+ * moment is placed by clicking the body it acts on, a Particle or a free
+ * support by clicking empty canvas, and a Resultant or Components picks forces
+ * by clicking them. So the router asks this first and leaves them alone.
+ */
+export function staticsToolOwnsCanvasClicks(toolId) {
+    return Boolean(
+        toolId &&
+            (STATICS_CHILD_TOOLS[toolId] ||
+                ["point-force", "moment", "coordinate-system-2d", "resultant", "force-components", "vector"].includes(toolId))
+    );
+}
+
+/*
+ * ============================================================
+ * SINGLE OR MULTIPLE PLACEMENT
+ * ============================================================
+ *
+ * Each Statics tool places ONE feature and returns to Select by default - the
+ * rule every category shares. A student who wants several particles, supports
+ * or loads in a row switches that tool to Multiple, and it then stays armed
+ * until Escape. The choice is per tool and lasts for the session.
+ */
+const placementModes = {};
+
+export function placementModeOf(toolId) {
+    return placementModes[toolId] === "multiple" ? "multiple" : "single";
+}
+
+export function setPlacementMode(toolId, mode) {
+    if (toolId && (mode === "single" || mode === "multiple")) {
+        placementModes[toolId] = mode;
+    }
+}
+
+/* The shared model asks this before returning a creating tool to Select. */
+enggDrawingState.setCreationRepeatPolicy?.(
+    toolId => staticsToolOwnsCanvasClicks(toolId) && placementModeOf(toolId) === "multiple"
+);
+
+/*
+ * ============================================================
+ * AFTER A STATICS FEATURE IS PLACED: SELECT, OR THE NEXT ONE
+ * ============================================================
+ *
+ * In Single placement (the default) the tool returns to Select with the new
+ * feature selected, so its Features tab is open for it. In Multiple placement
+ * a student drawing several particles, supports or loads keeps going until
+ * Escape or another tool.
  *
  * A TRUSS IS THE EXCEPTION. It is finished explicitly, as a whole structure,
  * and returns to Select so the finished truss can be edited joint by joint.
@@ -623,7 +681,8 @@ export function bodyPlacementLocations(
 export function keepStaticsToolArmed() {
     const toolId = drawingState.activeTool;
 
-    if (!toolId || toolId === "select" || toolId === "truss") {
+    /* Single placement (the default) and a finished truss return to Select. */
+    if (!toolId || toolId === "select" || toolId === "truss" || placementModeOf(toolId) !== "multiple") {
         activateTool("select");
         return;
     }
@@ -666,7 +725,8 @@ export function staticsInstruction(
             "slider-connection": "Specify connection start point",
 
             "reference-point": "Specify reference point location",
-            "reference-line": "Specify first point"
+            "reference-line": "Specify first point",
+            vector: "Click the vector's tail, or drag from tail to head"
         }[toolId] || "Specify location"
     );
 }
@@ -694,7 +754,8 @@ export function staticsSpanInstruction(
             "fixed-connection": "Specify connection end point",
             "slider-connection": "Specify connection end point",
 
-            "reference-line": "Specify second point"
+            "reference-line": "Specify second point",
+            vector: "Click the vector's head"
         }[toolId] || "Specify second point"
     );
 }
@@ -976,7 +1037,8 @@ export const STATICS_SPAN_TOOLS = {
      * clicking, which is one decision instead of four coordinates, and
      * the only decision that is actually the student's to make.
      */
-    "reference-line": "Reference Line"
+    "reference-line": "Reference Line",
+    vector: "Vector"
 };
 
 /*

@@ -2401,12 +2401,29 @@ let onDocumentChanged = null;
  */
 let onObjectCommitted = null;
 
+/*
+ * Whether a tool that has just created a feature stays armed for another -
+ * asked by `commitDrawingChange`, registered by the category that owns the
+ * tool. Null means every tool returns to Select after creating.
+ */
+let creationRepeatPolicy = null;
+
+function setCreationRepeatPolicy(policy) {
+    creationRepeatPolicy = typeof policy === "function" ? policy : null;
+}
+
 function commitDrawingChange(state, previousObjects) {
     refreshCalloutReferences(state);
     const previousIds = new Set((Array.isArray(previousObjects) ? previousObjects : previousObjects?.objects || []).map(object => object.id));
     const created = state.objects.some(object => !previousIds.has(object.id));
     const creatingTool = state.activeTool;
-    if ((created || ["move", "rotate", "mirror", "trim", "extend"].includes(creatingTool)) && creatingTool && creatingTool !== "select") {
+    /*
+     * A TOOL SET TO PLACE SEVERAL IN A ROW keeps going: the category that owns
+     * it registers that policy (`setCreationRepeatPolicy`), so the model stays
+     * free of any tool list. Everything else returns to Select, as before.
+     */
+    const repeats = created && typeof creationRepeatPolicy === "function" && creationRepeatPolicy(creatingTool);
+    if (!repeats && (created || ["move", "rotate", "mirror", "trim", "extend"].includes(creatingTool)) && creatingTool && creatingTool !== "select") {
         queueMicrotask(() => {
             if (state.activeTool === creatingTool) setActiveTool(state, "select");
         });
@@ -3419,6 +3436,7 @@ const enggDrawingState = {
     snapshotDrawing,
     restoreDrawingSnapshot,
     commitDrawingChange,
+    setCreationRepeatPolicy,
     setAnalysisDependencyRegistry,
     refreshAnalysisObjects,
     refreshDerivedFeatures,

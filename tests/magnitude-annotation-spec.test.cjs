@@ -121,7 +121,8 @@ const matrix = [
     "Resultant",
     "resultant",
     "resultant-value",
-    { magnitude: 150, angle: 20, direction: 20 },
+    /* The value is the one the STUDENT states; the app never works it out. */
+    { magnitude: 150, angle: 20, direction: 20, statedValue: "150" },
     /150/,
   ],
 ];
@@ -263,9 +264,12 @@ console.log("\n  A VARYING LOAD STATES w1 AND w2, WITH NO ANGLE\n");
 console.log("\n  FORCE COMPONENTS STATE Fx AND Fy, WITH NO ANGLE\n");
 
 {
+  /* Fx and Fy as the student stated them - the app does not resolve them. */
   const { text } = read("force", "force-components", {
     magnitude: 100,
     angle: 0,
+    statedFx: "100",
+    statedFy: "0",
   });
 
   check(

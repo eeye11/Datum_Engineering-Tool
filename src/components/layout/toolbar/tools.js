@@ -698,6 +698,7 @@ export const disciplineToolGroups = {
 
 				{ id: "load", label: "Loads", submenu: true },
 				{ id: "moment", label: "Moment" },
+				{ id: "vector", label: "Vector" },
 				{ id: "support", label: "Supports", submenu: true },
 				{ id: "connection", label: "Connections", submenu: true }
 			]

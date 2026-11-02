@@ -673,6 +673,40 @@ function varyingEndField(key, label) {
     };
 }
 
+/* An on/off drawing choice for a member, with each type's own default. */
+function memberToggleField(key, label, defaults) {
+    return {
+        kind: "toggle",
+        applies: (object) => Object.hasOwn(defaults, object.type),
+        read: (object) => {
+            const stored = object.geometry?.[key];
+
+            return typeof stored === "boolean" ? stored : defaults[object.type];
+        },
+        write: (object, value) => {
+            object.geometry = { ...object.geometry, [key]: Boolean(value) };
+
+            return true;
+        },
+        label
+    };
+}
+
+/* A value the student types for an analysis object; empty means not yet stated. */
+function statedValueField(type, key, label) {
+    return {
+        kind: "text",
+        applies: (object) => object.type === type,
+        read: (object) => String(object.geometry?.[key] ?? ""),
+        write: (object, value) => {
+            object.geometry = { ...object.geometry, [key]: String(value ?? "").trim() };
+
+            return true;
+        },
+        label
+    };
+}
+
 /* A member's drawn size across its centreline - a Beam's depth, a Shaft's diameter. */
 function bodySizeField(type, key, label, fallback) {
     return {
@@ -1348,6 +1382,22 @@ const FIELDS = {
         label: "Unit"
     },
 
+    /*
+     * THE STUDENT'S OWN ANSWER. A Resultant and a pair of Components are drawn
+     * from the forces they read, but their VALUES are left for the student to
+     * work out: these hold what they typed - a number, a symbol, or nothing.
+     */
+    resultantValue: statedValueField("resultant", "statedValue", "Value (N)"),
+    componentFx: statedValueField("force-components", "statedFx", "Fx (N)"),
+    componentFy: statedValueField("force-components", "statedFy", "Fy (N)"),
+
+    /*
+     * A MEMBER'S OUTLINE AND CENTRELINE. A Beam shows its outline and no
+     * centreline until asked; a Shaft shows both, as a shaft is drawn.
+     */
+    showOutline: memberToggleField("showOutline", "Show Outline", { beam: true, shaft: true }),
+    showCentreline: memberToggleField("showCentreline", "Show Centreline", { beam: false, shaft: true }),
+
     beamDepth: bodySizeField("beam", "depth", "Depth", 12),
     shaftDiameter: bodySizeField("shaft", "diameter", "Diameter", 20),
 
@@ -1795,7 +1845,16 @@ export const STATICS_GROUPS = [
     {
         id: "appearance",
         heading: "Appearance",
-        fields: ["staticsLineType", "stroke", "lineWidth", "customWidth", "staticsFillMode", "staticsFill"]
+        fields: [
+            "staticsLineType",
+            "stroke",
+            "lineWidth",
+            "customWidth",
+            "staticsFillMode",
+            "staticsFill",
+            "showOutline",
+            "showCentreline"
+        ]
     },
     { id: "transform", heading: "Transform", fields: [], transform: true },
     {
@@ -1813,6 +1872,9 @@ export const STATICS_GROUPS = [
             "loadStartIntensity",
             "loadEndIntensity",
             "loadUnit",
+            "resultantValue",
+            "componentFx",
+            "componentFy",
             "beamDepth",
             "shaftDiameter",
             "trussPanels"

@@ -98,18 +98,22 @@ const resultant = factories.annotation({
   position: { x: 10, y: 10 }
 });
 
+/*
+ * THE APP DOES NOT WORK THE VALUE OUT. The annotation names the resultant;
+ * the number is the student's to state, so until they do it reads "R".
+ */
 check(
-  "it states the magnitude and direction",
+  "it names the resultant and leaves the value to the student",
   annotationModel.textFor(resultant, state),
-  "R = 250.0 N"
+  "R"
 );
 
 console.log("\nAnd follows its feature");
 force.geometry.angle = 30;
 check(
-  "turning the force turns the resultant",
+  "turning the force changes no number on the sheet",
   annotationModel.textFor(resultant, state),
-  "R = 250.0 N"
+  "R"
 );
 
 console.log("\nForce components are described the same way");
@@ -119,24 +123,25 @@ const components = factories.annotation({
   position: { x: 10, y: 10 }
 });
 
+/* Named, not worked out: the student states Fx and Fy themselves. */
 check(
-  "they resolve into X and Y",
+  "they are named Fx and Fy, without values the app worked out",
   annotationModel.textFor(components, state),
-  "Fx = 216.5 N\nFy = 125.0 N"
+  "Fx\nFy"
 );
 
 force.geometry.magnitude = 100;
 check(
-  "and follow a change of magnitude",
+  "and a change of magnitude computes nothing for the student",
   annotationModel.textFor(components, state),
-  "Fx = 86.6 N\nFy = 50.0 N"
+  "Fx\nFy"
 );
 
 console.log("\nNeither is a dimension");
 check(
-  "a force is still measured, not solved",
-  annotationModel.textFor(resultant, state).indexOf("R =") === 0,
-  true
+  "a resultant is named, never solved",
+  annotationModel.textFor(resultant, state),
+  "R"
 );
 
 console.log(`\n${pass} passed, ${fail} failed`);

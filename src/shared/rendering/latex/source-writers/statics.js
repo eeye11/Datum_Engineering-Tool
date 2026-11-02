@@ -598,7 +598,22 @@ function serializeBeam(entity, object) {
    */
   const outline = barOutline(ends.start, ends.end, halfDepth);
 
-  return outline ? drawPath(outline, styleOptions(object.style), { cycle: true }) : null;
+  /*
+   * Show Outline (on by default) and Show Centreline (off by default) are the
+   * student's: the bar's outline, a dash-dot line along its axis, or both.
+   */
+  const geometry = object.geometry || {};
+  const commands = [];
+
+  if (outline && geometry.showOutline !== false) {
+    commands.push(drawPath(outline, styleOptions(object.style), { cycle: true }));
+  }
+
+  if (geometry.showCentreline === true) {
+    commands.push(seg(ends.start, ends.end, styleOptions({ ...(object.style || {}), lineType: "center" })));
+  }
+
+  return commands.filter(Boolean).join("\n") || null;
 }
 
 function serializeCable(entity, object) {
@@ -682,9 +697,12 @@ function serializeShaft(entity, object) {
    * derived from the same two endpoints, so a move or a resize keeps them
    * concentric.
    */
-  const commands = [drawPath(outline, styleOptions(style), { cycle: true })];
+  /* Show Outline is on by default; with it off only the centreline remains. */
+  const outlined = geometry.showOutline !== false;
 
-  [ends.start, ends.end].forEach((at) => {
+  const commands = outlined ? [drawPath(outline, styleOptions(style), { cycle: true })] : [];
+
+  (outlined ? [ends.start, ends.end] : []).forEach((at) => {
     commands.push(
       seg(
         { x: at.x + normal.x * half, y: at.y + normal.y * half },
@@ -694,9 +712,12 @@ function serializeShaft(entity, object) {
     );
   });
 
-  commands.push(seg(ends.start, ends.end, styleOptions({ ...style, lineType: "center" })));
+  /* A shaft's centreline is on by default; Show Centreline turns it off. */
+  if (geometry.showCentreline !== false) {
+    commands.push(seg(ends.start, ends.end, styleOptions({ ...style, lineType: "center" })));
+  }
 
-  return commands.filter(Boolean).join("\n");
+  return commands.filter(Boolean).join("\n") || null;
 }
 
 /*

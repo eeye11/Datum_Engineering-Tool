@@ -11,6 +11,7 @@ import { applyStyle, arcPathData, createSvgElement, paintColour } from "../svg-p
 import enggDrawingState from "../../model/drawing-state.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
+import { vectorHeadSize } from "../vector-render.js";
 
 
     export function drawPoint({ svg, parentSvg, geometry, style, toScreen }) {
@@ -80,6 +81,53 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 
             svg.appendChild(
                 line
+            );
+
+            /*
+             * THE LINE'S OWN ARROWHEADS. Begin Arrow and End Arrow were written
+             * to the source but never drawn on the canvas, so a Statics Vector
+             * - a line with a filled head - showed as a bare line.
+             */
+            appendLineEnd(svg, end, start, style?.arrowEnd, line.getAttribute("stroke"), style);
+            appendLineEnd(svg, start, end, style?.arrowStart, line.getAttribute("stroke"), style);
+        }
+
+    /* One end of a line: a filled or open head, or a bar, pointing away from `from`. */
+    function appendLineEnd(svg, tip, from, kind, stroke, style) {
+            const type = String(kind || "none").toLowerCase();
+
+            if (type === "none") {
+                return;
+            }
+
+            const angle = Math.atan2(tip.y - from.y, tip.x - from.x);
+            const size = vectorHeadSize(style?.lineWidth);
+            const spread = 0.4;
+
+            const corner = (sign) => ({
+                x: tip.x - size * Math.cos(angle + sign * spread),
+                y: tip.y - size * Math.sin(angle + sign * spread)
+            });
+
+            if (type === "bar") {
+                const half = size / 2;
+                const nx = -Math.sin(angle) * half;
+                const ny = Math.cos(angle) * half;
+
+                svg.appendChild(createSvgElement("line", { x1: tip.x + nx, y1: tip.y + ny, x2: tip.x - nx, y2: tip.y - ny, stroke, "stroke-width": 1.4 }));
+                return;
+            }
+
+            const left = corner(1);
+            const right = corner(-1);
+
+            svg.appendChild(
+                createSvgElement(type === "open" ? "polyline" : "polygon", {
+                    points: `${left.x},${left.y} ${tip.x},${tip.y} ${right.x},${right.y}`,
+                    fill: type === "open" ? "none" : stroke,
+                    stroke: type === "open" ? stroke : "none",
+                    "stroke-width": type === "open" ? 1.4 : 0
+                })
             );
         }
 

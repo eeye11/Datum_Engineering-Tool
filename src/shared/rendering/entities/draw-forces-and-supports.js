@@ -15,13 +15,17 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
 import { COMPONENT_COLOURS } from "../component-colours.js";
 import { isConnectionType, isSupportType } from "../../model/feature-types.js";
 
-/* One component's "Fx = 67.5 N", at the middle of its own arrow. */
+/*
+ * One component's label at the middle of its own arrow: "Fx" until the student
+ * has worked the value out and typed it, then "Fx = 30 N". The app never fills
+ * in the number itself.
+ */
 function appendComponentValue(svg, pair, shown, symbol, value, colour, toScreen) {
-    const number = Number(value);
-
-    if (!shown || !pair?.start || !pair?.end || !Number.isFinite(number)) {
+    if (!shown || !pair?.start || !pair?.end) {
         return;
     }
+
+    const stated = String(value ?? "").trim();
 
     const start = toScreen(pair.start);
     const end = toScreen(pair.end);
@@ -31,7 +35,6 @@ function appendComponentValue(svg, pair, shown, symbol, value, colour, toScreen)
     }
 
     const horizontal = Math.abs(end.y - start.y) < Math.abs(end.x - start.x);
-    const rounded = Math.round(number * 10) / 10;
 
     const text = createSvgElement("text", {
         x: horizontal ? (start.x + end.x) / 2 : start.x - 8,
@@ -42,7 +45,11 @@ function appendComponentValue(svg, pair, shown, symbol, value, colour, toScreen)
         "text-anchor": horizontal ? "middle" : "end"
     });
 
-    text.textContent = `${symbol} = ${rounded} N`;
+    text.textContent = !stated
+        ? symbol
+        : /^[+-]?(\d+\.?\d*|\.\d+)$/.test(stated)
+            ? `${symbol} = ${stated} N`
+            : `${symbol} = ${stated}`;
     svg.appendChild(text);
 }
 
@@ -229,8 +236,8 @@ function appendComponentValue(svg, pair, shown, symbol, value, colour, toScreen)
                      * values are the stored, calculated forceX / forceY.
                      */
                     if (geometry.showValues !== false) {
-                        appendComponentValue(svg, x, geometry.showX !== false, "Fx", geometry.forceX, COMPONENT_COLOURS.x, toScreen);
-                        appendComponentValue(svg, y, geometry.showY !== false, "Fy", geometry.forceY, COMPONENT_COLOURS.y, toScreen);
+                        appendComponentValue(svg, x, geometry.showX !== false, "Fx", geometry.statedFx, COMPONENT_COLOURS.x, toScreen);
+                        appendComponentValue(svg, y, geometry.showY !== false, "Fy", geometry.statedFy, COMPONENT_COLOURS.y, toScreen);
                     }
 
                     appendDerivedMagnitude(svg, entity, state, toScreen, style);

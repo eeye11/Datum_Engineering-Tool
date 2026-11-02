@@ -405,7 +405,7 @@ async function main() {
         debug("panels", created.length);
         for (const id of created) panels[id] = await panelFor(id);
         await escape();
-        results[key] = { steps, ...snap, panels, errors: [...errors] };
+        results[key] = { steps, ...snap, panels, created: created.length, errors: [...errors] };
         process.stdout.write(`${key}: ${created.length} new, ${errors.length} errors\n`);
         /*
          * Flush as we go: the recording is only written at the very end, so a

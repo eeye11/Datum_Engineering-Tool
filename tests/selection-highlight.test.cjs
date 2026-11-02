@@ -254,8 +254,12 @@ test("clicking empty canvas with an idle construction tool returns to Select", a
   const page = await ready();
   const { m } = sheet();
 
-  /* A construction tool with no shape started and nothing under the pointer. */
-  m.ds.setActiveTool(m.state, "truss");
+  /*
+   * A construction tool with no shape started and nothing under the pointer.
+   * A Geometry tool: Statics tools (a Truss, a Particle) are started BY an
+   * empty-canvas click, so they keep it - see `staticsToolOwnsCanvasClicks`.
+   */
+  m.ds.setActiveTool(m.state, "triangle");
   m.ds.clearInteraction(m.state);
 
   clickAt(page, { x: 10, y: 10 });

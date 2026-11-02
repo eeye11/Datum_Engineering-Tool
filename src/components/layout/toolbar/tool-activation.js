@@ -108,7 +108,18 @@ export function activateTool(
         return;
     }
 
-    const requestedTool = isFluidsTool(toolId)
+    /*
+     * ONLY A FLUIDS BUTTON ARMS A FLUIDS ENTRY. Fluids reuses the ids of shared
+     * tools - `reference-point`, `reference-line`, `coordinate-system` - for its
+     * own Reference section, so asking the Fluids table alone turned Statics'
+     * Reference Point into a bare Geometry point and its Reference Line into a
+     * plain line. The mapping applies while the Fluids category is open.
+     */
+    const fluidsEntry =
+        activeCategory() === "FLUIDS" &&
+        isFluidsTool(toolId);
+
+    const requestedTool = fluidsEntry
         ? fluidsArmedTool(toolId)
         : toolId;
 
@@ -324,7 +335,7 @@ export function activateTool(
      *
      * Written AFTER the interaction is cleared, or the clear would drop it.
      */
-    if (isFluidsTool(toolId)) {
+    if (fluidsEntry) {
         enggDrawingState.setInteraction(drawingState, {
             fluidsTool: toolId
         });

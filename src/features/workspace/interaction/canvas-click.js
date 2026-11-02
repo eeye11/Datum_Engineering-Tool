@@ -26,6 +26,7 @@ import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../component
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { staticsToolOwnsCanvasClicks } from "../statics/statics-tools.js";
 
 export function handleCanvasClick(
     event
@@ -304,7 +305,14 @@ export function handleCanvasClick(
      * click it is waiting for - and a click on EMPTY space fails the hit test
      * here and falls through to the tool below.
      */
+    /*
+     * A STATICS TOOL IS EXEMPT: its click on an existing feature IS its input -
+     * a support, a load, a force or a moment is placed by clicking the beam it
+     * acts on, and a Resultant picks forces by clicking them. Selecting the
+     * beam instead created nothing. The tool's own branch below takes the click.
+     */
     if (
+        !staticsToolOwnsCanvasClicks(drawingState.activeTool) &&
         shouldClickSelectExistingObject(
             event
         )
@@ -344,7 +352,13 @@ export function handleCanvasClick(
      * construction branch below. Those tools are named in CLICK_CLICK_TOOLS, so
      * the distinction is stated once, beside the classification that owns it.
      */
+    /*
+     * A STATICS PLACEMENT IS EXEMPT TOO: a Particle, a Rigid Body, a free
+     * support or a free moment is placed BY an empty-canvas click, so that
+     * click goes to the tool rather than back to Select.
+     */
     if (
+        !staticsToolOwnsCanvasClicks(drawingState.activeTool) &&
         drawingState.activeTool !==
             "select" &&
         drawingState.interaction.phase ===
