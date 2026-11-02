@@ -587,7 +587,8 @@
     cursor: default;
 }
 
-.drawing-canvas.drawing-can-move {
+.drawing-canvas.drawing-can-move,
+.drawing-canvas.drawing-can-move svg {
     cursor: move;
 }
 

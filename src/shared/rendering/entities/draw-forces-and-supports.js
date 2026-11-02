@@ -381,12 +381,12 @@ import { isConnectionType, isSupportType } from "../../model/feature-types.js";
                      * typed: there is no orientation for a student to
                      * set wrongly.
                      */
-                    frame
+                    placement?.angle ?? (frame
                         ? enggBodyFrames.supportAngle(
                             frame,
                             flipped
                         )
-                        : Number(geometry.orientation) || 0,
+                        : Number(geometry.orientation) || 0),
 
                     stroke
                 );

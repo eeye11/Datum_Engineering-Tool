@@ -471,6 +471,21 @@ function supportPlacement(
 
     const side = defaultSide(frame, flipped);
 
+    if (options.fixed === true) {
+        const distance = positionOn(frame, attachment) < frame.length / 2
+            ? 0 : frame.length;
+        const end = pointAt(frame, distance);
+        const direction = distance === 0 ? -1 : 1;
+        return {
+            attachment: end,
+            render: end,
+            side,
+            distance,
+            frame,
+            angle: Math.atan2(-frame.tangent.y * direction, frame.tangent.x * direction)
+        };
+    }
+
     /*
      * The offset from the centreline out to the member's own face, and a little
      * beyond it so a triangular symbol sits clear of the drawn body. A FIXED

@@ -1856,11 +1856,16 @@ export function beginOrCompleteGeometry(
             previousObjects
         );
 
-        setToolMessage(
-            staticsInstruction(
-                drawingState.activeTool
-            )
-        );
+        if (object.type === "beam") {
+            activateTool("select");
+            setToolMessage("Beam created - drag it to move, or drag an endpoint to resize");
+        } else {
+            setToolMessage(
+                staticsInstruction(
+                    drawingState.activeTool
+                )
+            );
+        }
 
         renderProperties();
         renderCurrentDrawing();

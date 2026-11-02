@@ -146,7 +146,8 @@ export function createStaticsFeature(
                 ? enggBodyFrames.supportPlacement(
                     parent,
                     point,
-                    false
+                    false,
+                    { fixed: type === "fixed-support" }
                 )
                 : null;
 
@@ -224,6 +225,9 @@ export function createStaticsFeature(
              * anything.
              */
             object.geometry.flipped = false;
+            if (type === "fixed-support") {
+                object.geometry.orientation = -placement.angle;
+            }
         }
     }
 
