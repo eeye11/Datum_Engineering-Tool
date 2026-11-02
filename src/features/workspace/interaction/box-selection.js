@@ -646,7 +646,10 @@ export function objectIntersectsSelection(
      * anywhere on the arrow.
      */
     if (object.type === "force") {
+        const labelHit = (enggAnnotationModel.derivedAnnotations(object, drawingState) || [])
+            .some(annotation => annotationBoxIntersectsSelection(annotation, selectionBox));
         return (
+            labelHit ||
             (geometry.start &&
                 geometry.end &&
                 segmentIntersectsSelection(

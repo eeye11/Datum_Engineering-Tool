@@ -545,13 +545,14 @@ export function safeDimensionGraphics(
     }
 }
 
-// Match the visible selection frame, including its three-pixel padding.
+// Selected plates and point loads can be grabbed anywhere inside their frame.
 export function boundarySelectionAtPoint(point) {
-    const tolerance = 8 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
     const selected = new Set(drawingState.selection.selectedObjectIds);
     return drawingState.objects.findLast(object => {
-        if (!selected.has(object.id) || !object.metadata?.boundaryStress || object.locked || object.visible === false) return false;
-        const box = selectionBounds([object], [object.id]);
+        if (!selected.has(object.id) || !(object.metadata?.boundaryStress || object.type === "force") || object.locked || object.visible === false) return false;
+        const tolerance = (object.type === "force" ? 16 : 8) /
+            (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+        const box = selectionBounds([object], [object.id], drawingState);
         return box && point.x >= box.minX - tolerance && point.x <= box.maxX + tolerance &&
             point.y >= box.minY - tolerance && point.y <= box.maxY + tolerance;
     }) || null;
@@ -744,7 +745,7 @@ export function objectAtPoint(
                                 point,
                                 geometry.start,
                                 geometry.end
-                            ) <= tolerance) ||
+                            ) <= tolerance * 1.5) ||
                         (geometry.start &&
                             distance(
                                 point,

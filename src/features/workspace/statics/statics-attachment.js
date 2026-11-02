@@ -787,7 +787,7 @@ function commitStaticsAttachment(
         object.id
     );
 
-    if (isSupportType(type)) {
+    if (isSupportType(type) || type === "force") {
         renderProperties();
         activateTool("select");
         return;

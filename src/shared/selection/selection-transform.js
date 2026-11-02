@@ -1,14 +1,23 @@
 import geometry from "../geometry/feature-geometry.js";
+import annotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import { boundaryStressDrawing } from "../geometry/boundary-stress.js";
 import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 
-export function selectionBounds(objects, selectedIds) {
+export function selectionBounds(objects, selectedIds, state = null) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.type === "force" && state) {
+            const points = geometry.definingPoints(g, object.type);
+            for (const annotation of annotationModel.derivedAnnotations(object, state) || []) {
+                const box = annotationModel.annotationTextBounds(annotation, state);
+                if (box) points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
+            }
+            return points;
+        }
         if (object.metadata?.boundaryStress) {
             const drawing = boundaryStressDrawing(g);
             return geometry.rectangleCorners(g).concat(drawing.paths.flatMap(path => path.points), drawing.labels.map(label => label.point));

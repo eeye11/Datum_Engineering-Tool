@@ -76,7 +76,9 @@ const TOOLS = [
     ["DYNAMICS", "dynamics-reference-line", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-reference-arc", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["FLUIDS", "pipe-duct", null, null, ["d:0.35,0.5,0.6,0.5", "Enter"]], ["THERMODYNAMICS", "control-volume"],
-    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
+    ["HEAT TRANSFER", "wall"],
+    ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.35"]],
+    ["SOLID MECHANICS", "boundary-stress", null, null, ["d:0.3,0.55,0.6,0.35"]],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];
 
@@ -328,6 +330,12 @@ async function main() {
         await escape();
         const snap = await snapshot();
         const created = snap.objects.map(o => o.id).filter(id => !before.includes(id));
+        if (["stress-element", "boundary-stress"].includes(toolId)) {
+            const metadataKey = toolId === "stress-element" ? "stressElement" : "boundaryStress";
+            if (!snap.objects.some(object => created.includes(object.id) && object.metadata?.[metadataKey])) {
+                throw new Error(`${key}: dragging the tool did not create its stress feature`);
+            }
+        }
         const panels = {};
         debug("panels", created.length);
         for (const id of created) panels[id] = await panelFor(id);

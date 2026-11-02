@@ -411,7 +411,7 @@ export function installCanvasEvents() {
                     const point = canvasPointFromEvent(event, false);
                     const target = drawingState.activeTool === "select" ? boundarySelectionAtPoint(point) || objectAtPoint(point) : null;
                     drawingCanvas.classList.toggle("drawing-can-move", Boolean(target && !target.locked &&
-                        (target.metadata?.boundaryStress || ["coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
+                        (target.metadata?.boundaryStress || ["force", "coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
                 }
                 /*
                  * A DRAG-TO-CREATE KEEPS ITS PREVIEW LIVE.

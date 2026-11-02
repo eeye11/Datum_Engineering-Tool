@@ -8,6 +8,25 @@ const cylinder = {
 };
 const cv = { id: "cv", type: "rectangle", geometry: { position: { x: 20, y: 60 }, width: 60, height: 50 } };
 
+test("a selected force's frame includes its displaced magnitude label", async () => {
+    const { selectionBounds } = await model();
+    const annotations = (await import("../src/features/workspace/model/annotations/annotation-model.js")).default;
+    const force = { id: "force", type: "force", geometry: {
+        start: { x: 10, y: 20 }, end: { x: 40, y: 60 }, magnitude: 100,
+        magnitudeOffset: { x: 120, y: 80 }
+    } };
+    const state = { objects: [force], camera: { zoom: 1 }, display: { showMagnitudes: true } };
+    const labels = annotations.derivedAnnotations(force, state);
+    assert.ok(labels.length > 0);
+    const frame = selectionBounds([force], [force.id], state);
+    for (const label of labels) {
+        const box = annotations.annotationTextBounds(label, state);
+        assert.ok(frame.minX <= box.minX && frame.maxX >= box.maxX);
+        assert.ok(frame.minY <= box.minY && frame.maxY >= box.maxY);
+    }
+    assert.ok(frame.minX <= 10 && frame.maxY >= 60);
+});
+
 test("moving a force and its magnitude preserves the label offset without doubling the move", async () => {
     const { transformSelectionObject } = await model();
     const force = { id: "force", type: "force", geometry: {

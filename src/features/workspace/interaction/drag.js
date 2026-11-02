@@ -82,7 +82,7 @@ export function beginManipulationDrag(
         );
 
     const selectedIds = drawingState.selection.selectedObjectIds;
-    const box = selectionBounds(drawingState.objects, selectedIds);
+    const box = selectionBounds(drawingState.objects, selectedIds, drawingState);
     const hit = handleAtPoint(point);
     const pistonHandle = hit && isPistonCylinder(hit.object) &&
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
@@ -346,13 +346,13 @@ export function beginManipulationDrag(
 
     if (
         object &&
-        (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
+        (object.type === "force" || object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
             .selectedObjectIds
             .includes(
                 object.id
             ))
     ) {
-        const coordinateNeedsSelection = (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress) && !selectedIds.includes(object.id);
+        const coordinateNeedsSelection = (object.type === "force" || object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress) && !selectedIds.includes(object.id);
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,

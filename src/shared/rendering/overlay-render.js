@@ -648,15 +648,15 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             }));
         };
 
-        const frame = selectionBounds(state.objects, [...selected]);
+        const frame = selectionBounds(state.objects, [...selected], state);
         if (frame) {
+            const padding = state.objects.some(object => selected.has(object.id) && object.type === "force") ? 16 : 8;
             const first = toScreen({ x: frame.minX, y: frame.maxY });
             const last = toScreen({ x: frame.maxX, y: frame.minY });
-            svg.appendChild(createSvgElement("rect", {
-                x: first.x - 8, y: first.y - 8,
-                width: Math.max(16, last.x - first.x + 16), height: Math.max(16, last.y - first.y + 16),
-                fill: "none", stroke: "#3b82f6", "stroke-width": 1,
-                "stroke-dasharray": "4 3", "pointer-events": "none"
+            if (selected.size > 1) svg.appendChild(createSvgElement("rect", {
+                x: first.x - padding, y: first.y - padding,
+                width: Math.max(16, last.x - first.x + padding * 2), height: Math.max(16, last.y - first.y + padding * 2),
+                class: "drawing-selection-box"
             }));
             if (selected.size > 1) {
                 selectionCorners(frame).forEach(point => add(point, "group-resize"));
@@ -1005,7 +1005,7 @@ export {
     function renderSelectionOutline(svg, state, bounds) {
         const selected = new Set(state.selection?.selectedObjectIds || []);
 
-        if (!selected.size) {
+        if (!selected.size || selected.size > 1) {
             return;
         }
 
@@ -1017,7 +1017,7 @@ export {
                 let frame;
 
                 try {
-                    frame = selectionBounds([object], [object.id]);
+                    frame = selectionBounds([object], [object.id], state);
                 } catch {
                     frame = null;
                 }
@@ -1031,17 +1031,14 @@ export {
 
                 const width = Math.max(2, last.x - first.x);
                 const height = Math.max(2, last.y - first.y);
+                const padding = object.type === "force" ? 16 : 3;
 
                 svg.appendChild(createSvgElement("rect", {
-                    x: first.x - 3,
-                    y: first.y - 3,
-                    width: width + 6,
-                    height: height + 6,
-                    fill: "none",
-                    stroke: "#17643b",
-                    "stroke-width": 1.2,
-                    "stroke-dasharray": "5 3",
-                    "pointer-events": "none",
+                    x: first.x - padding,
+                    y: first.y - padding,
+                    width: width + padding * 2,
+                    height: height + padding * 2,
+                    class: "drawing-selection-box",
                     "data-selection-outline-for": object.id
                 }));
             });

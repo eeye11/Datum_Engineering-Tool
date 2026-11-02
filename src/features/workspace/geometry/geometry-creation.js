@@ -1828,11 +1828,8 @@ export function beginOrCompleteGeometry(
                         previousObjects
                     );
 
-                    setToolMessage(
-                        staticsInstruction(
-                            drawingState.activeTool
-                        )
-                    );
+                    activateTool("select");
+                    setToolMessage("Point force created - drag the arrow to move the load; drag the magnitude label to reposition it separately");
 
                     renderProperties();
                     renderCurrentDrawing();
