@@ -435,7 +435,7 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     "reference-point": [at(150, -120)],
     "reference-line": [at(140, -150), at(180, -150)],
     /* the sweep is unchanged by the scale; the radius is a length, so it scales */
-    "reference-arc": ["arc[start angle=0, end angle=120, radius=4.50"],
+    "reference-arc": ["arc[start angle=0, end angle=120, radius="],
   };
 
   require("fs").writeFileSync(
@@ -449,6 +449,14 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     assert.ok(expected, `no expectation written for ${label}`);
 
     await assertObjectIsDrawnFromItsSource(label, object, expected);
+    if (label === "reference-arc") {
+      const body = blockBody(object.id);
+      const radius = body.match(/arc\[start angle=0, end angle=120, radius=([\d.]+)\]/);
+      assert.ok(radius, "reference arc retains its sweep and a numeric radius");
+      const expectedRadius = object.geometry.radius * syncExportTransformForSheet().factor;
+      assert.ok(Math.abs(Number(radius[1]) - expectedRadius) < 0.0002,
+        `reference arc radius must follow the current export scale: expected ${expectedRadius}, got ${radius[1]}`);
+    }
     if (label === "coordinate-system") {
       const body = blockBody(object.id);
       const segments = [...body.matchAll(/\((-?[\d.]+),(-?[\d.]+)\) -- \((-?[\d.]+),(-?[\d.]+)\)/g)]
