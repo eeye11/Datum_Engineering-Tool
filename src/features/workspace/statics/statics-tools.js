@@ -38,8 +38,7 @@ export const STATICS_TOOL_MENUS = {
     support: [
         { id: "pin-support", label: "Pin Support" },
         { id: "roller-support", label: "Roller Support" },
-        { id: "fixed-support", label: "Fixed Support" },
-        { id: "smooth-support", label: "Smooth Support" }
+        { id: "fixed-support", label: "Fixed Support" }
     ],
 
     connection: [

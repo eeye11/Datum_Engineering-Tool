@@ -26,6 +26,7 @@ import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../component
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { isBodyAttachedTool } from "../statics/statics-tools.js";
 
 export function handleCanvasClick(
     event
@@ -235,6 +236,12 @@ export function handleCanvasClick(
             resolution
         );
 
+        return;
+    }
+
+    // Attached tools need the beam click as input, before general selection.
+    if (isBodyAttachedTool(drawingState.activeTool)) {
+        beginOrCompleteGeometry(resolution);
         return;
     }
 

@@ -45,7 +45,6 @@ const TOOLS = [
     ["STATICS", "support", "pin-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "support", "roller-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "support", "fixed-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
-    ["STATICS", "support", "smooth-support", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "connection", "pin-connection", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "connection", "fixed-connection", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],
     ["STATICS", "connection", "slider-connection", "beam", ["c:0.4,0.6", "c:0.25,0.6"]],

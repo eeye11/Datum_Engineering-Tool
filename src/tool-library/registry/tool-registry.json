@@ -375,13 +375,6 @@
               "libraryPath": "src/tool-library/statics/bodies/support/fixed-support"
             },
             {
-              "id": "statics.bodies.support.smooth-support",
-              "label": "Smooth Support",
-              "parentId": "statics.bodies",
-              "kind": "tool",
-              "libraryPath": "src/tool-library/statics/bodies/support/smooth-support"
-            },
-            {
               "id": "statics.bodies.connection.pin-connection",
               "label": "Pin Connection",
               "parentId": "statics.bodies",
