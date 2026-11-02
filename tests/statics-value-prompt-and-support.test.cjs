@@ -324,11 +324,18 @@ console.log("\n  a fixed support is a wall at the END of the member\n");
   const ordinary = frames.supportPlacement(beam, end, false);
 
   check(
-    "a FIXED support's wall sits ON the member's FACE, at the end",
+    "a FIXED support's wall sits at the member endpoint",
     fixed &&
       Math.abs(fixed.render.x - end.x) < 1e-6 &&
-      Math.abs(Math.abs(fixed.render.y) - frame.halfDepth) < 1e-6,
+      Math.abs(fixed.render.y - end.y) < 1e-6,
     JSON.stringify(fixed?.render) + " halfDepth=" + frame.halfDepth,
+  );
+
+  check(
+    "the fixed wall's hatching faces outward along the beam",
+    fixed && Math.abs(Math.cos(fixed.angle) + 1) < 1e-6 &&
+      Math.abs(Math.sin(fixed.angle)) < 1e-6,
+    `angle ${fixed?.angle}`,
   );
 
   check(
