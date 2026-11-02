@@ -430,8 +430,8 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     sfd: ["-{Latex"],
     bmd: ["-{Latex"],
     afd: ["-{Latex"],
-    /* both axes, 25 either side of the stored origin (-150,-150) */
-    "coordinate-system": ["-17.4925,7.5075", "32.5075,7.5075", "7.5075,-17.4925", "7.5075,32.5075"],
+    /* Two positive arms from the origin; their drawn lengths stay 25. */
+    "coordinate-system": [at(-150, -150), "{X}", "{Y}"],
     "reference-point": [at(150, -120)],
     "reference-line": [at(140, -150), at(180, -150)],
     /* the sweep is unchanged by the scale; the radius is a length, so it scales */
@@ -449,6 +449,22 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     assert.ok(expected, `no expectation written for ${label}`);
 
     await assertObjectIsDrawnFromItsSource(label, object, expected);
+    if (label === "coordinate-system") {
+      const body = blockBody(object.id);
+      const segments = [...body.matchAll(/\((-?[\d.]+),(-?[\d.]+)\) -- \((-?[\d.]+),(-?[\d.]+)\)/g)]
+        .map(match => match.slice(1).map(Number));
+      assert.equal(segments.length, 2, "coordinate system has two positive arms");
+      const origin = syncExportTransformForSheet().point(-150, -150);
+      for (const [x1, y1] of segments) {
+        assert.ok(Math.abs(x1 - origin.x) < 0.0002 && Math.abs(y1 - origin.y) < 0.0002,
+          "each arm starts at the exported origin");
+      }
+      const [[x1, y1, x2, y2], [a1, b1, a2, b2]] = segments;
+      assert.ok(Math.abs(x2 - x1 - 25) < 0.0002 && Math.abs(y2 - y1) < 0.0002,
+        "X extends 25 to the right");
+      assert.ok(Math.abs(b2 - b1 - 25) < 0.0002 && Math.abs(a2 - a1) < 0.0002,
+        "Y extends 25 upward");
+    }
   }
 
   /*

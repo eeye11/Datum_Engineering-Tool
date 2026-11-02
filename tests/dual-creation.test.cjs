@@ -167,7 +167,12 @@ check(
 
 check(
   "and a cancelled pointer clears the press",
-  /"pointercancel"[\s\S]{0,200}creationDrag = null/.test(events),
+  (() => {
+    const start = events.indexOf('"pointercancel"');
+    const end = events.indexOf('window.addEventListener(', start);
+    const handler = events.slice(start, end < 0 ? undefined : end);
+    return start >= 0 && /editorState\.creationDrag = null;/.test(handler);
+  })(),
   "otherwise the next release would complete an abandoned gesture",
 );
 
