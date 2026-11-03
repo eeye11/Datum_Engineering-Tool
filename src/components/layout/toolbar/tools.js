@@ -6,15 +6,9 @@ const iconStroke = 'fill="none" stroke="currentColor" stroke-width="1.4" stroke-
 
 
 export const toolIcons = {
-    "Boundary Stress": drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="9"/><path ${iconStroke} d="M6 5V1m4 4V1m4 4V1M4 8H1m3 4H1m15-4h3m-3 4h3M6 16v3m4-3v3m4-3v3"/>`),
-    "Stress Element": drawingIcon(`<path ${iconStroke} d="M10 2l8 8-8 8-8-8z"/>`),
-    "Thermodynamic Cycles": drawingIcon(`<path ${iconStroke} d="M16.1 7A6.8 6.8 0 0 0 4.3 5.9L2.5 8M2.5 4v4h4M3.9 13a6.8 6.8 0 0 0 11.8 1.1l1.8-2.1M17.5 16v-4h-4"/>`),
-    "Turbine / Compressor": drawingIcon(`<path ${iconStroke} d="M3 3l14 5v4L3 17z"/>`),
-    "Nozzle / Diffuser": drawingIcon(`<path ${iconStroke} d="M3 3l14 5M3 17l14-5"/>`),
-    "Tank": drawingIcon(`<rect ${iconStroke} x="4" y="2" width="12" height="16" rx="3"/>`),
     "Work": drawingIcon(`<path ${iconStroke} d="M3 10h14m-4-4 4 4-4 4"/>`),
     "Electric Work": drawingIcon(`<path ${iconStroke} d="M3 3h11v4l2 1-4 2 4 2-4 2 2 1v2H3"/>`),
-    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M2 10h11m0-1h2v2h-2zM13 9C12 6 10 2 13 2S16 6 15 9ZM15 11C16 14 18 18 15 18S12 14 13 11Z"/>`),
+    "Mechanical Work": drawingIcon(`<path ${iconStroke} d="M3 6v8h5V6zM8 10h9m-3-3 3 3-3 3"/>`),
     "Heat Transfer": drawingIcon(`<path ${iconStroke} d="M3 7h13m-4-4 4 4-4 4M17 14H4m4-4-4 4 4 4"/>`),
     "Heat Entering": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#dc2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
     "Heat Leaving": drawingIcon('<path d="M3 10h14m-5-5 5 5-5 5" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
@@ -28,6 +22,7 @@ export const toolIcons = {
 	"Dynamics Bodies": drawingIcon(`<circle ${iconStroke} cx="7" cy="8" r="2.6"/><path ${iconStroke} d="M3 16c0-2.4 1.8-4 4-4s4 1.6 4 4"/><rect ${iconStroke} x="11.5" y="6" width="5.5" height="5.5"/>`),
 	"Dynamics Particle": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 3v5M10 12v5M3 10h5M12 10h5"/>`),
 	"Dynamics Rigid Body": drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	Trajectory: drawingIcon(`<path ${iconStroke} d="M3 16C6 16 6 6 10 6s4 10 7 10"/><circle fill="currentColor" cx="3" cy="16" r="1.3"/>`),
 	Kinematics: drawingIcon(`<path ${iconStroke} d="M4 17L16 4m-4 0h4v4"/><path ${iconStroke} stroke-dasharray="2 2" d="M4 9a8 8 0 0 1 5-5"/>`),
 	"Polar Vector": drawingIcon(`<path ${iconStroke} d="M5 15L15 6m-5 0h5v5"/><path ${iconStroke} d="M5 15a10 10 0 0 1 3-6"/>`),
 	"Angular Vector": drawingIcon(`<path ${iconStroke} d="M10 10l5-4m-5 4a6 6 0 1 0 5 2.6"/><path ${iconStroke} d="M12 11l3-1 .5 3"/>`),
@@ -69,16 +64,7 @@ export const toolIcons = {
 	"Fit Whole Page": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><path ${iconStroke} d="M5 12l3-4 3 3 4-4"/>`),
 
 	"Fit Selected": drawingIcon(`<path ${iconStroke} d="M3 6V3h3M14 3h3v3M17 14v3h-3M6 17H3v-3"/><rect ${iconStroke} x="8" y="9" width="4" height="3"/>`),
-	Plant: drawingIcon(`<rect ${iconStroke} x="5" y="6" width="10" height="8"/><path ${iconStroke} d="M2 8h3m10 4h3M2 8l1.5-1.5M2 8l1.5 1.5m14 2L16 8.5m1.5 1.5L16 11.5"/>`),
-	/*
-	 * DIMENSION is the one dimension tool.
-	 *
-	 * The retired Smart Dimension and Variable Dimension tools are gone from
-	 * the catalogue: a dimension is a single annotation tool whose linear,
-	 * aligned, angular, radius, diameter and arc-length types are read from
-	 * the geometry the student picks, and whose displayed value is editable
-	 * text rather than a second tool.
-	 */
+	/* Both dimension tools share the measurement and reference engine. */
 	Dimension: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
 	"Annotation": drawingIcon(`<path ${iconStroke} d="M4 5h8M4 9h8M4 13h5"/><path ${iconStroke} d="M12 16l1.5-4L18 7l-4.5 1.5L12 13"/>`),
 	"Note / Text": drawingIcon(`<path ${iconStroke} d="M4 4h12v9H9l-4 3v-3H4zM7 7h6M7 10h4"/>`),
@@ -134,7 +120,7 @@ export const toolIcons = {
 	 */
 	Truss: drawingIcon(`<path ${iconStroke} d="M3 6h14M3 6l14 8M17 6L3 14M3 14h14M8 6v8M12 6v8"/>`),
 	Cable: drawingIcon(`<path ${iconStroke} d="M3 5c5 8 9 8 14 0"/><circle ${iconStroke} cx="3" cy="5" r="1.2"/><circle ${iconStroke} cx="17" cy="5" r="1.2"/>`),
-	"Point Load": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
+	"Point Force": drawingIcon(`<path ${iconStroke} d="M10 15V5"/><path ${iconStroke} d="M10 3l-3 4h6z"/><circle ${iconStroke} cx="10" cy="16.5" r="1.2"/>`),
 	"Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 4h14M3 4v10M6.5 4v10M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Varying Distributed Load": drawingIcon(`<path ${iconStroke} d="M2 16h16M2 18h16M3 11l7-7h7M3 11v3M6.5 7.5V14M10 4v10M13.5 4v10M17 4v10"/><path ${iconStroke} d="M2 13l1 1 1-1M5.5 13l1 1 1-1M9 13l1 1 1-1M12.5 13l1 1 1-1M16 13l1 1 1-1"/>`),
 	"Applied Moment": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/><path ${iconStroke} d="M10 5.6a4.4 4.4 0 0 1 3.7 2"/><path ${iconStroke} d="M10 14.4a4.4 4.4 0 0 1-3.7-2"/><path ${iconStroke} d="M12.6 5.2l3 1.7-1.7 3"/><path ${iconStroke} d="M7.4 14.8l-3-1.7 1.7-3"/>`),
@@ -411,12 +397,11 @@ export const toolIcons = {
 	Fastener: drawingIcon(`<path ${iconStroke} d="M6 4h8M6 7h8M8 7v9M12 7v9M5 16h10"/>`),
 	"Section View": drawingIcon(`<path ${iconStroke} d="M4 4h12v12H4zM4 8h12M8 4v12"/>`),
 	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
-	Gain: drawingIcon(`<path ${iconStroke} d="M4 3v14l12-7z"/><path ${iconStroke} d="M8 10h4"/>`),
-	Sum: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="7"/><path ${iconStroke} d="M8 7h4M10 5v4M8 13h4"/>`),
+	Input: drawingIcon(`<path ${iconStroke} d="M3 10h10M10 6l4 4-4 4"/>`),
+	Output: drawingIcon(`<path ${iconStroke} d="M17 10H7M10 6l-4 4 4 4"/>`),
 	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
 	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
 	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
-	"Signal Line": drawingIcon(`<path ${iconStroke} d="M4 10h12"/><circle ${iconStroke} cx="3" cy="10" r="1"/><circle ${iconStroke} cx="17" cy="10" r="1"/>`),
 	Point: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
 	Function: drawingIcon(`<path ${iconStroke} d="M4 14c2-8 4 4 6-3s4-5 6-5"/>`),
 	Vector: drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
@@ -435,6 +420,7 @@ export const toolIcons = {
  * category such as Bodies or Loads is not a feature and has no
  * entry here, so no tree row is ever created for one.
  */
+
 export const featureIcons = {
 	point: toolIcons.Point,
 	particle: toolIcons.Particle,
@@ -444,7 +430,7 @@ export const featureIcons = {
 	cable: toolIcons.Cable,
 	shaft: toolIcons.Shaft,
 
-	force: toolIcons["Point Load"],
+	force: toolIcons["Point Force"],
 	moment: toolIcons.Moment,
 
 	load: toolIcons["Distributed Load"],
@@ -510,13 +496,8 @@ export const drawingToolGroups = [
 			{ id: "triangle", label: "Triangle", shortcut: "T" },
 			{ id: "rectangle", label: "Rectangle", shortcut: "R" },
 			{ id: "circle", label: "Circle", shortcut: "C" },
-			/*
-			 * Arc and Polygon each have two construction methods, shown as an
-			 * expandable list under the tool - the same layout Statics uses for
-			 * its grouped tools (see expandedToolbarSections).
-			 */
-			{ id: "arc", label: "Arc", shortcut: "A", submenu: true },
-			{ id: "polygon", label: "Polygon", shortcut: "G", submenu: true },
+			{ id: "arc", label: "Arc", shortcut: "A" },
+			{ id: "polygon", label: "Polygon", shortcut: "G" },
 			{ id: "freeform-polygon", label: "Freeform Polygon", shortcut: "F" }
 		]
 	},
@@ -567,6 +548,8 @@ export const drawingToolGroups = [
  * each thing. `dimension` is the single dimension tool: the retired Smart
  * Dimension and Variable Dimension tools are no longer part of it.
  */
+toolIcons.Angle = drawingIcon(`<path ${iconStroke} d="M3 4v13h14M3 11h6v6"/>`);
+
 export const annotateToolGroups = [
 	{
 		id: "annotate-selection",
@@ -589,7 +572,7 @@ export const annotateToolGroups = [
 	 *     Need writing?                    Text
 	 *     Need to point at geometry?       Leaders
 	 *     Need a free arrow?               Markup
-	 *     Need a symbol or a tolerance?    Symbols & Tolerances
+	 *     Need a note, label or symbol?    Text
 	 *     Need a table?                    Tables
 	 *
 	 * THESE ARE CATEGORIES, NOT SUBMENUS.
@@ -608,21 +591,21 @@ export const annotateToolGroups = [
 	{
 		id: "annotate-dimensions",
 		label: "Dimensions",
-		tools: [{ id: "dimension", label: "Dimension" }]
+		tools: [{ id: "dimension", label: "Dimension" }, { id: "angle", label: "Angle" }]
 	},
 	{
 		id: "annotate-text",
 		label: "Text",
 		tools: [
 			{ id: "note", label: "Note / Text" },
-			{ id: "label", label: "Label" }
+			{ id: "label", label: "Label" },
+			{ id: "symbol", label: "Symbol" }
 		]
 	},
 	{
-		id: "annotate-leaders",
-		label: "Leaders",
+		id: "annotate-callouts",
+		label: "Callouts",
 		tools: [
-			{ id: "leader", label: "Leader" },
 			{ id: "callout", label: "Callout" }
 		]
 	},
@@ -646,11 +629,6 @@ export const annotateToolGroups = [
 	 * would be a category holding no command.
 	 */
 	{
-		id: "annotate-symbols",
-		label: "Symbols",
-		tools: [{ id: "symbol", label: "Symbol" }]
-	},
-	{
 		id: "annotate-tables",
 		label: "Tables",
 		tools: [{ id: "table", label: "Table" }]
@@ -667,35 +645,6 @@ export const annotateToolGroups = [
  */
 export const disciplineToolGroups = {
 	ANNOTATE: annotateToolGroups,
-	"SOLID MECHANICS": [
-		{
-			id: "solid-mechanics-selection",
-			label: "Selection",
-			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
-		},
-		{
-			id: "solid-mechanics-create",
-			label: "Create",
-			tools: [
-				{ id: "beam", label: "Beam" },
-				{ id: "support", label: "Supports", submenu: true },
-				{ id: "load", label: "Loads", submenu: true }
-			]
-		},
-		{
-			id: "solid-mechanics-analysis",
-			label: "Analysis",
-			tools: [
-				{ id: "stress-element", label: "Stress Element" },
-				{ id: "boundary-stress", label: "Boundary Stress" }
-			]
-		},
-		{
-			id: "solid-mechanics-reference",
-			label: "Reference",
-			tools: [{ id: "coordinate-system", label: "Coordinate System" }]
-		}
-	],
 
 	/*
 	 * ========================================================
@@ -728,41 +677,6 @@ export const disciplineToolGroups = {
 	 */
 	FLUIDS: fluidsToolGroups,
 
-	THERMODYNAMICS: [
-		{
-			id: "thermodynamics-selection",
-			label: "Selection",
-			tools: [{ id: "select", label: "Select", shortcut: "Esc" }]
-		},
-		{
-			id: "thermodynamics-create",
-			label: "Create",
-			tools: [
-				{ id: "tank", label: "Tank" },
-				{ id: "steady-state-devices", label: "Steady-State Devices", iconLabel: "Turbine / Compressor", submenu: true },
-				{ id: "control-volume", label: "Control Volume" },
-				{ id: "piston-cylinder", label: "Piston Cylinder", submenu: true },
-				{ id: "process-diagrams", label: "Process Diagrams", submenu: true },
-				{ id: "heat-transfer", label: "Heat Transfer", submenu: true },
-				{ id: "work", label: "Work", submenu: true }
-			]
-		},
-		{
-			id: "thermodynamics-analysis",
-			label: "Analysis",
-			tools: [
-				{ id: "thermodynamic-cycles", label: "Thermodynamic Cycles", submenu: true }
-			]
-		},
-		{
-			id: "thermodynamics-reference",
-			label: "Reference",
-			tools: [
-				{ id: "coordinate-system", label: "Coordinate System" }
-			]
-		}
-	],
-
 	STATICS: [
 		{
 			id: "statics-selection",
@@ -774,6 +688,13 @@ export const disciplineToolGroups = {
 			label: "Create",
 			tools: [
 				{ id: "body", label: "Bodies", submenu: true },
+
+				/*
+				 * A Point Force is a single direct tool, in
+				 * the same way Line and Circle are. It has no
+				 * submenu and opens no popup before drawing.
+				 */
+				{ id: "point-force", label: "Point Force" },
 
 				{ id: "load", label: "Loads", submenu: true },
 				{ id: "moment", label: "Moment" },
@@ -821,7 +742,7 @@ export const disciplineToolGroups = {
 			tools: [
 				{ id: "resultant", label: "Resultant" },
 				{ id: "force-components", label: "Force Components" },
-				{ id: "shear-force-diagram", label: "Shear Force (SFD)", submenu: true },
+				{ id: "shear-force-diagram", label: "Shear Force (SFD)" },
 				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
 				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
 			]
@@ -889,8 +810,8 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
-	ANNOTATE: ["Dimension", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
-	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Load", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
+	ANNOTATE: ["Dimension", "Angle", "Note / Text", "Label", "Callout", "Symbol", "Table"],
+	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Force", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*
 	 * FLUIDS is a GROUPED toolset now - see `disciplineToolGroups.FLUIDS`,
@@ -923,10 +844,10 @@ export const engineeringTools = {
 		"Reference Line",
 		"Section Plane"
 	],
-	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "Heat Transfer", "Work"],
+	THERMODYNAMICS: ["Control Volume", "Piston Cylinder", "Process Diagrams", "State Point", "Heat Transfer", "Work"],
 	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
-	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
-	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Input", "Output", "Sensor", "Controller", "Signal Line"],
+	"SOLID MECHANICS": ["Beam", "Shaft", "Load", "Stress", "Strain", "Boundary Condition"],
+	"MECHANICAL DESIGN": ["Part", "Hole", "Shaft", "Gear", "Fastener", "Section View"],
+	CONTROLS: ["Block", "Input", "Output", "Sensor", "Controller", "Signal Arrow"],
 	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
 };

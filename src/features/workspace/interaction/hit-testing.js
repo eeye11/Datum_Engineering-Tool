@@ -8,18 +8,9 @@ import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
-import enggJunction from "../model/fluids/junction.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
-import { stressArrowPaths } from "../../../shared/geometry/stress-element.js";
-import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
-import { selectionBounds } from "../../../shared/selection/selection-transform.js";
-import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
-import { nozzleDiffuserPaths } from "../model/thermodynamics/nozzle-diffuser.js";
-import { rankineCycleDiagram } from "../model/thermodynamics/rankine-cycle.js";
-import { fanPaths } from "../model/thermodynamics/fan.js";
-import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
 import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
@@ -28,16 +19,6 @@ import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
 import { gainTrianglePoints, isControlBlock, isGain, isSum } from "../../../shared/model/plant.js";
-import enggFlowArrow from "../model/fluids/flow-arrow.js";
-import enggReducer from "../model/fluids/reducer-expander.js";
-import enggEquipment from "../model/fluids/inline-equipment.js";
-import enggVessel from "../model/fluids/reservoir-tank.js";
-import enggFluidLevel from "../model/fluids/fluid-level.js";
-import enggFlowArrows from "../model/fluids/flow-arrows.js";
-import enggPressureProfile from "../model/fluids/pressure-profile.js";
-import enggFlowProfile from "../model/fluids/flow-profile.js";
-import enggSectionPlane from "../model/fluids/section-plane.js";
-import { polygonContainsPoint } from "../model/fluids/fluids-shared.js";
 
 /*
  * THE POINT PRIMITIVES ARE RE-EXPORTED, NOT RE-DEFINED.
@@ -58,24 +39,6 @@ import { axisLabelPositions } from "../../../shared/geometry/axis-labels.js";
 import { drawingState } from "../editor-state.js";
 import { momentIsClockwise } from "../../../shared/rendering/vector-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
-
-/* Whether a point lies inside a triangle - the Flow Arrow's pickable area. */
-function pointInTriangle(point, a, b, c) {
-    if (!point || !a || !b || !c) {
-        return false;
-    }
-
-    const side = (from, to) => (point.x - to.x) * (from.y - to.y) - (from.x - to.x) * (point.y - to.y);
-
-    const first = side(a, b);
-    const second = side(b, c);
-    const third = side(c, a);
-
-    const hasNegative = first < 0 || second < 0 || third < 0;
-    const hasPositive = first > 0 || second > 0 || third > 0;
-
-    return !(hasNegative && hasPositive);
-}
 
 /*
  * The distance from a point to a closed outline.
@@ -195,16 +158,6 @@ function elbowContainsPoint(
         if (distance(point, sample) <= tolerance) {
             return true;
         }
-    }
-
-    /*
-     * THE CORNER ITSELF IS PICKABLE. The arc samples leave a wedge of dead
-     * space at each end of the bend, and at a sharp corner the two sampled
-     * ends are far apart - a click on the corner the fitting sits at is a
-     * click on the fitting.
-     */
-    if (geometry.position && distance(point, geometry.position) <= tolerance * 2) {
-        return true;
     }
 
     return false;
@@ -346,10 +299,6 @@ function annotateContainsPoint(object, point) {
     if (object.metadata?.thermodynamicsKind === "electric-work") {
         const points = resistorPoints(geometry);
         return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
-    }
-    if (object.metadata?.thermodynamicsKind === "mechanical-work") {
-        return fanPaths(geometry).some(points => points.some((end, index) =>
-            index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance));
     }
 
     /*
@@ -620,18 +569,6 @@ export function safeDimensionGraphics(
     }
 }
 
-// Match the visible selection frame, including its three-pixel padding.
-export function boundarySelectionAtPoint(point) {
-    const tolerance = 8 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
-    const selected = new Set(drawingState.selection.selectedObjectIds);
-    return drawingState.objects.findLast(object => {
-        if (!selected.has(object.id) || !object.metadata?.boundaryStress || object.locked || object.visible === false) return false;
-        const box = selectionBounds([object], [object.id]);
-        return box && point.x >= box.minX - tolerance && point.x <= box.maxX + tolerance &&
-            point.y >= box.minY - tolerance && point.y <= box.maxY + tolerance;
-    }) || null;
-}
-
 export function objectAtPoint(
     point
 ) {
@@ -676,36 +613,6 @@ export function objectAtPoint(
             object => {
                 const geometry =
                     object.geometry;
-
-                /*
-                 * A HIDDEN OBJECT CANNOT BE CLICKED.
-                 *
-                 * It is not drawn, so a click where it would have been must
-                 * reach whatever is behind it - or nothing, which then means
-                 * "empty canvas". Selecting something invisible would be the
-                 * worst of both: the student cannot see what they grabbed, and
-                 * the thing they meant to click was blocked by it.
-                 *
-                 * The object stays in the Objects list, where it can be
-                 * selected, inspected and shown again - this only stops the
-                 * CANVAS from picking it.
-                 */
-                if (object.visible === false) {
-                    return false;
-                }
-
-                /*
-                 * A PIPE ASSEMBLY IS A CONTAINER, AND IS NEVER PICKED.
-                 *
-                 * It draws nothing, so there is no ink to aim at - and picking it
-                 * by proximity would put an invisible box round the system that
-                 * swallows clicks meant for the pipes inside it. It is selected
-                 * from its ROW in the Objects tab instead, which is where a
-                 * container belongs.
-                 */
-                if (object.type === "pipe-assembly") {
-                    return false;
-                }
 
                 /*
                  * AN ANNOTATION IS HIT BY ITS TEXT, not by geometry.
@@ -812,8 +719,7 @@ export function objectAtPoint(
                  * feature, and one thing to hit.
                  */
                 if (object.type === "pipe-duct") {
-                    return enggPipeDuct.pipeDuctPaths(geometry.start, geometry.end, object.engineering || {})
-                        .some(path => path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance)) || Boolean(
+                    return Boolean(
                         geometry.start &&
                             geometry.end &&
                             distanceToSegment(
@@ -833,147 +739,6 @@ export function objectAtPoint(
                  */
                 if (object.type === "elbow") {
                     return elbowContainsPoint(object, point, tolerance);
-                }
-
-                /*
-                 * A JUNCTION IS PICKED AGAINST ITS OWN CONTOUR - the same loop
-                 * the canvas draws and the source writes, so what a student can
-                 * click is exactly the fitting they can see.
-                 */
-                if (object.type === "junction") {
-                    return enggJunction.junctionContainsPoint(object, point, tolerance);
-                }
-
-                /*
-                 * ========================================================
-                 * A FLOW ARROW IS PICKED ON ITS HEAD, NOT ON ITS PIPE
-                 * ========================================================
-                 *
-                 * The arrow sits ON a run, so a press near it is also near the
-                 * pipe. Testing the arrow's own triangle and nothing else is
-                 * what keeps the two selectable separately: the head is a small
-                 * closed shape, so clicking it selects the arrow and clicking
-                 * the wall beside it still selects the pipe.
-                 *
-                 * The corners come from the model's `flowArrowHead` - the same
-                 * three points the canvas draws - so what can be clicked is
-                 * exactly what is painted.
-                 */
-                /*
-                 * ========================================================
-                 * THE SCHEMATIC TOOLS
-                 * ========================================================
-                 *
-                 * Each is picked by its OWN drawn form, read from its model - so
-                 * what can be clicked is exactly what is painted, and a symbol
-                 * is never picked by a box that is bigger than its ink.
-                 */
-                if (enggReducer.isReducerType(object.type)) {
-                    const outline = enggReducer.outlineOf(object);
-
-                    return polygonContainsPoint(point, outline, tolerance);
-                }
-
-                if (enggEquipment.isEquipmentType(object.type)) {
-                    return enggEquipment.equipmentContainsPoint(object, point, tolerance);
-                }
-
-                if (enggVessel.isVesselType(object.type)) {
-                    /* A vessel is picked by its walls OR anywhere inside it. */
-                    return (
-                        enggVessel.vesselContainsPoint(object, point, tolerance) ||
-                        enggVessel
-                            .vesselSegments(object)
-                            .some((side) => distanceToSegment(point, side.start, side.end) <= tolerance)
-                    );
-                }
-
-                if (enggFluidLevel.isFluidLevelType(object.type)) {
-                    return enggFluidLevel.levelContainsPoint(object, point, tolerance);
-                }
-
-                if (enggFlowArrows.isFlowDirectionType(object.type)) {
-                    return enggFlowArrows.directionContainsPoint(object, point, tolerance);
-                }
-
-                /*
-                 * A FLOW PROFILE IS PICKED INSIDE ITS FRAME, exactly as the
-                 * Pressure Profile is - it is the same graph, and a student aiming
-                 * at one aims at the whole plot area rather than at a one-pixel
-                 * axis.
-                 */
-                if (enggFlowProfile.isFlowProfileType(object.type)) {
-                    const frame = enggFlowProfile.profileFrame(object);
-
-                    if (!frame) {
-                        return false;
-                    }
-
-                    return (
-                        point.x >= frame.position.x - tolerance &&
-                        point.x <= frame.position.x + frame.width + tolerance &&
-                        point.y >= frame.position.y - tolerance &&
-                        point.y <= frame.position.y + frame.height + tolerance
-                    );
-                }
-
-                if (enggPressureProfile.isPressureProfileType(object.type)) {
-                    const frame = enggPressureProfile.profileFrame(object);
-
-                    if (!frame) {
-                        return false;
-                    }
-
-                    /*
-                     * A GRAPH IS PICKED ANYWHERE INSIDE ITS FRAME. Its ink is two
-                     * axes and a line, and a student aiming at a graph aims at the
-                     * graph - not at a one-pixel axis.
-                     */
-                    return (
-                        point.x >= frame.position.x - tolerance &&
-                        point.x <= frame.position.x + frame.width + tolerance &&
-                        point.y >= frame.position.y - tolerance &&
-                        point.y <= frame.position.y + frame.height + tolerance
-                    );
-                }
-
-                if (enggSectionPlane.isSectionPlaneType(object.type)) {
-                    return enggSectionPlane.sectionContainsPoint(object, point, tolerance);
-                }
-
-                /*
-                 * A FREE FLOW ARROW IS PICKED ALONG ITS SPAN.
-                 */
-                if (
-                    enggFlowArrows.isFreeFlowArrowType(object.type) &&
-                    !object.attachment &&
-                    geometry.start &&
-                    geometry.end
-                ) {
-                    return distanceToSegment(point, geometry.start, geometry.end) <= tolerance;
-                }
-
-                if (object.type === "flow-arrow") {
-                    const shape = enggFlowArrow.flowArrowShape(object);
-
-                    if (!shape) {
-                        return false;
-                    }
-
-                    /*
-                     * THE SHAFT IS PART OF THE SYMBOL. A student grabbing the
-                     * line of the arrow is grabbing the arrow, so the stem is
-                     * pickable for its whole length - and the head, of course.
-                     * The run under it is still picked by clicking BESIDE the
-                     * stem, where the pipe's own centreline is.
-                     */
-                    return (
-                        distanceToSegment(point, shape.shaft.start, shape.shaft.end) <= tolerance ||
-                        distanceToSegment(point, shape.tip, shape.barbFirst) <= tolerance * 2 ||
-                        distanceToSegment(point, shape.barbFirst, shape.barbSecond) <= tolerance * 2 ||
-                        distanceToSegment(point, shape.barbSecond, shape.tip) <= tolerance * 2 ||
-                        pointInTriangle(point, shape.tip, shape.barbFirst, shape.barbSecond)
-                    );
                 }
 
                 /*
@@ -1002,58 +767,6 @@ export function objectAtPoint(
                 }
 
                 /*
-                 * A Dynamics Polar Vector is the segment from its tail to
-                 * tip. Pick along the shaft and give the endpoints a slightly
-                 * wider target so the arrowhead and origin remain easy to
-                 * select at normal zoom.
-                 */
-                if (object?.engineering?.dynamicsType === "dynamics-polar-vector") {
-                    return Boolean(
-                        geometry.start &&
-                            geometry.end &&
-                            (
-                                distanceToSegment(point, geometry.start, geometry.end) <= tolerance ||
-                                distance(point, geometry.start) <= tolerance * 2 ||
-                                distance(point, geometry.end) <= tolerance * 2
-                            )
-                    );
-                }
-
-                if (object?.engineering?.dynamicsType === "dynamics-angular-vector") {
-                    if (!geometry.center || !(Number(geometry.radius) > 0)) {
-                        return false;
-                    }
-
-                    if (distance(point, geometry.center) <= tolerance * 2) {
-                        return true;
-                    }
-
-                    const sweep = Math.min(360, Math.abs(Number(geometry.sweep) || 270));
-                    const direction = String(geometry.direction || "ccw").toLowerCase() === "cw" ? -1 : 1;
-                    const start = Number(geometry.startAngle) || 0;
-                    const segments = Math.max(1, Math.ceil(sweep / 5));
-
-                    for (let index = 1; index <= segments; index += 1) {
-                        const previousAngle = start + direction * sweep * (index - 1) / segments;
-                        const currentAngle = start + direction * sweep * index / segments;
-                        const previous = {
-                            x: geometry.center.x + geometry.radius * Math.cos(previousAngle * Math.PI / 180),
-                            y: geometry.center.y + geometry.radius * Math.sin(previousAngle * Math.PI / 180)
-                        };
-                        const current = {
-                            x: geometry.center.x + geometry.radius * Math.cos(currentAngle * Math.PI / 180),
-                            y: geometry.center.y + geometry.radius * Math.sin(currentAngle * Math.PI / 180)
-                        };
-
-                        if (distanceToSegment(point, previous, current) <= tolerance) {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                }
-
-                /*
                  * A rigid body is a shape, so it is picked
                  * anywhere inside or on its outline rather
                  * than only at its position anchor. The test
@@ -1078,8 +791,7 @@ export function objectAtPoint(
 
                     return (
                         (isControlBlock(object) && pointInPolygon(point, corners)) ||
-                        distanceToPolygon(point, corners) <= tolerance ||
-                        pointInPolygon(point, corners)
+                        distanceToPolygon(point, corners) <= tolerance
                     );
                 }
 
@@ -1256,22 +968,6 @@ export function objectAtPoint(
                     );
                 }
 
-                if (object.metadata?.boundaryStress) {
-                    const angle = (Number(geometry.rotation) || 0) * Math.PI / 180;
-                    const dx = point.x - geometry.position.x - geometry.width / 2;
-                    const dy = point.y - geometry.position.y + geometry.height / 2;
-                    const x = dx * Math.cos(angle) + dy * Math.sin(angle);
-                    const y = -dx * Math.sin(angle) + dy * Math.cos(angle);
-                    if (Math.abs(x) <= geometry.width / 2 && Math.abs(y) <= geometry.height / 2) return true;
-                }
-                if (object.metadata?.boundaryStress && boundaryStressDrawing(geometry).paths.some(({ points }) =>
-                    points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance))) {
-                    return true;
-                }
-                if (object.metadata?.stressElement && stressArrowPaths(geometry).some(path =>
-                    path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance))) {
-                    return true;
-                }
                 if (
                     object.type ===
                     "circle"
@@ -1292,22 +988,6 @@ export function objectAtPoint(
                     );
                 }
 
-                if (object.metadata?.thermodynamicsKind === "tank") {
-                    return tankPaths(geometry).some(path => path.some((end, index) =>
-                        index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance));
-                }
-                if (object.metadata?.thermodynamicsKind === "nozzle-diffuser") {
-                    return nozzleDiffuserPaths(geometry).some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
-                }
-                if (object.metadata?.thermodynamicsKind === "rankine-cycle") {
-                    const diagram = rankineCycleDiagram(geometry, object.metadata?.problemData);
-                    return diagram.paths.some(path => path.points.some((end, index) => index > 0 && distanceToSegment(point, path.points[index - 1], end) <= tolerance)) ||
-                        diagram.labels.some(label => distance(point, label.point) <= tolerance * 3);
-                }
-                if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
-                    const points = turbineCompressorPoints(geometry);
-                    return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
-                }
                 if (isPistonCylinder(object)) {
                     const level = pistonFraction(geometry);
                     const local = (x, y) => cylinderPoint(geometry, x, y);
@@ -2162,8 +1842,6 @@ export function pickDerivedMagnitude(
         const object =
             drawingState.objects[i];
 
-        if (object.visible === false) continue;
-
         const annotations =
             model.derivedAnnotations(
                 object,
@@ -2191,7 +1869,7 @@ export function pickDerivedMagnitude(
                 !model.textBoundsContainPoint(
                     bounds,
                     point,
-                    padding + (object.type === "force" ? 4 / Math.max(drawingState.camera.zoom, 0.25) : 0)
+                    padding
                 )
             ) {
                 continue;
@@ -2413,13 +2091,13 @@ export function objectPoints(
         ];
 
         enggPipeDuct
-            .pipeDuctPaths(
+            .boundaryLines(
                 geometry.start,
                 geometry.end,
                 object.engineering || {}
             )
-            .forEach((path) => {
-                points.push(...path);
+            .forEach((boundary) => {
+                points.push(boundary.start, boundary.end);
             });
 
         return points.filter(Boolean);
