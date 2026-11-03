@@ -217,6 +217,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         const heldFirst =
             state.interaction
                 .dimensionStage === "first" ||
+            state.interaction.dimensionStage === "selecting" ||
             state.interaction
                 .dimensionStage === "armed"
                 ? state.interaction
@@ -231,7 +232,7 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                     object.id === heldFirst.featureId
             );
 
-            const heldPoint =
+            const heldPoint = heldFirst.kind === "canvas-point" ? heldFirst.point :
                 enggMeasurement?.resolveAnchor?.(
                     heldObject,
                     heldFirst.anchor
@@ -710,15 +711,19 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
          * same `boundaryLines` the committed run is drawn with.
          */
         if (preview.type === "pipe-duct" && geometry.start && geometry.end) {
-            enggPipeDuct.pipeDuctPaths(
+            enggPipeDuct.boundaryLines(
                 geometry.start,
                 geometry.end,
                 geometry.engineering || preview.engineering || {}
-            ).forEach((path) => {
-                const points = path.map(toScreen);
-                svg.appendChild(createSvgElement("path", {
-                    d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
-                    fill: "none",
+            ).forEach((boundary) => {
+                const from = toScreen(boundary.start);
+                const to = toScreen(boundary.end);
+
+                svg.appendChild(createSvgElement("line", {
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
                     stroke: style.stroke,
                     "stroke-width": 1.5,
                     "stroke-dasharray": "6 4",

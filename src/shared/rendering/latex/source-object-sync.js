@@ -207,8 +207,8 @@ function createObjectFromShape(type, shape, previous) {
       case "pipe-duct": {
         const engineering = {
           ...enggPipeDuct.defaultPipeEngineering(),
-          ...(Number.isFinite(shape.schematicWidth) && Math.abs(shape.schematicWidth) > 1e-9
-            ? { schematicWidth: Number(shape.schematicWidth.toFixed(6)) }
+          ...(Number.isFinite(shape.separation) && Math.abs(shape.separation) > 1e-9
+            ? { separation: Number(shape.separation.toFixed(6)) }
             : {})
         };
 
@@ -312,9 +312,8 @@ function pipeFromWalls(shapes) {
     start,
     end,
 
-    /* The wall spacing itself, which is what the model stores. */
-    separation,
-    schematicWidth: separation
+    /* The change from the drawing default, which is what the model stores. */
+    separation: separation - enggPipeDuct.DEFAULT_SCHEMATIC_SEPARATION
   };
 }
 

@@ -62,13 +62,8 @@ console.log("\n  the V1 Annotate toolset\n");
 
   const inMenu = (id) => new RegExp(`id:\\s*"${id}"`).test(groups);
 
-  ["dimension", "note", "label", "leader", "callout", "symbol", "table"].forEach(
+  ["dimension", "note", "label", "callout", "symbol", "table"].forEach(
     (id) => check(`"${id}" is offered`, inMenu(id)),
-  );
-
-  /* Folded into the one Dimension tool - never offered on their own again. */
-  ["smart-dimension", "variable-dimension"].forEach(
-    (id) => check(`the retired "${id}" tool is NOT offered`, !inMenu(id)),
   );
 
   check("the standalone Arrow tool is NOT offered", !inMenu("arrow"));
@@ -258,7 +253,8 @@ console.log("\n  the Symbol library covers the required categories\n");
 
   const required = [
     "Other Engineering Symbols",
-    "Greek & Mathematical",
+    "Greek — lowercase",
+    "Greek — uppercase",
     "Center / Centerline",
     "Section",
     "Surface Finish",

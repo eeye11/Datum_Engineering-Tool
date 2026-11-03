@@ -21,8 +21,9 @@ const assert = require("node:assert/strict");
 const { bootApp } = require("./helpers/boot-app.cjs");
 const { locate } = require("./helpers/source-path.cjs");
 
+// Let node:test report failures; forcing process.exit here can hide them.
 test.after(() => {
-  setImmediate(() => process.exit(process.exitCode || 0));
+  page?.window.close();
 });
 
 let page = null;
@@ -123,6 +124,7 @@ test("1: a press and drag on a valid pipe creates ONE attached arrow", () => {
   const arrow = createAt(m, host, 0.4);
 
   assert.ok(arrow, "the release must commit an arrow");
+  assert.equal(arrow, m.state.objects.find(object => object.id === arrow.id), "creation returns the live drawing object, not the detached draft");
   assert.equal(m.state.objects.length, before + 1, "exactly one object is added");
   assert.equal(arrow.type, "flow-arrow");
 

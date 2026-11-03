@@ -17,12 +17,12 @@ import { isDimensionTool, openDimensionValuePrompt } from "../annotate/dimension
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
-import { add2DCoordinateSystem, beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
 import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-path.js";
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
 import { resolvePointerEvent } from "./pointer.js";
-import { shouldExitToSelectOnClick } from "../../../components/layout/toolbar/tool-classification.js";
+import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../components/layout/toolbar/tool-classification.js";
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
@@ -145,17 +145,44 @@ export function handleCanvasClick(
         placeSum(resolution.effectiveConstructionPoint);
         return;
     }
+
+    // Also cover clicks delivered without a pointerdown creation session.
+    // Select the note before a click-to-create tool consumes its first point.
+    if (drawingState.interaction.phase === "idle" && ["line", "rectangle", "circle"].includes(drawingState.activeTool) &&
+        isEditableAnnotate(objectAtPoint(resolution.rawPointerPoint || canvasPointFromEvent(event, false)))) {
+        activateTool("select");
+        selectFromCanvasClick(event);
+        return;
+    }
+
     if (isProcessPlotTool(drawingState.activeTool)) {
         addProcessPoint(resolution.rawPointerPoint);
         return;
     }
 
+    /*
+     * THE COORDINATE SYSTEM TAKES CLICK-MOVE-CLICK AS WELL AS ITS DRAG.
+     *
+     * The first click is the origin and the second the positive X
+     * direction - the same two points the drag supplies, through the same
+     * construction step. A click used to place a fixed-size system on its
+     * own, so two clicks placed two of them.
+     */
     if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        add2DCoordinateSystem(
-            resolution.effectiveConstructionPoint
+        /*
+         * CLICK-MOVE-CLICK, LIKE THE DRAG.
+         *
+         * The first click is the origin and the second the positive X
+         * direction - the same two points the press and release of a drag
+         * supply - so both workflows go through the one construction path
+         * and produce the same axes. This used to place a fixed-length cross
+         * on a single click, with no way to say which way the axes ran.
+         */
+        beginOrCompleteGeometry(
+            resolution
         );
 
         return;
@@ -296,6 +323,86 @@ export function handleCanvasClick(
             "idle"
     ) {
         exitToolToSelect(
+            event
+        );
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * AN EXISTING OBJECT UNDER THE POINTER IS SELECTED, WHATEVER TOOL IS ARMED
+     * ========================================================
+     *
+     * Answered BEFORE the construction branch, because a construction tool takes
+     * every click it is offered - including one on a feature that already exists.
+     * With a Line armed, clicking an existing run started a new line through it
+     * instead of selecting it.
+     *
+     * IT IS THE SAME RULE SELECT USES: the hit test is `objectAtPoint` and the
+     * selection goes through `selectFromCanvasClick`, so clicking an object
+     * means the same thing whichever tool is armed.
+     *
+     * A RUNNING CONSTRUCTION IS EXEMPT. `shouldClickSelectExistingObject` asks
+     * the interaction state, not a tool list, so a half-built shape keeps the
+     * click it is waiting for - and a click on EMPTY space fails the hit test
+     * here and falls through to the tool below.
+     */
+    if (
+        shouldClickSelectExistingObject(
+            event
+        )
+    ) {
+        if (
+            drawingState.activeTool !==
+            "select"
+        ) {
+            activateTool("select");
+        }
+
+        selectFromCanvasClick(
+            event
+        );
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * EMPTY CANVAS WITH NOTHING STARTED RETURNS TO SELECT
+     * ========================================================
+     *
+     * Every other handler above has had its turn, and the click is on empty
+     * canvas - no object was under the pointer, no dimension or annotation was
+     * taking references, and the interaction is idle. That gesture means one
+     * thing in every category: clear the selection and go back to Select.
+     *
+     * ASKED OF THE INTERACTION, NOT OF A TOOL LIST. A tool added tomorrow gets
+     * this without being named, and a tool that DOES want the click - a
+     * dimension collecting references, a construction part-way through its
+     * points, a press-drag-release - has already consumed it above.
+     *
+     * THE ONE EXCEPTION IS A CLICK-CLICK SHAPE'S FIRST CORNER. A Line,
+     * Rectangle or Circle is drawn click-move-click, so with nothing started an
+     * empty click is the point the student is aiming at and goes to the
+     * construction branch below. Those tools are named in CLICK_CLICK_TOOLS, so
+     * the distinction is stated once, beside the classification that owns it.
+     */
+    if (
+        drawingState.activeTool !==
+            "select" &&
+        drawingState.interaction.phase ===
+            "idle" &&
+        !(
+            CLICK_CLICK_TOOLS.includes(
+                drawingState.activeTool
+            ) &&
+            !drawingState.interaction.startPoint
+        )
+    ) {
+        activateTool("select");
+
+        selectFromCanvasClick(
             event
         );
 
@@ -460,6 +567,47 @@ export function handleCanvasClick(
         if (drawingState.activeTool !== "select") {
             activateTool("select");
         }
+        selectFromCanvasClick(
+            event
+        );
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * EMPTY CANVAS CLEARS THE SELECTION AND RETURNS TO SELECT
+     * ========================================================
+     *
+     * The rule is one line long and it applies to EVERY tool, because it is
+     * reached only after every tool has had its turn above: a dimension asking
+     * for a reference, a Beam taking its first point, an annotation placing its
+     * anchor and a construction mid-flight have all already consumed the click
+     * and returned. What is left is a click on empty space that no tool wanted.
+     *
+     * Clicking away is the application's "I am finished here": the selection
+     * empties, the Features tab goes back to nothing, and the tool returns to
+     * Select. Before this, only the Select tool answered an empty click that
+     * way - with any other tool active the click went to the tool, which either
+     * started a stray feature or did nothing at all, and the student was left
+     * in a mode they had not asked for.
+     *
+     * AN ACTIVE GESTURE IS NOT INTERRUPTED, and that is structural rather than
+     * something this branch checks: a press-drag-release reaches its tool
+     * through the DRAG path (`creation-drag.js`), not through this router, and
+     * a construction, dimension or annotation that is part-way through its own
+     * steps has consumed the click in the branches above.
+     *
+     * This last branch is therefore the CATCH-ALL for a tool that had no meaning
+     * for the click at all - which is what makes the rule hold for every
+     * category, including one added tomorrow.
+     */
+    if (
+        drawingState.activeTool !==
+        "select"
+    ) {
+        activateTool("select");
+
         selectFromCanvasClick(
             event
         );
@@ -763,9 +911,19 @@ export function openNoteEditorFor(object, atPoint = null) {
             return false;
         }
 
+        const originalText = object.text || "";
+        const previousTextObjects = enggDrawingState.snapshotDrawing(drawingState);
+        const currentObject = () => drawingState.objects.find(candidate => candidate.id === object.id);
+        const canvasText = ["note", "callout"].includes(object.annotateKind);
         beginTextEntry(object);
 
         enggNoteEditor?.open({
+            canvasText,
+            onInput: canvasText ? text => {
+                const current = currentObject();
+                if (current) current.text = text;
+                renderCurrentDrawing();
+            } : undefined,
             text: object.text || "",
 
             /*
@@ -788,17 +946,13 @@ export function openNoteEditorFor(object, atPoint = null) {
             cameraSignal,
 
             onApply: (text) => {
+                const current = currentObject();
+                if (current) {
+                    current.text = text;
+                    enggDrawingState.commitDrawingChange(drawingState, previousTextObjects);
+                }
                 endTextEntry();
-
-                const previousObjects =
-                    enggDrawingState.snapshotDrawing(drawingState);
-
-                object.text = text;
-
-                enggDrawingState.commitDrawingChange(
-                    drawingState,
-                    previousObjects
-                );
+                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation updated");
 
@@ -807,7 +961,10 @@ export function openNoteEditorFor(object, atPoint = null) {
             },
 
             onCancel: () => {
+                const current = currentObject();
+                if (current && canvasText) current.text = originalText;
                 endTextEntry();
+                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation edit cancelled");
 

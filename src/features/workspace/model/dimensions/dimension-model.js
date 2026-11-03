@@ -1,4 +1,5 @@
-﻿/*
+import { dimensionLabelSize } from "../../../../shared/geometry/dimension-layout.js";
+/*
  * The Dimension object.
  *
  * A dimension is a MEASUREMENT OF GEOMETRY, and this module is the
@@ -130,8 +131,15 @@ function createDimension({
   orientation = ORIENTATIONS.auto,
   style = {},
   label = null,
+  dimensionKind = "smart",
+  mode = "driven",
+  content = "",
+  drivingValue = null,
   name,
 } = {}) {
+  if (dimensionKind === "variable" && !String(content ?? "").trim()) {
+    throw new Error("Variable dimension content is required.");
+  }
   const normalisedRefs = normaliseReferences(refs);
 
   return {
@@ -160,6 +168,10 @@ function createDimension({
      * dimension asserts.
      */
     label,
+    dimensionKind: dimensionKind === "variable" ? "variable" : "smart",
+    mode: mode === "driving" && dimensionKind !== "variable" ? "driving" : "driven",
+    content: String(content ?? "").trim(),
+    drivingValue,
 
     /*
      * Where the dimension is DRAWN, in drawing units - deliberately
@@ -236,8 +248,9 @@ function normaliseReferences(refs) {
   const list = Array.isArray(refs) ? refs : [refs];
 
   return list
-    .filter((reference) => reference?.featureId)
+    .filter((reference) => reference?.featureId || (reference?.kind === "canvas-point" && Number.isFinite(reference.point?.x) && Number.isFinite(reference.point?.y)))
     .map((reference) => {
+      if (reference.kind === "canvas-point") return {kind:"canvas-point", point:{...reference.point}};
       if (reference.kind === REFERENCE_KINDS.property) {
         return {
           kind: REFERENCE_KINDS.property,
@@ -560,6 +573,7 @@ function resolveReferencePoint(
   reference,
   state
 ) {
+  if (reference?.kind === "canvas-point") return reference.point || null;
   const object = findObject(
     state,
     reference.featureId
@@ -1157,6 +1171,9 @@ function formatMeasurement(
   dimension,
   state
 ) {
+  if (dimension?.dimensionKind === "variable") {
+    return isResolved(dimension, state) ? String(dimension.content || "") : null;
+  }
   const override =
     typeof dimension?.label === "string"
       ? dimension.label.trim()
@@ -1687,7 +1704,8 @@ function perpendicular(direction) {
  */
 function textFrame(
   position,
-  direction
+  direction,
+  fontSize = 11
 ) {
   const { x, y } = direction;
 
@@ -1705,6 +1723,7 @@ function textFrame(
   return {
     x: position.x,
     y: position.y,
+    fontSize,
     angle: normalised,
     flip: angle > 90 || angle < -90,
     vertical: Math.abs(normalised) > 45 && Math.abs(normalised) < 135,
@@ -1754,15 +1773,13 @@ function linearGraphics(
     (dimension.placement.y - midpoint.y) *
       anchor.y;
 
-  const lineStart = {
-    x: first.x + anchor.x * offset,
-    y: first.y + anchor.y * offset,
+  const plane=dimension.placement.x*anchor.x+dimension.placement.y*anchor.y;
+  const project=point=>{
+    const delta=plane-point.x*anchor.x-point.y*anchor.y;
+    return {x:point.x+anchor.x*delta,y:point.y+anchor.y*delta};
   };
-
-  const lineEnd = {
-    x: second.x + anchor.x * offset,
-    y: second.y + anchor.y * offset,
-  };
+  const lineStart=project(first);
+  const lineEnd=project(second);
 
   /*
    * Extension lines run from the measured points out to the
@@ -1770,24 +1787,14 @@ function linearGraphics(
    * are never ordinary Line features - they exist for as long as the
    * dimension does and cannot be selected on their own.
    */
-  const extensionStart = {
-    x: first.x + anchor.x * offset,
-    y: first.y + anchor.y * offset,
-  };
-
-  const extensionEnd = {
-    x: second.x + anchor.x * offset,
-    y: second.y + anchor.y * offset,
-  };
-
-  /*
-   * Where the text sits: on the dimension line, at its midpoint,
-   * shifted slightly off it so it does not sit ON the line and the
-   * arrows.
-   */
+  const extensionStart = {...lineStart};
+  const extensionEnd = {...lineEnd};
+  const label=dimensionLabelSize(text,state,dimension.style);
+  const side=offset<0 ? -1 : 1;
+  const clearance=label.halfHeight+label.gap;
   const textAnchor = {
-    x: (lineStart.x + lineEnd.x) / 2,
-    y: (lineStart.y + lineEnd.y) / 2,
+    x:(lineStart.x+lineEnd.x)/2+anchor.x*clearance*side,
+    y:(lineStart.y+lineEnd.y)/2+anchor.y*clearance*side
   };
 
   return {
@@ -1816,7 +1823,7 @@ function linearGraphics(
       offset
     ),
 
-    textFrame: textFrame(textAnchor, direction),
+    textFrame: textFrame(textAnchor, direction, dimension.style?.fontSize || 11),
     textAnchor,
   };
 }
@@ -2257,10 +2264,21 @@ function angularGraphics(
     1e-6
   );
 
-  const arcPoints = arcFrom(vertex, a, b, radius);
+  const rightAngle = Math.abs(a.x*b.x+a.y*b.y) <= 1e-10;
+  const side=radius/Math.sqrt(2);
+  const arcPoints = rightAngle ? [
+    {x:vertex.x+a.x*side,y:vertex.y+a.y*side},
+    {x:vertex.x+(a.x+b.x)*side,y:vertex.y+(a.y+b.y)*side},
+    {x:vertex.x+b.x*side,y:vertex.y+b.y*side}
+  ] : arcFrom(vertex, a, b, radius);
+
+  const bisector = normalise({x:a.x+b.x,y:a.y+b.y});
+  const label=dimensionLabelSize(text,state,dimension.style);
+  const labelRadius=radius+Math.abs(bisector.x)*label.halfWidth+Math.abs(bisector.y)*label.halfHeight+label.gap/2;
 
   return {
     kind: "angular",
+    rightAngle,
     dimensionType: dimension.dimensionType,
     measurement,
     vertex,
@@ -2275,15 +2293,13 @@ function angularGraphics(
       {
         x:
           vertex.x +
-          ((a.x + b.x) / 2) * radius * 1.15,
+          bisector.x * labelRadius,
         y:
           vertex.y +
-          ((a.y + b.y) / 2) * radius * 1.15,
+          bisector.y * labelRadius,
       },
-      normalise({
-        x: (a.x + b.x) / 2,
-        y: (a.y + b.y) / 2,
-      })
+      {x:1,y:0},
+      dimension.style?.fontSize || 11
     ),
   };
 }
@@ -2349,6 +2365,16 @@ function legDirection(vertex, start, end) {
 function nearestVertex(spanA, spanB) {
   if (!spanA || !spanB) {
     return spanA?.end || spanA?.start || null;
+  }
+
+  // The vertex is the intersection of the two supporting lines, including
+  // crossings between endpoints and intersections of extended segments.
+  const dx=spanA.end.x-spanA.start.x,dy=spanA.end.y-spanA.start.y;
+  const ex=spanB.end.x-spanB.start.x,ey=spanB.end.y-spanB.start.y;
+  const cross=dx*ey-dy*ex;
+  if (Math.abs(cross)>1e-12*Math.hypot(dx,dy)*Math.hypot(ex,ey)) {
+    const t=((spanB.start.x-spanA.start.x)*ey-(spanB.start.y-spanA.start.y)*ex)/cross;
+    return {x:spanA.start.x+t*dx,y:spanA.start.y+t*dy};
   }
 
   const pairs = [

@@ -43,7 +43,6 @@ import {
   LABEL_REACH,
 } from "./symbol-sizes.js";
 import { boundsOfPoint, unionBounds } from "./export-transform.js";
-import { pipeDuctPaths } from "../../../features/workspace/model/fluids/pipe-duct.js";
 
 function finite(value) {
   const number = Number(value);
@@ -148,9 +147,6 @@ export function objectBounds(object) {
   }
 
   switch (type) {
-    case "pipe-duct": {
-      return unionBounds(pipeDuctPaths(geometry.start, geometry.end, object.engineering || {}).flat().map(boundsOfPoint));
-    }
     case "beam": {
       const start = pointOf(geometry.start);
       const end = pointOf(geometry.end);

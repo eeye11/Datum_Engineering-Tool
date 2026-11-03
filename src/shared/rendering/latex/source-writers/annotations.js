@@ -1,3 +1,4 @@
+import enggAnnotate from "../../../../features/workspace/model/annotations/annotate-model.js";
 /*
  * ============================================================
  * ANNOTATION SOURCE WRITER
@@ -32,6 +33,7 @@
  * no geometry - the same answer the canvas gives.
  */
 
+import { noteTextStyle } from "../../../typography/note-text-style.js";
 import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
@@ -162,12 +164,12 @@ function textAnchor(align) {
  * at guessed offsets would space the lines by a number that is not the font's
  * leading, and the second node would not move with the first.
  */
-function multiLineNode(at, text, colour, options = [], mathSubscript = null, mathSymbol = null, mathSuffix = "") {
+function multiLineNode(at, text, colour, options = [], typography = {}, mathSubscript = null, mathSymbol = null, mathSuffix = "") {
   const lines = String(text ?? "").split("\n");
   const math = lines.length === 1 && annotationSubscript(text, { mathSubscript, mathSymbol, mathSuffix });
   const content = math
     ? `$${math.base}_{${math.subscript}}$${texText(math.suffix)}`
-    : lines.map((line) => texText(line)).join(" \\\\ ");
+    : lines.map((line) => typography.underline ? `\\underline{${texText(line)}}` : texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
 }
@@ -195,7 +197,7 @@ function textAtPosition(object) {
     return null;
   }
 
-  const text = String(object.text ?? "");
+  const text = object.annotateKind === "symbol" ? enggAnnotate.textOf(object) : String(object.text ?? "");
 
   if (!text.trim()) {
     /*
@@ -209,12 +211,19 @@ function textAtPosition(object) {
 
   const colour = strokeOf(object);
 
+  const note = object.annotateKind === "note";
+  const typography = noteTextStyle(object.style);
+  const fontSize = note ? typography.fontSize * 0.75 : fontFor(object.style);
+  const family = typography.fontFamily === "Courier New" ? "\\ttfamily"
+    : typography.fontFamily === "Times New Roman" ? "\\rmfamily" : "\\sffamily";
+  const emphasis = `${typography.bold ? "\\bfseries" : ""}${typography.italic ? "\\itshape" : ""}`;
   return join(
     colourPrelude([object.style?.stroke]),
-    multiLineNode({ x: finite(at.x), y: finite(at.y) }, text, colour, [
+    multiLineNode({ x: finite(at.x) + (note ? typography.indent : 0), y: finite(at.y) }, text, colour, [
       `anchor=${textAnchor(object.style?.align)}`,
-      `font=\\fontsize{${num(fontFor(object.style), 2)}}{${num(fontFor(object.style) * 1.2, 2)}}\\selectfont`
-    ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
+      `align=${typography.align}`,
+      `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * (note ? typography.lineSpacing : 1.2), 2)}}\\selectfont${note ? family + emphasis : ""}`
+    ], note ? typography : {}, object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
   );
 }
 
@@ -337,21 +346,16 @@ function serializePen(object) {
   }
 
   const text = String(object.text ?? "");
-  const textAt = valid(geometry.position) ? geometry.position : valid(geometry.end) ? geometry.end : null;
+  const textAt = kind === "callout" ? geometry.end || geometry.position : valid(geometry.position) ? geometry.position : valid(geometry.end) ? geometry.end : null;
 
   if (text.trim() && textAt) {
     const fontSize = fontFor(object.style);
 
     if (kind === "callout") {
-      const widest = Math.max(1, ...text.split("\n").map((line) => line.length));
-      const width = widest * fontSize * 0.58 + 8;
-      const height = text.split("\n").length * fontSize * 1.2 + 4;
-
-      commands.push(
-        `\\draw[${colour}] (${num(finite(textAt.x) - width / 2)},${num(finite(textAt.y) - height / 2)}) rectangle (${num(
-          finite(textAt.x) + width / 2
-        )},${num(finite(textAt.y) + height / 2)});`
-      );
+      const box = enggAnnotate.calloutBox(object);
+      commands.push(object.style?.calloutShape === "circle"
+        ? `\\draw[${colour}, fill=white] ${point((box.minX+box.maxX)/2,(box.minY+box.maxY)/2)} circle[radius=${num((box.maxX-box.minX)/2)}];`
+        : `\\draw[${colour}, fill=white] ${point(box.minX,box.minY)} rectangle ${point(box.maxX,box.maxY)};`);
     }
 
     if (kind !== "arrow" || object.metadata?.thermodynamicsKind === "work-arrow") {
@@ -676,7 +680,9 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
   }
 
   const textAt =
-    frame && valid(frame.center)
+    frame && valid(frame)
+      ? frame
+      : frame && valid(frame.center)
       ? frame.center
       : Array.isArray(line) && line.length === 2
         ? {
@@ -687,7 +693,7 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
 
   if (textAt && String(graphics.text ?? "").trim()) {
     commands.push(
-      `\\node[anchor=center, text=${colour}] at ${point(finite(textAt.x), finite(textAt.y))} {${graphics.text}};`
+      `\\node[anchor=center, font=\\fontsize{${num((frame?.fontSize || 11)*0.75)}}{${num((frame?.fontSize || 11)*0.9)}}\\selectfont, text=${colour}${frame?.angle ? `, rotate=${num(frame.angle)}` : ""}] at ${point(finite(textAt.x), finite(textAt.y))} {${texText(graphics.text)}};`
     );
   }
 

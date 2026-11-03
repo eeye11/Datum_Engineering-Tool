@@ -1,3 +1,4 @@
+import enggAnnotate from "../model/annotations/annotate-model.js";
 /*
  * Box selection: which features a selection rectangle touches.
  */
@@ -1061,9 +1062,10 @@ export function objectIntersectsSelection(
             return true;
         }
 
-        return annotateExtent(object).some(point =>
-            pointInsideSelection(point, selectionBox)
-        );
+        const textBox = enggAnnotate.textBoundsOf(object, drawingState);
+        if (textBox && !(textBox.maxX < selectionBox.minX || textBox.minX > selectionBox.maxX ||
+            textBox.maxY < selectionBox.minY || textBox.minY > selectionBox.maxY)) return true;
+        return annotateExtent(object).some(point => pointInsideSelection(point, selectionBox));
     }
 
     /*

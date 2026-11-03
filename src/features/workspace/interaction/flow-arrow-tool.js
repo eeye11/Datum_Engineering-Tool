@@ -483,8 +483,14 @@ export function commitFlowArrowSession(session) {
 	renderProperties();
 	renderCurrentDrawing();
 
-	/* The tool stays armed: the next press places another arrow. */
-	return stored;
+	/*
+	 * The tool stays armed: the next press places another arrow.
+	 *
+	 * Insertion and source synchronisation can replace the draft. Return the
+	 * live feature, just as free-arrow creation does, so subsequent edits never
+	 * target an object outside the drawing.
+	 */
+	return drawingState.objects.find((object) => object.id === stored.id) || stored;
 }
 
 /* ============================================================

@@ -1,9 +1,9 @@
+import annotate from "../../features/workspace/model/annotations/annotate-model.js";
 import geometry from "../geometry/feature-geometry.js";
 import { boundaryStressDrawing } from "../geometry/boundary-stress.js";
 import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
-import { pipeDuctPaths } from "../../features/workspace/model/fluids/pipe-duct.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import annotations from "../../features/workspace/model/annotations/annotation-model.js";
@@ -195,10 +195,11 @@ function flowPathPoints(object) {
     return null;
 }
 
-export function selectionBounds(objects, selectedIds, state = null) {
+export function selectionBounds(objects, selectedIds, state = {}) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
+        if (object.type === "annotate") return annotate.boundsOf(object, state);
         const ink = flowPathPoints(object);
         if (ink) return ink;
         if (object.type === "truss" && g.members?.length) {
@@ -209,7 +210,13 @@ export function selectionBounds(objects, selectedIds, state = null) {
             return geometry.rectangleCorners(g).concat(drawing.paths.flatMap(path => path.points), drawing.labels.map(label => label.point));
         }
         if (object.metadata?.stressElement) return geometry.rectangleCorners(g).concat(stressArrowPaths(g).flat());
-        if (object.type === "pipe-duct") return pipeDuctPaths(g.start, g.end, object.engineering || {}).flat();
+        if (object.type === "pipe-duct") {
+            const centreline = enggPipeDuct.trimmedCentreline(object) || g;
+            if (!centreline?.start || !centreline?.end) return [];
+            return enggPipeDuct
+                .boundaryLines(centreline.start, centreline.end, object.engineering || {})
+                .flatMap((wall) => [wall.start, wall.end]);
+        }
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
         if (object.metadata?.thermodynamicsKind === "mechanical-work") return fanPaths(g).flat();
         if (["circle", "arc"].includes(object.type) && g.center) {

@@ -2,8 +2,8 @@
   "id": "annotate.symbols.symbol",
   "label": "Symbol",
   "category": "annotate",
-  "group": "symbols",
+  "group": "text",
   "libraryPath": "src/tool-library/annotate/symbols/symbol",
   "template": "template.tex",
-  "implemented": false
+  "implemented": true
 }

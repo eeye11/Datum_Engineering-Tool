@@ -1742,3 +1742,14 @@
     min-width: 0;
     width: 1px;
 }
+
+.dfp-readonly { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+
+.dfp-note-text {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 58px;
+    max-height: 160px;
+    resize: vertical;
+    font: inherit;
+}

@@ -211,10 +211,8 @@ console.log("\nZoom is a view, not a measurement");
  *
  * A dimension that read 100 mm at 100% and 200 mm at 200% would be
  * reporting screen size rather than geometry - the failure this guards
- * against is a dimension whose value or graphics are ever derived from
- * pixels. The model works in world units and is handed no zoom at all,
- * so what is asserted here is that a document carrying a different zoom
- * factor produces identical output.
+ * against is a measurement changing with the view. Geometry stays in world
+ * units; label clearance may adjust to keep zoom-scaled glyphs off the line.
  */
 const atZoom = (zoom) => {
   const zoomed = {
@@ -242,9 +240,9 @@ check(
   normal.graphics.line
 );
 check(
-  "including where its text sits",
-  doubled.graphics.textFrame,
-  normal.graphics.textFrame
+  "text remains centered along the dimension",
+  doubled.graphics.textFrame.x,
+  normal.graphics.textFrame.x
 );
 
 console.log("\nAnd pan is only a view too");

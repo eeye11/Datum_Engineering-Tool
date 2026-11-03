@@ -1488,10 +1488,17 @@ disappeared while I typed" failure.
     const pictureLayer = ensureLayer(drawingCanvas, PICTURE_LAYER_CLASS);
     const liveIds = objectsThePictureDoesNotShow(pictureRevision, revision);
     const shownObjects = modelAtRevision.get(pictureRevision);
-    // A compiled SVG has no per-feature boundaries. If it contains an old
-    // version of a moved/deleted object, temporarily draw the complete live
-    // model instead of painting both the old ink and its new position.
-    const staleGeometry = Boolean(picture && shownObjects &&
+    /*
+     * A compiled SVG has no per-feature boundaries. If it contains an old
+     * version of a moved/deleted object, temporarily draw the complete live
+     * model instead of painting both the old ink and its new position.
+     *
+     * The same applies while a note is being typed into: the picture still
+     * holds the committed text, so it must not be painted under the live
+     * entry - even when the compiler is unavailable and cannot replace its
+     * cached picture.
+     */
+    const staleGeometry = Boolean(editorState.textEntryObjectId) || Boolean(picture && shownObjects &&
         [...shownObjects.keys()].some(id => liveIds.has(id) ||
             !drawingState.objects.some(object => object.id === id)));
     pictureLayer.style.visibility = staleGeometry ? "hidden" : "";
@@ -1525,6 +1532,7 @@ disappeared while I typed" failure.
         overlay,
         {
             overlayOnly: true,
+            textEntryObjectId: editorState.textEntryObjectId,
             liveObjectIds: staleGeometry
                 ? new Set(drawingState.objects.map(object => object.id)) : liveObjectIds
         }

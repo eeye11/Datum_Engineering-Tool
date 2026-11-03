@@ -112,6 +112,7 @@ export function isPointTool(toolId) {
 export const REQUIRED_INPUT_TOOLS = [
     /* The dimension tool collects references until Enter. */
     "dimension",
+    "angle",
 
     /* The reference-based annotate kinds attach to a feature. */
     "label",
@@ -250,18 +251,58 @@ export function isMultiStepTool(toolId) {
 }
 
 /*
- * The GEOMETRY tools that take click-move-click as well as press-drag-release.
+ * The tools that take click-move-click as well as press-drag-release.
  *
  * A bare click with one of these armed is the shape's FIRST POINT, exactly as in
  * a CAD program - the second click completes it, and Esc or Select leaves the
- * tool. Kept to the Geometry category on purpose: the Statics, Annotate and
- * Thermodynamics path tools keep the exit-on-click rule until their owners
- * choose otherwise.
+ * tool. The Annotate and Thermodynamics path tools keep the exit-on-click rule
+ * until their owners choose otherwise.
  */
 export const CLICK_CLICK_TOOLS = [
+    "callout",
     "line",
     "rectangle",
     "circle",
+
+    /*
+     * THE MULTI-POINT GEOMETRY TOOLS START ON A CLICK TOO.
+     *
+     * A Triangle, an Arc and a Polygon already kept every click AFTER their
+     * first point (they are multi-step tools), but their very first bare
+     * click reached `finishCreationClick` with the phase still idle and was
+     * read as "leave the tool". So they could be dragged but never clicked.
+     * Listing them here makes the first click their first point, exactly as
+     * for a Line - and a drag still works as before.
+     *
+     * The Coordinate System is the same two points (origin, then X
+     * direction), so a click places its origin and a second click its axis.
+     */
+    "triangle",
+    "arc",
+    "polygon",
+
+    /*
+     * THE STATICS TWO-POINT TOOLS.
+     *
+     * Every Statics tool whose feature (or whose first step) is a start and an
+     * end takes the click workflow as well as the drag: the bodies drawn as a
+     * span, the Point Force, the connections, a load's span, the reference
+     * line and arc, and the coordinate system's origin and X direction. The
+     * single-click placements (particle, supports, moment, reference point)
+     * and the flow tools (truss) already take clicks and are not listed.
+     */
+    "beam",
+    "cable",
+    "shaft",
+    "point-force",
+    "pin-connection",
+    "fixed-connection",
+    "slider-connection",
+    "distributed-load",
+    "varying-distributed-load",
+    "reference-line",
+    "reference-arc",
+    "coordinate-system-2d",
 
     /*
      * PIPE / DUCT KEEPS ITS CLICK TOO.

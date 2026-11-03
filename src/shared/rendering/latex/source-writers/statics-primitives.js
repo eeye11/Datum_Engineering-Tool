@@ -1,3 +1,4 @@
+import { SYMBOL_TEX } from "../../../symbols/math-symbol-catalog.js";
 /*
  * ============================================================
  * SHARED STATICS SOURCE PRIMITIVES
@@ -355,6 +356,7 @@ export function splitPrelude(options) {
  * is not escaped - `isLatex` says which.
  */
 const LATEX_SYMBOLS = {
+    ...SYMBOL_TEX,
     "\\": "\\textbackslash{}",
     "{": "\\{",
     "}": "\\}",
