@@ -11,6 +11,7 @@ import { renderCurrentDrawing, requestRender } from "../../../components/layout/
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { drawingCanvas } from "../dom.js";
+import { resizeBoxFromCorner } from "../../../shared/geometry/box-resize.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
@@ -19,6 +20,7 @@ import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynami
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
+import { HIT_PIXELS, getPointerKind } from "./pointer-precision.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
 import { applyDynamicsHandle } from "../dynamics/dynamics-handles.js";
@@ -109,7 +111,8 @@ export function beginManipulationDrag(
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
     const processLabelHandle = hit?.handle.kind.startsWith("process-label-") || hit?.handle.kind.startsWith("process-bend-");
     if (selectedIds.length > 1 && box && !pistonHandle && !processLabelHandle) {
-        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom) *
+            (HIT_PIXELS[getPointerKind()] ?? HIT_PIXELS.mouse) / HIT_PIXELS.mouse;
         const corners = selectionCorners(box);
         const corner = corners.findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
         const inside = point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
@@ -1584,6 +1587,20 @@ void bodyDragRouted;
 
         const original = drag.originals?.[object.id]?.geometry || object.geometry;
 
+        /*
+         * THE FLUID LEVEL COMES FIRST.
+         *
+         * Its handle sits on the surface, which can be anywhere inside the
+         * vessel - including where a body press would otherwise move the whole
+         * object. `vesselModel.dragVesselLevel` writes ONLY the percentage, so a
+         * level drag can never move or resize the vessel.
+         */
+        if (drag.kind === "vessel-level") {
+            enggVessel.dragVesselLevel(object, point);
+
+            return;
+        }
+
         if (drag.kind === "equipment-body" || drag.kind === "body") {
             object.geometry = {
                 ...original,
@@ -1606,6 +1623,11 @@ void bodyDragRouted;
              * RESIZE FROM THE CORNER OPPOSITE THE ONE GRABBED. The opposite
              * corner stays exactly where it is, and the box is re-derived from
              * the two - which is what makes an edge drag feel like the edge.
+             *
+             * THE CORNER ORDER COMES FROM THE MODEL: `vesselRect` reports its
+             * corners from the vessel's own BOTTOM-LEFT anchor, so the box
+             * re-derived here keeps the same orientation as the one the handles
+             * are drawn from - dragging a corner can never turn the vessel over.
              */
             const opposite = (Number(match[1]) + 2) % 4;
 
@@ -1621,21 +1643,69 @@ void bodyDragRouted;
             const local = enggVessel.localOf(rect, point);
             const anchorLocal = enggVessel.localOf(rect, anchor);
 
+            /* The frame grows UP from the floor, so the anchor is the floor side. */
             const left = Math.min(local.x, anchorLocal.x);
-            const top = Math.min(local.y, anchorLocal.y);
+            const bottom = Math.min(local.y, anchorLocal.y);
 
             const width = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.x - anchorLocal.x));
             const height = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.y - anchorLocal.y));
 
             object.geometry = {
                 ...original,
-                position: enggVessel.worldOf(rect, { x: left, y: top }),
+                position: enggVessel.worldOf(rect, { x: left, y: bottom }),
                 width,
                 height
             };
 
             enggVessel.followVessel(object, drawingState.objects);
             refreshLevelsOf(object, drawingState.objects);
+
+            return;
+        }
+
+        const edgeMatch = /^vessel-edge-(left|right|top|bottom)$/.exec(drag.kind);
+
+        if (edgeMatch) {
+            /*
+             * ONE BOUNDARY AT A TIME. The model owns the arithmetic - it moves
+             * the named wall, keeps the other three, refuses to collapse the
+             * box and re-seats everything attached - so the handle drag and the
+             * Features fields produce the same geometry.
+             *
+             * THE GRAB OFFSET IS SUBTRACTED, so the WALL follows the pointer by
+             * the distance the pointer travelled. The handle is drawn just
+             * outside the wall; without this the wall would jump out to the
+             * handle's own position on the first move, and a drag that went
+             * nowhere would still resize the vessel.
+             */
+            const edgeRect = enggVessel.vesselRect({ geometry: original });
+
+            if (!edgeRect) {
+                return;
+            }
+
+            const grabLocal = enggVessel.localOf(edgeRect, drag.start);
+            const nowLocal = enggVessel.localOf(edgeRect, point);
+
+            const axis = edgeMatch[1] === "left" || edgeMatch[1] === "right" ? "x" : "y";
+
+            const grabbedWall =
+                edgeMatch[1] === "left" ? 0
+                    : edgeMatch[1] === "right" ? edgeRect.width
+                        : edgeMatch[1] === "bottom" ? 0
+                            : edgeRect.height;
+
+            /* The wall moves by the pointer's own travel along its axis. */
+            const moved = grabbedWall + (nowLocal[axis] - grabLocal[axis]);
+
+            const at = enggVessel.worldOf(edgeRect, {
+                x: axis === "x" ? moved : edgeRect.width / 2,
+                y: axis === "y" ? moved : edgeRect.height / 2
+            });
+
+            if (enggVessel.dragVesselEdge(object, edgeMatch[1], at)) {
+                refreshLevelsOf(object, drawingState.objects);
+            }
 
             return;
         }
@@ -2311,44 +2381,33 @@ void bodyDragRouted;
             Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
             return;
         }
+
         /*
-         * Resize by moving one corner while the opposite
-         * corner stays put. A fixed width or height is
-         * respected by keeping that dimension unchanged.
+         * RESIZE FROM THE HANDLE, ANCHORED ON THE OPPOSITE CORNER.
+         *
+         * One shared rule for a Rectangle and a Rigid Body - see
+         * `shared/geometry/box-resize.js`, which works in the box's OWN frame so
+         * a turned body stays turned and its far corner stays exactly where it
+         * was. This used to recompute the box from axis-aligned min/max and then
+         * write `rotation = 0`, so resizing a rotated rectangle un-rotated it.
          */
-        const index =
-            Number(
-                drag.kind.replace("corner", "")
-            );
+        const cornerIndex = Number(
+            drag.kind.startsWith("rigid-corner")
+                ? drag.kind.replace("rigid-corner", "")
+                : drag.kind.replace("corner", "")
+        );
 
-        const corners =
-            rectangleCorners(
-                original
-            );
+        if (Number.isFinite(cornerIndex)) {
+            const resized = resizeBoxFromCorner(original.geometry, cornerIndex, point);
 
-        const opposite =
-            corners[(index + 2) % 4];
+            if (resized) {
+                g.width = resized.width;
+                g.height = resized.height;
+                g.position = resized.position;
 
-        const minX =
-            Math.min(opposite.x, point.x);
-
-        const maxX =
-            Math.max(opposite.x, point.x);
-
-        const minY =
-            Math.min(opposite.y, point.y);
-
-        const maxY =
-            Math.max(opposite.y, point.y);
-
-        g.width = maxX - minX;
-        g.height = maxY - minY;
-        g.position = {
-            x: minX,
-            y: maxY
-        };
-        g.rotation = 0;
-        return;
+                return;
+            }
+        }
     }
 
     /*

@@ -20,7 +20,7 @@ import { drawingState, editorState } from "../editor-state.js";
 import { objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
 import { cancelManipulationDrag } from "./handles.js";
 import { updateDrawingCoordinates } from "./pointer.js";
-import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
+import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishFreeformPolygonByDoubleClick, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { closeCoordinateSystemMenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -85,9 +85,65 @@ export function installCanvasEvents() {
             updateDrawingCoordinates
         );
 
+        /*
+         * A PEN AND A FINGER MOVE WITHOUT A MOUSE EVENT.
+         *
+         * `mousemove` is synthesized from a touch or a pen only after the
+         * pointer has been pressed - so while a multi-click construction is
+         * running on a tablet, the preview's last edge (and its closing edge
+         * back to the first vertex) would freeze between taps, and a stylus
+         * hovering over the canvas would show no preview at all. Driving the
+         * same update from `pointermove` makes every kind of pointer follow
+         * the shape. It is the SAME function the mouse path calls, so the two
+         * cannot describe different geometry, and a leading pass over a mouse
+         * move is harmless: it reads the event's own position and rewrites
+         * the interaction from it.
+         */
+        drawingCanvas.addEventListener(
+            "pointermove",
+            event => {
+                if (event.pointerType && event.pointerType !== "mouse") {
+                    updateDrawingCoordinates(event);
+                }
+            }
+        );
+
         drawingCanvas.addEventListener(
             "click",
-            handleCanvasClick
+            event => {
+                /*
+                 * ========================================================
+                 * A DOUBLE-CLICK'S SECOND CLICK IS NOT A VERTEX
+                 * ========================================================
+                 *
+                 * The browser delivers a double-click as `click` (detail 1),
+                 * `click` (detail 2), then `dblclick`. Both clicks reach the
+                 * click router, so a polygon drew a vertex for EACH - and
+                 * then the double-click finished the shape, leaving two
+                 * vertices (and a zero-length edge) where the student made
+                 * one. Dropping those after the fact would be a repair; the
+                 * second click is simply not a placement, so it is never
+                 * handed to the tool in the first place.
+                 *
+                 * `detail` is the browser's own count of successive clicks
+                 * at one point, and it is the same number for a mouse, a pen
+                 * and a finger - so a double-TAP is covered by the same test
+                 * and needs no separate listener or timer.
+                 *
+                 * EVERY OTHER TOOL IS UNAFFECTED. This is a single click
+                 * router with one guard in front of it, not a second set of
+                 * listeners; a Line's second click of a double-click still
+                 * behaves exactly as it always has.
+                 */
+                if (
+                    (event.detail || 0) > 1 &&
+                    drawingState.activeTool === "freeform-polygon"
+                ) {
+                    return;
+                }
+
+                handleCanvasClick(event);
+            }
         );
         drawingCanvas.addEventListener("click", updateManipulationCursor);
         drawingCanvas.addEventListener("pointermove", updateManipulationCursor);
@@ -271,10 +327,40 @@ export function installCanvasEvents() {
                     }
                 }
 
+                /*
+                 * THE FREEFORM POLYGON IS FINISHED BY A DOUBLE-CLICK, AND THE
+                 * POINT THE STUDENT DOUBLE-CLICKED IS ITS LAST VERTEX.
+                 *
+                 * A double-click is two `click` events and then a `dblclick`,
+                 * so by the time this runs the FIRST of the pair has already
+                 * been handled as an ordinary click and placed a vertex at
+                 * that spot. That is precisely why this does not place one
+                 * itself: adding the double-click's point again would give
+                 * the shape a duplicate final vertex, and an extra edge of
+                 * zero length that no student drew.
+                 *
+                 * It closes instead - the last vertex back to the first -
+                 * through the same commit the closing click and Enter use, so
+                 * all three ways of finishing produce the identical polygon.
+                 */
                 if (
-                    ["polyline", "freeform-polygon"].includes(
-                        drawingState.activeTool
-                    )
+                    drawingState.activeTool === "freeform-polygon"
+                ) {
+                    event.preventDefault();
+
+                    /*
+                     * NO POSITION IS PASSED. A `dblclick` event carries
+                     * `detail: 0` and no useful click count, so the finisher
+                     * must not try to place or compare a vertex from it - the
+                     * clicks that made up the gesture have already placed the
+                     * last vertex, and the finisher only closes the shape.
+                     */
+                    finishFreeformPolygonByDoubleClick();
+                    return;
+                }
+
+                if (
+                    drawingState.activeTool === "polyline"
                 ) {
                     event.preventDefault();
 
@@ -446,7 +532,8 @@ export function installCanvasEvents() {
                      */
                     if (
                         drawingState.activeTool === "pipe-duct" ||
-                        drawingState.activeTool === "dynamics-polar-vector"
+                        drawingState.activeTool === "dynamics-polar-vector" ||
+                        editorState.freeformTrace
                     ) {
                         try {
                             drawingCanvas.setPointerCapture(

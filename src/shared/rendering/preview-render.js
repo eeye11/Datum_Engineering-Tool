@@ -1242,6 +1242,37 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             }
 
             /*
+             * THE CLOSING EDGE - pointer back to the first vertex.
+             *
+             * Drawn after the outline so it sits on top of it, in the same
+             * preview stroke but thinner and more faint: it is the edge the
+             * NEXT click would add, not one already placed. A longer dash
+             * distinguishes it from the outline without introducing a second
+             * colour that would read as a different kind of thing.
+             */
+            const closingEdge =
+                preview.metadata?.closingEdge;
+
+            if (closingEdge?.from && closingEdge?.to) {
+                const from = toScreen(closingEdge.from);
+                const to = toScreen(closingEdge.to);
+
+                svg.appendChild(
+                    createSvgElement("line", {
+                        x1: from.x,
+                        y1: from.y,
+                        x2: to.x,
+                        y2: to.y,
+                        stroke: style.stroke,
+                        "stroke-width": 1,
+                        "stroke-dasharray": "3 3",
+                        "stroke-opacity": 0.6,
+                        "data-freeform-closing-edge": "true"
+                    })
+                );
+            }
+
+            /*
              * A Freeform Polygon's placed vertices: a dot on each, and a
              * ring on the first (the close target), filled when the pointer
              * would close the shape.

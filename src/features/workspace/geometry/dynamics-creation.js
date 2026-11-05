@@ -12,7 +12,6 @@
 import { commitCreatedFeature } from "./creation-commit.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import {
     DYNAMICS_PLACEMENT_TOOLS,
     dynamicsObjectName,
@@ -21,6 +20,9 @@ import {
     resolveDynamicsToolId
 } from "../dynamics/dynamics-tools.js";
 import { createDynamicsObject } from "../dynamics/dynamics-model.js";
+import { promptForDynamicsLabel, toolTakesLabel } from "../dynamics/dynamics-label.js";
+import { drawingState as dynamicsDrawingState } from "../editor-state.js";
+import { renderCurrentDrawing as redrawDynamicsSheet } from "../../../components/layout/workspace/canvas-render.js";
 
 /*
  * Build the Dynamics object, add it as one undoable action, select it and
@@ -65,17 +67,41 @@ export function createDynamicsFeature(
 
     commitCreatedFeature(object);
 
-    if (resolved === "dynamics-particle") {
-        activateTool("select");
-    } else {
-        setToolMessage(
-            DYNAMICS_PLACEMENT_TOOLS[resolved]
-                ? `Click to place the next ${dynamicsObjectName(resolved).toLowerCase()}`
-                : dynamicsInstruction(resolved)
-        );
-    }
+    /*
+     * THE TOOL STAYS ARMED, whatever kind of Dynamics feature was placed.
+     *
+     * A particle used to hand back to Select after one placement, so placing a
+     * second one meant finding the button again. Every tool ends on a deliberate
+     * act - empty canvas, Escape, its own button, another tool - and the next
+     * point places the next one.
+     */
+    setToolMessage(
+        DYNAMICS_PLACEMENT_TOOLS[resolved]
+            ? `Click to place the next ${dynamicsObjectName(resolved).toLowerCase()}`
+            : dynamicsInstruction(resolved)
+    );
 
     renderProperties();
+
+    /*
+     * THE OPTIONAL LABEL IS PART OF CREATING THE SYMBOL.
+     *
+     * The object is already committed and selected, so the student can ignore
+     * the box entirely (Enter, or a press elsewhere, keeps what is in it), and
+     * Escape closes only the box - the symbol they drew stays exactly where it
+     * is. Nothing is written unless they type, and what they type is the
+     * feature's own `label`, the single field the canvas, the panel and the
+     * source all read.
+     */
+    if (toolTakesLabel(resolved)) {
+        promptForDynamicsLabel(object, {
+            state: dynamicsDrawingState,
+            onDone: () => {
+                renderProperties();
+                redrawDynamicsSheet();
+            }
+        });
+    }
 
     return object;
 }

@@ -80,7 +80,7 @@ export const toolIcons = {
 	 * the geometry the student picks, and whose displayed value is editable
 	 * text rather than a second tool.
 	 */
-	Dimension: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
+	Length: drawingIcon(`<path ${iconStroke} d="M4 6v12M16 6v12M4 12h12M4 12l3-2M4 12l3 2M16 12l-3-2M16 12l-3 2"/>`),
 	"Annotation": drawingIcon(`<path ${iconStroke} d="M4 5h8M4 9h8M4 13h5"/><path ${iconStroke} d="M12 16l1.5-4L18 7l-4.5 1.5L12 13"/>`),
 	"Note / Text": drawingIcon(`<path ${iconStroke} d="M4 4h12v9H9l-4 3v-3H4zM7 7h6M7 10h4"/>`),
 
@@ -300,11 +300,20 @@ export const toolIcons = {
 	 */
 	"Reducer / Expander": drawingIcon(`<path ${iconStroke} d="M3 6h4l6 4-6 4H3M10 10h7M3 6v2M3 14v-2M10 4v2M10 14v-2"/>`),
 
-	/*
-	 * RESERVOIR / TANK. A simple open-top vessel: two walls and a floor, with no
-	 * lid and no fluid inside - the OBJECT, not a symbol for fluid.
+/*
+	 * RESERVOIR / TANK. A storage vessel seen from the front: two walls, a floor and
+	 * a lid, with the fluid's surface drawn across the inside and the liquid
+	 * shaded beneath it. The surface line inside the walls is what tells it apart
+	 * from a plain rectangle (a pipe or a valve body) at toolbar size.
+	 *
+	 * It is built from the shared `iconStroke`, so it carries no colour of its own
+	 * and follows the icon system's current ink exactly as its neighbours do.
 	 */
-	"Reservoir / Tank": drawingIcon(`<path ${iconStroke} d="M4 4v12h12V4"/>`),
+	"Reservoir / Tank": drawingIcon(
+		`<path ${iconStroke} d="M4 4v12h12V4"/>` +
+			`<path ${iconStroke} d="M4 9.5h12"/>` +
+			`<path ${iconStroke} d="M5.5 12.5h2.2M8.9 12.5h2.2M12.3 12.5h2.2"/>`
+	),
 
 	/*
 	 * FLOW METER. A circular gauge with a pointer - deliberately a DIAL rather
@@ -612,7 +621,7 @@ export const annotateToolGroups = [
 	{
 		id: "annotate-dimensions",
 		label: "Dimensions",
-		tools: [{ id: "dimension", label: "Dimension" }, { id: "angle", label: "Angle" }]
+		tools: [{ id: "dimension", label: "Length" }, { id: "angle", label: "Angle" }]
 	},
 	{
 		id: "annotate-text",
@@ -888,7 +897,7 @@ export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool
 
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
-	ANNOTATE: ["Dimension", "Angle", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
+	ANNOTATE: ["Length", "Angle", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],
 	STATICS: ["Particle", "Rigid Body", "Beam", "Truss", "Cable", "Shaft", "Point Load", "Distributed Load", "Varying Distributed Load", "Moment", "Pin Support", "Roller Support", "Fixed Support", "Smooth Support", "Pin Connection", "Fixed Connection", "Slider Connection", "Free Body Diagram"],
 	DYNAMICS: ["Particle", "Rigid Body", "Velocity", "Acceleration", "Rotation", "Motion Path"],
 	/*

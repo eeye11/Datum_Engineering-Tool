@@ -30,6 +30,10 @@ import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
 import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
 import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
+import { createDynamicsPreview } from "../dynamics/dynamics-model.js";
+import { DYNAMICS_BOX_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction } from "../dynamics/dynamics-tools.js";
+import { creationLabelPrompt } from "../../../shared/ui/editors/creation-label.js";
+import { RIGID_BODY_HEIGHT, RIGID_BODY_WIDTH } from "../constants.js";
 
 /*
  * The colour every construction preview is drawn in.
@@ -480,6 +484,38 @@ export function updatePreview(
     }
 
     /*
+     * A DYNAMICS SPAN THAT STILL HAS TO TAKE ITS FIRST POINT SHOWS THE SYMBOL AT
+     * THE DEFAULT SIZE UNDER THE CURSOR - the ghost the student sees before the
+     * press, so a Spring or a Rigid Body is visibly the thing that will be
+     * drawn rather than an unexplained armed tool. It is the same builder the
+     * commit uses, given the same point twice.
+     */
+    if (
+        interaction.phase === "dynamics-span" &&
+        !interaction.startPoint &&
+        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool])
+    ) {
+        const at = resolution.effectiveConstructionPoint;
+
+        interaction.preview = createDynamicsPreview(
+            drawingState.activeTool,
+            [
+                at,
+                { x: at.x + RIGID_BODY_WIDTH, y: at.y - RIGID_BODY_HEIGHT }
+            ],
+            {
+                ...drawingState.styleDefaults,
+                stroke: PREVIEW_STROKE,
+                lineType: "dashed",
+                opacity: 0.55
+            }
+        );
+
+        return;
+    }
+
+    /*
      * Most two-click tools need a start point before they have
      * anything to preview. A progressive construction is
      * different: a truss clears its start point between members
@@ -572,52 +608,85 @@ export function updatePreview(
             }
         }
     } else if (
-        interaction.phase === "dynamics-span" &&
-        interaction.toolId === "dynamics-polar-vector"
+        interaction.phase === "dynamics-span" ||
+        interaction.phase === "dynamics-angle"
     ) {
-        const start = interaction.startPoint;
-        const dx = point.x - start.x;
-        const dy = point.y - start.y;
-        const magnitude = Math.hypot(dx, dy);
-        const angle = magnitude > 0
-            ? (Math.atan2(dy, dx) * 180) / Math.PI
-            : 0;
-        const normalizedAngle = (angle + 360) % 360;
+        /*
+         * EVERY DYNAMICS DRAG SHOWS THE SYMBOL IT IS MAKING, BUILT BY THE
+         * BUILDER THAT WILL COMMIT IT.
+         *
+         * A Polar Vector, a Spring, a Damper, a Pulley - and the Rigid Body,
+         * which is now drawn like a Rectangle - all preview through the SAME
+         * `createDynamicsPreview` the commit uses, so the ghost on the sheet and
+         * the object that lands on it cannot disagree: same geometry, same
+         * style, same fill (none, for a body), same code path. Only the stroke
+         * is overridden, so a preview reads as a construction guide.
+         */
+        const preview = createDynamicsPreview(
+            interaction.toolId || drawingState.activeTool,
+            [interaction.startPoint, point],
+            {
+                ...drawingState.styleDefaults,
+                stroke: PREVIEW_STROKE,
+                lineType: "dashed",
+                opacity: 1
+            }
+        );
 
-        interaction.preview = magnitude > 1e-9
-            ? {
-                  id: "preview-dynamics-polar-vector",
-                  type: "dynamics-polar-vector",
-                  engineering: {
-                      dynamicsType: "dynamics-polar-vector"
-                  },
-                  geometry: {
-                      start: { ...start },
-                      end: { ...point },
-                      vectorMagnitude: magnitude,
-                      vectorAngle: normalizedAngle,
-                      vectorUnit: "m/s"
-                  },
-                  style: {
-                      ...drawingState.styleDefaults,
-                      stroke: PREVIEW_STROKE,
-                      fill: "none",
-                      lineType: "dashed",
-                      opacity: 1
-                  }
-              }
-            : null;
+        interaction.preview = preview || null;
 
         const feedback = [
             inferenceLabel(resolution.inference),
             snapTypeLabel(resolution.snapCandidate?.type)
         ].filter(Boolean);
 
-        setToolMessage(
-            magnitude > 1e-9
-                ? `Magnitude: ${magnitude.toFixed(1)} mm · Angle: ${normalizedAngle.toFixed(1)}°${feedback.length ? ` · ${feedback.join(" · ")}` : ""}`
-                : "Drag to set vector magnitude and angle"
-        );
+        /*
+         * THE PREVIEW REPORTS ITS OWN DERIVED VALUES.
+         *
+         * A Polar Vector's magnitude and angle are DERIVED from its ends, and
+         * the status line reads them off the preview the student is watching.
+         * The builder does not store them, so they are written here - on the
+         * PREVIEW only, never on the model - from the same two points, so the
+         * number on screen is the number the commit will produce.
+         */
+        if (preview?.geometry?.start && preview?.geometry?.end) {
+            const dx = preview.geometry.end.x - preview.geometry.start.x;
+            const dy = preview.geometry.end.y - preview.geometry.start.y;
+            const magnitude = Math.hypot(dx, dy);
+
+            preview.geometry.vectorMagnitude = magnitude;
+            preview.geometry.vectorAngle =
+                magnitude > 0 ? ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360 : 0;
+        }
+
+        if (feedback.length) {
+            setToolMessage(feedback.join(" · "));
+            return;
+        }
+
+        /*
+         * THE VECTOR'S STATUS LINE reports its magnitude and angle while it is
+         * being drawn; every other Dynamics drag states what the next point
+         * will do. Either way the GHOST itself is the shared preview above.
+         */
+        if (interaction.toolId === "dynamics-polar-vector" && interaction.startPoint) {
+            const start = interaction.startPoint;
+            const dx = point.x - start.x;
+            const dy = point.y - start.y;
+            const magnitude = Math.hypot(dx, dy);
+            const angle = magnitude > 0 ? (Math.atan2(dy, dx) * 180) / Math.PI : 0;
+            const normalizedAngle = (angle + 360) % 360;
+
+            setToolMessage(
+                magnitude > 1e-9
+                    ? `Magnitude: ${magnitude.toFixed(1)} mm · Angle: ${normalizedAngle.toFixed(1)}°`
+                    : "Drag to set vector magnitude and angle"
+            );
+
+            return;
+        }
+
+        setToolMessage(dynamicsInstruction(interaction.toolId || drawingState.activeTool));
     } else if (
         drawingState.activeTool ===
         "coordinate-system-2d"
@@ -788,13 +857,34 @@ export function updatePreview(
             vertexMarkers: interaction.points.map(vertex => ({ ...vertex })),
             closingVertex:
                 interaction.points.length >= 3 &&
-                closingFreeformPolygon(point)
+                closingFreeformPolygon(point),
+
+            /*
+             * THE CLOSING EDGE, AS ITS OWN STROKE.
+             *
+             * The preview polygon already joins the last placed vertex to the
+             * pointer. What the student cannot yet see is WHERE THE POINTER'S
+             * EDGE WOULD END - the line back to the first vertex, which is the
+             * edge that will close the shape. Drawn separately and more
+             * faintly, it reads as "this is where the shape comes round": the
+             * last placed vertex and the pointer are solid, the closing edge is
+             * the question the next click answers.
+             */
+            closingEdge:
+                interaction.points.length >= 2 && interaction.points[0]
+                    ? {
+                        from: { ...point },
+                        to: { ...interaction.points[0] }
+                    }
+                    : null
         };
 
         setToolMessage(
-            closingFreeformPolygon(point)
-                ? "Release to close the polygon"
-                : "Click next vertex, or drag to the first vertex to close"
+            interaction.points.length < 2
+                ? "Click to add a vertex"
+                : closingFreeformPolygon(point)
+                    ? "Click to close the polygon"
+                    : "Click to add a vertex · double-click or Enter to finish"
         );
     } else if (
         isArcTool() &&
@@ -2092,6 +2182,15 @@ function staticsPreviewType(
 
                 renderProperties();
                 renderCurrentDrawing();
+
+                /* AND ITS NAME, TYPED ON THE DRAWING - see creation-label.js. */
+                creationLabelPrompt(object, {
+                    state: drawingState,
+                    onDone: () => {
+                        renderProperties();
+                        renderCurrentDrawing();
+                    }
+                });
             },
 
             /*

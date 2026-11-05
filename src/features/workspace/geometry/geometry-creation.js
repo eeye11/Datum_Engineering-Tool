@@ -26,10 +26,26 @@ import { commitMomentPlacement } from "./preview.js";
 import { beginStaticsAttachment, continueStaticsAttachment, staticsBodyAtPoint } from "../statics/statics-attachment.js";
 import { createStaticsFeature } from "../statics/statics-creation.js";
 import { createDynamicsFeature } from "./dynamics-creation.js";
+import { creationLabelPrompt } from "../../../shared/ui/editors/creation-label.js";
+import { toolTakesCreationLabel } from "../../../shared/ui/editors/creation-label.js";
 
 /* The one Dynamics creation entry point, shared with the span gesture. */
 export { createDynamicsFeature };
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS } from "../dynamics/dynamics-tools.js";
+
+/*
+ * THE DYNAMICS TOOLS THAT ARE STILL FINISHED BY ONE CLICK.
+ *
+ * A particle has no extent to drag (its size is its marker size) and an
+ * angular vector is placed at its centre with a default radius and sweep, so
+ * both commit on the press. A Rigid Body is drawn between two corners and is
+ * therefore a span tool - it reaches the same press-drag-release path a Spring
+ * or a Polar Vector uses, so its size is the gesture's, not a constant.
+ */
+const DEVICE_CLICK_PLACEMENT_TOOLS = new Set([
+    "dynamics-particle",
+    "dynamics-angular-vector"
+]);
 import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, isFreeMomentTool, staticsAttachmentId, staticsInstruction, staticsSpanInstruction } from "../statics/statics-tools.js";
 import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
@@ -263,6 +279,41 @@ export function polygonSideCount(
  */
 const FREEFORM_CLOSING_FRACTION = 0.18;
 
+/*
+ * THE CLOSING TARGET A SCREEN ALWAYS OFFERS.
+ *
+ * The fraction above is a share of the shape's own size, which is right for a
+ * shape drawn large: 18% of a 300-unit polygon is a generous target at any
+ * zoom. It is wrong for a shape drawn SMALL - 18% of 12 units is two units,
+ * about a pixel once the sheet is zoomed out, which no finger, no stylus and no
+ * mouse can hit reliably.
+ *
+ * So the tolerance is the LARGER of the two: enough of the shape to feel like
+ * "back where I started", and never less than a fixed number of SCREEN pixels.
+ * Measured in pixels and converted through the same `basePixelsPerUnit * zoom`
+ * the rest of the canvas uses, so the target is the same physical size at every
+ * magnification and does not drift as the student zooms while drawing.
+ */
+const FREEFORM_CLOSING_MIN_PX = 12;
+
+function closingToleranceUnits(span) {
+    const fromShape = span * FREEFORM_CLOSING_FRACTION;
+
+    try {
+        const scale =
+            enggDrawingState.basePixelsPerUnit(drawingState) *
+            (Number(drawingState.camera?.zoom) || 1);
+
+        if (Number.isFinite(scale) && scale > 0) {
+            return Math.max(fromShape, FREEFORM_CLOSING_MIN_PX / scale);
+        }
+    } catch {
+        /* A test with no camera still closes by the shape's own size. */
+    }
+
+    return fromShape;
+}
+
 export function closingFreeformPolygon(
     point,
     interaction = drawingState.interaction
@@ -271,6 +322,19 @@ export function closingFreeformPolygon(
         interaction?.points?.[0];
 
     if (!first || !point) {
+        return false;
+    }
+
+    /*
+     * A CLOSING EDGE NEEDS AN EDGE TO CLOSE. With a single vertex placed there
+     * is no shape yet, and "near the first vertex" is simply where the student
+     * already is - so the first click on a fresh polygon is never read as a
+     * close, whatever the tolerance.
+     */
+    if (
+        !Array.isArray(interaction.points) ||
+        interaction.points.length < 2
+    ) {
         return false;
     }
 
@@ -288,15 +352,16 @@ export function closingFreeformPolygon(
         );
 
     /*
-     * With no extent yet - a single vertex placed - there is nothing to
-     * close, and a fraction of zero would make every point "near". The
-     * guard returns false so the first edge is never mistaken for a close.
+     * With no extent yet - every vertex on the first one - there is nothing to
+     * close, and a fraction of zero would make every point "near". The guard
+     * returns false so the first edge is never mistaken for a close.
      */
     if (span <= 1e-9) {
         return false;
     }
 
-    const tolerance = span * FREEFORM_CLOSING_FRACTION;
+    const tolerance =
+        closingToleranceUnits(span);
 
     return distance(first, point) <= tolerance;
 }
@@ -391,6 +456,162 @@ export function currentEngineeringMetadata() {
     return {
         plane: "XY"
     };
+}
+
+/*
+ * ============================================================
+ * THE KEYBOARD'S TWO CORRECTIONS WHILE A POLYGON IS DRAWN
+ * ============================================================
+ *
+ * A vertex is a decision like any other, so the two keys every other
+ * multi-point construction offers must work here too:
+ *
+ *   BACKSPACE   takes the LAST vertex back. It is the undo of "where was my
+ *               last corner" - a mis-aimed click in the middle of a six-sided
+ *               shape - and it must never take the FIRST vertex back into
+ *               nothing, because the first vertex is the closing target. With
+ *               one vertex left it clears the construction, exactly as
+ *               Escape would.
+ *
+ *   ESCAPE      abandons the shape entirely. Nothing is committed - the
+ *               vertices only ever lived in the interaction - so the drawing,
+ *               the Objects list and the source are already untouched.
+ *
+ * Both write through `setInteraction` so the preview, the status line and the
+ * renderer all see the same state on the next frame, and both return whether
+ * anything happened so the keyboard handler knows whether it consumed the key.
+ */
+export function removeLastFreeformVertex(
+    interaction = drawingState.interaction
+) {
+    if (
+        drawingState.activeTool !== "freeform-polygon" ||
+        !Array.isArray(interaction?.points) ||
+        !interaction.points.length
+    ) {
+        return false;
+    }
+
+    if (interaction.points.length <= 1) {
+        return cancelFreeformPolygon(interaction);
+    }
+
+    const points = interaction.points.slice(0, -1);
+    const last = points[points.length - 1];
+
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            ...interaction,
+            points,
+            startPoint: last,
+            currentPoint: last,
+            preview: null,
+            snapGeometry:
+                points.slice(1).map((end, index) => ({
+                    start: points[index],
+                    end
+                }))
+        }
+    );
+
+    setToolMessage(
+        points.length < 3
+            ? "Click next vertex, or drag back to the first vertex to close"
+            : "Click next vertex, or return to the first vertex to close"
+    );
+
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/* Abandon the polygon being drawn. Nothing was committed, so this is a reset. */
+export function cancelFreeformPolygon(
+    interaction = drawingState.interaction
+) {
+    if (drawingState.activeTool !== "freeform-polygon") {
+        return false;
+    }
+
+    if (!Array.isArray(interaction?.points) || !interaction.points.length) {
+        return false;
+    }
+
+    enggDrawingState.clearInteraction(
+        drawingState
+    );
+
+    setToolMessage(
+        "Polygon cancelled"
+    );
+
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * Whether the vertices placed so far already define a real polygon.
+ *
+ * "DISTINCT" IS A REAL TEST, NOT A COUNT: three clicks on the same spot are
+ * three vertices to the array and a zero-area sliver to the student. The
+ * predicate is exported so the keyboard handler, the preview's close hint and
+ * the commit all ask the SAME question - a shape that Enter refuses to commit
+ * must not be one the preview promises to close.
+ */
+export function freeformPolygonIsClosedShape(
+    interaction = drawingState.interaction
+) {
+    const points =
+        (interaction?.points || []).filter(Boolean);
+
+    const distinct = points.filter(
+        (vertex, index) =>
+            points.findIndex(
+                other =>
+                    Math.abs(other.x - vertex.x) < 1e-9 &&
+                    Math.abs(other.y - vertex.y) < 1e-9
+            ) === index
+    );
+
+    if (distinct.length < 3) {
+        return false;
+    }
+
+    /*
+     * NON-COLLINEAR: the signed area of the ring must not vanish. Three
+     * vertices on one line are a segment drawn three times, and TikZ would
+     * fill nothing while the Objects list claimed a polygon.
+     */
+    let twiceArea = 0;
+
+    for (let index = 0; index < distinct.length; index += 1) {
+        const current = distinct[index];
+        const next = distinct[(index + 1) % distinct.length];
+
+        twiceArea += current.x * next.y - next.x * current.y;
+    }
+
+    return Math.abs(twiceArea) > 1e-9;
+}
+
+/*
+ * The point the next click must land on to close - the instant "near the first
+ * vertex", without asking whether a vertex has ALREADY been placed there.
+ *
+ * `closingFreeformPolygon` below is the gesture's question and also requires
+ * three vertices; this is the target the cursor is drawn against, so the ring
+ * lights up under the pointer whether or not the shape is yet closable.
+ */
+export function nearFreeformFirstVertex(
+    point,
+    interaction = drawingState.interaction
+) {
+    return closingFreeformPolygon(
+        point,
+        interaction
+    );
 }
 
 /*
@@ -835,7 +1056,17 @@ export function beginOrCompleteGeometry(
          * centre-out angle tool - anchors on this click and is committed by the
          * next one, through the `dynamics-*` phases handled further down.
          */
-        if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
+        /*
+         * THE TYPES THAT ARE STILL PLACED BY A CLICK. A Rigid Body is drawn
+         * between two corners now, so it reaches the span branch below with the
+         * rest of the shaped Dynamics tools; a particle and an angular vector
+         * are still one click, because their geometry is a point plus a
+         * default (a marker size, a default radius and sweep).
+         */
+        if (
+            DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool] &&
+            DEVICE_CLICK_PLACEMENT_TOOLS.has(drawingState.activeTool)
+        ) {
             const toolId = drawingState.activeTool;
             const target = toolId === "dynamics-angular-vector" ? objectAtPoint(point) : null;
             createDynamicsFeature(
@@ -855,10 +1086,17 @@ export function beginOrCompleteGeometry(
 
             if (
                 toolId === "dynamics-particle" ||
-                toolId === "dynamics-rigid-body" ||
                 toolId === "dynamics-angular-vector"
             ) {
-                activateTool("select");
+                /*
+                 * THE TOOL STAYS ARMED AFTER ITS FEATURE IS PLACED, so a second
+                 * particle, body or angular vector needs no second press on the
+                 * button. It ends when the student clicks empty canvas, presses
+                 * Escape or picks another tool - the same way every other tool
+                 * ends. `renderCurrentDrawing` already redraws the placement
+                 * preview for the armed tool.
+                 */
+                renderCurrentDrawing();
             }
 
             renderCurrentDrawing();
@@ -1014,6 +1252,28 @@ export function beginOrCompleteGeometry(
                     : "Specify arc start point"
             );
         } else {
+            /*
+             * A RE-PLACED FIRST VERTEX IS NOT A NEW VERTEX.
+             *
+             * A double-click's two clicks both arrive with the phase still
+             * idle the first time, so without this guard the pair would put
+             * TWO vertices on one spot before the gesture was even read. The
+             * click that starts the shape is a decision; the one that repeats
+             * it exactly is not, and is left to the double-click handler.
+             */
+            const repeat =
+                drawingState.activeTool === "freeform-polygon" &&
+                Array.isArray(interaction.points) &&
+                interaction.points.some(
+                    (vertex) =>
+                        Math.abs(vertex.x - point.x) < 1e-9 &&
+                        Math.abs(vertex.y - point.y) < 1e-9
+                );
+
+            if (repeat) {
+                return;
+            }
+
             enggDrawingState.setInteraction(
                 drawingState,
                 {
@@ -1071,6 +1331,100 @@ export function beginOrCompleteGeometry(
         }
 
         renderCurrentDrawing();
+        return;
+    }
+
+    /*
+     * ============================================================
+     * A FREEFORM POLYGON'S CLICK
+     * ============================================================
+     *
+     * Handled BEFORE the shared polyline branch, so the polyline's own
+     * behaviour is untouched and this tool's two extra rules live in one
+     * place:
+     *
+     *   1. A CLICK NEAR THE FIRST VERTEX CLOSES. It does not add a vertex
+     *      there - the closing edge is the segment back to the vertex that is
+     *      already there, and adding a second one a few units away would give
+     *      the shape a duplicate corner and a sliver edge.
+     *
+     *   2. A CLICK ON THE LAST VERTEX ADDS NOTHING. Rapid clicking, or the
+     *      second half of a double-click, must never stack a zero-length edge
+     *      onto the shape.
+     *
+     *   3. A DOUBLE-CLICK GESTURE PLACES ONE VERTEX, NOT TWO. The browser
+     *      sends `click`, `click`, `dblclick`; the first click of the pair is
+     *      the placement and the second (`event.detail === 2`) is dropped by
+     *      the router before it gets here. The check below is the second line
+     *      of defence for a caller that reaches this function directly - it
+     *      refuses a point identical to the one placed a moment ago, so no
+     *      input path, however it is wired, can put two vertices on one spot.
+     *
+     * Everything else is the same "another point" the shared branch does, so
+     * the preview, the snap geometry and the status line stay identical.
+     */
+    if (drawingState.activeTool === "freeform-polygon") {
+        if (!Array.isArray(interaction.points)) {
+            interaction.points = [];
+        }
+
+        if (interaction.points.length >= 3 && closingFreeformPolygon(point)) {
+            interaction.currentPoint = point;
+
+            commitFreeformPolygon(interaction);
+
+            return;
+        }
+
+        /*
+         * Too small to close, but the pointer is on the close target: say so
+         * rather than adding a corner the student did not mean.
+         */
+        if (interaction.points.length >= 3 && nearFreeformFirstVertex(point)) {
+            setToolMessage(
+                "A polygon needs at least three distinct, non-collinear vertices"
+            );
+
+            renderCurrentDrawing();
+
+            return;
+        }
+
+        const last = interaction.points[interaction.points.length - 1];
+
+        if (
+            last &&
+            Math.abs(last.x - point.x) < 1e-9 &&
+            Math.abs(last.y - point.y) < 1e-9
+        ) {
+            /*
+             * THE SAME VERTEX TWICE IS ONE VERTEX. This is the input-level
+             * guard against a double-click's second half: it never adds a
+             * point, so no duplicate is created and nothing has to be cleaned
+             * up afterwards.
+             */
+            return;
+        }
+
+        interaction.points.push(point);
+
+        interaction.snapGeometry =
+            interaction.points.slice(1).map((end, index) => ({
+                start: interaction.points[index],
+                end
+            }));
+
+        interaction.startPoint = point;
+        interaction.currentPoint = point;
+
+        setToolMessage(
+            interaction.points.length < 3
+                ? "Click next vertex, or drag back to the first vertex to close"
+                : "Click next vertex, or double-click or Enter to finish"
+        );
+
+        renderCurrentDrawing();
+
         return;
     }
 
@@ -1140,6 +1494,47 @@ export function beginOrCompleteGeometry(
             return;
         }
 
+        /*
+         * A CLICK NEAR THE FIRST VERTEX ON A SHAPE TOO SMALL TO CLOSE IS
+         * REFUSED, NOT ADDED.
+         *
+         * With three or more vertices and the pointer over the closing
+         * target, a click means "close this" and nothing else - so a shape
+         * that cannot be closed (every vertex on one line) says so instead of
+         * quietly stacking another vertex a few units from the first one. Two
+         * vertices are the exception: there is no closing edge yet, and the
+         * near-first click is the frame of the shape, which must be allowed.
+         */
+        if (
+            interaction.points.length >= 3 &&
+            nearFreeformFirstVertex(point)
+        ) {
+            setToolMessage(
+                "A polygon needs at least three distinct, non-collinear vertices"
+            );
+
+            renderCurrentDrawing();
+
+            return;
+        }
+
+        /*
+         * NO DUPLICATE VERTICES. A click that lands where the last vertex
+         * already is adds nothing but a zero-length edge - and it is exactly
+         * what a double-click's second half produces when the browser sends
+         * two clicks. The click is consumed so the vertex count does not move.
+         */
+        const last =
+            interaction.points[interaction.points.length - 1];
+
+        if (
+            last &&
+            Math.abs(last.x - point.x) < 1e-9 &&
+            Math.abs(last.y - point.y) < 1e-9
+        ) {
+            return;
+        }
+
         interaction.points.push(point);
 
         interaction.startPoint = point;
@@ -1147,8 +1542,8 @@ export function beginOrCompleteGeometry(
 
         setToolMessage(
             interaction.points.length < 3
-                ? "Drag to add vertices; return to the first vertex to close"
-                : "Drag to add vertices, or back to the first vertex to close"
+                ? "Click next vertex, or drag back to the first vertex to close"
+                : "Click next vertex, or return to the first vertex to close"
         );
 
         renderCurrentDrawing();
@@ -1519,11 +1914,50 @@ export function beginOrCompleteGeometry(
             interaction.phase === "dynamics-angle")
     ) {
         /*
-         * THE SECOND POINT COMMITS. The tool id the gesture armed with is
-         * the one that creates - not necessarily the tool armed NOW - so a
-         * student who switched tools mid-drag cannot commit a hybrid.
+         * ================================================
+         * THE PRESS OR THE RELEASE - NOT BOTH
+         * ================================================
+         *
+         * A DYNAMICS SPAN IS TWO THINGS.
+         *
+         * The PRESS arms the tool's phase with no anchor, so its ghost shows
+         * under the cursor before the student starts - that is what makes a
+         * Spring or a Rigid Body visibly the thing about to be drawn.
+         *
+         * The RELEASE of a drag then supplies the SECOND point, through this
+         * same entry point. So a release that arrives while the phase is still
+         * holding only the press's point would otherwise be read as "the second
+         * point" and commit the symbol at zero length - which is exactly what
+         * made a dragged Polar Vector vanish on release.
+         *
+         * The anchor is therefore taken EITHER from the press that started a
+         * span (a click-move-click first point) OR, when the phase is the
+         * press-only one, by STARTING the span here at this point. `points`
+         * tells the two apart: the press-only phase has none.
          */
+        const starting = !Array.isArray(interaction.points) || interaction.points.length === 0;
         const gestureTool = interaction.toolId || drawingState.activeTool;
+
+        if (starting) {
+            /*
+             * THE FIRST POINT: begin the span and wait for the second, exactly
+             * as the click-move-click path does.
+             */
+            enggDrawingState.setInteraction(drawingState, {
+                ...interaction,
+                phase: interaction.phase,
+                toolId: gestureTool,
+                startPoint: point,
+                currentPoint: point,
+                points: [point]
+            });
+
+            setToolMessage("Specify second point");
+
+            renderCurrentDrawing();
+
+            return;
+        }
 
         const object = createDynamicsFeature(
             gestureTool,
@@ -1534,9 +1968,11 @@ export function beginOrCompleteGeometry(
         if (object) {
             enggDrawingState.clearInteraction(drawingState);
 
-            if (gestureTool === "dynamics-polar-vector") {
-                activateTool("select");
-            }
+            /*
+             * THE TOOL STAYS ARMED. The feature is committed and the next
+             * vector, spring or pulley is drawn by the same gesture without
+             * re-arming; Escape, empty canvas or another tool ends it.
+             */
         }
 
         renderCurrentDrawing();
@@ -1882,11 +2318,30 @@ export function beginOrCompleteGeometry(
 
                     renderProperties();
                     renderCurrentDrawing();
+
+                    /*
+                     * AND NOW ITS NAME, TYPED ON THE DRAWING. The magnitude was
+                     * asked for first - it is what the arrow IS - and the name
+                     * comes after, when there is a symbol on the sheet to name.
+                     */
+                    creationLabelPrompt(object, {
+                        state: drawingState,
+                        onDone: () => {
+                            renderProperties();
+                            renderCurrentDrawing();
+                        }
+                    });
                 },
 
+    /*
+     * A CANCELLED LOAD KEEPS THE TOOL ARM ONE MORE RUN.
+     *
+     * Cancel abandons the unfinished load, not the tool: the student was
+     * placing a load and gave up on this one. Escape and empty canvas are the
+     * ways out of a tool, so the armed tool is left alone.
+     */
                 onCancel: () => {
                     enggDrawingState.clearInteraction(drawingState);
-                    activateTool("select");
                     setToolMessage(
                         "Point load cancelled"
                     );
@@ -1911,6 +2366,22 @@ export function beginOrCompleteGeometry(
 
         renderProperties();
         renderCurrentDrawing();
+
+        /*
+         * A LOAD ASKS FOR ITS NAME ON THE DRAWING, like a force or a moment.
+         * The same field every other label uses - typed where the words will sit,
+         * committed with Enter, cancelled with Escape - and an empty answer leaves
+         * no text at all.
+         */
+        if (toolTakesCreationLabel(drawingState.activeTool)) {
+            creationLabelPrompt(object, {
+                state: drawingState,
+                onDone: () => {
+                    renderProperties();
+                    renderCurrentDrawing();
+                }
+            });
+        }
 
         return;
     }
@@ -2342,7 +2813,6 @@ export function beginOrCompleteGeometry(
             });
             enggDrawingState.selectObjects(drawingState, objects.map(item => item.id));
             enggDrawingState.commitDrawingChange(drawingState, previous);
-            activateTool("select");
             setToolMessage(isCarnot ? "Carnot diagram created - select the process path to edit its states or bends" : isOtto ? "Otto diagrams created - select a process path to edit its points or bends" : "Diesel P-v and T-s diagrams created - select a process path to edit its states or bends");
             renderProperties();
             renderCurrentDrawing();
@@ -2353,7 +2823,6 @@ export function beginOrCompleteGeometry(
         // drawn size without asking for a physical dimension or scale.
         if (object.metadata?.boundaryStress) {
             commitCreatedFeature(object);
-            activateTool("select");
             setToolMessage("Boundary stress plate created - edit the top, right, bottom and left edge distributions in Features");
             renderProperties();
             renderCurrentDrawing();
@@ -2361,7 +2830,6 @@ export function beginOrCompleteGeometry(
         }
         if (object.metadata?.stressElement) {
             commitCreatedFeature(object);
-            activateTool("select");
             setToolMessage("Stress element created - drag its rotation handle or enter Angle in the Features panel");
             renderProperties();
             renderCurrentDrawing();
@@ -2369,11 +2837,6 @@ export function beginOrCompleteGeometry(
         }
         if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "control-volume", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata?.thermodynamicsKind)) {
             commitCreatedFeature(object);
-            if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "piston-cylinder", "saturation-curve", "process-plot"].includes(object.metadata.thermodynamicsKind)) {
-                // The finished cylinder remains selected, with its handles
-                // immediately available instead of starting another drawing.
-                activateTool("select");
-            }
             setToolMessage(object.metadata.thermodynamicsKind === "rankine-cycle"
                 ? "Cycle created - drag to move or use corner dots to resize"
                 : object.metadata.thermodynamicsKind === "nozzle-diffuser"
@@ -2414,7 +2877,6 @@ export function beginOrCompleteGeometry(
         );
 
         if (object.type === COORDINATE_SYSTEM_TYPE) {
-            activateTool("select");
             setToolMessage("Coordinate system created - drag either axis or the origin to move it");
         } else {
             setToolMessage("Ready");
@@ -2533,11 +2995,12 @@ function createPointFeature(
         object.id
     );
 
-    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
-        activateTool("select");
-    } else {
-        setToolMessage("Specify point");
-    }
+    /*
+     * THE TOOL STAYS ARMED after its feature is committed. It ends on empty
+     * canvas, Escape, its own button or another tool - never because a feature
+     * was successfully drawn.
+     */
+    setToolMessage("Specify point");
 
     renderProperties();
     renderCurrentDrawing();
@@ -2634,7 +3097,6 @@ export function add2DCoordinateSystem(
     );
 
     enggDrawingState.selectObject(drawingState, coordinateSystem.id);
-    activateTool("select");
     setToolMessage("Coordinate system created - drag either axis or the origin to move it");
 
     renderProperties();

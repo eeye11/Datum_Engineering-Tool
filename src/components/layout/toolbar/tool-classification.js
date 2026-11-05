@@ -282,6 +282,18 @@ export const CLICK_CLICK_TOOLS = [
     "polygon",
 
     /*
+     * THE FREEFORM POLYGON STARTS ON A CLICK TOO.
+     *
+     * Its first vertex is a click, exactly as a Triangle's first corner and a
+     * Polyline's first point are. It is a PROGRESSIVE tool - it takes a flow
+     * of points rather than one drag - but the click router asks this question
+     * before it reaches the construction, so without this entry the first
+     * click of a new polygon would be read as "I am finished with this tool"
+     * and drop the student into Select.
+     */
+    "freeform-polygon",
+
+    /*
      * THE STATICS TWO-POINT TOOLS.
      *
      * Every Statics tool whose feature (or whose first step) is a start and an

@@ -571,7 +571,7 @@ export function initialToolMessage(
             rectangle: "Specify first corner",
             arc: "Specify arc start point",
             polygon: "Specify polygon centre",
-            "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
+            "freeform-polygon": "Click to add vertices (double-click or Enter to finish) - or drag to trace the outline",
             "coordinate-system-2d": "Drag out the area for the axes; width sets X, height sets Y, and rotation stays at 0 degrees",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
             "boundary-stress": "Drag a plate; set width and height in Features (numbers or symbols), then enter edge equations such as x/a or y/b. Symbolic dimensions use a schematic scale.",

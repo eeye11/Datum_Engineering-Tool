@@ -237,112 +237,96 @@ export const THICKNESS_OPTIONS = [
     { value: "ultra-thick", label: "Ultra Thick", width: THICKNESS_PRESETS["ultra-thick"] }
 ];
 
+/*
+ * A PARTICLE: the three standard sections and nothing else.
+ *
+ * Object holds its name and Fix; Appearance holds the one
+ * thing that is painted - the fill of its disc; Transform holds where the disc
+ * sits and how big it is, plus its mass properties. There is no line style, no
+ * outline weight and no rotation, because the symbol has none of them.
+ */
 const PARTICLE_GROUPS = [
-    { id: "object", heading: "Object", fields: ["dynamics.name", "fixed"] },
-    {
-        id: "physical-properties",
-        heading: "Physical Properties",
-        fields: [
-            "dynamics.mass",
-            "dynamics.initialVelocityX",
-            "dynamics.initialVelocityY"
-        ]
-    },
+    { id: "object", heading: "Object", fields: ["name", "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
-        fields: [
-            "lineType",
-            "stroke",
-            "customWidth",
-            "fill",
-            "dynamics.fillOpacityEnabled"
-        ]
+        fields: ["fill"]
     },
     {
         id: "transform",
         heading: "Transform",
-        fields: ["dynamics.positionX", "dynamics.positionY"]
+        fields: [],
+        transform: true
     }
 ];
 
+/*
+ * AN ANGULAR VECTOR: a directed arc, so it has a direction, a sweep and an
+ * arrowhead. Its label is optional like every other Dynamics symbol's.
+ */
 const ANGULAR_VECTOR_GROUPS = [
-    { id: "object", heading: "Object", fields: ["dynamics.name", "dynamics.angularAttachment"] },
-    {
-        id: "rotational-properties",
-        heading: "Rotational Properties",
-        fields: ["dynamics.rotationalType", "dynamics.angularMagnitude", "dynamics.direction"]
-    },
+    { id: "object", heading: "Object", fields: ["name", "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
-        fields: ["lineType", "dynamics.vectorColor", "dynamics.vectorThickness", "dynamics.arrowheadSize"]
+        fields: ["lineType", "stroke", "lineWidth", "customWidth", "dynamics.arrowheadSize", "dynamics.angularArrow"]
     },
     {
         id: "transform",
         heading: "Transform",
-        fields: ["dynamics.angularCenterX", "dynamics.angularCenterY"]
+        fields: [],
+        transform: true
     }
 ];
 
+/*
+ * A RIGID BODY: its label, how it is outlined and filled, where it sits and
+ * how big it is, whether it shows its centre, and its mass properties.
+ *
+ * THE SIZE IS A TRANSFORM PROPERTY, not a geometry one: width, height, position
+ * and rotation are the four numbers the corner and rotation handles write, so
+ * the panel row and the handle are the same edit.
+ */
 const RIGID_BODY_GROUPS = [
-    { id: "object", heading: "Object", fields: ["dynamics.name", "fixed"] },
-    {
-        id: "physical-properties",
-        heading: "Physical Properties",
-        fields: [
-            "dynamics.mass",
-            "dynamics.bodyWidth",
-            "dynamics.bodyHeight",
-            "dynamics.momentOfInertia"
-        ]
-    },
+    { id: "object", heading: "Object", fields: ["name", "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
         fields: [
             "lineType",
             "stroke",
+            "lineWidth",
             "customWidth",
             "fillMode",
-            "fill",
-            "dynamics.fillOpacityEnabled"
+            "fill"
         ]
     },
     {
         id: "transform",
         heading: "Transform",
-        fields: ["dynamics.positionX", "dynamics.positionY", "dynamics.rotation"]
+        fields: [],
+        transform: true
     }
 ];
 
+/*
+ * A POLAR VECTOR: a directed segment. Origin, magnitude and angle are the
+ * Transform (exactly the values its two endpoint handles write), and the
+ * Geometry section holds what is specific to the tool - its components, the
+ * arrowhead and where its label sits.
+ */
 const POLAR_VECTOR_GROUPS = [
-    { id: "object", heading: "Object", fields: ["dynamics.name", "dynamics.vectorAttachment"] },
-    {
-        id: "vector-properties",
-        heading: "Vector Properties",
-        fields: [
-            "dynamics.vectorRepresentation",
-            "dynamics.vectorMagnitude",
-            "dynamics.vectorAngle",
-            "dynamics.vectorComponentX",
-            "dynamics.vectorComponentY"
-        ]
-    },
+    { id: "object", heading: "Object", fields: ["name", "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
-        fields: [
-            "lineType",
-            "dynamics.vectorColor",
-            "dynamics.vectorThickness",
-            "dynamics.arrowheadSize"
-        ]
+        fields: ["lineType", "stroke", "lineWidth", "customWidth", "dynamics.arrowheadSize", "dynamics.polarArrow"]
     },
     {
         id: "transform",
         heading: "Transform",
-        fields: ["dynamics.vectorOriginX", "dynamics.vectorOriginY"]
+        fields: [],
+        transform: true
     }
 ];
 
@@ -576,6 +560,19 @@ export function labelOf(object) {
     return typeof object?.label === "string" ? object.label : "";
 }
 
+/*
+ * AN OBJECT'S NAME IS ITS LABEL.
+ *
+ * The object model has always carried both - `name` for the inventory and
+ * `label` for text drawn beside the shape - and the panel now offers ONE field.
+ * It reads whichever the object has, and writes BOTH, so a name typed in the
+ * panel reaches the inventory, the source header and the drawing together, and
+ * a Dynamics symbol's optional label is the same single control.
+ */
+export function nameOf(object) {
+    return String(object?.name ?? "");
+}
+
 export function textOfAnnotation(object) {
     if (!object || object.type !== "annotate") {
         return "";
@@ -646,6 +643,31 @@ function noteStyleField(key, kind, label, extra = {}) {
         }
     };
 }
+
+/* The universal Name field: one control, declared once. */
+const nameField = {
+    kind: "text",
+    label: "Name",
+    applies: (object) => typeof object?.type === "string" && object.type !== "annotate",
+    read: nameOf,
+    write: (object, value) => {
+        const name = String(value ?? "").trim();
+
+        object.name = name;
+
+        /*
+         * THE DRAWN TEXT GOES WITH IT - ALWAYS. The panel has one naming field
+         * and the object has two stored readings of it (`name` for the inventory
+         * and the source header, `label` for the text on the sheet). Writing only
+         * one of them leaves the other showing what the student just replaced,
+         * so both are written on every edit - including on a feature that had no
+         * label yet.
+         */
+        object.label = name;
+
+        return true;
+    }
+};
 
 const FIELDS = {
     ...Object.fromEntries([["dimensionWidth", "Width / x extent"], ["dimensionHeight", "Height / y extent"]].map(([key, label]) => [`boundary.${key}`, {
@@ -983,7 +1005,14 @@ const FIELDS = {
 
     "dynamics.angularMagnitude": {
         kind: "quantity",
-        label: "Magnitude",
+
+        /*
+         * THE LABEL NAMES THE QUANTITY THE UNIT DESCRIBES. The unit selector is
+         * the angular TYPE (rad/s is an angular velocity, rad/s² an angular
+         * acceleration), so the row says which is being entered rather than a
+         * bare "Magnitude" above a dropdown that changes meaning.
+         */
+        label: "Angular Velocity / Acceleration",
         min: 0,
         step: 0.1,
         unitField: "dynamics.angularUnit",
@@ -1371,51 +1400,27 @@ const FIELDS = {
 
     /* ------------------------------------------------- Universal */
 
-    label: {
-        kind: "text",
-        applies: (object) => typeof object?.type === "string" && !["annotate", "dimension"].includes(object.type),
-        read: labelOf,
-        write: (object, value) => {
-            object.label = String(value ?? "");
-
-            return true;
-        }
-    },
+    /*
+     * THE UNIVERSAL NAME.
+     *
+     * ONE field, and it is the only naming control in the panel. An object's
+     * `name` is what the Objects inventory calls it and - when the student has
+     * given it one - what the drawing prints beside it. Clearing it removes the
+     * text and nothing else; the object's `id` is its identity and is never
+     * touched. There is no separate Show Name switch: a name is shown when it
+     * has a value and hidden when it does not.
+     */
+    name: nameField,
 
     /*
-     * SHOW THE OBJECT'S NAME.
+     * WHERE A DYNAMICS SYMBOL'S LABEL SITS, relative to the symbol's own anchor.
      *
-     * The feature's name ("Point Force 1") identifies the object in the Objects
-     * list and in the source's comment header. Printing it in the picture is a
-     * SEPARATE, explicit choice - which is why this is a switch of its own
-     * rather than something inferred from the name being present. Off is the
-     * default, so a drawing never gains a label nobody asked for.
+     * It is a drawing-unit offset, so it follows the symbol through a move, a
+     * turn and a resize; clearing the name leaves it in place, and setting a
+     * name on a symbol that has none starts it at the anchor with no offset.
      */
-    showName: {
-        kind: "toggle",
-        /*
-         * A PIPE'S NAME IS NOT A DRAWING LABEL.
-         *
-         * The finalized design gives a run a Name in the Object section and
-         * nothing else - there is no separate "show the name on the sheet"
-         * property. Excluding the pipe here is what removes that control
-         * without taking it from the features that legitimately have it.
-         */
-        applies: (object) =>
-            typeof object?.type === "string" &&
-            object.type !== "annotate" &&
-            object.type !== "pipe-duct" &&
-            object.type !== "elbow" &&
-            object.type !== "junction" &&
-            Boolean(object.name),
-        read: (object) => object?.showName === true,
-        write: (object, value) => {
-            object.showName = Boolean(value);
-
-            return true;
-        },
-        label: "Show Name"
-    },
+    "dynamics.labelOffsetX": dynamicsLabelOffsetField("x"),
+    "dynamics.labelOffsetY": dynamicsLabelOffsetField("y"),
 
     workDirection: {
         kind: "choice", label: "Direction",
@@ -1531,12 +1536,12 @@ export const GROUPS = [
     { id: "gain", heading: "Gain", fields: ["gainValue"] },
     { id: "sum", heading: "Sum", fields: ["sumInputs", "sumInputSign"] },
     { id: "marker", heading: "Marker", fields: ["markerStyle", "markerSize"] },
-    { id: "line", heading: "Line", fields: ["lineType", "arrowStart", "arrowEnd", "arrowhead"] },
+    { id: "line", heading: "Line", fields: ["arrowStart", "arrowEnd", "arrowhead"] },
     { id: "shape", heading: "Shape", fields: ["sides"] },
     { id: "fill", heading: "Fill", fields: ["fillMode", "fill"] },
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
-    { id: "text", heading: "Text", plainHeading: true, fields: ["label", "showName", "text", "calloutShape", "calloutReference"] },
+    { id: "text", heading: "Text", plainHeading: true, fields: ["text", "arrowStart", "arrowEnd", "arrowhead", "calloutShape", "calloutReference"] },
     { id: "note-format", heading: "Text formatting", fields: ["noteFont", "noteSize", "noteBold", "noteItalic", "noteUnderline", "noteAlign", "noteIndent", "noteSpacing"] },
 
     /*
@@ -1562,7 +1567,7 @@ export const GROUPS = [
     {
         id: "dynamics-rigid-body",
         heading: "Body",
-        fields: ["dynamics.showCenterOfMass"]
+        fields: []
     },
     {
         id: "dynamics-polar-vector",
@@ -1613,7 +1618,7 @@ export const GROUPS = [
     },
 
 	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-	{ id: "object", heading: "Object", fields: ["fixed", "name"], reserveTransform: true },
+	{ id: "object", heading: "Object", fields: ["name", "fixed"], reserveTransform: true },
 	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true },
 
     { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
@@ -1621,7 +1626,7 @@ export const GROUPS = [
     { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
     ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
     { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
-    { id: "object", heading: "Object", fields: ["fixed"], reserveTransform: true },
+    { id: "object", heading: "Object", fields: ["name", "fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
@@ -1660,9 +1665,16 @@ export const GROUPS = [
     	        { id: "transform", heading: "Transform", fields: ["equipmentX", "equipmentY", "equipmentRotation", "symbolSize", "equipmentPosition"] }
     	    ],
     	    vessel: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "vesselStyle"] },
+    	        { id: "object", heading: "Object", fields: ["name", "fixed", "vesselStyle"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-    	        { id: "transform", heading: "Transform", fields: ["vesselX", "vesselY", "vesselRotation", "vesselWidth", "vesselHeight"] }
+    	        /*
+    	         * TRANSFORM: the box, its configuration and the fluid level.
+    	         *
+    	         * The level is a NUMERICAL ROW under Transform - not a section, not a
+    	         * toggle and not a slider - because it is one number of the vessel's
+    	         * geometry, and it is the same number the canvas handle writes.
+    	         */
+    	        { id: "transform", heading: "Transform", fields: ["vesselX", "vesselY", "vesselRotation", "vesselWidth", "vesselHeight", "vesselStyle", "vesselFluidPercent"] }
     	    ],
     	    fluidLevel: [
     	        /*
@@ -1838,23 +1850,21 @@ Object.assign(FIELDS, {
      * The label the Objects list and the source comment show. It is the
      * object's DISPLAY name, never its identity: `object.id` is untouched, so
      * renaming cannot break a selection, a source block or a connection.
+     *
+     * IT IS TAG-ALIASED TO THE UNIVERSAL `name` FIELD below, so the panel has
+     * one naming control: the alias's own behaviour (write the name, and the
+     * drawn label with it) is what both keys resolve to.
      */
-    name: {
-        kind: "text",
-        applies: (object) => Boolean(object),
-        read: (object) => String(object.name ?? ""),
-        write: (object, value) => {
-            const name = String(value ?? "").trim();
+    name: nameField,
 
-            if (!name) {
-                return false;
-            }
-
-            object.name = name;
-
-            return true;
-        }
-    },
+    /*
+     * VISIBILITY IS NOT A FEATURES PROPERTY.
+     *
+     * It is the EYE ICON on the object's header - and the same eye in the
+     * Objects panel. Both write `object.visible`, which the renderer, the hit
+     * test and the source writer already honour; neither is a field in this
+     * table, so there is no fourth section and no control to go stale.
+     */
 
     /*
      * PIPE WIDTH.
@@ -2611,6 +2621,17 @@ Object.assign(FIELDS, {
 
     /* ---------------------------------------------------------- Vessel */
 
+    /*
+     * ============================================================
+     * VESSEL TYPE AND FLUID LEVEL
+     * ============================================================
+     *
+     * The configuration is one segmented control: Reservoir or Tank, on the same
+     * object either way. The level is one NUMBER - the percentage of the internal
+     * height the fluid fills - shown directly under Transform. There is no
+     * Enable/Disable toggle: every vessel carries a level, exactly as the
+     * specification requires.
+     */
     vesselStyle: {
         kind: "segmented",
         applies: (object) => enggVessel.isVesselType(object?.type),
@@ -2622,11 +2643,23 @@ Object.assign(FIELDS, {
 
             return enggVessel.setVesselStyle(object, value);
         },
-        label: "Vessel Style",
+        label: "Vessel Type",
         options: [
-            { value: "open", label: "Open Reservoir" },
-            { value: "closed", label: "Closed Tank" }
+            { value: "open", label: "Reservoir" },
+            { value: "closed", label: "Tank" }
         ]
+    },
+
+    vesselFluidPercent: {
+        kind: "number",
+        applies: (object) => enggVessel.isVesselType(object?.type),
+        read: (object) => enggVessel.fluidLevelPercentOf(object),
+        write: (object, value) => enggVessel.setFluidLevelPercent(object, Number(value)),
+        min: 0,
+        max: 100,
+        step: 1,
+        unit: "%",
+        label: "Fluid Level"
     },
 
     vesselX: {
@@ -3434,6 +3467,48 @@ function isDynamicsKind(object, kind) {
     return object?.engineering?.dynamicsType === kind;
 }
 
+/* The label-capable Dynamics symbols, by their stored type. */
+const DYNAMICS_LABELLED_TYPES = new Set([
+    "dynamics-polar-vector",
+    "dynamics-angular-vector",
+    "dynamics-spring",
+    "dynamics-damper",
+    "dynamics-spring-damper",
+    "dynamics-pulley"
+]);
+
+const LABEL_OFFSET_TYPES = DYNAMICS_LABELLED_TYPES;
+
+function dynamicsLabelOffsetField(axis) {
+    return {
+        kind: "number",
+        label: axis === "x" ? "Label Offset X" : "Label Offset Y",
+        step: 0.5,
+        unit: "mm",
+        applies: (object) => LABEL_OFFSET_TYPES.has(object?.engineering?.dynamicsType),
+        read: (object) => {
+            const stored = Number(object?.geometry?.labelOffset?.[axis]);
+            const fallback = axis === "x" ? 2 : 2;
+
+            return Number.isFinite(stored) ? stored : fallback;
+        },
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return false;
+            }
+
+            object.geometry = {
+                ...(object.geometry || {}),
+                labelOffset: { ...(object.geometry?.labelOffset || { x: 2, y: 2 }), [axis]: number }
+            };
+
+            return true;
+        }
+    };
+}
+
 function isDynamicsBody(object) {
     return (
         isDynamicsKind(object, "dynamics-particle") ||
@@ -3854,198 +3929,9 @@ Object.assign(FIELDS, {
         }
     },
 
-    "dynamics.mass": {
-        kind: "quantity",
-        label: "Mass (m)",
-        min: 0,
-        step: 0.1,
-        unitField: "dynamics.massUnit",
-        unitOptions: [
-            { value: "kg", label: "kg" },
-            { value: "g", label: "g" },
-            { value: "lb", label: "lb" },
-            { value: "slug", label: "slug" }
-        ],
-        applies: isDynamicsBody,
-        read: (object) => {
-            const factors = { kg: 1, g: 0.001, lb: 0.45359237, slug: 14.59390294 };
-            const unit = object.engineering?.massUnit || "kg";
-
-            return Number(object.engineering?.massKg ?? 1) / factors[unit];
-        },
-        write: (object, value) => {
-            const mass = Number(value);
-
-            if (!Number.isFinite(mass) || mass < 0) {
-                return false;
-            }
-
-            const factors = { kg: 1, g: 0.001, lb: 0.45359237, slug: 14.59390294 };
-            const unit = object.engineering?.massUnit || "kg";
-            object.engineering = {
-                ...object.engineering,
-                massKg: mass * factors[unit]
-            };
-
-            return true;
-        }
-    },
-
-    "dynamics.massUnit": {
-        kind: "choice",
-        label: "Mass unit",
-        applies: isDynamicsBody,
-        read: (object) => object.engineering?.massUnit || "kg",
-        write: (object, value) => {
-            if (!["kg", "g", "lb", "slug"].includes(value)) {
-                return false;
-            }
-
-            object.engineering = { ...object.engineering, massUnit: value };
-
-            return true;
-        },
-        options: [
-            { value: "kg", label: "kg" },
-            { value: "g", label: "g" },
-            { value: "lb", label: "lb" },
-            { value: "slug", label: "slug" }
-        ]
-    },
-
-    "dynamics.bodyWidth": {
-        kind: "number",
-        label: "Width (mm)",
-        min: 1,
-        step: 1,
-        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
-        read: (object) => Number(object.geometry?.width ?? 50),
-        write: (object, value) => {
-            const width = Number(value);
-
-            if (!Number.isFinite(width) || width < 1) {
-                return false;
-            }
-
-            object.geometry = { ...object.geometry, width };
-
-            return true;
-        }
-    },
-
-    "dynamics.bodyHeight": {
-        kind: "number",
-        label: "Height (mm)",
-        min: 1,
-        step: 1,
-        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
-        read: (object) => Number(object.geometry?.height ?? 30),
-        write: (object, value) => {
-            const height = Number(value);
-
-            if (!Number.isFinite(height) || height < 1) {
-                return false;
-            }
-
-            object.geometry = { ...object.geometry, height };
-
-            return true;
-        }
-    },
-
-    "dynamics.momentOfInertia": {
-        kind: "number",
-        label: "Mass Moment of Inertia (I)",
-        min: 0,
-        step: 0.000001,
-        unit: "kg·m²",
-        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
-        read: (object) => Number(object.engineering?.momentOfInertiaKgM2 ?? 0),
-        write: (object, value) => {
-            const inertia = Number(value);
-
-            if (!Number.isFinite(inertia) || inertia < 0) {
-                return false;
-            }
-
-            object.engineering = {
-                ...object.engineering,
-                momentOfInertiaKgM2: inertia
-            };
-
-            return true;
-        }
-    },
-
-    "dynamics.initialVelocityX": {
-        kind: "number",
-        label: "Initial Velocity X (v₀ₓ)",
-        min: -Infinity,
-        step: 0.1,
-        unit: "m/s",
-        applies: (object) => isDynamicsKind(object, "dynamics-particle"),
-        read: (object) => Number(object.engineering?.initialVelocity?.x ?? 0),
-        write: (object, value) => {
-            const velocity = Number(value);
-
-            if (!Number.isFinite(velocity)) {
-                return false;
-            }
-
-            object.engineering = {
-                ...object.engineering,
-                initialVelocity: {
-                    ...(object.engineering?.initialVelocity || {}),
-                    x: velocity
-                }
-            };
-
-            return true;
-        }
-    },
-
-    "dynamics.initialVelocityY": {
-        kind: "number",
-        label: "Initial Velocity Y (v₀ᵧ)",
-        min: -Infinity,
-        step: 0.1,
-        unit: "m/s",
-        applies: (object) => isDynamicsKind(object, "dynamics-particle"),
-        read: (object) => Number(object.engineering?.initialVelocity?.y ?? 0),
-        write: (object, value) => {
-            const velocity = Number(value);
-
-            if (!Number.isFinite(velocity)) {
-                return false;
-            }
-
-            object.engineering = {
-                ...object.engineering,
-                initialVelocity: {
-                    ...(object.engineering?.initialVelocity || {}),
-                    y: velocity
-                }
-            };
-
-            return true;
-        }
-    },
-
-    "dynamics.fillOpacityEnabled": {
-        kind: "toggle",
-        label: "Fill Opacity",
-        applies: (object) => isDynamicsBody(object),
-        read: (object) => object.style?.fillOpacityEnabled !== false,
-        write: (object, value) => {
-            object.style = { ...(object.style || {}), fillOpacityEnabled: Boolean(value) };
-
-            return true;
-        }
-    },
-
     "dynamics.positionX": {
         kind: "number",
-        label: "X Shift",
+        label: "X",
         step: 0.1,
         unit: "mm",
         applies: isDynamicsBody,
@@ -4068,7 +3954,7 @@ Object.assign(FIELDS, {
 
     "dynamics.positionY": {
         kind: "number",
-        label: "Y Shift",
+        label: "Y",
         step: 0.1,
         unit: "mm",
         applies: isDynamicsBody,
@@ -4132,10 +4018,18 @@ Object.assign(FIELDS, {
         min: 0.6,
         max: 20,
         step: 0.2,
-        label: "Display Size"
+        label: "Marker Size"
     }),
 
-    "dynamics.showCenterOfMass": dynamicsToggleField("dynamics-rigid-body", "showCenterOfMass", "Centre of Mass"),
+    showCenterOfMass: dynamicsFlag("showCenterOfMass", "Show Centre Marker", ["dynamics-rigid-body"]),
+
+    "dynamics.showCenterOfMass": {
+        kind: "toggle",
+        label: "Show Centre Marker",
+        applies: (object) => isDynamicsKind(object, "dynamics-rigid-body"),
+        read: (object) => object?.geometry?.showCenterOfMass === true,
+        write: (object, value) => writeDynamicsGeometry(object, "showCenterOfMass", Boolean(value))
+    },
 
     /* ------------------------------------------------------ Kinematics */
 
@@ -4493,25 +4387,11 @@ function dynamicsChoice(key, label, kinds, options, fallback) {
 Object.assign(FIELDS, {
     /* ---- Bodies ------------------------------------------------ */
 
-    particleStyle: dynamicsChoice(
-        "markerStyle",
-        "Marker",
-        ["dynamics-particle"],
-        [
-            { value: "filled", label: "Filled" },
-            { value: "open", label: "Open" },
-            { value: "cross", label: "Cross" }
-        ],
-        "filled"
-    ),
-
     markerRadius: dynamicsNumber("markerRadius", { min: 0.4, max: 30, step: 0.2 }, {
         appliesTo: ["dynamics-particle"],
         fallback: 1.6,
-        label: "Display Size"
+        label: "Marker Size"
     }),
-
-    showCenterOfMass: dynamicsFlag("showCenterOfMass", "Centre of Mass", ["dynamics-rigid-body"]),
 
     /* ---- Kinematics -------------------------------------------- */
 
@@ -4564,6 +4444,13 @@ Object.assign(FIELDS, {
 
     /* ---- Mechanical elements ----------------------------------- */
 
+    /*
+     * THE SPRING'S COILS ARE A DRAWING PARAMETER, and they are the one thing its
+     * two endpoint handles cannot express - the handles move the terminals, the
+     * coil count decides how many zigzags sit between them. Everything else the
+     * symbol draws (its span, its lead, its height) follows from the gesture and
+     * its amplitude grip.
+     */
     coils: dynamicsNumber("coils", { min: 1, max: 24, step: 1, integer: true }, {
         appliesTo: ["dynamics-spring", "dynamics-spring-damper"],
         fallback: 6,
@@ -4585,13 +4472,19 @@ Object.assign(FIELDS, {
     bodyWidth: dynamicsNumber("bodyWidth", { min: 1, max: 40, step: 0.5 }, {
         appliesTo: ["dynamics-damper", "dynamics-spring-damper"],
         fallback: 6,
-        label: "Body Width"
+        label: "Housing Height"
+    }),
+
+    bodyFrom: dynamicsNumber("bodyFrom", { min: 0.05, max: 0.9, step: 0.02 }, {
+        appliesTo: ["dynamics-damper", "dynamics-spring-damper"],
+        fallback: 0.42,
+        label: "Housing Start"
     }),
 
     bodyTo: dynamicsNumber("bodyTo", { min: 0.3, max: 0.98, step: 0.02 }, {
         appliesTo: ["dynamics-damper", "dynamics-spring-damper"],
         fallback: 0.82,
-        label: "Body Length"
+        label: "Housing End"
     }),
 
     branchSpacing: dynamicsNumber("branchSpacing", { min: 0, max: 40, step: 1 }, {
@@ -4610,6 +4503,29 @@ Object.assign(FIELDS, {
         appliesTo: ["dynamics-pulley"],
         fallback: 24,
         label: "Rope Length"
+    }),
+
+    ropeGap: dynamicsNumber("ropeGap", { min: 2, max: 200, step: 1 }, {
+        appliesTo: ["dynamics-pulley"],
+        fallback: 16,
+        label: "Rope Spacing"
+    }),
+
+    ropeAngle: dynamicsNumber("ropeAngle", { min: -180, max: 180, step: 5 }, {
+        appliesTo: ["dynamics-pulley"],
+        fallback: 0,
+        label: "Rope Direction (°)"
+    }),
+
+    /*
+     * THE ARC'S START ANGLE. Its sweep and its direction are declared above;
+     * this is the third number the arc's own grips write, so the row and the
+     * grip are the same edit.
+     */
+    angularStart: dynamicsNumber("startAngle", { min: -360, max: 360, step: 1 }, {
+        appliesTo: ["dynamics-angular-vector"],
+        fallback: 0,
+        label: "Start Angle (°)"
     }),
 
     showAxle: dynamicsFlag("showAxle", "Axle Marker", ["dynamics-pulley"]),
@@ -4658,16 +4574,23 @@ Object.assign(FIELDS, {
  */
 export const DYNAMICS_GROUPS = [
     {
-        id: "dynamics-bodies",
-        heading: "Body",
+        id: "dynamics-wheels",
+        heading: "Wheel",
         dynamics: true,
-        fields: ["particleStyle", "markerRadius", "showCenterOfMass"]
+        fields: ["pulleyRadius", "ropeDrop", "ropeGap", "ropeAngle", "showAxle"]
     },
     {
-        id: "dynamics-vector",
-        heading: "Vector",
+        id: "dynamics-spring-damper",
+        heading: "Spring & Damper",
         dynamics: true,
-        fields: ["vectorArrowHead", "showAngle", "sweep", "angularDirection"]
+        fields: [
+            "branchSpacing",
+            "coils",
+            "amplitude",
+            "lead",
+            "bodyWidth",
+            "bodyTo"
+        ]
     },
     {
         id: "dynamics-spring",
@@ -4680,24 +4603,6 @@ export const DYNAMICS_GROUPS = [
         heading: "Damper",
         dynamics: true,
         fields: ["bodyWidth", "bodyTo"]
-    },
-    {
-        id: "dynamics-branches",
-        heading: "Branches",
-        dynamics: true,
-        fields: ["branchSpacing"]
-    },
-    {
-        id: "dynamics-pulley",
-        heading: "Pulley",
-        dynamics: true,
-        fields: ["pulleyRadius", "ropeDrop", "showAxle"]
-    },
-    {
-        id: "dynamics-labels",
-        heading: "Branch Labels",
-        dynamics: true,
-        fields: ["springLabel", "damperLabel"]
     },
     {
         id: "dynamics-reference",
@@ -4831,6 +4736,96 @@ export function fieldLabel(field, key) {
  * title - so their group is marked `plainHeading` and the pane renders it
  * without a heading at all, rather than repeating the title.
  */
+/*
+ * ============================================================
+ * THE THREE SECTIONS, IN ONE ORDER, FOR EVERY TOOL
+ * ============================================================
+ *
+ * Object, then Appearance, then Transform - always. A group that is none of
+ * those three is the TOOL'S OWN, and it belongs inside Transform: a Dynamics
+ * symbol's coil count, a pulley's rope, an arc's sweep are geometric properties
+ * of the object, exactly like its X and Y. Folding them in here means no tool
+ * can grow a Geometry, Appearance 2 or "Vector" section of its own, and the
+ * order a student reads is the same for every object on the sheet.
+ *
+ * The FOLDED groups keep their heading - folded into Transform, they get it
+ * merged under the Transform heading, because the section a property sits in
+ * is the default position / appearance / geometry of the object.
+ */
+const SECTION_ORDER = ["object", "appearance", "transform"];
+
+function orderSections(groups) {
+    const byId = new Map();
+
+    const merge = (id, group) => {
+        const existing = byId.get(id);
+
+        if (!existing) {
+            byId.set(id, { ...group, id, fields: [...group.fields] });
+
+            return;
+        }
+
+        /*
+         * ONE ROW PER PROPERTY. Two groups in the list can name the same field
+         * (a Dynamics symbol's own Object section and the shared one both hold
+         * Name and Fix); the field is offered ONCE, at the first place it
+         * appeared.
+         */
+        const seen = new Set(existing.fields.map((field) => field.key));
+
+        group.fields.forEach((field) => {
+            if (!seen.has(field.key)) {
+                existing.fields.push(field);
+                seen.add(field.key);
+            }
+        });
+    };
+
+    groups.forEach((group) => {
+        merge(group.transform === true ? "transform" : group.id, group);
+    });
+
+    /*
+     * A SECOND PASS FOLDS THE TOOL-SPECIFIC GROUPS INTO APPEARANCE OR TRANSFORM.
+     * A group that carries a `transform` flag - or whose id the caller named as
+     * a transform group - goes to Transform; every other tool group (a marker's
+     * style, a polygon's sides, a coordinate system's axes) is about HOW the
+     * object is drawn, so it joins Appearance.
+     */
+    const folded = [...byId.values()].filter(
+        (group) => !SECTION_ORDER.includes(group.id)
+    );
+
+    folded.forEach((group) => byId.delete(group.id));
+
+    if (folded.length) {
+        const sink =
+            byId.get("appearance") || { id: "appearance", heading: "Appearance", fields: [] };
+
+        byId.set("appearance", sink);
+
+        folded.forEach((group) => merge("appearance", group));
+    }
+
+    const transform = byId.get("transform");
+
+    /*
+     * EVERY TOOL HAS ONE. X Shift and Y Shift are drawn by the editor rather
+     * than declared as schema fields, so a Transform group with no fields is
+     * still a real section - and it is the same section a body's Rotate or a
+     * symbol's coil count is folded into.
+     */
+    byId.set(
+        "transform",
+        transform
+            ? { ...transform, heading: "Transform", transform: true }
+            : { id: "transform", heading: "Transform", fields: [], transform: true }
+    );
+
+    return SECTION_ORDER.map((id) => byId.get(id)).filter(Boolean);
+}
+
 export function groupsFor(object) {
     if (!object) {
         return [];
@@ -4852,14 +4847,16 @@ export function groupsFor(object) {
     const schematic = schematicGroupsFor(object);
 
     if (schematic) {
-        return schematic
-            .map((group) => ({
-                ...group,
-                fields: group.fields
-                    .map((key) => ({ key, definition: definitionOf(key) }))
-                    .filter((entry) => entry.definition && entry.definition.applies(object))
-            }))
-            .filter((group) => group.fields.length || group.transform);
+        return orderSections(
+            schematic
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.fields.length || group.transform)
+        );
     }
 
     /*
@@ -4893,16 +4890,18 @@ export function groupsFor(object) {
 
     /* The pipe / duct family has exactly Object, Appearance and Transform. */
     if (flowPath) {
-        return ["object", "appearance", "transform"]
-            .map((id) => GROUPS.find((group) => group.id === id))
-            .filter(Boolean)
-            .map((group) => ({
-                ...group,
-                fields: group.fields
-                    .map((key) => ({ key, definition: definitionOf(key) }))
-                    .filter((entry) => entry.definition && entry.definition.applies(object))
-            }))
-            .filter((group) => group.transform || group.fields.length);
+        return orderSections(
+            ["object", "appearance", "transform"]
+                .map((id) => GROUPS.find((group) => group.id === id))
+                .filter(Boolean)
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.transform || group.fields.length)
+        );
     }
 
     const base = (
@@ -4930,27 +4929,29 @@ export function groupsFor(object) {
 
             return { ...group, fields };
         })
+        /*
+         * A GROUP SURVIVES IF IT HAS A ROW OR IS A TRANSFORM. A tool specific
+         * group (a marker's style, a polygon's sides) is folded into Appearance by
+         * `orderSections` rather than dropped here, so it must reach it with its
+         * rows intact.
+         */
         .filter((group) => group.transform || group.fields.length);
 
-    if (isFlowArrow) {
-        const order = [FLOW_ARROW_GROUP.id, "appearance"];
-
-        groups.sort((left, right) => order.indexOf(left.id) - order.indexOf(right.id));
-    }
-
-    /* A process path's bends, one per segment, ahead of its appearance. */
+    /* A process path's bends, one per segment, INSIDE its Transform. */
     if (isProcessPath(object) && object.geometry.points.length > 1) {
         const fields = object.geometry.points.slice(1).map((_, index) => {
             const key = `${PROCESS_BEND_PREFIX}${index}`;
 
             return { key, definition: definitionOf(key) };
         });
-        const at = groups.findIndex((group) => group.id === "appearance");
+        const transform = groups.find((group) => group.id === "transform");
 
-        groups.splice(at < 0 ? groups.length : at, 0, { id: "process-bends", heading: "Process Curves", fields });
+        if (transform) {
+            transform.fields = [...transform.fields, ...fields];
+        }
     }
 
-    return groups;
+    return orderSections(groups);
 }
 
 /* ============================================================

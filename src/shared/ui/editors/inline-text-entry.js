@@ -186,6 +186,26 @@ export function modelPointForTextEntry(object) {
 
   const geometry = object.geometry || {};
 
+  /*
+   * A DYNAMICS SYMBOL'S LABEL IS AT ITS MIDDLE. Its terms are two terminals
+   * and no placement, so a spring's prompt opens beside the coil rather than at
+   * one end of it.
+   *
+   * THIS COMES AFTER THE WRITTEN KINDS, because a leader, a callout and an
+   * arrow ALSO store `start` and `end` - and their text belongs at the far end
+   * of the pen, not halfway along it.
+   */
+  const isDynamicsSymbol = Boolean(object.engineering?.dynamicsType);
+
+  if (isDynamicsSymbol && geometry.start && geometry.end) {
+    const start = finitePoint(geometry.start);
+    const end = finitePoint(geometry.end);
+
+    if (start && end) {
+      return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    }
+  }
+
   if (object.type === "annotation") {
     return finitePoint(object.placement) || finitePoint(geometry.position);
   }
@@ -215,18 +235,7 @@ export function modelPointForTextEntry(object) {
     finitePoint(geometry.point) ||
     finitePoint(geometry.center);
 
-  if (direct) {
-    return direct;
-  }
-
-  const start = finitePoint(geometry.start);
-  const end = finitePoint(geometry.end);
-
-  if (start && end) {
-    return { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
-  }
-
-  return null;
+  return direct;
 }
 
 /* The viewport entry point: an object's text point, in window pixels. */

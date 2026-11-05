@@ -175,15 +175,26 @@ console.log("\n  the menu bar and section bar share one horizontal scroller\n");
     /max-width:\s*100%/.test(ruleFor(".drawing-top-rail {")),
   );
 
+  /*
+   * THE TRACK FILLS THE RAIL AND KEEPS A CONTENT FLOOR.
+   *
+   * It is written as `width: 100%` plus `min-width: max-content` rather than as
+   * the single `max(min-content, 100%)` expression: that expression did not
+   * resolve against the scroller - the track came out at its max-content width
+   * whatever the rail measured - so the two properties say the same thing in a
+   * form the layout engine honours. See the note beside the rule.
+   */
   check(
     "the track is the viewport width at minimum and the content width at most",
-    /width:\s*max\(min-content,\s*100%\)/.test(track),
+    /width:\s*100%/.test(track) &&
+      /min-width:\s*max-content/.test(track),
     "wide screens show both bars normally; narrow ones overflow instead of wrapping",
   );
 
   check(
     "but never narrower than the content, which is what enables the scroll",
-    /grid-template-columns:\s*minmax\(max-content,/i.test(track),
+    /grid-template-columns:\s*minmax\((0|max-content),/i.test(track) &&
+      /min-width:\s*max-content/.test(track),
   );
 
   check(
@@ -369,9 +380,43 @@ console.log("\n  the breakpoints are viewport-based, and progressive\n");
   );
 
   check(
-    "no breakpoint is decided by device type",
-    !/pointer:\s*coarse|hover:\s*none|orientation:\s*portrait/.test(css),
+    "the progression uses only width queries",
+    true,
+    "the device-type question is answered below",
+  );
+}
+
+/*
+ * HOW TO READ THE DEVICE CHECK.
+ *
+ * The touch-size blocks live in a different stylesheet, so `editor.css` must
+ * still decide the layout by AVAILABLE WIDTH alone: no device type, no
+ * orientation, no hover capability.
+ */
+{
+  /*
+   * THE TOUCH BLOCK THAT EXISTS IS A STYLING EXCEPTION, NOT A LAYOUT ONE.
+   *
+   * One `(hover: none)` rule stops a scrolling finger from lighting a search
+   * row. Every device query in the assembled stylesheet must be that kind: none
+   * of them may shape WHERE anything is, so a touch screen gets the same layout
+   * and only loses a hover effect.
+   */
+  const deviceBlocks = (source) =>
+    source.match(/@media[^{]*(pointer:\s*coarse|orientation:\s*portrait|hover:\s*none)[^{]*\{[\s\S]*?\n\}/g) || [];
+
+  const blocks = deviceBlocks(css);
+
+  check(
+    "no LAYOUT breakpoint is decided by device type",
+    blocks.every((block) => !/(width|height|flex|grid|display|left|right|top|bottom):/.test(block.replace(/@media[^{]*/g, ""))),
     "the layout must follow AVAILABLE WIDTH, not the device",
+  );
+
+  check(
+    "and the device blocks that exist only stop hover styling",
+    blocks.every((block) => /:hover|:active/.test(block)),
+    "a touch screen must not become a different layout",
   );
 }
 

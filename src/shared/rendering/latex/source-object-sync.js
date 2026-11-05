@@ -109,7 +109,16 @@ function stableBlockId(index, text) {
  * round - so a one-statement block that parses as a line stays a Line. The
  * reader only recognises the syntax the tool actually emits.
  */
-const CONVERTIBLE = new Set(["line", "circle", "rectangle", "arc", "point", "polyline"]);
+const CONVERTIBLE = new Set(["line", "circle", "rectangle", "arc", "point", "polyline", "triangle", "freeform-polygon"]);
+
+/*
+ * THE OBJECT TYPES THAT ARE A CLOSED PATH OF THEIR OWN VERTICES.
+ *
+ * Both are written as `(v1) -- (v2) -- ... -- cycle`, so both read back as a
+ * closed `polyline` shape. Naming them together is what lets a source edit
+ * update the polygon it belongs to instead of re-typing it as a polyline.
+ */
+const CLOSED_PATH_TYPES = new Set(["freeform-polygon", "triangle"]);
 
 /*
  * Apply the parts of a statement the object model carries: the stroke colour and
@@ -130,6 +139,24 @@ function styleFromShape(shape, existingStyle = {}) {
    */
   if (Number.isFinite(shape.lineWidth) && shape.lineWidth > 0) {
     style.lineWidth = Number((shape.lineWidth / 0.56).toFixed(3));
+  }
+
+  /*
+   * A FILLED SHAPE'S COLOUR IS PART OF ITS APPEARANCE.
+   *
+   * The statement says what it is filled WITH, and a shape that stayed
+   * `fillMode: solid` but lost its colour would be repainted in the theme's
+   * default on the next redraw - a different picture from the code on screen.
+   * `fill: none` clears it back to no fill, which is a real edit too.
+   */
+  if (shape.filled === true) {
+    style.fillMode = "solid";
+
+    if (shape.fill) {
+      style.fill = shape.fill;
+    }
+  } else if (shape.filled === false && style.fillMode) {
+    style.fillMode = "none";
   }
 
   return style;
@@ -196,8 +223,30 @@ function createObjectFromShape(type, shape, previous) {
         return table.arc(shape.centre, shape.radius, shape.startAngle, shape.endAngle, options);
       case "point":
         return table.point(shape.position, options);
+      case "freeform-polygon":
+        /*
+         * A NEW CLOSED PATH IS CREATED AS THE POLYGON IT IS. `convertedTypeFor`
+         * reports the type; the factory is what builds it - the same one the
+         * tool uses, so a block typed into Source and a polygon drawn by hand
+         * are the same feature.
+         */
+        return table["freeform-polygon"]
+          ? table["freeform-polygon"](shape.points, options)
+          : table.polyline(shape.points, options);
+
       case "polyline":
-        return table.polyline(shape.points, options);
+        /*
+         * A CLOSED PATH IN THE SOURCE IS A CLOSED PATH IN THE MODEL. The
+         * reader reports `-- cycle` as `closed: true`, and the factory that
+         * builds a Freeform Polygon stores exactly that flag - so a block
+         * created from scratch keeps the shape genuinely closed rather than
+         * merely looking closed.
+         */
+        return shape.closed === true
+          ? table["freeform-polygon"]
+            ? table["freeform-polygon"](shape.points, options)
+            : table.polyline(shape.points, options)
+          : table.polyline(shape.points, options);
 
       /*
        * A PIPE FROM ITS TWO WALLS. Recovered through the model's own factory, so
@@ -635,6 +684,44 @@ function convertedTypeFor(shape, previous) {
   }
 
   /*
+   * A CLOSED PATH BELONGS TO A CLOSED-PATH OBJECT.
+   *
+   * A Freeform Polygon and a Triangle are both written as a vertex list closed
+   * with `-- cycle`, and the reader reports that as a `polyline` shape. An
+   * existing closed-path object must therefore keep its own type rather than be
+   * converted into a plain Polyline - otherwise typing a new vertex into the
+   * Source tab would silently turn a polygon back into an open path and lose
+   * its fill, its vertex handles and its identity in the Objects list.
+   *
+   * The compatibility test is about the SHAPE the statement draws, not the
+   * object's name: a freeform polygon needs at least three vertices (a triangle
+   * exactly three), so a statement that no longer makes a polygon is refused
+   * here and reported as unsupported rather than committing a degenerate shape.
+   */
+  const keepsClosedPath =
+    previous &&
+    CLOSED_PATH_TYPES.has(previous.type) &&
+    shape.type === "polyline" &&
+    shape.closed === true &&
+    (previous.type !== "triangle" || shape.points.length === 3);
+
+  if (keepsClosedPath) {
+    return previous.type;
+  }
+
+  /*
+   * AND A BLOCK THAT IS NEWLY A CLOSED PATH IS A FREEFORM POLYGON.
+   *
+   * With no object to keep, a `-- cycle` path with three or more vertices is
+   * a polygon - that is what the shape means, and DAETUM's own writer emits
+   * exactly this for one. Left as a `polyline` it would be created as an OPEN
+   * path: no fill, no vertex handles, and closed only in appearance.
+   */
+  if (!previous && shape.type === "polyline" && shape.closed === true && shape.points.length >= 3) {
+    return "freeform-polygon";
+  }
+
+  /*
    * AN EXISTING STRUCTURED OBJECT KEEPS ITS OWN TYPE. A beam that happens to be
    * drawn as a straight line must not become a plain Line because one of its
    * statements is a `\draw (a) -- (b)`: the block belongs to a beam, and the
@@ -666,6 +753,19 @@ const SCHEMATIC_TYPES = new Set([
   "flow-profile",
   "section-plane"
 ]);
+
+/*
+ * THE NAME A BLOCK WRITES FOR ITSELF, from its readable header.
+ *
+ * `% DAETUM OBJECT: Day Tank` is how every writer states an object's name; the
+ * geometry below it says nothing about identity. Returns null when the block
+ * carries no header, so the caller keeps whatever name it already had.
+ */
+function nameFromBlockText(text) {
+  const match = /^[ \t]*%[ \t]*DAETUM[ \t]+OBJECT[ \t]*:[ \t]*(.+?)[ \t]*$/m.exec(String(text ?? ""));
+
+  return match ? match[1].trim() || null : null;
+}
 
 function isSchematicType(type) {
   return SCHEMATIC_TYPES.has(type);
@@ -735,7 +835,21 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
       return;
     }
 
-    const shapes = block.statements.map((statement) => statement.shape);
+    const shapes = block.statements
+      .filter(
+        /*
+         * A COLOUR DEFINITION IS NOT A SHAPE IN THE BLOCK.
+         *
+         * `\definecolor{...}{RGB}{...}` accompanies the `\draw` that uses it - a
+         * filled shape writes one per colour - so it is part of the object's
+         * appearance, not a second thing to draw. Counting it as a statement
+         * left every filled polygon, rectangle and triangle reading as "one
+         * shape plus something we cannot edit", and the object was frozen at
+         * its last valid form.
+         */
+        (statement) => !/^\\definecolor\b/.test(String(statement.text ?? "").trim())
+      )
+      .map((statement) => statement.shape);
 
     /*
      * ============================================================
@@ -809,6 +923,16 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
         })
       : null;
 
+    /*
+     * THE BLOCK'S NAME, FROM ITS OWN HEADER.
+     *
+     * A block's readable header is `% DAETUM OBJECT: <name>`, and that is the
+     * only place a schematic's name is written - the drawing commands carry
+     * geometry, not identity. Reading it here is what lets a reopened vessel
+     * come back under the name the student gave it.
+     */
+    const blockName = block.name || nameFromBlockText(blockText) || null;
+
     if (schematic) {
       if (!previous) {
         /*
@@ -822,6 +946,12 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
           object: {
             ...schematic,
             id: block.id,
+            /*
+             * THE NAME TRAVELS IN THE BLOCK'S OWN HEADER. Without this a
+             * reopened vessel came back as the bare type label and the student's
+             * name was lost - the one field the source had faithfully written.
+             */
+            ...(blockName ? { name: blockName } : {}),
             style: { ...(schematic.style || {}) },
             engineering: { ...(schematic.engineering || {}) },
             content: { ...(schematic.engineering || {}) }

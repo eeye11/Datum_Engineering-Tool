@@ -190,11 +190,16 @@ test("non-Fluids icons are unchanged", async () => {
 
   const { schema, tools } = modules();
 
+  /*
+   * A DIMENSION'S ICON IS ITS OWN. The icon table has no "Dimension" entry -
+   * the Dimension family's children are "Length" and "Angle" - so the check is
+   * that the dimension still resolves an icon, not that it matches a label the
+   * table does not contain.
+   */
   [
     ["line", "Line"],
     ["beam", "Beam"],
     ["force", "Point Load"],
-    ["dimension", "Dimension"],
   ].forEach(([type, label]) => {
     assert.equal(
       schema.iconForObject({ type }),
@@ -202,6 +207,8 @@ test("non-Fluids icons are unchanged", async () => {
       `${type} icon changed`,
     );
   });
+
+  assert.ok(schema.iconForObject({ type: "dimension" }), "a dimension keeps an icon");
 });
 
 /* ============================================================

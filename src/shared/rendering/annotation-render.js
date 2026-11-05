@@ -862,16 +862,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
     function labelAnchorFor(entity, toScreen) {
         const geometry = entity.geometry || {};
 
-        const point =
-            geometry.position ||
-            geometry.point ||
-            geometry.center ||
-            null;
-
-        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
-            return toScreen(point);
-        }
-
+        /*
+         * A DYNAMICS SPAN SYMBOL ANCHORS AT ITS MIDDLE. A spring, a damper, a
+         * polar vector and a spring-damper carry their extents as two
+         * terminals and no centre, so they are tested BEFORE the point list - a
+         * symbol whose label was anchored to its start would print it at one
+         * end rather than beside the thing it names.
+         */
         if (
             geometry.start &&
             geometry.end &&
@@ -884,7 +881,39 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             });
         }
 
+        const point =
+            geometry.position ||
+            geometry.point ||
+            geometry.center ||
+            null;
+
+        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+            return toScreen(point);
+        }
+
         return null;
+    }
+
+    /*
+     * WHERE THE LABEL SITS RELATIVE TO ITS ANCHOR, in drawing units.
+     *
+     * `geometry.labelOffset` is the explicit, editable offset a Dynamics
+     * symbol offers; without one the label keeps the historical screen-space
+     * nudge. It is measured from the anchor, so the label follows its parent
+     * whenever the parent moves, turns or is resized - and it never draws a
+     * leader, because it is text and nothing else.
+     */
+    function labelOffsetFor(entity, scale) {
+        const offset = entity?.geometry?.labelOffset;
+
+        if (offset && Number.isFinite(Number(offset.x)) && Number.isFinite(Number(offset.y))) {
+            return {
+                x: Number(offset.x) * scale,
+                y: -Number(offset.y) * scale
+            };
+        }
+
+        return { x: LABEL_OFFSET_PX, y: -LABEL_OFFSET_PX };
     }
 
     function appendFeatureLabel(svg, entity, state, bounds) {
@@ -917,9 +946,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 ? entity.style.stroke
                 : "#000000";
 
+        const scale =
+            enggDrawingState.BASE_PIXELS_PER_UNIT * (state.camera?.zoom || 1);
+        const offset = labelOffsetFor(entity, scale);
+
         const label = createSvgElement("text", {
-            x: anchor.x + LABEL_OFFSET_PX,
-            y: anchor.y - LABEL_OFFSET_PX,
+            x: anchor.x + offset.x,
+            y: anchor.y + offset.y,
             fill: colour,
             "font-size": zoomedFontHere(11),
             "font-family": "Arial, sans-serif",

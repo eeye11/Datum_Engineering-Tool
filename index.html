@@ -826,6 +826,21 @@
                     <span class="drawing-style-strip-divider" aria-hidden="true"></span>
 
                     <!--
+                    SPECIAL SYMBOLS: a quick-access control beside Line Type.
+
+                    It is a FORMATTING control, not a drawing tool: it opens the
+                    same Symbols list the Annotate category's Symbols tool opens
+                    and inserts the chosen glyph at the caret of the text field
+                    being edited. The category and its tool are untouched.
+                    -->
+                    <button class="drawing-status-toggle drawing-special-symbols" id="drawingSpecialSymbols"
+                    type="button" title="Special Symbols" aria-label="Special Symbols" aria-pressed="false">
+                    <svg class="drawing-toolbar-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M11.4 4.2c-.8-.9-2.2-1-3.1-.2-1 .9-.9 2.4 0 3.2l3.4 3.1c.9.8 1 2.3 0 3.2-.9.8-2.3.7-3.1-.2"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M10 3v14"/></svg>
+                    </button>
+
+                    <span class="drawing-style-strip-divider" aria-hidden="true"></span>
+
+                    <!--
                     GRID, SNAP, DIMENSIONS, MAGNITUDES: ICON-ONLY TOGGLES.
 
                     Each has TWO PERSISTENT VISUAL STATES, and the state is

@@ -102,7 +102,11 @@ function renderToolbarTool(tool) {
     }).replace(' aria-haspopup="menu"', '');
 
     const children = DYNAMICS_TOOL_MENUS[tool.id]
-        ? DYNAMICS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        ? DYNAMICS_TOOL_MENUS[tool.id].map(item => renderToolButton({
+              id: item.tool || item.id,
+              label: item.label,
+              state: item.state
+          })).join("")
         : FLUIDS_TOOL_MENUS[tool.id]
         ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
         : tool.id === "shear-force-diagram"

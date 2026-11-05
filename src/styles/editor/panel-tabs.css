@@ -1155,7 +1155,20 @@
 .dfp-header-text {
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto;
     min-width: 0;
+}
+
+/*
+ * THE HEADER'S EYE ICON.
+ *
+ * It is the Objects panel's own button, reused, pushed to the far right of the
+ * header. Same icon, same accessible label, same `visible` property - the
+ * header and the inventory are two views of one state.
+ */
+.dfp-header .drawing-objects-visibility {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 .dfp-header-type {

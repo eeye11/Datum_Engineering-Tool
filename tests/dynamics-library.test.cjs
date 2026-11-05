@@ -284,6 +284,19 @@ test("the sidebar has exactly the specified Dynamics hierarchy", async () => {
     ["Particle", "Rigid Body"],
   );
 
+  /*
+   * EVERY ENTRY NAMES ITS OWN TOOL. The labels are what the menu reads; the
+   * `id`/`tool` pair is what makes two entries distinguishable when their
+   * labels are not unique, and it must never point at a different tool than the
+   * one the entry's label names.
+   */
+  Object.values(m.tools.DYNAMICS_TOOL_MENUS)
+    .flat()
+    .forEach((item) => {
+      assert.equal(item.tool, item.id, `${item.label} must arm the tool it names`);
+      assert.ok(m.tools.isDynamicsTool(item.tool), `${item.label} must be a Dynamics tool`);
+    });
+
   assert.deepEqual(
     m.tools.DYNAMICS_TOOL_MENUS["dynamics-kinematics"].map((item) => item.label),
     ["Polar Vector", "Angular Vector"],
@@ -408,7 +421,7 @@ test("the rendered sidebar shows the Dynamics groups", async () => {
   assert.equal(m.editor.drawingState.activeTool, "dynamics-particle", "child clicks must use normal tool activation");
 });
 
-test("placing a Dynamics Particle creates one node and returns to Select", async () => {
+test("placing a Dynamics Particle creates one node and keeps the tool armed", async () => {
   const m = await modules();
   const state = m.editor.drawingState;
   const before = state.objects.length;
@@ -417,21 +430,26 @@ test("placing a Dynamics Particle creates one node and returns to Select", async
   m.creation.beginOrCompleteGeometry(resolution({ x: 13, y: 17 }));
 
   assert.equal(state.objects.length, before + 1);
-  assert.equal(state.activeTool, "select");
+  assert.equal(state.activeTool, "dynamics-particle", "the tool stays armed for the next particle");
 
   const particle = state.objects[state.objects.length - 1];
 
   assert.equal(particle.engineering.dynamicsType, "dynamics-particle");
   assert.deepEqual(particle.geometry.position, { x: 13, y: 17 });
-  assert.equal(particle.name, "Particle A");
+  assert.equal(particle.name, "", "a particle nobody named carries no name");
   assert.deepEqual(state.selection.selectedObjectIds, [particle.id]);
   assert.equal(m.editor.editorState.drawingPanelTab, "features");
 
-  const xShift = document.querySelector('[data-feature-field="dynamics.positionX"]');
-  xShift.value = "29";
-  xShift.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  assert.equal(particle.geometry.position.x, 29, "coordinate edits must update the canvas model live");
-  xShift.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+  /*
+   * THE PARTICLE'S PANEL IS Name, Fix, its fill and the three shared transform
+   * rows. Its position is moved by dragging (or by the X Shift / Y Shift rows),
+   * not by a second pair of absolute-coordinate fields.
+   */
+  const nameField = document.querySelector('[data-feature-field="name"]');
+
+  assert.ok(nameField, "the Object section offers a Name");
+  assert.equal(document.querySelector('[data-feature-field="dynamics.positionX"]'), null);
+  assert.ok(document.querySelector('[data-transform-input="x"]'), "and the shared X Shift");
 });
 
 test("placing a Dynamics Rigid Body uses the centered Statics default", async () => {
@@ -443,26 +461,40 @@ test("placing a Dynamics Rigid Body uses the centered Statics default", async ()
   m.activation.activateTool("dynamics-rigid-body");
   m.creation.beginOrCompleteGeometry(resolution({ x: 80, y: 70 }));
 
+  /*
+   * THE FIRST POINT ANCHORS THE BODY, and the second sizes it - a Rigid Body is
+   * a drawn rectangle, so a press-drag-release is its creation. A single click
+   * still leaves the default size centred on the point.
+   */
+  assert.equal(state.interaction.phase, "dynamics-span");
+  assert.equal(state.objects.length, before, "the first point only anchors");
+
+  m.creation.beginOrCompleteGeometry(resolution({ x: 130, y: 40 }));
+
   assert.equal(state.objects.length, before + 1);
-  assert.equal(state.activeTool, "select", "Rigid Body placement returns to Select");
+  assert.equal(state.activeTool, "dynamics-rigid-body", "Rigid Body placement keeps the tool armed");
 
   const body = state.objects[state.objects.length - 1];
 
   assert.equal(body.type, "rigid-body");
   assert.equal(body.engineering.dynamicsType, "dynamics-rigid-body");
-  assert.deepEqual(body.geometry.position, { x: 55, y: 85 });
-  assert.equal(body.geometry.width, 50);
-  assert.equal(body.geometry.height, 30);
+  /*
+   * THE BODY IS DRAWN BETWEEN THE TWO POINTS, so its centre is their midpoint
+   * and its size is the distance between them.
+   */
+  assert.equal(body.geometry.width, 50, "the width is the drag's width");
+  assert.equal(body.geometry.height, 30, "the height is the drag's height");
+  assert.equal(Math.round(body.geometry.position.x + body.geometry.width / 2), 105);
+  assert.equal(Math.round(body.geometry.position.y - body.geometry.height / 2), 55);
   assert.equal(body.geometry.rotation, 0);
-  assert.equal(body.name, "Rigid Body");
-  assert.equal(body.geometry.showCenterOfMass, true);
-  assert.equal(body.style.fillMode, "solid");
-  assert.equal(body.style.fillOpacityEnabled, true);
+  assert.equal(body.name, "", "a body nobody named carries no name");
+  assert.equal(body.geometry.showCenterOfMass, false, "no centre marker by default");
+  assert.equal(body.style.fillMode, "none", "the body is an unfilled outline");
   assert.deepEqual(state.selection.selectedObjectIds, [body.id]);
   assert.equal(m.editor.editorState.drawingPanelTab, "features");
 });
 
-test("placing an Angular Vector on a body attaches it, selects it, and returns to Select", async () => {
+test("placing an Angular Vector on a body attaches it, selects it, and keeps the tool armed", async () => {
   const m = await modules();
   const state = m.editor.drawingState;
   const body = m.creation.createDynamicsFeature(
@@ -479,10 +511,10 @@ test("placing an Angular Vector on a body attaches it, selects it, and returns t
   const angular = state.objects[state.objects.length - 1];
 
   assert.equal(angular.engineering.dynamicsType, "dynamics-angular-vector");
-  assert.equal(angular.name, "Angular Vector 1");
+  assert.equal(angular.name, "", "an unnamed vector carries no name");
   assert.deepEqual(angular.geometry.center, { x: 1000, y: 1000 });
   assert.equal(angular.geometry.attachedTo, body.id);
-  assert.equal(state.activeTool, "select");
+  assert.equal(state.activeTool, "dynamics-angular-vector");
   assert.deepEqual(state.selection.selectedObjectIds, [angular.id]);
   assert.equal(m.editor.editorState.drawingPanelTab, "features");
 
@@ -532,22 +564,27 @@ test("Polar Vector press-drag-release creates and selects one vector", async () 
 
   assert.equal(m.creationDrag.finishCreationDrag(release), true);
   assert.equal(state.objects.length, before + 1);
-  assert.equal(state.activeTool, "select");
+  assert.equal(state.activeTool, "dynamics-polar-vector");
 
   const vector = state.objects[state.objects.length - 1];
-  assert.equal(vector.name, "Polar Vector 1");
+  assert.equal(vector.name, "", "an unnamed vector carries no name");
   const dx = vector.geometry.end.x - vector.geometry.start.x;
   const dy = vector.geometry.end.y - vector.geometry.start.y;
   const magnitude = Math.hypot(dx, dy);
   const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
 
   assert.ok(magnitude > 0, "the release point defines a non-zero vector");
-  assert.ok(Math.abs(vector.geometry.vectorMagnitude - magnitude) < 1e-8);
-  assert.ok(Math.abs(vector.geometry.vectorAngle - (angle + 360) % 360) < 1e-8);
+
+  /*
+   * THE MAGNITUDE AND ANGLE ARE DERIVED, not stored twice. The endpoints are the
+   * authoritative geometry; the panel and the source read the two numbers back
+   * out of them, so there is nothing that can drift.
+   */
+  assert.ok(!("vectorMagnitude" in vector.geometry), "the magnitude is not a stored copy");
   assert.deepEqual(state.selection.selectedObjectIds, [vector.id]);
 });
 
-test("Polar Vector drag placement returns to Select and exposes its editable vector schema", async () => {
+test("Polar Vector drag placement keeps the tool armed and exposes its editable vector schema", async () => {
   const m = await modules();
   const state = m.editor.drawingState;
   const before = state.objects.length;
@@ -573,17 +610,13 @@ test("Polar Vector drag placement returns to Select and exposes its editable vec
   m.creation.beginOrCompleteGeometry(resolution(end));
 
   assert.equal(state.objects.length, before + 1);
-  assert.equal(state.activeTool, "select", "finishing the drag returns to Select");
+  assert.equal(state.activeTool, "dynamics-polar-vector", "finishing the drag keeps the tool armed");
   const vector = state.objects[state.objects.length - 1];
 
   assert.equal(vector.engineering.dynamicsType, "dynamics-polar-vector");
-  assert.equal(vector.name, "Polar Vector 2");
+  assert.equal(vector.name, "", "an unnamed vector carries no name");
   assert.deepEqual(vector.geometry.start, start);
   assert.deepEqual(vector.geometry.end, end);
-  assert.equal(vector.geometry.vectorRepresentation, "magnitude-angle");
-  assert.equal(vector.geometry.vectorMagnitude, 50);
-  assert.equal(vector.geometry.vectorUnit, "m/s");
-  assert.equal(vector.geometry.attachedTo, "origin");
   assert.equal(vector.style.arrowheadSize, 9);
   assert.equal(
     m.hitTesting.objectAtPoint({ x: start.x + 15, y: start.y + 20 })?.id,
@@ -596,91 +629,52 @@ test("Polar Vector drag placement returns to Select and exposes its editable vec
   assert.deepEqual(state.selection.selectedObjectIds, [vector.id]);
   assert.equal(m.editor.editorState.drawingPanelTab, "features");
 
+  /*
+   * THREE SECTIONS, AND NO DUPLICATE PLACEMENT. The vector's position is its own
+   * two endpoints, moved with its endpoint handles; Magnitude, Angle and the two
+   * components are DERIVED from those endpoints, so they are not stored a second
+   * time and not offered a second time.
+   */
   const groups = m.schema.groupsFor(vector);
   assert.deepEqual(
     groups.map(({ heading }) => heading),
-    ["Object", "Vector Properties", "Appearance", "Transform"],
+    ["Object", "Appearance", "Transform"],
   );
   assert.deepEqual(
     groups.map(({ fields }) => fields.map(({ key }) => key)),
     [
-      ["dynamics.name", "dynamics.vectorAttachment"],
-      [
-        "dynamics.vectorRepresentation",
-        "dynamics.vectorMagnitude",
-        "dynamics.vectorAngle",
-        "dynamics.vectorComponentX",
-        "dynamics.vectorComponentY",
-      ],
-      ["lineType", "dynamics.vectorColor", "dynamics.vectorThickness", "dynamics.arrowheadSize"],
-      ["dynamics.vectorOriginX", "dynamics.vectorOriginY"],
+      ["name", "fixed"],
+      ["lineType", "stroke", "lineWidth", "dynamics.arrowheadSize", "dynamics.polarArrow"],
+      [],
     ],
   );
 
   const getField = (key) => document.querySelector(`[data-feature-field="${key}"]`);
-  const editLive = (key, value) => {
-    const field = getField(key);
-    field.value = String(value);
-    field.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-    field.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-  };
 
-  editLive("dynamics.vectorMagnitude", 80);
-  assert.ok(Math.abs(vector.geometry.end.x - (start.x + 48)) < 1e-8);
-  assert.ok(Math.abs(vector.geometry.end.y - (start.y + 64)) < 1e-8);
-
-  editLive("dynamics.vectorAngle", 90);
-  assert.ok(Math.abs(vector.geometry.end.x - start.x) < 1e-8);
-  assert.ok(Math.abs(vector.geometry.end.y - (start.y + 80)) < 1e-8);
-
-  editLive("dynamics.vectorComponentX", 12);
-  editLive("dynamics.vectorComponentY", 16);
-  assert.deepEqual(vector.geometry.end, { x: start.x + 12, y: start.y + 16 });
-
-  editLive("dynamics.vectorOriginX", 5);
-  editLive("dynamics.vectorOriginY", 8);
-  assert.deepEqual(vector.geometry.start, { x: 5, y: 8 });
-  assert.deepEqual(vector.geometry.end, { x: 17, y: 24 });
-
-  const representation = getField("dynamics.vectorRepresentation");
-  representation.value = "cartesian";
-  representation.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-  assert.equal(vector.geometry.vectorRepresentation, "cartesian");
-
-  const unit = getField("dynamics.vectorUnit");
-  unit.value = "N";
-  unit.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-  assert.equal(vector.geometry.vectorUnit, "N");
-
-  const attachments = getField("dynamics.vectorAttachment");
-  assert.ok([...attachments.options].some((option) => option.textContent.includes("Origin Point")));
-  const particle = state.objects.find((object) => object.engineering?.dynamicsType === "dynamics-particle");
-
-  if (particle) {
-    attachments.value = particle.id;
-    attachments.dispatchEvent(new page.window.Event("change", { bubbles: true }));
-    assert.equal(vector.geometry.attachedTo, particle.id);
-  }
+  assert.equal(getField("dynamics.vectorOriginX"), null, "no duplicate origin coordinates");
+  assert.equal(getField("dynamics.vectorMagnitude"), null, "no derived magnitude row");
+  assert.ok(document.querySelector('[data-transform-input="x"]'), "the shared X Shift is there");
 
   const size = getField("dynamics.arrowheadSize");
   size.value = "14";
   size.dispatchEvent(new page.window.Event("change", { bubbles: true }));
   assert.equal(vector.style.arrowheadSize, 14);
 
-  const beforeHandle = { ...vector.geometry.end };
+  /*
+   * THE END HANDLE WRITES THE ENDPOINT, and nothing else. Magnitude and angle
+   * are read back out of the two ends, so the new tip is the whole change.
+   */
+  const after = { ...vector.geometry.end };
   assert.equal(
     m.dynamicsHandles.applyDynamicsHandle(
       vector,
       { kind: "end" },
-      { x: beforeHandle.x + 30, y: beforeHandle.y + 40 },
+      { x: after.x + 30, y: after.y + 40 },
       vector.geometry,
     ),
     true,
   );
-  assert.equal(vector.geometry.vectorMagnitude, 70);
-  assert.ok(Math.abs(vector.geometry.vectorAngle - 53.13010235415598) < 1e-10);
-  assert.equal(m.schema.readField(vector, "dynamics.vectorMagnitude"), 70);
-  assert.ok(Math.abs(m.schema.readField(vector, "dynamics.vectorAngle") - 53.13010235415598) < 1e-10);
+  assert.deepEqual(vector.geometry.end, { x: after.x + 30, y: after.y + 40 });
 });
 
 /* ================================================================ creation */
@@ -950,41 +944,30 @@ test("a Dynamics object's Features are its own controls, not a generic form", as
   assert.match(spring, /X Shift/);
 
   assert.match(pulleyPair, /Branch Separation/);
-  assert.match(pulleyPair, /Spring Label/);
-  assert.match(pulleyPair, /Damper Label/);
 
   const angularGroups = [...angular.matchAll(/data-feature-group="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(
-    angularGroups,
-    ["object", "rotational-properties", "appearance", "transform"],
-  );
-  assert.match(angular, /Name/);
-  assert.match(angular, /Attached To/);
-  assert.match(angular, /Angular Velocity/);
-  assert.match(angular, /Angular Acceleration/);
-  assert.match(angular, /Magnitude/);
-  assert.match(angular, /Counter-Clockwise \(CCW\)/);
-  assert.match(angular, /Clockwise/);
-  assert.match(angular, /Color/);
+  assert.deepEqual(angularGroups, ["object", "appearance", "transform"]);
+  assert.match(angular, /data-feature-field="name"/);
+  assert.doesNotMatch(angular, /Visibility/);
+  assert.match(angular, /Line Style/);
+  assert.match(angular, /Outline Colour/);
   assert.match(angular, /Thickness/);
   assert.match(angular, /Arrowhead Size/);
-  assert.match(angular, /Center X/);
-  assert.match(angular, /Center Y/);
+  assert.match(angular, /Arrowhead/);
+
+  /*
+   * NO SELECTED IDENTITY ROWS AND NO SIMULATION VALUES. The arc's centre, angle
+   * and direction are its drawing, edited by its own grips; an angular velocity
+   * or acceleration would be a physical quantity the symbol does not use.
+   */
+  assert.doesNotMatch(angular, /Center X/);
+  assert.doesNotMatch(angular, /Angular Velocity/);
 
   const angularObject = objects["dynamics-angular-vector"];
-  m.schema.writeField(angularObject, "dynamics.rotationalType", "acceleration");
-  assert.equal(angularObject.geometry.unit, "rad/s²", "acceleration selects its matching default unit");
-  m.schema.writeField(angularObject, "dynamics.angularMagnitude", 2.5);
-  m.schema.writeField(angularObject, "dynamics.angularUnit", "rad/s²");
   m.schema.writeField(angularObject, "dynamics.direction", "cw");
-  m.schema.writeField(angularObject, "dynamics.angularCenterX", 12);
-  m.schema.writeField(angularObject, "dynamics.angularCenterY", 15);
-  assert.equal(angularObject.geometry.rotationalType, "acceleration");
-  assert.equal(angularObject.geometry.magnitude, 2.5);
-  assert.equal(angularObject.geometry.unit, "rad/s²");
-  assert.equal(angularObject.geometry.direction, "cw");
-  assert.deepEqual(angularObject.geometry.center, { x: 12, y: 15 });
+  assert.equal(angularObject.geometry.direction, "cw", "the direction is a drawing property");
 
+  /* The centre handle moves the arc; there is no second centre field beside it. */
   const beforeCenterDrag = { ...angularObject.geometry.center };
   m.dynamicsHandles.applyDynamicsHandle(
     angularObject,
@@ -992,38 +975,47 @@ test("a Dynamics object's Features are its own controls, not a generic form", as
     { x: 22, y: 25 },
     angularObject.geometry,
   );
-  assert.equal(m.schema.readField(angularObject, "dynamics.angularCenterX"), 22);
-  assert.equal(m.schema.readField(angularObject, "dynamics.angularCenterY"), 25);
   assert.notDeepEqual(angularObject.geometry.center, beforeCenterDrag);
+  assert.equal(Math.round(angularObject.geometry.center.x), 22);
 
+  /*
+   * A PARTICLE'S PANEL IS ITS OWN FIVE FACTS. The marker is one filled disc, so
+   * there is no line style, no outline weight and no rotation to offer - and the
+   * Label is optional and empty until the student writes one.
+   */
   const particleGroups = [...particle.matchAll(/data-feature-group="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(particleGroups, ["object", "physical-properties", "appearance", "transform"]);
-  assert.match(
-    particle,
-    new RegExp(`data-feature-field="dynamics\\.name"[^>]*value="${particleObject.name}"`),
-  );
-  assert.match(particle, /Mass \(m\)/);
-  assert.match(particle, /Initial Velocity X/);
-  assert.match(particle, /Initial Velocity Y/);
-  assert.match(particle, /Line Style|lineType/);
-  assert.match(particle, /Outline Colour/);
-  assert.match(particle, /data-feature-field="customWidth"/);
-  assert.match(particle, /Fill Opacity/);
+  assert.deepEqual(particleGroups, ["object", "appearance", "transform"]);
+  assert.match(particle, /data-feature-field="name"/);
+  assert.doesNotMatch(particle, /data-feature-field="visibility"/);
+  assert.match(particle, /Fill Colour/);
   assert.match(particle, /X Shift/);
   assert.match(particle, /Y Shift/);
   assert.doesNotMatch(particle, />Rotate</);
+  assert.doesNotMatch(particle, /Line Style/);
 
-  assert.equal(particleObject.engineering.massKg, 1);
-  m.schema.writeField(particleObject, "dynamics.massUnit", "g");
-  assert.equal(m.schema.readField(particleObject, "dynamics.mass"), 1000);
-  m.schema.writeField(particleObject, "dynamics.mass", 250);
-  assert.equal(particleObject.engineering.massKg, 0.25);
-  m.schema.writeField(particleObject, "dynamics.initialVelocityX", 3);
-  m.schema.writeField(particleObject, "dynamics.initialVelocityY", -4);
-  assert.deepEqual(particleObject.engineering.initialVelocity, { x: 3, y: -4 });
-  m.schema.writeField(particleObject, "dynamics.positionX", 42);
-  m.schema.writeField(particleObject, "dynamics.positionY", 24);
-  assert.deepEqual(particleObject.geometry.position, { x: 42, y: 24 });
+  /* No mass, no velocity, no marker-size row: a particle is a disc and a place. */
+  assert.doesNotMatch(particle, /Mass/);
+  assert.doesNotMatch(particle, /Velocity/);
+  assert.doesNotMatch(particle, /Marker Size/);
+
+  assert.equal(
+    m.schema.writeField(particleObject, "dynamics.massUnit", "g"),
+    false,
+    "a particle carries no mass - it is a drawing",
+  );
+  assert.equal(
+    m.schema.writeField(particleObject, "dynamics.mass", 5),
+    false,
+    "and no mass row exists to write",
+  );
+
+  /*
+   * ITS PLACE ON THE SHEET IS THE CANVAS: the shared X Shift and Y Shift move
+   * it, exactly as they move every other object, and there is no second pair of
+   * absolute coordinates beside them.
+   */
+  assert.equal(document.querySelector('[data-feature-field="dynamics.positionX"]'), null);
+  assert.ok(document.querySelector('[data-transform-input="x"]'));
 
   /* Fix is offered, and it is called Fix. */
   assert.match(spring, />Fix</);
@@ -1034,22 +1026,19 @@ test("a mixed selection shows only what the objects share", async () => {
   const m = await modules();
   const objects = await builtObjects();
 
-  const markup = m.features.featuresMarkupForSelection([
-    objects["dynamics-spring"],
-    objects["dynamics-pulley"]
-  ]);
-
-  const groups = [...markup.matchAll(/data-feature-group="([^"]+)"/g)].map((match) => match[1]);
+  const markup = m.features.featuresMarkupForSelection([objects["dynamics-spring"], objects["dynamics-pulley"]]);
 
   /*
-   * THE SHARED CONTROLS SURVIVE, and so does each object's own section - the
-   * union of what the selection offers. A SPRING section is present because a
-   * spring is selected; a PULLEY section because a pulley is.
+   * THERE ARE THREE SECTIONS AND THEY ARE ALWAYS THE SAME THREE.
+   *
+   * Each object's own controls - a spring's coils, a pulley's rope - are folded
+   * into Transform, where the rest of its geometry lives. A mixed selection
+   * therefore shows one of each section, holding the UNION of what either
+   * object offers.
    */
-  assert.ok(groups.includes("transform"));
-  assert.ok(groups.includes("appearance"));
-  assert.ok(groups.includes("dynamics-spring"));
-  assert.ok(groups.includes("dynamics-pulley"));
+  const groups = [...markup.matchAll(/data-feature-group="([^"]+)"/g)].map((match) => match[1]);
+
+  assert.deepEqual(groups, ["object", "appearance", "transform"]);
 
   /* A CONTROL ONLY ONE OF THEM HAS IS STILL SHOWN FOR THAT ONE. */
   assert.match(markup, /Coils/);
@@ -1062,7 +1051,7 @@ test("a mixed selection shows only what the objects share", async () => {
   assert.doesNotMatch(markup, /Branch Separation/);
 });
 
-test("a Dynamics Rigid Body exposes physical properties, appearance, and live transforms", async () => {
+test("a Dynamics Rigid Body is an unfilled outline with the standard panel", async () => {
   const m = await modules();
   const body = m.model.createDynamicsObject(
     "dynamics-rigid-body",
@@ -1072,43 +1061,34 @@ test("a Dynamics Rigid Body exposes physical properties, appearance, and live tr
   const markup = m.features.featuresMarkupForSelection([body]);
   const groups = m.schema.groupsFor(body).map((group) => group.id);
 
-  assert.deepEqual(groups, ["object", "physical-properties", "appearance", "transform"]);
-  assert.match(markup, /Mass \(m\)/);
-  assert.match(markup, /Width \(mm\)/);
-  assert.match(markup, /Height \(mm\)/);
-  assert.match(markup, /Mass Moment of Inertia \(I\)/);
+  assert.deepEqual(groups, ["object", "appearance", "transform"]);
+  assert.match(markup, /data-feature-field="name"/);
   assert.match(markup, /Line Style/);
   assert.match(markup, /Outline Colour/);
-  assert.match(markup, /Fill Opacity/);
   assert.match(markup, /Rotate/);
   assert.equal((markup.match(/data-feature-group="transform"/g) || []).length, 1);
 
-  assert.equal(m.schema.readField(body, "dynamics.mass"), 1);
-  assert.equal(m.schema.readField(body, "dynamics.momentOfInertia"), 0);
-  assert.equal(m.schema.writeField(body, "dynamics.massUnit", "lb"), true);
-  assert.equal(m.schema.writeField(body, "dynamics.mass", 2), true);
-  assert.equal(body.engineering.massKg, 2 * 0.45359237);
-  assert.equal(m.schema.writeField(body, "dynamics.bodyWidth", 75), true);
-  assert.equal(m.schema.writeField(body, "dynamics.bodyHeight", 40), true);
-  assert.equal(m.schema.writeField(body, "dynamics.momentOfInertia", 1.25), true);
-  assert.equal(body.geometry.width, 75);
-  assert.equal(body.geometry.height, 40);
-  assert.equal(body.engineering.momentOfInertiaKgM2, 1.25);
+  /*
+   * NOTHING THE BODY DOES NOT NEED. It is a drawn rectangle: no mass, no moment
+   * of inertia, no numeric width or height beside the corner handles, and no
+   * centre marker - and it starts UNFILLED.
+   */
+  assert.doesNotMatch(markup, /Mass/);
+  assert.doesNotMatch(markup, /Moment of Inertia/);
+  assert.doesNotMatch(markup, /Centre Marker/);
+  assert.equal(body.style.fillMode, "none", "the default fill is None");
+  assert.notEqual(body.geometry.showCenterOfMass, true, "no centre marker by default");
+
   assert.equal(m.schema.writeField(body, "lineType", "dashed"), true);
+  assert.equal(m.schema.writeField(body, "fillMode", "solid"), true);
   assert.equal(m.schema.writeField(body, "fill", "#336699"), true);
-  assert.equal(m.schema.writeField(body, "dynamics.fillOpacityEnabled", true), true);
 
   m.editor.drawingState.objects.push(body);
   m.drawingState.selectObject(m.editor.drawingState, body.id);
-  const xShift = document.querySelector('[data-feature-field="dynamics.positionX"]');
-  xShift.value = "25";
-  xShift.dispatchEvent(new page.window.Event("input", { bubbles: true }));
-  assert.equal(body.geometry.position.x, 25, "X coordinate edits update the canvas model live");
-  xShift.dispatchEvent(new page.window.Event("change", { bubbles: true }));
 
-  const rotation = document.querySelector('[data-feature-field="dynamics.rotation"]');
+  const rotation = document.querySelector('[data-transform-input="rotate"]');
   rotation.value = "35";
-  rotation.dispatchEvent(new page.window.Event("input", { bubbles: true }));
+  rotation.dispatchEvent(new page.window.Event("change", { bubbles: true }));
   assert.equal(body.geometry.rotation, 35, "rotation edits update the canvas model live");
   rotation.dispatchEvent(new page.window.Event("change", { bubbles: true }));
 
@@ -1118,12 +1098,16 @@ test("a Dynamics Rigid Body exposes physical properties, appearance, and live tr
 
   assert.ok(renderedBody, "the Dynamics body uses the shared rigid-body renderer");
   assert.equal(renderedBody.getAttribute("fill"), "#336699");
-  assert.equal(renderedBody.getAttribute("fill-opacity"), "0.35");
   assert.ok(renderedBody.getAttribute("stroke-dasharray"), "the line style applies to the body outline");
 
+  /*
+   * A CHOSEN FILL IS A FILL. It used to be laid down at 35% opacity as a
+   * tint, which meant a rectangle the student had explicitly filled still looked
+   * washed out. The fill is now the colour they picked, at full strength.
+   */
   const source = m.dynamicsWriter.dynamicsSourceWriter(body);
 
-  assert.match(source, /fill opacity=0\.35/);
+  assert.match(source, /fill=/);
   assert.ok((await compile(source)).ok, "the styled rigid-body source compiles");
 
   m.schema.writeField(body, "fixed", true);

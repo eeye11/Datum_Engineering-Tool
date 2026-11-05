@@ -19,6 +19,8 @@
  * not - which the drag layer takes as "this handle is not mine".
  */
 
+import { resizeBoxFromCorner } from "../../../shared/geometry/box-resize.js";
+
 function finite(value, fallback = 0) {
     const number = Number(value);
 
@@ -109,6 +111,33 @@ export function applyDynamicsHandle(object, drag, point, geometry) {
 
         return true;
     }
+
+    /*
+     * A RIGID BODY'S CORNER DRAGS ITS OWN CORNER, NOT THE CENTRE.
+     *
+     * The old rule measured the distance from the centre and grew the box by
+     * twice that - so every drag moved BOTH the near corner and the far one, and
+     * the rectangle appeared to scale about the middle. It now goes through the
+     * same shared resize a Rectangle uses: the opposite corner is the anchor, the
+     * box grows only on the side that was pulled, the angle is preserved, and the
+     * model's minimum size stops it inverting.
+     */
+    if (kind.startsWith("rigid-corner")) {
+        const index = Number(kind.replace("rigid-corner", ""));
+        const resized = resizeBoxFromCorner(geometry, index, point);
+
+        if (!resized) {
+            return false;
+        }
+
+        geometry.width = resized.width;
+        geometry.height = resized.height;
+        geometry.position = resized.position;
+
+        return true;
+    }
+
+
 
     /* ---- the symbol's own parameters -------------------------- */
 

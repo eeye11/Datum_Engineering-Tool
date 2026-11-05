@@ -323,6 +323,142 @@ function createPreview(object) {
 }
 
 /*
+ * THE ON-DRAWING LABEL FIELD.
+ *
+ * A label prompt is not a form. It is the words, being typed, where they will
+ * be drawn - so this presentation has no title, no hint, no border card and no
+ * background. It is a single transparent line of text at the object's own label
+ * anchor, in the object's own colour and size, with the caret as the only sign
+ * that it is editable. It grows as it is typed and never covers the object it
+ * belongs to.
+ *
+ * The SAME field, the SAME keys and the SAME commit path as every other inline
+ * prompt - only the chrome differs - so there is one text-entry implementation.
+ */
+function openLabelField(options, anchor) {
+  const host = document.createElement("div");
+
+  host.className = "drawing-inline-entry drawing-label-entry";
+  host.dataset.inline = "true";
+  host.setAttribute("role", "group");
+  host.setAttribute("aria-label", "Label");
+
+  host.innerHTML = fieldMarkup(
+    false,
+    "",
+    options.text ?? "",
+    "drawing-label-entry-input",
+  );
+
+  document.body.appendChild(host);
+
+  openDialog = host;
+
+  const input = host.querySelector("#noteText");
+  attachTextSymbols(host);
+
+  const style = options.object?.style || {};
+  const stroke = /^#[0-9a-f]{6}$/i.test(String(style.stroke || ""))
+    ? style.stroke
+    : "var(--datum-ink)";
+
+  input.style.color = stroke;
+  input.style.caretColor = stroke;
+
+  if (options.labelField === true) {
+    input.placeholder = "";
+    input.style.background = "transparent";
+  }
+
+  const place = () => {
+    const rect =
+      typeof options.anchor === "function" ? options.anchor() : anchor;
+
+    if (!rect) {
+      return;
+    }
+
+    /*
+     * AT THE ANCHOR, NOT BESIDE IT. The prompt sits exactly where the drawn
+     * label will sit, so the words do not jump when it is committed; it is
+     * nudged only enough to keep a caret's width clear of the point it names.
+     */
+    const zoom = Number(options.zoom) > 0 ? Number(options.zoom) : 1;
+    const size = Math.max(10, Math.round(14 * Math.min(1.6, Math.max(0.7, zoom))));
+
+    host.style.left = `${Math.round(rect.left + 4)}px`;
+    host.style.top = `${Math.round(rect.top - size)}px`;
+    host.style.fontSize = `${size}px`;
+    input.style.fontSize = `${size}px`;
+    input.style.lineHeight = `${Math.round(size * 1.2)}px`;
+  };
+
+  options.place = place;
+
+  return place;
+}
+
+/*
+ * THE LABEL FLOOR.
+ *
+ * It shares every rule of an inline entry - commit on Enter, cancel on Escape,
+ * commit on a press elsewhere, no symbol button of its own - and differs only
+ * in how it LOOKS and where it sits. The preview is suppressed: the words are
+ * already the field.
+ */
+function openLabelFlow(options, anchor) {
+  const place = openLabelField(options, anchor);
+  const input = openDialog.querySelector("#noteText");
+
+  const apply = () => {
+    const text = input ? input.value : "";
+
+    close();
+
+    options.onApply?.(text);
+  };
+
+  const cancel = () => {
+    close();
+
+    options.onCancel?.();
+  };
+
+  attachKeyHandling(openDialog, { multiline: false, apply, cancel });
+
+  let finished = false;
+
+  const outside = (event) => {
+    if (
+      finished ||
+      openDialog?.contains(event.target) ||
+      symbolPickerContains(event.target)
+    ) {
+      return;
+    }
+
+    finished = true;
+
+    apply();
+  };
+
+  stopOutsidePress = () => {
+    globalThis.document.removeEventListener("pointerdown", outside, true);
+  };
+
+  globalThis.document.addEventListener("pointerdown", outside, true);
+
+  if (typeof options.cameraSignal === "function") {
+    stopFollowing = enggInlineEntry.followCamera(options.cameraSignal, place);
+  }
+
+  place();
+  focusField(input);
+
+  return openDialog;
+}
+
+/*
  * THE INLINE PROMPT.
  *
  *   options.anchor        a DOMRect-like point to hang on (window pixels)
@@ -332,6 +468,10 @@ function createPreview(object) {
  */
 function openInline(options, anchor) {
   const multiline = options.multiline !== false;
+
+  if (options.labelField === true) {
+    return openLabelFlow(options, anchor);
+  }
 
   const placeholder =
     options.placeholder || (multiline ? "Enter note" : "Enter text");
@@ -493,7 +633,29 @@ function openInline(options, anchor) {
  * resolvable position (or a page with no canvas) falls back to it, because a
  * prompt anchored to a guessed point is worse than a centred one.
  */
-/* A note is edited on its own canvas location, with no separate prompt. */
+/*
+ * ============================================================
+ * THE IN-PLACE TEXT EDITOR
+ * ============================================================
+ *
+ * A note is edited WHERE IT IS WRITTEN - the field sits over the drawing at the
+ * note's own anchor, in the note's own type, and looks like the text rather
+ * than like a form:
+ *
+ *   - TRANSPARENT background, so the sheet shows through it;
+ *   - the rendered note's font family, size, weight, italic, underline, line
+ *     spacing and alignment, and its colour (the stylesheet uses `currentColor`);
+ *   - only a subtle boundary and the caret while editing - the boundary is the
+ *     editor's own box and disappears with it when the text is committed, so no
+ *     textbox outline is left in the drawing;
+ *   - the box GROWS with what is typed, in width and in lines, so a paragraph
+ *     is never written through a one-line window.
+ *
+ * WHILE IT IS OPEN THE CANVAS MUST NOT STEAL ITS KEYS. Every key that starts in
+ * the field is stopped from reaching the drawing's shortcut handler, and every
+ * press inside it is stopped from reaching the canvas - so typing is typing, and
+ * panning or arming a tool waits until the entry is finished.
+ */
 function openCanvasText(options) {
   const host = document.createElement("div");
   host.className = "drawing-canvas-text-editor";
@@ -506,24 +668,41 @@ function openCanvasText(options) {
   input.placeholder = "";
   input.value = options.text || "";
   input.rows = 1;
+  input.spellcheck = false;
+  input.autocomplete = "off";
+  input.wrap = "off";
   host.append(input);
-  attachTextSymbols(host);
+
+  /*
+   * THE SYMBOL BUTTON IS NOT REPEATED HERE. Special Symbols lives in the Tools
+   * menu now, and it inserts at THIS field's caret because the field is what
+   * has focus.
+   */
   document.body.append(host);
   openDialog = host;
   let finished = false;
+
   const place = () => {
     const at = enggInlineEntry.clientPointForObject(options.object, {state:options.state});
     if (!at) return;
     const zoom = options.state?.camera?.zoom || 1;
     const typography = noteTextStyle(options.object?.style);
     const font = noteFontPixels(options.object?.style, zoom);
-    const lines = input.value.split("\n");
-    const width = Math.max(options.object?.annotateKind === "callout" ? 24 : 140, noteTextWidth(input.value, typography, font) + 12);
-    const height = Math.max(font * typography.lineSpacing, lines.length * font * typography.lineSpacing) + 6;
+    const lines = String(input.value || " ").split("\n");
+
+    /*
+     * THE BOX FOLLOWS THE TEXT. One empty line still gets a caret's worth of
+     * room, and the width tracks the longest line so a wide word is not clipped
+     * while it is being typed.
+     */
+    const width = Math.max(120, noteTextWidth(input.value || " ", typography, font) + 14);
+    const height = Math.max(font * typography.lineSpacing, lines.length * font * typography.lineSpacing) + 8;
     const align = typography.align;
     at.x += typography.indent * 2.4 * zoom;
     host.style.left = `${at.x - (align === "center" ? width/2 : align === "right" ? width : 0) - 3}px`;
-    host.style.top = `${at.y - height/2}px`;
+
+    /* The anchor is the text's BASELINE, so the field is lifted by one line. */
+    host.style.top = `${at.y - height + font * 0.2}px`;
     host.style.width = `${width}px`;
     host.style.height = `${height}px`;
     input.style.fontSize = `${font}px`;
@@ -533,6 +712,9 @@ function openCanvasText(options) {
     input.style.fontStyle = typography.italic ? "italic" : "normal";
     input.style.textDecoration = typography.underline ? "underline" : "none";
     input.style.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
+    input.style.color = /^#[0-9a-f]{6}$/i.test(String(options.object?.style?.stroke || ""))
+      ? options.object.style.stroke
+      : "var(--datum-ink)";
   };
   const finish = (cancel = false) => {
     if (finished) return;
@@ -546,9 +728,23 @@ function openCanvasText(options) {
   input.addEventListener("input", () => { options.onInput?.(input.value); place(); });
   input.addEventListener("keydown", event => {
     event.stopPropagation();
+
+    /*
+     * ENTER COMMITS A CALLOUT'S SHORT TEXT; A NOTE MAY BE SEVERAL LINES.
+     *
+     * A balloon holds a name or a number, so Enter finishes it - that is the
+     * key a student reaches for. A note is prose, and there Enter has to keep
+     * meaning "new line": Ctrl+Enter (or Cmd+Enter) commits it. Escape is the
+     * way out of either, and it never deletes the object being edited.
+     */
     if (event.key === "Escape") { event.preventDefault(); finish(true); }
-    else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); finish(); }
+    else if (
+      event.key === "Enter" &&
+      (options.object?.annotateKind === "callout" ? !event.shiftKey : event.ctrlKey || event.metaKey)
+    ) { event.preventDefault(); finish(); }
   });
+  host.addEventListener("keydown", event => event.stopPropagation());
+  host.addEventListener("keyup", event => event.stopPropagation());
   host.addEventListener("pointerdown", event => event.stopPropagation());
   const outside = event => { if (!host.contains(event.target) && !symbolPickerContains(event.target)) finish(); };
   document.addEventListener("pointerdown", outside, true);
@@ -556,7 +752,13 @@ function openCanvasText(options) {
   input.addEventListener("blur", () => { if (!isSymbolPickerOpen()) finish(); });
   if (typeof options.cameraSignal === "function") stopFollowing = enggInlineEntry.followCamera(options.cameraSignal, place);
   place();
-  input.focus();
+  /*
+   * THE CARET GOES AFTER THE EXISTING TEXT, not in front of it: reopening a
+   * written annotation to add to it should not begin by typing over its first
+   * word. A balloon still selects all of its number, which is one short token.
+   */
+  focusField(input);
+
   if (options.object?.annotateKind === "callout") input.select();
   else input.setSelectionRange(input.value.length, input.value.length);
   return host;

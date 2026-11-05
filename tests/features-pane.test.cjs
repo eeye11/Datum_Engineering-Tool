@@ -140,7 +140,13 @@ const setValue = (element, value) => {
   renderFeatures();
 
   check("the header names the object", body.querySelector(".dfp-header-name")?.textContent === line.name, body.querySelector(".dfp-header-name")?.textContent);
-  check("a Line heading appears", Boolean(group("line")), body.innerHTML.slice(0, 200));
+  /*
+   * THE ARROW ROWS SIT IN APPEARANCE NOW. A line's two heads are part of how it
+   * LOOKS, next to its line style and weight - not a section of their own - so
+   * the panel has the three sections the specification names and the arrow
+   * controls inside Appearance.
+   */
+  check("a Line heading appears", Boolean(group("appearance")), body.innerHTML.slice(0, 200));
   check("Line style shows the object's own value", field("lineType")?.value === "solid");
   check("Begin Arrow and End Arrow are two independent controls", Boolean(field("arrowStart")) && Boolean(field("arrowEnd")));
   check("the End Arrow shows the stored Filled Arrow", field("arrowEnd")?.value === "filled", field("arrowEnd")?.value);

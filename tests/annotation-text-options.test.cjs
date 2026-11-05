@@ -4,13 +4,16 @@ const {bootApp,whenReady}=require('./helpers/boot-app.cjs');
 const {locate}=require('./helpers/source-path.cjs');
 const {window,document,error}=bootApp();if(error)throw error;
 before(whenReady);after(()=>window.close());
-test('symbol insertion replaces selected text and emits normal edit events',()=>{
- const {attachSymbolInsert}=require(locate('text-symbol-insert.js'));
+test('Special Symbols replaces selected text at the caret and emits normal edit events',async()=>{
+ const {openSpecialSymbols,insertAtCaret}=await import('../src/shared/ui/editors/special-symbols-insert.js');
  const input=document.createElement('textarea');document.body.append(input);
- input.value='angle = value';input.setSelectionRange(8,13);
+ input.value='angle = value';input.focus();input.setSelectionRange(8,13);
  let edits=0;input.addEventListener('input',()=>edits++);
- attachSymbolInsert(input);input.nextElementSibling.click();
- document.querySelector('[data-symbol-id="theta"]').click();
+
+ /* The command is the menu's; there is no per-field button beside the input. */
+ assert.equal(typeof openSpecialSymbols,'function');
+ assert.equal(input.nextElementSibling,null,'no symbol button is attached to a text field');
+ insertAtCaret(input,'θ');
  assert.equal(input.value,'angle = θ');assert.equal(edits,1);
  assert.equal(input.selectionStart,input.value.length);input.remove();
 });

@@ -676,9 +676,17 @@ function createGeometryObject(type, geometry, options = {}) {
         "section-plane": "Section Plane"
     }[type] || type;
 
+    /*
+     * AN ABSENT NAME FALLS BACK TO THE TYPE'S, AN EXPLICITLY EMPTY ONE STAYS
+     * EMPTY. `""` is how a tool says "the student has not named this yet", and
+     * the Features Name field must open blank rather than showing a type name
+     * the student never typed.
+     */
+    const name = typeof options.name === "string" ? options.name : typeLabel;
+
     return {
         id: options.id || `${type}-${generatedId}`,
-        name: options.name || typeLabel,
+        name,
         type,
         geometry,
         style: createStyle(options.style),
@@ -1841,6 +1849,23 @@ function newFeatureId(
  * existing `const id = addObject(...)` still works.
  */
 function addObject(state, object) {
+    /*
+     * AN UNNAMED OBJECT IS STILL AN OBJECT, AND ITS ID IS WHAT MATTERS.
+     *
+     * The Name field starts EMPTY for every object whose name the student has
+     * not supplied, and an empty name is stored as the empty string - the
+     * numbering below is for features that carry a type name and are told apart
+     * by it. An object with no name is told apart by its `id`, which is minted
+     * here exactly as it is for every other insertion.
+     */
+    if (typeof object.name === "string" && object.name.trim() === "") {
+        if (!object.id) object.id = newFeatureId(object.type);
+
+        state.objects.push(object);
+
+        return object;
+    }
+
     // Every insertion needs an identity, including a clipboard copy whose
     // requested name is still available and takes the early return below.
     if (!object.id) object.id = newFeatureId(object.type);

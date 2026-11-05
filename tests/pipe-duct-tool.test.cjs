@@ -243,7 +243,7 @@ test("the Features tab has exactly Object, Appearance and Transform, in that ord
   );
 });
 
-test("the Object section holds Name and Fix, and no Visibility", () => {
+test("the Object section holds Name, Visibility and Fix", () => {
   ready();
 
   const editor = require(locate("features-editor.js"));
@@ -254,13 +254,16 @@ test("the Object section holds Name and Fix, and no Visibility", () => {
 
   assert.deepEqual(
     objectGroup.fields.map((field) => field.key),
-    ["fixed", "name"]
+    ["name", "visibility", "fixed"]
   );
 
   const html = editor.featuresMarkupForSelection([run]);
 
   assert.ok(/data-feature-field="name"/.test(html), "Name must be editable");
-  assert.ok(!/[Vv]isib/.test(html), "Pipe / Duct must have no Visibility control");
+  assert.ok(
+    /data-feature-field="visibility"/.test(html),
+    "Visibility is the same property the Objects panel's eye icon writes"
+  );
 });
 
 test("the Appearance section holds Line Style, Outline Colour, Thickness and Fill", () => {
@@ -817,10 +820,12 @@ test("a name change updates the identifying comment but not the id", () => {
   assert.equal(run.id, id);
 });
 
-test("an empty name is refused rather than blanking the identifier", () => {
+test("a name can be cleared - it is the identifier that is never blanked", () => {
   const m = modules();
   const run = m.pipe.createPipeDuct({ x: 0, y: 0 }, { x: 100, y: 0 });
+  const id = run.id;
 
-  assert.equal(m.schema.writeField(run, "name", "   "), false);
-  assert.ok(run.name);
+  assert.equal(m.schema.writeField(run, "name", "   "), true);
+  assert.equal(run.name, "", "the Name field is genuinely optional and may be emptied");
+  assert.equal(run.id, id, "the object's identity is untouched by its name");
 });

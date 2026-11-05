@@ -1419,7 +1419,7 @@ const ALIASES = {
     "shear-force-diagram": ["sfd", "shear", "shear force diagram"],
     "bending-moment-diagram": ["bmd", "bending moment", "moment diagram"],
     "axial-force-diagram": ["afd", "axial force", "normal force"],
-    dimension: ["dimension", "measure size", "measurement"],
+    dimension: ["length", "dimension", "measure size", "measurement"],
     note: ["note", "text", "text box", "writing"],
     label: ["label", "tag", "name"],
     leader: ["leader", "leader line", "pointer"],

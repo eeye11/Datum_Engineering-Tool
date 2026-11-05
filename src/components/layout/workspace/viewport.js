@@ -198,6 +198,87 @@ function applyFittedCamera(
 }
 
 /*
+ * ============================================================
+ * THE VIEWPORT'S TWO TOUCH PRIMITIVES
+ * ============================================================
+ *
+ * A two-finger pan and a pinch are written here, ONCE, as two small functions
+ * over the camera - so the gesture layer never does camera arithmetic and a
+ * mouse zoom cannot disagree with a pinch about the limits.
+ *
+ * NEITHER OF THEM TOUCHES THE DRAWING. They write `zoom`, `panX` and `panY` and
+ * nothing else: no geometry, no selection, no snapping, no history. That is
+ * what makes navigation safe to interleave with an editing session, and why an
+ * undo can never appear because of a pan.
+ */
+
+/*
+ * PAN BY A SCREEN-SPACE DRAG, in CSS pixels.
+ *
+ * A finger moving right moves the sheet right, which means the CAMERA moves
+ * left - the same sign convention the Pan tool already uses.
+ */
+export function panByScreenDelta(deltaX, deltaY) {
+    if (
+        !Number.isFinite(deltaX) ||
+        !Number.isFinite(deltaY)
+    ) {
+        return false;
+    }
+
+    const scale =
+        enggDrawingState.BASE_PIXELS_PER_UNIT *
+        Math.max(drawingState.camera.zoom, 1e-6);
+
+    enggDrawingState.panCamera(
+        drawingState,
+
+        drawingState.camera.panX - deltaX / scale,
+
+        drawingState.camera.panY + deltaY / scale
+    );
+
+    syncActiveSheetViewport();
+
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * PINCH ZOOM, ANCHORED ON A SCREEN POINT.
+ *
+ * The point under the fingers must stay under the fingers, so this is
+ * `zoomAtCanvasPoint` - the SAME function the wheel, the menu and the zoom
+ * buttons use - given a synthetic event carrying the gesture's midpoint. Using
+ * it rather than re-deriving the anchor arithmetic is what keeps a pinch and a
+ * wheel-zoom anchored identically, and what keeps the state model's clamping
+ * in force: a pinch cannot exceed the supported zoom range.
+ */
+export function zoomAtScreenPoint(
+    nextZoom,
+    screenPoint
+) {
+    if (
+        !screenPoint ||
+        !Number.isFinite(screenPoint.x) ||
+        !Number.isFinite(screenPoint.y)
+    ) {
+        return false;
+    }
+
+    zoomAtCanvasPoint(
+        nextZoom,
+        {
+            clientX: screenPoint.x,
+            clientY: screenPoint.y
+        }
+    );
+
+    return true;
+}
+
+/*
  * FIT WHOLE PAGE.
  *
  * Every visible feature on the ACTIVE SHEET, and nothing else. Not

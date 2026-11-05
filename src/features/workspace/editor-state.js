@@ -145,6 +145,32 @@ export const editorState = {
     panSession: null,
 
     /*
+     * ========================================================
+     * THE POINTER'S OWN STATE
+     * ========================================================
+     *
+     * `penInRange` - a stylus is hovering over or touching the canvas. Read by
+     * the palm policy: while a pen is present, an incidental touch is ignored
+     * rather than allowed to draw, select or interrupt. It is cleared on the
+     * pen's release and on its leaving the canvas, so touch works again at once.
+     *
+     * `capturedPointerId` - the pointer this surface has captured for an active
+     * gesture, so a release, a cancel or a lost capture knows exactly which id
+     * to hand back. Pointer capture is what keeps a drag alive when the pointer
+     * travels outside the canvas, and the id is kept here rather than on a
+     * session because the capture belongs to the SURFACE, not to a tool.
+     *
+     * `freeformTrace` - the drag-to-draw session of the Freeform Polygon. Null
+     * for every other tool and for the polygon's click workflow, so the two
+     * ways of drawing a polygon can never be running at once.
+     */
+    penInRange: false,
+
+    capturedPointerId: null,
+
+    freeformTrace: null,
+
+    /*
      * The pending expiry of a held snap guideline.
      *
      * A guideline is kept up briefly after the cursor leaves its

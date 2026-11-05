@@ -147,10 +147,10 @@ export function handleCanvasClick(
     }
 
     // Also cover clicks delivered without a pointerdown creation session.
-    // Select the note before a click-to-create tool consumes its first point.
+    // Select the note before a click-to-create tool consumes its first point -
+    // the tool stays armed, so editing text never disarms the pencil.
     if (drawingState.interaction.phase === "idle" && ["line", "rectangle", "circle"].includes(drawingState.activeTool) &&
         isEditableAnnotate(objectAtPoint(resolution.rawPointerPoint || canvasPointFromEvent(event, false)))) {
-        activateTool("select");
         selectFromCanvasClick(event);
         return;
     }
@@ -292,35 +292,37 @@ export function handleCanvasClick(
 
     /*
      * ========================================================
-     * A BARE CLICK WITH A ONE-GESTURE TOOL LEAVES THE TOOL
+     * A CLICK ON EMPTY CANVAS ENDS THE TOOL - NOTHING ELSE DOES
      * ========================================================
      *
-     * A Beam and an Arrow are made by ONE press-drag-release - their gesture
-     * arrives through the drag path, which has already classified it on release
-     * (see creation-drag.js `finishCreationClick`). What remains here is the
-     * click that reaches this router WITHOUT a creation session behind it - an
-     * edge case such as a release whose session was already dropped - and it is
-     * answered the same way: back to Select, selecting whatever was under the
-     * cursor.
+     * A drag that created a feature leaves the tool ARMED, so the next one can
+     * be drawn without re-arming it: that is the whole point of a drawing tool.
+     * The tool ends on a deliberate act of "I am done" - a click or tap on
+     * EMPTY canvas, the tool's own button, Escape, or choosing another tool.
      *
-     * IT IS PLACED BEFORE the construction branch below, because that branch
-     * would otherwise consume the click as a first point. It is placed AFTER the
-     * dimension, annotate and animation handlers above, because a tool with an
-     * EXPLICIT REQUIRED INPUT - a dimension collecting references, a label or a
-     * leader attaching, a Resultant being told which force - must keep receiving
-     * the click. The classification decides this; see tool-classification.js.
+     * So this only fires when the press landed on NOTHING. A click on an
+     * existing feature selects it through the branch below and keeps the tool;
+     * a click on empty canvas leaves the tool and clears the selection, exactly
+     * as Select would.
      *
-     * A TOOL MID-WAY THROUGH ITS OWN STEPS IS NOT "FINISHED". A Triangle waiting
-     * for its third corner, a Polygon for its side count, an Arc for its next
-     * point, a load for its span - those clicks are real decisions, so they go
-     * to the construction pipeline below exactly as before.
+     * A TOOL MID-WAY THROUGH ITS OWN STEPS IS NOT "FINISHED" EITHER. A Triangle
+     * waiting for its third corner, a Polygon for its side count, an Arc for its
+     * next point, a load for its span - those clicks are real decisions, so they
+     * go to the construction pipeline below exactly as before.
      */
     if (
         shouldExitToSelectOnClick(
             drawingState.activeTool
         ) &&
         drawingState.interaction.phase ===
-            "idle"
+            "idle" &&
+        !objectAtPoint(
+            resolution.rawPointerPoint ||
+                canvasPointFromEvent(
+                    event,
+                    false
+                )
+        )
     ) {
         exitToolToSelect(
             event
@@ -353,13 +355,14 @@ export function handleCanvasClick(
             event
         )
     ) {
-        if (
-            drawingState.activeTool !==
-            "select"
-        ) {
-            activateTool("select");
-        }
-
+        /*
+         * THE CLICK SELECTS; THE TOOL STAYS ARMED.
+         *
+         * A click on an existing feature is a SELECTION, not an end to the
+         * drawing: a student who selects a beam to check a dimension still wants
+         * the Line tool when they come back. The tool ends only on empty canvas,
+         * Escape, its own button or another tool.
+         */
         selectFromCanvasClick(
             event
         );
@@ -564,9 +567,9 @@ export function handleCanvasClick(
             event
         )
     ) {
-        if (drawingState.activeTool !== "select") {
-            activateTool("select");
-        }
+        selectFromCanvasClick(
+            event
+        );
         selectFromCanvasClick(
             event
         );

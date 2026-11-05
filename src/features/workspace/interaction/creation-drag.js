@@ -76,7 +76,7 @@ import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool, i
 import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
-import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
+import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
@@ -95,6 +95,7 @@ import {
     commitElbowGesture
 } from "./pipe-duct-tool.js";
 import { JUNCTION_PHASE, commitJunctionGesture, junctionGesturePreview } from "./junction-tool.js";
+import { beginFreeformTrace, finishFreeformTrace, moveFreeformTrace } from "./freeform-trace.js";
 import {
     beginFlowArrowSession,
     beginFreeArrowSession,
@@ -254,6 +255,19 @@ const PROGRESSIVE_TOOLS = [
 const SINGLE_POINT_DRAG_TOOLS = [
     "point"
 ];
+
+/*
+ * THE DYNAMICS TOOLS THAT ARE FINISHED BY ONE CLICK.
+ *
+ * A Particle has no extent to drag and an Angular Vector is placed at its
+ * centre with a default radius and sweep. A Rigid Body joined them until it
+ * became a drag-sized rectangle - it is now a span tool, so it is deliberately
+ * absent here.
+ */
+const CLICK_PLACED_DYNAMICS_TOOLS = new Set([
+    "dynamics-particle",
+    "dynamics-angular-vector"
+]);
 
 
 /*
@@ -423,6 +437,18 @@ export function isDragCreationTool(
     }
 
     /*
+     * THE FREEFORM POLYGON IS THE ONE PROGRESSIVE TOOL THAT ALSO DRAWS BY DRAG.
+     *
+     * It is asked BEFORE the progressive branch below, because that branch is
+     * what keeps a flow tool on its click workflow - and the polygon is the one
+     * flow tool that now has a gesture of its own as well. Everything about it
+     * is decided in its own module; this only says the press belongs to it.
+     */
+    if (toolId === "freeform-polygon") {
+        return true;
+    }
+
+    /*
      * The progressive tools keep their own click-driven construction.
      */
     if (PROGRESSIVE_TOOLS.includes(toolId)) {
@@ -463,6 +489,20 @@ export function isDragCreationTool(
         DYNAMICS_ANGLE_TOOLS[toolId] ||
         DYNAMICS_BOX_TOOLS[toolId]
     ) {
+        return true;
+    }
+
+    /*
+     * THE SCHEMATIC TOOLS HAVE THE SAME TWO GESTURES AS EVERYTHING ELSE.
+     *
+     * A schematic drag tool - the vessel, the two profiles, the section trace -
+     * takes its whole object from one press-drag-release, and a schematic click
+     * tool - an inline symbol, the level, the direction arrow - is placed on the
+     * press itself. Both are told apart below, in their own sessions; here they
+     * only have to be recognised, or the press falls straight through to the
+     * selection path and the tool creates nothing at all.
+     */
+    if (SCHEMATIC_DRAG_TOOLS[toolId] || SCHEMATIC_CLICK_TOOLS.includes(toolId)) {
         return true;
     }
 
@@ -561,11 +601,11 @@ export function beginCreationDrag(
         phase === "idle";
 
     // Written notes are editing targets, including a cycle's temperature
-    // labels. An armed geometry tool must not start a shape through the text.
+    // labels. An armed geometry tool must not start a shape through the text -
+    // and the tool is KEPT armed, so editing a label never disarms the pencil.
     if (idle && ["line", "rectangle", "circle"].includes(drawingState.activeTool)) {
         const pointed = objectAtPoint(canvasPointFromEvent(event, false));
         if (isEditableAnnotate(pointed)) {
-            activateTool("select");
             return false;
         }
     }
@@ -881,6 +921,32 @@ export function beginCreationDrag(
     }
 
     /*
+     * ========================================================
+     * THE FREEFORM POLYGON'S SECOND WAY OF BEING DRAWN
+     * ========================================================
+     *
+     * A press with the Freeform Polygon armed arms a TRACE session - press,
+     * trace, release - beside the click workflow it has always had. The session
+     * records nothing until the pointer has actually travelled, so a press that
+     * does not move is still an ordinary click placing a vertex. See
+     * freeform-trace.js for the whole rule.
+     */
+    if (drawingState.activeTool === "freeform-polygon") {
+        if (beginFreeformTrace(event)) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                freeformTrace: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /*
      * A press that is neither the start of a feature nor the next point of
      * one belongs to whatever else is running - a load being built, a
      * truss, a dimension - and is left to that.
@@ -892,6 +958,45 @@ export function beginCreationDrag(
     ) {
         return false;
     }
+    /*
+     * A DYNAMICS SPAN OR BOX TOOL SHOWS ITS GHOST AS SOON AS IT IS ARMED - see
+     * the block above, which sets the phase on the press.
+     */
+    if (
+        idle &&
+        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool])
+    ) {
+        /*
+         * THE PHASE IS SET WITH NO ANCHOR YET, so the ghost appears the moment
+         * the tool is used rather than only after the drag has travelled. The
+         * anchor is filled in by the drag (see moveCreationDrag); a press that
+         * never travels is still an ordinary click, which the browser's own
+         * `click` handles through the normal pipeline.
+         */
+        const press = resolvePointerEvent(event);
+
+        enggDrawingState.setInteraction(drawingState, {
+            ...press,
+            phase: "dynamics-span",
+            toolId: drawingState.activeTool,
+            startPoint: null,
+            currentPoint: press.effectiveConstructionPoint,
+            points: []
+        });
+    } else if (idle && DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) {
+        const press = resolvePointerEvent(event);
+
+        enggDrawingState.setInteraction(drawingState, {
+            ...press,
+            phase: "dynamics-angle",
+            toolId: drawingState.activeTool,
+            startPoint: null,
+            currentPoint: press.effectiveConstructionPoint,
+            points: []
+        });
+    }
+
     if (SINGLE_POINT_DRAG_TOOLS.includes(drawingState.activeTool)) {
         const onExisting =
             idle && pressSelectsExistingObject(event);
@@ -926,7 +1031,16 @@ export function beginCreationDrag(
      * shared Point tool does. Named here rather than added to that list so
      * the Dynamics library keeps one source of its own tool kinds.
      */
-    if (DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool]) {
+    /*
+     * A Rigid Body is drawn between two corners, so it is not a click-placement
+     * tool any more: only the particle and the angular vector are, and both
+     * are named rather than derived from `placement`, which the body also used
+     * to share.
+     */
+    if (
+        DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool] &&
+        CLICK_PLACED_DYNAMICS_TOOLS.has(drawingState.activeTool)
+    ) {
         const onExisting =
             idle && pressSelectsExistingObject(event);
 
@@ -1157,10 +1271,16 @@ export function finishCreationClick(session) {
     }
 
     /*
-     * A CLICK, NOT A DRAG: the canvas goes back to Select. The point under the
-     * pointer is chosen against the RAW position through the shared hit test, so
-     * a click on a feature selects it and a click on nothing clears the
-     * selection - exactly what the same click would do with Select active.
+     * A CLICK, NOT A DRAG: the click is answered like a Select click - the
+     * feature under the press is selected, or the selection is cleared - and the
+     * ARMED TOOL STAYS ARMED.
+     *
+     * It used to switch to Select, so every stray click ended the tool and the
+     * student had to re-arm it before drawing the next feature. The tool now
+     * ends only on a deliberate act: a click or tap on EMPTY canvas, the tool
+     * button again, Escape, or choosing another tool. Those are the same rules
+     * the canvas already applies to every tool (see `shouldExitToSelectOnClick`
+     * and the Escape handler), so one gesture is never interpreted twice.
      */
     const hit =
         session.pressPoint
@@ -1168,8 +1288,6 @@ export function finishCreationClick(session) {
                   session.pressPoint
               )
             : null;
-
-    activateTool("select");
 
     enggDrawingState.selectObject(
         drawingState,
@@ -1181,6 +1299,20 @@ export function finishCreationClick(session) {
     renderCurrentDrawing();
 
     return true;
+}
+
+/*
+ * The point a traced polygon records, resolved through the shared pipeline so a
+ * trace can still snap to existing geometry - the same candidates, tolerance and
+ * indicators every other construction uses.
+ */
+function freeformTracePoint(event) {
+    const resolution = resolvePointerEvent(event);
+
+    return (
+        resolution.rawPointerPoint ||
+        null
+    );
 }
 
 /*
@@ -1204,6 +1336,20 @@ export function moveCreationDrag(event) {
     const session = editorState.creationDrag;
 
     if (!session) {
+        return;
+    }
+
+    /*
+     * A TRACED FREEFORM POLYGON FOLDS ITS POINTS AS THE POINTER MOVES.
+     *
+     * Its preview is the ordinary polygon preview, so the points are published
+     * into the interaction every frame - through the same commit and the same
+     * renderer a clicked polygon uses. Nothing here knows anything else about
+     * the polygon's geometry.
+     */
+    if (session.freeformTrace) {
+        moveFreeformTrace(event, freeformTracePoint(event));
+
         return;
     }
 
@@ -1566,6 +1712,24 @@ export function finishCreationDrag(
         return false;
     }
 
+    /*
+     * A TRACED POLYGON IS CLOSED ON RELEASE.
+     *
+     * The release is the final vertex joined back to the first, committed
+     * through the same polygon commit the click workflow uses. A press that
+     * never travelled returns false, so the browser's click places the vertex
+     * exactly as before - and the session is dropped once, so a release can
+     * never close the same polygon twice.
+     */
+    if (session.freeformTrace) {
+        editorState.creationDrag = null;
+
+        return finishFreeformTrace(
+            event,
+            freeformTracePoint(event)
+        );
+    }
+
     // A pipe's release is authoritative: coalesced or missing move events
     // must not turn a real drag into a click that silently draws nothing.
     if (session.pipeDuct && !session.moved) {
@@ -1748,9 +1912,17 @@ export function finishCreationDrag(
                 snapGeometry: []
             });
             renderCurrentDrawing();
-        } else {
-            activateTool("select");
         }
+
+        /*
+         * THE TOOL STAYS ARMED AFTER A RUN IS COMMITTED.
+         *
+         * A path is drawn as a sequence of legs, so the next leg must follow the
+         * release of this one with no second press on the button. The run's far
+         * end is remembered as the next start (see `resolveRouteStart`), so a
+         * continuous path still connects; the tool ends on a click on empty
+         * canvas, Escape, its own button or another tool.
+         */
 
         return true;
     }

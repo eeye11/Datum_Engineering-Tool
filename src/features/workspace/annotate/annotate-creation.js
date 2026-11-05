@@ -394,28 +394,69 @@ export function commitAnnotate(options) {
    * move where the text ends up.
    */
   if (isEditableAnnotate(object) && object.metadata?.thermodynamicsKind !== "work-arrow") {
-    void import("../interaction/canvas-click.js").then((module) => {
-      module.openNoteEditorFor?.(object, nodePoint);
-    });
+    /*
+     * THE LIVE OBJECT, NOT THE FACTORY'S COPY.
+     *
+     * `addObject` may store a COPY - it renames and numbers the feature before
+     * it inserts it - so the object this function still holds is not
+     * necessarily the one in the document. The editor looks its feature up in
+     * the drawing to write to it and to place its box, so it is handed the
+     * STORED object, found by the stable id. Without this the box was opened on
+     * an object the model had never heard of and silently refused to appear.
+     */
+    const stored =
+      drawingState.objects.find((candidate) => candidate.id === object.id) || object;
+
+    openPlacedTextEditor(stored, nodePoint);
   }
 
   return object;
 }
 
 /**
- * Put the armed tool back to Select.
+ * Say that a symbol was placed, and KEEP THE TOOL ARMED.
  *
- * Used by the Symbol tool, whose workflow is ONE placement per operation: after
- * a symbol is placed the tool hands back to Select so a stray click cannot place
- * a second. `setActiveTool` is the one place the active tool changes, so this
- * behaves exactly as a click on the Select button does.
+ * The Symbol tool used to hand back to Select after one placement. Every tool
+ * in DAETUM ends on a deliberate act - a click on empty canvas, its own button,
+ * Escape, or another tool - and placing a feature is not one of them, so a
+ * second symbol is now placed by the same click that placed the first.
  */
 function returnToSelect() {
-  enggDrawingState.setActiveTool(drawingState, "select");
-
-  setToolMessage("Symbol placed - Select is active");
+  setToolMessage("Symbol placed - pick the next symbol to place");
 
   renderCurrentDrawing();
+}
+
+/**
+ * Open the on-canvas write box for a just-placed annotation.
+ *
+ * THE MODULE CYCLE STAYS OPEN, AND THE CALL IS NEVER ONE STEP LATE.
+ *
+ * `canvas-click.js` already imports this module, so importing it back at the
+ * top would close the loop at load time. Instead the module is loaded lazily
+ * ONCE, and its function reference is COPIED out and used directly - an ESM
+ * namespace object is live and may be inspected before it is initialised, so
+ * reading `canvasClickModule.openNoteEditorFor` can be undefined even when the
+ * module is fully loaded. The copy cannot be.
+ */
+let openNoteEditorFor = null;
+
+void import("../interaction/canvas-click.js").then((module) => {
+  openNoteEditorFor = module.openNoteEditorFor || null;
+});
+
+function openPlacedTextEditor(object, nodePoint) {
+  if (openNoteEditorFor) {
+    openNoteEditorFor(object, nodePoint);
+
+    return;
+  }
+
+  void import("../interaction/canvas-click.js").then((module) => {
+    openNoteEditorFor = module.openNoteEditorFor || null;
+
+    openNoteEditorFor?.(object, nodePoint);
+  });
 }
 
 function annotatePlacedMessage(kind) {

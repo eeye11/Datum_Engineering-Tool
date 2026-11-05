@@ -130,7 +130,7 @@ function contextMenuItem(
     `;
 }
 
-function openFeatureContextMenu(
+export function openFeatureContextMenu(
     x,
     y,
     hasSelection

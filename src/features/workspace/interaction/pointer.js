@@ -297,6 +297,24 @@ function resolvePointerPoint(
         drawingState.activeTool === "pipe-duct" ||
         drawingState.interaction.fluidsTool === "pipe-duct";
 
+    /*
+     * ========================================================
+     * A PIPE / DUCT RUN IS NOT CONSTRAINED TO THE HORIZONTAL
+     * ========================================================
+     *
+     * This resolver used to force every run onto its start's horizontal axis
+     * (`{ x: point.x, y: pipeStart.y }`), which made a level pipe the only one
+     * that could be drawn: a drag downwards, upwards or diagonally all produced
+     * a flat run, and the release committed the same flattened end.
+     *
+     * There is no horizontal rule in the pipe model - `enggPipeDuct` builds its
+     * walls from the centreline's own PERPENDICULAR, so a run in any direction is
+     * already valid and its width stays square to it. Horizontal and vertical
+     * are SNAPS the shared inference offers when the cursor is near them, and
+     * the cursor is otherwise left where the student put it. Because the preview
+     * and the release both read THIS function, they cannot disagree.
+     */
+
     if (isLine || isRoute) {
         /*
          * A truss anchors inference on the point its next member
@@ -690,35 +708,12 @@ function resolvePointerPoint(
 export function resolvePointerEvent(
     event
 ) {
-    const resolution = resolvePointerPoint(
+    return resolvePointerPoint(
         canvasPointFromEvent(
             event,
             false
         )
     );
-
-    const pipeStart = drawingState.activeTool === "pipe-duct" &&
-        (editorState.creationDrag?.pipeDuct
-            ? editorState.creationDrag.start
-            : drawingState.interaction.routeSegmentStart);
-    if (!pipeStart) return resolution;
-
-    // Lock the run to the start's horizontal axis in both the preview and
-    // the release. This is a drawing constraint, independent of snap settings.
-    const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
-    const constrained = { x: point.x, y: pipeStart.y };
-    if (point.y !== constrained.y) {
-        return {
-            ...resolution,
-            effectiveConstructionPoint: constrained,
-            snappedPoint: null,
-            inferredPoint: null,
-            snapCandidate: null,
-            inference: null,
-            guideline: null
-        };
-    }
-    return { ...resolution, effectiveConstructionPoint: constrained };
 }
 
 /*

@@ -9,8 +9,6 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import { drawingState } from "../editor-state.js";
-import { STATICS_CHILD_TOOLS } from "../statics/statics-tools.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * The snapshot is taken BEFORE the object is added, so Undo removes the
@@ -52,9 +50,16 @@ export function commitCreatedFeature(
         previous
     );
 
-    if (STATICS_CHILD_TOOLS[drawingState.activeTool]) {
-        activateTool("select");
-    }
+    /*
+     * THE TOOL STAYS ARMED AFTER A FEATURE IS COMMITTED.
+     *
+     * It used to drop back to Select for a Statics child tool, so the second
+     * Beam or the second Resultant needed the button pressed again. A tool ends
+     * on a DELIBERATE act and only then: a click or tap on empty canvas, the
+     * tool's own button, Escape, or another tool. The new feature is still
+     * selected (above), so its properties are on screen while the tool waits for
+     * the next one.
+     */
 
     return object;
 }

@@ -129,17 +129,28 @@ function markDynamics(object, toolId, metadata = null) {
  * the factory.
  */
 function particle(position, style) {
+    /*
+     * A PARTICLE IS A FILLED DISC AND NOTHING ELSE. The predicate enforced by
+     * the renderer and the writer is `style.fillMode === "solid"` and
+     * `style.fill` - so both are written here explicitly, from the style the
+     * sheet handed in, rather than inherited from a default that may have
+     * been "none". No outline is drawn: `stroke` is still stored because the
+     * Features panel offers an Outline Colour for it, but the circle itself is
+     * a fill with no pen around it.
+     */
+    const ink = style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#193335";
+
     const object = enggDrawingState.geometryFactories.particle(
         at(position),
         factoryOptions("dynamics-particle", {
             style: {
                 ...style,
-                fill: style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#193335",
+                fill: ink,
                 fillMode: "solid",
                 lineWidthCustom: true,
-                fillOpacityEnabled: true
+                fillOpacityEnabled: false
             },
-            name: nextParticleName(),
+            name: "",
             metadata: { markerRadius: DYNAMICS_SIZES.particleRadius }
         })
     );
@@ -147,77 +158,77 @@ function particle(position, style) {
     object.geometry = {
         ...(object.geometry || {}),
         markerRadius: DYNAMICS_SIZES.particleRadius,
+
+        /*
+         * THE MARKER HAS ONE SHAPE. It used to offer Filled / Open / Cross,
+         * which let the particle stop being a filled circle - the one thing
+         * the tool is defined as. The stored value is kept for source
+         * round-trips, but it is always the filled disc.
+         */
         markerStyle: "filled"
     };
 
-    const marked = markDynamics(object, "dynamics-particle", {
+    return markDynamics(object, "dynamics-particle", {
         markerRadius: DYNAMICS_SIZES.particleRadius
     });
-
-    marked.engineering = {
-        ...marked.engineering,
-        massKg: 1,
-        massUnit: "kg",
-        initialVelocity: { x: 0, y: 0 }
-    };
-
-    return marked;
 }
 
-function nextParticleName() {
-    const count = drawingState.objects.filter(
-        object => object?.engineering?.dynamicsType === "dynamics-particle"
-    ).length;
-    let suffix = "";
-    let ordinal = count;
-
-    do {
-        suffix = String.fromCharCode(65 + (ordinal % 26)) + suffix;
-        ordinal = Math.floor(ordinal / 26) - 1;
-    } while (ordinal >= 0);
-
-    return `Particle ${suffix}`;
-}
-
-function rigidBody(position, style) {
-    const center = at(position);
+/*
+ * A RIGID BODY IS DRAWN BETWEEN TWO CORNERS.
+ *
+ * The creation gesture is a press-drag-release, so the body takes its size
+ * from the gesture - `size` is `{ width, height }` in drawing units - and the
+ * two corners given are the drag's own. A click (no drag) falls back to the
+ * Statics default size centred on the point, which is what a placement with
+ * no extent means.
+ */
+function rigidBody(position, style, size = null, corner = null) {
+    const dragged = size && Number(size.width) > 0 && Number(size.height) > 0 ? size : null;
+    const width = dragged ? Number(dragged.width) : RIGID_BODY_WIDTH;
+    const height = dragged ? Number(dragged.height) : RIGID_BODY_HEIGHT;
+    const center = dragged && corner ? { x: corner.x, y: corner.y } : at(position);
     const stroke = style?.stroke || drawingState.styleDefaults?.stroke || "#193335";
-    const fill = style?.fill && style.fill !== "none" ? style.fill : stroke;
+
+    /*
+     * AN ORDINARY UNFILLED RECTANGLE, like the Rectangle tool draws.
+     *
+     * Fill starts at NONE and the centre marker is OFF: a rigid body is an
+     * outline, and both of those are choices the student can make in Features
+     * afterwards rather than decoration the tool adds for them.
+     */
     const object = enggDrawingState.geometryFactories["rigid-body"](
         {
-            x: center.x - RIGID_BODY_WIDTH / 2,
-            y: center.y + RIGID_BODY_HEIGHT / 2
+            x: center.x - width / 2,
+            y: center.y + height / 2
         },
-        RIGID_BODY_WIDTH,
-        RIGID_BODY_HEIGHT,
+        width,
+        height,
         factoryOptions("dynamics-rigid-body", {
             style: {
                 ...drawingState.styleDefaults,
                 ...style,
-                fill,
-                fillMode: "solid",
-                fillOpacityEnabled: true
+                stroke,
+                fill: "none",
+                fillMode: "none"
             },
-            name: "Rigid Body",
-            metadata: { showCenterOfMass: true }
+            name: "",
+            metadata: { showCenterOfMass: false }
         })
     );
 
     object.geometry = {
         ...object.geometry,
-        showCenterOfMass: true
+        showCenterOfMass: false
     };
 
-    const marked = markDynamics(object, "dynamics-rigid-body");
-
-    marked.engineering = {
-        ...marked.engineering,
-        massKg: 1,
-        massUnit: "kg",
-        momentOfInertiaKgM2: 0
-    };
-
-    return marked;
+    /*
+     * A BODY IS A DRAWING, NOT A SIMULATION. Mass and moment of inertia are
+     * real quantities of a real body, but this symbol does not calculate with
+     * them - so the tool does not create them, and the panel does not offer
+     * them. Nothing is removed from an object that already carries them: an
+     * older drawing keeps its stored values untouched.
+     */
+    return markDynamics(object, "dynamics-rigid-body");
 }
 
 /* ============================================================
@@ -230,22 +241,27 @@ function polarVector(tail, tip, style) {
     const dx = to.x - from.x;
     const dy = to.y - from.y;
     const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
-    const count = drawingState.objects.filter(
-        object => object?.engineering?.dynamicsType === "dynamics-polar-vector"
-    ).length;
 
+    /*
+     * NO NAME IS INVENTED. The object is named by what the type list calls it
+     * (`Polar Vector`) and distinguished by its id; the Name field on the panel
+     * starts EMPTY and stays empty until the student types one. A sequential
+     * "Polar Vector 1" would be a visible name nobody asked for.
+     */
     return {
         type: "dynamics-polar-vector",
-        name: `Polar Vector ${count + 1}`,
+        name: "",
         geometry: {
             start: from,
             end: to,
-            showAngle: false,
-            vectorRepresentation: "magnitude-angle",
-            vectorMagnitude: lengthOf(from, to),
-            vectorAngle: (angle + 360) % 360,
-            vectorUnit: "m/s",
-            attachedTo: "origin"
+
+            /*
+             * THE VECTOR'S GEOMETRY IS ITS TWO ENDS. The magnitude and the
+             * angle are DERIVED from them by the panel and the source writer -
+             * one authoritative value, two readings - and there is no stored
+             * unit or attachment to keep in step with the drawing.
+             */
+            showAngle: false
         },
         style: { arrowheadSize: 9, ...style },
         label: ""
@@ -257,13 +273,15 @@ function angularVector(centre, radiusPoint, style) {
     const requestedRadius = lengthOf(origin, at(radiusPoint));
     const radius = Math.max(1, requestedRadius || 12);
     const radiusAngle = requestedRadius ? spanAngle(origin, at(radiusPoint)) : 0;
-    const count = drawingState.objects.filter(
-        object => object?.engineering?.dynamicsType === "dynamics-angular-vector"
-    ).length;
 
+    /*
+     * A DIRECTED ARC: centre, radius, start, sweep and the way it turns. There
+     * is no angular velocity or acceleration stored - the symbol draws a
+     * rotation, it does not simulate one.
+     */
     return {
         type: "dynamics-angular-vector",
-        name: `Angular Vector ${count + 1}`,
+        name: "",
         geometry: {
             center: origin,
             radius,
@@ -275,11 +293,7 @@ function angularVector(centre, radiusPoint, style) {
             startAngle: finite(radiusAngle, 0),
             sweep: 270,
             direction: "ccw",
-            arrowHead: "filled",
-            rotationalType: "velocity",
-            magnitude: 0,
-            unit: "rad/s",
-            attachedTo: "origin"
+            arrowHead: "filled"
         },
         style: { arrowheadSize: 9, ...style },
         label: ""
@@ -572,9 +586,39 @@ const OWN_GEOMETRY_TOOLS = new Set([
     "dynamics-pulley"
 ]);
 
+/*
+ * THE SIZE A GESTURE GAVE, AS `{ width, height }`.
+ *
+ * A span (press-drag-release) supplies two corners; a single click supplies
+ * one, and returns null so the builder falls back to its own default. The
+ * absolute value is taken because a body dragged from bottom-right to
+ * top-left is the same body as one dragged the other way.
+ */
+function spanSize(first, second) {
+    if (!first || !second) {
+        return null;
+    }
+
+    const width = Math.abs(finite(second.x) - finite(first.x));
+    const height = Math.abs(finite(second.y) - finite(first.y));
+
+    return width > 0 && height > 0 ? { width, height } : null;
+}
+
 const BUILDERS = {
     "dynamics-particle": (points, style) => particle(points[0], style),
-    "dynamics-rigid-body": (points, style) => rigidBody(points[0], style),
+    "dynamics-rigid-body": (points, style) =>
+        rigidBody(
+            points[0],
+            style,
+            spanSize(points[0], points[1]),
+            points[1]
+                ? {
+                      x: (finite(points[0].x) + finite(points[1].x)) / 2,
+                      y: (finite(points[0].y) + finite(points[1].y)) / 2
+                  }
+                : null
+        ),
     "dynamics-polar-vector": (points, style) => polarVector(points[0], points[1], style),
     "dynamics-angular-vector": (points, style) => angularVector(points[0], points[1], style),
     "dynamics-spring": (points, style) => spring(points[0], points[1], style),
@@ -588,10 +632,11 @@ const BUILDERS = {
 };
 
 /*
- * The display name a new Dynamics object carries, so the Objects inventory
- * names it for what it IS rather than for the primitive it happens to store.
+ * AN UNNAMED DYNAMICS OBJECT IS DESCRIBED BY ITS TYPE. The Objects inventory
+ * reads this when `name` is empty, so a student can still tell two particles
+ * apart in the tree without either of them carrying a name nobody typed.
  */
-function nameFor(toolId) {
+export function dynamicsTypeName(toolId) {
     return DYNAMICS_CHILD_TOOLS[toolId]?.label || "Dynamics Object";
 }
 
@@ -624,12 +669,16 @@ export function createDynamicsObject(toolId, points, style = {}) {
     }
 
     /*
-     * A NAME, ALWAYS. The factories that build a whole feature name it
-     * themselves; the ones that build a symbol from its own geometry do not,
-     * and the document requires a name to number it.
+     * THE NAME IS THE OBJECT'S IDENTITY, NOT ITS LABEL.
+     *
+     * It is what the Objects inventory and the source's `% DAETUM OBJECT:`
+     * header call the feature, and it is never drawn on the sheet. An object
+     * whose Name the student has not supplied keeps the EMPTY string - the
+     * inventory falls back to the type name and the id tells two apart, so
+     * nothing invents a visible "Particle A" or "Spring 1".
      */
-    if (typeof object.name !== "string" || object.name.trim() === "") {
-        object.name = nameFor(toolId);
+    if (typeof object.name !== "string") {
+        object.name = "";
     }
 
     return object;

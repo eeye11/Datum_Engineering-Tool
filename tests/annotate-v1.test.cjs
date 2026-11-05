@@ -424,7 +424,17 @@ console.log("\n  a note, label, leader or callout opens its editor as it is plac
 
   check(
     "the commit opens the shared editor for a written annotation",
-    /isEditableAnnotate\(object\)[\s\S]{0,300}openNoteEditorFor/.test(creation),
+    /*
+     * THE OPEN IS NOW BEHIND ONE SMALL FUNCTION.
+     *
+     * The commit still asks `isEditableAnnotate` and still opens the editor on
+     * the STORED object - the module cycle means the open itself is made from
+     * the lazily loaded module rather than in this file, so the assertion follows
+     * the indirection instead of requiring those two names to be adjacent.
+     */
+    /isEditableAnnotate\(object\)[\s\S]{0,900}openPlacedTextEditor/.test(creation) &&
+      /function openPlacedTextEditor[\s\S]{0,1600}openNoteEditorFor/.test(creation) &&
+      /openNoteEditorFor/.test(creation),
   );
 
   const click = require("fs").readFileSync(locate("canvas-click.js"), "utf8");

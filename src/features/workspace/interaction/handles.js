@@ -25,6 +25,7 @@ import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../model/thermodynamics/piston-cylinder.js";
 import { isRectangleLike, safeDimensionGraphics } from "./hit-testing.js";
+import { HIT_PIXELS, handleTolerance } from "./pointer-precision.js";
 import { translateObject } from "../geometry/transforms.js";
 import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
@@ -948,13 +949,40 @@ function manipulationHandles(
             return [];
         }
 
-        const [topLeft, topRight, bottomRight, bottomLeft] = rect.corners;
+        const [bottomLeft, bottomRight, topRight, topLeft] = rect.corners;
+
+        const level = enggVessel.vesselLevelHandle(object);
 
         return [
-            { kind: "vessel-corner0", point: topLeft },
-            { kind: "vessel-corner1", point: topRight },
-            { kind: "vessel-corner2", point: bottomRight },
-            { kind: "vessel-corner3", point: bottomLeft },
+            /*
+             * THE FLUID LEVEL COMES FIRST.
+             *
+             * It sits ON the surface, which at 50% is exactly the row a right-
+             * or left-wall handle occupies - and `handleAtPoint` keeps the FIRST
+             * handle at an equal distance. Listing the level first is what makes
+             * a press on the surface drag the LEVEL rather than resize the wall,
+             * which is the priority the specification asks for.
+             */
+            ...(level ? [{ kind: level.kind, point: level.point }] : []),
+
+            /*
+             * THE FOUR CORNERS. The vessel's frame has its origin at the
+             * bottom-left, so corner 0 is the FLOOR-LEFT and corner 2 the
+             * lid-right - the same points a rectangle would offer.
+             */
+            { kind: "vessel-corner0", point: bottomLeft },
+            { kind: "vessel-corner1", point: bottomRight },
+            { kind: "vessel-corner2", point: topRight },
+            { kind: "vessel-corner3", point: topLeft },
+
+            /*
+             * THE FOUR BOUNDARIES, each at the middle of its own side - the
+             * left wall, the right wall, the lid (or open mouth) and the floor.
+             * They resize one side at a time, so moving a wall leaves the other
+             * three exactly where they are.
+             */
+            ...enggVessel.vesselEdgeHandles(object),
+
             { kind: "equipment-body", point: rect.centre }
         ];
     }
@@ -1702,13 +1730,20 @@ export function rectangleCorners(
 export function handleAtPoint(
     point
 ) {
-    const scale =
-        enggDrawingState.BASE_PIXELS_PER_UNIT *
-        drawingState.camera.zoom;
-
+    /*
+     * THE HANDLE TOLERANCE FOLLOWS THE INPUT.
+     *
+     * A handle is something the student aims AT, so it keeps its wider mouse
+     * radius and grows for a stylus and a finger - a handle left the size of a
+     * mouse target is not usable on a tablet, and widening it here changes
+     * nothing about where the handle is drawn or what the edit does.
+     */
     const tolerance =
-        MANIPULATION_PICK_PX /
-        Math.max(scale, 1e-6);
+        handleTolerance(
+            undefined,
+            drawingState.camera.zoom
+        ) *
+        (MANIPULATION_PICK_PX / HIT_PIXELS.mouse);
 
     let best = null;
 

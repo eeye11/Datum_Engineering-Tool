@@ -22,6 +22,7 @@ import { fanPaths } from "../model/thermodynamics/fan.js";
 import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
+import { bodyTolerance, minimumTargetRadius } from "./pointer-precision.js";
 import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
 import { processPathPoints } from "../model/thermodynamics/process-curves.js";
@@ -601,11 +602,18 @@ export function boundarySelectionAtPoint(point) {
 export function objectAtPoint(
     point
 ) {
+    /*
+     * THE TOLERANCE IS THE INPUT'S, NOT A CONSTANT.
+     *
+     * A mouse keeps its established four pixels. A finger is given a target it
+     * can actually cover, and a stylus sits between them - so a thin line is as
+     * pickable on a tablet as it is with a mouse, without any line becoming
+     * visually thicker.
+     */
     const tolerance =
-        4 /
-        Math.max(
-            drawingState.camera.zoom,
-            0.25
+        bodyTolerance(
+            undefined,
+            drawingState.camera.zoom
         );
 
     /*
@@ -750,7 +758,13 @@ export function objectAtPoint(
                             point,
                             geometry.origin
                         ) <=
-                            tolerance * 2 ||
+                            Math.max(
+                                tolerance * 2,
+                                minimumTargetRadius(
+                                    undefined,
+                                    drawingState.camera.zoom
+                                )
+                            ) ||
                         coordinateSystemArms(
                             geometry
                         ).some(
@@ -1546,6 +1560,51 @@ export function objectAtPoint(
                     );
                 }
 
+                /*
+                 * ========================================================
+                 * A FREEFORM POLYGON IS A CLOSED REGION
+                 * ========================================================
+                 *
+                 * Its own vertex list is its outline, and the CLOSING edge -
+                 * the last vertex back to the first - is a real edge of the
+                 * shape, so it must be hit like any other. The generic
+                 * polyline branch above only walks consecutive pairs and
+                 * would leave that final side dead: clicking on the very edge
+                 * that closes the polygon would select nothing.
+                 *
+                 * A FILLED polygon is also picked from its interior, because
+                 * a region painted solid is one thing to the eye and the
+                 * student should be able to grab it anywhere inside - exactly
+                 * as a filled rectangle or circle is picked. An unfilled one
+                 * keeps the outline-only rule, so a large see-through
+                 * polygon does not block every click inside it.
+                 */
+                if (object.type === "freeform-polygon") {
+                    const vertices =
+                        (geometry.points || []).filter(Boolean);
+
+                    if (vertices.length < 3) {
+                        return false;
+                    }
+
+                    const filled =
+                        Boolean(object.style?.fill) &&
+                        object.style.fill !== "none";
+
+                    if (filled && pointInPolygon(point, vertices)) {
+                        return true;
+                    }
+
+                    return vertices.some(
+                        (vertex, index) =>
+                            distanceToSegment(
+                                point,
+                                vertex,
+                                vertices[(index + 1) % vertices.length]
+                            ) <= tolerance
+                    );
+                }
+
                 if (
                     object.type ===
                     "arc"
@@ -1684,6 +1743,32 @@ function analysisObjectHit(
                         point,
                         marker.position
                     ) <= tolerance * 2
+            )
+        ) {
+            return true;
+        }
+
+        /*
+         * A REFERENCE POINT IS A SMALL MARK, SO IT GETS A TOUCH-SIZED TARGET.
+         *
+         * The reserved region it sits in is a box the student draws in; the
+         * point itself is a dot. With a finger, aiming at the dot must work
+         * without the box swallowing the gesture - so the dot's own pick radius
+         * grows to a coverable size for the current input, and nothing about
+         * the marker's drawn size or its coordinate changes.
+         */
+        const referenceTarget = minimumTargetRadius(
+            undefined,
+            drawingState.camera.zoom
+        );
+
+        if (
+            referenceTarget > 0 &&
+            Array.isArray(geometry.referencePositions) &&
+            geometry.referencePositions.some(
+                marker =>
+                    marker.position &&
+                    distance(point, marker.position) <= referenceTarget
             )
         ) {
             return true;
@@ -1841,6 +1926,34 @@ function analysisObjectHit(
      * also where the source force's own application point is, so
      * clicking the two in turn is a natural way to work.
      */
+    /*
+     * THE POINT'S OWN MARK GETS A TOUCH-SIZED TARGET.
+     *
+     * A Point and a Particle are drawn four pixels across. A mouse picks them
+     * by their ink, as it always has; a finger is offered a target it can
+     * cover. `minimumTargetRadius` is zero for a mouse, so desktop precision is
+     * untouched - only the invisible pick radius grows.
+     */
+    const touchMark = minimumTargetRadius(
+        undefined,
+        drawingState.camera.zoom
+    );
+
+    if (touchMark > 0) {
+        const mark =
+            geometry.position || geometry.point || null;
+
+        if (
+            mark &&
+            Number.isFinite(mark.x) &&
+            Number.isFinite(mark.y) &&
+            distance(point, mark) <=
+                Math.max(touchMark, pick)
+        ) {
+            return true;
+        }
+    }
+
     return Boolean(
         geometry.position &&
         distance(

@@ -420,7 +420,7 @@ test("B6: the features Transform has X Shift, Y Shift and Bend Radius - no angle
 
   assert.ok(!transform.includes(">Rotate<"), "an elbow has no Rotate");
   assert.ok(!/Rotate/.test(html), "and no Rotate anywhere in its panel");
-  assert.ok(!/[Vv]isib/.test(html), "and no Visibility control");
+  assert.ok(/data-feature-field="visibility"/.test(html), "and the shared Visibility control");
 });
 
 test("B7: the radius handle is offered, the angle handle is withdrawn when fully connected", () => {
@@ -662,7 +662,7 @@ test("D2: Object holds Name and Fix, and Appearance holds the four shared contro
   const object = groups.find((group) => group.heading === "Object");
   const appearance = groups.find((group) => group.heading === "Appearance");
 
-  assert.deepEqual(object.fields.map((field) => field.key), ["fixed", "name"]);
+  assert.deepEqual(object.fields.map((field) => field.key), ["name", "visibility", "fixed"]);
 
   assert.deepEqual(
     appearance.fields.slice(0, 3).map((field) => field.key),

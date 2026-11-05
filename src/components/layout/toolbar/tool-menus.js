@@ -23,19 +23,27 @@ export function activeCategory() {
     );
 }
 
-export function toolDefinitionForLabel(label) {
+export function toolDefinitionForLabel(label, { id = null } = {}) {
     const toolIdByLabel =
         Object.fromEntries(
             Object.entries(
                 drawToolLabelById
             ).map(
-                ([id, toolLabel]) =>
-                    [toolLabel, id]
+                ([entryId, toolLabel]) =>
+                    [toolLabel, entryId]
             )
         );
 
+    /*
+     * A CALLER THAT KNOWS THE TOOL'S ID PASSES IT. A Dynamics family's children
+     * are the same tools as each other in NAME - every one of them is a Spring
+     * or a Vector - which is what makes the menu read as a list of the symbol
+     * library; the id is what says which tool arm. The label lookup is only the
+     * answer for a caller that has nothing better.
+     */
     return {
         id:
+            id ||
             toolIdByLabel[label] ||
             (label === "Supports" ? "support" : null) ||
             label
@@ -803,6 +811,15 @@ export function openToolSubmenu(
         "menu"
     );
 
+    /*
+     * AN ITEM CARRIES ITS OWN LABEL, AND MAY CARRY A TRAILING STATE.
+     *
+     * A Statics family's entries are plain words; a Dynamics family's entries
+     * are the tools that exist, and a list of the same tool under several
+     * families would read as duplicates. `item.state` (when present) is the one
+     * short fact that tells two of them apart, and `item.kind` is the stored
+     * feature the entry pages, so a label lookup can never pick the wrong one.
+     */
     menu.innerHTML =
         items
             .map(
@@ -813,7 +830,7 @@ export function openToolSubmenu(
                         role="menuitem"
                         data-submenu-id="${item.id}"
                     >
-                        ${item.label}
+                        ${item.label}${item.state ? `<span class="drawing-coordinate-submenu-state">${item.state}</span>` : ""}
                     </button>
                 `
             )

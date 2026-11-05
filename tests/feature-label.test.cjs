@@ -50,7 +50,7 @@ const check = (name, ok, detail) => {
  * shared `updateFeatureProperty` setter is retired with that panel.)
  */
 const schema = require(locate("feature-schema.js"));
-const setLabel = (feature, value) => schema.fieldDefinition("label").write(feature, value);
+const setLabel = (feature, value) => schema.fieldDefinition("name").write(feature, value);
 const drawingState = require(locate("drawing-state.js")).default;
 
 const line = () =>
@@ -69,8 +69,8 @@ console.log("\n  the setter writes a LABEL, not a name\n");
     check("setting a label reports a change", changed === true);
     check("and stores it on the feature", feature.label === "AB", feature.label);
     check(
-        "the feature's NAME is untouched",
-        feature.name === nameBefore,
+        "the feature's NAME carries the same text - one field writes both",
+        feature.name === "AB",
         `${nameBefore} -> ${feature.name}`,
     );
     check(
@@ -179,30 +179,33 @@ console.log("\n  the panel field is wired to the model\n");
     const schemaSource = fs.readFileSync(locate("feature-schema.js"), "utf8");
 
     check(
-        "the Label field shows the LABEL, not the name",
-        schema.readField({ type: "line", name: "Line 4", label: "AB", geometry: {} }, "label") === "AB",
-        "it read object.name, so the field showed the wrong value",
+        "the Name field shows the NAME",
+        schema.readField({ type: "line", name: "Line 4", label: "AB", geometry: {} }, "name") === "Line 4",
+        "the single naming field reads object.name",
     );
 
     /*
-     * THE INSPECTOR'S FEATURES PANE WRITES THE LABEL THROUGH ITS FIELD TABLE.
-     *
-     * The old panel bound the input by hand in `property-binding.js`, which was
-     * deleted with that panel. The new one declares the field once - `label`,
-     * kind `text` - and the pane renders and writes it from that declaration, so
-     * what has to be true is that the declaration exists and writes `object.label`
-     * rather than the name.
+     * THERE IS ONE NAMING FIELD. It is declared as `name`, kind `text`, and it
+     * writes the NAME and the drawn label together - so a name typed in the
+     * panel reaches the inventory, the source header and the picture, and no
+     * second Label control competes with it.
      */
     check(
-        "there is a Label field in the schema",
-        /label:\s*\{[\s\S]{0,400}?kind:\s*"text"/.test(schemaSource),
-        "the pane has no Label field to render",
+        "there is one Name field in the schema",
+        /name:\s*nameField/.test(schemaSource),
+        "the pane has no Name field to render",
     );
 
     check(
-        "which writes the feature's label, not its name",
-        /label:\s*\{[\s\S]{0,600}?object\.label\s*=/.test(schemaSource),
-        "the field would rename the feature instead of labelling it",
+        "which writes the feature's name AND its drawn label",
+        /const nameField = \{[\s\S]{0,1600}?object\.name = name[\s\S]{0,600}?object\.label = name/.test(schemaSource),
+        "the field would not keep the name and the text in step",
+    );
+
+    check(
+        "and there is no separate Label field left to compete",
+        !/^\s+label:\s*\{/m.test(schemaSource),
+        "two naming controls would disagree",
     );
 }
 

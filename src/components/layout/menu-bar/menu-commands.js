@@ -528,6 +528,19 @@ const toolsMenu = () => ({
     id: "tools",
     label: "Tools",
     items: [
+        {
+            id: "show-dimension",
+            label:
+                display().showDimensions === false
+                    ? "Show Dimension"
+                    : "Hide Dimension",
+            icon: "ruler",
+            run: () =>
+                toggleDisplaySetting("showDimensions", "drawingDimensionsToggle")
+        },
+
+        { separator: true },
+
         { id: "drawing-settings", label: "Drawing Settings\u2026", icon: "settings-2", run: () => showSettings("drawing") },
         { id: "precision", label: "Precision & Snapping\u2026", icon: "crosshair", run: () => showSettings("snapping") },
         {

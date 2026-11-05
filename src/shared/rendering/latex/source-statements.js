@@ -288,7 +288,19 @@ function scanCommand(text, start, name) {
         character === "{" &&
         GROUP_COMMANDS.has(name) &&
         !SEMICOLON_COMMANDS.has(name) &&
-        (next === null || next === "\n")
+        (next === null ||
+          /*
+           * A NEW COMMAND STARTS HERE, SO THIS ONE HAS ENDED.
+           *
+           * `nextSignificant` skips whitespace AND newlines, so the test has
+           * to be on the character rather than on the line break: a group
+           * command is finished by its own group - `\definecolor{a}{RGB}{1,2,3}`
+           * has no `;` and never will - and without this the scan carried on
+           * and swallowed the next command, so DAETUM's own `\definecolor`
+           * line plus its `\draw` was read as ONE malformed statement and a
+           * coloured shape could never be parsed back from its source.
+           */
+          next === "\\")
       ) {
         endedByDelimiter = true;
         index = group.end;

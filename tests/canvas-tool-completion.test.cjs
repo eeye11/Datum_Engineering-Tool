@@ -88,7 +88,8 @@ test('notes focus on canvas immediately, update while typing, and finish on Ente
  assert.equal(document.querySelector('.drawing-inline-entry'),null);
  input.value='Live text';input.dispatchEvent(new window.Event('input',{bubbles:true}));
  assert.equal(state.objects.find(o=>o.id===created.id).text,'Live text');
- input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+ /* A note is multi-line, so Enter writes a line and Ctrl+Enter finishes it. */
+ input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}));
  assert.equal(document.querySelector('.drawing-canvas-text-editor'),null);
  assert.equal(state.activeTool,'select');
  model.undo(state);assert.equal(state.objects.find(o=>o.id===created.id).text,'','typing is one undoable edit');
