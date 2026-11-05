@@ -186,13 +186,6 @@ function isDrawingStatement(line) {
 const PICTURE_OPEN = /^\s*\\begin\s*\{tikzpicture\}/m;
 const PICTURE_CLOSE = /^\s*\\end\s*\{tikzpicture\}/m;
 
-/* The end of the line the picture's opening tag is on. */
-function lineEndAfter(text, at) {
-    const newline = text.indexOf("\n", at);
-
-    return newline < 0 ? text.length : newline;
-}
-
 /* The start of the line `at` sits on - what a whole-line slice begins from. */
 function lineStartOf(text, at) {
     const newline = text.lastIndexOf("\n", Math.max(0, at - 1));
@@ -283,69 +276,22 @@ export function embeddedPictureSource(text) {
  * picture that is not DAETUM's is LaTeX, and LaTeX's unit rules apply to it
  * (see `readLatexDrawing`).
  */
-const EMPTY_SHEET_PICTURE = /\\path\s*\(\s*0\s*,\s*0\s*\)\s*rectangle\s*\(\s*10\s*,\s*10\s*\)\s*;/;
-
-function isDaetumPicture(picture) {
-    const text = String(picture || "");
-
-    if (text.includes(VIEW_BEGIN)) {
-        return true;
-    }
-
-    /* An empty sheet's placeholder, in a picture that holds nothing else. */
-    return EMPTY_SHEET_PICTURE.test(text) && !isDrawingBlock(text.replace(EMPTY_SHEET_PICTURE, ""));
-}
-
 /*
- * THE SAME QUESTION, ANSWERED WHERE THE ANSWER IS KNOWN FOR CERTAIN: THE MODEL.
+ * NO PICTURE-CLASSIFICATION HELPERS ANY MORE.
  *
- * A picture DAETUM wrote and is SAVING now is DAETUM's, whatever it looks like -
- * including a sheet that draws nothing, whose placeholder would otherwise read
- * back as a rectangle. `source` is the document body being written, and a sheet
- * it lists is one this application owns.
- *
- * `picture` wins when it is given, because it is what the file actually holds.
+ * `VIEW_BEGIN` remains - it is how a saved picture's own view record is read -
+ * but the predicates that answered "is this DAETUM's picture?" for the save path
+ * went with the written solution.
  */
-function daetumOwnedPicture(picture, source) {
-    if (picture === undefined) {
-        return true;
-    }
-
-    if (picture === null) {
-        return false;
-    }
-
-    if (isDaetumPicture(picture)) {
-        return true;
-    }
-
-    return Boolean(source && sheetOfSource(source, picture));
-}
 
 /* Whether a text holds any drawing command at all. */
-function isDrawingBlock(text) {
+function isDrawingStatementLike(text) {
     return String(text || "")
         .split(/\r?\n/)
         .some(isDrawingStatement);
 }
 
-/*
- * The sheet of `source` that is the same picture as `picture`.
- *
- * A sheet is the same picture when its stored source is exactly the fragment
- * being tested (one sheet written on its own - the exporter's own question) or
- * when it draws nothing at all (the placeholder case).
- */
-function sheetOfSource(source, picture) {
-    const sheets = Array.isArray(source?.sheets) ? source.sheets : [];
-    const wanted = String(picture || "").trim();
-
-    return sheets.find((sheet) => {
-        const stored = sheet?.source && typeof sheet.source.source === "string" ? sheet.source.source.trim() : "";
-
-        return stored !== "" && (stored === wanted || stored.includes(wanted));
-    }) || sheets.find((sheet) => !(sheet?.objects || []).length);
-}
+void isDrawingStatementLike;
 
 /*
  * ONE SHEET, AS AN EDITED .tex SHOWS IT - WITH ITS PRINT RECORD.

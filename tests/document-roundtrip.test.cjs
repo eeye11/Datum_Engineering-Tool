@@ -60,7 +60,7 @@ const objs = body2.objects || [];
 const d2 = objs.find(o => o.id === "dimension-1");
 const a2 = objs.find(o => o.id === "annotation-1");
 
-check("the file still declares its format", JSON.parse(text).format, "enggdraw");
+check("the file still declares its format", JSON.parse(text).format, "daetum-document");
 check("the dimension comes back", !!d2, true);
 check("still a dimension, not flattened into a line", d2 && d2.type, "dimension");
 check("keeping its measurement type", d2 && d2.content.dimensionType, "linear");

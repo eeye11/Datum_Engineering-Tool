@@ -7,7 +7,7 @@ import enggErrorLog from "../../../app/error-log.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import enggDocumentFile from "../../../shared/file/document-file.js";
 import enggDocumentManagement from "../../../shared/file/document-management.js";
-import enggLatexDocument, { LATEX_EXTENSION, LATEX_MEDIA_TYPE, drawingFromPicture, embeddedPictureSource, hasEmbeddedDocument, pictureViewFromText, readEmbeddedEnvelope, writeLatexDocument, writeStandaloneFromSource } from "../../../shared/file/latex/latex-document.js";
+import enggLatexDocument, { LATEX_EXTENSION, LATEX_MEDIA_TYPE, embeddedPictureSource, hasEmbeddedDocument, pictureViewFromText, readEmbeddedEnvelope, writeLatexDocument, writeStandaloneFromSource } from "../../../shared/file/latex/latex-document.js";
 import { openLatexCodeEditor } from "./latex-commands.js";
 import enggRecovery from "../../../shared/file/document-recovery.js";
 import enggFileSave from "../../../shared/file/file-save.js";
@@ -17,27 +17,18 @@ import enggDrawingReference from "../../../shared/references/drawing-reference.j
 import enggSheets from "../../../components/layout/workspace/sheets.js";
 import enggOpenPopup from "../../../components/layout/toolbar/open-popup.js";
 import enggUi from "../../../shared/ui/ui.js";
-import enggSolutionState from "../../../shared/solution/solution-state.js";
 import { activeSourceManager } from "../../../shared/rendering/latex/drawing-source-manager.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 
 /*
- * The workspace's own "load this source" function, registered by the workspace
- * when it installs.
+ * THE WRITTEN SOLUTION'S TWO SEAMS ARE RETIRED.
  *
- * IT IS A REGISTRATION, NOT AN IMPORT, and that is deliberate. The workspace
- * already reaches this module (it renders through `written-references`, and the
- * preview needs the sheet facade), so importing it back would close a cycle that
- * the module-graph test exists to prevent. A registration has no such edge: the
- * workspace is optional - a page can have the API and the drawings without the
- * solution tab - and this stays null there, which the call site checks.
- */
-let loadSolutionSource = null;
-
-/*
- * The written-solution writer, registered by the solution tab when it is
- * installed (writing-tab.js). An export before the tab was ever opened is
- * answered as the fault it is, rather than half-served.
+ * This module used to accept a "load this source" registration and a
+ * "write this document" writer from the solution workspace. The workspace is
+ * gone, so there is nothing to register; `attachSolutionDocumentWriter` and
+ * `attachSolutionLoader` are kept as no-ops because the export path and the
+ * integration API still call them, and a missing function would be a crash for
+ * a feature that simply has nothing to answer with.
  */
 let writeSolutionDocument = null;
 
@@ -45,8 +36,8 @@ export function attachSolutionDocumentWriter(writer) {
     writeSolutionDocument = typeof writer === "function" ? writer : null;
 }
 
-export function attachSolutionLoader(loader) {
-    loadSolutionSource = typeof loader === "function" ? loader : null;
+export function attachSolutionLoader() {
+    /* No written solution exists to load into. */
 }
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -546,19 +537,14 @@ export function serializeDocumentBody() {
         activeSheetId: editorState.sheetCollection.activeSheetId,
 
         /*
-         * THE WRITTEN SOLUTION TRAVELS WITH THE DRAWINGS.
+         * THE WRITTEN SOLUTION KEY IS NO LONGER WRITTEN.
          *
-         * A submission is BOTH halves - the diagrams and the write-up - so the
-         * write-up's source is stored in the same file as the sheets that explain
-         * it. It is an ADDITIVE key: the format module spreads the body through
-         * unchanged, so a document carrying it is still a valid document, and one
-         * saved before this existed simply reads back an empty solution.
-         *
-         * The DRAFT in localStorage is a safety copy of unsaved typing; THIS is
-         * the document - the version that belongs in the file the student keeps.
+         * It used to carry the write-up's source in the same file as the
+         * drawings. The write-up does not exist any more, so new documents do
+         * not carry the key - and an OLD document that still has one is simply
+         * left alone: the reader ignores keys it does not know, so nothing that
+         * was saved is damaged by opening it here.
          */
-        [enggSolutionState.SOLUTION_DOCUMENT_KEY]:
-            enggSolutionState.getSource()
     };
 }
 
@@ -1836,11 +1822,6 @@ export function loadDrawing(
     const previousCollection =
         editorState.sheetCollection;
 
-    const previousSolution =
-        enggSolutionState.getSource();
-
-    restoreSolutionSource(data[enggSolutionState.SOLUTION_DOCUMENT_KEY]);
-
     const previous =
         enggDrawingState.snapshotDrawing(
             drawingState
@@ -1885,7 +1866,6 @@ export function loadDrawing(
 
         try {
             editorState.sheetCollection = previousCollection;
-            restoreSolutionSource(previousSolution || "");
             loadSheetIntoEditor(activeSheet());
             renderProperties();
             renderCurrentDrawing();
@@ -1909,37 +1889,6 @@ export function loadDrawing(
     }
 
     return data;
-}
-
-/*
- * Put the written solution's source back into the workspace.
- *
- * The workspace is loaded LAZILY - it may not have been opened yet, and it may
- * not be installed at all in a page without the solution tab - so this first
- * offers the source to the workspace, and always keeps the state's own copy in
- * step. That way a document opened while the Drawing tab is showing still brings
- * its write-up back when the student switches to it.
- */
-function restoreSolutionSource(source) {
-    const text = typeof source === "string" ? source : "";
-
-    enggSolutionState.setSource(text);
-
-    /*
-     * The editor is updated only if it is on the page. The source is written to
-     * the field AND through the workspace's loader where that exists, so the
-     * outline and line numbers are rebuilt rather than left describing the
-     * previous globalThis.document.
-     */
-    const editor = globalThis.document.getElementById("solutionEditor");
-
-    if (editor) {
-        editor.value = text;
-    }
-
-    if (typeof loadSolutionSource === "function") {
-        loadSolutionSource(text);
-    }
 }
 
 /*

@@ -51,7 +51,6 @@ import { isArcTool, openPolygonSidesPrompt, referenceArcOptions } from "../../..
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { TRUSS_STAGES, continueTrussConstruction } from "../statics/truss-tool.js";
 import { attachableStaticsType } from "../../../shared/model/feature-types.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
 
 /*
@@ -1623,6 +1622,14 @@ export function beginOrCompleteGeometry(
 
         interaction.phase =
             "polygon-sides";
+
+        /*
+         * THE STATUS SAYS WHAT IS BEING ASKED. The side-count prompt is a
+         * dialog, so the status line is the only place the sheet itself says
+         * why the drawing has stopped - and a phase that returns without
+         * touching it leaves the previous snap printed instead.
+         */
+        setToolMessage("Choose the number of sides");
 
         openPolygonSidesPrompt(
             interaction

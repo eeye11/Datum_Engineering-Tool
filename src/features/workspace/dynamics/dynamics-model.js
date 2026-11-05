@@ -238,9 +238,6 @@ function rigidBody(position, style, size = null, corner = null) {
 function polarVector(tail, tip, style) {
     const from = at(tail);
     const to = at(tip);
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
 
     /*
      * NO NAME IS INVENTED. The object is named by what the type list calls it

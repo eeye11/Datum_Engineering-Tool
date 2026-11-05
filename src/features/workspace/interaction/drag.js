@@ -14,7 +14,7 @@ import { drawingCanvas } from "../dom.js";
 import { resizeBoxFromCorner } from "../../../shared/geometry/box-resize.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynamics/process-curves.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";

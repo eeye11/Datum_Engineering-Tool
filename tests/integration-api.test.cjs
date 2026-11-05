@@ -76,32 +76,32 @@ check(
   datum.getDocument().document.sheets[0].objects.some((o) => o.type === "beam"),
 );
 
-console.log("\n  the written solution\n");
+/*
+ * THE WRITTEN SOLUTION IS GONE, AND THE API SAYS SO HONESTLY.
+ *
+ * `setSolution` / `getSolution` used to read and write the write-up's source.
+ * There is no write-up any more, so the calls are still present - an embed that
+ * calls them must not crash - but they report that there is nothing to set
+ * rather than pretending to store text nobody can see.
+ */
+console.log("\n  the written solution is gone\n");
 
-let solutionChanges = 0;
-datum.on("solutionchange", () => solutionChanges++);
-
-const sheetId = datum.listSheets()[0].id;
-check("setSolution accepts LaTeX", datum.setSolution(`See [DRAWING_REFERENCE:${sheetId}].`).ok);
-
-const solution = datum.getSolution();
-check("getSolution returns it", solution.latex === `See [DRAWING_REFERENCE:${sheetId}].`);
 check(
-  "with the drawings it references, by id and name",
-  solution.references.length === 1 &&
-    solution.references[0].sheetId === sheetId &&
-    solution.references[0].sheetName === datum.listSheets()[0].name,
-  JSON.stringify(solution.references),
+  "setSolution reports that there is no written solution",
+  datum.setSolution("anything").ok === false,
+  JSON.stringify(datum.setSolution("anything")),
 );
 
-/*
- * THE EDITOR IS `solutionEditor` NOW. The written solution became a workspace
- * with its own editor element; the API and the event it raises are unchanged.
- */
-const code = document.getElementById("solutionEditor");
-code.value += " Edited.";
-code.dispatchEvent(new window.Event("input"));
-check("a student's edit raises solutionchange", solutionChanges === 1, `raised ${solutionChanges}`);
+check(
+  "and getSolution returns an empty source",
+  (datum.getSolution()?.latex ?? "") === "",
+  JSON.stringify(datum.getSolution()),
+);
+
+check(
+  "there is no written-solution editor on the page",
+  document.getElementById("solutionEditor") === null,
+);
 
 let threw = null;
 try {

@@ -542,6 +542,21 @@ const toolsMenu = () => ({
         { separator: true },
 
         { id: "drawing-settings", label: "Drawing Settings\u2026", icon: "settings-2", run: () => showSettings("drawing") },
+
+        /*
+         * SHOW DIMENSION.
+         *
+         * The same switch as the Dimensions button in the quick-access strip -
+         * one call to one setting, so the menu and the button cannot disagree.
+         * Hidden by NOT DRAWING them, so turning it back on restores every
+         * dimension exactly as it was.
+         */
+        {
+            id: "show-dimension",
+            label: display().showDimensions === false ? "Show Dimension" : "Hide Dimension",
+            icon: "ruler",
+            run: () => toggleDisplaySetting("showDimensions", "drawingDimensionsToggle")
+        },
         { id: "precision", label: "Precision & Snapping\u2026", icon: "crosshair", run: () => showSettings("snapping") },
         {
             id: "measure-distance",
