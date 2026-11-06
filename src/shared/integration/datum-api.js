@@ -54,7 +54,7 @@ export const API_VERSION = 1;
  * three-column panel, then `solutionEditor` in the workspace redesign. The
  * Written Solution workspace has since been removed from the page entirely,
  * but the API contract stands: an OCR review screen or a course platform
- * embeds Datum and hands over LaTeX through exactly these calls.
+ * embeds DAETUM and hands over LaTeX through exactly these calls.
  *
  * So the source now lives in the solution state module, which keeps it in
  * memory and in the session draft - the same place the workspace's editor

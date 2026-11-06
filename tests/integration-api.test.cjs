@@ -77,24 +77,23 @@ check(
 );
 
 /*
- * THE WRITTEN SOLUTION IS GONE, AND THE API SAYS SO HONESTLY.
+ * THE WRITTEN SOLUTION'S SOURCE SURVIVES WITHOUT THE EDITOR.
  *
- * `setSolution` / `getSolution` used to read and write the write-up's source.
- * There is no write-up any more, so the calls are still present - an embed that
- * calls them must not crash - but they report that there is nothing to set
- * rather than pretending to store text nobody can see.
+ * `setSolution` / `getSolution` used to read and write the write-up's editor.
+ * There is no write-up any more, but the calls still work: the source lives in
+ * the solution state module, so an embed can set LaTeX and read it back.
  */
-console.log("\n  the written solution is gone\n");
+console.log("\n  the written solution survives without the editor\n");
 
 check(
-  "setSolution reports that there is no written solution",
-  datum.setSolution("anything").ok === false,
-  JSON.stringify(datum.setSolution("anything")),
+  "setSolution accepts LaTeX without an editor on the page",
+  datum.setSolution("\\frac{1}{2}").ok === true,
+  JSON.stringify(datum.setSolution("\\frac{1}{2}")),
 );
 
 check(
-  "and getSolution returns an empty source",
-  (datum.getSolution()?.latex ?? "") === "",
+  "and getSolution returns the LaTeX it was given",
+  (datum.getSolution()?.latex ?? "") === "\\frac{1}{2}",
   JSON.stringify(datum.getSolution()),
 );
 
