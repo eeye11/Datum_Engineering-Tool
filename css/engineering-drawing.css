@@ -283,6 +283,7 @@
 }
 
 .drawing-canvas-area {
+    position: relative;
     background: #ffffff;
     min-height: 0;
     min-width: 0;

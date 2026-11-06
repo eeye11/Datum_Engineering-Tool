@@ -24,6 +24,7 @@
 
 import { createSvgElement, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
 import enggFeatureGeometry from "../../geometry/feature-geometry.js";
+import { drawRigidBody as drawRigidBodyGeometry } from "./draw-bodies.js";
 
 /* ============================================================
  * SHARED HELPERS
@@ -141,6 +142,8 @@ function strokeLine(parent, a, b, style, scale, extra = {}) {
 }
 
 function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
+    const dash = dashArrayOf(style, scale);
+
     parent.appendChild(
         createSvgElement("circle", {
             cx: centre.x,
@@ -149,34 +152,63 @@ function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
             fill: "none",
             stroke: paintColour(style?.stroke || "#193335"),
             "stroke-width": lineWidthOf(style, scale),
+            ...(dash ? { "stroke-dasharray": dash } : {}),
+            ...(style?.opacity !== undefined ? { opacity: style.opacity } : {}),
             ...extra
         })
     );
 }
 
 /*
- * An arrowhead at `tip`, pointing along `degrees` (world degrees, measured
- * anticlockwise from +x). Screen y grows downward, so the direction is
- * inverted for the projection - the same convention the camera uses.
+ * AN ARROWHEAD AT `tip`, POINTING ALONG `degrees`.
+ *
+ * World degrees are measured anticlockwise from +x while screen y grows
+ * downward, which is why the direction is written as `(cos, -sin)` here: the
+ * head of a vector pointing up the page must sit ABOVE its shaft, not below it.
+ *
+ * THE SHAPE IS A CONVENTIONAL ENGINEERING ARROW, not a wedge:
+ *
+ *   - the two barbs sweep BACK from the tip at a shallow angle, so the head is
+ *     sharp and the outline that joins them is a triangle with a real point;
+ *   - the notch is half-way down, which is what makes a filled head read as a
+ *     drawn arrow rather than as a blunt cap;
+ *   - the length and the half-width are both taken from `arrowheadSize`, with a
+ *     fixed proportion between them - so the head grows and shrinks as ONE
+ *     shape and never depends on the shaft's weight.
+ *
+ * The shaft runs to the tip and the head is drawn over its end, so the head
+ * keeps the proportions `arrowheadSize` gives it.
  */
+const ARROW_ANGLE = 0.36;
+const ARROW_HALF_WIDTH_RATIO = 0.36;
 function arrowHead(parent, tip, degrees, style, scale, filled = true) {
     const radians = (num(degrees) * Math.PI) / 180;
-    const length = 9 * scale;
-    const spread = 0.38;
+    const length = Math.max(4, num(style?.arrowheadSize, 9) * scale);
+    const halfWidth = length * ARROW_HALF_WIDTH_RATIO;
 
+    const direction = { x: Math.cos(radians), y: -Math.sin(radians) };
+    const normal = { x: -direction.y, y: direction.x };
+
+    /* The two barbs, back and out either side of the line through the tip. */
     const back = {
-        x: tip.x - Math.cos(radians) * length,
-        y: tip.y + Math.sin(radians) * length
+        x: tip.x - direction.x * length,
+        y: tip.y - direction.y * length
     };
 
     const left = {
-        x: back.x + Math.cos(radians + spread) * length,
-        y: back.y - Math.sin(radians + spread) * length
+        x: back.x + normal.x * halfWidth - direction.x * length * Math.cos(ARROW_ANGLE) * 0.35,
+        y: back.y + normal.y * halfWidth - direction.y * length * Math.cos(ARROW_ANGLE) * 0.35
     };
 
     const right = {
-        x: back.x + Math.cos(radians - spread) * length,
-        y: back.y - Math.sin(radians - spread) * length
+        x: back.x - normal.x * halfWidth - direction.x * length * Math.cos(ARROW_ANGLE) * 0.35,
+        y: back.y - normal.y * halfWidth - direction.y * length * Math.cos(ARROW_ANGLE) * 0.35
+    };
+
+    /* The notch: where the shaft meets the head, half-way along it. */
+    const neck = {
+        x: tip.x - direction.x * (length / 2),
+        y: tip.y - direction.y * (length / 2)
     };
 
     const colour = paintColour(style?.stroke || "#193335");
@@ -184,11 +216,16 @@ function arrowHead(parent, tip, degrees, style, scale, filled = true) {
     if (filled) {
         parent.appendChild(
             createSvgElement("path", {
-                d: `M ${tip.x} ${tip.y} L ${left.x} ${left.y} L ${right.x} ${right.y} Z`,
+                d:
+                    `M ${tip.x} ${tip.y} ` +
+                    `L ${left.x} ${left.y} ` +
+                    `L ${neck.x} ${neck.y} ` +
+                    `L ${right.x} ${right.y} Z`,
                 fill: colour,
                 stroke: colour,
-                "stroke-width": lineWidthOf(style, scale) * 0.5,
-                "stroke-linejoin": "round"
+                "stroke-width": Math.max(0.5, lineWidthOf(style, scale) * 0.4),
+                "stroke-linejoin": "miter",
+                "stroke-linecap": "round"
             })
         );
 
@@ -202,6 +239,12 @@ function arrowHead(parent, tip, degrees, style, scale, filled = true) {
         scale
     );
 }
+
+/*
+ * The shaft is not redrawn separately. It runs to the tip and the head's filled
+ * body covers its end, so the head keeps the proportions `arrowheadSize` gives
+ * it and a thick shaft cannot widen it.
+ */
 
 function rgbaFill(colour, alpha) {
     const value = String(colour || "").trim();
@@ -236,28 +279,35 @@ function drawParticle(context) {
         return true;
     }
 
-    const radius = Math.max(2, num(geometry.markerRadius, 1.6) * units(scale));
-    const colour = paintColour(style?.stroke || "#193335");
-    const markerStyle = String(geometry.markerStyle || "filled").toLowerCase();
+    /*
+     * A PARTICLE IS ONE FILLED DISC - AND ONLY THAT.
+     *
+     * No line, leader, radius indicator, vector, crosshair or connecting
+     * stroke is drawn beside it. The optional label is the shared label pass's
+     * job (annotation-render.js), so it is text with no leader of its own, and
+     * an empty label draws nothing at all.
+     *
+     * THE RADIUS IS A SCREEN SIZE. `markerRadius` is the marker's display size
+     * in pixels - the same number the Features row and the size grip write - so
+     * the disc stays clearly visible at every zoom, which is what the symbol is
+     * required to be.
+     */
+    const radius = Math.max(2.5, num(geometry.markerRadius, 5) * units(scale));
+    const ink = paintColour(
+        style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#193335"
+    );
 
-    if (markerStyle === "open") {
-        strokeCircle(svg, centre, radius, style, scale);
-    } else if (markerStyle === "cross") {
-        const arm = radius * 1.4;
-
-        strokeLine(svg, { x: centre.x - arm, y: centre.y }, { x: centre.x + arm, y: centre.y }, style, scale);
-        strokeLine(svg, { x: centre.x, y: centre.y - arm }, { x: centre.x, y: centre.y + arm }, style, scale);
-    } else {
-        svg.appendChild(
-            createSvgElement("circle", {
-                cx: centre.x,
-                cy: centre.y,
-                r: radius,
-                fill: colour,
-                stroke: "none"
-            })
-        );
-    }
+    svg.appendChild(
+        createSvgElement("circle", {
+            cx: centre.x,
+            cy: centre.y,
+            r: radius,
+            fill: ink,
+            stroke: "none",
+            "stroke-width": 0,
+            ...(style?.opacity !== undefined ? { opacity: style.opacity } : {})
+        })
+    );
 
     parentSvg.appendChild(svg);
 
@@ -272,7 +322,12 @@ function drawParticle(context) {
 function drawRigidBodyOverlay(context) {
     const { svg, geometry, style, toScreen, scale } = context;
 
-    if (geometry.showCenterOfMass === false) {
+    /*
+     * THE CENTRE MARKER IS OFF UNLESS ASKED FOR. A rigid body is an outline; the
+     * quartered disc is an extra mark the student switches on in Features, never
+     * one the tool adds to every body.
+     */
+    if (geometry.showCenterOfMass !== true) {
         return false;
     }
 
@@ -315,73 +370,46 @@ function drawRigidBodyOverlay(context) {
  * KINEMATICS
  * ============================================================ */
 
-function drawTrajectory(context) {
-    const { svg, parentSvg, geometry, style, toScreen, scale } = context;
+function drawPolarVector(context) {
+    const { svg, parentSvg, entity, geometry, style, toScreen, scale } = context;
     const start = geometry.start;
     const end = geometry.end;
 
     if (!start || !end) {
         return true;
     }
-
-    const a = toScreen(start);
-    const b = toScreen(end);
-    const bow = num(geometry.bow, 0);
-
-    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const length = Math.hypot(dx, dy) || 1;
 
     /*
-     * THE CONTROL POINT: THE MIDPOINT PUSHED PERPENDICULAR BY `bow`.
+     * A PREVIEW IS A GHOST AND A SYMBOL IS A SYMBOL.
      *
-     * The push is a FRACTION OF THE SPAN (`bow` is the curve's depth over its
-     * length), so it is computed in the SAME length unit the span was measured
-     * in. The screen span is used here because that is what the points are; the
-     * source writer uses the world span, which is the same fraction of the same
-     * segment - so the curve on the sheet and the curve in the compiled picture
-     * have the same shape at every zoom.
+     * The construction preview draws this same vector while the student is still
+     * dragging - as a dashed guide. A dashed guide with a solid filled head on
+     * the end of it reads as a finished arrow that happens to be dashed. So the
+     * head is drawn while the vector is being dragged and only while it is not
+     * a preview, and the shaft runs all the way to the tip either way.
      */
-    const control = {
-        x: mid.x - (dy / length) * length * bow,
-        y: mid.y + (dx / length) * length * bow
-    };
-
-    const path = Math.abs(bow) < 1e-6
-        ? `M ${a.x} ${a.y} L ${b.x} ${b.y}`
-        : `M ${a.x} ${a.y} Q ${control.x} ${control.y} ${b.x} ${b.y}`;
-
-    strokePath(svg, path, style, scale);
-
-    if (geometry.arrowEnd === true) {
-        const tangent = Math.abs(bow) < 1e-6
-            ? Math.atan2(-(b.y - a.y), b.x - a.x)
-            : Math.atan2(-(b.y - control.y), b.x - control.x);
-
-        arrowHead(svg, b, (tangent * 180) / Math.PI, style, scale, true);
-    }
-
-    parentSvg.appendChild(svg);
-
-    return true;
-}
-
-function drawPolarVector(context) {
-    const { svg, parentSvg, geometry, style, toScreen, scale } = context;
-    const start = geometry.start;
-    const end = geometry.end;
-
-    if (!start || !end) {
-        return true;
-    }
-
     const a = toScreen(start);
     const b = toScreen(end);
     const degrees = (Math.atan2(end.y - start.y, end.x - start.x) * 180) / Math.PI;
+    const head = String(style?.arrowEnd || "filled");
 
-    strokeLine(svg, a, b, style, scale);
-    arrowHead(svg, b, degrees, style, scale, String(style?.arrowEnd || "filled") !== "open");
+    /*
+     * A PREVIEW IS A GHOST AND A SYMBOL IS A SYMBOL.
+     *
+     * While the student drags, the vector is drawn as a dashed guide; a solid
+     * filled head on a dashed guide reads as a finished arrow. So a PREVIEW - an
+     * object flagged as one, or one whose id names it - gets the shaft only, and
+     * the committed vector gets the head. The committed vector is the normal
+     * case, so the default is to draw the head.
+     */
+    const isPreview =
+        entity?.isPreview === true || String(entity?.id || "").startsWith("preview");
+
+    strokeLine(svg, a, b, { ...style, opacity: 1 }, scale);
+
+    if (!isPreview && head !== "none") {
+        arrowHead(svg, b, degrees, style, scale, head !== "open");
+    }
 
     /* The tail is marked, so a vector reads as having an origin. */
     svg.appendChild(
@@ -464,7 +492,7 @@ function drawAngularVector(context) {
      * The arrowhead follows the direction of travel at the end of the arc,
      * so reversing the sense of rotation turns the head the other way.
      */
-    const tangent = startAngle + travel + (clockwise ? -90 : 90);
+    const tangent = startAngle + travel + (clockwise ? 90 : -90);
 
     arrowHead(
         svg,
@@ -480,6 +508,20 @@ function drawAngularVector(context) {
 
     strokeLine(svg, { x: centre.x - arm, y: centre.y }, { x: centre.x + arm, y: centre.y }, style, scale);
     strokeLine(svg, { x: centre.x, y: centre.y }, { x: centre.x, y: centre.y - arm * 2 }, style, scale);
+
+    const symbol = geometry.rotationalType === "acceleration" ? "α" : "ω";
+    const unit = String(geometry.unit || (symbol === "α" ? "rad/s²" : "rad/s"));
+    const label = createSvgElement("text", {
+        x: centre.x + radius + 5 * scale,
+        y: centre.y - radius,
+        fill: paintColour(style?.stroke || "#193335"),
+        "font-size": 10 * scale,
+        "font-family": "Arial, sans-serif",
+        "pointer-events": "none"
+    });
+
+    label.textContent = `${symbol} = ${num(geometry.magnitude)} ${unit}`;
+    svg.appendChild(label);
 
     parentSvg.appendChild(svg);
 
@@ -826,7 +868,10 @@ export function drawDynamicsSymbol(context) {
     }
 
     if (kind === "dynamics-rigid-body") {
-        return drawRigidBodyOverlay(context);
+        drawRigidBodyGeometry(context);
+        drawRigidBodyOverlay(context);
+
+        return true;
     }
 
     /*
@@ -837,10 +882,6 @@ export function drawDynamicsSymbol(context) {
      */
     if (kind === "dynamics-reference-line" || kind === "dynamics-reference-arc" || kind === "dynamics-reference-point") {
         return false;
-    }
-
-    if (kind === "dynamics-trajectory") {
-        return drawTrajectory(context);
     }
 
     if (kind === "dynamics-polar-vector") {
@@ -875,12 +916,6 @@ export function drawDynamicsSymbol(context) {
 }
 
 export default drawDynamicsSymbol;
-
-
-
-
-
-
 
 
 

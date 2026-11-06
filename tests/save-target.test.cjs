@@ -59,9 +59,9 @@ check(
 );
 
 check(
-  "and the handle is remembered BEFORE the file is read",
-  /setFileHandle\(chosen\.handle\)[\s\S]{0,200}openChosenFile/.test(commands),
-  "the save target exists from the moment the document is open",
+  "and the handle is remembered only AFTER the file has opened",
+  /openChosenFile\(chosen\.file[\s\S]{0,200}setFileHandle\(chosen\.handle\)/.test(commands),
+  "a refused file must not take over the previous document's save target",
 );
 
 check(

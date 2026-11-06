@@ -742,12 +742,20 @@ function lengthScaleOf(toScreen) {
     return Math.max(1e-6, Math.hypot(unit.x - origin.x, unit.y - origin.y));
 }
 
-/* ============================================================
+/*
+ * ============================================================
  * THE RESERVOIR / TANK
  * ============================================================
  *
  * Three walls (plus a top for a closed tank), one object. An open reservoir's
  * mouth is open - it is not drawn - which is the whole visual difference.
+ *
+ * A CLOSED TANK MAY ALSO SHOW A LIQUID. It is painted BEHIND the walls and
+ * clipped to the vessel's own interior, so it can never spill past an outline -
+ * and both the surface and the region come from the vessel model, which derives
+ * them from the tank's current rectangle and its stored percentage. A resize
+ * therefore moves the liquid with the tank, at the same relative level, with no
+ * second copy of the arithmetic here.
  */
 export function drawVessel({ svg, parentSvg, entity, toScreen }) {
     const segments = enggVessel.vesselSegments(entity);
@@ -761,7 +769,78 @@ export function drawVessel({ svg, parentSvg, entity, toScreen }) {
     const dash = dashPatternFor(style.lineType);
     const width = scaledStrokeWidth(style.lineWidth);
 
-    if (style.fillMode === "solid") {
+    const liquid = enggVessel.fluidLevelRegion(entity);
+
+    /*
+     * THE FILL IS THE LIQUID, NOT THE WHOLE BOX.
+     *
+     * The Appearance tab's Fill is the fluid's colour: it paints the region
+     * BELOW the surface and nothing above it. A vessel whose fill mode is
+     * "none" therefore still shows its liquid - in the drawing's own default
+     * ink - because every vessel carries a level; a chosen colour simply says
+     * what that liquid looks like.
+     */
+    const liquidColour = style.fillMode === "solid" && style.fill ? style.fill : enggVessel.FLUID_LEVEL_DEFAULT_FILL;
+
+    if (liquid && liquid.points.length >= 3) {
+        const rect = enggVessel.vesselRect(entity);
+
+        const fill = createSvgElement("polygon", {
+            points: liquid.points.map(toScreen).map((point) => `${point.x},${point.y}`).join(" "),
+            fill: paintColour(liquidColour),
+            "fill-opacity": enggVessel.FLUID_LEVEL_DEFAULT_OPACITY,
+            stroke: "none"
+        });
+
+        /* THE CLIP IS THE VESSEL'S OWN INTERIOR - a second guarantee on the region. */
+        if (rect) {
+            const clipId = `vessel-liquid-${String(entity.id || "vessel").replace(/[^\w-]/g, "-")}`;
+
+            const clipPath = createSvgElement("clipPath", { id: clipId });
+
+            clipPath.appendChild(
+                createSvgElement("polygon", {
+                    points: rect.corners.map(toScreen).map((point) => `${point.x},${point.y}`).join(" ")
+                })
+            );
+
+            const defs = createSvgElement("defs");
+
+            defs.appendChild(clipPath);
+            svg.appendChild(defs);
+
+            fill.setAttribute("clip-path", `url(#${clipId})`);
+        }
+
+        svg.appendChild(fill);
+    }
+
+    /*
+     * THE SURFACE IS ALWAYS DRAWN, at every percentage including 0% and 100%:
+     * it is the level the student set, and it stays visible when the vessel is
+     * deselected because it is part of the vessel, not a separate object.
+     */
+    if (liquid?.segment) {
+        const from = toScreen(liquid.segment.start);
+        const to = toScreen(liquid.segment.end);
+
+        svg.appendChild(createSvgElement("line", {
+            x1: from.x,
+            y1: from.y,
+            x2: to.x,
+            y2: to.y,
+            stroke,
+            "stroke-width": width,
+            "stroke-linecap": "round"
+        }));
+    }
+
+    /*
+     * A SOLID FILL MODE WITH NO LIQUID TO PAINT (a level switched off) still
+     * paints the vessel's interior, so the Appearance tab's Fill never appears
+     * to do nothing.
+     */
+    if (style.fillMode === "solid" && !(liquid && liquid.points.length >= 3)) {
         const points = enggVessel
             .vesselOutline(entity)
             .map(toScreen)

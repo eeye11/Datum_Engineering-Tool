@@ -393,7 +393,7 @@ function equationFor(text) {
     return function (x) {
         var value = evaluate(tokens, x);
 
-        return isFinite(value) ? value : null;
+        return typeof value === "number" && isFinite(value) ? value : null;
     };
 }
 

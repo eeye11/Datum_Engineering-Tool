@@ -192,7 +192,7 @@ test("2: a press on empty canvas starts the FREE arrow, not an attached one", ()
   assert.ok(block && block.includes("% DAETUM TYPE: flow-arrow"), block || "no source block");
 });
 
-test("2b: a bare click with the tool armed creates nothing and returns to Select", () => {
+test("2b: a bare click with the tool armed creates nothing and KEEPS the tool", () => {
   const m = modules();
   withPipe(m);
 
@@ -201,8 +201,9 @@ test("2b: a bare click with the tool armed creates nothing and returns to Select
    *
    * `finishCreationClick` is what the release calls when the pointer never
    * travelled. A press ON the pipe that is released without moving must create
-   * nothing and hand the drawing back to Select - the same answer every other
-   * drag tool gives, and the one the requirement asks for.
+   * nothing - and the TOOL STAYS ARMED, so the next press can place an arrow.
+   * It used to hand the drawing back to Select, which made the student re-arm
+   * the tool after every stray click.
    */
   m.tool.beginFlowArrowConstruction();
 
@@ -227,7 +228,7 @@ test("2b: a bare click with the tool armed creates nothing and returns to Select
   require(locate("editor-state.js")).editorState.creationDrag = null;
 
   assert.equal(m.state.objects.length, host_count_before, "a click creates no arrow");
-  assert.equal(m.state.activeTool, "select", "and the drawing returns to Select");
+  assert.equal(m.state.activeTool, "flow-arrow", "and the tool stays armed");
   assert.ok(!m.state.interaction.preview, "with no preview left behind");
 });
 

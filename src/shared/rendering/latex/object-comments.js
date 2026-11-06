@@ -119,7 +119,7 @@ const TYPE_LABELS = Object.freeze({
   cable: "Cable",
   shaft: "Shaft",
 
-  force: "Point Force",
+  force: "Point Load",
   load: "Distributed Load",
   "varying-load": "Varying Distributed Load",
   moment: "Applied Moment",

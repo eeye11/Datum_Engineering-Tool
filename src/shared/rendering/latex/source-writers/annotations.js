@@ -37,6 +37,9 @@ import { noteTextStyle } from "../../../typography/note-text-style.js";
 import { num, point, texText } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
+import { workArrowPoints } from "../../../../features/workspace/model/thermodynamics/work-arrow.js";
+import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
 
@@ -161,9 +164,12 @@ function textAnchor(align) {
  * at guessed offsets would space the lines by a number that is not the font's
  * leading, and the second node would not move with the first.
  */
-function multiLineNode(at, text, colour, options = [], typography = {}) {
+function multiLineNode(at, text, colour, options = [], typography = {}, mathSubscript = null, mathSymbol = null, mathSuffix = "") {
   const lines = String(text ?? "").split("\n");
-  const content = lines.map((line) => typography.underline ? `\\underline{${texText(line)}}` : texText(line)).join(" \\\\ ");
+  const math = lines.length === 1 && annotationSubscript(text, { mathSubscript, mathSymbol, mathSuffix });
+  const content = math
+    ? `$${math.base}_{${math.subscript}}$${texText(math.suffix)}`
+    : lines.map((line) => typography.underline ? `\\underline{${texText(line)}}` : texText(line)).join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
 }
@@ -217,7 +223,7 @@ function textAtPosition(object) {
       `anchor=${textAnchor(object.style?.align)}`,
       `align=${typography.align}`,
       `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * (note ? typography.lineSpacing : 1.2), 2)}}\\selectfont${note ? family + emphasis : ""}`
-    ], note ? typography : {})
+    ], note ? typography : {}, object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
   );
 }
 
@@ -235,6 +241,7 @@ function serializeLabel(object) {
 
   const commands = [];
   const definitions = colourPrelude([object.style?.stroke]);
+
 
   if (valid(geometry.start)) {
     commands.push(
@@ -289,6 +296,11 @@ function serializePen(object) {
   const colour = strokeOf(object);
   const definitions = colourPrelude([object.style?.stroke]);
 
+  if (object.metadata?.thermodynamicsKind === "mechanical-work") {
+    const paths = fanPaths(geometry);
+    return paths.length ? join(definitions, paths.map(points => pathThrough(points, colour, [])).join("\n")) : null;
+  }
+
   /*
    * ELECTRIC WORK IS A RESISTOR, not an arrow: two leads and the zigzag between
    * them, through the same points the canvas draws (`resistorPoints`).
@@ -326,7 +338,10 @@ function serializePen(object) {
     }
   }
 
-  if (path.length >= 2) {
+  const blockArrow = object.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+  if (blockArrow.length) {
+    commands.push(pathThrough([...blockArrow, blockArrow[0]], colour, [`fill=${colour}`, "line join=miter"]));
+  } else if (path.length >= 2) {
     commands.push(pathThrough(path, colour, [], arrow));
   }
 
@@ -338,15 +353,17 @@ function serializePen(object) {
 
     if (kind === "callout") {
       const box = enggAnnotate.calloutBox(object);
-      commands.push(`\\draw[${colour}, fill=white] ${point(box.minX,box.minY)} rectangle ${point(box.maxX,box.maxY)};`);
+      commands.push(object.style?.calloutShape === "circle"
+        ? `\\draw[${colour}, fill=white] ${point((box.minX+box.maxX)/2,(box.minY+box.maxY)/2)} circle[radius=${num((box.maxX-box.minX)/2)}];`
+        : `\\draw[${colour}, fill=white] ${point(box.minX,box.minY)} rectangle ${point(box.maxX,box.maxY)};`);
     }
 
-    if (kind !== "arrow") {
+    if (kind !== "arrow" || object.metadata?.thermodynamicsKind === "work-arrow") {
       commands.push(
         multiLineNode({ x: finite(textAt.x), y: finite(textAt.y) }, text, colour, [
           "anchor=center",
           `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * 1.2, 2)}}\\selectfont`
-        ])
+        ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
       );
     }
   }
@@ -663,7 +680,9 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
   }
 
   const textAt =
-    frame && valid(frame.center)
+    frame && valid(frame)
+      ? frame
+      : frame && valid(frame.center)
       ? frame.center
       : Array.isArray(line) && line.length === 2
         ? {
@@ -674,7 +693,7 @@ function dimensionToTikz(graphics, colour, lineWidthPt) {
 
   if (textAt && String(graphics.text ?? "").trim()) {
     commands.push(
-      `\\node[anchor=center, text=${colour}] at ${point(finite(textAt.x), finite(textAt.y))} {${graphics.text}};`
+      `\\node[anchor=center, font=\\fontsize{${num((frame?.fontSize || 11)*0.75)}}{${num((frame?.fontSize || 11)*0.9)}}\\selectfont, text=${colour}${frame?.angle ? `, rotate=${num(frame.angle)}` : ""}] at ${point(finite(textAt.x), finite(textAt.y))} {${texText(graphics.text)}};`
     );
   }
 

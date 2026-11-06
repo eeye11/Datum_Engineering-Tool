@@ -20,6 +20,42 @@ import { STATICS_SPAN_SNAP_TOOLS } from "../statics/statics-tools.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { allowsDirectManipulation } from "./direct-manipulation.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
+import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
+import { isDerivedFeature } from "../../../shared/model/feature-types.js";
+import { selectionBounds, selectionMembers } from "../../../shared/selection/selection-transform.js";
+
+function updateMoveCursor(event) {
+    let movable = false;
+    if (allowsDirectManipulation() && !event.shiftKey &&
+        !editorState.modifySession && !isConstructionInProgress()) {
+        const point = canvasPointFromEvent(event, false);
+        const hit = handleAtPoint(point);
+        const object = objectAtPoint(point);
+        const target = hit?.object || object;
+        movable = Boolean(target && !target.locked && !isDerivedFeature(target));
+        if (pickDerivedMagnitude(point)) {
+            movable = true;
+        }
+
+        const ids = drawingState.selection.selectedObjectIds;
+        if (ids.length > 1) {
+            const box = selectionBounds(drawingState.objects, ids, drawingState);
+            if (box && point.x >= box.minX && point.x <= box.maxX &&
+                point.y >= box.minY && point.y <= box.maxY) {
+                movable = selectionMembers(drawingState.objects, ids)
+                    .every(member => !member.locked && !isDerivedFeature(member));
+            }
+        }
+    }
+    if (allowsDirectManipulation() &&
+        (editorState.manipulationDrag || editorState.selectionDrag?.derived ||
+            editorState.selectionDrag?.axisLabel)) {
+        movable = true;
+    }
+    drawingCanvas?.classList.toggle("drawing-can-move", movable);
+}
 
 /*
  * The positional reference of each SELECTED force, for horizontal alignment.
@@ -260,6 +296,24 @@ function resolvePointerPoint(
     const isRoute =
         drawingState.activeTool === "pipe-duct" ||
         drawingState.interaction.fluidsTool === "pipe-duct";
+
+    /*
+     * ========================================================
+     * A PIPE / DUCT RUN IS NOT CONSTRAINED TO THE HORIZONTAL
+     * ========================================================
+     *
+     * This resolver used to force every run onto its start's horizontal axis
+     * (`{ x: point.x, y: pipeStart.y }`), which made a level pipe the only one
+     * that could be drawn: a drag downwards, upwards or diagonally all produced
+     * a flat run, and the release committed the same flattened end.
+     *
+     * There is no horizontal rule in the pipe model - `enggPipeDuct` builds its
+     * walls from the centreline's own PERPENDICULAR, so a run in any direction is
+     * already valid and its width stays square to it. Horizontal and vertical
+     * are SNAPS the shared inference offers when the cursor is near them, and
+     * the cursor is otherwise left where the student put it. Because the preview
+     * and the release both read THIS function, they cannot disagree.
+     */
 
     if (isLine || isRoute) {
         /*
@@ -671,6 +725,7 @@ export function resolvePointerEvent(
  */
 function freeThermodynamicsMove(drag, rawPoint) {
     if (
+        drag?.object?.type === "coordinate-system-2d" ||
         drag?.kind?.startsWith("process-label-") ||
         drag?.kind?.startsWith("process-bend-") ||
         drag?.object?.metadata?.thermodynamicsKind === "control-volume" ||
@@ -1329,6 +1384,7 @@ export function scheduleGuidelineExpiry(
 export function updateDrawingCoordinates(
     event
 ) {
+    updateMoveCursor(event);
     /*
      * Always calculate from the current
      * pointer event.

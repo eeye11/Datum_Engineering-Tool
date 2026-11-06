@@ -18,7 +18,7 @@ import { isDimensionTool } from "../annotate/dimension-tool.js";
 import { drawingCanvas } from "../dom.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { currentEngineeringMetadata } from "../geometry/geometry-creation.js";
+import { currentEngineeringMetadata, commitFreeformPolygon, freeformPolygonIsClosedShape } from "../geometry/geometry-creation.js";
 import { cancelManipulationDrag, isConstructionInProgress } from "./handles.js";
 import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
 import { finishDistributedLoadConstruction, isLoadBuildPhase } from "../statics/load-tool.js";
@@ -62,6 +62,8 @@ function startDerivedAnnotationDrag(
     if (!picked || !point) {
         return false;
     }
+    const source = drawingState.objects.find(object => object.id === picked.sourceFeatureId);
+    if (!source || source.locked) return false;
 
     /*
      * SELECT THE LABEL, so its tight editor box appears while it is dragged
@@ -76,6 +78,8 @@ function startDerivedAnnotationDrag(
 
     editorState.selectionDrag = {
         pointerId: event.pointerId,
+        previousObjects: enggDrawingState.snapshotDrawing(drawingState),
+        originalGeometry: structuredClone(source.geometry),
         start: point,
         current: point,
         moved: false,
@@ -203,6 +207,13 @@ export function beginAnnotationDrag(
         );
 
     if (!picked) {
+        return false;
+    }
+
+    const selectedIds = drawingState.selection.selectedObjectIds;
+    if (selectedIds.includes(picked.sourceFeatureId)) {
+        // A force and its label are one selected feature, even when it is
+        // the only feature inside the selection rectangle.
         return false;
     }
 
@@ -672,10 +683,7 @@ export function finishSelectionDrag(
     if (currentSelection.derived) {
         if (currentSelection.moved) {
             const previous =
-                enggDrawingState
-                    .snapshotDrawing(
-                        drawingState
-                    );
+                currentSelection.previousObjects;
 
             /*
              * The offset is already on the feature from the move handler;
@@ -692,9 +700,8 @@ export function finishSelectionDrag(
             );
         } else {
             /*
-             * A click with no movement: the box goes back where it
-             * naturally falls, so a nudge that was abandoned does not leave
-             * the label a pixel out of place forever.
+             * A click without a drag preserves the label's previous location,
+             * including any offset from an earlier move.
              */
             const source =
                 objectsByIds([
@@ -703,16 +710,7 @@ export function finishSelectionDrag(
                 ])[0];
 
             if (source?.geometry) {
-                /*
-                 * Only THIS label's slot is cleared - one point of a
-                 * varying load, or the whole feature for a single-magnitude
-                 * one - so abandoning a nudge on one label cannot reset the
-                 * positions of the others.
-                 */
-                enggAnnotationModel.resetDerivedAnnotation(
-                    source,
-                    currentSelection.derived.annotation
-                );
+                source.geometry = structuredClone(currentSelection.originalGeometry);
             }
 
             setToolMessage(
@@ -803,6 +801,28 @@ export function cancelInteraction() {
     editorState.creationDrag = null;
 
     editorState.creationDragConsumedClick = false;
+
+    /*
+     * A TRACE THAT WAS INTERRUPTED LEAVES NOTHING BEHIND.
+     *
+     * Its vertices only ever lived in the session until the commit, so dropping
+     * the session is the rollback - the same rule a cancelled Line follows. Any
+     * vertices an EARLIER completed stage placed by clicking are recovered here,
+     * so a multi-step polygon keeps what it had already earned.
+     */
+    if (editorState.freeformTrace) {
+        const preceding = editorState.freeformTrace.preceding || [];
+
+        editorState.freeformTrace = null;
+
+        if (preceding.length) {
+            enggDrawingState.setInteraction(drawingState, {
+                points: preceding,
+                currentPoint: preceding[preceding.length - 1],
+                startPoint: preceding[0]
+            });
+        }
+    }
 
     if (
         editorState.selectionDrag
@@ -1181,6 +1201,38 @@ export function finishActiveConstruction() {
     }
 
     /*
+     * ENTER CLOSES A FREEFORM POLYGON.
+     *
+     * A polygon has no "next point" it is waiting for, so the only thing
+     * Enter can mean is "I am done, close it back to the first vertex". The
+     * closing edge is not a click the student places - it is the `-- cycle`
+     * the shape is stored and written with - so Enter hands the vertices
+     * straight to the same commit a click on the first vertex reaches. A
+     * shape that is not yet a real polygon is refused (commit answers null
+     * and says why), and the construction stays live so the student can
+     * carry on or press Backspace.
+     */
+    if (
+        drawingState.activeTool === "freeform-polygon" &&
+        Array.isArray(interaction.points) &&
+        interaction.points.length
+    ) {
+        if (!freeformPolygonIsClosedShape(interaction)) {
+            setToolMessage(
+                "A polygon needs at least three distinct, non-collinear vertices"
+            );
+
+            return false;
+        }
+
+        return Boolean(
+            commitFreeformPolygon(
+                interaction
+            )
+        );
+    }
+
+    /*
      * A polyline is identified by its TOOL rather than by a
      * phase of its own: it has no stage after the first point,
      * it simply accumulates points until the student says
@@ -1307,4 +1359,76 @@ export function finishPolyline() {
 
     renderProperties();
     renderCurrentDrawing();
+}
+
+/*
+ * ========================================================
+ * FINISHING A FREEFORM POLYGON BY DOUBLE-CLICK
+ * ========================================================
+ *
+ * A DOUBLE-CLICK IS TWO CLICKS AND THEN ONE GESTURE, and the two halves of it
+ * have to be reconciled or the shape gets a vertex nobody placed.
+ *
+ *   `click` #1   the first of the pair. It is an ordinary click to everything
+ *                upstream, so it has ALREADY added its vertex by the time the
+ *                `dblclick` fires.
+ *
+ *   `dblclick`   the request to finish. Its position is the LAST VERTEX the
+ *                student meant - which is exactly the vertex #1 of the pair
+ *                put down.
+ *
+ * SO THIS FUNCTION NEVER ADDS A VERTEX. It reads the vertices that are already
+ * there and closes the shape: the last one back to the first, by the same
+ * commit the closing click and Enter use. Adding the double-click's own point
+ * would be a third event at the same place - a duplicate vertex, a zero-length
+ * edge and a polygon whose closing edge has no length.
+ *
+ * THE EXCEPTION IS A DOUBLE-CLICK WITH NO VERTEX UNDER IT: a coalesced or
+ * simulated gesture can arrive with nothing placed by its first half. Rather
+ * than finishing a shape that does not include the point the student just
+ * double-clicked, the gesture's own position is added - but only when it is
+ * genuinely absent, so the ordinary case is untouched.
+ *
+ * IN PRACTICE THE CALLER PASSES NO POINT. A real `dblclick` event carries
+ * `detail: 0` and a position that has already been placed by the clicks
+ * before it, so the handler calls this with nothing and the shape is simply
+ * closed. The optional point is for a caller that genuinely knows a final
+ * vertex was never placed - never for the ordinary gesture.
+ *
+ * A shape that is still not a polygon - fewer than three distinct, non-
+ * collinear vertices - is refused with a message and left running, exactly as
+ * the closing click and Enter refuse it.
+ */
+export function finishFreeformPolygonByDoubleClick(point = null) {
+    const interaction =
+        drawingState.interaction;
+
+    if (
+        drawingState.activeTool !== "freeform-polygon" ||
+        !interaction
+    ) {
+        return false;
+    }
+
+    const points =
+        Array.isArray(interaction.points) ? interaction.points : [];
+
+    if (
+        !points.length ||
+        !freeformPolygonIsClosedShape(interaction)
+    ) {
+        setToolMessage(
+            "A polygon needs at least three distinct, non-collinear vertices"
+        );
+
+        renderCurrentDrawing();
+
+        return false;
+    }
+
+    return Boolean(
+        commitFreeformPolygon(
+            interaction
+        )
+    );
 }

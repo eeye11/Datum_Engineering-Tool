@@ -1,0 +1,174 @@
+import { cylinderPoint } from "./piston-cylinder.js";
+import { appendReheatRankineCycle } from "./reheat-rankine-cycle.js";
+import { appendVaporCompressionCycle } from "./vapor-compression-cycle.js";
+import { layoutCycleLabels } from "./cycle-label-layout.js";
+import { appendBraytonCycle } from "./brayton-cycle.js";
+
+// One resizable schematic; all paths and labels share its local frame.
+export function rankineCycleDiagram(geometry, problemData = {}) {
+    const paths = [];
+    const labels = [];
+    const at = (x, y) => cylinderPoint(geometry, x, y);
+    const path = (points, colour = "black") => paths.push({ points: points.map(([x, y]) => at(x, y)), colour });
+    const label = (x, y, text, latex = text, plainText = false) => labels.push({ point: at(x, y), text, latex, plainText });
+    const box = (x, y, w, h) => path([[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]);
+    const circle = (x, y, radius) => path(Array.from({ length: 49 }, (_, i) => [x + radius * Math.cos(i * Math.PI / 24), y + radius * Math.sin(i * Math.PI / 24)]));
+    const stateCircle = (x, y) => {
+        const centre = at(x, y);
+        const origin = at(0, 0), horizontal = at(1, 0), vertical = at(0, 1);
+        const radius = 0.028 * Math.min(
+            Math.hypot(horizontal.x - origin.x, horizontal.y - origin.y),
+            Math.hypot(vertical.x - origin.x, vertical.y - origin.y)
+        );
+        // Draw in world coordinates so nonuniform resizing cannot make ovals.
+        paths.push({ colour: "black", points: Array.from({ length: 49 }, (_, i) => ({
+            x: centre.x + radius * Math.cos(i * Math.PI / 24),
+            y: centre.y + radius * Math.sin(i * Math.PI / 24)
+        })) });
+    };
+    const pipe = (vertices, colour, startBoundary = null, endBoundary = null) => {
+        const origin = at(0, 0), horizontal = at(1, 0), vertical = at(0, 1);
+        const width = Math.hypot(horizontal.x - origin.x, horizontal.y - origin.y);
+        const height = Math.hypot(vertical.x - origin.x, vertical.y - origin.y);
+        if (width < 1e-9 || height < 1e-9) return;
+        // Measure the wall offset after resizing: normalized offsets would
+        // make vertical pipes wider than horizontal ones in a wide diagram.
+        const halfThickness = 0.009 * Math.min(width, height);
+        const centreline = [vertices[0]];
+        for (let i = 1; i < vertices.length - 1; i++) {
+            const previous = vertices[i - 1], corner = vertices[i], next = vertices[i + 1];
+            const incoming = Math.hypot(corner[0] - previous[0], corner[1] - previous[1]);
+            const outgoing = Math.hypot(next[0] - corner[0], next[1] - corner[1]);
+            const radius = Math.min(0.045, incoming * 0.45, outgoing * 0.45);
+            const entry = corner.map((value, axis) => value + (previous[axis] - value) * radius / incoming);
+            const exit = corner.map((value, axis) => value + (next[axis] - value) * radius / outgoing);
+            centreline.push(entry);
+            for (let step = 1; step <= 20; step++) {
+                const t = step / 20, s = 1 - t;
+                centreline.push(entry.map((value, axis) => s * s * value + 2 * s * t * corner[axis] + t * t * exit[axis]));
+            }
+        }
+        centreline.push(vertices[vertices.length - 1]);
+        const wall = side => centreline.map((p, index) => {
+            const before = centreline[Math.max(0, index - 1)];
+            const after = centreline[Math.min(centreline.length - 1, index + 1)];
+            const dx = (after[0] - before[0]) * width;
+            const dy = (after[1] - before[1]) * height;
+            const length = Math.hypot(dx, dy);
+            return [
+                p[0] - side * dy / length * halfThickness / width,
+                p[1] + side * dx / length * halfThickness / height
+            ];
+        });
+        // Meet each casing independently at each wall, including sloped faces.
+        const attach = (points, first, boundary) => {
+            if (!boundary) return;
+            const index = first ? 0 : points.length - 1;
+            const origin = points[first ? 1 : index - 1];
+            const direction = points[index].map((value, axis) => value - origin[axis]);
+            let nearest = Infinity;
+            for (let i = 1; i < boundary.length; i++) {
+                const a = boundary[i - 1], b = boundary[i];
+                const edge = [b[0] - a[0], b[1] - a[1]];
+                const cross = direction[0] * edge[1] - direction[1] * edge[0];
+                if (Math.abs(cross) < 1e-12) continue;
+                const delta = [a[0] - origin[0], a[1] - origin[1]];
+                const t = (delta[0] * edge[1] - delta[1] * edge[0]) / cross;
+                const u = (delta[0] * direction[1] - delta[1] * direction[0]) / cross;
+                if (t >= 0 && u >= 0 && u <= 1) nearest = Math.min(nearest, t);
+            }
+            if (Number.isFinite(nearest)) points[index] = origin.map((value, axis) => value + direction[axis] * nearest);
+        };
+        for (const side of [1, -1]) {
+            const points = wall(side);
+            attach(points, true, startBoundary);
+            attach(points, false, endBoundary);
+            path(points, colour);
+        }
+    };
+    const arrow = (x, y, dx, dy, colour = "blue", headScale = 1) => {
+        path([[x, y], [x + dx, y + dy]], colour);
+        paths[paths.length - 1].bold = true;
+        const length = Math.hypot(dx, dy);
+        const ux = dx / length, uy = dy / length;
+        const headLength = 0.018 * headScale, headWidth = 0.009 * headScale;
+        path([[x + dx - ux * headLength - uy * headWidth, y + dy - uy * headLength + ux * headWidth], [x + dx, y + dy], [x + dx - ux * headLength + uy * headWidth, y + dy - uy * headLength - ux * headWidth]], colour);
+        paths[paths.length - 1].bold = true;
+    };
+
+    // Smooth casing, a single hub and a side inlet, like the reference.
+    const curve = (a, b, c, d) => Array.from({ length: 25 }, (_, i) => {
+        const t = i / 24, s = 1 - t;
+        return a.map((value, axis) => s ** 3 * value + 3 * s ** 2 * t * b[axis] + 3 * s * t ** 2 * c[axis] + t ** 3 * d[axis]);
+    });
+    const pumpCasing = [
+        [0.165, 0.57], [0.195, 0.57], [0.195, 0.545],
+        ...curve([0.195, 0.545], [0.27, 0.545], [0.27, 0.435], [0.195, 0.435]),
+        ...curve([0.195, 0.435], [0.12, 0.435], [0.12, 0.545], [0.165, 0.545]),
+        [0.165, 0.57]
+    ];
+    const turbineCasing = [[0.68, 0.56], [0.87, 0.64], [0.87, 0.36], [0.68, 0.44], [0.68, 0.56]];
+    if (geometry.brayton) {
+        appendBraytonCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
+        return layoutCycleLabels(paths, labels, geometry);
+    }
+    if (geometry.refrigeration) {
+        appendVaporCompressionCycle({ pipe, path, box, stateCircle, label, arrow }, problemData);
+        return layoutCycleLabels(paths, labels, geometry);
+    }
+    if (geometry.reheat) {
+        appendReheatRankineCycle({ pipe, path, box, circle, stateCircle, label, arrow, pumpCasing }, problemData);
+        return layoutCycleLabels(paths, labels, geometry);
+    }
+    // Clockwise flow: pump -> boiler -> turbine -> condenser -> pump.
+    pipe([[0.18, 0.57], [0.18, 0.84], [0.34, 0.84]], "blue", pumpCasing);
+    pipe([[0.64, 0.84], [0.78, 0.84], [0.78, 0.60]], "red", null, turbineCasing);
+    pipe([[0.78, 0.40], [0.78, 0.16], [0.64, 0.16]], "red", turbineCasing);
+    pipe([[0.34, 0.16], [0.12, 0.16], [0.12, 0.49], [0.145, 0.49]], "blue", null, pumpCasing);
+    box(0.34, 0.78, 0.30, 0.12);
+    box(0.34, 0.10, 0.30, 0.12);
+    path(pumpCasing);
+    circle(0.195, 0.49, 0.018);
+    path(turbineCasing);
+    label(0.49, 0.84, "Boiler");
+    label(0.49, 0.16, "Condenser");
+    label(0.30, 0.49, "Pump");
+    label(0.775, 0.50, "Turbine");
+    for (const [x, y, number] of [[0.06, 0.29, "1"], [0.12, 0.69, "2"], [0.84, 0.69, "3"], [0.84, 0.25, "4"]]) {
+        stateCircle(x, y);
+        label(x, y, number);
+    }
+    // Follow the working-fluid loop, separate from heat and shaft work.
+    arrow(0.17, 0.27, 0, 0.09, "gray");
+    arrow(0.23, 0.64, 0, 0.09, "gray");
+    arrow(0.73, 0.74, 0, -0.09, "gray");
+    arrow(0.73, 0.30, 0, -0.09, "gray");
+    arrow(0.49, 0.98, 0, -0.065, "red");
+    arrow(0.49, 0.085, 0, -0.065, "red");
+    arrow(0.025, 0.50, 0.065, 0, "red");
+    arrow(0.89, 0.50, 0.065, 0, "red");
+    label(0.45, 0.95, "q in", "$q_{in}$");
+    label(0.535, 0.05, "q out", "$q_{out}$");
+    label(0.065, 0.56, "w pump,in", "$w_{pump,in}$");
+    label(0.92, 0.57, "w turb,out", "$w_{turb,out}$");
+    // User-entered givens are annotations, carried with the cycle on resize.
+    const annotate = (x, y, value, prefix = "") => {
+        const lines = String(value || "").split(/[;\n]/).map(line => line.trim()).filter(Boolean);
+        lines.forEach((line, index) => {
+            const text = prefix ? `${prefix}: ${line}` : line;
+            label(x, y - index * 0.032, text);
+            // User input is always plain text, including a leading dollar sign.
+            labels[labels.length - 1].plainText = true;
+        });
+        return lines.length;
+    };
+    annotate(0.28, 0.27, problemData.state1);
+    annotate(0.35, 0.70, problemData.state2);
+    annotate(0.60, 0.70, problemData.state3);
+    annotate(0.59, 0.29, problemData.state4);
+    let notesY = 0.57;
+    for (const [key, title] of [["massFlow", "Mass flow"], ["boiler", "Boiler"], ["turbine", "Turbine"], ["condenser", "Condenser"], ["pump", "Pump"]]) {
+        notesY -= annotate(0.49, notesY, problemData[key], title) * 0.032;
+    }
+    return layoutCycleLabels(paths, labels, geometry);
+}

@@ -54,6 +54,14 @@ export function isConstructionTool(
                 "polygon",
                 "circle",
                 "arc",
+
+                /*
+                 * The Statics Reference Arc is the Arc tool by another name.
+                 * Without it here the router dropped every click it was
+                 * given - its first point, and the third point after a drag -
+                 * so an arc could be started by a drag but never finished.
+                 */
+                "reference-arc",
                 "rectangle"
             ].includes(toolId) ||
 
@@ -65,6 +73,14 @@ export function isConstructionTool(
              * Fluids-specific snap of its own.
              */
             toolId === "pipe-duct" ||
+            toolId === "nozzle-diffuser" ||
+            toolId === "rankine-cycle" ||
+            toolId === "reheat-rankine-cycle" ||
+            toolId === "vapor-compression-cycle" ||
+            toolId === "brayton-cycle" ||
+            toolId === "diesel-cycle" ||
+            toolId === "otto-cycle" ||
+            toolId === "carnot-cycle" ||
             isDimensionTool(toolId) ||
         Boolean(STATICS_PLACEMENT_TOOLS[toolId]) ||
         Boolean(STATICS_BODY_ATTACHED_TOOLS[toolId]) ||

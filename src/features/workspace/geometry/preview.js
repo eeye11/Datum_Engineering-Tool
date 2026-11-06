@@ -4,6 +4,7 @@ import { dimensionEndpointAt, endpointPosition, endpointDimensionType } from "..
  */
 
 import enggBodyFrames from "../../../shared/geometry/body-frames.js";
+import { coordinateSystemFromDrag } from "../../../shared/geometry/coordinate-system.js";
 import enggQuantities from "../../../shared/units/quantities.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
@@ -11,7 +12,7 @@ import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { isProcessPlotTool } from "../thermodynamics/process-path.js";
+import { isProcessPlotTool, processPathInstruction } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
 import { isDimensionTool } from "../annotate/dimension-tool.js";
@@ -23,11 +24,16 @@ import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInter
 import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
 import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
 import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
+import { createDynamicsPreview } from "../dynamics/dynamics-model.js";
+import { DYNAMICS_BOX_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction } from "../dynamics/dynamics-tools.js";
+import { creationLabelPrompt } from "../../../shared/ui/editors/creation-label.js";
+import { RIGID_BODY_HEIGHT, RIGID_BODY_WIDTH } from "../constants.js";
 
 /*
  * The colour every construction preview is drawn in.
@@ -130,6 +136,10 @@ export function updatePreview(
         setToolMessage(interaction.preview?.invalid
             ? "Not enough room or incompatible pipe ends"
             : "Click a pipe or gap to insert the Reducer / Expander, or empty space to place it");
+        return;
+    }
+
+    if (interaction.phase === "point-force-value") {
         return;
     }
 
@@ -380,6 +390,7 @@ export function updatePreview(
                     x: point.x,
                     y: point.y
                 };
+
         }
 
         reportConstructionStatus(
@@ -469,6 +480,38 @@ export function updatePreview(
         interaction.phase ===
             "idle"
     ) {
+        return;
+    }
+
+    /*
+     * A DYNAMICS SPAN THAT STILL HAS TO TAKE ITS FIRST POINT SHOWS THE SYMBOL AT
+     * THE DEFAULT SIZE UNDER THE CURSOR - the ghost the student sees before the
+     * press, so a Spring or a Rigid Body is visibly the thing that will be
+     * drawn rather than an unexplained armed tool. It is the same builder the
+     * commit uses, given the same point twice.
+     */
+    if (
+        interaction.phase === "dynamics-span" &&
+        !interaction.startPoint &&
+        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool])
+    ) {
+        const at = resolution.effectiveConstructionPoint;
+
+        interaction.preview = createDynamicsPreview(
+            drawingState.activeTool,
+            [
+                at,
+                { x: at.x + RIGID_BODY_WIDTH, y: at.y - RIGID_BODY_HEIGHT }
+            ],
+            {
+                ...drawingState.styleDefaults,
+                stroke: PREVIEW_STROKE,
+                lineType: "dashed",
+                opacity: 0.55
+            }
+        );
+
         return;
     }
 
@@ -565,51 +608,99 @@ export function updatePreview(
             }
         }
     } else if (
+        interaction.phase === "dynamics-span" ||
+        interaction.phase === "dynamics-angle"
+    ) {
+        /*
+         * EVERY DYNAMICS DRAG SHOWS THE SYMBOL IT IS MAKING, BUILT BY THE
+         * BUILDER THAT WILL COMMIT IT.
+         *
+         * A Polar Vector, a Spring, a Damper, a Pulley - and the Rigid Body,
+         * which is now drawn like a Rectangle - all preview through the SAME
+         * `createDynamicsPreview` the commit uses, so the ghost on the sheet and
+         * the object that lands on it cannot disagree: same geometry, same
+         * style, same fill (none, for a body), same code path. Only the stroke
+         * is overridden, so a preview reads as a construction guide.
+         */
+        const preview = createDynamicsPreview(
+            interaction.toolId || drawingState.activeTool,
+            [interaction.startPoint, point],
+            {
+                ...drawingState.styleDefaults,
+                stroke: PREVIEW_STROKE,
+                lineType: "dashed",
+                opacity: 1
+            }
+        );
+
+        interaction.preview = preview || null;
+
+        const feedback = [
+            inferenceLabel(resolution.inference),
+            snapTypeLabel(resolution.snapCandidate?.type)
+        ].filter(Boolean);
+
+        /*
+         * THE PREVIEW REPORTS ITS OWN DERIVED VALUES.
+         *
+         * A Polar Vector's magnitude and angle are DERIVED from its ends, and
+         * the status line reads them off the preview the student is watching.
+         * The builder does not store them, so they are written here - on the
+         * PREVIEW only, never on the model - from the same two points, so the
+         * number on screen is the number the commit will produce.
+         */
+        if (preview?.geometry?.start && preview?.geometry?.end) {
+            const dx = preview.geometry.end.x - preview.geometry.start.x;
+            const dy = preview.geometry.end.y - preview.geometry.start.y;
+            const magnitude = Math.hypot(dx, dy);
+
+            preview.geometry.vectorMagnitude = magnitude;
+            preview.geometry.vectorAngle =
+                magnitude > 0 ? ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360 : 0;
+        }
+
+        if (feedback.length) {
+            setToolMessage(feedback.join(" · "));
+            return;
+        }
+
+        /*
+         * THE VECTOR'S STATUS LINE reports its magnitude and angle while it is
+         * being drawn; every other Dynamics drag states what the next point
+         * will do. Either way the GHOST itself is the shared preview above.
+         */
+        if (interaction.toolId === "dynamics-polar-vector" && interaction.startPoint) {
+            const start = interaction.startPoint;
+            const dx = point.x - start.x;
+            const dy = point.y - start.y;
+            const magnitude = Math.hypot(dx, dy);
+            const angle = magnitude > 0 ? (Math.atan2(dy, dx) * 180) / Math.PI : 0;
+            const normalizedAngle = (angle + 360) % 360;
+
+            setToolMessage(
+                magnitude > 1e-9
+                    ? `Magnitude: ${magnitude.toFixed(1)} mm · Angle: ${normalizedAngle.toFixed(1)}°`
+                    : "Drag to set vector magnitude and angle"
+            );
+
+            return;
+        }
+
+        setToolMessage(dynamicsInstruction(interaction.toolId || drawingState.activeTool));
+    } else if (
         drawingState.activeTool ===
         "coordinate-system-2d"
     ) {
-        /*
-         * THE AXIS PREVIEWS AS THE CROSS IT WILL BECOME.
-         *
-         * The press placed the origin; the pointer says which way the X arm
-         * runs and how long it is. The Y arm is drawn square to it, from the
-         * same two points the commit uses, so the preview and the placed axis
-         * are the same cross - and the perpendicularity the student sees is
-         * the perpendicularity the code will write. A drag too short to give
-         * the axis a direction shows nothing rather than a degenerate cross.
-         */
-        const arm = Math.hypot(
-            point.x - interaction.startPoint.x,
-            point.y - interaction.startPoint.y
-        );
-
-        if (arm > 1e-9) {
-            interaction.preview =
-                createPreview(
-                    "coordinate-system-2d",
-                    {
-                        origin: {
-                            ...interaction.startPoint
-                        },
-
-                        rotation: Math.atan2(
-                            point.y - interaction.startPoint.y,
-                            point.x - interaction.startPoint.x
-                        ),
-
-                        xPositiveLength: arm,
-                        xNegativeLength: arm,
-                        yPositiveLength: arm,
-                        yNegativeLength: arm
-                    }
-                );
+        const axes = coordinateSystemFromDrag(interaction.startPoint, point);
+        if (axes) {
+            interaction.preview = createPreview("coordinate-system-2d", axes);
 
             if (
                 !resolution.inference &&
                 !resolution.snapCandidate
             ) {
                 setToolMessage(
-                    "Release to place the X axis"
+                    "Release to place the coordinate system"
                 );
             }
         } else {
@@ -638,8 +729,7 @@ export function updatePreview(
             "Specify radius"
         );
     } else if (
-        drawingState.activeTool === "rectangle" ||
-        drawingState.activeTool === "control-volume" ||
+        ["rectangle", "stress-element", "boundary-stress", "control-volume", "tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor"].includes(drawingState.activeTool) ||
         ["saturation-curve", "process-plot"].includes(drawingState.activeTool) ||
         ["piston-cylinder", "piston-cylinder-stoppers"].includes(drawingState.activeTool)
     ) {
@@ -655,7 +745,7 @@ export function updatePreview(
          * press decided where the shape begins, and Shift only says the two
          * extents are equal.
          */
-        const square = Boolean(resolution.modifiers?.shift);
+        const square = drawingState.activeTool === "stress-element" || Boolean(resolution.modifiers?.shift);
 
         interaction.squareConstrained = square;
 
@@ -669,8 +759,24 @@ export function updatePreview(
                 )
             );
 
-        if (["saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
+        if (drawingState.activeTool === "boundary-stress") {
+            interaction.preview.metadata = { boundaryStress: true };
+            Object.assign(interaction.preview.geometry, { top_normalStart: 1, top_normalEnd: 1 });
+        }
+        if (["tank", "diesel-cycle", "otto-cycle", "carnot-cycle", "vapor-compression-cycle", "brayton-cycle", "reheat-rankine-cycle", "rankine-cycle", "nozzle-diffuser", "turbine-compressor", "saturation-curve", "process-plot"].includes(drawingState.activeTool)) {
             interaction.preview.metadata = { thermodynamicsKind: drawingState.activeTool };
+            if (drawingState.activeTool === "reheat-rankine-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.reheat = true;
+            }
+            if (drawingState.activeTool === "vapor-compression-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.refrigeration = true;
+            }
+            if (drawingState.activeTool === "brayton-cycle") {
+                interaction.preview.metadata.thermodynamicsKind = "rankine-cycle";
+                interaction.preview.geometry.brayton = true;
+            }
         }
 
         setToolMessage(
@@ -713,7 +819,9 @@ export function updatePreview(
         }
 
         setToolMessage(
-            "Click next point or double-click to finish"
+            isProcessPlotTool(drawingState.activeTool)
+                ? processPathInstruction()
+                : "Click next point or double-click to finish"
         );
     } else if (
         drawingState.activeTool === "freeform-polygon"
@@ -737,10 +845,46 @@ export function updatePreview(
                 }
             );
 
+        /*
+         * THE PLACED VERTICES ARE MARKED, not only found by hovering.
+         *
+         * Every vertex already committed to the construction gets a dot, and
+         * the first one a ring - it is the close target - which lights up
+         * when the pointer is close enough to close the polygon.
+         */
+        interaction.preview.metadata = {
+            ...(interaction.preview.metadata || {}),
+            vertexMarkers: interaction.points.map(vertex => ({ ...vertex })),
+            closingVertex:
+                interaction.points.length >= 3 &&
+                closingFreeformPolygon(point),
+
+            /*
+             * THE CLOSING EDGE, AS ITS OWN STROKE.
+             *
+             * The preview polygon already joins the last placed vertex to the
+             * pointer. What the student cannot yet see is WHERE THE POINTER'S
+             * EDGE WOULD END - the line back to the first vertex, which is the
+             * edge that will close the shape. Drawn separately and more
+             * faintly, it reads as "this is where the shape comes round": the
+             * last placed vertex and the pointer are solid, the closing edge is
+             * the question the next click answers.
+             */
+            closingEdge:
+                interaction.points.length >= 2 && interaction.points[0]
+                    ? {
+                        from: { ...point },
+                        to: { ...interaction.points[0] }
+                    }
+                    : null
+        };
+
         setToolMessage(
-            closingFreeformPolygon(point)
-                ? "Release to close the polygon"
-                : "Click next vertex, or drag to the first vertex to close"
+            interaction.points.length < 2
+                ? "Click to add a vertex"
+                : closingFreeformPolygon(point)
+                    ? "Click to close the polygon"
+                    : "Click to add a vertex · double-click or Enter to finish"
         );
     } else if (
         isArcTool() &&
@@ -1928,6 +2072,8 @@ function staticsPreviewType(
             stored.id
         );
 
+        activateTool("select");
+
         renderProperties();
         renderCurrentDrawing();
 
@@ -2036,6 +2182,15 @@ function staticsPreviewType(
 
                 renderProperties();
                 renderCurrentDrawing();
+
+                /* AND ITS NAME, TYPED ON THE DRAWING - see creation-label.js. */
+                creationLabelPrompt(object, {
+                    state: drawingState,
+                    onDone: () => {
+                        renderProperties();
+                        renderCurrentDrawing();
+                    }
+                });
             },
 
             /*

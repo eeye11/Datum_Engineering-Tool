@@ -70,6 +70,32 @@ export const editorState = {
      */
     sheetCollection: enggSheets.createCollection(),
 
+    /*
+     * ========================================================
+     * A DOCUMENT IS BEING INSTALLED
+     * ========================================================
+     *
+     * True from the moment an opened file starts being applied until it has
+     * finished, and closed however that ends (see `beginDocumentLoad` in
+     * document-commands.js). While it is true the document is being RESTORED,
+     * not edited: the ordinary "this changed" notifications are suppressed, so
+     * a file that arrives does not land marked as having unsaved changes.
+     */
+    documentLoading: false,
+
+    /*
+     * THE ONLY VARIANT OF A DOCUMENT THAT MAY BE INSTALLED AT ONCE.
+     *
+     * Opening reads a file, and then applies what it read. That is two steps
+     * with an await between them when the file arrives from the operating
+     * system's picker, so a second Open - a double-click, a slow read while
+     * another file is chosen - could otherwise finish FIRST and be replaced by
+     * the older answer. Each load takes a ticket from here and only the newest
+     * one is allowed to commit; a superseded read is dropped rather than
+     * overwriting the document the user asked for last.
+     */
+    documentLoadVariant: null,
+
     coordinateSystemMenu: null,
 
     coordinateSystemMenuAnchor: null,
@@ -94,6 +120,8 @@ export const editorState = {
 
     selectionClickSuppressed: false,
 
+    selectedPlantNode: null,
+
     selectionDrag: null,
 
     /*
@@ -115,6 +143,32 @@ export const editorState = {
     creationDragConsumedClick: false,
 
     panSession: null,
+
+    /*
+     * ========================================================
+     * THE POINTER'S OWN STATE
+     * ========================================================
+     *
+     * `penInRange` - a stylus is hovering over or touching the canvas. Read by
+     * the palm policy: while a pen is present, an incidental touch is ignored
+     * rather than allowed to draw, select or interrupt. It is cleared on the
+     * pen's release and on its leaving the canvas, so touch works again at once.
+     *
+     * `capturedPointerId` - the pointer this surface has captured for an active
+     * gesture, so a release, a cancel or a lost capture knows exactly which id
+     * to hand back. Pointer capture is what keeps a drag alive when the pointer
+     * travels outside the canvas, and the id is kept here rather than on a
+     * session because the capture belongs to the SURFACE, not to a tool.
+     *
+     * `freeformTrace` - the drag-to-draw session of the Freeform Polygon. Null
+     * for every other tool and for the polygon's click workflow, so the two
+     * ways of drawing a polygon can never be running at once.
+     */
+    penInRange: false,
+
+    capturedPointerId: null,
+
+    freeformTrace: null,
 
     /*
      * The pending expiry of a held snap guideline.

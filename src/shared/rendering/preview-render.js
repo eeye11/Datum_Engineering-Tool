@@ -15,6 +15,7 @@ import { appendCoordinateSystem } from "./symbol-render.js";
 import { appendEntity } from "./entity-render.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { heatTransferTool } from "../../features/workspace/model/thermodynamics/heat-transfer.js";
+import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
 
@@ -50,7 +51,11 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             appendEntity(svg, { ...preview, isPreview: true, style: previewStyle(preview) }, state, bounds);
             return;
         }
-        if (["process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
+        if (state.interaction.phase === "point-force-value" && state.interaction.preview) {
+            appendEntity(svg, { ...state.interaction.preview, isPreview: true }, state, bounds);
+            return;
+        }
+        if (["diesel-cycle", "otto-cycle", "carnot-cycle", "rankine-cycle", "nozzle-diffuser", "process-path", "constant-temp-pressure-lines"].includes(state.interaction.preview?.metadata?.thermodynamicsKind)) {
             appendEntity(svg, state.interaction.preview, state, bounds);
             return;
         }
@@ -458,11 +463,13 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             const previewMark = {
                 id: "annotate-preview",
                 type: "annotate",
-                metadata: state.activeTool === "electric-work" ? { thermodynamicsKind: "electric-work" } : {},
+                metadata: ["work-arrow", "electric-work", "mechanical-work"].includes(state.activeTool) ? { thermodynamicsKind: state.activeTool } : {},
                 annotateKind:
                     state.interaction.annotateKind,
                 text: "",
-                geometry: {
+                geometry: state.activeTool === "electric-work" && state.interaction.annotateEnd
+                    ? resistorGeometryFromDrag(state.interaction.annotateStart, state.interaction.annotateEnd)
+                    : {
                     start: state.interaction.annotateStart,
                     end: state.interaction.annotateEnd
                 },
@@ -1190,11 +1197,18 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             preview.type ===
             "polygon"
         ) {
+            /*
+             * A Freeform Polygon previews its OWN vertices. `polygonVertices`
+             * builds a regular polygon from centre, radius and sides, which a
+             * freeform preview does not have - so it drew a zero-size shape
+             * and the outline never appeared while the student drew.
+             */
             const polygonPoints =
-                enggDrawingState
-                    .polygonVertices(
-                        geometry
-                    )
+                (
+                    Array.isArray(geometry.points)
+                        ? geometry.points.filter(Boolean)
+                        : enggDrawingState.polygonVertices(geometry)
+                )
                     .map(toScreen)
                     .map(
                         point =>
@@ -1226,6 +1240,78 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                     polygon
                 );
             }
+
+            /*
+             * THE CLOSING EDGE - pointer back to the first vertex.
+             *
+             * Drawn after the outline so it sits on top of it, in the same
+             * preview stroke but thinner and more faint: it is the edge the
+             * NEXT click would add, not one already placed. A longer dash
+             * distinguishes it from the outline without introducing a second
+             * colour that would read as a different kind of thing.
+             */
+            const closingEdge =
+                preview.metadata?.closingEdge;
+
+            if (closingEdge?.from && closingEdge?.to) {
+                const from = toScreen(closingEdge.from);
+                const to = toScreen(closingEdge.to);
+
+                svg.appendChild(
+                    createSvgElement("line", {
+                        x1: from.x,
+                        y1: from.y,
+                        x2: to.x,
+                        y2: to.y,
+                        stroke: style.stroke,
+                        "stroke-width": 1,
+                        "stroke-dasharray": "3 3",
+                        "stroke-opacity": 0.6,
+                        "data-freeform-closing-edge": "true"
+                    })
+                );
+            }
+
+            /*
+             * A Freeform Polygon's placed vertices: a dot on each, and a
+             * ring on the first (the close target), filled when the pointer
+             * would close the shape.
+             */
+            const markers =
+                preview.metadata?.vertexMarkers || [];
+
+            markers.forEach((vertex, index) => {
+                const screen =
+                    toScreen(vertex);
+
+                if (index === 0) {
+                    svg.appendChild(
+                        createSvgElement("circle", {
+                            cx: screen.x,
+                            cy: screen.y,
+                            r: preview.metadata.closingVertex ? 7 : 6,
+                            fill: preview.metadata.closingVertex
+                                ? style.stroke
+                                : "none",
+                            "fill-opacity": 0.25,
+                            stroke: style.stroke,
+                            "stroke-width": 1.5,
+                            "data-freeform-vertex": "first"
+                        })
+                    );
+                }
+
+                svg.appendChild(
+                    createSvgElement("circle", {
+                        cx: screen.x,
+                        cy: screen.y,
+                        r: 3,
+                        fill: style.stroke,
+                        stroke: "none",
+                        "data-freeform-vertex": String(index)
+                    })
+                );
+            });
 
             return;
         }
@@ -1359,7 +1445,8 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                 style,
                 state,
                 bounds,
-                true
+                true,
+                -(Number(geometry.rotation) || 0)
             );
             return;
         }

@@ -77,6 +77,7 @@ import { installToolbarWiring } from "../../components/layout/toolbar/toolbar-wi
 import { installWorkspaceLayout } from "../../components/layout/workspace/workspace-layout.js";
 import { installDrawingPanel } from "../../components/layout/panels/drawing-panel.js";
 import { installCanvasEvents } from "./interaction/canvas-events.js";
+import { installGestureInput } from "./interaction/gesture-wiring.js";
 import { installKeyboardShortcuts } from "./interaction/keyboard-shortcuts.js";
 import { editableHandlesFor } from "./interaction/handles.js";
 import { setHandleResolver } from "../../shared/rendering/overlay-render.js";
@@ -106,6 +107,7 @@ installToolbarWiring();
 installWorkspaceLayout();
 installDrawingPanel();
 installCanvasEvents();
+installGestureInput();
 installKeyboardShortcuts();
 
 renderEngineeringTools(

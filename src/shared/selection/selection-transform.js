@@ -1,8 +1,12 @@
 import annotate from "../../features/workspace/model/annotations/annotate-model.js";
 import geometry from "../geometry/feature-geometry.js";
+import { boundaryStressDrawing } from "../geometry/boundary-stress.js";
+import { stressArrowPaths } from "../geometry/stress-element.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import { processPathPoints } from "../../features/workspace/model/thermodynamics/process-curves.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
+import annotations from "../../features/workspace/model/annotations/annotation-model.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
 import enggReducer from "../../features/workspace/model/fluids/reducer-expander.js";
@@ -198,7 +202,23 @@ export function selectionBounds(objects, selectedIds, state = {}) {
         if (object.type === "annotate") return annotate.boundsOf(object, state);
         const ink = flowPathPoints(object);
         if (ink) return ink;
+        if (object.type === "truss" && g.members?.length) {
+            return g.members.flatMap(member => [member.start, member.end]).filter(Boolean);
+        }
+        if (object.metadata?.boundaryStress) {
+            const drawing = boundaryStressDrawing(g);
+            return geometry.rectangleCorners(g).concat(drawing.paths.flatMap(path => path.points), drawing.labels.map(label => label.point));
+        }
+        if (object.metadata?.stressElement) return geometry.rectangleCorners(g).concat(stressArrowPaths(g).flat());
+        if (object.type === "pipe-duct") {
+            const centreline = enggPipeDuct.trimmedCentreline(object) || g;
+            if (!centreline?.start || !centreline?.end) return [];
+            return enggPipeDuct
+                .boundaryLines(centreline.start, centreline.end, object.engineering || {})
+                .flatMap((wall) => [wall.start, wall.end]);
+        }
         if (object.metadata?.thermodynamicsKind === "electric-work") return resistorPoints(g);
+        if (object.metadata?.thermodynamicsKind === "mechanical-work") return fanPaths(g).flat();
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];
@@ -217,6 +237,14 @@ export function selectionBounds(objects, selectedIds, state = {}) {
         }
         return [...geometry.definingPoints(g, object.type), ...(object.placement ? [object.placement] : [])];
     }).filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+    if (state) {
+        for (const object of objects.filter(object => ids.has(object.id))) {
+            for (const annotation of annotations.derivedAnnotations(object, state)) {
+                const box = annotations.annotationTextBounds(annotation, state);
+                if (box) points.push({ x: box.minX, y: box.minY }, { x: box.maxX, y: box.maxY });
+            }
+        }
+    }
     if (!points.length) return null;
     return {
         minX: Math.min(...points.map(point => point.x)), maxX: Math.max(...points.map(point => point.x)),
@@ -240,20 +268,32 @@ export function selectionMembers(objects, selectedIds) {
 }
 
 const lengthKeys = new Set(["width", "height", "radius", "length", "depth", "xPositiveLength", "xNegativeLength", "yPositiveLength", "yNegativeLength"]);
+const relativeOffsetKeys = new Set(["magnitudeOffset", "pointOffsets", "supportValueOffsets"]);
 
 // Apply one uniform transform to the original snapshot on every frame.
 // Fractions (piston and stopper positions), angles and engineering values stay intact.
 export function transformSelectionObject(original, anchor, scale = 1, dx = 0, dy = 0) {
     const object = structuredClone(original);
-    const transform = value => {
+    const transform = (value, relative = false) => {
         if (!value || typeof value !== "object") return;
         if (Number.isFinite(value.x) && Number.isFinite(value.y)) {
-            value.x = anchor.x + (value.x - anchor.x) * scale + dx;
-            value.y = anchor.y + (value.y - anchor.y) * scale + dy;
+            value.x = relative ? value.x * scale : anchor.x + (value.x - anchor.x) * scale + dx;
+            value.y = relative ? value.y * scale : anchor.y + (value.y - anchor.y) * scale + dy;
         }
         for (const [key, child] of Object.entries(value)) {
-            if (lengthKeys.has(key) && Number.isFinite(child)) value[key] = child * scale;
-            else if (child && typeof child === "object") transform(child);
+            if (["magnitudeOffset", "pointOffsets", "supportValueOffsets"].includes(key) && child) {
+                // Label offsets are vectors relative to their moving anchors.
+                const scaleOffset = offset => {
+                    if (!offset || typeof offset !== "object") return;
+                    for (const [axis, component] of Object.entries(offset)) {
+                        if ((axis === "x" || axis === "y") && Number.isFinite(component)) offset[axis] *= scale;
+                        else if (component && typeof component === "object") scaleOffset(component);
+                    }
+                };
+                scaleOffset(child);
+            }
+            else if (lengthKeys.has(key) && Number.isFinite(child)) value[key] = child * scale;
+            else if (child && typeof child === "object") transform(child, relative || relativeOffsetKeys.has(key));
         }
     };
     transform(object.geometry);

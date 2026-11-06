@@ -772,7 +772,7 @@ import { arrowHeadSize } from "./dimension-render.js";
         const head =
             rotational.headPoints(
                 arc,
-                arrowHeadSize(lineWidth) * 0.8
+                arrowHeadSize(lineWidth) * 1.12
             );
 
         svg.appendChild(

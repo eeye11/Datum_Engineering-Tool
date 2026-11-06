@@ -457,6 +457,25 @@ function renderClean(state, bounds) {
   );
 
   /*
+   * THE VIEWBOX IS FITTED INTO WHATEVER BOX THE SVG LANDS IN.
+   *
+   * Without this the default is `xMidYMid meet`, which is what is wanted - but
+   * saying it explicitly is what makes the guarantee hold for every consumer.
+   * A preview is rendered into a box shaped like the drawing (a wide plan comes
+   * out 160x42), and the places it is shown - a Recent row's square, a template
+   * card, a written-solution figure - each have their own aspect. `meet` fits
+   * the WHOLE picture inside the box and centres it; without it, an SVG sized
+   * `width: 100%; height: 100%` by a stylesheet is stretched to the box.
+   *
+   * `slice` would crop to fill instead. A thumbnail that crops the drawing is
+   * worse than one with a margin: it shows something that is not the sheet.
+   */
+  svg.setAttribute(
+    "preserveAspectRatio",
+    "xMidYMid meet"
+  );
+
+  /*
    * The width is stated in PIXELS and the height is left to the aspect ratio,
    * which is what lets a figure scale down to a narrow pane without distorting:
    * a fixed pixel height would keep the drawing at its rendered size and

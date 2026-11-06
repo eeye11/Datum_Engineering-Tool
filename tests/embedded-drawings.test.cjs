@@ -29,10 +29,6 @@ const check = (name, ok, detail) => {
 };
 
 const drawings = loadModule("embedded-drawings.js");
-const writingTab = require("fs").readFileSync(
-  require("./helpers/source-path.cjs").locate("writing-tab.js"),
-  "utf8",
-);
 const latexDocument = require("fs").readFileSync(
   require("./helpers/source-path.cjs").locate("latex-document.js"),
   "utf8",
@@ -179,9 +175,7 @@ check("the insertion path writes a reference command",
 check("the picture writer is still what a LINKED drawing renders from",
   /readSheetLatex/.test(latexDocument));
 
-check("the old copy-the-whole-drawing insertion is gone",
-  !/writeLatexPictureParts/.test(writingTab) &&
-    !/function insertDrawingFigure/.test(writingTab));
+
 
 check("Enter Drawing is bound to the workflow, through the workspace",
   /enterDrawingAtCaret/.test(

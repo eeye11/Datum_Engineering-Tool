@@ -98,11 +98,21 @@ for (const tool of [
 
 console.log("\n  a one-gesture path tool exits on a bare click\n");
 
-for (const tool of ["beam", "point-force", "arrow"]) {
+for (const tool of ["arrow"]) {
   check(
     `${tool} exits to Select on a click`,
     shouldExitToSelectOnClick(tool) === true,
     "the tool must not trap the student",
+  );
+}
+
+console.log("\n  the Statics two-point tools take click-move-click\n");
+
+for (const tool of ["beam", "point-force", "pin-connection", "reference-line"]) {
+  check(
+    `${tool} keeps a bare click as its first point`,
+    shouldExitToSelectOnClick(tool) === false,
+    "a click is the start of the feature, as with a Line",
   );
 }
 

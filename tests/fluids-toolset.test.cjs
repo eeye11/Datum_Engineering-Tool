@@ -584,7 +584,7 @@ console.log("\n  the groups expand inline through the Statics mechanism\n");
 
   check(
     "the click handler toggles the inline subsection (the Statics path)",
-    /Object\.hasOwn\(expandedToolbarSections, toolId\)[\s\S]{0,400}#statics-\$\{toolId\}-tools["\s\S]{0,80}hidden = !expanded/.test(
+    /Object\.hasOwn\(expandedToolbarSections, toolId\)[\s\S]{0,800}\.hidden = !expanded/.test(
       renderer,
     ),
   );

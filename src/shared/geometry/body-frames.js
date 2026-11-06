@@ -471,6 +471,28 @@ function supportPlacement(
 
     const side = defaultSide(frame, flipped);
 
+    if (options.fixed === true) {
+        const atStart = positionOn(frame, attachment) <= frame.length / 2;
+        const sign = atStart ? -1 : 1;
+
+        /*
+         * THE WALL IS ON THE MEMBER'S FACE. The render point is the
+         * attachment pushed OUT to the face along the member's normal -
+         * so a wall drawn across the face sits exactly on it, not a
+         * clearance beyond, and not buried along the centreline.
+         */
+        const render = {
+            x: attachment.x + frame.normal.x * side * frame.halfDepth,
+            y: attachment.y + frame.normal.y * side * frame.halfDepth
+        };
+
+        return {
+            attachment: { ...attachment }, render, side,
+            distance: positionOn(frame, attachment), frame,
+            orientation: Math.atan2(frame.tangent.y * sign, frame.tangent.x * sign)
+        };
+    }
+
     /*
      * The offset from the centreline out to the member's own face, and a little
      * beyond it so a triangular symbol sits clear of the drawn body. A FIXED
@@ -479,7 +501,7 @@ function supportPlacement(
      */
     const standoff =
         frame.halfDepth +
-        (options.fixed === true ? 0 : SUPPORT_CLEARANCE);
+        SUPPORT_CLEARANCE;
 
     return {
         attachment: { x: attachment.x, y: attachment.y },

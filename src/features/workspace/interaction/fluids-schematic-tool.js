@@ -61,6 +61,7 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderFeatures } from "../../../components/layout/panels/features-editor.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { toolSetting } from "../../../components/layout/panels/tool-settings-store.js";
 import {
 	DEFAULT_ARROW_LENGTH,
 	DEFAULT_SYMBOL_RADIUS,
@@ -132,7 +133,20 @@ export function beginInlineToolSession(toolId) {
 }
 
 export function beginVesselToolSession() {
-	arm("reservoir-tank", { phase: VESSEL_PHASE, vesselStyle: enggVessel.VESSEL_STYLES.open });
+	/*
+	 * THE TOOL'S DEFAULTS ARE ITS SETTINGS, NOT A SECOND LIST.
+	 *
+	 * A configuration chosen in the tool's own settings applies to what the next
+	 * gesture CREATES; the object it draws is then edited in its Features tab.
+	 * Reading the setting through the shared store means the arm-time value and
+	 * the tool's declared default cannot disagree.
+	 */
+	const configured = toolSetting("reservoir-tank", "vesselStyle");
+
+	arm("reservoir-tank", {
+		phase: VESSEL_PHASE,
+		vesselStyle: configured === enggVessel.VESSEL_STYLES.closed ? enggVessel.VESSEL_STYLES.closed : enggVessel.VESSEL_STYLES.open
+	});
 
 	setToolMessage("Drag to draw the Reservoir / Tank");
 
@@ -290,6 +304,13 @@ export function vesselPreview(session, point) {
 		return null;
 	}
 
+	/*
+	 * THE PREVIEW IS THE VESSEL. It is built by the SAME factory the commit
+	 * uses, from the CONFIGURATION THE TOOL WAS ARMED WITH - which lives on the
+	 * session, beside its start point, not inside its style. Reading it from
+	 * `session.style` meant the preview was always a Reservoir, so a Tank was
+	 * previewed with an open mouth and committed with a lid.
+	 */
 	const width = Math.abs(point.x - session.start.x);
 	const height = Math.abs(point.y - session.start.y);
 
@@ -297,8 +318,11 @@ export function vesselPreview(session, point) {
 		position: { x: Math.min(session.start.x, point.x), y: Math.min(session.start.y, point.y) },
 		width: Math.max(width, enggVessel.MIN_VESSEL_SIDE),
 		height: Math.max(height, enggVessel.MIN_VESSEL_SIDE),
-		vesselStyle: session.style?.vesselStyle || enggVessel.VESSEL_STYLES.open,
-		style: session.style?.lineStyle || {}
+		vesselStyle:
+			session.vesselStyle === enggVessel.VESSEL_STYLES.closed
+				? enggVessel.VESSEL_STYLES.closed
+				: enggVessel.VESSEL_STYLES.open,
+		style: session.style || {}
 	});
 
 	return preview

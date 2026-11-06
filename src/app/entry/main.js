@@ -39,8 +39,6 @@ import "../../shared/references/drawing-reference.js";
 import "../../components/layout/workspace/sheet-tabs.js";
 import "../../features/workspace/index.js";
 import "../../components/layout/toolbar/toolbar.js";
-import "../../shared/solution/written-references.js";
-import "../../shared/solution/writing-tab.js";
 import { installAutomationHooks } from "../automation-hooks.js";
 import enggErrorLog from "../error-log.js";
 import { createDatumApi } from "../../shared/integration/datum-api.js";

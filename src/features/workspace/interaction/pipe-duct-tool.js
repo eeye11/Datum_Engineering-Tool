@@ -80,6 +80,10 @@ import {
   setJunctionElbowBuilder
 } from "./junction-tool.js";
 import { reconcilePipeAssemblies } from "../model/fluids/pipe-assembly.js";
+import enggVessel from "../model/fluids/reservoir-tank.js";
+
+/* How close a pipe's end must be to a wall to be attached to it (drawing units). */
+const VESSEL_ATTACH_TOLERANCE = 1.5;
 
 /*
  * The interaction phase a Pipe / Duct run under construction uses.
@@ -1652,8 +1656,39 @@ export function reconcileFluidConnections(run, objects = drawingState.objects) {
     return { created: [], removed: [], updated: [] };
   }
 
-  enggReducer.reconcilePipe(run, list);
-  const result = reconcileRun(run, list);
+  /*
+   * THE DOCUMENT'S COPY OF THE RUN, NOT THE CALLER'S. `createPipeDuct` returns a
+   * new object that `addObject` then stores as another - so recording an
+   * attachment on the caller's reference left the SHEET's pipe unattached, and a
+   * vessel resize had nothing to carry. Every settlement is applied to the
+   * object the document actually holds.
+   */
+  const stored = list.find((object) => object?.id === run.id) || run;
+
+  enggReducer.reconcilePipe(stored, list);
+
+  /*
+   * A PIPE THAT ENDS ON A VESSEL'S WALL IS ATTACHED TO IT.
+   *
+   * This runs BEFORE the elbows are settled and before any fitting can be
+   * generated, because a vessel is not a pipe: two runs meeting on a wall are
+   * not a corner, and letting the endpoint rule see this one could build an
+   * elbow for a connection that is not a bend. Recording the attachment first
+   * means the fitting rule never has a reason to look at it.
+   */
+  noteVesselAttachment(stored, list);
+
+  const result = reconcileRun(stored, list);
+
+  /*
+   * THE CALLER'S REFERENCE SEES WHAT THE SHEET SEES. `createPipeDuct` hands back
+   * an object the document then clones, so a caller holding the first reference
+   * would otherwise never learn it was attached - and the next call through that
+   * reference would look unattached. The two are kept in step here.
+   */
+  if (stored !== run && run.engineering && stored.engineering) {
+    run.engineering = { ...stored.engineering };
+  }
 
   if (paired) {
     const other = reconcileRun(objects, list);
@@ -1664,6 +1699,77 @@ export function reconcileFluidConnections(run, objects = drawingState.objects) {
   }
 
   return result;
+}
+
+/*
+ * ATTACH A RUN'S END TO THE VESSEL WALL IT WAS PLACED ON.
+ *
+ * The rule is deliberately narrow, because a vessel is a REGION and not a pipe:
+ *
+ *   - only an endpoint that lands ON the outline attaches - a pipe that merely
+ *     crosses the vessel is not connected to it, and one is never invented
+ *     because two geometries happen to overlap;
+ *   - only while the vessel is a CLOSED TANK is its top wall a connection - a
+ *     reservoir's mouth is open, so a pipe there is not attached to anything;
+ *   - the attach records WHERE on the wall (`vesselLocal`, in the vessel's own
+ *     frame), so the end follows that spot when the tank is moved or resized.
+ *
+ * A run whose held end no longer touches its vessel lets go: the attachment is
+ * a fact about where the pipe ends, and it stops being true when the end moves
+ * somewhere else. This function owns that decision for every path that moves a
+ * pipe's end - a drag, a Features edit, a source edit - because it is called
+ * from the single place the joints are settled.
+ */
+function noteVesselAttachment(run, objects) {
+  const vessels = objects.filter((object) => object && enggVessel.isVesselType(object.type));
+
+  const ports = enggPipeDuct.portsOf(run);
+
+  const attached = vessels.find((vessel) => vessel.id === run.engineering?.vesselId);
+
+  if (attached) {
+    const port = run.engineering?.vesselPort;
+
+    const end = port === "start" || port === "end" ? run.geometry?.[port] : null;
+
+    if (!end || !enggVessel.outlineAttachment(attached, end, VESSEL_ATTACH_TOLERANCE)) {
+      releaseVesselAttachment(run);
+    }
+
+    return;
+  }
+
+  /* An unattached run attaches at the first end that sits on a wall. */
+  for (const port of ports) {
+    const vessel = vessels.find((candidate) =>
+      Boolean(enggVessel.outlineAttachment(candidate, port.point, VESSEL_ATTACH_TOLERANCE))
+    );
+
+    if (vessel) {
+      enggVessel.recordPipeAttachment(vessel, run, port.id, port.point);
+
+      return;
+    }
+  }
+}
+
+/* Forget a vessel attachment, so the pipe is a free run again. */
+function releaseVesselAttachment(run) {
+  if (!run?.engineering?.vesselId) {
+    return;
+  }
+
+  const { vesselId, vesselPort, vesselLocal, ...rest } = run.engineering;
+
+  void vesselId;
+  void vesselPort;
+  void vesselLocal;
+
+  run.engineering = rest;
+
+  if (run.parentId) {
+    delete run.parentId;
+  }
 }
 
 function reconcileRun(run, objects) {

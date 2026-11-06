@@ -30,7 +30,7 @@ export function isDimensionTool(
     toolId
 ) {
     return (
-        ["dimension", "smart-dimension", "variable-dimension"].includes(toolId) ||
+        ["dimension", "angle", "smart-dimension", "variable-dimension"].includes(toolId) ||
         enggFluidsTools.fluidsCapability(toolId) ===
             enggFluidsTools.FLUIDS_CAPABILITIES.DIMENSION
     );
@@ -167,14 +167,15 @@ export function dimensionChoiceLabel(
 export function commitDimension(
     dimensionType,
     refs,
-    placement
+    placement,
+    defaultLabel = ""
 ) {
-    if (["dimension", "smart-dimension", "variable-dimension"].includes(drawingState.activeTool)) {
+    if (["dimension", "angle", "smart-dimension", "variable-dimension"].includes(drawingState.activeTool)) {
         enggDrawingState.clearInteraction(drawingState);
         const savedRefs = structuredClone(refs);
         const savedPlacement = { ...placement };
         openLoadValuePopup({
-            title: "Dimension", label: "Magnitude (include units if needed)", value: "",
+            title: dimensionType === "angular" ? "Angle" : "Dimension", label: "Magnitude (include units if needed)", value: defaultLabel,
             expression: true, requireContent: true,
             onConfirm: answer => commitDimensionNow({
                 dimensionType, refs: savedRefs, placement: savedPlacement,
@@ -206,6 +207,7 @@ function commitDimensionNow({
 
     const object = enggDrawingState.geometryFactories.dimension({
         dimensionType,
+        ...(dimensionType === "angular" ? {name:"Angle"} : {}),
         refs,
         placement,
         dimensionKind,
@@ -258,6 +260,7 @@ function commitDimensionNow({
 export function openDimensionValuePrompt(object) {
     if (!object || object.type !== "dimension") return false;
     openDimensionEditor({
+        title: object.dimensionType === "angular" ? "Angle" : "Dimension",
         value: object.dimensionKind === "variable" ? object.content : enggDimensionModel.formatMeasurement(object, drawingState),
         references: referenceSummary(object, drawingState),
         onApply: ({ value }) => {

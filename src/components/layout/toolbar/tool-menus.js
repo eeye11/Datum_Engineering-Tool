@@ -23,20 +23,29 @@ export function activeCategory() {
     );
 }
 
-export function toolDefinitionForLabel(label) {
+export function toolDefinitionForLabel(label, { id = null } = {}) {
     const toolIdByLabel =
         Object.fromEntries(
             Object.entries(
                 drawToolLabelById
             ).map(
-                ([id, toolLabel]) =>
-                    [toolLabel, id]
+                ([entryId, toolLabel]) =>
+                    [toolLabel, entryId]
             )
         );
 
+    /*
+     * A CALLER THAT KNOWS THE TOOL'S ID PASSES IT. A Dynamics family's children
+     * are the same tools as each other in NAME - every one of them is a Spring
+     * or a Vector - which is what makes the menu read as a list of the symbol
+     * library; the id is what says which tool arm. The label lookup is only the
+     * answer for a caller that has nothing better.
+     */
     return {
         id:
+            id ||
             toolIdByLabel[label] ||
+            (label === "Supports" ? "support" : null) ||
             label
                 .toLowerCase()
                 .replace(
@@ -55,10 +64,13 @@ export function renderToolButton(tool) {
      * shows which category the running tool belongs to.
      */
     const childActive =
-        (tool.id === "work" && ["electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
+        (tool.id === "thermodynamic-cycles" && ["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(drawingState.activeTool)) ||
+        (tool.id === "steady-state-devices" && ["turbine-compressor", "pipe-duct", "nozzle-diffuser"].includes(drawingState.activeTool)) ||
+        (tool.id === "work" && ["work-arrow", "electric-work", "mechanical-work"].includes(drawingState.activeTool)) ||
         (tool.id === "heat-transfer" && ["heat-entering", "heat-leaving"].includes(drawingState.activeTool)) ||
         (tool.id === "process-diagrams" && ["saturation-curve", "process-plot", "process-path", "constant-temp-pressure-lines"].includes(drawingState.activeTool)) ||
         (tool.id === "piston-cylinder" && drawingState.activeTool === "piston-cylinder-stoppers") ||
+        tool.childToolIds?.includes(drawingState.activeTool) ||
         STATICS_TOOL_MENUS[tool.id]?.some(
             item =>
                 item.id ===
@@ -123,9 +135,18 @@ export function renderToolButton(tool) {
      * a popup, so it must not promise a menu. Its `aria-expanded` and
      * `aria-controls` are written by the inline section that renders it.
      */
-    const coordinateAttributes =
-        !FLUIDS_TOOL_MENUS[tool.id] &&
-        (tool.id === "coordinate-system" || tool.submenu)
+    /*
+     * A GROUP THAT EXPANDS IN PLACE SAYS WHETHER IT IS OPEN.
+     *
+     * The inline section is rendered underneath the button with `hidden` set
+     * from the same state, so the button must state it too - otherwise a
+     * collapsed group looks identical to an open one, and nothing on the page
+     * records what a press would do. `inlineSection` carries the id the button
+     * controls and whether it is showing.
+     */
+    const coordinateAttributes = tool.inlineSection
+        ? ` aria-expanded="${tool.inlineSection.expanded}" aria-controls="${tool.inlineSection.id}"`
+        : tool.submenu && !FLUIDS_TOOL_MENUS[tool.id]
             ? ' aria-haspopup="menu" aria-expanded="false"'
             : "";
 
@@ -139,7 +160,8 @@ export function renderToolButton(tool) {
             class="drawing-tool${active ? " active" : ""}"
             type="button"
             data-tool-id="${tool.id}"
-            title="${tool.label}${shortcut}"
+            ${tool.disabled ? 'disabled aria-disabled="true"' : ""}
+            title="${tool.id === "force-components" ? "Force Components: draw an arrow with Loads > Point Load first, then click that arrow to show X and Y components" : tool.label}${shortcut}"
             aria-label="${tool.label}${shortcut}"
             aria-pressed="${active}"
             ${coordinateAttributes}
@@ -557,7 +579,7 @@ export const ARC_CREATION_MODES = [
 ];
 
 export function activateArcMode(toolId, mode) {
-    armCreationMode(toolId, "arcMode", mode);
+    return armCreationMode(toolId, "arcMode", mode);
 }
 
 /*
@@ -582,7 +604,7 @@ function armCreationMode(toolId, key, mode) {
         }
     );
 
-    import("./tool-activation.js").then(
+    return import("./tool-activation.js").then(
         ({ activateTool }) => {
             activateTool(toolId);
 
@@ -607,8 +629,13 @@ function armCreationMode(toolId, key, mode) {
  * records the method and arms the Polygon tool, exactly as the Arc
  * modes do.
  */
-function activatePolygonMode(mode) {
-    armCreationMode("polygon", "polygonMode", mode);
+export const POLYGON_CREATION_MODES = [
+    { id: "sides", label: "By Sides" },
+    { id: "centre", label: "By Centre" }
+];
+
+export function activatePolygonMode(mode) {
+    return armCreationMode("polygon", "polygonMode", mode);
 }
 
 export function openArcMenu(button) {
@@ -784,6 +811,15 @@ export function openToolSubmenu(
         "menu"
     );
 
+    /*
+     * AN ITEM CARRIES ITS OWN LABEL, AND MAY CARRY A TRAILING STATE.
+     *
+     * A Statics family's entries are plain words; a Dynamics family's entries
+     * are the tools that exist, and a list of the same tool under several
+     * families would read as duplicates. `item.state` (when present) is the one
+     * short fact that tells two of them apart, and `item.kind` is the stored
+     * feature the entry pages, so a label lookup can never pick the wrong one.
+     */
     menu.innerHTML =
         items
             .map(
@@ -794,7 +830,7 @@ export function openToolSubmenu(
                         role="menuitem"
                         data-submenu-id="${item.id}"
                     >
-                        ${item.label}
+                        ${item.label}${item.state ? `<span class="drawing-coordinate-submenu-state">${item.state}</span>` : ""}
                     </button>
                 `
             )

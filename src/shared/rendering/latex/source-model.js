@@ -423,8 +423,48 @@ function shapeOfPath(body) {
     return { type: "line", from: points[0].value, to: points[1].value };
   }
 
-  if (kinds === "point line point line point cycle" && points.length === 3) {
-    return { type: "polyline", points: points.map((operation) => operation.value) };
+  /*
+   * A CLOSED PATH: `(p1) -- (p2) -- ... -- cycle`.
+   *
+   * Read from the OPERATIONS rather than reconstructed into a string: every
+   * operation after the first must be a line, the last must be the cycle, and
+   * there must be three points for it to be a shape at all. Written this way
+   * it holds for any number of vertices, which is what a Freeform Polygon
+   * needs - the old form only matched exactly three.
+   */
+  const closedPath =
+    points.length >= 3 &&
+    operations[operations.length - 1].type === "cycle" &&
+    operations.every((operation, index) => {
+      /*
+       * The shape of the sequence is `point (line point)* line cycle`: the
+       * cycle is its own final operation and there is a `line` immediately
+       * before it, which is the drawn edge. Anything else - a curve, a
+       * repeated move - is not a simple closed polygon.
+       */
+      if (index === operations.length - 1) {
+        return operation.type === "cycle";
+      }
+
+      if (index === operations.length - 2) {
+        return operation.type === "line";
+      }
+
+      return index % 2 === 0 ? operation.type === "point" : operation.type === "line";
+    });
+
+  /*
+   * A RECTANGLE IS A MORE SPECIFIC READING OF FOUR POINTS, and it is written
+   * as a `rectangle` operation rather than as four segments, so it never
+   * matches `closedPath` - it is handled by the `point rectangle point` case
+   * below.
+   */
+  if (closedPath) {
+    return {
+      type: "polyline",
+      points: points.map((operation) => operation.value),
+      closed: true
+    };
   }
 
   if (kinds === "point rectangle point" && points.length === 2) {
@@ -506,9 +546,15 @@ function polarOffsetOf(arc) {
   return { angle: from, delta };
 }
 
-/* `line width=0.28mm` -> 0.28. */
+/*
+ * `line width=0.28mm` -> 0.28, and `line width=1.2pt` -> 1.2.
+ *
+ * The unit is part of the statement but not part of the answer: the caller
+ * converts a length to the model's own width, and \`pt\` is how DAETUM's writers
+ * emit the named presets while \`mm\` is how a mm-scale export does.
+ */
 function lineWidthOf(options) {
-  const match = /line\s*width\s*=\s*([\d.]+)\s*mm/.exec(options || "");
+  const match = /line\s*width\s*=\s*([\d.]+)\s*(mm|pt|cm)?/.exec(options || "");
 
   return match ? Number(match[1]) : null;
 }
@@ -524,32 +570,128 @@ function lineWidthOf(options) {
 function definedColour(text) {
   const match = /\\definecolor\{([^}]*)\}\{RGB\}\{\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\}/.exec(text || "");
 
+  /*
+   * NO LOCAL DEFINITION: fall back to `#RRGGBB`, which DAETUM's readers also
+   * accept. `named` says whether the name came from a definition, which is
+   * what lets a caller add a word boundary that a hex value must not have.
+   */
+  if (!match) {
+    const hex = /#([0-9a-fA-F]{6})\b/.exec(text || "");
+
+    return hex ? { name: hex[1], value: `#${hex[1].toLowerCase()}`, hex: true } : null;
+  }
+
+  const value = [match[2], match[3], match[4]]
+    .map((part) => Math.max(0, Math.min(255, Number(part))).toString(16).padStart(2, "0"))
+    .join("");
+
+  return { name: match[1], value: `#${value}`, hex: false };
+}
+
+/*
+ * The colour ONE named definition in `text` stands for, by that name.
+ *
+ * A statement can carry more than one `\definecolor` - an outline and a fill,
+ * each written as its own local colour - so a lookup has to name the one it
+ * wants rather than taking whichever came first.
+ */
+function definitionFor(text, name) {
+  if (!name) {
+    return null;
+  }
+
+  const pattern = new RegExp(`\\\\definecolor\\{${name}\\}\\{RGB\\}\\{\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\}`);
+  const match = pattern.exec(text || "");
+
   if (!match) {
     return null;
   }
 
-  const hex = [match[2], match[3], match[4]]
+  return `#${[match[1], match[2], match[3]]
     .map((part) => Math.max(0, Math.min(255, Number(part))).toString(16).padStart(2, "0"))
-    .join("");
-
-  return { name: match[1], value: `#${hex}` };
+    .join("")}`;
 }
 
 /* The name a `draw=`/`color=` option refers to, if the statement defined it. */
-function colourOf(options, statementText) {
-  const direct = /#([0-9a-fA-F]{6})\b|(?:draw|color)\s*=\s*\{?\s*#?([0-9a-fA-F]{6})\b/.exec(options || "");
+function colourOf(options, statementText, colourContext = "") {
+  /*
+   * A NAMED LOCAL COLOUR IS RESOLVED BEFORE A BARE HEX.
+   *
+   * DAETUM writes a hex colour as `daetumC112233`, and THAT NAME CONTAINS SIX
+   * HEX DIGITS (`C112233`) - so a hex matcher run first finds them inside the
+   * identifier and reports the wrong colour, or none at all. The definition a
+   * statement carries is the authority: when the option names a colour this
+   * statement defined, that definition IS the colour.
+   *
+   * A SHAPE MAY HAVE TWO - an outline and a fill - so the option's own name is
+   * resolved against its own definition rather than against "the" first one.
+   *
+   * `colourContext` is the rest of the block, for the case where the
+   * `\definecolor` is its own statement on its own line (as DAETUM writes it).
+   */
+  const scope = [statementText, colourContext].filter(Boolean).join("\n");
+  const strokeName = /(?:draw|color)\s*=\s*\{?\s*([A-Za-z#][A-Za-z0-9#_]*)/.exec(options || "");
+
+  if (strokeName && strokeName[1].startsWith("#")) {
+    return strokeName[1].toLowerCase();
+  }
+
+  if (strokeName) {
+    const named = definitionFor(scope, strokeName[1]);
+
+    if (named) {
+      return named;
+    }
+  }
+
+  const defined = definedColour(scope);
+
+  if (defined && defined.hex !== true) {
+    return defined.value;
+  }
+
+  const direct = /#([0-9a-fA-F]{6})\b|(?:draw|color|fill)\s*=\s*\{?\s*#?([0-9a-fA-F]{6})\b/.exec(options || "");
 
   if (direct) {
     return `#${(direct[1] || direct[2]).toLowerCase()}`;
   }
 
-  const defined = definedColour(statementText);
+  return null;
+}
 
-  if (defined && new RegExp(`(?:draw|color)\\s*=\\s*\{?\\s*${defined.name}\\b`).test(options || "")) {
-    return defined.value;
+/*
+ * The fill colour a statement names, when it fills with one.
+ *
+ * `filled` alone says "this shape is filled"; the COLOUR is what a round trip
+ * has to carry, and DAETUM writes it as `fill=<name>` joined to the same local
+ * definition the stroke uses. `fill=none` is no fill at all.
+ */
+function fillColourOf(options, statementText, colourContext = "") {
+  const option = /\bfill\s*=\s*\{?\s*(#[0-9a-fA-F]{6}|[A-Za-z][A-Za-z0-9_]*)/.exec(options || "");
+
+  if (!option || option[1] === "none") {
+    return null;
   }
 
-  return null;
+  /* A literal hex colour, as `fill=#abcdef`. */
+  if (option[1].startsWith("#")) {
+    return option[1].toLowerCase();
+  }
+
+  /*
+   * A NAMED COLOUR IS LOOKED UP BY ITS DEFINITION, whichever definition it was.
+   *
+   * A shape filled with one colour has TWO definitions in its block - the
+   * stroke's and the fill's - so the lookup has to match the NAME the option
+   * uses, not simply take "the" definition.
+   */
+  const named = definitionFor([statementText, colourContext].filter(Boolean).join("\n"), option[1]);
+
+  if (named) {
+    return named;
+  }
+
+  return /^[0-9a-fA-F]{6}$/.test(option[1]) ? `#${option[1].toLowerCase()}` : null;
 }
 
 /* `\node at (x,y) {$text$};` or `\node[right] at (x,y) {$text$};`. */
@@ -594,8 +736,14 @@ function coordinateAt(statementText) {
  * `{ type, ... }` for a shape DAETUM can edit, `null` for a statement it can only
  * render. A `null` is not an error: the statement stays in the document and in
  * the picture.
+ *
+ * `colourContext` is the REST OF THE BLOCK, when the caller has it. A `\definecolor`
+ * is written on its own line ahead of the `\draw` that uses it, so it is a
+ * different statement - and the `\draw` alone cannot say what `daetumC123456`
+ * means. Passing the block lets the colour resolve without merging the two
+ * statements, so each keeps its own line and its own diagnostic.
  */
-export function shapeFromStatement(statementText) {
+export function shapeFromStatement(statementText, colourContext = "") {
   const text = String(statementText ?? "").trim();
   const nameMatch = /^\\([A-Za-z]+\*?)/.exec(text);
 
@@ -613,26 +761,93 @@ export function shapeFromStatement(statementText) {
     return coordinateAt(text);
   }
 
-  if (!PATH_COMMANDS.has(name)) {
+  /*
+   * A COLOUR DEFINITION IS NOT A SHAPE, BUT IT IS PART OF ONE.
+   *
+   * DAETUM writes a hex colour as a local `\definecolor{daetumC...}{RGB}{...}`
+   * FOLLOWED BY the `\draw` that uses it - two statements, one object. So a
+   * definition is never a shape on its own, and the `\draw` beside it IS one.
+   * That is why this does not return early on `definecolor`: the path command
+   * is located below, wherever it sits in the statement, and a statement with
+   * no path command at all answers null there.
+   */
+  /*
+   * A PATH COMMAND BOUNDED BY WHAT CAN FOLLOW IT.
+   *
+   * `\b` is wrong here: a word boundary needs a word character on one side,
+   * and `\draw[` / `\draw (` are both followed by a non-word character - so
+   * `\draw\b` never matched and the search found nothing. The lookahead states
+   * the real rule: the name must not run on into more letters.
+   */
+  const PATH_COMMAND = /\\(?:draw|fill|filldraw|shade|shadedraw|clip|path)(?![A-Za-z])/;
+
+  if (!PATH_COMMANDS.has(name) && !PATH_COMMAND.test(text)) {
     return null;
   }
 
-  /* Everything after the command's own name, minus the terminator. */
-  const body = text.slice(1 + name.length).replace(/;\s*$/, "");
-  const shape = shapeOfPath(body);
+  /*
+   * THE PATH STARTS AT THE PATH COMMAND, not at the statement's first
+   * character. A block may open with `\definecolor` lines - a coloured shape
+   * writes one per colour - so `\draw` is not always at the front.
+   */
+  const pathAt = text.search(PATH_COMMAND);
+
+  if (pathAt < 0) {
+    return null;
+  }
+
+  /*
+   * EVERYTHING FROM THE PATH COMMAND ONWARD belongs to the path. A block may
+   * open with `\definecolor` lines - a coloured shape writes one per colour -
+   * so the statement's FIRST command is not necessarily the one that draws.
+   */
+  const pathText = text.slice(pathAt);
+  const pathName = /^\\([A-Za-z]+)/.exec(pathText)[1];
+
+  /*
+   * THE BODY STARTS AT THE PATH'S OWN FIRST TOKEN. The text between the
+   * command name and the path is options (`[draw=...]`) and whitespace; the
+   * path begins at the first `(` or `++`.
+   */
+  const rawBody = pathText.slice(1 + pathName.length).replace(/;\s*$/, "");
+  const firstToken = rawBody.search(/[()]|\+\+/);
+  const body = firstToken < 0 ? "" : rawBody.slice(firstToken).trim();
+  const shape = shapeOfPath(body.trim());
 
   if (!shape) {
     return null;
   }
 
-  const options = optionsAt(text, 1 + name.length);
+  /*
+   * THE PATH'S OWN OPTION LIST, READ DIRECTLY.
+   *
+   * `\draw[draw=..., fill=...]` - the brackets immediately after the command
+   * name. Read with one small expression rather than by offset arithmetic, so
+   * a `\definecolor` line ahead of the `\draw` in the same statement cannot
+   * shift the index and silently produce an empty option list (which reads as
+   * "this shape has no colour" rather than as a parse failure).
+   */
+  const optionMatch = /^\s*\[([^\]]*)\]/.exec(pathText.slice(1 + pathName.length));
+  const options = optionMatch ? optionMatch[1] : "";
+
+  /*
+   * THE COLOUR LOOKUP SEES THE WHOLE STATEMENT, NOT ONLY ITS OPTION LIST.
+   *
+   * A `\definecolor` accompanies the `\draw` that uses it, and the definition
+   * is what says what `daetumC123456` means - so the WHOLE statement text is
+   * passed below, with the options still identified from it. Reading only
+   * `[draw=daetumC123456]` in isolation would give a name that nothing in
+   * scope defines.
+   */
 
   return {
     ...shape,
     /** Whether a fill was requested (`\fill`, or `fill=<colour>`). */
-    filled: name === "fill" || name === "filldraw" || /\bfill\s*=/.test(options),
+    filled: pathName === "fill" || pathName === "filldraw" || /\bfill\s*=/.test(options),
+    /** The fill colour as `#rrggbb`, when the statement fills with one. */
+    fill: fillColourOf(options, text, colourContext),
     /** The stroke colour as `#rrggbb`, when the statement names one. */
-    stroke: colourOf(options, text),
+    stroke: colourOf(options, text, colourContext),
     /** The stroke width in millimetres, when the statement names one. */
     lineWidth: lineWidthOf(options)
   };
@@ -684,6 +899,8 @@ export function blockContents(source, map) {
         (statement) => statement.startLine >= bodyStart && statement.startLine < bodyEnd
       );
 
+      const bodyText = lines.slice(bodyStart, bodyEnd).join("\n");
+
       return {
         id: block.id,
         type: block.type,
@@ -696,7 +913,7 @@ export function blockContents(source, map) {
          * needs to know WHAT the block is must see both.
          */
         header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart)).join("\n"),
-        body: lines.slice(bodyStart, bodyEnd).join("\n"),
+        body: bodyText,
         statements: inside.map((statement) => {
           const statementText = text.slice(statement.start, statement.end);
 
@@ -705,7 +922,12 @@ export function blockContents(source, map) {
             complete: statement.complete,
             startLine: statement.startLine,
             endLine: statement.endLine,
-            shape: statement.complete ? shapeFromStatement(statementText) : null
+            /*
+             * THE BLOCK'S OWN TEXT IS PASSED ALONGSIDE. A `\definecolor` is its
+             * own statement on its own line, so the `\draw` beside it cannot
+             * name its colour without it - and the block is what has it.
+             */
+            shape: statement.complete ? shapeFromStatement(statementText, bodyText) : null
           };
         })
       };

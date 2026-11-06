@@ -95,11 +95,11 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
         const origin = toScreen(frame);
 
         const lines = String(text).split("\n");
-        const fontSize = zoomedFontHere(11);
+        const fontSize = zoomedFontHere(frame.fontSize || 11);
         const lineHeight = fontSize * 1.15;
 
         const group = createSvgElement("g", {
-            transform: `translate(${origin.x} ${origin.y}) rotate(${frame.angle || 0})`
+            transform: `translate(${origin.x} ${origin.y}) rotate(${-Number(frame.angle || 0)})`
         });
 
         // A narrow canvas-coloured halo separates glyphs from crossing lines.
@@ -284,6 +284,7 @@ import { createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.
             if (arc.length >= 2) {
                 svg.appendChild(
                     createSvgElement("polyline", {
+                        class: graphics.rightAngle ? "drawing-right-angle-marker" : "drawing-angle-arc",
                         points: arc
                             .map((point) => {
                                 const p = toScreen(point);

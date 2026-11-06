@@ -348,14 +348,27 @@ export function readVessel(source, { previous = null } = {}) {
     return null;
   }
 
-  /* The top-left corner is the highest and left-most point the outline uses. */
+  /* Every block written by this version carries `percent=`; an older one may not. */
+  const legacyAnchor = settings.percent === undefined;
+
+  /*
+   * THE VESSEL'S ANCHOR IS ITS BOTTOM-LEFT CORNER (world Y grows upward), so the
+   * anchor is the lowest and left-most point on the outline - not the highest,
+   * which would pull a reopened vessel one height up the sheet.
+   */
   const minX = Math.min(...coordinates.map((corner) => corner.x));
   const minY = Math.min(...coordinates.map((corner) => corner.y));
 
   return {
     type: enggVessel.RESERVOIR_TYPE,
     geometry: {
-      position: { x: minX, y: minY },
+      /*
+       * A BLOCK WRITTEN BY AN EARLIER VERSION ANCHORED AT THE TOP-LEFT, with the
+       * same numbers, so it is placed one height HIGHER than it reads. The block
+       * says which: a `percent=` header is written for every vessel now, and a
+       * block without one is an older file - so the anchor is lifted to match.
+       */
+      position: { x: minX, y: legacyAnchor ? minY + height : minY },
       width,
       height,
       rotation: numberOf(previous?.geometry?.rotation, 0)
@@ -364,10 +377,37 @@ export function readVessel(source, { previous = null } = {}) {
       vesselStyle:
         settings.style === enggVessel.VESSEL_STYLES.closed
           ? enggVessel.VESSEL_STYLES.closed
-          : enggVessel.VESSEL_STYLES.open
+          : enggVessel.VESSEL_STYLES.open,
+
+      /*
+       * THE TANK'S LIQUID, AS TYPED. `fluid=on` switches it on and `percent=`
+       * places the surface; either may be retyped on its own, and the other then
+       * keeps the value the block did not mention (or the default). A level
+       * carried over from the previous object is preserved, which is what makes
+       * a one-line source edit an edit rather than a reset.
+       */
+      fluidLevel: fluidLevelOf(settings, previous)
     },
     style: baseStyleFromSource(source, previous?.style),
     id: previous?.id || null
+  };
+}
+
+/* The liquid state a vessel block states, merged over what the object already had. */
+function fluidLevelOf(settings, previous) {
+  const before = previous?.engineering?.fluidLevel || {};
+
+  const stated = String(settings.fluid || "").trim().toLowerCase();
+
+  const percent = numberOf(settings.percent, null);
+
+  return {
+    enabled: stated === "off" ? false : stated === "on" ? true : Boolean(before.enabled ?? true),
+    percent: percent !== null
+      ? Math.min(100, Math.max(0, percent))
+      : Number.isFinite(Number(before.percent))
+        ? Number(before.percent)
+        : enggVessel.DEFAULT_FLUID_LEVEL_PERCENT
   };
 }
 

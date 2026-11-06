@@ -76,32 +76,31 @@ check(
   datum.getDocument().document.sheets[0].objects.some((o) => o.type === "beam"),
 );
 
-console.log("\n  the written solution\n");
+/*
+ * THE WRITTEN SOLUTION'S SOURCE SURVIVES WITHOUT THE EDITOR.
+ *
+ * `setSolution` / `getSolution` used to read and write the write-up's editor.
+ * There is no write-up any more, but the calls still work: the source lives in
+ * the solution state module, so an embed can set LaTeX and read it back.
+ */
+console.log("\n  the written solution survives without the editor\n");
 
-let solutionChanges = 0;
-datum.on("solutionchange", () => solutionChanges++);
-
-const sheetId = datum.listSheets()[0].id;
-check("setSolution accepts LaTeX", datum.setSolution(`See [DRAWING_REFERENCE:${sheetId}].`).ok);
-
-const solution = datum.getSolution();
-check("getSolution returns it", solution.latex === `See [DRAWING_REFERENCE:${sheetId}].`);
 check(
-  "with the drawings it references, by id and name",
-  solution.references.length === 1 &&
-    solution.references[0].sheetId === sheetId &&
-    solution.references[0].sheetName === datum.listSheets()[0].name,
-  JSON.stringify(solution.references),
+  "setSolution accepts LaTeX without an editor on the page",
+  datum.setSolution("\\frac{1}{2}").ok === true,
+  JSON.stringify(datum.setSolution("\\frac{1}{2}")),
 );
 
-/*
- * THE EDITOR IS `solutionEditor` NOW. The written solution became a workspace
- * with its own editor element; the API and the event it raises are unchanged.
- */
-const code = document.getElementById("solutionEditor");
-code.value += " Edited.";
-code.dispatchEvent(new window.Event("input"));
-check("a student's edit raises solutionchange", solutionChanges === 1, `raised ${solutionChanges}`);
+check(
+  "and getSolution returns the LaTeX it was given",
+  (datum.getSolution()?.latex ?? "") === "\\frac{1}{2}",
+  JSON.stringify(datum.getSolution()),
+);
+
+check(
+  "there is no written-solution editor on the page",
+  document.getElementById("solutionEditor") === null,
+);
 
 let threw = null;
 try {

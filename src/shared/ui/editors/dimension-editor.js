@@ -1,13 +1,14 @@
+import { attachSymbolInsert } from "./text-symbol-insert.js";
 let currentClose = null;
 
-export function openDimensionEditor({ value, references, onApply }) {
+export function openDimensionEditor({ value, references, onApply, title: editorTitle = "Dimension" }) {
     currentClose?.();
     const panel = document.createElement("form");
     panel.className = "drawing-creation-dimension dimension-value-editor";
     panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", "Dimension");
+    panel.setAttribute("aria-label", editorTitle);
     const title = document.createElement("strong");
-    title.textContent = "Dimension";
+    title.textContent = editorTitle;
     panel.append(title);
     const label = document.createElement("label");
     label.textContent = "Magnitude (include units if needed)";
@@ -16,6 +17,7 @@ export function openDimensionEditor({ value, references, onApply }) {
     input.setAttribute("aria-label", "Dimension magnitude");
     input.className = "drawing-property-input";
     label.append(input); panel.append(label);
+    attachSymbolInsert(input);
     const refs = document.createElement("p"); refs.textContent = `References: ${references || "Unresolved"}`; panel.append(refs);
     const error = document.createElement("p"); error.setAttribute("role", "alert"); panel.append(error);
     const actions = document.createElement("div"); actions.className = "drawing-scale-dialog-actions";

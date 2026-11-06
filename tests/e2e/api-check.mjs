@@ -72,7 +72,12 @@ try {
 
     // Draw a beam through the UI and watch for documentchange.
     await page.evaluate(() => { window.__changes = 0; window.datum.on("documentchange", () => window.__changes++); });
-    await page.click("text=Engineering Drawing");
+    /*
+     * NO WORKSPACE TAB TO CLICK. There is one workspace - Engineering Drawing -
+     * and since the Written Solution tab was removed there is no tab strip at
+     * all: the drawing section is the page. The old click here waited on text
+     * that no longer exists anywhere but a comment, and timed out.
+     */
     await page.click('.drawing-category[data-category="STATICS"]');
     await page.click('.drawing-tool[data-tool-id="body"]');
     // Bodies opens an INLINE section now, not a popup submenu: the child is

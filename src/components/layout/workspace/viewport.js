@@ -3,12 +3,16 @@
  */
 
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import { coordinateSystemArms } from "../../../shared/geometry/feature-handles.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../../../features/workspace/model/analysis/load-profile.js";
 import enggAnnotationModel from "../../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../../features/workspace/model/annotations/annotate-model.js";
 import { resistorPoints } from "../../../features/workspace/model/thermodynamics/resistor.js";
+import { stressArrowPaths, stressAngleMark } from "../../../shared/geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
+import { fanPaths } from "../../../features/workspace/model/thermodynamics/fan.js";
 import enggDimensionModel from "../../../features/workspace/model/dimensions/dimension-model.js";
 import enggDrawingRotationalArrow from "../../../features/workspace/model/analysis/rotational-arrow.js";
 import { analysisFrameExtents } from "../../../features/workspace/model/analysis/analysis-frame.js";
@@ -16,7 +20,6 @@ import { analysisSketchMarks } from "../../../shared/rendering/analysis-render.j
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import { arcSelectionPoints, distributedLoadArrowScreenLength } from "../../../features/workspace/interaction/box-selection.js";
 import { renderCurrentDrawing } from "./canvas-render.js";
-import { COORDINATE_SYSTEM_LENGTH } from "../../../features/workspace/constants.js";
 import { renderedPointsForObjects } from "../../../features/workspace/commands/document-commands.js";
 import { drawingCanvas, drawingGridToggle, drawingSnapToggle } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -190,6 +193,87 @@ function applyFittedCamera(
     syncActiveSheetViewport();
 
     renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * ============================================================
+ * THE VIEWPORT'S TWO TOUCH PRIMITIVES
+ * ============================================================
+ *
+ * A two-finger pan and a pinch are written here, ONCE, as two small functions
+ * over the camera - so the gesture layer never does camera arithmetic and a
+ * mouse zoom cannot disagree with a pinch about the limits.
+ *
+ * NEITHER OF THEM TOUCHES THE DRAWING. They write `zoom`, `panX` and `panY` and
+ * nothing else: no geometry, no selection, no snapping, no history. That is
+ * what makes navigation safe to interleave with an editing session, and why an
+ * undo can never appear because of a pan.
+ */
+
+/*
+ * PAN BY A SCREEN-SPACE DRAG, in CSS pixels.
+ *
+ * A finger moving right moves the sheet right, which means the CAMERA moves
+ * left - the same sign convention the Pan tool already uses.
+ */
+export function panByScreenDelta(deltaX, deltaY) {
+    if (
+        !Number.isFinite(deltaX) ||
+        !Number.isFinite(deltaY)
+    ) {
+        return false;
+    }
+
+    const scale =
+        enggDrawingState.BASE_PIXELS_PER_UNIT *
+        Math.max(drawingState.camera.zoom, 1e-6);
+
+    enggDrawingState.panCamera(
+        drawingState,
+
+        drawingState.camera.panX - deltaX / scale,
+
+        drawingState.camera.panY + deltaY / scale
+    );
+
+    syncActiveSheetViewport();
+
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * PINCH ZOOM, ANCHORED ON A SCREEN POINT.
+ *
+ * The point under the fingers must stay under the fingers, so this is
+ * `zoomAtCanvasPoint` - the SAME function the wheel, the menu and the zoom
+ * buttons use - given a synthetic event carrying the gesture's midpoint. Using
+ * it rather than re-deriving the anchor arithmetic is what keeps a pinch and a
+ * wheel-zoom anchored identically, and what keeps the state model's clamping
+ * in force: a pinch cannot exceed the supported zoom range.
+ */
+export function zoomAtScreenPoint(
+    nextZoom,
+    screenPoint
+) {
+    if (
+        !screenPoint ||
+        !Number.isFinite(screenPoint.x) ||
+        !Number.isFinite(screenPoint.y)
+    ) {
+        return false;
+    }
+
+    zoomAtCanvasPoint(
+        nextZoom,
+        {
+            clientX: screenPoint.x,
+            clientY: screenPoint.y
+        }
+    );
 
     return true;
 }
@@ -532,6 +616,17 @@ function dimensionBoundsPoints(object) {
  * Fit and the renderer cannot disagree about how much room a mark takes.
  */
 function annotateBoundsPoints(object) {
+    if (object?.metadata?.boundaryStress && object.visible !== false) {
+        const drawing = boundaryStressDrawing(object.geometry);
+        return drawing.paths.flatMap(path => path.points).concat(drawing.labels.map(label => label.point));
+    }
+    if (object?.metadata?.stressElement && object.visible !== false) {
+        const mark = stressAngleMark(object.geometry);
+        return stressArrowPaths(object.geometry).flat().concat(mark ? [...mark.reference, ...mark.face, ...mark.perpendicular, ...mark.arc, mark.labelPoint, ...mark.axes.map(axis => axis.point)] : []);
+    }
+    if (object?.metadata?.thermodynamicsKind === "mechanical-work" && object.visible !== false) {
+        return fanPaths(object.geometry).flat();
+    }
     if (object?.metadata?.thermodynamicsKind === "electric-work" && object.visible !== false) {
         return resistorPoints(object.geometry);
     }
@@ -993,21 +1088,7 @@ function geometryRenderedBounds(
     }
 
     if (object.type === "coordinate-system-2d") {
-        const axisLength =
-            geometry.axisLength ??
-            geometry.xAxisLength ??
-            COORDINATE_SYSTEM_LENGTH;
-
-        return [
-            {
-                x: geometry.origin.x - axisLength,
-                y: geometry.origin.y - axisLength
-            },
-            {
-                x: geometry.origin.x + axisLength,
-                y: geometry.origin.y + axisLength
-            }
-        ];
+        return coordinateSystemArms(geometry).flatMap(arm => [arm.start, arm.end]);
     }
 
     /*

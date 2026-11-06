@@ -105,7 +105,7 @@ test("E7: a generated elbow's TikZ compiles and draws two curved boundaries", as
 
   const subpaths = paths.flatMap((d) => d.split(/(?=M)/).filter(Boolean));
 
-  const curved = subpaths.filter((sub) => /[CcQs]/.test(sub));
+  const curved = subpaths.filter((sub) => /[CcQsAa]/.test(sub));
 
   assert.ok(curved.length >= 2, `both boundaries must be curves, found ${curved.length}`);
   assert.ok(countTag(svg, "svg") >= 1);
@@ -178,6 +178,7 @@ test("E10: an AUTOMATIC non-right elbow compiles and draws its bend", async () =
   assert.ok(elbow, "a 30 degree join must earn an elbow");
 
   const source = m.sync.sourceForObject(elbow);
+
   const svg = await render(source);
 
   assert.ok(typeof svg === "string" && svg.includes("<svg"), "the 30 degree elbow compiled");
@@ -185,7 +186,7 @@ test("E10: an AUTOMATIC non-right elbow compiles and draws its bend", async () =
   const paths = [...svg.matchAll(/<path\b[^>]*\bd="([^"]*)"/g)].map((match) => match[1]);
 
   const subpaths = paths.flatMap((d) => d.split(/(?=M)/).filter(Boolean));
-  const curved = subpaths.filter((sub) => /[CcQs]/.test(sub));
+  const curved = subpaths.filter((sub) => /[CcQsAa]/.test(sub));
 
   assert.ok(curved.length >= 2, `both walls must render as curves, found ${curved.length}`);
 });

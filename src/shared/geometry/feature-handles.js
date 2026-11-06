@@ -28,7 +28,7 @@ export function trussJoints(
 }
 
 /*
- * The four arms of the coordinate system as segments.
+ * The positive X and Y arms of the coordinate system as segments.
  *
  * Shared by hit-testing, handles and snapping so they
  * all agree on the same geometry, and so the four
@@ -88,7 +88,16 @@ export function coordinateSystemArms(
                 y: origin.y - read(geometry.yNegativeLength)
             }
         }
-    ];
+    ].filter(arm => !arm.kind.endsWith("Negative") &&
+        (arm.kind === "xPositive" ? geometry.showXAxis !== false : geometry.showYAxis !== false))
+        .map(arm => {
+            const angle = Number(geometry.rotation) || 0;
+            const dx = arm.end.x - origin.x, dy = arm.end.y - origin.y;
+            return { ...arm, end: {
+                x: origin.x + dx * Math.cos(angle) - dy * Math.sin(angle),
+                y: origin.y + dx * Math.sin(angle) + dy * Math.cos(angle)
+            } };
+        });
 }
 
 /*

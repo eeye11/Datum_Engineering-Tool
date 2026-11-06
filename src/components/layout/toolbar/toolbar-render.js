@@ -3,16 +3,16 @@
  */
 
 import { disciplineToolGroups, drawingToolGroups, engineeringTools } from "./tools.js";
-import { ANALYSIS_DIAGRAM_TOOLS, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS, beginAnalysisDiagram, analysisDiagramIntroMessage, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
-import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openCoordinateSystemMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
-import { DYNAMICS_TOOL_MENUS, openDynamicsMenu } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../../../features/workspace/statics/statics-tools.js";
+import { DYNAMICS_TOOL_MENUS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
-import { ARC_CREATION_MODES, activateArcMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
+import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 
 // Keep inline sections open independently across toolbar redraws.
 const expandedToolbarSections = {
@@ -20,7 +20,14 @@ const expandedToolbarSections = {
     load: false,
     support: false,
     connection: false,
+    "dynamics-bodies": false,
+    "dynamics-kinematics": false,
+    "dynamics-mechanical": false,
+    "shear-force-diagram": false,
     "reference-arc": false,
+    arc: false,
+    polygon: false,
+    "coordinate-system": false,
     "piston-cylinder": false,
     "process-diagrams": false,
     "heat-transfer": false,
@@ -35,7 +42,9 @@ const expandedToolbarSections = {
      * subsection and what makes the click handler toggle it.
      */
     "fluids-flow-paths": false,
-    "fluids-flow-indicators": false
+    "fluids-flow-indicators": false,
+    "steady-state-devices": false,
+    "thermodynamic-cycles": false
 };
 
 function renderToolGroup(group) {
@@ -69,38 +78,66 @@ function renderToolGroup(group) {
 }
 
 function renderToolbarTool(tool) {
-    if (!Object.hasOwn(expandedToolbarSections, tool.id)) {
+    if (!Object.hasOwn(expandedToolbarSections, tool.id) && !tool.collapsible) {
         return renderToolButton(tool);
     }
 
     const expanded = expandedToolbarSections[tool.id];
-    const sectionId = `statics-${tool.id}-tools`;
-
+    const sectionId = tool.id.startsWith("dynamics-")
+        ? `${tool.id}-tools`
+        : `statics-${tool.id}-tools`;
     /*
      * THE HEADER BUTTON DESCRIBES THE SUBSECTION IT OPENS.
      *
      * It is not a menu, so `aria-haspopup` goes; and it gets `aria-expanded`
-     * and `aria-controls` whatever the button renderer happened to emit. A
-     * Fluids group deliberately emits neither (it must not promise a popup),
-     * so the attributes are SET here rather than string-replaced - which is
-     * what keeps a group that emits no `aria-expanded` at all from silently
-     * losing its accessible expanded state.
+     * and `aria-controls` from the state the section is actually drawn in, so
+     * the button and the section beneath it agree on the FIRST frame and on
+     * every redraw.
      */
-    const button =
-        renderToolButton(tool)
-            .replace(' aria-haspopup="menu"', '')
-            .replace('aria-expanded="false"', '')
-            .replace('aria-pressed="', `aria-expanded="${expanded}" aria-controls="${sectionId}" aria-pressed="`);
+    const button = renderToolButton({
+        ...tool,
+        submenu: true,
+        inlineSection: { id: sectionId, expanded },
+        childToolIds: DYNAMICS_TOOL_MENUS[tool.id]?.map(({ id }) => id)
+    }).replace(' aria-haspopup="menu"', '');
 
-    /*
-     * A FLUIDS GROUP'S CHILDREN COME FROM ITS OWN REGISTRY, so the tools that
-     * open under Flow Paths are the SAME entries the activation layer reads -
-     * there is no second list here to fall out of step.
-     */
-    const children = FLUIDS_TOOL_MENUS[tool.id]
+    const children = DYNAMICS_TOOL_MENUS[tool.id]
+        ? DYNAMICS_TOOL_MENUS[tool.id].map(item => renderToolButton({
+              id: item.tool || item.id,
+              label: item.label,
+              state: item.state
+          })).join("")
+        : FLUIDS_TOOL_MENUS[tool.id]
         ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
+        : tool.id === "shear-force-diagram"
+        ? ANALYSIS_DIAGRAM_MODES.map(mode =>
+            renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })
+                .replace('data-tool-id=', `data-analysis-diagram-mode="${mode}" data-tool-id=`)
+        ).join("")
+        : tool.id === "coordinate-system"
+        ? [
+            { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
+            { id: "coordinate-system-3d", label: "3D Coordinate System", iconLabel: "Coordinate System" }
+        ].map(renderToolButton).join("")
+        : tool.id === "thermodynamic-cycles"
+        ? [
+            { id: "rankine-cycle", label: "Rankine Cycle" },
+            { id: "reheat-rankine-cycle", label: "Ideal Reheat Rankine Cycle" },
+            { id: "brayton-cycle", label: "Brayton Cycle" },
+            { id: "otto-cycle", label: "Otto Cycle" },
+            { id: "diesel-cycle", label: "Diesel Cycle" },
+            { id: "carnot-cycle", label: "Carnot Cycle" },
+            { id: "vapor-compression-cycle", label: "Ideal Vapor-Compression Refrigeration Cycle" }
+        ].map(cycle => renderToolButton({ ...cycle, disabled: !["rankine-cycle", "reheat-rankine-cycle", "vapor-compression-cycle", "brayton-cycle", "diesel-cycle", "otto-cycle", "carnot-cycle"].includes(cycle.id) }).replace(/<span class="drawing-tool-icon"[^>]*>[\s\S]*?<\/span>/, "")).join("")
+        : tool.id === "steady-state-devices"
+        ? [
+            { id: "turbine-compressor", label: "Turbine / Compressor" },
+            { id: "pipe-duct", label: "Pipe / Duct", iconLabel: "Pipe / Duct" },
+            { id: "nozzle-diffuser", label: "Nozzle / Diffuser" }
+        ].map(renderToolButton).join("")
         : tool.id === "work"
         ? [
+            { id: "work-arrow", label: "Work Arrow", iconLabel: "Work" },
             { id: "electric-work", label: "Electric Work" },
             { id: "mechanical-work", label: "Mechanical Work" }
         ].map(renderToolButton).join("")
@@ -121,12 +158,22 @@ function renderToolbarTool(tool) {
             { id: "piston-cylinder", label: "Without Stoppers", iconLabel: "Piston Cylinder" },
             { id: "piston-cylinder-stoppers", label: "With Stoppers", iconLabel: "Piston Cylinder With Stoppers" }
         ].map(option => renderToolButton(option).replace('data-tool-id=', 'data-piston-cylinder-option="true" data-tool-id=')).join("")
+        : tool.id === "arc"
+        ? ARC_CREATION_MODES.map(mode => {
+            const active = drawingState.activeTool === "arc" && drawingState.interaction.arcMode === mode.id;
+            return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-arc-mode="${mode.id}">${mode.label}</button>`;
+        }).join("")
+        : tool.id === "polygon"
+        ? POLYGON_CREATION_MODES.map(mode => {
+            const active = drawingState.activeTool === "polygon" && (drawingState.interaction.polygonMode || "sides") === mode.id;
+            return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-polygon-mode="${mode.id}">${mode.label}</button>`;
+        }).join("")
         : tool.id === "reference-arc"
         ? ARC_CREATION_MODES.map(mode => {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
             return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-reference-arc-mode="${mode.id}">${mode.label}</button>`;
         }).join("")
-        : STATICS_TOOL_MENUS[tool.id].map(renderToolButton).join("");
+        : (STATICS_TOOL_MENUS[tool.id] || FLUIDS_TOOL_MENUS[tool.id] || []).map(renderToolButton).join("");
 
     return `${button}
         <div id="${sectionId}" class="drawing-inline-tools"${expanded ? "" : " hidden"}>
@@ -208,6 +255,17 @@ export function renderEngineeringTools(
                             button.dataset
                                 .toolId;
 
+                        if (button.dataset.analysisDiagramMode) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            activateTool(toolId);
+                            drawingState.interaction.analysisMode = button.dataset.analysisDiagramMode;
+                            beginAnalysisDiagram(toolId);
+                            setToolMessage(analysisDiagramIntroMessage(null));
+                            renderCurrentDrawing();
+                            return;
+                        }
+
                         if (button.dataset.pistonCylinderOption) {
                             event.preventDefault();
                             event.stopPropagation();
@@ -221,26 +279,47 @@ export function renderEngineeringTools(
                             return;
                         }
 
+                        /*
+                         * A Geometry Arc or Polygon method, from its inline
+                         * list. The method is written after the tool is armed
+                         * (see armCreationMode), so the list is redrawn once it
+                         * is - otherwise the highlight shows the previous method.
+                         */
+                        if (button.dataset.arcMode) {
+                            event.preventDefault();
+                            activateArcMode("arc", button.dataset.arcMode)
+                                .then(() => renderEngineeringTools(activeCategory()));
+                            return;
+                        }
+
+                        if (button.dataset.polygonMode) {
+                            event.preventDefault();
+                            activatePolygonMode(button.dataset.polygonMode)
+                                .then(() => renderEngineeringTools(activeCategory()));
+                            return;
+                        }
+
                         if (Object.hasOwn(expandedToolbarSections, toolId)) {
                             event.preventDefault();
                             event.stopPropagation();
                             const expanded = !expandedToolbarSections[toolId];
                             expandedToolbarSections[toolId] = expanded;
                             button.setAttribute("aria-expanded", String(expanded));
-                            toolList.querySelector(`#statics-${toolId}-tools`).hidden = !expanded;
+                            const sectionId = toolId.startsWith("dynamics-")
+                                ? `${toolId}-tools`
+                                : `statics-${toolId}-tools`;
+                            toolList.querySelector(`#${sectionId}`).hidden = !expanded;
                             return;
                         }
 
                         if (
                             toolId ===
-                            "coordinate-system"
+                            "coordinate-system-3d"
                         ) {
                             event.preventDefault();
                             event.stopPropagation();
 
-                            openCoordinateSystemMenu(
-                                button
-                            );
+                            setToolMessage("3D Coordinate System is not available on the 2D drawing canvas");
 
                             return;
                         }
@@ -276,27 +355,6 @@ export function renderEngineeringTools(
                                 button,
                                 toolId
                             );
-
-                            return;
-                        }
-
-                        /*
-                         * A DYNAMICS FAMILY OPENS ITS SUBMENU, exactly as a
-                         * Statics one does. Without this branch the family
-                         * button fell through to `activateTool`, which armed
-                         * nothing: the Bodies, Kinematics and Mechanical
-                         * Elements entries looked like tools but opened no
-                         * menu, so no Dynamics tool could be reached from the
-                         * toolbar at all. The injected `onActivate` is the
-                         * module's own decoupling - see `openDynamicsMenu`.
-                         */
-                        if (DYNAMICS_TOOL_MENUS[toolId]) {
-                            event.preventDefault();
-                            event.stopPropagation();
-
-                            openDynamicsMenu(button, toolId, {
-                                onActivate: childId => activateTool(childId)
-                            });
 
                             return;
                         }

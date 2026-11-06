@@ -10,6 +10,18 @@ export const toolList = dom?.getElementById("drawingToolList");
 
 export const drawingCanvas = dom?.querySelector(".drawing-canvas");
 
+/*
+ * THE CANVAS'S INTERACTION SURFACE.
+ *
+ * The pointer wiring lives on the `.drawing-canvas-area` wrapper rather than on
+ * the rendered sheet itself, because the multi-touch gestures (two-finger pan
+ * and pinch) must be recognised even when a finger lands on the margin around
+ * the sheet. The events BUBBLE up from the canvas, so every existing handler
+ * still sees exactly the event it saw before - this only widens where a
+ * gesture may begin.
+ */
+export const drawingCanvasArea = dom?.querySelector(".drawing-canvas-area");
+
 export const drawingCoordinates = dom?.getElementById("drawingCoordinates");
 
 export const drawingZoomValue = dom?.getElementById("drawingZoomValue");
@@ -67,6 +79,12 @@ export const drawingColor = dom?.getElementById("drawingColor");
 
 export const drawingLineType = dom?.getElementById("drawingLineType");
 
+/*
+ * SPECIAL SYMBOLS, in the quick-access style strip beside Line Type. It opens
+ * the Symbols list the Annotate category uses; see workspace-controls.js.
+ */
+export const drawingSpecialSymbols = dom?.getElementById("drawingSpecialSymbols");
+
 export const drawingToolPanelToggle = dom?.getElementById("drawingToolPanelToggle");
 
 export const drawingFeaturesPanelToggle = dom?.getElementById("drawingFeaturesPanelToggle");
@@ -81,5 +99,13 @@ export const drawingFeaturesPanelToggle = dom?.getElementById("drawingFeaturesPa
  * workspace layout flip them together.
  */
 export const headerHideButton = dom?.getElementById("headerHideButton");
+
+/*
+ * THE SHARED TOP RAIL - the menu bar stacked over the toolset bar, in one
+ * horizontally scrolling area. It is one element so the two bars have ONE
+ * scroll offset and cannot drift apart; see `.drawing-top-rail` in
+ * workspace-chrome.css.
+ */
+export const drawingTopRail = dom?.getElementById("drawingTopRail");
 
 export const drawingTopBarShow = dom?.getElementById("drawingTopBarShow");

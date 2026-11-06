@@ -90,7 +90,20 @@ function geometryOf(shape) {
     case "point":
       return { position: { ...shape.position } };
     case "polyline":
-      return { points: shape.points.map((point) => ({ ...point })) };
+      /*
+       * A CLOSED PATH'S FLAG IS ITS GEOMETRY TOO.
+       *
+       * A Freeform Polygon is stored as a vertex list plus `closed: true`, and
+       * the `-- cycle` in its block is what says so. Merging only the points
+       * would leave the flag untouched for an update (fine) but missing for a
+       * shape that was drawn open and has since been closed (a real change the
+       * model must record). `shape.closed` is absent from an ordinary polyline
+       * shape, so an open path is never silently closed by this branch.
+       */
+      return {
+        points: shape.points.map((point) => ({ ...point })),
+        ...(shape.closed === true ? { closed: true } : {})
+      };
     default:
       return null;
   }
@@ -101,6 +114,24 @@ function styleOf(shape) {
 
   if (shape.stroke) {
     style.stroke = shape.stroke;
+  }
+
+  /*
+   * A FILLED SHAPE'S COLOUR IS PART OF ITS APPEARANCE.
+   *
+   * The statement says what it is filled WITH, and a shape that stayed
+   * `fillMode: solid` but lost its colour would be repainted in the theme's
+   * default on the next redraw - a different picture from the code on screen.
+   * A shape with no fill option at all is left exactly as it is.
+   */
+  if (shape.filled === true) {
+    style.fillMode = "solid";
+
+    if (shape.fill) {
+      style.fill = shape.fill;
+    }
+  } else if (shape.filled === false) {
+    style.fillMode = "none";
   }
 
   /*

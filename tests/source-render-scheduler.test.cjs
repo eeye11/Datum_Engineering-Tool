@@ -331,11 +331,13 @@ test("a clockwise moment's head points clockwise, an anticlockwise one's anticlo
   const cw = arcOf("CW");
   const ccw = arcOf("CCW");
 
-  /* The head is at the END of the sweep, and the sweep runs the right way. */
-  assert.match(cw.options, /(^|, )-\{Latex\}/, "the CW head is not at the end of its sweep");
+  /* The head is at the END of the sweep, and the sweep runs the right way.
+   * The head may be a bare `-{Latex}` or a sized one (`-{Latex[length=..., width=...]}`) -
+   * either way it is a Latex arrowhead at the sweep's end. */
+  assert.match(cw.options, /(^|, )-\{Latex[\[{]/, "the CW head is not at the end of its sweep");
   assert.ok(cw.end < cw.start, "the CW arc does not sweep clockwise");
 
-  assert.match(ccw.options, /(^|, )-\{Latex\}/, "the CCW head is not at the end of its sweep");
+  assert.match(ccw.options, /(^|, )-\{Latex[\[{]/, "the CCW head is not at the end of its sweep");
   assert.ok(ccw.end > ccw.start, "the CCW arc does not sweep anticlockwise");
 });
 

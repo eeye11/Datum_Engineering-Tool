@@ -399,13 +399,23 @@
     width: min(420px, 80vw);
 }
 
-/* The field itself is the note while editing, at its canvas position. */
+/*
+ * THE FIELD ITSELF IS THE NOTE WHILE IT IS BEING WRITTEN.
+ *
+ * It sits over the drawing at the note's own anchor, in the note's own type,
+ * with a transparent background - so the sheet shows through and the words look
+ * like the words. The boundary is deliberately faint: it marks the editable
+ * area while editing and is removed with the element when the text is
+ * committed, so nothing box-like is left in the drawing.
+ */
 .drawing-canvas-text-editor {
     position: fixed;
     z-index: 1000;
     box-sizing: border-box;
-    border: 1px solid var(--datum-green);
+    border: 1px solid color-mix(in srgb, var(--datum-green) 45%, transparent);
+    border-radius: 2px;
     background: transparent;
+    pointer-events: auto;
 }
 .drawing-canvas-text-editor textarea {
     display: block;
@@ -413,16 +423,116 @@
     width: 100%;
     height: 100%;
     min-height: 0;
-    padding: 2px;
+    padding: 2px 3px;
     margin: 0;
     border: 0;
     border-radius: 0;
     outline: none;
     background: transparent;
-    color: var(--datum-ink);
+    color: inherit;
     caret-color: var(--datum-green);
     font-family: Arial, sans-serif;
     resize: none;
     overflow: hidden;
     white-space: pre;
+}
+
+.drawing-insert-symbol {
+    display: inline-block;
+    padding: 3px 7px;
+    margin-top: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+/*
+ * SPECIAL SYMBOLS, IN THE Tools MENU.
+ *
+ * Its title, close button and search field use the menu's own surface and ink,
+ * so the popup reads as part of the menu bar rather than as a second dialog
+ * style. The glyph grid is the only layout it has of its own.
+ */
+.datum-menu-panel .datum-menu-item[data-menu-item="special-symbols"]::after {
+    content: "Ω";
+    margin-left: auto;
+    padding-left: 12px;
+    color: var(--datum-ink);
+    font-size: 11px;
+    opacity: 0.75;
+}
+
+/*
+ * THE QUICK-ACCESS SPECIAL SYMBOLS BUTTON.
+ *
+ * It is a status-toggle button like Grid and Snap, so it inherits their size,
+ * focus ring and pressed state; the only thing of its own is the small gap after
+ * the line-type control's divider, which the shared divider already supplies.
+ */
+.drawing-special-symbols .drawing-toolbar-icon {
+    display: block;
+}
+
+.datum-symbol-picker .datum-symbol-picker-title,
+.datum-symbol-picker .datum-symbol-picker-heading {
+    color: var(--datum-ink);
+}
+
+.datum-symbol-picker .datum-symbol-picker-search input {
+    background: var(--datum-surface);
+    color: var(--datum-ink);
+    border: 1px solid var(--datum-border-strong);
+}
+
+/*
+ * ============================================================
+ * A LABEL, TYPED ONTO THE DRAWING
+ * ============================================================
+ *
+ * A label prompt is not a form: it is the words, being typed, where they will be
+ * drawn. So this variant has no card, no title, no hint and no background - just
+ * a line of text at the object's own label anchor, in its own colour, with the
+ * caret as the only sign that it is editable. The faint dotted underline marks
+ * the editable width while it is being typed and disappears with the field, so
+ * nothing box-shaped is left in the drawing.
+ */
+.drawing-inline-entry.drawing-label-entry {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    display: inline-block;
+    width: auto;
+    min-width: 40px;
+    white-space: nowrap;
+}
+
+.drawing-inline-entry.drawing-label-entry .drawing-inline-entry-label,
+.drawing-inline-entry.drawing-label-entry .drawing-inline-entry-hint,
+.drawing-inline-entry.drawing-label-entry .drawing-inline-entry-preview {
+    display: none;
+}
+
+.drawing-inline-entry.drawing-label-entry input.drawing-label-entry-input {
+    display: block;
+    box-sizing: content-box;
+    width: 12ch;
+    min-width: 4ch;
+    max-width: 40ch;
+    padding: 0 2px;
+    margin: 0;
+    border: 0;
+    border-bottom: 1px dotted color-mix(in srgb, currentColor 40%, transparent);
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    caret-color: currentColor;
+    font-family: Arial, sans-serif;
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.drawing-inline-entry.drawing-label-entry input.drawing-label-entry-input::placeholder {
+    color: transparent;
 }

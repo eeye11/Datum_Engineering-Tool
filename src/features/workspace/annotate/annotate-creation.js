@@ -43,6 +43,7 @@ import { calloutReferenceAt } from "../model/annotations/callout-reference.js";
  */
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
+import { resistorGeometryFromDrag } from "../model/thermodynamics/resistor.js";
 import { HEAT_TRANSFER_TOOLS, heatTransferTool } from "../model/thermodynamics/heat-transfer.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
@@ -69,7 +70,7 @@ import enggFluidsTools from "../model/fluids/fluids-tools.js";
 export const ANNOTATE_TOOL_KINDS = Object.fromEntries(
   [...Object.keys(enggAnnotate.ANNOTATE_KINDS).map((kind) => [kind, kind]),
     ...Object.keys(HEAT_TRANSFER_TOOLS).map(toolId => [toolId, "arrow"]),
-    ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
+    ["work-arrow", "arrow"], ["electric-work", "arrow"], ["mechanical-work", "arrow"]]
 );
 
 const workToolLabels = {
@@ -126,6 +127,7 @@ export function isAnnotateTool(toolId) {
  * value that is not a sentence.
  */
 export function isEditableAnnotate(object) {
+  if (object?.metadata?.thermodynamicsKind === "work-arrow") return true;
   if (!object || object.type !== "annotate") {
     return false;
   }
@@ -151,7 +153,9 @@ export function isGeometricAnnotateTool(toolId) {
  * to do next rather than leaving the previous tool's wording in place.
  */
 export function annotateInstruction(toolId) {
-  if (toolId === "electric-work") return "Drag from the upper lead to the lower lead; the resistor extends to the right";
+  if (toolId === "work-arrow") return "Drag from the arrow tail to where work flows; edit its direction and label in Features";
+  if (toolId === "mechanical-work") return "Drag from the shaft end to the fan blades to set size and direction";
+  if (toolId === "electric-work") return "Drag diagonally from the lead entry to size the resistor; or click two corners";
   if (workToolLabels[toolId]) {
     return `${workToolLabels[toolId]}: drag from the arrow tail to where the work flows`;
   }
@@ -307,9 +311,25 @@ export function commitAnnotate(options) {
   }
 
   const heat = kind === "arrow" && heatTransferTool(drawingState.activeTool);
+  if (kind === "arrow" && drawingState.activeTool === "work-arrow") {
+    object.name = "Work Arrow";
+    object.text = "W in";
+    object.style = { ...object.style, stroke: "#dc2626", align: "center" };
+    object.metadata = { ...object.metadata, thermodynamicsKind: "work-arrow", workDirection: "in", mathSymbol: "W", mathSubscript: "in" };
+    const start = object.geometry.start, end = object.geometry.end;
+    if (start && end) {
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const gap = Math.min(1.5, length * 0.045) + 16 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+      object.geometry.position = { x: (start.x + end.x) / 2 - dy / length * gap, y: (start.y + end.y) / 2 + dx / length * gap };
+    }
+  }
   const workLabel = kind === "arrow" && workToolLabels[drawingState.activeTool];
   if (workLabel) {
-    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : workLabel;
+    if (drawingState.activeTool === "electric-work" && options.start && options.end) {
+      Object.assign(object.geometry, resistorGeometryFromDrag(options.start, options.end));
+    }
+    object.name = drawingState.activeTool === "electric-work" ? "Resistor" : "Fan";
     object.metadata = { ...object.metadata, thermodynamicsKind: drawingState.activeTool };
   }
   if (heat) {
@@ -339,7 +359,9 @@ export function commitAnnotate(options) {
 
   enggDrawingState.selectObject(drawingState, object.id);
 
-  setToolMessage(heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
+  setToolMessage(object.metadata?.thermodynamicsKind === "work-arrow"
+    ? "Work arrow placed - edit Direction and Text in Features"
+    : heat ? `${heat.label} arrow placed` : workLabel ? `${object.name} placed` : annotatePlacedMessage(kind));
 
   renderProperties();
   renderCurrentDrawing();
@@ -371,29 +393,70 @@ export function commitAnnotate(options) {
    * point the model stored, not a screen position, so a later zoom or pan cannot
    * move where the text ends up.
    */
-  if (isEditableAnnotate(object)) {
-    void import("../interaction/canvas-click.js").then((module) => {
-      module.openNoteEditorFor?.(object, nodePoint);
-    });
+  if (isEditableAnnotate(object) && object.metadata?.thermodynamicsKind !== "work-arrow") {
+    /*
+     * THE LIVE OBJECT, NOT THE FACTORY'S COPY.
+     *
+     * `addObject` may store a COPY - it renames and numbers the feature before
+     * it inserts it - so the object this function still holds is not
+     * necessarily the one in the document. The editor looks its feature up in
+     * the drawing to write to it and to place its box, so it is handed the
+     * STORED object, found by the stable id. Without this the box was opened on
+     * an object the model had never heard of and silently refused to appear.
+     */
+    const stored =
+      drawingState.objects.find((candidate) => candidate.id === object.id) || object;
+
+    openPlacedTextEditor(stored, nodePoint);
   }
 
   return object;
 }
 
 /**
- * Put the armed tool back to Select.
+ * Say that a symbol was placed, and KEEP THE TOOL ARMED.
  *
- * Used by the Symbol tool, whose workflow is ONE placement per operation: after
- * a symbol is placed the tool hands back to Select so a stray click cannot place
- * a second. `setActiveTool` is the one place the active tool changes, so this
- * behaves exactly as a click on the Select button does.
+ * The Symbol tool used to hand back to Select after one placement. Every tool
+ * in DAETUM ends on a deliberate act - a click on empty canvas, its own button,
+ * Escape, or another tool - and placing a feature is not one of them, so a
+ * second symbol is now placed by the same click that placed the first.
  */
 function returnToSelect() {
-  enggDrawingState.setActiveTool(drawingState, "select");
-
-  setToolMessage("Symbol placed - Select is active");
+  setToolMessage("Symbol placed - pick the next symbol to place");
 
   renderCurrentDrawing();
+}
+
+/**
+ * Open the on-canvas write box for a just-placed annotation.
+ *
+ * THE MODULE CYCLE STAYS OPEN, AND THE CALL IS NEVER ONE STEP LATE.
+ *
+ * `canvas-click.js` already imports this module, so importing it back at the
+ * top would close the loop at load time. Instead the module is loaded lazily
+ * ONCE, and its function reference is COPIED out and used directly - an ESM
+ * namespace object is live and may be inspected before it is initialised, so
+ * reading `canvasClickModule.openNoteEditorFor` can be undefined even when the
+ * module is fully loaded. The copy cannot be.
+ */
+let openNoteEditorFor = null;
+
+void import("../interaction/canvas-click.js").then((module) => {
+  openNoteEditorFor = module.openNoteEditorFor || null;
+});
+
+function openPlacedTextEditor(object, nodePoint) {
+  if (openNoteEditorFor) {
+    openNoteEditorFor(object, nodePoint);
+
+    return;
+  }
+
+  void import("../interaction/canvas-click.js").then((module) => {
+    openNoteEditorFor = module.openNoteEditorFor || null;
+
+    openNoteEditorFor?.(object, nodePoint);
+  });
 }
 
 function annotatePlacedMessage(kind) {
@@ -650,7 +713,9 @@ export function beginAnnotateAnchor({ kind, point, targetFeatureId }) {
 
   setToolMessage(
     drawingState.activeTool === "electric-work"
-      ? "Place the lower lead to size the resistor; Esc cancels"
+      ? "Move to set resistor width and height, click to place; Esc cancels"
+      : drawingState.activeTool === "mechanical-work"
+      ? "Move to size the fan, click to place; Esc cancels"
       : kind === "arrow"
       ? "Specify arrow endpoint"
       : "Move to place the text, click to confirm, Esc to cancel"

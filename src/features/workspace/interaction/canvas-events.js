@@ -17,15 +17,56 @@ import { isConstructionTool } from "../../../components/layout/toolbar/construct
 import { drawingCanvas, drawingCoordinates } from "../dom.js";
 import { beginManipulationDrag, finishManipulationDrag, updateManipulationDrag } from "./drag.js";
 import { drawingState, editorState } from "../editor-state.js";
-import { objectAtPoint } from "./hit-testing.js";
+import { objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
+import { cancelManipulationDrag } from "./handles.js";
 import { updateDrawingCoordinates } from "./pointer.js";
-import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
+import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishFreeformPolygonByDoubleClick, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { closeCoordinateSystemMenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { zoomAtCanvasPoint } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruction } from "./pipe-duct-tool.js";
+import { allowsDirectManipulation } from "./direct-manipulation.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
+import { isDerivedFeature } from "../../../shared/model/feature-types.js";
+import { selectionBounds, selectionCorners, selectionMembers } from "../../../shared/selection/selection-transform.js";
+
+// Use the same unsnapped hit targets as dragging, so the cursor shows
+// exactly where a press can move the selection.
+function updateManipulationCursor(event) {
+    let cursor = "";
+    if (allowsDirectManipulation() && !editorState.modifySession && !isConstructionInProgress() && !event.shiftKey) {
+        const drag = editorState.manipulationDrag;
+        const point = canvasPointFromEvent(event, false);
+        const selectedIds = drawingState.selection.selectedObjectIds;
+        const hit = handleAtPoint(point);
+        const object = objectAtPoint(point);
+        const movable = item => item && !item.locked && !isDerivedFeature(item);
+        const bounds = selectedIds.length > 1 && selectionBounds(drawingState.objects, selectedIds);
+        const specialHandle = hit && /^(piston-height|stopper-height|process-label-|process-bend-)/.test(hit.handle.kind);
+        if (drag) {
+            cursor = drag.kind === "body" ? "move" : "crosshair";
+        } else if (bounds && !specialHandle && selectionMembers(drawingState.objects, selectedIds).every(movable)) {
+            const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+            const corner = selectionCorners(bounds).findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
+            if (corner >= 0) cursor = corner % 2 === 0 ? "nesw-resize" : "nwse-resize";
+            else if (point.x >= bounds.minX && point.x <= bounds.maxX && point.y >= bounds.minY && point.y <= bounds.maxY) cursor = "move";
+        }
+        if (!cursor && !isDerivedFeature(object) && !object?.locked) {
+            if (hit && movable(hit.object)) {
+                const kind = hit.handle.kind;
+                if (/^corner[0-3]$/.test(kind)) cursor = Number(kind.slice(-1)) % 2 === 0 ? "nwse-resize" : "nesw-resize";
+                else if (["piston-height", "stopper-height"].includes(kind)) cursor = "ns-resize";
+                else if (["position", "center", "origin"].includes(kind) || kind.startsWith("process-label-")) cursor = "move";
+                else cursor = "crosshair";
+            } else if (movable(object)) {
+                cursor = selectedIds.includes(object.id) || ["dimension", "annotate"].includes(object.type) ? "move" : "pointer";
+            }
+        }
+    }
+    drawingCanvas.style.cursor = cursor;
+}
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -36,15 +77,82 @@ export function installCanvasEvents() {
         drawingCanvas
     ) {
         installAxisLabelEditor();
+        drawingCanvas.addEventListener("mouseleave", () => {
+            drawingCanvas.classList.remove("drawing-can-move");
+        });
         drawingCanvas.addEventListener(
             "mousemove",
             updateDrawingCoordinates
         );
 
+        /*
+         * A PEN AND A FINGER MOVE WITHOUT A MOUSE EVENT.
+         *
+         * `mousemove` is synthesized from a touch or a pen only after the
+         * pointer has been pressed - so while a multi-click construction is
+         * running on a tablet, the preview's last edge (and its closing edge
+         * back to the first vertex) would freeze between taps, and a stylus
+         * hovering over the canvas would show no preview at all. Driving the
+         * same update from `pointermove` makes every kind of pointer follow
+         * the shape. It is the SAME function the mouse path calls, so the two
+         * cannot describe different geometry, and a leading pass over a mouse
+         * move is harmless: it reads the event's own position and rewrites
+         * the interaction from it.
+         */
+        drawingCanvas.addEventListener(
+            "pointermove",
+            event => {
+                if (event.pointerType && event.pointerType !== "mouse") {
+                    updateDrawingCoordinates(event);
+                }
+            }
+        );
+
         drawingCanvas.addEventListener(
             "click",
-            handleCanvasClick
+            event => {
+                /*
+                 * ========================================================
+                 * A DOUBLE-CLICK'S SECOND CLICK IS NOT A VERTEX
+                 * ========================================================
+                 *
+                 * The browser delivers a double-click as `click` (detail 1),
+                 * `click` (detail 2), then `dblclick`. Both clicks reach the
+                 * click router, so a polygon drew a vertex for EACH - and
+                 * then the double-click finished the shape, leaving two
+                 * vertices (and a zero-length edge) where the student made
+                 * one. Dropping those after the fact would be a repair; the
+                 * second click is simply not a placement, so it is never
+                 * handed to the tool in the first place.
+                 *
+                 * `detail` is the browser's own count of successive clicks
+                 * at one point, and it is the same number for a mouse, a pen
+                 * and a finger - so a double-TAP is covered by the same test
+                 * and needs no separate listener or timer.
+                 *
+                 * EVERY OTHER TOOL IS UNAFFECTED. This is a single click
+                 * router with one guard in front of it, not a second set of
+                 * listeners; a Line's second click of a double-click still
+                 * behaves exactly as it always has.
+                 */
+                if (
+                    (event.detail || 0) > 1 &&
+                    drawingState.activeTool === "freeform-polygon"
+                ) {
+                    return;
+                }
+
+                handleCanvasClick(event);
+            }
         );
+        drawingCanvas.addEventListener("click", updateManipulationCursor);
+        drawingCanvas.addEventListener("pointermove", updateManipulationCursor);
+        drawingCanvas.addEventListener("pointerup", event => {
+            queueMicrotask(() => updateManipulationCursor(event));
+        });
+        drawingCanvas.addEventListener("pointerleave", () => {
+            drawingCanvas.style.cursor = "";
+        });
 
         drawingCanvas.addEventListener(
             "dblclick",
@@ -219,10 +327,40 @@ export function installCanvasEvents() {
                     }
                 }
 
+                /*
+                 * THE FREEFORM POLYGON IS FINISHED BY A DOUBLE-CLICK, AND THE
+                 * POINT THE STUDENT DOUBLE-CLICKED IS ITS LAST VERTEX.
+                 *
+                 * A double-click is two `click` events and then a `dblclick`,
+                 * so by the time this runs the FIRST of the pair has already
+                 * been handled as an ordinary click and placed a vertex at
+                 * that spot. That is precisely why this does not place one
+                 * itself: adding the double-click's point again would give
+                 * the shape a duplicate final vertex, and an extra edge of
+                 * zero length that no student drew.
+                 *
+                 * It closes instead - the last vertex back to the first -
+                 * through the same commit the closing click and Enter use, so
+                 * all three ways of finishing produce the identical polygon.
+                 */
                 if (
-                    ["polyline", "freeform-polygon"].includes(
-                        drawingState.activeTool
-                    )
+                    drawingState.activeTool === "freeform-polygon"
+                ) {
+                    event.preventDefault();
+
+                    /*
+                     * NO POSITION IS PASSED. A `dblclick` event carries
+                     * `detail: 0` and no useful click count, so the finisher
+                     * must not try to place or compare a vertex from it - the
+                     * clicks that made up the gesture have already placed the
+                     * last vertex, and the finisher only closes the shape.
+                     */
+                    finishFreeformPolygonByDoubleClick();
+                    return;
+                }
+
+                if (
+                    drawingState.activeTool === "polyline"
                 ) {
                     event.preventDefault();
 
@@ -376,7 +514,8 @@ export function installCanvasEvents() {
                     )
                 ) {
                     /*
-                     * PIPE / DUCT CAPTURES THE POINTER FOR ITS DRAG.
+                     * PIPE / DUCT AND POLAR VECTOR CAPTURE THE POINTER FOR
+                     * THEIR DRAGS.
                      *
                      * A run is defined by press, drag and release - and the
                      * release must commit even when the pointer has travelled
@@ -386,15 +525,16 @@ export function installCanvasEvents() {
                      * receiving its move and up events wherever the cursor
                      * goes.
                      *
-                     * ONLY PIPE / DUCT, and only here. The geometry and
-                     * Statics tools deliberately defer their press, so that a
-                     * press that never travels stays an ordinary click - and
-                     * capturing on their press would redirect the click that
-                     * IS their first point. A run has no click workflow: its
-                     * whole gesture is the drag, so capture belongs on its
-                     * press.
+                     * Both are completed by one drag and have no first-click
+                     * workflow. The other geometry and Statics tools defer
+                     * their press, so a press that never travels stays an
+                     * ordinary click and capture would redirect that click.
                      */
-                    if (drawingState.activeTool === "pipe-duct") {
+                    if (
+                        drawingState.activeTool === "pipe-duct" ||
+                        drawingState.activeTool === "dynamics-polar-vector" ||
+                        editorState.freeformTrace
+                    ) {
                         try {
                             drawingCanvas.setPointerCapture(
                                 event.pointerId
@@ -422,6 +562,12 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointermove",
             event => {
+                if (!editorState.manipulationDrag && !editorState.creationDrag) {
+                    const point = canvasPointFromEvent(event, false);
+                    const target = drawingState.activeTool === "select" ? boundarySelectionAtPoint(point) || objectAtPoint(point) : null;
+                    drawingCanvas.classList.toggle("drawing-can-move", Boolean(target && !target.locked &&
+                        (target.metadata?.boundaryStress || ["coordinate-system-2d", "derived-magnitude", "axis-label"].includes(target.type) || drawingState.selection.selectedObjectIds.includes(target.id))));
+                }
                 /*
                  * A DRAG-TO-CREATE KEEPS ITS PREVIEW LIVE.
                  *
@@ -467,12 +613,10 @@ export function installCanvasEvents() {
                 /*
                  * GIVE THE POINTER BACK FIRST, WHATEVER THE RELEASE DOES.
                  *
-                 * A pipe-duct press captures the pointer so its drag survives
-                 * leaving the canvas. The capture is released HERE, before the
-                 * gesture is classified, so it is dropped whether the release
-                 * commits a run or turns out to be an ordinary click - neither
-                 * path may leave the canvas holding a capture the gesture has
-                 * finished with.
+                 * Pipe-duct and Polar Vector presses capture the pointer so
+                 * their drags survive leaving the canvas. The capture is
+                 * released HERE, before the gesture is classified, so neither
+                 * path can leave the canvas holding a capture after release.
                  */
                 if (
                     drawingCanvas.hasPointerCapture(
@@ -543,15 +687,20 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointercancel",
             event => {
+                if (editorState.manipulationDrag) {
+                    cancelManipulationDrag();
+                    renderCurrentDrawing();
+                }
+                drawingCanvas.classList.remove("drawing-object-moving", "drawing-can-move");
                 editorState.creationDrag = null;
 
                 /*
                  * A CANCELLED DRAG MUST NOT KEEP THE CAPTURE.
                  *
-                 * A pipe-duct press captures the pointer; if the gesture is
-                 * cancelled before the release the capture has to be dropped
-                 * here, or the canvas would keep swallowing that pointer's
-                 * events and the next gesture would never begin.
+                 * Pipe-duct and Polar Vector presses capture the pointer; if
+                 * the gesture is cancelled before release the capture has to
+                 * be dropped here, or the canvas would keep swallowing that
+                 * pointer's events and the next gesture would never begin.
                  */
                 if (
                     event &&

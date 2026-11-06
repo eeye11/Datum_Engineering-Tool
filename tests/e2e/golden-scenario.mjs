@@ -29,6 +29,7 @@ const TOOLS = [
     ["GEOMETRY", "polygon", "By Sides"], ["GEOMETRY", "polygon", "By Centre"],
     ["GEOMETRY", "coordinate-system", "2D Coordinate System"],
     ["ANNOTATE", "dimension", null, "line", ["c:0.25,0.6", "c:0.7,0.6", "c:0.475,0.45"]],
+    ["ANNOTATE", "angle", null, "angle", ["edge:0", "edge:1", "c:0.35,0.45"]],
     ["ANNOTATE", "note", null, null, ["c:0.3,0.55"]],
     ["ANNOTATE", "label", null, "line", ["c:0.475,0.6"]],
     ["ANNOTATE", "callout", null, "line", ["c:0.475,0.6", "c:0.6,0.35"]],
@@ -66,7 +67,6 @@ const TOOLS = [
      */
     ["DYNAMICS", "dynamics-bodies", "dynamics-particle"],
     ["DYNAMICS", "dynamics-bodies", "dynamics-rigid-body", null, ["d:0.3,0.55,0.6,0.35"]],
-    ["DYNAMICS", "dynamics-kinematics", "dynamics-trajectory", null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-kinematics", "dynamics-polar-vector", null, ["d:0.3,0.55,0.6,0.55"]],
     ["DYNAMICS", "dynamics-kinematics", "dynamics-angular-vector", null, ["d:0.3,0.55,0.55,0.3"]],
     ["DYNAMICS", "dynamics-mechanical", "dynamics-spring", null, ["d:0.3,0.55,0.6,0.55"]],
@@ -86,7 +86,7 @@ const TOOLS = [
      */
     ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
     ["THERMODYNAMICS", "control-volume"],
-    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress"],
+    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
 ];
 
@@ -134,10 +134,14 @@ async function main() {
 
     debug("goto"); await page.goto(baseUrl, { waitUntil: "domcontentloaded" }); debug("loaded");
     await page.waitForSelector(".drawing-canvas", { state: "attached" });
-    await page.click("text=Engineering Drawing");
+    /*
+     * NO WORKSPACE TAB TO CLICK. One workspace since the Written Solution tab
+     * was removed, so there is no tab strip and the drawing section is the
+     * page; the click used to wait on text that now exists only in a comment.
+     */
     await sleep(300);
 
-    debug("tab clicked");
+    debug("workspace ready");
     const box = await page.evaluate(() => {
         const r = document.querySelector(".drawing-canvas").getBoundingClientRect();
         return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -165,7 +169,7 @@ async function main() {
     };
     /* Accept a creation popup (length/radius) or any modal by pressing Enter. */
     const VALUES = { width: "60", height: "40", length: "80", radius: "30", angle: "30", magnitude: "100", sides: "5" };
-    const acceptPopups = async () => {
+    const acceptPopups = async (toolId) => {
         for (let round = 0; round < 6; round++) {
             const popup = await page.evaluate(() => {
                 const shown = el => el && getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
@@ -203,7 +207,20 @@ async function main() {
                 const key = Object.keys(VALUES).find(k => popup.label.includes(k));
                 await page.locator(".drawing-creation-dimension [data-creation-input], .drawing-creation-dimension input[type=text]").first().fill(VALUES[key] || "50");
             }
-            await page.keyboard.press("Enter");
+            /*
+             * COMMIT KEYS. A callout is committed by plain Enter - a balloon
+             * holds one short token, and Enter is the key a student reaches
+             * for. A note is prose, so Enter keeps meaning "new line" and
+             * Ctrl+Enter (Cmd on a Mac) is the commit: the same rule the
+             * note editor itself documents. Sending plain Enter to a note
+             * would only write a line break and leave the editor open, so the
+             * object would be created with no text at all.
+             */
+            if (toolId === "note") {
+                await page.keyboard.press("Control+Enter");
+            } else {
+                await page.keyboard.press("Enter");
+            }
             await sleep(150);
         }
     };
@@ -224,6 +241,19 @@ async function main() {
             await section.locator(`.drawing-tool[data-tool-id="${sub}"]`).first().click();
             await sleep(150);
             return;
+        }
+        /*
+         * A tool WITHOUT a sub can still live inside a collapsed statics
+         * section (e.g. point-force inside Loads): expand its parent section
+         * before clicking, otherwise the button exists but is never visible.
+         */
+        for (const group of ["body", "load", "support", "connection"]) {
+            const parent = page.locator(`#statics-${group}-tools`);
+            if (await parent.locator(`.drawing-tool[data-tool-id="${toolId}"]`).count()
+                && await parent.evaluate(el => el.hidden)) {
+                await page.click(`.drawing-tool[data-tool-id="${group}"]`);
+                await sleep(120);
+            }
         }
         await page.click(`.drawing-tool[data-tool-id="${toolId}"]`);
         await sleep(120);
@@ -323,12 +353,29 @@ async function main() {
         debug("newSheet", key); await newSheet(); debug("sheet ok");
         if (seed === "beam") await seedBeam();
         if (seed === "line") await seedLine();
+        if (seed === "angle") {
+            await seedLine();
+            await chooseTool("GEOMETRY", "line");
+            await drag(P(0.25,0.6),P(0.25,0.2)); await escape();
+        }
         if (seed === "forces") await seedForces();
         const before = await page.evaluate(() => window.enggDrawing.state.objects.map(o => o.id));
         await chooseTool(category, toolId, sub);
         const steps = [];
         for (const action of actions || SPOTS) {
-            if (typeof action === "string" && action.startsWith("type:")) {
+            if (typeof action === "string" && action.startsWith("edge:")) {
+                // Pick the actual drawn edge; grid snapping can move seeded
+                // geometry several pixels away from the original pointer.
+                const point = await page.evaluate(index => {
+                    const state=window.enggDrawing.state;
+                    const line=state.objects.filter(object=>object.type === "line")[index];
+                    const canvas=document.querySelector(".drawing-canvas"),rect=canvas.getBoundingClientRect();
+                    const world={x:(line.geometry.start.x+line.geometry.end.x)/2,y:(line.geometry.start.y+line.geometry.end.y)/2};
+                    const screen=window.enggDrawing.model.engineeringToScreen(world,{width:canvas.clientWidth,height:canvas.clientHeight},state);
+                    return {x:rect.left+screen.x,y:rect.top+screen.y};
+                },Number(action.slice(5)));
+                await click(point);
+            } else if (typeof action === "string" && action.startsWith("type:")) {
                 await page.keyboard.type(action.slice(5)); await sleep(100);
             } else if (typeof action === "string" && action.startsWith("d:")) {
                 const [x1, y1, x2, y2] = action.slice(2).split(",").map(Number);
@@ -341,7 +388,7 @@ async function main() {
                     : action;
                 debug("click", spot.x, spot.y); await click(spot);
             }
-            await acceptPopups();
+            await acceptPopups(toolId);
             steps.push(await page.evaluate(() => window.enggDrawing.state.objects.length));
         }
         if (category === "ANNOTATE") {
@@ -356,11 +403,14 @@ async function main() {
             const added = snap.objects.filter(object => created.includes(object.id));
             assert.equal(added.length, 1, `${key} should create exactly one annotation`);
             const object = added[0];
-            if (toolId === "dimension") {
+            if (toolId === "dimension" || toolId === "angle") {
                 assert.equal(object.type, "dimension");
                 assert.equal(object.content, VALUES.magnitude);
                 assert.equal(object.sourceRefs.length, 2);
-                assert.notEqual(object.dimensionType, "angular");
+                if (toolId === "angle") {
+                    assert.equal(object.dimensionType, "angular");
+                    assert.ok(snap.svg.includes("drawing-right-angle-marker"), "Perpendicular lines should draw a square marker");
+                } else assert.notEqual(object.dimensionType, "angular");
             } else {
                 assert.equal(object.annotateKind, toolId);
                 if (toolId === "note") assert.equal(object.text, "Example note");
@@ -483,23 +533,26 @@ async function main() {
     const body = await page.evaluate(() => JSON.parse(JSON.stringify(window.enggDrawingSheets.serializeDocumentBody())));
     results["document/serialized"] = { body, errors: [...errors] };
 
-    /* Written solution: a drawing reference renders from a sheet. */
+    /* Written solution: a drawing reference renders from a sheet.
+     *
+     * The Written Solution TAB is gone - one workspace now - but the API and
+     * the solution state module remain. There is no editor and no preview
+     * element on the page any more, so what is asserted here is what an embed
+     * actually gets: setSolution accepts the LaTeX and getSolution reads it
+     * back, with the reference resolved to its sheet.
+     */
     errors = [];
     await acceptPopups(); await escape();
-    await page.click("text=Written Solution");
     await sleep(200);
     results["solution/render"] = await page.evaluate(async () => {
         const sheets = window.enggDrawingSheets.all();
-        try {
-            window.datum.setSolution(`Equilibrium of the beam
-
-[DRAWING_REFERENCE:${sheets[1].id}]
-
-Then $F = ma$.`);
-        } catch (e) { return { thrown: String(e.message) }; }
-        await new Promise(r => setTimeout(r, 400));
-        const out = document.getElementById("solutionPreview");
-        return { html: out ? out.innerHTML.replace(/\s+/g, " ").slice(0, 20000) : null };
+        const set = window.datum.setSolution(`Equilibrium of the beam\n\n[DRAWING_REFERENCE:${sheets[1].id}]\n\nThen $F = ma$.`);
+        if (!set?.ok) { return { thrown: set?.detail || "setSolution failed" }; }
+        const got = window.datum.getSolution();
+        return {
+            latex: got?.latex ?? null,
+            references: got?.references ?? null
+        };
     });
     results["solution/render"].errors = [...errors];
 

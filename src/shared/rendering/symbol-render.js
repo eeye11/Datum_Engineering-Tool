@@ -385,14 +385,10 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         const xAxisLength =
             readLength(geometry.xPositiveLength);
 
-        const xNegativeLength =
-            readLength(geometry.xNegativeLength);
 
         const yAxisLength =
             readLength(geometry.yPositiveLength);
 
-        const yNegativeLength =
-            readLength(geometry.yNegativeLength);
 
         const axisColor =
             style.stroke ||
@@ -446,15 +442,6 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 }
             );
 
-        const xAxisNegative = createSvgElement("line", {
-            x1: origin.x - xNegativeLength,
-            y1: origin.y,
-            x2: origin.x,
-            y2: origin.y,
-            stroke: axisColor,
-            "stroke-width": axisWidth,
-            "stroke-linecap": "butt"
-        });
 
         /*
          * Positive Y axis
@@ -478,15 +465,6 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 }
             );
 
-        const yAxisNegative = createSvgElement("line", {
-            x1: origin.x,
-            y1: origin.y,
-            x2: origin.x,
-            y2: origin.y + yNegativeLength,
-            stroke: axisColor,
-            "stroke-width": axisWidth,
-            "stroke-linecap": "butt"
-        });
 
         /*
          * X arrowhead
@@ -528,7 +506,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 {
                     cx: origin.x,
                     cy: origin.y,
-                    r: 3,
+                    r: 1.5,
                     fill:
                         "#ffffff",
                     stroke:
@@ -551,10 +529,11 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 {
                     x:
                         origin.x +
-                        xAxisLength +
-                        7,
+                        xAxisLength,
                     y:
-                        origin.y + 4,
+                        origin.y + 7 * scale,
+                    "text-anchor": "middle",
+                    "dominant-baseline": "middle",
                     fill:
                         axisColor,
                     "font-size":
@@ -577,11 +556,12 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 "text",
                 {
                     x:
-                        origin.x + 5,
+                        origin.x - 7 * scale,
                     y:
                         origin.y -
-                        yAxisLength -
-                        7,
+                        yAxisLength,
+                    "text-anchor": "middle",
+                    "dominant-baseline": "middle",
                     fill:
                         axisColor,
                     "font-size":
@@ -598,9 +578,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
 
         const elements = [
             xAxis,
-            xAxisNegative,
             yAxis,
-            yAxisNegative,
             xArrow,
             yArrow,
             originMarker,

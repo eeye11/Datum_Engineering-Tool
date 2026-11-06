@@ -12,6 +12,7 @@ import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { openAnalysisEditorFor } from "./analysis-editor.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 
 /*
  * Statics analysis tools.
@@ -1169,12 +1170,9 @@ function createForceComponents(
          * and `forces[0]` is the one being decomposed - so its parent is
          * unambiguous, and that is what goes on the object.
          */
-        if (force.parentId) {
-            resolved.parentId =
-                force.parentId;
-        }
+        resolved.parentId = force.id;
 
-        enggDrawingState.addObject(
+        const stored = enggDrawingState.addObject(
             drawingState,
             resolved
         );
@@ -1189,9 +1187,11 @@ function createForceComponents(
          * first reading.
          */
         enggAnalysisDependencies.registerDependency(
-            resolved,
+            stored,
             [force.id]
         );
+
+        enggDrawingState.selectObject(drawingState, stored.id);
 
         enggDrawingState.commitDrawingChange(
             drawingState,
@@ -1249,7 +1249,9 @@ export function isAnalysisInputTool(toolId) {
  */
 export function analysisInputMessage(toolId) {
     return toolId === "force-components"
-        ? "Select force"
+        ? drawingState.objects.some(object => object.type === "force")
+            ? "Click a Point Load arrow to show components: X in blue, Y in orange"
+            : "Draw a force first with Loads > Point Load, then choose Force Components and click its arrow"
         : "Select force(s)";
 }
 
@@ -1339,6 +1341,8 @@ export function handleAnalysisInputClick(
          * ONE FORCE, REPLACED RATHER THAN ACCUMULATED.
          */
         enggDrawingState.selectObject(drawingState, object.id);
+        commitAnalysisInput();
+        return;
     } else if (selected.includes(object.id)) {
         /*
          * CLICKING AN ALREADY-CHOSEN FORCE REMOVES IT. No duplicate can be
@@ -1394,18 +1398,9 @@ export function commitAnalysisInput() {
         createResultant(chosen);
     }
 
-    /*
-     * THE OPERATION IS FINISHED, so the interaction is cleared but the TOOL
-     * stays armed - the same "place another one" shape every placement tool
-     * has. Escape is how the student leaves it.
-     */
+    // The completed analysis returns control to selection.
     enggDrawingState.clearInteraction(drawingState);
-    drawingState.interaction.phase = "analysis-input";
-    drawingState.interaction.analysisKind = toolId;
-
-    drawingState.selection.selectedObjectIds = [];
-
-    setToolMessage(analysisInputMessage(toolId));
+    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

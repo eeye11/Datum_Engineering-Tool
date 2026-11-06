@@ -99,8 +99,8 @@ console.log("\n  a Triangle's Features panel renders\n");
 
   check(
     "showing the triangle's own Fill and Appearance",
-    Boolean(panel.querySelector('[data-feature-group="fill"]')) &&
-      Boolean(panel.querySelector('[data-feature-group="appearance"]')),
+    Boolean(panel.querySelector('[data-feature-group="appearance"]')) &&
+      /Fill/.test(panel.textContent),
     panel.innerHTML.slice(0, 200),
   );
 

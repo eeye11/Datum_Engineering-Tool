@@ -38,21 +38,20 @@ import { openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.j
 
 export const DYNAMICS_TOOL_MENUS = {
     "dynamics-bodies": [
-        { id: "dynamics-particle", label: "Particle" },
-        { id: "dynamics-rigid-body", label: "Rigid Body" }
+        { id: "dynamics-particle", label: "Particle", tool: "dynamics-particle", state: "point mass" },
+        { id: "dynamics-rigid-body", label: "Rigid Body", tool: "dynamics-rigid-body", state: "extended body" }
     ],
 
     "dynamics-kinematics": [
-        { id: "dynamics-trajectory", label: "Trajectory" },
-        { id: "dynamics-polar-vector", label: "Polar Vector" },
-        { id: "dynamics-angular-vector", label: "Angular Vector" }
+        { id: "dynamics-polar-vector", label: "Polar Vector", tool: "dynamics-polar-vector", state: "linear" },
+        { id: "dynamics-angular-vector", label: "Angular Vector", tool: "dynamics-angular-vector", state: "rotation" }
     ],
 
     "dynamics-mechanical": [
-        { id: "dynamics-spring", label: "Spring" },
-        { id: "dynamics-damper", label: "Viscous Damper" },
-        { id: "dynamics-spring-damper", label: "Spring–Damper Element" },
-        { id: "dynamics-pulley", label: "Pulley" }
+        { id: "dynamics-spring", label: "Spring", tool: "dynamics-spring", state: "zigzag" },
+        { id: "dynamics-damper", label: "Viscous Damper", tool: "dynamics-damper", state: "housing + rod" },
+        { id: "dynamics-spring-damper", label: "Spring–Damper Element", tool: "dynamics-spring-damper", state: "parallel" },
+        { id: "dynamics-pulley", label: "Pulley", tool: "dynamics-pulley", state: "wheel + rope" }
     ]
 };
 
@@ -101,14 +100,15 @@ export const DYNAMICS_CHILD_TOOLS = {
     "dynamics-rigid-body": {
         label: "Rigid Body",
         type: "rigid-body",
-        placement: "box"
-    },
 
-    "dynamics-trajectory": {
-        label: "Trajectory",
-        type: "dynamics-trajectory",
+        /*
+         * A BODY IS DRAWN, NOT DROPPED. The tool takes its width and height
+         * from the press-drag-release, the way every other shaped tool does,
+         * so a click on its own only means "the default size at this point".
+         */
         placement: "span"
     },
+
     "dynamics-polar-vector": {
         label: "Polar Vector",
         type: "dynamics-polar-vector",
@@ -117,7 +117,7 @@ export const DYNAMICS_CHILD_TOOLS = {
     "dynamics-angular-vector": {
         label: "Angular Vector",
         type: "dynamics-angular-vector",
-        placement: "angle"
+        placement: "point"
     },
 
     "dynamics-spring": {
@@ -238,8 +238,8 @@ export function resolveDynamicsToolId(toolId) {
  * WHEN THE FEATURE IS FINISHED
  * ============================================================
  *
- * Tools finished by one click (a point or a particle). Everything else is a
- * drag, which is what the creation session already handles.
+ * Tools finished by one click (a point, particle or default-size rigid body).
+ * Everything else is a drag, which is what the creation session already handles.
  */
 export const DYNAMICS_PLACEMENT_TOOLS = Object.fromEntries(
     Object.entries(DYNAMICS_CHILD_TOOLS)
@@ -324,13 +324,22 @@ export function openDynamicsMenu(button, familyId, { onActivate, onMessage } = {
         return;
     }
 
+    /*
+     * THE ENTRY'S `id` IS THE SUBMENU ID; `tool` IS THE TOOL IT ARMS. They are
+     * the same string for every Dynamics tool - the menu entry and the tool are
+     * one thing - and the pair is spelled out so a reader can see that the menu
+     * is not inventing a second name for the tool it opens.
+     */
     openToolSubmenu(button, items, childId => {
+        const item = items.find((entry) => entry.id === childId);
+        const toolId = item?.tool || childId;
+
         if (typeof onActivate === "function") {
-            onActivate(childId);
+            onActivate(toolId);
         }
 
         if (typeof onMessage === "function") {
-            onMessage(childId);
+            onMessage(toolId);
         }
     });
 }
@@ -384,10 +393,10 @@ export function midpointBetween(start, end) {
 
 /* The default display sizes, in drawing units (one unit is one paper mm). */
 export const DYNAMICS_SIZES = Object.freeze({
-    particleRadius: 1.6,
+    /* The marker's DISPLAY SIZE, in screen pixels - see draw-dynamics.js. */
+    particleRadius: 5,
     bodyWidth: 24,
     bodyHeight: 14,
-    trajectoryBow: 0.22,
     springCoils: 6,
     springAmplitude: 4,
     springLead: 0.18,

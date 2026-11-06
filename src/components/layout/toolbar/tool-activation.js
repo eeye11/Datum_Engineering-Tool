@@ -8,11 +8,11 @@ import { annotateInstruction, isAnnotateTool } from "../../../features/workspace
 import { analysisInputMessage, isAnalysisInputTool } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { isDimensionTool } from "../../../features/workspace/annotate/dimension-tool.js";
-import { drawingCanvas, drawingRedo, drawingUndo, toolList } from "../../../features/workspace/dom.js";
+import { drawingCanvas, drawingRedo, drawingUndo } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { cancelModifySession } from "../../../features/workspace/commands/modify-tools.js";
-import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, openCoordinateSystemMenu, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_CHILD_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool, staticsBodyMessage, staticsInstruction } from "../../../features/workspace/statics/statics-tools.js";
 import { DYNAMICS_ANGLE_TOOLS, DYNAMICS_BOX_TOOLS, DYNAMICS_PLACEMENT_TOOLS, DYNAMICS_SPAN_TOOLS, dynamicsInstruction, isDynamicsTool } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import enggFluidsTools from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { fluidsArmedTool, fluidsInstruction, isFluidsTool } from "../../../features/workspace/interaction/fluids-tool.js";
@@ -73,13 +73,7 @@ export function activateTool(
         toolId ===
         "coordinate-system"
     ) {
-        openCoordinateSystemMenu(
-            toolList.querySelector(
-                '[data-tool-id="coordinate-system"]'
-            )
-        );
-
-        return;
+        toolId = "coordinate-system-2d";
     }
 
     /*
@@ -225,6 +219,15 @@ export function activateTool(
         Boolean(DYNAMICS_ANGLE_TOOLS[requestedTool]) ||
         Boolean(DYNAMICS_BOX_TOOLS[requestedTool]) ||
         requestedTool === "truss" ||
+        requestedTool === "pipe-duct" ||
+        requestedTool === "nozzle-diffuser" ||
+        requestedTool === "rankine-cycle" ||
+        requestedTool === "reheat-rankine-cycle" ||
+        requestedTool === "vapor-compression-cycle" ||
+        requestedTool === "brayton-cycle" ||
+        requestedTool === "diesel-cycle" ||
+        requestedTool === "otto-cycle" ||
+        requestedTool === "carnot-cycle" ||
         requestedTool === "point" ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
@@ -510,9 +513,14 @@ export function initialToolMessage(
          * given. Saying "reference" rather than "feature" is what tells
          * the student they may click a midpoint as readily as a body.
          */
+        if (toolId === "angle") return "Pick the first line or edge for the angle";
         return toolId === "dimension"
             ? "Pick the first dimension endpoint — nearby geometry snaps automatically"
             : "Specify dimension reference - D changes what is measured";
+    }
+
+    if (toolId === "signal-line") {
+        return "Select an output node";
     }
 
     /*
@@ -563,9 +571,21 @@ export function initialToolMessage(
             rectangle: "Specify first corner",
             arc: "Specify arc start point",
             polygon: "Specify polygon centre",
-            "freeform-polygon": "Drag to add vertices; return to the first vertex to close",
-            "coordinate-system-2d": "Specify origin",
+            "freeform-polygon": "Click to add vertices (double-click or Enter to finish) - or drag to trace the outline",
+            "coordinate-system-2d": "Drag out the area for the axes; width sets X, height sets Y, and rotation stays at 0 degrees",
             "control-volume": "Drag from one corner to the opposite corner to draw a control volume",
+            "boundary-stress": "Drag a plate; set width and height in Features (numbers or symbols), then enter edge equations such as x/a or y/b. Symbolic dimensions use a schematic scale.",
+            "stress-element": "Drag opposite corners to draw a square stress element; use its rotation handle or enter Angle in the Features panel",
+            "tank": "Drag between opposite corners to draw a closed tank",
+            "turbine-compressor": "Drag opposite corners to draw a turbine/compressor casing; select it to move, resize or rotate",
+            "nozzle-diffuser": "Drag opposite corners to draw a nozzle/diffuser; select it to move, resize or rotate",
+            "rankine-cycle": "Drag opposite corners to place a Rankine cycle schematic",
+            "reheat-rankine-cycle": "Drag opposite corners to place an ideal reheat Rankine cycle",
+            "vapor-compression-cycle": "Drag opposite corners to place an ideal vapor-compression refrigeration cycle",
+            "brayton-cycle": "Drag opposite corners to place a Brayton cycle schematic",
+            "diesel-cycle": "Drag opposite corners to place Diesel P-v and T-s diagrams",
+            "otto-cycle": "Drag opposite corners to place the Otto indicator and ideal P-v diagrams",
+            "carnot-cycle": "Drag opposite corners to place a Carnot P-V diagram",
             "process-plot": "Drag to draw process axes; use the corner dots to resize and edit the axis labels",
             "saturation-curve": "Drag to draw a T-v saturation diagram; use the corner dots to resize it",
             "process-path": "Click inside a process diagram to place the first process state",

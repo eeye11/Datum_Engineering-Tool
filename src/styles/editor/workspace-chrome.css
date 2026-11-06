@@ -52,8 +52,8 @@
     /*
      * THE PAGE DOES NOT SCROLL SIDEWAYS BECAUSE A PANEL IS OPEN.
      *
-     * Only the toolbar and the section bar scroll horizontally, and they
-     * do it INSIDE their own row. The workspace itself is clamped to its
+     * Only the shared top rail and the style strip scroll horizontally, and
+     * they do it INSIDE their own row. The workspace itself is clamped to its
      * container: `overflow: hidden` keeps the scrollable rows from
      * pushing the document wider, and `max-width: 100%` keeps the grid
      * from ever exceeding the viewport it was laid out into. The canvas
@@ -78,33 +78,40 @@
      */
     grid-template-columns: 202px minmax(0, 1fr) 236px;
     /*
-     * Rows: the main menu bar, the toolset nav, the style strip, the
-     * canvas row, the sheet bar, the status bar.
+     * Rows: the shared top rail (the menu bar stacked over the toolset
+     * nav), the top-of-canvas Show row, the panels, the sheet bar, the
+     * status bar.
      *
-     * THE FIRST THREE ARE THE DRAWING BANDS BELOW THE APPLICATION AND
-     * DOCUMENT BAR: Band 2 (the main menu), Band 3 (the toolset selector)
-     * and Band 4 (command search and the quick-access toolbar). They used to
-     * be TWO children - the menu shared a row with a global tool bar that has
-     * since been removed - and now each is its own row, which is what makes
-     * "four bands, in that order" true of the layout as well as the markup.
+     * ONE CHILD, ONE TRACK, AND THE TRACKS MATCH THE CHILDREN BY ORDER. The
+     * five children are: the rail, `.drawing-topbar-show-row`, the three
+     * middle columns (tool panel, canvas area and features panel, all on
+     * row 3), the sheet bar row and the status bar. So FIVE tracks - the
+     * same five the hidden state keeps - and the second is the Show row,
+     * which is `display: none` while the bars are up and so contributes no
+     * height.
      *
-     * THE STYLE STRIP'S ROW IS `auto`, NOT A FIXED 28px.
+     * IT USED TO BE FOUR TRACKS FOR FIVE CHILDREN. With one track short, the
+     * grid added an implicit row, and every child after the Show row fell one
+     * row down: the canvas area was pushed into the sheet bar's 24px track
+     * and the sheet bar into the status bar's 22px one. Nothing threw and
+     * the bars still laid out - which is why the stylesheets' rail tests all
+     * passed - but the drawing itself was cut down to the height of a tab
+     * strip.
      *
-     * A fixed height clips: the row of style controls (Thickness, Color,
-     * Line Type and the display toggles) is the one row that must be able
-     * to REFLOW onto a second line when the panel is narrow, and a fixed
-     * track would cut that second line off rather than accommodate it. Left
-     * at 28px, the controls also had no option but to shrink into one
-     * another, which is the overlap this row is being fixed for. `auto`
-     * lets the row be exactly as tall as its contents need, whether that is
-     * one line or two.
+     * THE SHEET BAR'S TRACK IS 24px, AS IT ALWAYS WAS. The canvas row and the
+     * two chrome rows above it are `auto`, so they are exactly as tall as their
+     * contents and can never clip them. The sheet bar is the one row with a
+     * deliberate fixed height: it is a thin strip of tabs along the bottom of
+     * the drawing, and it takes as little of the canvas's height as a legible
+     * row can. Left `auto` it grows to whatever its tabs need, and the drawing
+     * loses that height for nothing.
      *
      * The sheet bar gets its own row beneath the canvas rather than
      * sharing the status bar's, so that the two never have to
      * negotiate the width: tabs scroll horizontally within the canvas
      * column while the coordinates and the zoom stay where they are.
      */
-    grid-template-rows: auto auto 0 minmax(0, 1fr) 24px 22px;
+    grid-template-rows: auto auto minmax(0, 1fr) 24px 22px;
     height: auto;
     min-height: 0;
     overflow: hidden;
@@ -124,19 +131,19 @@
  *
  * The bars hidden are the DRAWING's chrome AND the main menu bar:
  *
- *   .datum-menubar          the main menu (File, Edit, Insert, View, Tools,
- *                           Help) - folded away too, so "hide the top bar"
- *                           means the whole strip of application chrome above
- *                           the drawing, not just part of it
- *   .drawing-toolbar        the toolset bar (Geometry/Statics/Annotate/...) -
- *                           and the Hide button lives ON it, so the button
- *                           folds away with the bar it folds, and the Show
- *                           control takes its place
+ *   .drawing-top-rail       the shared navigation rail - the main menu (File,
+ *                           Edit, Insert, View, Tools, Help) stacked over the
+ *                           toolset bar (Geometry/Statics/Annotate/...) - so
+ *                           "hide the top bar" means the whole strip of
+ *                           application chrome above the drawing, not just part
+ *                           of it. The Hide button lives on the toolset bar
+ *                           INSIDE the rail, so the button folds away with the
+ *                           bars it folds, and the Show control takes its place
  *   .drawing-style-strip    the quick-access strip (search, undo/redo, the
  *                           drawing properties and the display toggles)
  *
  * Everything above the canvas and below the application and document bar goes,
- * so the drawing rises to just under the header and gets all three rows back.
+ * so the drawing rises to just under the header and gets all its rows back.
  *
  * WHAT STAYS: the application and document bar, the sheet bar, the status bar
  * and the two side panels. The application and document bar identifies where
@@ -157,24 +164,57 @@
  * THE WORKSPACE'S ROW TRACKS ARE KEPT, AND THREE OF THEM ARE ZEROED.
  *
  * This is the part that has to be exactly right. The workspace is a grid with
- * SIX rows - the menu bar, the toolset bar, the style strip, the panels, the
- * sheet bar and the status bar - and the rows are matched to their children by
- * POSITION. Re-stating a SHORTER list while three children are hidden does not
- * remove those rows: it re-assigns every remaining row to the wrong child, and
- * the canvas ends up in a 24px track. That is the defect this replaces - the
- * drawing did not grow, it shrank.
+ * FIVE rows - the shared top rail, the style strip, the panels, the sheet bar
+ * and the status bar - and the rows are matched to their children by POSITION.
+ * Re-stating a SHORTER list while children are hidden does not remove those
+ * rows: it re-assigns every remaining row to the wrong child, and the canvas
+ * ends up in a 24px track. That is the defect this replaces - the drawing did
+ * not grow, it shrank.
  *
- * So the list keeps its SIX entries and the TOOLSET BAR and the STYLE STRIP
- * become `0`. The menu bar's track stays `auto` - it has not gone away, it has
- * become the sliver of the way back. The tracks are still there, still matched
- * to the same children, and contribute no height. The canvas row is untouched
- * as `minmax(0, 1fr)`, so it absorbs exactly what the two empty rows gave up.
+ * So the list keeps its FIVE entries and the STYLE STRIP becomes `0`. The
+ * rail's track stays `auto` - it has not gone away, it has become the sliver of
+ * the way back. The tracks are still there, still matched to the same children,
+ * and contribute no height. The canvas row is untouched as
+ * `minmax(0, 1fr)`, so it absorbs exactly what the empty row gave up.
  */
 body.datum-topbar-hidden .drawing-toolbar,
 body.datum-topbar-hidden .drawing-menu-controls-bar,
 body.datum-topbar-hidden .drawing-topbar-hide,
 body.datum-topbar-hidden .drawing-style-strip {
     display: none;
+}
+
+/*
+ * AND THE RAIL BECOMES THE SLIVER ITSELF.
+ *
+ * The rail is the child the grid matches to its row; its two bars are gone, so
+ * what is left has to be the 6px seaming line and must not scroll - there is
+ * nothing in it to scroll. The click that brings the bars back is handled on
+ * the sliver (see `workspace-layout.js`).
+ */
+body.datum-topbar-hidden .drawing-top-rail {
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    cursor: pointer;
+    height: 6px;
+    max-height: 6px;
+    min-height: 6px;
+    overflow: hidden;
+}
+
+/*
+ * AND IT SAYS WHAT IT IS.
+ *
+ * A bare 6px line is not obviously a control. It keeps its pointer cursor and
+ * takes a hover tint, so the seam the bars were folded along reads as the place
+ * to press rather than as a decoration.
+ */
+body.datum-topbar-hidden .drawing-top-rail:hover {
+    background: var(--datum-menu-hover);
+}
+
+body.datum-topbar-hidden .drawing-top-rail-scroll {
+    overflow: hidden;
 }
 
 /*
@@ -205,11 +245,28 @@ body.datum-topbar-hidden .datum-menubar > * {
 
 body.datum-topbar-hidden .drawing-workspace {
     /*
-     * SIX TRACKS, as above: the menu bar shrinks to its sliver, the toolset bar
-     * and the style strip are empty, then the flexible panel row, the sheet bar
-     * and the status bar - the same children, in the same order.
+     * FIVE TRACKS, as above: the rail shrinks to its sliver, the Show row is
+     * empty (the bars are what it brought back), then the flexible panel row,
+     * the sheet bar and the status bar - the same children, in the same order.
+     *
+     * THE RAIL'S TRACK STAYS `auto`, NOT `0`.
+     *
+     * It used to be `0`, on the reasoning that the rail had gone. But the rail
+     * has NOT gone - it is the 6px sliver that brings the bars back, and its
+     * whole width is the target. A `0` track gave the sliver no height at all:
+     * the bars were hidden correctly and the way back was a 1px line that could
+     * not be aimed at, so "Hide" appeared to do nothing recoverable.
+     *
+     * `auto` lets the rail be exactly as tall as the sliver it now is - see
+     * `max-height: 6px` above - so the way back is the full-width target it was
+     * designed to be, and the canvas absorbs the height the two bars gave up.
+     *
+     * THE TRACKS ARE THE SAME FIVE TRACKS as the shown layout. Stating a
+     * shorter list here would re-match every child to the wrong row - which is
+     * the defect the comment above records - so the hidden state repeats the
+     * shown state exactly and lets the children collapse themselves.
      */
-    grid-template-rows: 0 auto 0 minmax(0, 1fr) 24px 22px;
+    grid-template-rows: auto auto minmax(0, 1fr) 24px 22px;
 }
 
 /*
@@ -403,20 +460,450 @@ body.datum-topbar-hidden .drawing-workspace {
 
 /*
  * =========================================================
+ * THE SHARED TOP RAIL: MENU BAR ABOVE SECTION BAR
+ * =========================================================
+ *
+ * ONE NAVIGATION AREA, ONE SCROLLER.
+ *
+ * The main menu (File, Edit, Insert, View, Tools, Help) and the toolset selector
+ * are the same kind of thing - navigation across the top of the drawing - so
+ * they are laid out as ONE child of the workspace grid, stacked in that order:
+ * the menu on top, the toolset bar directly beneath it.
+ *
+ *   .drawing-top-rail         the grid child; takes the row and clips sideways
+ *   .drawing-top-rail-scroll  THE horizontal scroller - the only one
+ *   .drawing-top-rail-track   one column wide enough for both bars' contents
+ *
+ * WHY A SHARED SCROLLER AND NOT TWO SYNCHRONISED ONES. Two independent
+ * scrollers are two ideas of "how far right we are", and any scrollbar drag, a
+ * touch fling, a `scrollIntoView` or a browser restoring scroll positions can
+ * leave them one pixel - or one whole bar - apart. Here there is nothing to
+ * synchronise: there is one offset, so the bars are aligned by construction.
+ *
+ * TOUCHPAD, MOUSE WHEEL AND TOUCH. A single `overflow-x: auto` box is the only
+ * arrangement where all three work with no script: two-finger horizontal pans,
+ * `Shift`+wheel and a wheel over a surface with a horizontal axis scroll this
+ * box, and a one-finger horizontal drag on a touchscreen does too. It carries
+ * `tabindex="0"` so a keyboard can scroll it as well.
+ *
+ * VERTICAL SCROLLING IS UNTOUCHED. `overflow-y: hidden` and `contain` for the
+ * page - a sideways scroll that reaches either end must not jump to the page
+ * behind it - and the row is `auto` tall, so the two bars are never clipped.
+ *
+ * NOTHING WRAPS AND NOTHING SHRINKS. The track sizes its column to
+ * `max(min-content, 100%)`: never narrower than the contents, never narrower
+ * than the rail, so it is the VIEWPORT WIDTH on a wide screen and the natural
+ * content width on a narrow one. Both bars are `nowrap` and their children are
+ * `flex: 0 0 auto`, so the extra width goes to the scroller as overflow rather
+ * than into squeezing a label or folding a menu onto a second line.
+ *
+ * THE HIDE BUTTON COUNTED AS CONTENT TOO. The toolset bar's `min-width: 0`
+ * would otherwise let it be sized by the bar AROUND it, and with
+ * `margin-left: auto` on the button the two would chase each other's width.
+ * On the rail the button is therefore laid out at its natural place in the row
+ * (see the rule below), so the track's width is simply the contents' width and
+ * the button can never spill past the scrollable area where it could not be
+ * reached.
+ *
+ * THE PAGE DOES NOT WIDEN. This is the only child of the workspace that may be
+ * as wide as it likes, and `.drawing-workspace` is `overflow: hidden`, so the
+ * rail scrolls INSIDE the grid row it was given and the document never grows
+ * past the viewport.
+ */
+.drawing-top-rail {
+    grid-column: 1 / -1;
+    display: block;
+    /*
+     * THE RAIL FILLS ITS GRID ROW EXACTLY - no more, no less.
+     *
+     * A block box would take the width of its track, but this box is also
+     * stretched by `justify-self`, and it carries the positioning context the
+     * Hide button hangs from. Stating `width: 100%` with `box-sizing:
+     * border-box` and `min-width: 0` makes its width THE VIEWPORT WIDTH of the
+     * drawing, whatever its contents want: the bars inside are as wide as the
+     * content, the SCROLLER is the box that clips them, and neither bar can
+     * push its right-hand end past the edge of the screen. Without this the
+     * rail could grow to its contents, and the last controls on both bars then
+     * sat beyond the right edge where nothing could scroll to them.
+     */
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+    /*
+     * THE POSITIONING CONTEXT FOR THE HIDE BUTTON. It is the only positioned
+     * box above the bars that is also the box clipped to the visible width, so
+     * a `right: 0` descendant lands on the RAIL's right edge - on screen at any
+     * scroll position - and not on the far end of the scrolled content.
+     */
+    position: relative;
+    z-index: 60;
+}
+
+/*
+ * THE DIVIDER BETWEEN THE MENU BAR AND THE TOOL OPTIONS BAR.
+ *
+ * Two bars stacked inside one rail: the main menu on top, the toolset selector
+ * directly beneath. The line between them says where one ends, and it is the
+ * same 1px hairline in the same border colour as every other seam in the
+ * chrome.
+ *
+ * IT IS PAINTED ON THE RAIL, WHICH DOES NOT SCROLL. That is what makes it
+ * right at every scroll position: the rail is exactly the visible width of the
+ * top of the drawing, so the line starts at the window's left edge and ends at
+ * its right, whether the contents beneath it fit on a wide screen or are
+ * scrolled right on a narrow one. A border on either bar could not do that - a
+ * bar is as wide as its contents, so its border would scroll away with it.
+ *
+ * ITS POSITION IS MEASURED, NOT GUESSED. `--datum-rail-row-one` is written by
+ * `installTopRail` from the real height of the menu-and-controls row, so the
+ * line sits at that row's foot whatever the row's height turns out to be - the
+ * font, the theme and the window all change it. Until the first measurement (or
+ * in a layout that cannot measure), it falls back to the row's own resting
+ * height, which is what the `0px` token would otherwise have drawn through the
+ * middle of the menu.
+ *
+ * It sends no input: a decorative line between two rows must not intercept a
+ * click meant for a menu label or a toolset. `pointer-events: none` also means
+ * it can overlap the foot of the bar without taking anything from it.
+ */
+.drawing-top-rail::after {
+    background: var(--datum-border);
+    /*
+     * AT THE FOOT OF THE FIRST ROW, NOT AT ITS HEAD.
+     *
+     * `--datum-rail-row-one` is the height of the menu-and-controls row, so
+     * measuring from the rail's TOP is the correct placement: `top` equal to the
+     * row height puts the line exactly on the row's bottom edge. It was first
+     * written as `bottom`, which subtracts that height from the rail's foot and
+     * draws the line at the row's top - straight through the menu labels.
+     */
+    top: var(--datum-rail-row-one, 0px);
+    content: "";
+    height: 1px;
+    left: 0;
+    pointer-events: none;
+    position: absolute;
+    right: 0;
+    /*
+     * ABOVE BOTH BARS. The menu row is a stacking context of its own (65), so a
+     * line painted by the rail - a different box - has to be given a level that
+     * wins against it, or the row's background covers the seam. It stays below
+     * the Hide control (62 would be too low here, 90 is the open menus).
+     */
+    z-index: 66;
+}
+
+/*
+ * AND IT IS NOT DRAWN WHILE THE BARS ARE FOLDED AWAY.
+ *
+ * The rail is a 6px sliver then, with the closing line at its foot already
+ * doing the job of saying where the drawing begins. A divider across the middle
+ * of that sliver would read as a second, thinner bar rather than as a seam
+ * between two that are no longer there.
+ */
+body.datum-topbar-hidden .drawing-top-rail::after {
+    display: none;
+}
+
+/*
+ * THE SCROLLER IS THE VISIBLE WIDTH, AND ONLY THE VISIBLE WIDTH.
+ *
+ * `overflow-x: auto` cannot stop a box from being as wide as its contents on
+ * its own: the box has to be bounded first. `width: 100%` on a `border-box`
+ * box inside the rail does that, so the scroller is exactly the rail's width
+ * and everything wider than it becomes OVERFLOW - which is what makes the
+ * `--scrollable` state (and the horizontal scroll behind it) real. Left
+ * unstated, the scroller could size to its track and the bars' right-hand end
+ * would be clipped by the workspace rather than reachable by scrolling.
+ */
+.drawing-top-rail-scroll {
+    box-sizing: border-box;
+    max-width: 100%;
+    min-width: 0;
+    width: 100%;
+
+    /*
+     * =====================================================
+     * THE SCROLLER MUST NOT CLIP THE MENUS
+     * =====================================================
+     *
+     * This is the one rule that cannot be guessed at. A horizontal scroller
+     * with `overflow-y: hidden` clips VERTICALLY as well - the two axes are
+     * not independent when only one of them is `visible`. The menu panels drop
+     * from the bar, so under that clip they were drawn into the bar and cut off
+     * at its lower edge: the dropdowns were there, and invisible.
+     *
+     * `overflow-x: auto` alone is not enough either, because `auto` establishes
+     * a clip of its own. So the clip is lifted (`overflow: visible`) while the
+     * bars FIT - which is every wide window - and applied only when the rail
+     * actually has something to scroll, by `installTopRail` adding
+     * `.drawing-top-rail-scroll--scrollable`. Panels opened in the overflowing
+     * state are still readable because `menu-bar.js` renders a panel in a
+     * SCROLLABLE rail as `position: fixed`, against the window rather than
+     * against the clipped bar.
+     *
+     * `overflow-y: clip` is used rather than `hidden` where supported: `clip`
+     * cuts the same box but does NOT create a scroll container, so it cannot
+     * become the containing block for a fixed-position panel.
+     */
+    overflow: visible;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    white-space: nowrap;
+}
+
+/*
+ * AND ONLY WHILE THERE IS SOMETHING TO SCROLL.
+ *
+ * The width can change at any time - a window resize, a panel collapsing, a
+ * font loading - so the state is not a media query. `installTopRail` toggles
+ * this class from the rail's real `scrollWidth`, on start-up and on resize.
+ */
+.drawing-top-rail-scroll--scrollable {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+@supports (overflow: clip) {
+    .drawing-top-rail-scroll,
+    .drawing-top-rail-scroll--scrollable {
+        overflow-x: auto;
+        overflow-y: clip;
+    }
+
+    .drawing-top-rail-scroll:not(.drawing-top-rail-scroll--scrollable) {
+        overflow-x: clip;
+    }
+}
+
+/*
+ * THE DIVIDING LINES SPAN THE WINDOW, NOT THE SCROLLED CONTENT.
+ *
+ * Each bar draws its own `border-bottom`, and a border belongs to the element -
+ * which here is as wide as the CONTENT, not as the rail. Scrolled to the left,
+ * the rule ran past the right edge and stopped at the clip; scrolled right, it
+ * began part-way across, because its left end had scrolled out of view. Either
+ * way it looked cut off half way along the bar.
+ *
+ * So neither bar draws a border of its own. Each row's rule is painted by the
+ * TRACK, as a 1px background-image gradient at that row's foot.
+ *
+ * THE TRACK SCROLLS, THE LINE DOES NOT. That is the important half. The track
+ * is as wide as the CONTENT and it moves sideways with the scroll, so a line
+ * painted on it would travel with the content - fine while the content is wider
+ * than the window, but on a wide screen, where the track is stretched to fill
+ * the rail, a sideways touch-drag can shift it by a few pixels and the line
+ * would visibly detach from the edge of the window.
+ *
+ * The line between the two bars therefore belongs to the RAIL - the box that
+ * does NOT scroll - and is pinned to the foot of its first bar by the measured
+ * row height (see `.drawing-top-rail::after` below). The track keeps only the
+ * closing line under the section bar, where there is no row above it to fix a
+ * position against.
+ */
+
+/*
+ * A KEYBOARD SCROLL TARGET, so arrow keys can pan the rail.
+ *
+ * It is focusable for that reason alone. The outline is inset and only shown on
+ * `:focus-visible`, so it never appears after a mouse click and never draws over
+ * the bars on either side of it.
+ */
+.drawing-top-rail-scroll:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.drawing-top-rail-track {
+    display: grid;
+    grid-auto-rows: auto;
+    /*
+     * ONE COLUMN, STRETCHED TO THE WIDER OF THE TWO ROWS.
+     *
+     * `minmax(0, 1fr)` rather than `minmax(max-content, 1fr)`. The old floor was
+     * `max-content` - the widest of the two bars' contents - and the scroller
+     * around it is only `overflow-x: auto` ONCE THE TRACK IS WIDER THAN ITSELF,
+     * so nothing ever made the track wider than the visible rail: it stopped at
+     * the toolset row's natural width and the rest of a large screen was left
+     * blank. That is the "cut off half way" the bars showed on a big monitor -
+     * the bar itself was fine, the BOX it was stretched across was half a
+     * screen wide.
+     *
+     * `1fr` makes the track the rail's width, as it should be on a screen that
+     * fits, and the `min-width` below restores the overflow on a narrow one: a
+     * scroll container takes its content's size into account, so the floor is
+     * still respected and a compressed window still scrolls rather than
+     * squeezing the bars.
+     */
+    grid-template-columns: minmax(0, 1fr);
+
+    /*
+     * `width: 100%` PLUS A `max-content` FLOOR - stated as two properties, not
+     * as one `max(min-content, 100%)`.
+     *
+     * The single expression did not resolve against the scroller: the track came
+     * out at its max-content width no matter how wide the rail was, so the width
+     * half of it was silently doing nothing and the bars ended half way across a
+     * large screen. `width: 100%` fills the rail and `min-width: max-content`
+     * keeps the floor - the track is the wider of the two, which is exactly what
+     * the expression was meant to say, and which a scroll container also takes
+     * into account when it decides whether there is anything to scroll.
+     */
+    min-width: max-content;
+    width: 100%;
+
+    /*
+     * NO `overflow` HERE, AND THAT IS LOAD-BEARING.
+     *
+     * A box with `overflow: hidden` becomes the containing block for the
+     * absolutely-positioned descendants of its parents, so a `right: 0` control
+     * would anchor to the TRACK's right edge - the full scrolled width - and
+     * disappear off the side of a compressed window instead of sticking to the
+     * rail's edge. Clipping is the SCROLLER's job; the track only lays out.
+     */
+
+    /*
+     * THE DIVIDER'S PLACEMENT, ASKED FOR BY THE RAIL.
+     *
+     * The line between the two bars is drawn by the rail, but the row it sits
+     * under is measured from the TRACK - here - so this is where the figure is
+     * written: `--datum-rail-row-one` is the height of the first row, the menu
+     * and quick-access row, updated by `installTopRail` whenever the bars
+     * resize. The closing line under the section bar is still painted here, as
+     * the one background layer, because it is single-row and there is no second
+     * row to place it against.
+     */
+    --datum-rail-row-one: 0px;
+    background-image:
+        linear-gradient(var(--cad-border), var(--cad-border));
+    background-position:
+        0 bottom;
+    background-repeat: no-repeat;
+    background-size: 100% 1px, 100% 1px;
+}
+
+/*
+ * THE TWO ROWS, IN THE ORDER THE SPECIFICATION GIVES THEM.
+ *
+ *   1. the main menu AND the quick-access controls, on ONE line
+ *        File  Edit  Insert  View  Tools  Help  |  Search  Undo Redo  |
+ *        Thickness  Colour  Line Type  |  Grid  Snap  Dimensions
+ *        Magnitudes  Fit
+ *   2. the section bar
+ *        Geometry  Annotate  Statics  DYNAMICS  Fluids  ...
+ *
+ * The quick-access bar is a SIBLING of the menu bar INSIDE the menu's own row
+ * (`.drawing-menu-controls-bar`), separated from it by a divider - see
+ * `toolbar.css`. That is the arrangement the drawing had before, and it is why
+ * the first row of the rail is tall enough for both.
+ *
+ * Both rows span the track's one column, so they are exactly as wide as each
+ * other and as the rail - and they scroll as one. The row order is stated
+ * explicitly rather than left to source order, so a later edit to the markup
+ * cannot silently put the section bar on top.
+ *
+ * EACH IS ONE LINE THAT NEVER WRAPS. The bars' children keep their natural
+ * widths; the rail is what scrolls.
+ */
+.drawing-top-rail-track > .drawing-menu-controls-bar,
+.drawing-top-rail-track > .drawing-toolbar {
+    grid-column: 1 / -1;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+/*
+ * THE ROW ABOVE THE DIVIDER MUST NOT PAINT A LINE OF ITS OWN.
+ *
+ * `.drawing-menu-controls-bar` carries a `border-bottom` of its own in
+ * `toolbar.css`, and inside the rail that border is a second divider: it sits
+ * 1px ABOVE the rail's own line, so the seam reads as two hairlines with a pale
+ * line between them. The bar keeps its border where it is used as a plain row;
+ * on the rail the RAIL draws the seam, at the foot of the row, across the whole
+ * window.
+ */
+.drawing-top-rail-track > .drawing-menu-controls-bar {
+    border-bottom: 0;
+    grid-row: 1;
+}
+
+.drawing-top-rail-track > .drawing-toolbar {
+    border-bottom: 0;
+    grid-row: 2;
+}
+
+/*
+ * THE HIDE CONTROL SHOULD BE IN SIGHT, NOT AT THE END OF THE SCROLL.
+ *
+ * It is the way back from the sliver, so it belongs where the eye already looks
+ * for it - the right-hand end of the bars. On a compressed window the row is
+ * wider than the rail, and "the right-hand end" is only reachable by scrolling
+ * there. The button therefore floats over the section bar's right edge at fixed
+ * position, while remaining a child of the bar (so the Hide/Show wiring finds it
+ * where it always has).
+ *
+ * `--rail-hide-width` reserves exactly that much room at the end of the
+ * toolset group, so the last toolset can be scrolled clear of the button and
+ * never sits underneath it.
+ */
+.drawing-top-rail {
+    --rail-hide-width: 42px;
+}
+
+@media (max-width: 900px) {
+    /* The word "Hide" goes at this width - see `responsive.css`. */
+    .drawing-top-rail {
+        --rail-hide-width: 30px;
+    }
+}
+
+/*
+ * INSIDE THE RAIL, THE BARS ARE SIZED BY THE TRACK.
+ *
+ * `min-width: 0` rather than `min-width: auto`. A grid item's default
+ * `min-width: auto` refuses to be narrower than its own content, and on a grid
+ * track that content contribution is what decided the track's width: the track
+ * became the widest bar's content and STOPPED THERE, so on a large monitor both
+ * bars ended half way across the screen while the rail carried on past them.
+ * The track is now the rail's width (`minmax(0, 1fr)`), and the bars must be
+ * allowed to follow it - which is what `min-width: 0` permits.
+ *
+ * THE OVERFLOW NOW COMES FROM THE CONTENT, NOT FROM A FLOOR. The toolset group
+ * keeps `min-width: max-content`, so the row is still never narrower than its
+ * toolsets and a compressed window still overflows the rail and scrolls. The
+ * menu row has no floor of its own and simply fills whatever width it is given.
+ *
+ * (*The Hide button is a sibling of the scroller, pinned to the rail's right
+ * edge. The reserved room it leaves in the toolset bar's padding is what keeps
+ * the last toolset from hiding underneath it.*)
+ */
+.drawing-top-rail-track > .drawing-menu-controls-bar,
+.drawing-top-rail-track > .drawing-toolbar {
+    min-width: 0;
+}
+
+.drawing-top-rail-track > .drawing-toolbar > .drawing-toolbar-scroll {
+    min-width: max-content;
+}
+
+
+
+/*
+ * =========================================================
  * BAND 2: THE MAIN MENU BAR
  * =========================================================
  *
  * File, Edit, Insert, View, Tools, Help - one compact row directly beneath the
  * application and document bar, above the toolset selector.
  *
- * IT IS ITS OWN GRID CHILD, AND IT SPANS THE WHOLE WIDTH.
+ * IT SITS ON TOP OF THE TOOLSET BAR, INSIDE THE SHARED TOP RAIL.
  *
  * The workspace is a THREE-COLUMN grid - `202px | 1fr | 236px` for the Tools
- * rail, the canvas and the Features rail - and a child with no `grid-column`
- * lands in COLUMN ONE, the 202px rail. Six short labels would then be cropped
- * to the width of the rail. Every full-width row in this grid states the same
- * span for that reason: the menu bar, the toolset nav and the style strip all
- * carry `grid-column: 1 / -1`.
+ * rail, the canvas and the Features rail - and only the rail spans all three
+ * columns (`.drawing-top-rail` carries `grid-column: 1 / -1`). Inside the rail
+ * the menu and the toolset bar are stacked with the same `grid-column: 1 / -1`
+ * on their own single-column grid, so both are as wide as the rail's track.
  *
  * IT DOES NOT WRAP AND IT DOES NOT GROW. Six short labels fit any desktop
  * width, and the row's height comes from its own content - so opening a menu
@@ -426,25 +913,30 @@ body.datum-topbar-hidden .drawing-workspace {
  * space in it.
  */
 .datum-menubar {
-    grid-row: 2;
     align-items: stretch;
     background: var(--datum-chrome);
     border-bottom: 1px solid var(--datum-border);
     display: flex;
     flex: 0 0 auto;
+    flex-wrap: nowrap;
     gap: 2px;
-    grid-column: 1 / -1;
     min-width: 0;
     padding: 0 6px;
     position: relative;
+    white-space: nowrap;
 
     /*
-     * ABOVE THE CANVAS BELOW IT. The bar is a positioned element, so without a
-     * level of its own a dropdown would be painted under later siblings - the
-     * canvas and the panels - and a menu opened near one would appear behind it.
-     * This is the whole of "must display above the drawing canvas".
+     * NO LEVEL HERE - IT WOULD TRAP THE DROPDOWN.
+     *
+     * It had `z-index: 60`, which made it a stacking context. The dropdown panel
+     * is built INSIDE it, so the panel's own level could only ever be compared
+     * with things in here - never with the section bar in the row below, whose
+     * background then painted over an open menu and hid its first item.
+     *
+     * It stays positioned (the panel is laid out from it) but takes no level, so
+     * the panel participates in the level of the bar it hangs off. That bar is
+     * `.drawing-menu-controls-bar` at 65, above the section row's 61.
      */
-    z-index: 60;
 }
 
 /*
@@ -548,8 +1040,61 @@ body.datum-topbar-hidden .drawing-workspace {
     padding: 5px;
     position: absolute;
     top: 100%;
+
+    /*
+     * A LEVEL OF ITS OWN, WITHIN THE RAIL.
+     *
+     * This keeps an open panel above the section bar and the quick-access
+     * controls in its own rail - see `.datum-menu-panel-fixed` below for the
+     * rest of the story, which is that the panel does not stay in the rail at
+     * all once it is open.
+     */
     z-index: 70;
 }
+
+/*
+ * =========================================================
+ * AN OPEN PANEL IS PLACED AGAINST THE WINDOW
+ * =========================================================
+ *
+ * THIS IS THE WHOLE OF "A DROPDOWN MUST BE FULLY VISIBLE".
+ *
+ * The rail is a stacking context (`z-index: 60`) so that it sits above the
+ * canvas. Everything drawn INSIDE it - including a panel at 70 - is painted as
+ * part of that context, which is BELOW the tools panel and the drawing space
+ * beside and beneath it. Raising the panel's number cannot help: it is only
+ * being compared with its siblings inside the rail. That is what covered the
+ * lower half of the File menu.
+ *
+ * A `position: fixed` box, by contrast, is positioned against the viewport and
+ * painted in the ROOT stacking context, where a `z-index` above every panel
+ * means what it says. `menu-bar.js` places it directly under its own label and
+ * keeps it there while the rail scrolls or the window changes size.
+ *
+ * `getBoundingClientRect` on the label is what the placement is computed from,
+ * so the panel lands in the right place even though it is no longer a visual
+ * child of the bar.
+ */
+.datum-menu-panel-fixed {
+    left: auto;
+    margin-top: 0;
+    position: fixed;
+    top: auto;
+    z-index: 90;
+}
+
+
+
+/*
+ * A PANEL IN A SCROLLING RAIL, PLACED AGAINST THE WINDOW.
+ *
+ * The rail clips while it scrolls, so a panel that stays inside it is cut off at
+ * the bar's edge. `placePanelAgainstWindow` in `menu-bar.js` adds this class and
+ * sets `left`/`top` from the label's own rectangle; here the panel is taken out
+ * of the bar's coordinate system entirely and put at the very top of the
+ * painting order.
+ */
+
 
 /*
  * AN ITEM.
@@ -937,21 +1482,138 @@ body.datum-topbar-hidden .drawing-workspace {
     z-index: 210;
 }
 
+/*
+ * ONE RESULT: ITS TYPE, ITS NAME, AND WHERE IT LIVES.
+ *
+ * THE NAME COMES FIRST. No leading tag: the name is what a student scans for,
+ * and a word before it delays every row by one glance. What kind of thing a
+ * result is sits on the second line, after where it lives - "Fluids · Create ·
+ * Flow Paths · Tool" - so it still distinguishes a Tool from the Section that
+ * holds it without getting between the student and the name.
+ *
+ * It is compact because a search list is read at a glance; the padding is sized
+ * for a fingertip as well as a pointer, which is why it is not tighter than
+ * this.
+ */
 .datum-search-result {
-    align-items: center;
     background: transparent;
     border: 0;
     border-radius: var(--radius-sm);
     color: var(--datum-ink);
     cursor: pointer;
     display: flex;
+    flex-direction: column;
     font-family: var(--datum-font);
     font-size: 13px;
-    gap: 10px;
-    justify-content: space-between;
-    padding: 7px 10px;
+    gap: 1px;
+    min-height: 34px;
+    padding: 6px 10px;
     text-align: left;
     width: 100%;
+}
+
+.datum-search-result-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/*
+ * THE SECOND LINE: where it lives, what it is, and its key, separated by a
+ * quiet dot. The type word stays the same muted colour as the place it follows;
+ * the key, when there is one, is the only part set in a monospaced face, so a
+ * shortcut reads as a key rather than as another word.
+ */
+.datum-search-result-where {
+    white-space: nowrap;
+}
+
+.datum-search-result-separator {
+    margin: 0 4px;
+    opacity: .55;
+}
+
+.datum-search-result-where:last-child {
+    font-family: var(--datum-font-mono);
+    font-size: 10px;
+}
+
+/*
+ * AN ENTRY THAT CANNOT RUN STILL APPEARS - it is findable, which is the point -
+ * but it reads as unavailable, and the reason is printed under it.
+ */
+.datum-search-result-unavailable .datum-search-result-label {
+    opacity: .7;
+}
+
+.datum-search-result-reason {
+    color: var(--datum-muted);
+    font-size: 10px;
+    font-style: italic;
+    line-height: 1.25;
+}
+
+.datum-search-result-blocked {
+    outline: 1px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+/*
+ * NO RESULTS. The heading says what was asked for; the hint names a term that
+ * would have found something.
+ */
+.datum-search-empty {
+    padding: 10px 12px;
+}
+
+.datum-search-empty-heading {
+    color: var(--datum-ink);
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.datum-search-empty-hint {
+    color: var(--datum-muted);
+    display: block;
+    font-size: 11px;
+    line-height: 1.35;
+    margin-top: 3px;
+}
+
+/*
+ * A PLACE THE SEARCH HAS TAKEN THE EYE TO - the toolset or the sheet bar. A
+ * brief ring, then gone: it is a signpost, not a state.
+ */
+.datum-search-reveal {
+    animation: datum-search-reveal 1.4s ease-out;
+    border-radius: var(--radius-sm);
+}
+
+@keyframes datum-search-reveal {
+    0%, 40% {
+        box-shadow: 0 0 0 2px var(--datum-focus);
+    }
+    100% {
+        box-shadow: 0 0 0 2px transparent;
+    }
+}
+
+/*
+ * WITHOUT HOVER THERE IS NO "DISCOVER ON HOVER". A touch screen applies the
+ * highlight on contact only (via :active), never through :hover, so a row is
+ * never lit by a finger that was only passing over it while scrolling.
+ */
+@media (hover: none) {
+    .datum-search-result:hover {
+        background: transparent;
+        color: var(--datum-ink);
+    }
+
+    .datum-search-result.datum-search-active {
+        background: var(--datum-green-tint);
+        color: var(--datum-green-ink);
+    }
 }
 
 .datum-search-result:hover,
@@ -961,20 +1623,25 @@ body.datum-topbar-hidden .drawing-workspace {
 }
 
 /*
- * WHERE THE COMMAND LIVES. Shown because the point of the search is often to
- * learn which menu a command is in - the second time, the student goes straight
- * there.
+ * WHERE THE RESULT LIVES. Shown because the point of the search is often to
+ * learn WHICH SECTION holds a tool - the second time, the student goes straight
+ * there. It sits under the name, in the muted colour, so the name is the first
+ * thing read.
  */
-.datum-search-result-menu {
+.datum-search-result-location {
     color: var(--datum-muted);
-    flex: 0 0 auto;
     font-size: 11px;
+    line-height: 1.3;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
-.datum-search-result:hover .datum-search-result-menu,
-.datum-search-result.datum-search-active .datum-search-result-menu {
+.datum-search-result:hover .datum-search-result-location,
+.datum-search-result.datum-search-active .datum-search-result-location {
     color: var(--datum-green-ink);
-    opacity: .75;
+    opacity: .8;
 }
 
 /*

@@ -114,12 +114,19 @@ function runInFreshPage(taskSource, { timeout = 120_000 } = {}) {
 
   const child = String.raw`
     const { bootApp, projectRoot, whenReady } = require(${JSON.stringify(__filename)});
+    /*
+     * A TASK LOADS APPLICATION MODULES BY PATH. Node's own require() is handed in
+     * (a bare eval context has no window, so it cannot be asked from there), so a
+     * task says require("<projectRoot>/src/...") and gets the SAME module
+     * instance the booted page is using - ES modules are singletons.
+     */
+    const nodeRequire = require;
     const page = bootApp();
     const task = ${taskSource};
     (async () => {
       await whenReady();
       const result = await task({ window: page.window, document: page.document,
-        projectRoot, require, bootError: page.error });
+        projectRoot, require: nodeRequire, bootError: page.error });
       process.stdout.write("\n__DATUM_REPORT__" + JSON.stringify(result === undefined ? null : result));
       /*
        * THE PAGE'S TIMERS ARE LEFT RUNNING - jsdom's clock, the source

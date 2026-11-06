@@ -776,20 +776,61 @@ function serializeVessel(object) {
 
   const { definitions, options } = styleOf(object);
 
-  const corners = enggVessel.vesselOutline(object).map((corner) => point(corner.x, corner.y));
-
-  const closed = enggVessel.vesselStyleOf(object) === enggVessel.VESSEL_STYLES.closed;
-
+  /*
+   * EVERY VESSEL HAS A LEVEL, so the percentage is written for both
+   * configurations. It is the one number that says where the surface is; the
+   * type line above says whether there is a lid over it.
+   */
   const settings = settingsLine([
     ["style", enggVessel.vesselStyleOf(object)],
     ["width", number(enggVessel.vesselRect(object)?.width || 0)],
-    ["height", number(enggVessel.vesselRect(object)?.height || 0)]
+    ["height", number(enggVessel.vesselRect(object)?.height || 0)],
+    ["percent", number(enggVessel.fluidLevelPercentOf(object))]
   ]);
 
-  const body =
-    object.style?.fillMode === "solid"
-      ? [`\\draw[${options.join(", ")}] ${corners.join(" -- ")} -- ${closed ? "cycle" : corners[0]};`]
-      : segments.map((segment) => line(segment.start, segment.end, options));
+  /*
+   * A VESSEL'S FILL IS ITS LIQUID, so a solid fill is not a filled outline: the
+   * walls are always strokes, and the fill is the region under the surface.
+   */
+  const body = segments.map((segment) => line(segment.start, segment.end, options));
+
+  /*
+   * THE LIQUID IS PART OF THE TANK, so it is written in the same block - the
+   * fill FIRST, so the walls paint over its edges, and then the surface. Both
+   * come from the vessel model, so the compiled picture fills exactly what the
+   * canvas fills and the surface sits at the same fraction of the interior.
+   */
+  if (enggVessel.fluidLevelEnabledOf(object)) {
+    /* The liquid takes the vessel's own Fill colour, exactly as the canvas does. */
+    const hex = /^#[0-9a-fA-F]{6}$/.test(String(object.style?.fill || ""))
+      ? String(object.style.fill).toLowerCase()
+      : enggVessel.FLUID_LEVEL_DEFAULT_FILL;
+
+    const ink = colourOfHex(hex) || "black";
+    const opacity = number(enggVessel.FLUID_LEVEL_DEFAULT_OPACITY);
+    const region = enggVessel.fluidLevelRegion(object);
+    const liquid = [];
+
+    if (region && region.points.length >= 3) {
+      const fillName = hex.match(/^#([0-9a-fA-F]{6})$/);
+
+      if (fillName && ink !== "black" && ink !== "white") {
+        liquid.push(`\\definecolor{${ink}}{HTML}{${fillName[1].toUpperCase()}}`);
+      }
+
+      liquid.push(
+        `\\fill[${ink}, fill opacity=${opacity}] ${region.points
+          .map((corner) => point(corner.x, corner.y))
+          .join(" -- ")} -- cycle;`
+      );
+    }
+
+    if (region?.segment) {
+      liquid.push(line(region.segment.start, region.segment.end, options));
+    }
+
+    body.unshift(...liquid);
+  }
 
   return withDefinitions(definitions, [`% DAETUM VESSEL: ${settings}`, ...body]);
 }

@@ -23,6 +23,7 @@ import { renderEngineeringTools, setToolMessage } from "../../../components/layo
 import { cancelTrussConstruction } from "../statics/truss-tool.js";
 import { fitDrawingToView } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, ELBOW_PHASE, cancelRouteConstruction, cancelElbowConstruction } from "./pipe-duct-tool.js";
+import { removeLastFreeformVertex } from "../geometry/geometry-creation.js";
 import { formatDrawingSource } from "../commands/source-commands.js";
 
 /*
@@ -500,6 +501,27 @@ export function installKeyboardShortcuts() {
                     event.preventDefault();
                     return;
                 }
+            }
+
+            /*
+             * BACKSPACE TAKES THE LAST VERTEX BACK WHILE A POLYGON IS DRAWN.
+             *
+             * This is the undo of "where was my last corner", and it is
+             * checked BEFORE the delete branch below because in this state
+             * Backspace must not delete a selected feature - a student
+             * placing vertices is correcting the shape, not the drawing.
+             * The construction's own points are the only thing it touches,
+             * and it consumes the key only when there was a vertex to take
+             * back, so Backspace with nothing placed still behaves as it
+             * always has.
+             */
+            if (
+                event.key === "Backspace" &&
+                drawingState.activeTool === "freeform-polygon" &&
+                removeLastFreeformVertex()
+            ) {
+                event.preventDefault();
+                return;
             }
 
             /*

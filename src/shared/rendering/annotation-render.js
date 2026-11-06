@@ -9,7 +9,10 @@ import { noteTextStyle } from "../typography/note-text-style.js";
 import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
+import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
+import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
+import { workArrowPoints } from "../../features/workspace/model/thermodynamics/work-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
 import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
 
@@ -259,6 +262,17 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         const kind = entity.annotateKind;
         const geometry = entity.geometry || {};
 
+        if (entity.metadata?.thermodynamicsKind === "mechanical-work") {
+            for (const points of fanPaths(geometry)) {
+                svg.appendChild(createSvgElement("polyline", {
+                    points: points.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                    fill: "none", stroke: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                    "stroke-width": 1.5, "stroke-linejoin": "round"
+                }));
+            }
+            return;
+        }
+
         if (entity.metadata?.thermodynamicsKind === "electric-work") {
             svg.appendChild(createSvgElement("polyline", {
                 points: resistorPoints(geometry).map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
@@ -296,7 +310,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 toScreen(point)
             );
 
-        if (pathScreen.length >= 2) {
+        const blockArrow = entity.metadata?.thermodynamicsKind === "work-arrow" ? workArrowPoints(geometry) : [];
+        if (blockArrow.length) {
+            svg.appendChild(createSvgElement("polygon", {
+                points: blockArrow.map(toScreen).map(point => `${point.x},${point.y}`).join(" "),
+                fill: stroke, stroke, "stroke-width": 1, "stroke-linejoin": "miter"
+            }));
+        } else if (pathScreen.length >= 2) {
             svg.appendChild(
                 createSvgElement("polyline", {
                     points: pathScreen
@@ -402,7 +422,7 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     : pathScreen[1] || end;
 
             if (
-                (kind === "arrow" || kind === "leader" || kind === "callout") &&
+                !blockArrow.length && (kind === "arrow" || kind === "leader" || kind === "callout") &&
                 style.arrowhead !== "none"
             ) {
                 appendAnnotateArrowhead(
@@ -466,7 +486,8 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 const height = balloon ? bottomRight.y-topLeft.y : lines.length * lineHeight + 4;
 
                 svg.appendChild(
-                    createSvgElement("rect", {
+                    createSvgElement(entity.style?.calloutShape === "circle" && kind === "callout" ? "circle" : "rect", {
+                        cx:textAt.x, cy:textAt.y, r:width/2,
                         x: textAt.x - width / 2,
                         y: textAt.y - height / 2,
                         width,
@@ -499,7 +520,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     fontSize,
                     note ? zoomedFontHere(fontSize) * typography.lineSpacing : lineHeight,
                     kind === "callout" ? "center" : entity.style?.align,
-                    note ? typography : {}
+                    note ? typography : {},
+                    entity.metadata?.mathSubscript,
+                    entity.metadata?.mathSymbol,
+                    entity.metadata?.mathSuffix
                 );
             }
         }
@@ -525,7 +549,10 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         fontSize,
         lineHeight,
         align,
-        typography = {}
+        typography = {},
+        mathSubscript = null,
+        mathSymbol = null,
+        mathSuffix = ""
     ) {
         const anchorName =
             align === "center"
@@ -553,6 +580,19 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         lines.forEach((line, index) => {
             if (index === 0) {
+                const math = lines.length === 1 && annotationSubscript(line, { mathSubscript, mathSymbol, mathSuffix });
+                if (math) {
+                    textNode.textContent = math.base;
+                    const subscript = createSvgElement("tspan", { "baseline-shift": "sub", "font-size": "70%" });
+                    subscript.textContent = math.subscript;
+                    textNode.appendChild(subscript);
+                    if (math.suffix) {
+                        const suffix = createSvgElement("tspan", {});
+                        suffix.textContent = math.suffix;
+                        textNode.appendChild(suffix);
+                    }
+                    return;
+                }
                 textNode.textContent = line;
                 return;
             }
@@ -822,16 +862,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
     function labelAnchorFor(entity, toScreen) {
         const geometry = entity.geometry || {};
 
-        const point =
-            geometry.position ||
-            geometry.point ||
-            geometry.center ||
-            null;
-
-        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
-            return toScreen(point);
-        }
-
+        /*
+         * A DYNAMICS SPAN SYMBOL ANCHORS AT ITS MIDDLE. A spring, a damper, a
+         * polar vector and a spring-damper carry their extents as two
+         * terminals and no centre, so they are tested BEFORE the point list - a
+         * symbol whose label was anchored to its start would print it at one
+         * end rather than beside the thing it names.
+         */
         if (
             geometry.start &&
             geometry.end &&
@@ -844,7 +881,39 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             });
         }
 
+        const point =
+            geometry.position ||
+            geometry.point ||
+            geometry.center ||
+            null;
+
+        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+            return toScreen(point);
+        }
+
         return null;
+    }
+
+    /*
+     * WHERE THE LABEL SITS RELATIVE TO ITS ANCHOR, in drawing units.
+     *
+     * `geometry.labelOffset` is the explicit, editable offset a Dynamics
+     * symbol offers; without one the label keeps the historical screen-space
+     * nudge. It is measured from the anchor, so the label follows its parent
+     * whenever the parent moves, turns or is resized - and it never draws a
+     * leader, because it is text and nothing else.
+     */
+    function labelOffsetFor(entity, scale) {
+        const offset = entity?.geometry?.labelOffset;
+
+        if (offset && Number.isFinite(Number(offset.x)) && Number.isFinite(Number(offset.y))) {
+            return {
+                x: Number(offset.x) * scale,
+                y: -Number(offset.y) * scale
+            };
+        }
+
+        return { x: LABEL_OFFSET_PX, y: -LABEL_OFFSET_PX };
     }
 
     function appendFeatureLabel(svg, entity, state, bounds) {
@@ -877,9 +946,13 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                 ? entity.style.stroke
                 : "#000000";
 
+        const scale =
+            enggDrawingState.BASE_PIXELS_PER_UNIT * (state.camera?.zoom || 1);
+        const offset = labelOffsetFor(entity, scale);
+
         const label = createSvgElement("text", {
-            x: anchor.x + LABEL_OFFSET_PX,
-            y: anchor.y - LABEL_OFFSET_PX,
+            x: anchor.x + offset.x,
+            y: anchor.y + offset.y,
             fill: colour,
             "font-size": zoomedFontHere(11),
             "font-family": "Arial, sans-serif",

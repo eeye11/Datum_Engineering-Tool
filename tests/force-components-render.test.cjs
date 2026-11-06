@@ -365,9 +365,16 @@ SIGNS.forEach(([label, magnitude, angle, signX, signY]) => {
    * (An earlier version looked for a selection handle here and found
    * none, and reported "the origin is not drawn" - a fault in the test,
    * not the drawing.)
+   *
+   * ONLY SOLID LINES ARE SHAFTS. The renderer also draws two dashed
+   * construction guides closing the decomposition triangle (one from each
+   * component's tip back to the original's tip); they are not vectors and
+   * do not start at the origin, so counting them made every full
+   * decomposition look like it had two arrows too many.
    */
   const shafts = (group ? group.children : []).filter(
-    c => c.tagName === "LINE" && c.attributes?.x1 !== undefined
+    c => c.tagName === "LINE" && c.attributes?.x1 !== undefined &&
+      !c.attributes?.["stroke-dasharray"]
   );
 
   const origins = shafts.map(s => ({

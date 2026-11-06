@@ -54,6 +54,12 @@ const make = (type, geometry) => model.createGeometryObject(type, geometry || {}
 
 const groupsOf = (object) => schema.groupsFor(object).map((group) => group.id);
 
+/* Every field key the panel would draw for an object, whatever section it is in. */
+const fieldsOf = (object) =>
+  schema
+    .groupsFor(object)
+    .flatMap((group) => group.fields.map((field) => field.key));
+
 console.log("\n  a feature's type is its identity\n");
 
 check(
@@ -88,7 +94,7 @@ const NAMES = {
   polygon: "Polygon",
   "freeform-polygon": "Freeform Polygon",
   "coordinate-system-2d": "2D Coordinate System",
-  force: "Point Force",
+  force: "Point Load",
   "pin-support": "Pin Support",
   "roller-support": "Roller Support",
   "fixed-support": "Fixed Support",
@@ -123,40 +129,56 @@ const force = make("force", { start: { x: 0, y: 0 }, end: { x: 1, y: 1 } });
 const support = make("pin-support", { position: { x: 0, y: 0 } });
 const beam = make("beam", { start: { x: 0, y: 0 }, end: { x: 10, y: 0 } });
 
+/*
+ * THREE SECTIONS, AND THE TOOL'S OWN CONTROLS LIVE INSIDE THEM.
+ *
+ * Object, Appearance and Transform are the only top-level sections. A marker, a
+ * line's arrow rows, a polygon's side count, a coordinate system's axes and
+ * labels are folded into the section they belong to - so the panel reads the same
+ * for every tool while still offering exactly the controls that tool has.
+ */
 check(
-  "a Line offers Line and Appearance",
-  groupsOf(line).includes("line") && groupsOf(line).includes("appearance"),
+  "every Geometry tool offers exactly Object, Appearance and Transform",
+  [line, point, circle, polygon, arc, axes].every(
+    (object) => groupsOf(object).join(",") === "object,appearance,transform",
+  ),
   groupsOf(line).join(", "),
 );
 
 check(
-  "a Point offers Marker, not Line",
-  groupsOf(point).includes("marker") && !groupsOf(point).includes("line"),
-  groupsOf(point).join(", "),
+  "a Line's arrow rows are still offered under Appearance",
+  fieldsOf(line).includes("arrowEnd"),
+  fieldsOf(line).join(", "),
 );
 
 check(
-  "a Circle offers Fill and Appearance",
-  groupsOf(circle).includes("fill") && groupsOf(circle).includes("appearance"),
-  groupsOf(circle).join(", "),
+  "a Point's marker style and size are still offered",
+  fieldsOf(point).includes("markerStyle") && fieldsOf(point).includes("markerSize"),
+  fieldsOf(point).join(", "),
 );
 
 check(
-  "a Regular Polygon offers Shape",
-  groupsOf(polygon).includes("shape"),
-  groupsOf(polygon).join(", "),
+  "a Circle still offers Fill",
+  fieldsOf(circle).includes("fillMode"),
+  fieldsOf(circle).join(", "),
 );
 
 check(
-  "an Arc offers Line and no Fill",
-  groupsOf(arc).includes("line") && !groupsOf(arc).includes("fill"),
-  groupsOf(arc).join(", "),
+  "a Regular Polygon still offers its side count",
+  fieldsOf(polygon).includes("sides"),
+  fieldsOf(polygon).join(", "),
 );
 
 check(
-  "a Coordinate System offers Axes and Labels",
-  groupsOf(axes).includes("axes") && groupsOf(axes).includes("labels"),
-  groupsOf(axes).join(", "),
+  "an Arc offers Appearance and no Fill",
+  !fieldsOf(arc).includes("fill"),
+  fieldsOf(arc).join(", "),
+);
+
+check(
+  "a Coordinate System still offers its axes and labels",
+  ["showXAxis", "showLabels", "xLabel", "yLabel"].every((key) => fieldsOf(axes).includes(key)),
+  fieldsOf(axes).join(", "),
 );
 
 console.log("\n  no Geometry leaks into another category\n");

@@ -172,7 +172,7 @@ test("clicking an object with Select selects it", async () => {
   assert.equal(m.state.activeTool, "select");
 });
 
-test("clicking an unselected object with another tool switches to Select", async () => {
+test("clicking an unselected object with another tool selects it and keeps the tool", async () => {
   const page = await ready();
   const { m, second } = sheet();
 
@@ -181,7 +181,13 @@ test("clicking an unselected object with another tool switches to Select", async
 
   clickAt(page, { x: 250, y: 300 });
 
-  assert.equal(m.state.activeTool, "select", "the click must return to Select");
+  /*
+   * A CLICK ON A FEATURE SELECTS IT - IT DOES NOT PUT THE PENCIL DOWN.
+   *
+   * The tool ends on empty canvas, Escape, its own button or another tool, so
+   * a student who selects a feature to check it keeps the Rectangle armed.
+   */
+  assert.equal(m.state.activeTool, "rectangle", "the click must not end the tool");
   assert.deepEqual([...m.state.selection.selectedObjectIds], [second.id]);
 });
 

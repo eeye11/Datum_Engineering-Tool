@@ -46,6 +46,11 @@ import {
 } from "../../../../tool-library/shared/primitives/tikz-primitives.js";
 import { definitionForName } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
+import { gainTrianglePoints, isControlBlock, isGain, isPlant, isSum, plantNodeLabel, plantNodePosition, plantStyle, plantValue, sumInputSign, sumInputSignPosition, sumNodePortPosition } from "../../../model/plant.js";
+import { blockLabelLatex } from "../../../model/block-label.js";
+import { isSignalLine, signalLineSegments } from "../../../model/signal-line.js";
+import { stressArrows, stressAngleMark } from "../../../geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../geometry/boundary-stress.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 
 function finite(value, fallback = 0) {
@@ -287,7 +292,29 @@ const SHAPES = {    line(object) {
         return [coordinate(`${safeName(object)}`, at.x, at.y), drawn].join("\n");
     },
 
-    polyline(object) {
+    polyline(object, context = {}) {
+        if (isSignalLine(object)) {
+            const style = renderStyle({
+                stroke: "#000000",
+                lineWidth: "thin",
+                lineType: "solid",
+                opacity: 1
+            });
+
+            return signalLineSegments(object, context.allObjects || [])
+                .map(segment => straightLine(
+                    pointOf(segment.start),
+                    pointOf(segment.end),
+                    style,
+                    {
+                        arrowEnd: segment.hasArrow ? "open-arrow" : "none",
+                        transform: exportTransformInEffect
+                    }
+                ))
+                .filter(Boolean)
+                .join("\n");
+        }
+
         const points = pointsOf(object.geometry);
 
         if (points.length < 2) {
@@ -328,6 +355,72 @@ const SHAPES = {    line(object) {
     },
 
     rectangle(object) {
+        if (object.metadata?.boundaryStress) {
+            const drawing = boundaryStressDrawing(object.geometry);
+            const escape = text => text.replace(/[\\{}$&#%_^~]/g, char => ({ "\\": "\\textbackslash{}", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}" }[char] || `\\${char}`));
+            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), renderStyle(object.style)),
+                ...drawing.paths.map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" }))),
+                ...drawing.labels.map(item => textNode({ at: pointOf(item.point), text: escape(item.text), style: { stroke: item.colour } }))].join("\n");
+        }
+        if (object.metadata?.stressElement) {
+            const style = renderStyle(object.style);
+            const mark = stressAngleMark(object.geometry);
+            const referenceStyle = renderStyle({ ...object.style, stroke: "#909090", fill: "none", lineType: "solid" });
+            const angleCommands = mark ? [
+                polyline(mark.reference.map(pointOf), referenceStyle),
+                polyline(mark.face.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
+                polyline(mark.perpendicular.map(pointOf), { ...referenceStyle, lineType: "dashed" }),
+                polyline(mark.arc.map(pointOf), referenceStyle),
+                ...mark.axes.map((axis, index) => textNode({ at: pointOf(axis.point), text: ["$x$", "$x'$", "$y'$"][index], style: { stroke: "#909090" } })),
+                textNode({ at: pointOf(mark.labelPoint), text: `$${mark.text.replace("°", "^{\\circ}")}$`, style: { stroke: style.stroke } })
+            ] : [];
+            return [closedShape(enggFeatureGeometry.rectangleCorners(object.geometry).map(pointOf), style),
+                ...angleCommands,
+                ...stressArrows(object.geometry).map(({ points, colour }) => polyline(points.map(pointOf), renderStyle({ ...object.style, stroke: colour, fill: "none" })))].join("\n");
+        }
+        if (isGain(object)) {
+            const style = renderStyle(plantStyle(object.style));
+            const vertices = gainTrianglePoints(object);
+
+            if (vertices.length !== 3) {
+                return null;
+            }
+
+            const centre = {
+                x: vertices.reduce((sum, vertex) => sum + vertex.x, 0) / vertices.length,
+                y: vertices.reduce((sum, vertex) => sum + vertex.y, 0) / vertices.length
+            };
+            const commands = [
+                closedShape(vertices.map(pointOf), style),
+                textNode({
+                    at: pointOf(centre),
+                    text: plantValue(object, "gainValue"),
+                    style,
+                    fontSize: lengthOf(8)
+                })
+            ];
+
+            for (const [side, port] of [
+                ["inputs", {
+                    x: (vertices[0].x + vertices[1].x) / 2,
+                    y: (vertices[0].y + vertices[1].y) / 2
+                }],
+                ["outputs", vertices[2]]
+            ]) {
+                const terminal = plantNodePosition(object, side, 0);
+                commands.push(
+                    straightLine(pointOf(port), pointOf(terminal), style),
+                    circlePrimitive({
+                        centre: pointOf(terminal),
+                        radius: lengthOf(1.25),
+                        style: { ...style, fill: style.stroke }
+                    })
+                );
+            }
+
+            return commands.filter(Boolean).join("\n");
+        }
+
         /*
          * THE CORNER IS COMPUTED IN MODEL SPACE, THEN TRANSFORMED ONCE.
          *
@@ -347,7 +440,8 @@ const SHAPES = {    line(object) {
         const width = finite(object.geometry?.width);
         const height = finite(object.geometry?.height);
         const rotation = finite(object.geometry?.rotation);
-        const style = renderStyle(object.style);
+        const style = renderStyle(isControlBlock(object) ? plantStyle(object.style) : object.style);
+        let rectangle;
 
         /*
          * `position` IS THE TOP-LEFT CORNER, with y growing upward, so the
@@ -369,17 +463,163 @@ const SHAPES = {    line(object) {
              */
             const corners = enggFeatureGeometry.rectangleCorners(object.geometry);
 
-            return corners.length === 4 ? closedShape(corners.map(pointOf), style) : null;
+            rectangle = corners.length === 4 ? closedShape(corners.map(pointOf), style) : null;
+        } else {
+            rectangle = rectanglePrimitive({
+                from: pointOf({ x: position.x, y: position.y - height }),
+                to: pointOf({ x: position.x + width, y: position.y }),
+                style
+            });
         }
 
-        return rectanglePrimitive({
-            from: pointOf({ x: position.x, y: position.y - height }),
-            to: pointOf({ x: position.x + width, y: position.y }),
-            style
+        if (!isControlBlock(object) || !rectangle) {
+            return rectangle;
+        }
+
+        const centre = {
+            x: position.x + width / 2,
+            y: position.y - height / 2
+        };
+        const radians = (rotation * Math.PI) / 180;
+        const rotate = (x, y) => ({
+            x: centre.x + x * Math.cos(radians) - y * Math.sin(radians),
+            y: centre.y + x * Math.sin(radians) + y * Math.cos(radians)
         });
+        const commands = [rectangle];
+
+        if (isPlant(object)) {
+            commands.push(textNode({
+                at: pointOf(centre),
+                text: "Plant",
+                style,
+                fontSize: lengthOf(12)
+            }));
+        }
+        const userLabel = plantValue(object, "plantLabel");
+
+        if (isPlant(object) && userLabel.trim()) {
+            commands.push(
+                textNode({
+                    at: pointOf({ x: centre.x, y: centre.y - 6 }),
+                    text: `[${userLabel}]`,
+                    style,
+                    fontSize: lengthOf(4)
+                })
+            );
+        }
+
+        const blockLabel = plantValue(object, "blockLabel");
+
+        if (blockLabel.trim()) {
+            commands.push(
+                textNode({
+                    at: pointOf(centre),
+                    text: `$${blockLabelLatex(blockLabel)}$`,
+                    style,
+                    fontSize: lengthOf(8)
+                })
+            );
+        }
+
+        const blockLowerLabel = plantValue(object, "blockLowerLabel");
+
+        if (blockLowerLabel.trim()) {
+            commands.push(
+                textNode({
+                    at: pointOf({ x: centre.x, y: centre.y - height / 2 - 5 }),
+                    text: blockLowerLabel,
+                    style,
+                    fontSize: lengthOf(4)
+                })
+            );
+        }
+
+        for (const side of ["inputs", "outputs"]) {
+            const count = plantValue(object, side);
+            const isInput = side === "inputs";
+            const x = isInput ? -width / 2 : width / 2;
+            const outward = isInput ? -1 : 1;
+            const margin = Math.min(height * 0.15, 2);
+            const usableHeight = Math.max(0, height - margin * 2);
+
+            for (let index = 0; index < count; index += 1) {
+                const y = count === 1
+                    ? 0
+                    : height / 2 - margin - index * usableHeight / (count - 1);
+                const port = rotate(x, y);
+                const terminal = rotate(x + outward * 4, y);
+
+                commands.push(
+                    straightLine(pointOf(port), pointOf(terminal), style),
+                    circlePrimitive({
+                        centre: pointOf(terminal),
+                        radius: lengthOf(1.25),
+                        style: { ...style, fill: style.stroke }
+                    })
+                );
+
+                if (plantValue(object, "showNodeLabels")) {
+                    const labelPoint = rotate(x + outward * 7, y);
+                    commands.push(
+                        textNode({
+                            at: pointOf({ x: labelPoint.x, y: labelPoint.y - 5 }),
+                            text: plantNodeLabel(object, side, index),
+                            anchor: outward * Math.cos(radians) < 0 ? "east" : "west",
+                            style,
+                            fontSize: lengthOf(4)
+                        })
+                    );
+                }
+            }
+        }
+
+        return commands.filter(Boolean).join("\n");
     },
 
     circle(object) {
+        if (isSum(object)) {
+            const style = renderStyle(plantStyle(object.style));
+            const centre = pointOf(object.geometry?.center);
+            const radius = lengthOf(object.geometry?.radius);
+
+            if (radius <= 0) {
+                return null;
+            }
+
+            const commands = [circlePrimitive({ centre, radius, style })];
+            for (let index = 0; index < plantValue(object, "inputs"); index += 1) {
+                const terminal = plantNodePosition(object, "inputs", index);
+                const port = sumNodePortPosition(object, "inputs", index);
+                const signPosition = sumInputSignPosition(object, index);
+                commands.push(
+                    straightLine(pointOf(port), pointOf(terminal), style),
+                    circlePrimitive({
+                        centre: pointOf(terminal),
+                        radius: lengthOf(1.25),
+                        style: { ...style, fill: style.stroke }
+                    }),
+                    textNode({
+                        at: pointOf(signPosition),
+                        text: sumInputSign(object, index),
+                        style,
+                        fontSize: lengthOf(6)
+                    })
+                );
+            }
+
+            const outputTerminal = plantNodePosition(object, "outputs", 0);
+            const outputPort = sumNodePortPosition(object, "outputs", 0);
+            commands.push(
+                straightLine(pointOf(outputPort), pointOf(outputTerminal), style),
+                circlePrimitive({
+                    centre: pointOf(outputTerminal),
+                    radius: lengthOf(1.25),
+                    style: { ...style, fill: style.stroke }
+                })
+            );
+            return commands.filter(Boolean).join("\n");
+        }
+
         const centre = pointOf(object.geometry?.center);
         const radius = lengthOf(object.geometry?.radius);
 
@@ -459,9 +699,7 @@ const SHAPES = {    line(object) {
         };
 
         const xPositive = arm(geometry.xPositiveLength);
-        const xNegative = arm(geometry.xNegativeLength);
         const yPositive = arm(geometry.yPositiveLength);
-        const yNegative = arm(geometry.yNegativeLength);
 
         const fallback = arm(geometry.axisLength) || 25;
 
@@ -490,30 +728,28 @@ const SHAPES = {    line(object) {
             y: origin.y + dx * sin + dy * cos
         });
 
-        if (showX && (xPositive > 0 || xNegative > 0)) {
+        if (showX) {
             const posX = xPositive > 0 ? xPositive : fallback;
-            const negX = xNegative > 0 ? xNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(-negX, 0),
+                    rotate(0, 0),
                     rotate(posX, 0),
                     style,
-                    { arrow: "both" }
+                    { arrow: "end" }
                 )
             );
         }
 
-        if (showY && (yPositive > 0 || yNegative > 0)) {
+        if (showY) {
             const posY = yPositive > 0 ? yPositive : fallback;
-            const negY = yNegative > 0 ? yNegative : fallback;
 
             commands.push(
                 straightLine(
-                    rotate(0, -negY),
+                    rotate(0, 0),
                     rotate(0, posY),
                     style,
-                    { arrow: "both" }
+                    { arrow: "end" }
                 )
             );
         }
@@ -539,11 +775,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x + 3 * cos + 3 * sin,
-                            y: tip.y + 3 * sin - 3 * cos
+                            x: tip.x + 7 * sin,
+                            y: tip.y - 7 * cos
                         },
                         text: xText,
-                        anchor: "west",
+                        anchor: "center",
                         style: { stroke: style.stroke }
                     })
                 );
@@ -558,11 +794,11 @@ const SHAPES = {    line(object) {
                 commands.push(
                     textNode({
                         at: {
-                            x: tip.x - 3 * sin + 3 * cos,
-                            y: tip.y + 3 * cos + 3 * sin
+                            x: tip.x - 7 * cos,
+                            y: tip.y - 7 * sin
                         },
                         text: yText,
-                        anchor: "south west",
+                        anchor: "center",
                         style: { stroke: style.stroke }
                     })
                 );
@@ -624,7 +860,7 @@ export function geometrySourceWriter(object, context = {}) {
      * single-object preview and a test want.
      */
     return withExportTransform(context?.transform || null, () => {
-        const written = shape(object);
+        const written = shape(object, context);
 
         if (typeof written !== "string" || !written.trim()) {
             return written;

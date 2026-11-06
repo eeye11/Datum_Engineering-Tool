@@ -41,7 +41,7 @@
     display: flex;
     flex-direction: row;
     gap: 0;
-    grid-row: 4;
+    grid-row: 3;
     min-height: 0;
     min-width: 0;
     overflow: hidden;
@@ -247,7 +247,7 @@
 
 .drawing-tool-panel,
 .drawing-canvas-area {
-    grid-row: 4;
+    grid-row: 3;
 }
 
 .drawing-tool-panel {
@@ -578,6 +578,21 @@
     min-height: 0;
     min-width: 0;
     padding: 0;
+
+    /*
+     * THE WORK SURFACE OWNS ITS GESTURES.
+     *
+     * DAETUM draws, pans and zooms the sheet itself, so the browser must not
+     * claim a finger or a stylus for scrolling, text selection or double-tap
+     * zoom while it is over the canvas. `touch-action: none` is scoped to THIS
+     * element only - panels, menus, the Source editor and the page keep their
+     * native scrolling, text selection and on-screen keyboard behaviour.
+     *
+     * It is on the canvas AREA rather than the canvas so that a pinch that
+     * begins on the margin beside the sheet is still DAETUM's gesture, and so
+     * that no rubber-band scroll can start at the edge of the drawing.
+     */
+    touch-action: none;
 }
 
 .drawing-canvas {
@@ -589,6 +604,22 @@
     min-height: 0;
     overflow: hidden;
     position: relative;
+}
+
+/*
+ * A STYLUS AND A FINGER MUST NOT RAISE THE CALL-OUT MENU OR A SELECTION
+ * DURING A DRAWING GESTURE.
+ *
+ * `user-select: none` keeps a long press on the sheet from starting a text
+ * selection of the interface behind it, and `-webkit-touch-callout: none`
+ * stops iOS from offering a share/copy sheet over the drawing. Neither touches
+ * the text in the Source editor, which is a different element and keeps its
+ * full native behaviour.
+ */
+.drawing-canvas-area,
+.drawing-canvas {
+    -webkit-touch-callout: none;
+    user-select: none;
 }
 
 /*
@@ -611,6 +642,10 @@
     cursor: default;
 }
 
+.drawing-canvas.drawing-can-move {
+    cursor: move;
+}
+
 /*
  * AND NOTHING ELSE IN THE WORKSPACE ASKS FOR A SYSTEM CROSSHAIR EITHER. A
  * geometry handle is a small dot with a move cursor; a crosshair there was the
@@ -619,6 +654,12 @@
 .drawing-geometry-handle-start,
 .drawing-geometry-handle-end {
     cursor: grab;
+}
+
+/* Override tool and handle cursors for the duration of an object move. */
+.drawing-canvas.drawing-object-moving,
+.drawing-canvas.drawing-object-moving * {
+    cursor: move !important;
 }
 
 .drawing-renderer {

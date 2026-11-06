@@ -23,9 +23,8 @@
  *   3. SOURCE           the writer emitted `-- -{Latex} (x,y)`, which is not
  *                       TikZ, so every arrowed symbol failed to compile and
  *                       the whole picture with it.
- *   4. GEOMETRY         a trajectory's control point sat on its start and a
- *                       pulley's rope barely cleared its rim - valid code for
- *                       an all-but-invisible symbol.
+ *   4. GEOMETRY         a pulley's rope barely cleared its rim - valid code
+ *                       for an all-but-invisible symbol.
  *
  * The renderer, the preview and the writers are exercised as the application
  * uses them; the compile checks run the real TikZ engine.
@@ -81,7 +80,6 @@ const STYLE = {
 const ALL_TOOLS = [
   "dynamics-particle",
   "dynamics-rigid-body",
-  "dynamics-trajectory",
   "dynamics-polar-vector",
   "dynamics-angular-vector",
   "dynamics-spring",
@@ -209,6 +207,35 @@ test("every committed Dynamics symbol draws visible ink on the canvas", async ()
       }
     });
   });
+});
+
+test("Angular Vector renders its rotational type, magnitude, unit, and direction", async () => {
+  const p = await booted();
+  const m = await modules();
+  const object = make(m, "dynamics-angular-vector");
+  const state = {
+    ...m.state,
+    objects: [object],
+    selection: { selectedObjectIds: [], hoveredObjectId: null },
+    interaction: { preview: null, previewObjects: [] },
+    camera: { zoom: 1, panX: 0, panY: 0 },
+  };
+  const svg = overlaySvg(p.document);
+
+  object.geometry.rotationalType = "acceleration";
+  object.geometry.magnitude = 3.5;
+  object.geometry.unit = "rad/s²";
+  m.renderer.renderDrawing(state, svg, {});
+
+  assert.equal(svg.querySelector("g.drawing-feature text")?.textContent, "α = 3.5 rad/s²");
+  const counterClockwisePath = svg.querySelector("g.drawing-feature path")?.getAttribute("d");
+
+  object.geometry.direction = "cw";
+  m.renderer.renderDrawing(state, svg, {});
+
+  const clockwisePath = svg.querySelector("g.drawing-feature path")?.getAttribute("d");
+  assert.notEqual(clockwisePath, counterClockwisePath, "direction edits must redraw the arc");
+  assert.equal(svg.querySelector("g.drawing-feature text")?.textContent, "α = 3.5 rad/s²");
 });
 
 test("a committed symbol keeps its own colour and weight, not a palette default", async () => {
@@ -434,37 +461,6 @@ test("every Dynamics symbol compiles in the real TikZ engine", async () => {
       `${id} must draw ink into the compiled picture`,
     );
   }
-});
-
-test("a trajectory's curve bends about its middle, not at its end", async () => {
-  const m = await modules();
-
-  const object = make(
-    m,
-    "dynamics-trajectory",
-    { x: 0, y: 0 },
-    { x: 40, y: 0 },
-  );
-  const source = m.sync.sourceForObject(object);
-
-  const control = source.match(
-    /controls\s+\(([-\d.]+),([-\d.]+)\)\s+and\s+\(([-\d.]+),([-\d.]+)\)/,
-  );
-
-  assert.ok(control, "a curved trajectory writes a control point");
-
-  const x = Number(control[1]);
-  const y = Number(control[2]);
-
-  /* The midpoint of the span is (20, 0); the bow pushes it off the axis. */
-  assert.ok(
-    Math.abs(x - 20) < 1e-6,
-    `the control point must sit on the midpoint's x (was ${x})`,
-  );
-  assert.ok(
-    Math.abs(y) > 1,
-    `and must be pushed off the span by the bow (was ${y})`,
-  );
 });
 
 test("a pulley's rope hangs clear of the wheel", async () => {

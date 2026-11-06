@@ -8,7 +8,21 @@ import { drawingState, editorState } from "../../../features/workspace/editor-st
 import { activateGlobalTool } from "../../../features/workspace/commands/modify-tools.js";
 import { syncWorkspaceSettingToggles } from "./sheet-controller.js";
 import { performRedo, performUndo } from "../toolbar/tool-activation.js";
+import { setToolMessage } from "../toolbar/toolbar-render.js";
+import { openSpecialSymbols, trackEditableFields } from "../../../shared/ui/editors/special-symbols-insert.js";
 import { toggleFitDrawing, toggleWorkspaceSetting } from "./viewport.js";
+
+/*
+ * THE BUTTON IS FETCHED WHEN IT IS PRESSED, not when this module loads.
+ *
+ * `workspace-controls.js` is evaluated during start-up, while `index.html` is
+ * still being parsed - a `getElementById` at module scope can run before the
+ * quick-access strip exists and silently return null, which is why the button
+ * did nothing. The lookup is a function so every press asks the current
+ * document.
+ */
+const specialSymbolsButton = () =>
+    globalThis.document?.getElementById("drawingSpecialSymbols");
 
 /*
  * Paint the active highlight across the global toolbar.
@@ -53,6 +67,13 @@ export function clearGlobalToolHighlight() {
  * by editor/index.js.
  */
 export function installWorkspaceControls() {
+    /*
+     * REMEMBER THE FIELD THE STUDENT IS TYPING IN. A press on a toolbar button
+     * moves focus off it, so the quick-access Special Symbols control needs to
+     * know which field was last edited to know where its glyph goes.
+     */
+    trackEditableFields(globalThis.document);
+
     const fitButton = globalThis.document?.getElementById("drawingFitView");
     fitButton?.addEventListener("click", toggleFitDrawing);
 
@@ -128,6 +149,26 @@ export function installWorkspaceControls() {
             syncWorkspaceSettingToggles();
 
             renderCurrentDrawing();
+        });
+    });
+
+    /*
+     * SPECIAL SYMBOLS, IN THE QUICK-ACCESS STRIP.
+     *
+     * It sits with Colour and Line Type because it is the same kind of control:
+     * one button that formats what is on the sheet. It opens THE Symbols list -
+     * the same picker the Annotate category's Symbols tool uses, with the same
+     * categories, glyphs and search - and it writes into whichever text field is
+     * being edited. Where no field is open it says so; it never places a symbol
+     * object of its own, because that is what Annotate → Symbols is for.
+     */
+    const symbolsButton = specialSymbolsButton();
+
+    symbolsButton?.addEventListener("click", (event) => {
+        event.preventDefault();
+
+        openSpecialSymbols({
+            onMessage: (message) => setToolMessage(message)
         });
     });
 

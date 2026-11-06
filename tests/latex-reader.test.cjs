@@ -35,9 +35,25 @@ test("units: absolute lengths, and the picture's x and y units", () => {
   const absolute = read("\\draw (0,0) -- (20mm, 1cm);").features[0].geometry.end;
   assert.deepStrictEqual(absolute, { x: 20, y: 10 });
 
-  const units = read("\\begin{tikzpicture}[x=1mm, y=1mm, scale=0.5]\\draw (0,0) -- (150,25);\\end{tikzpicture}");
-  /* scale changes the printed size only, so DAETUM's own export reads back at its coordinates */
+  /*
+   * `x=1mm, y=1mm` IS APPLIED ONCE, as TikZ applies it: a bare coordinate is
+   * measured in the picture's vectors. (Applying it in the matrix and again as a
+   * default unit read these 150 mm as 1,500 mm.)
+   */
+  const units = read("\\begin{tikzpicture}[x=1mm, y=1mm]\\draw (0,0) -- (150,25);\\end{tikzpicture}");
   assert.deepStrictEqual(units.features[0].geometry.end, { x: 150, y: 25 });
+
+  /*
+   * AND THE PICTURE'S `scale` CHANGES THE PRINTED SIZE ONLY. It is the page fit
+   * the writer applied, and the reader's contract is to undo it, so the drawing
+   * comes back at its authored size rather than at 1/2 of it.
+   */
+  const printed = read("\\begin{tikzpicture}[x=1mm, y=1mm, scale=0.5]\\draw (0,0) -- (150,25);\\end{tikzpicture}");
+  assert.deepStrictEqual(printed.features[0].geometry.end, { x: 150, y: 25 });
+
+  /* TikZ's default frame, stated explicitly, is the same frame as no statement. */
+  const explicit = read("\\begin{tikzpicture}[x=1cm, y=1cm]\\draw (0,0) -- (1,1);\\end{tikzpicture}");
+  assert.deepStrictEqual(explicit.features[0].geometry.end, { x: 10, y: 10 });
 });
 
 test("polylines, triangles, rectangles: what a closed path IS", () => {
@@ -138,6 +154,11 @@ test("styles: colour, width, dashes, fill", () => {
 });
 
 test("scopes shift and rotate what they contain", () => {
+  /*
+   * THE SHIFT IS ALSO A COORDINATE, so it follows the same unit rule as every
+   * other bare number in a picture without a unit line: 1 cm. A scope inside a
+   * picture that states `x=1mm` inherits the millimetre (see the test below).
+   */
   const result = read([
     "\\begin{scope}[shift={(1,1)}]",
     "  \\draw (0,0) -- (1,0);",
@@ -152,6 +173,35 @@ test("scopes shift and rotate what they contain", () => {
   near(result.features[1].geometry.end.x, 0, "rotated x");
   near(result.features[1].geometry.end.y, 10, "rotated y");
   assert.deepStrictEqual(result.features[2].geometry.end, { x: 10, y: 0 }, "a scope ends at \\end{scope}");
+});
+
+test("a DAETUM picture's millimetres reach its scopes, and its print image is undone", () => {
+  /*
+   * THE SAME PICTURE A SAVE WRITES: `x=1mm, y=1mm, scale=s, shift={(ox,oy)}`.
+   * Its numbers are drawing units, and its scale and shift are the PRINT image
+   * of that drawing - so its own origin is (-ox, -oy) and every coordinate comes
+   * back as the number that was written (see `unprint`).
+   */
+  const result = read(
+    "\\begin{tikzpicture}[x=1mm, y=1mm, scale=0.3, shift={(-20,-5)}]\n" +
+      "\\begin{scope}[shift={(1,1)}]\n" +
+      "  \\draw (0,0) -- (30,0);\n" +
+      "\\end{scope}\n" +
+      "\\end{tikzpicture}"
+  );
+
+  /*
+   * The picture's print transform is undone from the finished drawing, so the
+   * coordinates are the ones that were written: the scope shifts by its own
+   * `(1,1)` mm and the line runs 30 mm from there.
+   */
+  near(result.features[0].geometry.start.x, 1, "scope shift x");
+  near(result.features[0].geometry.start.y, 1, "scope shift y");
+  near(result.features[0].geometry.end.x, 31, "drawn end x");
+  near(result.features[0].geometry.end.y, 1, "drawn end y");
+
+  /* And the bare numbers were NOT multiplied by the centimetre default. */
+  assert.ok(result.features[0].geometry.end.x < 40, "read as drawing units, not centimetres");
 });
 
 test("what it cannot draw is reported with its line, never silently dropped", () => {

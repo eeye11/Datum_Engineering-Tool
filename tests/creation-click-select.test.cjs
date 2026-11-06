@@ -7,8 +7,9 @@
  * gesture:
  *
  *     press, drag, release   -> create the feature with the active tool
- *     press, release         -> back to Select; nothing is created
- *     press on a feature     -> back to Select, that feature selected
+ *     press, release         -> answer the click; the tool STAYS ARMED
+ *     press on a feature     -> select that feature; the tool stays armed
+ *     click on empty canvas  -> back to Select; nothing is created
  *
  * The drag half already existed (creation-drag.js) and is pinned by
  * `dual-creation.test.cjs`. What this suite pins is the half that was missing:
@@ -55,14 +56,14 @@ const section = (source, name) => {
 const clickSection = section(drag, "finishCreationClick");
 const releaseSection = section(drag, "finishCreationDrag");
 
-console.log("\n  a bare click with a drag tool returns to Select\n");
+console.log("\n  a bare click answers the click, and keeps the tool armed\n");
 
 check("the decision has ONE implementation", clickSection.length > 0);
 
 check(
-  "it switches through the ordinary activation path",
-  /activateTool\(\s*"select"\s*\)/.test(clickSection),
-  "activating Select directly is what cancels the pending construction and redraws",
+  "it does NOT switch away from the active tool",
+  !/activateTool\(\s*"select"\s*\)/.test(clickSection),
+  "a drawing tool ends on empty canvas, Escape, its own button or another tool",
 );
 
 check(
@@ -153,8 +154,10 @@ check(
 console.log("\n  the click router is still the fallback, and keeps its ordering\n");
 
 check(
-  "a bare click on a one-gesture tool still exits there",
-  /shouldExitToSelectOnClick\([\s\S]{0,160}?exitToolToSelect/.test(click),
+  "a bare click on empty canvas still exits there, and only on EMPTY canvas",
+  /shouldExitToSelectOnClick\([\s\S]{0,500}?exitToolToSelect/.test(click) &&
+    /shouldExitToSelectOnClick\([\s\S]{0,500}?!objectAtPoint\(/.test(click),
+  "a click on a feature selects it and leaves the tool armed",
 );
 
 check(
@@ -172,15 +175,29 @@ check(
 console.log("\n  the tool inventory: which tools take part\n");
 
 check(
-  "one-gesture span tools exit a bare click",
-  ["beam", "cable", "shaft", "point-force", "coordinate-system-2d"].every(
-    (tool) => classification.shouldExitToSelectOnClick(tool) === true,
+  "one-gesture span tools take click-move-click and do not exit",
+  ["beam", "cable", "shaft", "point-force"].every(
+    (tool) => classification.shouldExitToSelectOnClick(tool) === false,
+  ),
+);
+
+check(
+  "the Statics two-point tools take click-move-click and do not exit",
+  [
+    "beam", "cable", "shaft", "point-force",
+    "pin-connection", "fixed-connection", "slider-connection",
+    "distributed-load", "varying-distributed-load",
+    "reference-line", "reference-arc", "coordinate-system-2d",
+  ].every(
+    (tool) =>
+      classification.isClickClickTool(tool) === true &&
+      classification.shouldExitToSelectOnClick(tool) === false,
   ),
 );
 
 check(
   "click-move-click geometry does not",
-  ["line", "rectangle", "circle"].every(
+  ["line", "rectangle", "circle", "triangle", "arc", "polygon", "coordinate-system-2d"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === false,
   ),
 );
@@ -197,6 +214,20 @@ check(
   ["triangle", "polygon", "arc", "reference-arc", "polyline", "truss", "distributed-load"].every(
     (tool) => classification.shouldExitToSelectOnClick(tool) === false,
   ),
+);
+
+const construction = fs.readFileSync(locate("construction-tools.js"), "utf8");
+
+check(
+  "the Reference Arc's clicks reach the construction pipeline",
+  /"arc",[\s\S]{0,400}?"reference-arc",/.test(section(construction, "isConstructionTool")),
+  "without it a click on a Reference Arc is dropped and the arc can never be finished",
+);
+
+check(
+  "a Coordinate System click is a construction point, not a fixed-size placement",
+  !/add2DCoordinateSystem\(/.test(click),
+  "two clicks used to place two systems",
 );
 
 check(

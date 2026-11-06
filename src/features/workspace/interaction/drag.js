@@ -4,22 +4,26 @@ import { calloutReferenceAt } from "../model/annotations/callout-reference.js";
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { resizeStressElement } from "../../../shared/geometry/stress-element.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { renderCurrentDrawing, requestRender } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_TYPE } from "../constants.js";
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { drawingCanvas } from "../dom.js";
+import { resizeBoxFromCorner } from "../../../shared/geometry/box-resize.js";
 import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { handleAtPoint, isConstructionInProgress, rectangleCorners } from "./handles.js";
+import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { processLabelPoint } from "../model/thermodynamics/process-labels.js";
 import { processBendPoint, setProcessBendFromPoint } from "../model/thermodynamics/process-curves.js";
 import { selectionBounds, selectionCorners, selectionMembers, transformSelectionObject } from "../../../shared/selection/selection-transform.js";
 import { isPistonCylinder, setPistonFromPoint, setStoppersFromPoint } from "../model/thermodynamics/piston-cylinder.js";
-import { isRectangleLike, objectAtPoint } from "./hit-testing.js";
+import { isRectangleLike, objectAtPoint, boundarySelectionAtPoint } from "./hit-testing.js";
+import { HIT_PIXELS, getPointerKind } from "./pointer-precision.js";
 import { resolveManipulationPoint, resolvePointerEvent, scheduleGuidelineExpiry, updateInteractionFeedback } from "./pointer.js";
 import { applyRigidBodyHandle, applyStaticsManipulation, isStaticsFeature, moveTrussJoint } from "../statics/statics-attachment.js";
+import { applyDynamicsHandle } from "../dynamics/dynamics-handles.js";
 import { rotationPivotFor } from "./handles.js";
 import { rotateObjectAbout } from "../geometry/transforms.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
@@ -36,6 +40,13 @@ import enggPressureProfile from "../model/fluids/pressure-profile.js";
 import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { createJunctionForInteriorConnection } from "./junction-tool.js";
+import { controlNodeAlignmentOffset, isControlSymbol, isSum, setSumNodeAngle, sumNodeAngle } from "../../../shared/model/plant.js";
+
+/* How near the pivot (screen px) a rotation drag stops reading an angle. */
+const ROTATION_DEAD_ZONE_PX = 8;
+
+/* The rotation step while Shift is held: 15 degrees. */
+const ROTATION_STEP = Math.PI / 12;
 
 export function beginManipulationDrag(
     event
@@ -100,7 +111,8 @@ export function beginManipulationDrag(
         ["piston-height", "stopper-height"].includes(hit.handle.kind);
     const processLabelHandle = hit?.handle.kind.startsWith("process-label-") || hit?.handle.kind.startsWith("process-bend-");
     if (selectedIds.length > 1 && box && !pistonHandle && !processLabelHandle) {
-        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+        const tolerance = 9 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom) *
+            (HIT_PIXELS[getPointerKind()] ?? HIT_PIXELS.mouse) / HIT_PIXELS.mouse;
         const corners = selectionCorners(box);
         const corner = corners.findIndex(value => Math.hypot(value.x - point.x, value.y - point.y) <= tolerance);
         const inside = point.x >= box.minX && point.x <= box.maxX && point.y >= box.minY && point.y <= box.maxY;
@@ -122,24 +134,22 @@ export function beginManipulationDrag(
     }
 
     /*
-     * A DERIVED CHILD IS NEVER DRAGGED.
-     *
-     * A Resultant and a Force Components pair are static children of the
-     * force(s) they read: position, direction and magnitude are all re-derived
-     * from those parents on every refresh. A drag would either be wiped by the
-     * next refresh or survive as a lie about where the reading belongs.
+     * A DERIVED CHILD IS NEVER DRAGGED, AND THE HIT IS RESOLVED THROUGH THE
+     * ONE LOOKUP: a boundary-stress plate is picked by its box, and a press on
+     * a derived child is mapped to its source feature before any check below.
      *
      * Refused ahead of BOTH drag shapes - a handle and the body - so the child
      * stays put; it is still selectable, inspectable and deletable.
      */
-    const underPointer =
-        objectAtPoint(
-            point
-        );
+    const pointed =
+        boundarySelectionAtPoint(point) || objectAtPoint(point);
+    const resolved = pointed?.sourceFeatureId && selectedIds.includes(pointed.sourceFeatureId)
+        ? drawingState.objects.find(item => item.id === pointed.sourceFeatureId)
+        : pointed;
 
-    if (isDerivedFeature(underPointer)) {
+    if (isDerivedFeature(resolved)) {
         setToolMessage(
-            `${underPointer.name || "This feature"} is derived from its source force - change the force instead`
+            `${resolved.name || "This feature"} is derived from its source force - change the force instead`
         );
 
         return false;
@@ -160,11 +170,7 @@ export function beginManipulationDrag(
      */
     const locked =
         (hit && hit.object && hit.object.locked) ||
-        (() => {
-            const under = objectAtPoint(point);
-
-            return under && under.locked ? under : null;
-        })();
+        (resolved && resolved.locked ? resolved : null);
 
     if (locked) {
         setToolMessage(
@@ -226,6 +232,19 @@ export function beginManipulationDrag(
                     : undefined,
 
             /*
+             * AND IT TURNS ABOUT THE PIVOT OF THE GRAB, FOR THE WHOLE DRAG.
+             *
+             * Captured once from the untouched object. Re-deriving it every
+             * frame from the half-turned live shape let any change in how
+             * that shape's centre is computed move the pivot under the
+             * student's hand, so the feature wandered off as it turned.
+             */
+            rotationPivot:
+                hit.handle.kind === "rotate"
+                    ? rotationPivotFor(hit.object)
+                    : undefined,
+
+            /*
              * The WHOLE object is snapshotted, not just its geometry.
              *
              * A drag can move more than a shape: an annotation moves by
@@ -250,6 +269,15 @@ export function beginManipulationDrag(
                     )
             }
         };
+
+        const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(hit.handle.kind);
+        if (sumNodeMatch) {
+            const side = sumNodeMatch[1];
+            const index = Number(sumNodeMatch[2]);
+            enggDrawingState.selectObject(drawingState, hit.object.id);
+            editorState.selectedPlantNode = { objectId: hit.object.id, side, index };
+            renderProperties();
+        }
 
         drawingCanvas.setPointerCapture(
             event.pointerId
@@ -278,14 +306,9 @@ export function beginManipulationDrag(
      * pointer actually travels, so a press that stays put is still a click -
      * which selects the dimension, exactly as a click on it always did.
      */
-    const overlay =
-        objectAtPoint(
-            point
-        );
-
     if (
-        overlay?.type === "dimension" ||
-        overlay?.type === "annotate"
+        resolved?.type === "dimension" ||
+        resolved?.type === "annotate"
     ) {
         /*
          * ARMED, NOT CLAIMED.
@@ -308,7 +331,7 @@ export function beginManipulationDrag(
          */
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
-            object: overlay,
+            object: resolved,
             kind: "annotation-offset",
             moved: false,
             pending: true,
@@ -321,10 +344,10 @@ export function beginManipulationDrag(
              */
             anchor: { ...point },
             originals: {
-                [overlay.id]:
+                [resolved.id]:
                     JSON.parse(
                         JSON.stringify(
-                            overlay
+                            resolved
                         )
                     )
             }
@@ -343,19 +366,33 @@ export function beginManipulationDrag(
     const insideSelection = selectedIds.length === 1 && box &&
         point.x >= box.minX && point.x <= box.maxX &&
         point.y >= box.minY && point.y <= box.maxY;
-    const object = overlay || (insideSelection
+    const object = resolved || (insideSelection
         ? drawingState.objects.find(item => item.id === selectedIds[0]) : null);
 
+    /*
+     * A press inside an UNSELECTED outline's box starts the move as well - the
+     * student aims at the shape, not its edge - so the box interior is a move
+     * target whenever the press lands on exactly one feature's geometry.
+     */
+    const outlineHit = Boolean(resolved) && !insideSelection;
+
     if (
-        object && !object.locked && !isDerivedFeature(object)
+        object && !object.locked && !isDerivedFeature(object) &&
+        (insideSelection || outlineHit || object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress || drawingState.selection
+            .selectedObjectIds
+            .includes(
+                object.id
+            ))
     ) {
         if (!selectedIds.includes(object.id)) {
             enggDrawingState.selectObject(drawingState, object.id);
         }
+        const coordinateNeedsSelection = (object.type === COORDINATE_SYSTEM_TYPE || object.metadata?.boundaryStress) && !selectedIds.includes(object.id);
         editorState.manipulationDrag = {
             pointerId: event.pointerId,
             object,
             kind: "body",
+            pending: coordinateNeedsSelection,
             moved: false,
             start: { ...point },
 
@@ -372,8 +409,7 @@ export function beginManipulationDrag(
             anchor: { ...point },
             originals: Object.fromEntries(
                 selectionMembers(drawingState.objects,
-                    drawingState.selection
-                        .selectedObjectIds
+                    coordinateNeedsSelection ? [object.id] : drawingState.selection.selectedObjectIds
                 ).map(
                     item => [
                         item.id,
@@ -442,6 +478,24 @@ export function updateManipulationDrag(
     const draggingAnnotate =
         editorState.manipulationDrag.object
             ?.type === "annotate";
+    const draggingSumNode = /^sum-node-(inputs|outputs)-\d+$/.test(editorState.manipulationDrag.kind);
+
+    const resizingPipe = editorState.manipulationDrag.object?.type === "pipe-duct" &&
+        /^corner[0-3]$/.test(editorState.manipulationDrag.kind);
+
+    /*
+     * A VESSEL'S WALL, CORNER AND BODY HANDLES READ THE RAW POINTER.
+     *
+     * The vessel publishes its own corners, edge midpoints and centre as snap
+     * candidates, and the drag's anchor is the handle itself - so the
+     * inference pulled every move straight back onto the feature it started
+     * from, and a wall could not be dragged at all nor the tank moved as a
+     * whole. What these handles write is a BOUNDARY or a BODY POSITION, not a
+     * point to be aligned with anything, so they take the pointer as it is.
+     */
+    const draggingVesselHandle =
+        enggVessel.isVesselType(editorState.manipulationDrag.object?.type) &&
+        /^(vessel-(edge|corner|level)|equipment-body)/.test(editorState.manipulationDrag.kind);
 
     /*
      * GEOMETRY IS RESOLVED THROUGH THE SHARED SNAP PIPELINE.
@@ -456,10 +510,26 @@ export function updateManipulationDrag(
      * they write is a DRAWING position rather than a measurement - see the
      * two comments above.
      */
+    /*
+     * A ROTATION IS AN ANGLE, NOT A POSITION, so it reads the RAW pointer.
+     *
+     * Through the snap pipeline the cursor was pulled onto grid points, onto
+     * the feature's own corners and centre, and onto horizontal/vertical
+     * guides - each a jump in angle that had nothing to do with where the
+     * hand was, and a snap onto the pivot itself left the angle undefined and
+     * spun the shape to a random orientation. Angle steps are offered instead
+     * by holding Shift (see applyManipulation).
+     */
+    const rotating =
+        editorState.manipulationDrag.kind === "rotate";
+
+    editorState.manipulationDrag.shiftKey =
+        Boolean(event.shiftKey);
+
     const resolution =
-        editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body"
+        resizingPipe || draggingVesselHandle || editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body" || rotating
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
-            : draggingDimension || draggingAnnotate
+            : draggingDimension || draggingAnnotate || draggingSumNode
             ? resolvePointerEvent(event)
             : resolveManipulationPoint(
                   event,
@@ -467,7 +537,7 @@ export function updateManipulationDrag(
               );
 
     const point =
-        draggingDimension || draggingAnnotate
+        draggingDimension || draggingAnnotate || draggingSumNode || draggingVesselHandle
             ? resolution.rawPointerPoint ||
               resolution.effectiveConstructionPoint
             : resolution.effectiveConstructionPoint;
@@ -488,7 +558,7 @@ export function updateManipulationDrag(
      * `setInteraction` is the same path a construction uses, so the guideline
      * hold and its expiry timer behave identically for a drag.
      */
-    if (!draggingDimension && !draggingAnnotate) {
+    if (!draggingDimension && !draggingAnnotate && !draggingSumNode) {
         enggDrawingState.setInteraction(
             drawingState,
             {
@@ -535,6 +605,8 @@ export function updateManipulationDrag(
 
     editorState.manipulationDrag.moved =
         true;
+    drawingCanvas.classList.toggle("drawing-object-moving",
+        ["body", "origin", "position", "center", "annotation-offset"].includes(editorState.manipulationDrag.kind));
 
     applyManipulation(
         editorState.manipulationDrag,
@@ -575,6 +647,7 @@ export function finishManipulationDrag(
 
     editorState.manipulationDrag =
         null;
+    drawingCanvas.classList.remove("drawing-object-moving");
 
     /*
      * THE DRAG'S TRANSIENT SNAP STATE IS CLEARED WITH IT.
@@ -641,6 +714,16 @@ export function finishManipulationDrag(
             renderCurrentDrawing();
         }
 
+        return;
+    }
+
+    if (drag.kind.startsWith("sum-node-") && !drag.changed) {
+        editorState.selectionClickSuppressed = true;
+        if (drawingState.activeTool === "select") {
+            setToolMessage("Select geometry");
+        }
+        renderProperties();
+        renderCurrentDrawing();
         return;
     }
 
@@ -774,8 +857,7 @@ export function applyManipulationFrame(drag, point) {
 
     applyManipulation(drag, point);
 
-    return drag.object;
-}
+    return drag.object;}
 
 /* The name the endpoint tests drive; the same frame, stated once. */
 export const applyManipulationForTest = applyManipulationFrame;
@@ -822,6 +904,49 @@ function applyManipulation(
 
     const g =
         object.geometry;
+
+    const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(drag.kind);
+    if (isSum(object) && sumNodeMatch) {
+        const side = sumNodeMatch[1];
+        const index = Number(sumNodeMatch[2]);
+        const angle = Math.atan2(point.y - g.center.y, point.x - g.center.x) -
+            (Number(g.rotation) || 0) * Math.PI / 180;
+        const previousAngle = sumNodeAngle(object, side, index);
+        if (setSumNodeAngle(object, side, index, angle)) {
+            const difference = Math.atan2(
+                Math.sin(angle - previousAngle),
+                Math.cos(angle - previousAngle)
+            );
+            drag.changed = drag.changed || Math.abs(difference) > 1e-6;
+        }
+        return;
+    }
+
+    if (object?.engineering?.dynamicsType && applyDynamicsHandle(object, drag, point, g)) {
+        return;
+    }
+
+    if (object.type === "pipe-duct" && /^corner[0-3]$/.test(drag.kind)) {
+        const original = drag.originals[object.id];
+        const bounds = selectionBounds([original], [original.id]);
+        if (!bounds) return;
+        const corners = selectionCorners(bounds);
+        const index = Number(drag.kind.slice(-1));
+        const anchor = corners[(index + 2) % 4];
+        const corner = corners[index];
+        // Keep the initial grab offset: pressing near a dot must not make
+        // the corner jump to the pointer on the first frame.
+        const target = {
+            x: corner.x + point.x - drag.start.x,
+            y: corner.y + point.y - drag.start.y
+        };
+        const sx = Math.max(0.01, (target.x - anchor.x) / (corner.x - anchor.x));
+        const sy = Math.max(0.01, (target.y - anchor.y) / (corner.y - anchor.y));
+        const transform = value => ({ x: anchor.x + (value.x - anchor.x) * sx, y: anchor.y + (value.y - anchor.y) * sy });
+        g.start = transform(original.geometry.start);
+        g.end = transform(original.geometry.end);
+        return;
+    }
 
     if (drag.kind.startsWith("process-bend-")) {
         const index = Number(drag.kind.slice("process-bend-".length));
@@ -877,6 +1002,7 @@ function applyManipulation(
             drag.originals?.[object.id];
 
         const pivot =
+            drag.rotationPivot ||
             rotationPivotFor(object);
 
         if (
@@ -885,6 +1011,27 @@ function applyManipulation(
             !point ||
             !Number.isFinite(point.x) ||
             !Number.isFinite(point.y)
+        ) {
+            return;
+        }
+
+        /*
+         * TOO CLOSE TO THE PIVOT TO HAVE A DIRECTION.
+         *
+         * Within a few screen pixels of the pivot the angle swings wildly
+         * for a tiny movement (and is undefined on it), so the last good
+         * rotation is kept until the pointer is far enough out to mean one.
+         */
+        const pixelsPerUnit =
+            enggDrawingState.BASE_PIXELS_PER_UNIT *
+            (drawingState.camera?.zoom || 1);
+
+        if (
+            Math.hypot(
+                point.x - pivot.x,
+                point.y - pivot.y
+            ) * pixelsPerUnit <
+            ROTATION_DEAD_ZONE_PX
         ) {
             return;
         }
@@ -902,8 +1049,15 @@ function applyManipulation(
                 drag.start.x - pivot.x
             );
 
+        /*
+         * SHIFT TURNS IN 15 DEGREE STEPS, counted from where the drag
+         * began, so a shape drawn square lands on 15, 30, 45 ... exactly.
+         */
         const radians =
-            angle - startAngle;
+            drag.shiftKey
+                ? Math.round((angle - startAngle) / ROTATION_STEP) *
+                  ROTATION_STEP
+                : angle - startAngle;
 
         /* Rebuild from the snapshot so the newest angle is applied once. */
         object.geometry = JSON.parse(
@@ -973,6 +1127,18 @@ function applyManipulation(
         let anchor = drag.start;
         let dx = point.x - drag.start.x;
         let dy = point.y - drag.start.y;
+        if (
+            drag.kind === "body" &&
+            isControlSymbol(object) &&
+            Object.keys(drag.originals).length === 1
+        ) {
+            const original = drag.originals[object.id];
+            const alignment = controlNodeAlignmentOffset(original, drawingState.objects, dx, dy);
+            if (alignment) {
+                dx += alignment.dx;
+                dy += alignment.dy;
+            }
+        }
         if (drag.kind === "group-resize") {
             const corners = selectionCorners(drag.bounds);
             anchor = corners[(drag.corner + 2) % 4];
@@ -1289,50 +1455,11 @@ function applyManipulation(
         return true;
     }
 
-    /* ============================================================
- * HELPERS FOR THE SCHEMATIC DRAGS
- * ============================================================ */
-
-/*
- * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
- *
- * A level's line and its fill come from its VESSEL, so a tank that grew or
- * turned takes its levels with it AT THE SAME PERCENTAGE - a half-full tank
- * stays half full - without the level storing a second copy of where it is.
- */
-function refreshLevelsOf(vessel, objects = []) {
-    (objects || []).forEach((object) => {
-        if (enggFluidLevel.isFluidLevelType(object?.type) && object.engineering?.vesselId === vessel.id) {
-            enggFluidLevel.refreshFluidLevel(object, objects);
-        }
-    });
-}
-
-/*
- * WHETHER A BODY DRAG IS THE GENERIC TRANSLATE OR A TOOL'S OWN MOVE.
- *
- * The schematic objects are translated by their own branches above, because
- * each is constrained by something: a reducer by its pipe, a level by its
- * vessel, a direction arrow by its run. Letting the generic translate reach
- * them would move geometry the model derives, so they are answered here first.
- */
-function schematicBodyDrag(object) {
-    return (
-        enggReducer.isReducerType(object?.type) ||
-        enggEquipment.isEquipmentType(object?.type) ||
-        enggFluidLevel.isFluidLevelType(object?.type) ||
-        enggFlowArrows.isFlowDirectionType(object?.type)
-    );
-}
-
-const bodyDragRouted = schematicBodyDrag;
-
-void bodyDragRouted;
-
     const original =
         drag.originals?.[object.id]?.geometry;
 
     if (object.type === "point") {
+        console.log("TRACE point branch");
         const target =
             g.position || g.point || g;
 
@@ -1435,6 +1562,20 @@ void bodyDragRouted;
 
         const original = drag.originals?.[object.id]?.geometry || object.geometry;
 
+        /*
+         * THE FLUID LEVEL COMES FIRST.
+         *
+         * Its handle sits on the surface, which can be anywhere inside the
+         * vessel - including where a body press would otherwise move the whole
+         * object. `vesselModel.dragVesselLevel` writes ONLY the percentage, so a
+         * level drag can never move or resize the vessel.
+         */
+        if (drag.kind === "vessel-level") {
+            enggVessel.dragVesselLevel(object, point);
+
+            return;
+        }
+
         if (drag.kind === "equipment-body" || drag.kind === "body") {
             object.geometry = {
                 ...original,
@@ -1457,6 +1598,11 @@ void bodyDragRouted;
              * RESIZE FROM THE CORNER OPPOSITE THE ONE GRABBED. The opposite
              * corner stays exactly where it is, and the box is re-derived from
              * the two - which is what makes an edge drag feel like the edge.
+             *
+             * THE CORNER ORDER COMES FROM THE MODEL: `vesselRect` reports its
+             * corners from the vessel's own BOTTOM-LEFT anchor, so the box
+             * re-derived here keeps the same orientation as the one the handles
+             * are drawn from - dragging a corner can never turn the vessel over.
              */
             const opposite = (Number(match[1]) + 2) % 4;
 
@@ -1472,21 +1618,69 @@ void bodyDragRouted;
             const local = enggVessel.localOf(rect, point);
             const anchorLocal = enggVessel.localOf(rect, anchor);
 
+            /* The frame grows UP from the floor, so the anchor is the floor side. */
             const left = Math.min(local.x, anchorLocal.x);
-            const top = Math.min(local.y, anchorLocal.y);
+            const bottom = Math.min(local.y, anchorLocal.y);
 
             const width = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.x - anchorLocal.x));
             const height = Math.max(enggVessel.MIN_VESSEL_SIDE, Math.abs(local.y - anchorLocal.y));
 
             object.geometry = {
                 ...original,
-                position: enggVessel.worldOf(rect, { x: left, y: top }),
+                position: enggVessel.worldOf(rect, { x: left, y: bottom }),
                 width,
                 height
             };
 
             enggVessel.followVessel(object, drawingState.objects);
             refreshLevelsOf(object, drawingState.objects);
+
+            return;
+        }
+
+        const edgeMatch = /^vessel-edge-(left|right|top|bottom)$/.exec(drag.kind);
+
+        if (edgeMatch) {
+            /*
+             * ONE BOUNDARY AT A TIME. The model owns the arithmetic - it moves
+             * the named wall, keeps the other three, refuses to collapse the
+             * box and re-seats everything attached - so the handle drag and the
+             * Features fields produce the same geometry.
+             *
+             * THE GRAB OFFSET IS SUBTRACTED, so the WALL follows the pointer by
+             * the distance the pointer travelled. The handle is drawn just
+             * outside the wall; without this the wall would jump out to the
+             * handle's own position on the first move, and a drag that went
+             * nowhere would still resize the vessel.
+             */
+            const edgeRect = enggVessel.vesselRect({ geometry: original });
+
+            if (!edgeRect) {
+                return;
+            }
+
+            const grabLocal = enggVessel.localOf(edgeRect, drag.start);
+            const nowLocal = enggVessel.localOf(edgeRect, point);
+
+            const axis = edgeMatch[1] === "left" || edgeMatch[1] === "right" ? "x" : "y";
+
+            const grabbedWall =
+                edgeMatch[1] === "left" ? 0
+                    : edgeMatch[1] === "right" ? edgeRect.width
+                        : edgeMatch[1] === "bottom" ? 0
+                            : edgeRect.height;
+
+            /* The wall moves by the pointer's own travel along its axis. */
+            const moved = grabbedWall + (nowLocal[axis] - grabLocal[axis]);
+
+            const at = enggVessel.worldOf(edgeRect, {
+                x: axis === "x" ? moved : edgeRect.width / 2,
+                y: axis === "y" ? moved : edgeRect.height / 2
+            });
+
+            if (enggVessel.dragVesselEdge(object, edgeMatch[1], at)) {
+                refreshLevelsOf(object, drawingState.objects);
+            }
 
             return;
         }
@@ -1897,6 +2091,7 @@ void bodyDragRouted;
 
         if (kind === "flow-arrow-position") {
             /*
+            /*
              * THE POINTER'S PROJECTION ONTO THE RUN. `t` is the raw fraction
              * along the centreline; clamping it into the drawable range keeps
              * the arrow strictly inside the run's ends, where fittings are.
@@ -2157,44 +2352,38 @@ void bodyDragRouted;
     }
 
     if (isRectangleLike(object)) {
+        console.log("TRACE rectangle branch, kind:", drag.kind, "object:", object.type);
+        if (object.metadata?.stressElement && drag.kind.startsWith("corner")) {
+            Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
+            return;
+        }
+
         /*
-         * Resize by moving one corner while the opposite
-         * corner stays put. A fixed width or height is
-         * respected by keeping that dimension unchanged.
+         * RESIZE FROM THE HANDLE, ANCHORED ON THE OPPOSITE CORNER.
+         *
+         * One shared rule for a Rectangle and a Rigid Body - see
+         * `shared/geometry/box-resize.js`, which works in the box's OWN frame so
+         * a turned body stays turned and its far corner stays exactly where it
+         * was. This used to recompute the box from axis-aligned min/max and then
+         * write `rotation = 0`, so resizing a rotated rectangle un-rotated it.
          */
-        const index =
-            Number(
-                drag.kind.replace("corner", "")
-            );
+        const cornerIndex = Number(
+            drag.kind.startsWith("rigid-corner")
+                ? drag.kind.replace("rigid-corner", "")
+                : drag.kind.replace("corner", "")
+        );
 
-        const corners =
-            rectangleCorners(
-                original
-            );
+        if (Number.isFinite(cornerIndex)) {
+            const resized = resizeBoxFromCorner(original, cornerIndex, point);
 
-        const opposite =
-            corners[(index + 2) % 4];
+            if (resized) {
+                g.width = resized.width;
+                g.height = resized.height;
+                g.position = resized.position;
 
-        const minX =
-            Math.min(opposite.x, point.x);
-
-        const maxX =
-            Math.max(opposite.x, point.x);
-
-        const minY =
-            Math.min(opposite.y, point.y);
-
-        const maxY =
-            Math.max(opposite.y, point.y);
-
-        g.width = maxX - minX;
-        g.height = maxY - minY;
-        g.position = {
-            x: minX,
-            y: maxY
-        };
-        g.rotation = 0;
-        return;
+                return;
+            }
+        }
     }
 
     /*
@@ -2240,10 +2429,12 @@ void bodyDragRouted;
             return;
         }
 
-        const measured =
-            drag.kind.startsWith("x")
-                ? Math.abs(point.x - g.origin.x)
-                : Math.abs(point.y - g.origin.y);
+        const angle = Number(g.rotation) || 0;
+        const dx = point.x - g.origin.x;
+        const dy = point.y - g.origin.y;
+        const measured = Math.abs(drag.kind.startsWith("x")
+            ? dx * Math.cos(angle) + dy * Math.sin(angle)
+            : -dx * Math.sin(angle) + dy * Math.cos(angle));
 
         g[key] = Math.max(measured, 1e-6);
 
@@ -2295,9 +2486,52 @@ void bodyDragRouted;
         if (Array.isArray(g.points) && g.points[index]) {
             g.points[index].x = point.x;
             g.points[index].y = point.y;
+            if (object.metadata?.thermodynamicsKind === "process-path" && object.metadata.closed && index === 0) {
+                g.points[g.points.length - 1] = { x: point.x, y: point.y };
+            }
         }
     }
 }
+
+/* ============================================================
+ * HELPERS FOR THE SCHEMATIC DRAGS
+ * ============================================================ */
+
+/*
+ * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
+ *
+ * A level's line and its fill come from its VESSEL, so a tank that grew or
+ * turned takes its levels with it AT THE SAME PERCENTAGE - a half-full tank
+ * stays half full - without the level storing a second copy of where it is.
+ */
+function refreshLevelsOf(vessel, objects = []) {
+    (objects || []).forEach((object) => {
+        if (enggFluidLevel.isFluidLevelType(object?.type) && object.engineering?.vesselId === vessel.id) {
+            enggFluidLevel.refreshFluidLevel(object, objects);
+        }
+    });
+}
+
+/*
+ * WHETHER A BODY DRAG IS THE GENERIC TRANSLATE OR A TOOL'S OWN MOVE.
+ *
+ * The schematic objects are translated by their own branches above, because
+ * each is constrained by something: a reducer by its pipe, a level by its
+ * vessel, a direction arrow by its run. Letting the generic translate reach
+ * them would move geometry the model derives, so they are answered here first.
+ */
+function schematicBodyDrag(object) {
+    return (
+        enggReducer.isReducerType(object?.type) ||
+        enggEquipment.isEquipmentType(object?.type) ||
+        enggFluidLevel.isFluidLevelType(object?.type) ||
+        enggFlowArrows.isFlowDirectionType(object?.type)
+    );
+}
+
+const bodyDragRouted = schematicBodyDrag;
+
+void bodyDragRouted;
 
 /* ============================================================
  * THE ELBOW'S OWN DRAGS

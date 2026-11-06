@@ -25,11 +25,9 @@
  * from here rather than declaring a second copy, so the section the student
  * sees and the tools that exist still come from one list.
  *
- * The three Create entries carry `submenu: true`, which is the SAME flag a
- * Statics Bodies or Supports entry carries - so they open the shared submenu
- * through the shared click handler, and no Dynamics branch has to be written
- * into the toolbar. `collapsible: true` marks them as the categories that also
- * expand IN PLACE.
+ * The three Create entries carry `submenu: true` to indicate that they have
+ * child tools, and `collapsible: true` so the toolbar renders those children
+ * IN PLACE as an indented tree rather than as a floating menu.
  *
  * There is no Analysis section, no Joints and no Contact - the library is
  * exactly what this list says it is. There is exactly one Pulley.
@@ -89,7 +87,7 @@ export const DYNAMICS_COLLAPSIBLE_CATEGORIES = Object.fromEntries(
  *
  * Every other Dynamics tool reuses an ordinary stored type - a Reference Line
  * is a `line`, a Reference Point is a `point` - and is drawn, moved, rotated
- * and written by the layer that already owns that type. These seven are their
+ * and written by the layer that already owns that type. These six are their
  * own kind of object, so the shared geometry registry needs to know which
  * types it must read the anchor fields of.
  *
@@ -101,7 +99,6 @@ export const DYNAMICS_COLLAPSIBLE_CATEGORIES = Object.fromEntries(
  * re-exports it, so there is still one statement of what these are.
  */
 export const DYNAMICS_OWN_TYPES = new Set([
-    "dynamics-trajectory",
     "dynamics-polar-vector",
     "dynamics-angular-vector",
     "dynamics-spring",

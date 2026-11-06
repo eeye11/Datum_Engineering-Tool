@@ -32,7 +32,9 @@
 
 import {
   arrowHeadTip,
+  colourDefinition,
   colourOf,
+  normaliseHex,
   num,
   point,
   sourceMapFor,
@@ -40,6 +42,8 @@ import {
   styleOptions,
   texText
 } from "./statics-primitives.js";
+import enggFeatureGeometry from "../../../geometry/feature-geometry.js";
+import enggDrawingState from "../../../model/drawing-state.js";
 import { applyObjectComments, ensureObjectId, objectDisplayName } from "../object-comments.js";
 import { renderObjectBlock } from "../drawing-source.js";
 
@@ -52,6 +56,16 @@ function finite(value, fallback = 0) {
 
   return Number.isFinite(number) ? number : fallback;
 }
+
+/*
+ * SCREEN PIXELS TO DRAWING UNITS.
+ *
+ * A marker size and many of the symbol's own drawn dimensions are stored in
+ * SCREEN pixels, because that is what keeps them legible at any zoom on the
+ * canvas. The picture, though, is one paper millimetre per drawing unit - so
+ * the one conversion between the two is stated here rather than at each call.
+ */
+const BASE_PIXELS_PER_UNIT = enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4;
 
 function pt(candidate) {
   return {
@@ -170,18 +184,42 @@ function serializeParticle(object) {
     return null;
   }
 
-  const radius = Math.max(0.5, finite(object.geometry?.markerRadius, 1.6) / 2);
+  /*
+   * THE MARKER'S DISPLAY SIZE, IN DRAWING UNITS.
+   *
+   * `markerRadius` is in screen pixels (the number the panel and the size
+   * grip write), and one pixel is 1 / BASE_PIXELS_PER_UNIT paper millimetres -
+   * which is what the picture is drawn in. The division is the one conversion,
+   * stated here so the exported disc is the size the canvas shows.
+   */
+  const radius = Math.max(0.5, finite(object.geometry?.markerRadius, 5) / BASE_PIXELS_PER_UNIT);
   const style = object.style || {};
 
   /*
-   * A FILLED MARKER IS ONE `\fill`, in the feature's own colour. The colour
-   * options are taken from the shared style builder rather than written
-   * here, so the marker's ink is defined exactly the way every other
-   * symbol's is - and a marker copied out of the Source on its own compiles.
+   * A PARTICLE IS ONE FILLED DISC IN SOURCE - and nothing else. There is no
+   * outline, no leader and no second primitive: a `\fill` of one circle, in
+   * the student's fill colour (or their outline colour when no fill was
+   * chosen). The colour options come from the shared style builder, so the
+   * marker's ink is defined exactly the way every other symbol's is.
    */
-  const options = styleOptions(style)
-    .filter((option) => !/^draw=/.test(String(option)) && !/^fill=/.test(String(option)) && !/^line width=/.test(String(option)))
-    .concat([`fill=${colourName(style)}`]);
+  const wanted = style.fill && style.fill !== "none" ? style.fill : style.stroke;
+
+  if (!colourName(wanted)) {
+    return null;
+  }
+
+  const colour = colourOf({ ...style, fill: wanted, fillMode: "solid" }, "fill");
+  /*
+   * THE COLOUR IS DEFINED WHENEVER IT IS A HEX. A hex written straight into
+   * `fill=` is not something xcolor knows, so the marker's ink gets its own
+   * `\definecolor` first - the same name the shared style builder would give it,
+   * so two markers of one colour share one definition.
+   */
+  const hex = normaliseHex(wanted);
+  const definition = hex
+    ? colourDefinition(`daetumC${hex}`, `#${hex}`)
+    : "";
+  const options = [definition, "draw=none", `fill=${colour}`].filter(Boolean);
 
   return command(
     "fill",
@@ -191,28 +229,13 @@ function serializeParticle(object) {
 }
 
 function rigidBodyCorners(geometry) {
-  const shape = String(geometry?.shape || "rectangle").toLowerCase();
+  const shape = enggFeatureGeometry.rigidBodyShape(geometry);
 
   if (shape === "circle") {
     return null;
   }
 
-  const position = pt(geometry.position);
-  const width = finite(geometry.width);
-  const height = finite(geometry.height);
-  const radians = (finite(geometry.rotation) * Math.PI) / 180;
-  const cos = Math.cos(radians);
-  const sin = Math.sin(radians);
-
-  return [
-    { x: 0, y: 0 },
-    { x: width, y: 0 },
-    { x: width, y: height },
-    { x: 0, y: height },
-  ].map((corner) => ({
-    x: position.x + corner.x * cos - corner.y * sin,
-    y: position.y + corner.x * sin + corner.y * cos,
-  }));
+  return enggFeatureGeometry.definingPoints(geometry, "rigid-body");
 }
 
 function serializeRigidBody(object) {
@@ -221,6 +244,10 @@ function serializeRigidBody(object) {
 
   if (!hasPoint(geometry.position)) {
     return null;
+  }
+
+  if (object.style?.fillMode === "solid" && object.style?.fillOpacityEnabled === true) {
+    options.push("fill opacity=0.35");
   }
 
   if (String(geometry.shape || "rectangle").toLowerCase() === "circle") {
@@ -248,10 +275,11 @@ function serializeRigidBody(object) {
    * MARK, not a calculated property: its position is the centre of the shape
    * the student drew.
    */
-  const centre = {
-    x: finite(geometry.position.x) + finite(geometry.width) / 2,
-    y: finite(geometry.position.y) - finite(geometry.height) / 2,
-  };
+  const centre = enggFeatureGeometry.rigidBodyCenter(geometry);
+
+  if (!centre) {
+    return body;
+  }
 
   const mark = [
     command(
@@ -267,76 +295,6 @@ function serializeRigidBody(object) {
   ].join("\n");
 
   return `${body}\n${mark}`;
-}
-
-function serializeTrajectory(object) {
-  const geometry = object.geometry || {};
-
-  if (!hasPoint(geometry.start) || !hasPoint(geometry.end)) {
-    return null;
-  }
-
-  const a = pt(geometry.start);
-  const b = pt(geometry.end);
-  const bow = finite(geometry.bow);
-  const options = styleOptions(object.style || {});
-
-  if (Math.abs(bow) < 1e-6) {
-    return path([a, b], options, {
-      arrow: geometry.arrowEnd === true ? object.style?.arrowEnd || "filled" : null
-    });
-  }
-
-  /*
-   * A CURVED PATH IS A QUADRATIC BEND. The control point is the midpoint
-   * pushed perpendicular by `bow`, exactly as the canvas computes it, so the
-   * picture and the code describe the same curve.
-   *
-   * THE MIDPOINT, NOT THE START. `offsetFrom(a, b, ...)` walks from `a`, so the
-   * old control point sat a bow's length from the START and the "curve" was a
-   * shallow bend near one end - the canvas, which bends about the midpoint,
-   * drew a different shape from the code. The control is the midpoint plus the
-   * SAME perpendicular offset the canvas uses.
-   */
-  const span = Math.hypot(b.x - a.x, b.y - a.y);
-  const normal = offsetFrom(a, b, span * bow);
-  const control = {
-    x: (a.x + b.x) / 2 + (normal.x - a.x),
-    y: (a.y + b.y) / 2 + (normal.y - a.y),
-  };
-  const tip =
-    geometry.arrowEnd === true
-      ? `-${arrowHeadTip(object.style?.arrowEnd || "filled")}`
-      : "";
-
-  /*
-   * THE HEAD GOES BEFORE THE DESTINATION, as a path modifier: `.. controls
-   * (...) .. (a) -{Latex} (b)`. Written as `.. -{Latex} (b)` TikZ reads the
-   * head as the curvature symbol and stops the whole document.
-   */
-  const body = `${point(a.x, a.y)} .. controls ${point(control.x, control.y)} and ${point(control.x, control.y)} .. ${point(b.x, b.y)}`;
-
-  /*
-   * THE LAST RUN, WITH THE HEAD AS AN OPTION.
-   *
-   * An `arc`/`.. controls` operation ends the path, so a tip written after it
-   * would be a stray coordinate. A short `--` run back along the final tangent
-   * carries `-{Latex}` exactly where the curve ends, which is where the student
-   * sees the direction arrow on the sheet.
-   */
-  const degrees = (Math.atan2(b.y - control.y, b.x - control.x) * 180) / Math.PI;
-  const radians = (degrees * Math.PI) / 180;
-  const back = { x: b.x - Math.cos(radians) * 1.5, y: b.y - Math.sin(radians) * 1.5 };
-
-  const head = tip
-    ? `\n${command(
-        "draw",
-        [...options, `-${arrowHeadTip(object.style?.arrowEnd || "filled")}`],
-        `${point(back.x, back.y)} -- ${point(b.x, b.y)}`
-      )}`
-    : "";
-
-  return `${command("draw", options, body)}${head}`;
 }
 
 function serializePolarVector(object) {
@@ -378,13 +336,19 @@ function serializeAngularVector(object) {
   const start = finite(geometry.startAngle);
 
   /*
-   * THE ARC RUNS FROM WHERE IT STARTS TO WHERE THE SWEEP ENDS, and TikZ places
-   * an arc on the circle from `start angle` to `end angle`. It is one path
-   * operation; the coordinate before `arc` would be read as the end of a
-   * segment and the keyword after it would fail.
+   * THE ARC RUNS FROM ITS START TO ITS END, and TikZ places an arc on the
+   * circle from `start angle` to `end angle`. It is one path operation; a
+   * coordinate before `arc` would be read as the end of a segment.
+   *
+   * THE SWEEP RUNS THE WAY THE ARROW TURNS, and the path's END IS THE HEAD.
+   *
+   * `-{Latex}` places its head at the END of a path, so a clockwise arrow has
+   * to be written with its START at the head and its END at the tail - that is
+   * the only way TikZ's `->` points the way the rotation goes. The arc is the
+   * same arc; only the direction it is drawn in changes.
    */
-  const from = start;
-  const to = start + (clockwise ? -sweep : sweep);
+  const from = clockwise ? start - sweep : start;
+  const to = clockwise ? start : start + sweep;
 
   const arc =
     `${point(
@@ -735,7 +699,6 @@ function serializeReferenceArc(object) {
 const SERIALIZERS = {
   "dynamics-particle": serializeParticle,
   "dynamics-rigid-body": serializeRigidBody,
-  "dynamics-trajectory": serializeTrajectory,
   "dynamics-polar-vector": serializePolarVector,
   "dynamics-angular-vector": serializeAngularVector,
   "dynamics-spring": serializeSpring,
@@ -752,9 +715,28 @@ const SECONDARY_LABELS = {
   "dynamics-spring-damper": "labels",
 };
 
-/* A student's label, at the symbol's own anchor. */
+/*
+ * A student's label, at the symbol's own anchor.
+ *
+ * AN EMPTY LABEL WRITES NOTHING. The label is optional on every Dynamics
+ * symbol, so a symbol created and left unnamed produces no node at all - never
+ * a default "Particle 1", never the object's internal name.
+ *
+ * THE OFFSET IS PART OF THE SYMBOL. `geometry.labelOffset` is the explicit,
+ * editable offset the panel offers, so the written node lands exactly where
+ * the canvas draws it and moves with the symbol because it is measured from
+ * the symbol's own anchor.
+ */
 function labelFor(object) {
-  const text = typeof object.label === "string" ? object.label.trim() : "";
+  const typed = typeof object.label === "string" ? object.label.trim() : "";
+  const name = typeof object.name === "string" ? object.name.trim() : "";
+
+  /*
+   * THE NAME IS THE LABEL. The panel has one field, and it writes both; the
+   * source shows the text when EITHER carries a value, so a name typed into
+   * Features on a symbol created before that field existed is not lost.
+   */
+  const text = typed || name;
 
   if (!text) {
     return "";
@@ -762,12 +744,22 @@ function labelFor(object) {
 
   const geometry = object.geometry || {};
   const anchor =
+    (geometry.start && geometry.end
+      ? along(pt(geometry.start), pt(geometry.end), 0.5)
+      : null) ||
     geometry.center ||
     geometry.origin ||
-    (geometry.start && geometry.end ? along(pt(geometry.start), pt(geometry.end), 0.5) : null) ||
     geometry.position;
 
-  return label(text, anchor, object.style);
+  if (!anchor) {
+    return "";
+  }
+
+  const offset = geometry.labelOffset || {};
+  const dx = Number.isFinite(Number(offset.x)) ? Number(offset.x) : 1.2;
+  const dy = Number.isFinite(Number(offset.y)) ? Number(offset.y) : 1.2;
+
+  return label(text, { x: Number(anchor.x) + dx, y: Number(anchor.y) + dy }, object.style);
 }
 
 /* The two labels a spring-damper carries, each on its own branch. */
@@ -827,6 +819,14 @@ export function dynamicsSourceWriter(object) {
 
   const id = ensureObjectId(object, object.type);
 
+  /*
+   * ONE BLOCK UNDER ONE ID.
+   *
+   * `applyObjectComments` writes the object's header - its id, its type and
+   * its readable name, all as comments - in front of the commands, which is
+   * what makes a Dynamics symbol ONE region the source map, the panel edit and
+   * a delete can all find. The commands themselves are never altered by it.
+   */
   return applyObjectComments({ ...object, id }, body, { type: object.type });
 }
 

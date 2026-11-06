@@ -72,6 +72,8 @@ import { COMMENT_FIELDS, applyObjectComments, ensureObjectId, objectDisplayName 
 import { renderObjectBlock } from "../drawing-source.js";
 import { NOMINAL_ARROW_HEAD_PT } from "../../../../tool-library/shared/primitives/tikz-style.js";
 import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
+import bodyFrames from "../../../geometry/body-frames.js";
+import { COMPONENT_COLOURS } from "../../component-colours.js";
 import { sketchPointsOf as canvasSketchPointsOf } from "../../analysis-render.js";
 
 /* ============================================================
@@ -343,11 +345,11 @@ function headFor(style, fallback = "filled") {
  * The factor comes from the transform in effect for THIS object, so the head
  * and the shaft it belongs to are always scaled by the same one.
  */
-function scaledTip(tip) {
+function scaledTip(tip, sizeMultiplier = 1) {
   const transform = currentExportTransform();
   const factor = Number(transform?.factor);
 
-  if (!tip || !Number.isFinite(factor) || factor >= 1) {
+  if (!tip || (sizeMultiplier === 1 && (!Number.isFinite(factor) || factor >= 1))) {
     return tip;
   }
 
@@ -357,7 +359,8 @@ function scaledTip(tip) {
     return tip;
   }
 
-  const length = Number((NOMINAL_ARROW_HEAD_PT * factor).toFixed(3));
+  const exportScale = Number.isFinite(factor) && factor < 1 ? factor : 1;
+  const length = Number((NOMINAL_ARROW_HEAD_PT * exportScale * sizeMultiplier).toFixed(3));
   const width = Number((length * 0.6).toFixed(3));
 
   return `{${name[1]}[length=${length}pt, width=${width}pt]}`;
@@ -1019,7 +1022,7 @@ function serializeMoment(entity, object) {
    * clockwise moment's head at the START - as this used to - pointed it
    * against its own sweep, and every CW moment rendered as anticlockwise.
    */
-  const arrow = `-${scaledTip(tip)}`;
+  const arrow = `-${scaledTip(tip, 1.4)}`;
 
   const options = withArrow(styleOptions(object.style), tip ? arrow : null);
 
@@ -1082,7 +1085,14 @@ function supportFrame(geometry) {
 }
 
 function serializeSupport(entity, object) {
-  const geometry = object.geometry || {};
+  let geometry = object.geometry || {};
+  if (entity.type === "fixed-support" && object.parentId) {
+    const parent = entity.__generationOptions?.state?.objects?.find(item => item.id === object.parentId);
+    const bodyFrame = parent && bodyFrames.frameOf(parent);
+    const attachment = bodyFrame && bodyFrames.attachmentPoint(bodyFrame, geometry.attachment);
+    const placement = attachment && bodyFrames.supportPlacement(parent, attachment, false, { fixed: true });
+    if (placement) geometry = { ...geometry, position: placement.render, orientation: placement.orientation };
+  }
   const frame = supportFrame(geometry);
   const options = styleOptions(object.style);
 
@@ -1268,7 +1278,7 @@ function serializeForceComponents(entity, object) {
 
   const commands = [];
 
-  const segment = (pair) => {
+  const segment = (pair, colour = null) => {
     if (!pair?.start || !pair?.end) {
       return null;
     }
@@ -1280,7 +1290,7 @@ function serializeForceComponents(entity, object) {
       return null;
     }
 
-    return seg(from, to, options, arrow);
+    return seg(from, to, colour ? styleOptions({ ...style, stroke: colour }) : options, arrow);
   };
 
   /*
@@ -1299,11 +1309,11 @@ function serializeForceComponents(entity, object) {
   }
 
   if (geometry.showX !== false) {
-    commands.push(segment(geometry.horizontal));
+    commands.push(segment(geometry.horizontal, COMPONENT_COLOURS.x));
   }
 
   if (geometry.showY !== false) {
-    commands.push(segment(geometry.vertical));
+    commands.push(segment(geometry.vertical, COMPONENT_COLOURS.y));
   }
 
   /*
@@ -1315,7 +1325,26 @@ function serializeForceComponents(entity, object) {
   const endY = geometry.vertical?.end ? pointOf(geometry.vertical.end) : null;
 
   if (endX && endY && geometry.showX !== false && geometry.showY !== false) {
-    commands.push(seg(endX, endY, styleOptions({ ...style, lineType: "dashed" })));
+    const guideStyle = styleOptions({ ...style, lineType: "dashed", lineWidth: (Number(style.lineWidth) || 0.5) * 0.5 });
+
+    /*
+     * WITH A DRAWN ORIGINAL, the closing lines run from each component's
+     * end to the original's tip - the parallelogram that shows the two
+     * components adding back to the force. Without one, the two ends are
+     * joined directly, which is still the statement that the components
+     * belong to one decomposition.
+     */
+    if (
+        original?.end &&
+        geometry.showOriginal === true &&
+        distance(pointOf(original.start), pointOf(original.end)) > 1e-9
+    ) {
+      const tip = pointOf(original.end);
+
+      commands.push(seg(endX, tip, guideStyle), seg(endY, tip, guideStyle));
+    } else {
+      commands.push(seg(endX, endY, guideStyle));
+    }
   }
 
   return commands.filter(Boolean).join("\n");

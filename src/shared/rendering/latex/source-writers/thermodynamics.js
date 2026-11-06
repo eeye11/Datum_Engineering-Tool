@@ -20,9 +20,13 @@
  * and it declines an ordinary rectangle, which the Geometry writer owns.
  */
 
-import { num, point, texText } from "./statics-primitives.js";
+import { num, point, texText, colourName, colourDefinitions } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import { tankPaths } from "../../../../features/workspace/model/thermodynamics/tank.js";
+import { turbineCompressorPoints } from "../../../../features/workspace/model/thermodynamics/turbine-compressor.js";
+import { nozzleDiffuserPaths } from "../../../../features/workspace/model/thermodynamics/nozzle-diffuser.js";
+import { rankineCycleDiagram } from "../../../../features/workspace/model/thermodynamics/rankine-cycle.js";
 import * as saturationCurve from "../../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import * as processLabels from "../../../../features/workspace/model/thermodynamics/process-labels.js";
 import * as processCurves from "../../../../features/workspace/model/thermodynamics/process-curves.js";
@@ -270,7 +274,10 @@ function serializeProcessPath(object, options) {
    * `processPathPoints` follows each segment's own bend.
    */
   const drawn = processCurves.processPathPoints({ ...geometry, points });
-  const path = polyline(drawn.length >= 2 ? drawn : points, colour, ["line width=1.1pt"]);
+  const fill = geometry.closed && object.style?.fill && object.style.fill !== "none" ? colourName(object.style.fill) : null;
+  if (fill) commands.push(...colourDefinitions([object.style.fill]));
+  const path = polyline(drawn.length >= 2 ? drawn : points, colour, ["line width=1.1pt", ...(fill ? [`fill=${fill}`,
+    ...(Number.isFinite(object.style.fillOpacity) ? [`fill opacity=${num(Math.max(0, Math.min(1, object.style.fillOpacity)))}`] : [])] : [])]);
 
   if (path) {
     commands.push(path);
@@ -289,31 +296,30 @@ function serializeProcessPath(object, options) {
   const scale = 1;
 
   points.forEach((at, index) => {
-    if (index >= finite(object.metadata?.stateCount, points.length)) {
-      return;
+    if (index < finite(object.metadata?.stateCount, points.length)) {
+
+      commands.push(`\\fill[${colour}] ${point(finite(at.x), finite(at.y))} circle[radius=0.5];`);
+
+      let labelAt;
+
+      try {
+        const labels = processLabelsModule();
+
+        labelAt = labels && typeof labels.processLabelPoint === "function"
+          ? labels.processLabelPoint(geometry, index, scale)
+          : null;
+      } catch {
+        labelAt = null;
+      }
+
+      const placed = labelAt || { x: finite(at.x) + 3, y: finite(at.y) + 3 };
+
+      commands.push(
+        `\\node[anchor=center, text=${colour}] at ${point(finite(placed.x), finite(placed.y))} {${num(index + 1, 0)}};`
+      );
     }
 
-    commands.push(`\\fill[${colour}] ${point(finite(at.x), finite(at.y))} circle[radius=0.5];`);
-
-    let labelAt;
-
-    try {
-      const labels = processLabelsModule();
-
-      labelAt = labels && typeof labels.processLabelPoint === "function"
-        ? labels.processLabelPoint(geometry, index, scale)
-        : null;
-    } catch {
-      labelAt = null;
-    }
-
-    const placed = labelAt || { x: finite(at.x) + 3, y: finite(at.y) + 3 };
-
-    commands.push(
-      `\\node[anchor=center, text=${colour}] at ${point(finite(placed.x), finite(placed.y))} {${num(index + 1, 0)}};`
-    );
-
-    if (index > 0) {
+    if (index > 0 && (!Array.isArray(object.metadata?.arrowSegments) || object.metadata.arrowSegments.includes(index - 1))) {
       /*
        * THE ARROW SITS ON THE SEGMENT'S MIDDLE and points along it there - on a
        * bent segment that is the curve's middle, as the canvas draws it.
@@ -396,7 +402,7 @@ export function thermodynamicsKindOf(object) {
  * `thermodynamicsKind`, so this writer must claim it before the geometry writer
  * draws it as a bare box.
  */
-const RECTANGLE_KINDS = new Set(["control-volume", "saturation-curve", "process-plot", "piston-cylinder"]);
+const RECTANGLE_KINDS = new Set(["rankine-cycle", "nozzle-diffuser", "turbine-compressor", "tank", "control-volume", "saturation-curve", "process-plot", "piston-cylinder"]);
 
 export function thermodynamicsSourceWriter(object, options = {}) {
   if (!object || typeof object !== "object") {
@@ -419,7 +425,20 @@ export function thermodynamicsSourceWriter(object, options = {}) {
   }
 
   const written =
-    kind === "saturation-curve" || kind === "process-plot"
+    kind === "rankine-cycle" ? (() => {
+      const diagram = rankineCycleDiagram(object.geometry, object.metadata?.problemData);
+      return [
+        ...diagram.paths.map(path => polyline(path.points, path.colour, [
+          ...(path.fill ? [`fill=${path.fill}`] : []),
+          ...(path.bold ? ["line width=1.4pt", "line cap=round", "line join=round"] : [])
+        ])),
+        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt, align=center, font=\\fontsize{${num(14.4 * (label.fontScale || 1))}}{${num(17.28 * (label.fontScale || 1))}}\\selectfont] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : (label.lines || [label.text]).map(texText).join("\\\\")}};`)
+      ].join("\n");
+    })()
+    : kind === "turbine-compressor" ? withPrelude(object, polyline(turbineCompressorPoints(object.geometry), colourOf(object)))
+    : kind === "nozzle-diffuser" ? withPrelude(object, nozzleDiffuserPaths(object.geometry).map(path => polyline(path, colourOf(object))).join("\n"))
+    : kind === "tank" ? withPrelude(object, tankPaths(object.geometry).map(path => polyline(path, colourOf(object))).join("\n"))
+    : kind === "saturation-curve" || kind === "process-plot"
       ? serializeSaturation(object)
       : kind === "piston-cylinder"
         ? serializeCylinder(object)

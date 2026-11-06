@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ============================================================
  * THE FEATURES PANE - THE SELECTION'S OWN PROPERTIES
  * ============================================================
@@ -36,7 +36,7 @@
  * not add a form here.
  */
 
-import { drawingState } from "../../../features/workspace/editor-state.js";
+import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import {
     displayNameOf,
@@ -55,6 +55,7 @@ import {
 } from "./feature-schema.js";
 import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 import { applyElbowRadius } from "../../../features/workspace/interaction/elbow-radius.js";
+import { visibilityButtonMarkup } from "./objects-list.js";
 
 /*
  * THE ELBOW PANEL EDITS FIND THEIR PIPES THROUGH THE LIVE DOCUMENT.
@@ -83,8 +84,10 @@ setFeatureObjectLookup(
  * AND THE ONE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS.
  *
  * The Features tab's Bend Radius field goes through the SAME function the
- * canvas radius handle calls, so the two cannot produce different geometry
- * for the same radius.
+ * canvas radius handle calls, so the two cannot produce different geometry for
+ * the same radius. It clamps against the bend's live arms, re-seats every
+ * joined pipe on the new tangent points and keeps their outer ends where they
+ * are - see `applyElbowRadius`.
  */
 setElbowRadiusApply((elbow, radius) =>
     applyElbowRadius(elbow, radius, { objects: drawingState.objects })
@@ -99,6 +102,15 @@ setElbowRadiusApply((elbow, radius) =>
  * different states.
  */
 setFluidReconciler((run, other) => reconcileFluidConnections(run, other || drawingState.objects));
+
+/*
+ * AND THE SHEET A VESSEL'S ATTACHMENTS ARE RE-SEATED AGAINST.
+ *
+ * A Vessel Type or Width row edits ONE object, but the pipes held on its walls
+ * live elsewhere on the sheet - so the vessel model is given the same live
+ * document, and a typed change moves what is attached exactly as a drag does.
+ */
+enggVessel.setVesselObjectProvider(() => drawingState.objects);
 import { PIPE_WIDTH_STEP, TRANSFORM_STEP, applyTransform } from "./transform-session.js";
 import { settingsFor } from "./tool-settings-store.js";
 import { installToolSettingsPane, toolSettingsMarkup } from "./tool-settings-pane.js";
@@ -106,8 +118,10 @@ import { openColourPicker } from "../../../shared/ui/colour-picker.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
 import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
+import enggVessel from "../../../features/workspace/model/fluids/reservoir-tank.js";
 
 let host = null;
+let dynamicsGeometryEditSnapshot = null;
 
 function element(id) {
     return globalThis.document.getElementById(id);
@@ -314,7 +328,93 @@ function numberMarkup(key, definition, label, state) {
     );
 }
 
+function quantityMarkup(key, definition, label, state, objects) {
+    const unitState = fieldState(objects, definition.unitField);
+    const bounds = [
+        Number.isFinite(definition.min) ? `min="${definition.min}"` : "",
+        Number.isFinite(definition.max) ? `max="${definition.max}"` : "",
+        `step="${definition.step ?? 1}"`
+    ]
+        .filter(Boolean)
+        .join(" ");
+    const units = (definition.unitOptions || [])
+        .map((option) => (
+            `<option value="${escapeHtml(option.value)}"${
+                !unitState?.mixed && option.value === unitState?.value ? " selected" : ""
+            }>${escapeHtml(option.label)}</option>`
+        ))
+        .join("");
+
+    return (
+        `<div class="dfp-row-control dfp-quantity-control${state.mixed ? " is-mixed" : ""}">` +
+        `<input type="number" class="dfp-number" data-feature-field="${escapeHtml(key)}" ` +
+        `aria-label="${escapeHtml(label)}" ${bounds} value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        `>` +
+        `<select class="dfp-select dfp-quantity-unit" data-feature-field="${escapeHtml(definition.unitField)}" ` +
+        `aria-label="${escapeHtml(`${label} unit`)}"${unitState?.mixed ? ' data-mixed="true"' : ""}>` +
+        (unitState?.mixed ? `<option value="" selected disabled>Mixed</option>` : "") +
+        units +
+        `</select>` +
+        `</div>`
+    );
+}
+
+function attachmentMarkup(key, label, state) {
+    const eligible = drawingState.objects.filter((object) => {
+        const type = object?.engineering?.dynamicsType;
+
+        if (key === "dynamics.angularAttachment") {
+            return (
+                type === "dynamics-rigid-body" ||
+                type === "dynamics-coordinate-system" ||
+                object?.type === "rigid-body" ||
+                object?.type === "point" ||
+                object?.type === "coordinate-system-2d"
+            );
+        }
+
+        return (
+            type === "dynamics-particle" ||
+            type === "dynamics-rigid-body" ||
+            type === "dynamics-reference-point" ||
+            type === "dynamics-coordinate-system" ||
+            object?.type === "particle" ||
+            object?.type === "rigid-body" ||
+            object?.type === "point" ||
+            object?.type === "coordinate-system-2d"
+        );
+    });
+    const options = [
+        { value: "origin", label: "Origin Point" },
+        ...eligible.map((object) => ({
+            value: object.id,
+            label: `${object.name || "Unnamed"} (${object.engineering?.dynamicsType === "dynamics-particle"
+                || object.type === "particle"
+                ? "Particle"
+                : object.engineering?.dynamicsType === "dynamics-rigid-body" || object.type === "rigid-body"
+                  ? "Rigid Body"
+                  : "Origin Point"})`
+        }))
+    ];
+
+    if (!state.mixed && !options.some((option) => option.value === state.value)) {
+        options.push({ value: state.value, label: "Unresolved reference" });
+    }
+
+    return rowMarkup(label, choicesMarkup(key, label, options, state), { mixed: state.mixed });
+}
+
 function textMarkup(key, label, state, definition = {}, multiline = false) {
+    /*
+     * A READ-ONLY TEXT ROW STATES A FACT, IT DOES NOT OFFER A CONTROL.
+     *
+     * The Flow Arrow's Attached Pipe is the host it lives on. It is chosen by
+     * pressing on a pipe, so there is nothing to type here - a typed name would
+     * have to be resolved back to some pipe, and the wrong guess would silently
+     * move the arrow. So the field is rendered as the value it is, marked
+     * readOnly, with no edit path that could disagree with the drawing.
+     */
     const readOnly = definition.readOnly === true;
 
     if (multiline) {
@@ -326,7 +426,7 @@ function textMarkup(key, label, state, definition = {}, multiline = false) {
         `aria-label="${escapeHtml(label)}" ` +
         `value="${escapeHtml(state.mixed ? "" : state.value ?? "")}"` +
         (readOnly ? ` readonly aria-readonly="true" tabindex="-1"` : "") +
-        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : "") +
+        (state.mixed ? ' data-mixed="true" placeholder="Mixed"' : definition.placeholder ? ` placeholder="${escapeHtml(definition.placeholder)}"` : "") +
         ` autocomplete="off" spellcheck="false">`
     );
 }
@@ -375,6 +475,19 @@ function fieldMarkup(key, definition, objects) {
         return rowMarkup(label, numberMarkup(key, definition, label, state), options);
     }
 
+    if (definition.kind === "quantity") {
+        return (
+            `<div class="dfp-row">` +
+            `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
+            quantityMarkup(key, definition, label, state, objects) +
+            `</div>`
+        );
+    }
+
+    if (definition.kind === "reference") {
+        return attachmentMarkup(key, label, state);
+    }
+
     if (definition.kind === "text") {
         return rowMarkup(
             label,
@@ -404,7 +517,44 @@ function fieldMarkup(key, definition, objects) {
  * section clears it.
  */
 
-function transformRowMarkup(axis, label) {
+/*
+ * THE SELECTION'S OWN TRANSFORM FIELDS.
+ *
+ * Whatever the schema declared for a `transform` group - a body's size, a
+ * vector's magnitude and angle, a spring's endpoints, an arc's sweep - is drawn
+ * as ordinary rows inside the ONE Transform section, after X Shift, Y Shift and
+ * Rotate. Each row reads and writes through `fieldState`/`writeField`, so it is
+ * the same edit as the matching handle on the canvas.
+ */
+function transformFieldsMarkup(objects) {
+    const groups = new Map();
+
+    objects.forEach((object) => {
+        (groupsFor(object) || [])
+            .filter((group) => group.id === "transform" || group.transform === true)
+            .forEach((group) => {
+                const entry = groups.get(group.id) || { group, fields: new Map() };
+
+                group.fields.forEach((field) => {
+                    if (!entry.fields.has(field.key)) {
+                        entry.fields.set(field.key, field.definition);
+                    }
+                });
+
+                groups.set(group.id, entry);
+            });
+    });
+
+    return [...groups.values()]
+        .flatMap(({ fields }) =>
+            [...fields.entries()].map(([key, definition]) =>
+                fieldMarkup(key, definition, objects),
+            ),
+        )
+        .join("");
+}
+
+function transformRowMarkup(axis, label, value = null, extra = {}) {
     /*
      * PIPE WIDTH HAS ITS OWN INCREMENT. It is a distance between two walls, not
      * a coordinate nudge, so one click moves it by a whole pipe width rather
@@ -412,6 +562,29 @@ function transformRowMarkup(axis, label) {
      * value is still applied exactly as given.
      */
     const step = axis === "width" ? PIPE_WIDTH_STEP : TRANSFORM_STEP;
+
+    /*
+     * A FIELD VALUE IS SHOWN WHEN ONE IS GIVEN.
+     *
+     * The three generic offsets are RELATIVE nudges and start blank; an
+     * object's own measurements (a particle's X and Y, a spring's endpoints, a
+     * body's size) are absolute values, and their row shows the stored number
+     * and writes it through the schema like any other property.
+     */
+    const shown = value === null || value === undefined ? transformOffsetFor(axis) : String(value);
+
+    if (extra.field) {
+        return (
+            `<div class="dfp-row dfp-transform-row">` +
+            `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
+            `<span class="dfp-row-control">` +
+            `<input type="number" class="dfp-number" data-feature-field="${escapeHtml(extra.field)}" ` +
+            `aria-label="${escapeHtml(label)}" step="${extra.step ?? TRANSFORM_STEP}" value="${escapeHtml(shown)}">` +
+            (extra.unit ? `<span class="dfp-unit">${escapeHtml(extra.unit)}</span>` : "") +
+            `</span>` +
+            `</div>`
+        );
+    }
 
     return (
         `<div class="dfp-row dfp-transform-row">` +
@@ -514,17 +687,28 @@ function headerMarkup(objects) {
         );
     }
 
+    /*
+     * ONE OBJECT: THE TYPE ONCE, THE NAME BENEATH IT, AND THE EYE ON THE RIGHT.
+     *
+     * The header is the object's identity line. It says WHAT the thing is (its
+     * type) and, underneath, what the student called it - which is shown only
+     * when there is a name to show, so an unnamed object reads as its type once
+     * rather than as a type with a blank line. The eye at the far right is the
+     * SAME control as the one in the Objects panel: both toggle `visible`.
+     */
     const object = objects[0];
     const name = displayNameOf(object);
     const type = typeLabelOf(object);
+    const hasOwnName = typeof object?.name === "string" && object.name.trim() !== "";
 
     return (
         `<div class="dfp-header">` +
         `<span class="dfp-header-icon">${iconForObject(object)}</span>` +
         `<span class="dfp-header-text">` +
         `<span class="dfp-header-type">${escapeHtml(type)}</span>` +
-        `<span class="dfp-header-name">${escapeHtml(name)}</span>` +
+        (hasOwnName ? `<span class="dfp-header-name">${escapeHtml(name)}</span>` : "") +
         `</span>` +
+        visibilityButtonMarkup(object) +
         `</div>`
     );
 }
@@ -594,49 +778,64 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
     });
 
     /*
-     * TRANSFORM IS OFFERED WHEN SOMETHING CAN MOVE. A selection of only fixed
-     * objects keeps its Transform rows - so the student can see why nothing
-     * moves, and the arrows say so by doing nothing - but a selection of objects
-     * the model cannot move at all does not get a Transform section that could
-     * never act.
+     * ============================================================
+     * ONE TRANSFORM SECTION, WHATEVER THE SELECTION
+     * ============================================================
+     *
+     * X Shift and Y Shift are the SHARED translation rows - the schema's
+     * `transform` group never carries any of them - and the selected object's
+     * own measurements (a particle's X and Y, a body's size and rotation, a
+     * vector's magnitude and angle, a spring's endpoints, an arc's angles) are
+     * added to the same section underneath them. There is no second Transform,
+     * no "body" Transform, and no Geometry section anywhere in the panel.
+     *
+     * ROTATE IS OMITTED WHERE ORIENTATION IS ALREADY DECIDED: an elbow's by its
+     * pipes, a particle's by nothing at all, a vector's by its angle, a span
+     * symbol's by its two endpoints, a pulley's by its rope. A rotation row there
+     * would be a second, competing way to turn the same drawing.
      */
+    const hasElbow = objects.some((object) => object.type === "elbow");
+
+    const ENGINEERING_NO_ROTATE = new Set([
+        "particle",
+        "point",
+        "dynamics-particle",
+        "dynamics-polar-vector",
+        "dynamics-spring",
+        "dynamics-damper",
+        "dynamics-spring-damper",
+        "dynamics-pulley",
+        "dynamics-angular-vector",
+        "dynamics-reference-arc",
+        "dynamics-reference-point",
+        "dynamics-reference-line"
+    ]);
+
+    const noRotate = objects.every(
+        (object) =>
+            object.type === "elbow" ||
+            (object.type === "reducer-expander" && (object.engineering?.startPipeId || object.engineering?.endPipeId)) ||
+            ENGINEERING_NO_ROTATE.has(object.type) ||
+            ENGINEERING_NO_ROTATE.has(object.engineering?.dynamicsType)
+    );
+
     if (objects.some((object) => supportsTransform(object))) {
-        const hasElbow = objects.some((object) => object.type === "elbow");
+        const toolRows = transformFieldsMarkup(objects);
+        const elbow = objects.every(
+            (object) =>
+                object.type === "elbow" ||
+                (object.type === "reducer-expander" && (object.engineering?.startPipeId || object.engineering?.endPipeId))
+        );
 
         markup.push(
             `<div class="dfp-section" data-feature-group="transform">` +
                 `<div class="dfp-section-heading">Transform</div>` +
                 transformRowMarkup("x", "X Shift") +
                 transformRowMarkup("y", "Y Shift") +
-                /*
-                 * ROTATE IS NOT AN ELBOW'S CONTROL. The specification defines
-                 * exactly four Transform parameters for it, and a fitting's
-                 * orientation is decided by the pipes it joins, so the rotation
-                 * row is omitted for an elbow-only selection.
-                 */
-                (objects.every((object) => object.type === "elbow" || (object.type === "reducer-expander" && (object.engineering?.startPipeId || object.engineering?.endPipeId)))
-                    ? ""
-                    : transformRowMarkup("rotate", "Rotate")) +
-                /*
-                 * PIPE WIDTH IS A RELATIVE ADJUSTMENT, like the three above - so
-                 * it is a Transform row, not a measured field. It appears only
-                 * when a run is selected, and `applyTransform` refuses the axis
-                 * for anything else, so a stale click cannot alter a line.
-                 */
-                (objects.some((object) => object.type === "pipe-duct")
-                    ? transformRowMarkup("width", "Pipe Width")
-                    : "") +
-                /*
-                 * THE ELBOW'S OWN PARAMETER: BEND RADIUS.
-                 *
-                 * It is a relative adjustment and uses the same row shape as
-                 * X Shift. There is NO Bend Angle row: the angle is the direction
-                 * change the fitting's pipes make, so it is derived on every
-                 * settle rather than typed.
-                 */
-                (hasElbow
-                    ? transformRowMarkup("bendRadius", "Bend Radius")
-                    : "") +
+                (noRotate || elbow ? "" : transformRowMarkup("rotate", "Rotate")) +
+                (objects.some((object) => object.type === "pipe-duct") ? transformRowMarkup("width", "Pipe Width") : "") +
+                (hasElbow ? transformRowMarkup("bendRadius", "Bend Radius") : "") +
+                toolRows +
                 `</div>`
         );
     }
@@ -878,6 +1077,42 @@ function commitField(key, value) {
     return true;
 }
 
+function updateDynamicsGeometry(target) {
+    const value = Number(target.value);
+
+    if (!Number.isFinite(value)) {
+        return;
+    }
+
+    const key = target.dataset.featureField;
+    const objects = selectedObjects().filter(object => readField(object, key) !== value);
+
+    if (!objects.length) {
+        return;
+    }
+
+    if (!dynamicsGeometryEditSnapshot) {
+        dynamicsGeometryEditSnapshot = enggDrawingState.snapshotDrawing(drawingState);
+    }
+
+    objects.forEach((object) => {
+        writeField(object, key, value);
+    });
+
+    renderCurrentDrawing();
+}
+
+function commitDynamicsGeometryEdit() {
+    if (!dynamicsGeometryEditSnapshot) {
+        return false;
+    }
+
+    enggDrawingState.commitDrawingChange(drawingState, dynamicsGeometryEditSnapshot);
+    dynamicsGeometryEditSnapshot = null;
+
+    return true;
+}
+
 /*
  * Re-render and put focus back on the field the student was using. A change can
  * make another row appear or disappear - Solid adds a fill colour, Custom adds a
@@ -980,6 +1215,38 @@ function applySegmentedChoice(button) {
  */
 let transformOffsets = { x: 0, y: 0, rotate: 0, width: 0 };
 let transformOffsetsFor = "";
+const LIVE_DYNAMICS_GEOMETRY_FIELDS = new Set([
+    "dynamics.positionX",
+    "dynamics.positionY",
+    "dynamics.rotation",
+    "dynamics.bodyWidth",
+    "dynamics.bodyHeight",
+    "dynamics.angularRadius",
+    "dynamics.angularStart",
+    "dynamics.angularSweep",
+    "dynamics.markerRadius",
+    "dynamics.coils",
+    "dynamics.amplitude",
+    "dynamics.lead",
+    "dynamics.bodyFrom",
+    "dynamics.bodyTo",
+    "dynamics.branchSpacing",
+    "dynamics.pulleyRadius",
+    "dynamics.ropeDrop",
+    "dynamics.ropeGap",
+    "dynamics.ropeAngle",
+    "dynamics.labelOffsetX",
+    "dynamics.labelOffsetY",
+    "dynamics.vectorMagnitude",
+    "dynamics.vectorAngle",
+    "dynamics.vectorComponentX",
+    "dynamics.vectorComponentY",
+    "dynamics.vectorOriginX",
+    "dynamics.vectorOriginY",
+    "dynamics.angularCenterX",
+    "dynamics.angularCenterY",
+    "dynamics.angularMagnitude"
+]);
 
 function transformSelectionKey() {
     return (drawingState.selection?.selectedObjectIds || []).join("|");
@@ -1115,6 +1382,28 @@ export function installFeaturesPane() {
     }
 
     host.addEventListener("click", (event) => {
+        /*
+         * THE HEADER'S EYE.
+         *
+         * It is the SAME handler the Objects panel runs - `toggleObjectVisible`
+         * writes `visible`, one snapshot and one commit - so the two icons are
+         * two views of one property. The panel and the sheet are both redrawn,
+         * which is what makes each icon show the new state at once.
+         */
+        const eye = event.target.closest?.("[data-visibility-for]");
+
+        if (eye) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            enggDrawingState.toggleObjectVisible(drawingState, eye.dataset.visibilityFor);
+
+            renderFeatures();
+            renderCurrentDrawing();
+
+            return;
+        }
+
         const editorButton = event.target.closest?.("[data-analysis-editor]");
 
         if (editorButton) {
@@ -1194,6 +1483,14 @@ export function installFeaturesPane() {
         }
     });
 
+    host.addEventListener("input", (event) => {
+        const target = event.target;
+
+        if (target.matches?.("[data-feature-field]") && LIVE_DYNAMICS_GEOMETRY_FIELDS.has(target.dataset.featureField)) {
+            updateDynamicsGeometry(target);
+        }
+    });
+
     host.addEventListener("change", (event) => {
         const target = event.target;
 
@@ -1208,6 +1505,13 @@ export function installFeaturesPane() {
         }
 
         const key = target.dataset.featureField;
+
+        if (LIVE_DYNAMICS_GEOMETRY_FIELDS.has(key)) {
+            if (commitDynamicsGeometryEdit()) {
+                refreshFeatures();
+                return;
+            }
+        }
 
         /*
          * CUSTOM THICKNESS FROM THE DROPDOWN is the same mode choice as the
@@ -1295,6 +1599,15 @@ export function installFeaturesPane() {
      * moment the offsets are meant to be forgotten.
      */
     host.addEventListener("focusout", (event) => {
+        if (
+            event.target.matches?.("[data-feature-field]") &&
+            LIVE_DYNAMICS_GEOMETRY_FIELDS.has(event.target.dataset.featureField) &&
+            commitDynamicsGeometryEdit()
+        ) {
+            renderCurrentDrawing();
+            return;
+        }
+
         const leftThePane = !event.relatedTarget || !host.contains(event.relatedTarget);
         const fromTransform = event.target.closest?.("[data-transform-input]") || event.target === host;
 
@@ -1320,6 +1633,7 @@ export function installFeaturesPane() {
     });
 
     globalThis.document.addEventListener("datum:selection-changed", () => {
+        editorState.selectedPlantNode = null;
         resetTransformForSelection();
         renderFeatures();
     });

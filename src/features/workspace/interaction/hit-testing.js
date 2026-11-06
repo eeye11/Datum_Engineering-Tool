@@ -12,12 +12,23 @@ import enggJunction from "../model/fluids/junction.js";
 import enggAnnotationModel from "../model/annotations/annotation-model.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
 import { resistorPoints } from "../model/thermodynamics/resistor.js";
+import { stressArrowPaths } from "../../../shared/geometry/stress-element.js";
+import { boundaryStressDrawing } from "../../../shared/geometry/boundary-stress.js";
+import { selectionBounds } from "../../../shared/selection/selection-transform.js";
+import { turbineCompressorPoints } from "../model/thermodynamics/turbine-compressor.js";
+import { nozzleDiffuserPaths } from "../model/thermodynamics/nozzle-diffuser.js";
+import { rankineCycleDiagram } from "../model/thermodynamics/rankine-cycle.js";
+import { fanPaths } from "../model/thermodynamics/fan.js";
+import { tankPaths } from "../model/thermodynamics/tank.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import { distance, distanceToSegment } from "../../../shared/geometry/points.js";
+import { bodyTolerance, minimumTargetRadius } from "./pointer-precision.js";
+import { isSignalLine, signalLinePath } from "../../../shared/model/signal-line.js";
 import { isProcessDiagram, processDiagramPaths } from "../model/thermodynamics/saturation-curve.js";
 import { processPathPoints } from "../model/thermodynamics/process-curves.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperPaths } from "../model/thermodynamics/piston-cylinder.js";
 import enggPipeDuct from "../model/fluids/pipe-duct.js";
+import { gainTrianglePoints, isControlBlock, isGain, isSum } from "../../../shared/model/plant.js";
 import enggFlowArrow from "../model/fluids/flow-arrow.js";
 import enggReducer from "../model/fluids/reducer-expander.js";
 import enggEquipment from "../model/fluids/inline-equipment.js";
@@ -106,6 +117,31 @@ function distanceToPolygon(
     );
 }
 
+function pointInPolygon(point, corners) {
+    if (!Array.isArray(corners) || corners.length < 3) {
+        return false;
+    }
+
+    let inside = false;
+
+    for (let index = 0, previous = corners.length - 1; index < corners.length; previous = index, index += 1) {
+        const currentCorner = corners[index];
+        const previousCorner = corners[previous];
+        const crossesRay =
+            (currentCorner.y > point.y) !== (previousCorner.y > point.y) &&
+            point.x <
+                ((previousCorner.x - currentCorner.x) * (point.y - currentCorner.y)) /
+                    (previousCorner.y - currentCorner.y) +
+                    currentCorner.x;
+
+        if (crossesRay) {
+            inside = !inside;
+        }
+    }
+
+    return inside;
+}
+
 /*
  * ========================================================
  * IS A POINT ON AN ELBOW?
@@ -160,6 +196,16 @@ function elbowContainsPoint(
         if (distance(point, sample) <= tolerance) {
             return true;
         }
+    }
+
+    /*
+     * THE CORNER ITSELF IS PICKABLE. The arc samples leave a wedge of dead
+     * space at each end of the bend, and at a sharp corner the two sampled
+     * ends are far apart - a click on the corner the fitting sits at is a
+     * click on the fitting.
+     */
+    if (geometry.position && distance(point, geometry.position) <= tolerance * 2) {
+        return true;
     }
 
     return false;
@@ -301,6 +347,10 @@ function annotateContainsPoint(object, point) {
     if (object.metadata?.thermodynamicsKind === "electric-work") {
         const points = resistorPoints(geometry);
         return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+    }
+    if (object.metadata?.thermodynamicsKind === "mechanical-work") {
+        return fanPaths(geometry).some(points => points.some((end, index) =>
+            index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance));
     }
 
     /*
@@ -537,14 +587,33 @@ export function safeDimensionGraphics(
     }
 }
 
+// Match the visible selection frame, including its three-pixel padding.
+export function boundarySelectionAtPoint(point) {
+    const tolerance = 8 / (enggDrawingState.BASE_PIXELS_PER_UNIT * drawingState.camera.zoom);
+    const selected = new Set(drawingState.selection.selectedObjectIds);
+    return drawingState.objects.findLast(object => {
+        if (!selected.has(object.id) || !object.metadata?.boundaryStress || object.locked || object.visible === false) return false;
+        const box = selectionBounds([object], [object.id]);
+        return box && point.x >= box.minX - tolerance && point.x <= box.maxX + tolerance &&
+            point.y >= box.minY - tolerance && point.y <= box.maxY + tolerance;
+    }) || null;
+}
+
 export function objectAtPoint(
     point
 ) {
+    /*
+     * THE TOLERANCE IS THE INPUT'S, NOT A CONSTANT.
+     *
+     * A mouse keeps its established four pixels. A finger is given a target it
+     * can actually cover, and a stylus sits between them - so a thin line is as
+     * pickable on a tablet as it is with a mouse, without any line becoming
+     * visually thicker.
+     */
     const tolerance =
-        4 /
-        Math.max(
-            drawingState.camera.zoom,
-            0.25
+        bodyTolerance(
+            undefined,
+            drawingState.camera.zoom
         );
 
     /*
@@ -689,7 +758,13 @@ export function objectAtPoint(
                             point,
                             geometry.origin
                         ) <=
-                            tolerance * 2 ||
+                            Math.max(
+                                tolerance * 2,
+                                minimumTargetRadius(
+                                    undefined,
+                                    drawingState.camera.zoom
+                                )
+                            ) ||
                         coordinateSystemArms(
                             geometry
                         ).some(
@@ -906,6 +981,58 @@ export function objectAtPoint(
                 }
 
                 /*
+                 * A Dynamics Polar Vector is the segment from its tail to
+                 * tip. Pick along the shaft and give the endpoints a slightly
+                 * wider target so the arrowhead and origin remain easy to
+                 * select at normal zoom.
+                 */
+                if (object?.engineering?.dynamicsType === "dynamics-polar-vector") {
+                    return Boolean(
+                        geometry.start &&
+                            geometry.end &&
+                            (
+                                distanceToSegment(point, geometry.start, geometry.end) <= tolerance ||
+                                distance(point, geometry.start) <= tolerance * 2 ||
+                                distance(point, geometry.end) <= tolerance * 2
+                            )
+                    );
+                }
+
+                if (object?.engineering?.dynamicsType === "dynamics-angular-vector") {
+                    if (!geometry.center || !(Number(geometry.radius) > 0)) {
+                        return false;
+                    }
+
+                    if (distance(point, geometry.center) <= tolerance * 2) {
+                        return true;
+                    }
+
+                    const sweep = Math.min(360, Math.abs(Number(geometry.sweep) || 270));
+                    const direction = String(geometry.direction || "ccw").toLowerCase() === "cw" ? -1 : 1;
+                    const start = Number(geometry.startAngle) || 0;
+                    const segments = Math.max(1, Math.ceil(sweep / 5));
+
+                    for (let index = 1; index <= segments; index += 1) {
+                        const previousAngle = start + direction * sweep * (index - 1) / segments;
+                        const currentAngle = start + direction * sweep * index / segments;
+                        const previous = {
+                            x: geometry.center.x + geometry.radius * Math.cos(previousAngle * Math.PI / 180),
+                            y: geometry.center.y + geometry.radius * Math.sin(previousAngle * Math.PI / 180)
+                        };
+                        const current = {
+                            x: geometry.center.x + geometry.radius * Math.cos(currentAngle * Math.PI / 180),
+                            y: geometry.center.y + geometry.radius * Math.sin(currentAngle * Math.PI / 180)
+                        };
+
+                        if (distanceToSegment(point, previous, current) <= tolerance) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                /*
                  * A rigid body is a shape, so it is picked
                  * anywhere inside or on its outline rather
                  * than only at its position anchor. The test
@@ -914,18 +1041,24 @@ export function objectAtPoint(
                  * easy to click as a rectangular one.
                  */
                 if (isRectangleLike(object)) {
+                    if (isGain(object)) {
+                        const points = gainTrianglePoints(object);
+
+                        return pointInPolygon(point, points) ||
+                            distanceToPolygon(point, points) <= tolerance;
+                    }
+
+                    const corners = enggFeatureGeometry.definingPoints(
+                        geometry,
+                        object.type === "rigid-body"
+                            ? enggFeatureGeometry.rigidBodyShape(geometry)
+                            : "rectangle"
+                    );
+
                     return (
-                        distanceToPolygon(
-                            point,
-                            enggFeatureGeometry.definingPoints(
-                                geometry,
-                                object.type ===
-                                    "rigid-body"
-                                    ? enggFeatureGeometry
-                                          .rigidBodyShape(geometry)
-                                    : "rectangle"
-                            )
-                        ) <= tolerance
+                        (isControlBlock(object) && pointInPolygon(point, corners)) ||
+                        distanceToPolygon(point, corners) <= tolerance ||
+                        pointInPolygon(point, corners)
                     );
                 }
 
@@ -1102,10 +1235,30 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.boundaryStress) {
+                    const angle = (Number(geometry.rotation) || 0) * Math.PI / 180;
+                    const dx = point.x - geometry.position.x - geometry.width / 2;
+                    const dy = point.y - geometry.position.y + geometry.height / 2;
+                    const x = dx * Math.cos(angle) + dy * Math.sin(angle);
+                    const y = -dx * Math.sin(angle) + dy * Math.cos(angle);
+                    if (Math.abs(x) <= geometry.width / 2 && Math.abs(y) <= geometry.height / 2) return true;
+                }
+                if (object.metadata?.boundaryStress && boundaryStressDrawing(geometry).paths.some(({ points }) =>
+                    points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance))) {
+                    return true;
+                }
+                if (object.metadata?.stressElement && stressArrowPaths(geometry).some(path =>
+                    path.some((end, index) => index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance))) {
+                    return true;
+                }
                 if (
                     object.type ===
                     "circle"
                 ) {
+                    if (isSum(object)) {
+                        return distance(point, geometry.center) <= Number(geometry.radius) + tolerance;
+                    }
+
                     return (
                         Math.abs(
                             distance(
@@ -1118,6 +1271,22 @@ export function objectAtPoint(
                     );
                 }
 
+                if (object.metadata?.thermodynamicsKind === "tank") {
+                    return tankPaths(geometry).some(path => path.some((end, index) =>
+                        index > 0 && distanceToSegment(point, path[index - 1], end) <= tolerance));
+                }
+                if (object.metadata?.thermodynamicsKind === "nozzle-diffuser") {
+                    return nozzleDiffuserPaths(geometry).some(([start, end]) => distanceToSegment(point, start, end) <= tolerance);
+                }
+                if (object.metadata?.thermodynamicsKind === "rankine-cycle") {
+                    const diagram = rankineCycleDiagram(geometry, object.metadata?.problemData);
+                    return diagram.paths.some(path => path.points.some((end, index) => index > 0 && distanceToSegment(point, path.points[index - 1], end) <= tolerance)) ||
+                        diagram.labels.some(label => distance(point, label.point) <= tolerance * 3);
+                }
+                if (object.metadata?.thermodynamicsKind === "turbine-compressor") {
+                    const points = turbineCompressorPoints(geometry);
+                    return points.some((end, index) => index > 0 && distanceToSegment(point, points[index - 1], end) <= tolerance);
+                }
                 if (isPistonCylinder(object)) {
                     const level = pistonFraction(geometry);
                     const local = (x, y) => cylinderPoint(geometry, x, y);
@@ -1369,7 +1538,11 @@ export function objectAtPoint(
                     object.type ===
                     "polyline"
                 ) {
-                    const pathPoints = object.metadata?.thermodynamicsKind === "process-path" ? processPathPoints(geometry) : geometry.points;
+                    const pathPoints = isSignalLine(object)
+                        ? signalLinePath(object, drawingState.objects)
+                        : object.metadata?.thermodynamicsKind === "process-path"
+                            ? processPathPoints(geometry)
+                            : geometry.points;
                     return pathPoints.some(
                         (
                             current,
@@ -1384,6 +1557,51 @@ export function objectAtPoint(
                                 current
                             ) <=
                             tolerance
+                    );
+                }
+
+                /*
+                 * ========================================================
+                 * A FREEFORM POLYGON IS A CLOSED REGION
+                 * ========================================================
+                 *
+                 * Its own vertex list is its outline, and the CLOSING edge -
+                 * the last vertex back to the first - is a real edge of the
+                 * shape, so it must be hit like any other. The generic
+                 * polyline branch above only walks consecutive pairs and
+                 * would leave that final side dead: clicking on the very edge
+                 * that closes the polygon would select nothing.
+                 *
+                 * A FILLED polygon is also picked from its interior, because
+                 * a region painted solid is one thing to the eye and the
+                 * student should be able to grab it anywhere inside - exactly
+                 * as a filled rectangle or circle is picked. An unfilled one
+                 * keeps the outline-only rule, so a large see-through
+                 * polygon does not block every click inside it.
+                 */
+                if (object.type === "freeform-polygon") {
+                    const vertices =
+                        (geometry.points || []).filter(Boolean);
+
+                    if (vertices.length < 3) {
+                        return false;
+                    }
+
+                    const filled =
+                        Boolean(object.style?.fill) &&
+                        object.style.fill !== "none";
+
+                    if (filled && pointInPolygon(point, vertices)) {
+                        return true;
+                    }
+
+                    return vertices.some(
+                        (vertex, index) =>
+                            distanceToSegment(
+                                point,
+                                vertex,
+                                vertices[(index + 1) % vertices.length]
+                            ) <= tolerance
                     );
                 }
 
@@ -1525,6 +1743,32 @@ function analysisObjectHit(
                         point,
                         marker.position
                     ) <= tolerance * 2
+            )
+        ) {
+            return true;
+        }
+
+        /*
+         * A REFERENCE POINT IS A SMALL MARK, SO IT GETS A TOUCH-SIZED TARGET.
+         *
+         * The reserved region it sits in is a box the student draws in; the
+         * point itself is a dot. With a finger, aiming at the dot must work
+         * without the box swallowing the gesture - so the dot's own pick radius
+         * grows to a coverable size for the current input, and nothing about
+         * the marker's drawn size or its coordinate changes.
+         */
+        const referenceTarget = minimumTargetRadius(
+            undefined,
+            drawingState.camera.zoom
+        );
+
+        if (
+            referenceTarget > 0 &&
+            Array.isArray(geometry.referencePositions) &&
+            geometry.referencePositions.some(
+                marker =>
+                    marker.position &&
+                    distance(point, marker.position) <= referenceTarget
             )
         ) {
             return true;
@@ -1682,6 +1926,34 @@ function analysisObjectHit(
      * also where the source force's own application point is, so
      * clicking the two in turn is a natural way to work.
      */
+    /*
+     * THE POINT'S OWN MARK GETS A TOUCH-SIZED TARGET.
+     *
+     * A Point and a Particle are drawn four pixels across. A mouse picks them
+     * by their ink, as it always has; a finger is offered a target it can
+     * cover. `minimumTargetRadius` is zero for a mouse, so desktop precision is
+     * untouched - only the invisible pick radius grows.
+     */
+    const touchMark = minimumTargetRadius(
+        undefined,
+        drawingState.camera.zoom
+    );
+
+    if (touchMark > 0) {
+        const mark =
+            geometry.position || geometry.point || null;
+
+        if (
+            mark &&
+            Number.isFinite(mark.x) &&
+            Number.isFinite(mark.y) &&
+            distance(point, mark) <=
+                Math.max(touchMark, pick)
+        ) {
+            return true;
+        }
+    }
+
     return Boolean(
         geometry.position &&
         distance(
@@ -1968,6 +2240,8 @@ export function pickDerivedMagnitude(
         const object =
             drawingState.objects[i];
 
+        if (object.visible === false) continue;
+
         const annotations =
             model.derivedAnnotations(
                 object,
@@ -1995,7 +2269,7 @@ export function pickDerivedMagnitude(
                 !model.textBoundsContainPoint(
                     bounds,
                     point,
-                    padding
+                    padding + (object.type === "force" ? 4 / Math.max(drawingState.camera.zoom, 0.25) : 0)
                 )
             ) {
                 continue;
