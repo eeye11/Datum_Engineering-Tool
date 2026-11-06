@@ -134,10 +134,14 @@ async function main() {
 
     debug("goto"); await page.goto(baseUrl, { waitUntil: "domcontentloaded" }); debug("loaded");
     await page.waitForSelector(".drawing-canvas", { state: "attached" });
-    await page.click("text=Engineering Drawing");
+    /*
+     * NO WORKSPACE TAB TO CLICK. One workspace since the Written Solution tab
+     * was removed, so there is no tab strip and the drawing section is the
+     * page; the click used to wait on text that now exists only in a comment.
+     */
     await sleep(300);
 
-    debug("tab clicked");
+    debug("workspace ready");
     const box = await page.evaluate(() => {
         const r = document.querySelector(".drawing-canvas").getBoundingClientRect();
         return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -165,7 +169,7 @@ async function main() {
     };
     /* Accept a creation popup (length/radius) or any modal by pressing Enter. */
     const VALUES = { width: "60", height: "40", length: "80", radius: "30", angle: "30", magnitude: "100", sides: "5" };
-    const acceptPopups = async () => {
+    const acceptPopups = async (toolId) => {
         for (let round = 0; round < 6; round++) {
             const popup = await page.evaluate(() => {
                 const shown = el => el && getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
@@ -203,7 +207,20 @@ async function main() {
                 const key = Object.keys(VALUES).find(k => popup.label.includes(k));
                 await page.locator(".drawing-creation-dimension [data-creation-input], .drawing-creation-dimension input[type=text]").first().fill(VALUES[key] || "50");
             }
-            await page.keyboard.press("Enter");
+            /*
+             * COMMIT KEYS. A callout is committed by plain Enter - a balloon
+             * holds one short token, and Enter is the key a student reaches
+             * for. A note is prose, so Enter keeps meaning "new line" and
+             * Ctrl+Enter (Cmd on a Mac) is the commit: the same rule the
+             * note editor itself documents. Sending plain Enter to a note
+             * would only write a line break and leave the editor open, so the
+             * object would be created with no text at all.
+             */
+            if (toolId === "note") {
+                await page.keyboard.press("Control+Enter");
+            } else {
+                await page.keyboard.press("Enter");
+            }
             await sleep(150);
         }
     };
@@ -371,7 +388,7 @@ async function main() {
                     : action;
                 debug("click", spot.x, spot.y); await click(spot);
             }
-            await acceptPopups();
+            await acceptPopups(toolId);
             steps.push(await page.evaluate(() => window.enggDrawing.state.objects.length));
         }
         if (category === "ANNOTATE") {

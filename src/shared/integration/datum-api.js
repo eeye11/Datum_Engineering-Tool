@@ -38,6 +38,7 @@ import enggDrawingReference from "../references/drawing-reference.js";
 import { enggDrawingSheets } from "../../features/workspace/index.js";
 import { loadDrawing } from "../../features/workspace/commands/document-commands.js";
 import { render as renderSolution } from "../solution/written-references.js";
+import enggSolutionState from "../solution/solution-state.js";
 import { onDatumEvent } from "./events.js";
 
 /*
@@ -47,15 +48,23 @@ import { onDatumEvent } from "./events.js";
 export const API_VERSION = 1;
 
 /*
- * THE WRITTEN SOLUTION'S EDITOR.
+ * THE WRITTEN SOLUTION'S SOURCE.
  *
- * It used to be the `writingCode` textarea in the three-column panel. The
- * workspace redesign made it `solutionEditor`, and this is the ONE line that
- * changes for the public API - the callers of `getSolution` and `setSolution`
- * see exactly the same shape of result as before.
+ * It used to be a textarea on the page - first `writingCode` in the
+ * three-column panel, then `solutionEditor` in the workspace redesign. The
+ * Written Solution workspace has since been removed from the page entirely,
+ * but the API contract stands: an OCR review screen or a course platform
+ * embeds Datum and hands over LaTeX through exactly these calls.
+ *
+ * So the source now lives in the solution state module, which keeps it in
+ * memory and in the session draft - the same place the workspace's editor
+ * wrote through. The page lookup stays first, so a page that does still show
+ * an editor keeps its binding, and the API's result shape is unchanged for
+ * every caller either way.
  */
 function solutionSource() {
-    return document.getElementById("solutionEditor");
+    return document.getElementById("solutionEditor")
+        || { get value() { return enggSolutionState.getSource(); }, set value(text) { enggSolutionState.setSource(text); } };
 }
 
 /*
