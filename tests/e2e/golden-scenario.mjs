@@ -533,23 +533,26 @@ async function main() {
     const body = await page.evaluate(() => JSON.parse(JSON.stringify(window.enggDrawingSheets.serializeDocumentBody())));
     results["document/serialized"] = { body, errors: [...errors] };
 
-    /* Written solution: a drawing reference renders from a sheet. */
+    /* Written solution: a drawing reference renders from a sheet.
+     *
+     * The Written Solution TAB is gone - one workspace now - but the API and
+     * the solution state module remain. There is no editor and no preview
+     * element on the page any more, so what is asserted here is what an embed
+     * actually gets: setSolution accepts the LaTeX and getSolution reads it
+     * back, with the reference resolved to its sheet.
+     */
     errors = [];
     await acceptPopups(); await escape();
-    await page.click("text=Written Solution");
     await sleep(200);
     results["solution/render"] = await page.evaluate(async () => {
         const sheets = window.enggDrawingSheets.all();
-        try {
-            window.datum.setSolution(`Equilibrium of the beam
-
-[DRAWING_REFERENCE:${sheets[1].id}]
-
-Then $F = ma$.`);
-        } catch (e) { return { thrown: String(e.message) }; }
-        await new Promise(r => setTimeout(r, 400));
-        const out = document.getElementById("solutionPreview");
-        return { html: out ? out.innerHTML.replace(/\s+/g, " ").slice(0, 20000) : null };
+        const set = window.datum.setSolution(`Equilibrium of the beam\n\n[DRAWING_REFERENCE:${sheets[1].id}]\n\nThen $F = ma$.`);
+        if (!set?.ok) { return { thrown: set?.detail || "setSolution failed" }; }
+        const got = window.datum.getSolution();
+        return {
+            latex: got?.latex ?? null,
+            references: got?.references ?? null
+        };
     });
     results["solution/render"].errors = [...errors];
 
