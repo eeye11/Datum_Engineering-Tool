@@ -79,18 +79,18 @@ const LONG_PRESS_TYPES = new Set(["touch", "pen"]);
  * ============================================================ */
 
 export function screenDistance(a, b) {
-    if (!a || !b) {
-        return Infinity;
-    }
+  if (!a || !b) {
+    return Infinity;
+  }
 
-    return Math.hypot(b.x - a.x, b.y - a.y);
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 export function midpointOf(a, b) {
-    return {
-        x: (a.x + b.x) / 2,
-        y: (a.y + b.y) / 2
-    };
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
 }
 
 /*
@@ -101,16 +101,16 @@ export function midpointOf(a, b) {
  * no baseline distance, and dividing by it would send the zoom to infinity.
  */
 export function pinchScale(initialDistance, currentDistance) {
-    if (
-        !Number.isFinite(initialDistance) ||
-        !Number.isFinite(currentDistance) ||
-        initialDistance < 1 ||
-        currentDistance <= 0
-    ) {
-        return 1;
-    }
+  if (
+    !Number.isFinite(initialDistance) ||
+    !Number.isFinite(currentDistance) ||
+    initialDistance < 1 ||
+    currentDistance <= 0
+  ) {
+    return 1;
+  }
 
-    return currentDistance / initialDistance;
+  return currentDistance / initialDistance;
 }
 
 /* ============================================================
@@ -141,412 +141,417 @@ export function pinchScale(initialDistance, currentDistance) {
  *     onInteractionCancelled(pointerIds)  the one-pointer gesture was rolled back
  */
 export function createGestureRecognizer(callbacks = {}) {
-    /*
-     * The tracked pointers, by id: where each was pressed and where it is now.
-     * A Map, so identity is the browser's pointer id and never an index that a
-     * second finger could shift.
-     */
-    const pointers = new Map();
+  /*
+   * The tracked pointers, by id: where each was pressed and where it is now.
+   * A Map, so identity is the browser's pointer id and never an index that a
+   * second finger could shift.
+   */
+  const pointers = new Map();
 
-    /* The pointer currently owning a one-pointer interaction, or null. */
-    let ownerId = null;
+  /* The pointer currently owning a one-pointer interaction, or null. */
+  let ownerId = null;
 
-    /* "pressed" | "drag" - the state of the one-pointer interaction. */
-    let phase = "idle";
+  /* "pressed" | "drag" - the state of the one-pointer interaction. */
+  let phase = "idle";
 
-    /* The long-press deadline for the current pointer. */
-    let longPressTimer = null;
+  /* The long-press deadline for the current pointer. */
+  let longPressTimer = null;
 
-    /* The two-pointer navigation, while it is running. */
-    let navigation = null;
+  /* The two-pointer navigation, while it is running. */
+  let navigation = null;
 
-    function clearLongPress() {
-        if (longPressTimer) {
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
+  function clearLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
+  function screenOf(event, fallback = null) {
+    if (
+      event &&
+      Number.isFinite(event.clientX) &&
+      Number.isFinite(event.clientY)
+    ) {
+      return { x: event.clientX, y: event.clientY };
+    }
+
+    return fallback;
+  }
+
+  function trackedCount() {
+    return pointers.size;
+  }
+
+  /* The two pointers a navigation gesture is measured from. */
+  function navigationPointers() {
+    return [...pointers.values()].slice(0, 2);
+  }
+
+  function beginNavigation(event) {
+    if (navigation) {
+      return;
+    }
+
+    const pair = navigationPointers();
+
+    if (pair.length < 2) {
+      return;
+    }
+
+    const a = pair[0];
+    const b = pair[1];
+
+    navigation = {
+      initialDistance: screenDistance(a.current, b.current),
+      startMidpoint: midpointOf(a.current, b.current),
+      lastMidpoint: midpointOf(a.current, b.current),
+      /* The zoom the pinch began from, read once by the caller. */
+      startZoom: null,
+    };
+
+    callbacks.onNavigationStart?.(a, b, event);
+  }
+
+  /*
+   * One navigation frame: how far the midpoint travelled, and how far the two
+   * pointers have spread. The caller applies it to the camera - this module
+   * never touches the viewport itself, so a test can measure the numbers.
+   */
+  function moveNavigation(event) {
+    const pair = navigationPointers();
+
+    if (!navigation || pair.length < 2) {
+      return;
+    }
+
+    const a = pair[0];
+    const b = pair[1];
+
+    const midpoint = midpointOf(a.current, b.current);
+
+    const delta = {
+      x: midpoint.x - navigation.lastMidpoint.x,
+      y: midpoint.y - navigation.lastMidpoint.y,
+    };
+
+    const distance = screenDistance(a.current, b.current);
+
+    navigation.lastMidpoint = midpoint;
+
+    callbacks.onNavigationMove?.(
+      {
+        delta,
+        midpoint,
+        startMidpoint: navigation.startMidpoint,
+        distance,
+        initialDistance: navigation.initialDistance,
+        scale: pinchScale(navigation.initialDistance, distance),
+      },
+      event,
+    );
+  }
+
+  function endNavigation() {
+    if (!navigation) {
+      return;
+    }
+
+    navigation = null;
+
+    callbacks.onNavigationEnd?.();
+  }
+
+  /*
+   * Stop the one-pointer interaction WITHOUT committing it. The caller rolls
+   * back whatever it had begun; this only forgets the gesture, so a release
+   * that arrives later cannot resume it.
+   */
+  function cancelOwner() {
+    clearLongPress();
+
+    const id = ownerId;
+
+    phase = "idle";
+    ownerId = null;
+
+    if (id !== null && id !== undefined) {
+      callbacks.onInteractionCancelled?.([id]);
+    }
+  }
+
+  return {
+    press(event) {
+      if (!event || !Number.isFinite(event.pointerId)) {
+        return false;
+      }
+
+      /*
+       * A POINTER THAT IS ALREADY TRACKED IS THE SAME GESTURE.
+       *
+       * Some browsers re-deliver a pointerdown for a pointer that is
+       * already down (a synthetic re-send, a captured pointer's second
+       * dispatch). Treating it as a new press would arm a second session
+       * and could commit the object twice, so it is ignored outright.
+       */
+      if (pointers.has(event.pointerId)) {
+        return false;
+      }
+
+      if (pointers.size >= MAX_POINTERS) {
+        return false;
+      }
+
+      /*
+       * A MOUSE IS NEVER PART OF A TWO-POINTER GESTURE.
+       *
+       * A digitising tablet reports the pen and the mouse position as
+       * separate mouse pointers; counting them together would start a
+       * pinch every time a stylus touched down beside a resting cursor.
+       * Only touch and pen pointers are collected for navigation, and a
+       * stray mouse press while touching simply does nothing else.
+       */
+      if (
+        event.pointerType === "mouse" &&
+        pointers.size > 0 &&
+        [...pointers.values()].some((pointer) => pointer.type !== "mouse")
+      ) {
+        return false;
+      }
+
+      const point = screenOf(event);
+
+      if (!point) {
+        return false;
+      }
+
+      pointers.set(event.pointerId, {
+        id: event.pointerId,
+        type: event.pointerType || "mouse",
+        start: point,
+        current: point,
+      });
+
+      /*
+       * THE SECOND POINTER TURNS A DRAWING GESTURE INTO NAVIGATION.
+       *
+       * The rule of section 4.6, and it is order matters here: the
+       * one-pointer operation is cancelled FIRST, so the tool restores
+       * its last committed state before the camera moves a pixel.
+       */
+      if (pointers.size >= 2) {
+        if (ownerId !== null && ownerId !== undefined) {
+          cancelOwner();
         }
-    }
 
-    function screenOf(event, fallback = null) {
-        if (event && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-            return { x: event.clientX, y: event.clientY };
-        }
+        beginNavigation(event);
 
-        return fallback;
-    }
+        return false;
+      }
 
-    function trackedCount() {
-        return pointers.size;
-    }
+      ownerId = event.pointerId;
+      phase = "pressed";
 
-    /* The two pointers a navigation gesture is measured from. */
-    function navigationPointers() {
-        return [...pointers.values()].slice(0, 2);
-    }
-
-    function beginNavigation(event) {
-        if (navigation) {
-            return;
-        }
-
-        const pair = navigationPointers();
-
-        if (pair.length < 2) {
-            return;
-        }
-
-        const a = pair[0];
-        const b = pair[1];
-
-        navigation = {
-            initialDistance: screenDistance(a.current, b.current),
-            startMidpoint: midpointOf(a.current, b.current),
-            lastMidpoint: midpointOf(a.current, b.current),
-            /* The zoom the pinch began from, read once by the caller. */
-            startZoom: null
-        };
-
-        callbacks.onNavigationStart?.(a, b, event);
-    }
-
-    /*
-     * One navigation frame: how far the midpoint travelled, and how far the two
-     * pointers have spread. The caller applies it to the camera - this module
-     * never touches the viewport itself, so a test can measure the numbers.
-     */
-    function moveNavigation(event) {
-        const pair = navigationPointers();
-
-        if (!navigation || pair.length < 2) {
-            return;
-        }
-
-        const a = pair[0];
-        const b = pair[1];
-
-        const midpoint = midpointOf(a.current, b.current);
-
-        const delta = {
-            x: midpoint.x - navigation.lastMidpoint.x,
-            y: midpoint.y - navigation.lastMidpoint.y
-        };
-
-        const distance = screenDistance(a.current, b.current);
-
-        navigation.lastMidpoint = midpoint;
-
-        callbacks.onNavigationMove?.(
-            {
-                delta,
-                midpoint,
-                startMidpoint: navigation.startMidpoint,
-                distance,
-                initialDistance: navigation.initialDistance,
-                scale: pinchScale(navigation.initialDistance, distance)
-            },
-            event
-        );
-    }
-
-    function endNavigation() {
-        if (!navigation) {
-            return;
-        }
-
-        navigation = null;
-
-        callbacks.onNavigationEnd?.();
-    }
-
-    /*
-     * Stop the one-pointer interaction WITHOUT committing it. The caller rolls
-     * back whatever it had begun; this only forgets the gesture, so a release
-     * that arrives later cannot resume it.
-     */
-    function cancelOwner() {
+      /*
+       * A LONG PRESS IS ONLY ARMED FOR A FINGER OR A PEN. A mouse has a
+       * right button, and pressing one is not a request for a menu.
+       */
+      if (LONG_PRESS_TYPES.has(event.pointerType || "")) {
         clearLongPress();
 
-        const id = ownerId;
+        const pressed = { ...point };
+        const pressedId = event.pointerId;
 
-        phase = "idle";
-        ownerId = null;
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
 
-        if (id !== null && id !== undefined) {
-            callbacks.onInteractionCancelled?.([id]);
+          /*
+           * A gesture that has already become a drag, or that has
+           * been stopped, is not a long press any more.
+           */
+          if (ownerId !== pressedId || phase !== "pressed") {
+            return;
+          }
+
+          phase = "hold";
+
+          callbacks.onLongPress?.(event, pressed);
+        }, LONG_PRESS_MS);
+      }
+
+      return true;
+    },
+
+    move(event) {
+      if (!event || !Number.isFinite(event.pointerId)) {
+        return;
+      }
+
+      const pointer = pointers.get(event.pointerId);
+
+      if (!pointer) {
+        return;
+      }
+
+      const point = screenOf(event, pointer.current);
+
+      pointer.current = point;
+
+      /* Two (or more) pointers: the movement belongs to navigation. */
+      if (navigation) {
+        moveNavigation(event);
+
+        return;
+      }
+
+      if (event.pointerId !== ownerId) {
+        return;
+      }
+
+      const travelled = screenDistance(pointer.start, point);
+
+      if (phase === "pressed") {
+        if (travelled < TAP_SLOP_PX) {
+          return;
         }
-    }
 
-    return {
-        press(event) {
-            if (!event || !Number.isFinite(event.pointerId)) {
-                return false;
-            }
+        /*
+         * A DRAG. The long press is abandoned: the student is drawing,
+         * not asking for a menu.
+         */
+        clearLongPress();
 
-            /*
-             * A POINTER THAT IS ALREADY TRACKED IS THE SAME GESTURE.
-             *
-             * Some browsers re-deliver a pointerdown for a pointer that is
-             * already down (a synthetic re-send, a captured pointer's second
-             * dispatch). Treating it as a new press would arm a second session
-             * and could commit the object twice, so it is ignored outright.
-             */
-            if (pointers.has(event.pointerId)) {
-                return false;
-            }
+        phase = "drag";
 
-            if (pointers.size >= MAX_POINTERS) {
-                return false;
-            }
+        callbacks.onDragStart?.(event);
 
-            /*
-             * A MOUSE IS NEVER PART OF A TWO-POINTER GESTURE.
-             *
-             * A digitising tablet reports the pen and the mouse position as
-             * separate mouse pointers; counting them together would start a
-             * pinch every time a stylus touched down beside a resting cursor.
-             * Only touch and pen pointers are collected for navigation, and a
-             * stray mouse press while touching simply does nothing else.
-             */
-            if (
-                event.pointerType === "mouse" &&
-                pointers.size > 0 &&
-                [...pointers.values()].some((pointer) => pointer.type !== "mouse")
-            ) {
-                return false;
-            }
+        return;
+      }
 
-            const point = screenOf(event);
+      if (phase === "hold" && travelled > LONG_PRESS_SLOP_PX) {
+        /*
+         * The finger was held and has now moved: the press it was
+         * held for is not a long press any more, and the movement is
+         * an ordinary drag from where it started.
+         */
+        phase = "drag";
 
-            if (!point) {
-                return false;
-            }
+        callbacks.onDragStart?.(event);
 
-            pointers.set(event.pointerId, {
-                id: event.pointerId,
-                type: event.pointerType || "mouse",
-                start: point,
-                current: point
-            });
+        return;
+      }
 
-            /*
-             * THE SECOND POINTER TURNS A DRAWING GESTURE INTO NAVIGATION.
-             *
-             * The rule of section 4.6, and it is order matters here: the
-             * one-pointer operation is cancelled FIRST, so the tool restores
-             * its last committed state before the camera moves a pixel.
-             */
-            if (pointers.size >= 2) {
-                if (ownerId !== null && ownerId !== undefined) {
-                    cancelOwner();
-                }
+      if (phase === "drag") {
+        callbacks.onDragMove?.(event);
+      }
+    },
 
-                beginNavigation(event);
+    release(event) {
+      if (!event || !Number.isFinite(event.pointerId)) {
+        return;
+      }
 
-                return false;
-            }
+      const pointer = pointers.get(event.pointerId);
 
-            ownerId = event.pointerId;
-            phase = "pressed";
+      if (!pointer) {
+        return;
+      }
 
-            /*
-             * A LONG PRESS IS ONLY ARMED FOR A FINGER OR A PEN. A mouse has a
-             * right button, and pressing one is not a request for a menu.
-             */
-            if (LONG_PRESS_TYPES.has(event.pointerType || "")) {
-                clearLongPress();
+      if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+        pointer.current = { x: event.clientX, y: event.clientY };
+      }
 
-                const pressed = { ...point };
-                const pressedId = event.pointerId;
+      pointers.delete(event.pointerId);
 
-                longPressTimer = setTimeout(() => {
-                    longPressTimer = null;
+      /* A LIFTED NAVIGATION POINTER ENDS THE NAVIGATION, cleanly. */
+      if (navigation) {
+        endNavigation();
 
-                    /*
-                     * A gesture that has already become a drag, or that has
-                     * been stopped, is not a long press any more.
-                     */
-                    if (ownerId !== pressedId || phase !== "pressed") {
-                        return;
-                    }
+        return;
+      }
 
-                    phase = "hold";
+      if (event.pointerId !== ownerId) {
+        return;
+      }
 
-                    callbacks.onLongPress?.(event, pressed);
-                }, LONG_PRESS_MS);
-            }
+      const wasDrag = phase === "drag";
+      const wasPressed = phase === "pressed";
 
-            return true;
-        },
+      clearLongPress();
 
-        move(event) {
-            if (!event || !Number.isFinite(event.pointerId)) {
-                return;
-            }
+      phase = "idle";
+      ownerId = null;
 
-            const pointer = pointers.get(event.pointerId);
+      if (wasDrag) {
+        callbacks.onDragEnd?.(event);
 
-            if (!pointer) {
-                return;
-            }
+        return;
+      }
 
-            const point = screenOf(event, pointer.current);
+      if (wasPressed) {
+        callbacks.onTap?.(event);
+      }
+    },
 
-            pointer.current = point;
+    cancel(event) {
+      const id =
+        event && Number.isFinite(event.pointerId) ? event.pointerId : null;
 
-            /* Two (or more) pointers: the movement belongs to navigation. */
-            if (navigation) {
-                moveNavigation(event);
+      if (id !== null) {
+        pointers.delete(id);
+      }
 
-                return;
-            }
-
-            if (event.pointerId !== ownerId) {
-                return;
-            }
-
-            const travelled = screenDistance(pointer.start, point);
-
-            if (phase === "pressed") {
-                if (travelled < TAP_SLOP_PX) {
-                    return;
-                }
-
-                /*
-                 * A DRAG. The long press is abandoned: the student is drawing,
-                 * not asking for a menu.
-                 */
-                clearLongPress();
-
-                phase = "drag";
-
-                callbacks.onDragStart?.(event);
-
-                return;
-            }
-
-            if (phase === "hold" && travelled > LONG_PRESS_SLOP_PX) {
-                /*
-                 * The finger was held and has now moved: the press it was
-                 * held for is not a long press any more, and the movement is
-                 * an ordinary drag from where it started.
-                 */
-                phase = "drag";
-
-                callbacks.onDragStart?.(event);
-
-                return;
-            }
-
-            if (phase === "drag") {
-                callbacks.onDragMove?.(event);
-            }
-        },
-
-        release(event) {
-            if (!event || !Number.isFinite(event.pointerId)) {
-                return;
-            }
-
-            const pointer = pointers.get(event.pointerId);
-
-            if (!pointer) {
-                return;
-            }
-
-            if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
-                pointer.current = { x: event.clientX, y: event.clientY };
-            }
-
-            pointers.delete(event.pointerId);
-
-            /* A LIFTED NAVIGATION POINTER ENDS THE NAVIGATION, cleanly. */
-            if (navigation) {
-                endNavigation();
-
-                return;
-            }
-
-            if (event.pointerId !== ownerId) {
-                return;
-            }
-
-            const wasDrag = phase === "drag";
-            const wasPressed = phase === "pressed";
-
-            clearLongPress();
-
-            phase = "idle";
-            ownerId = null;
-
-            if (wasDrag) {
-                callbacks.onDragEnd?.(event);
-
-                return;
-            }
-
-            if (wasPressed) {
-                callbacks.onTap?.(event);
-            }
-        },
-
-        cancel(event) {
-            const id = event && Number.isFinite(event.pointerId) ? event.pointerId : null;
-
-            if (id !== null) {
-                pointers.delete(id);
-            }
-
-            if (navigation) {
-                /*
-                 * A CANCELLED NAVIGATION DOES NOT RESUME THE DRAWING.
-                 *
-                 * The owner was already cancelled when the second pointer
-                 * arrived; this only ends the camera movement. The clean
-                 * `idle` state that follows is what stops the interrupted
-                 * operation from picking itself back up.
-                 */
-                if (pointers.size < 2) {
-                    endNavigation();
-                }
-
-                return;
-            }
-
-            if (id !== null && id !== ownerId) {
-                return;
-            }
-
-            cancelOwner();
-        },
-
-        /* Drop EVERYTHING - a window blur, an unmount, a lost capture. */
-        abandon() {
-            cancelOwner();
-            endNavigation();
-            pointers.clear();
-        },
-
-        isTracking(pointerId) {
-            return pointers.has(pointerId);
-        },
-
-        activeCount() {
-            return trackedCount();
-        },
-
-        /* What the one-pointer interaction is doing right now. */
-        state() {
-            if (navigation) {
-                return "navigate";
-            }
-
-            return phase;
-        },
-
-        reset() {
-            this.abandon();
+      if (navigation) {
+        /*
+         * A CANCELLED NAVIGATION DOES NOT RESUME THE DRAWING.
+         *
+         * The owner was already cancelled when the second pointer
+         * arrived; this only ends the camera movement. The clean
+         * `idle` state that follows is what stops the interrupted
+         * operation from picking itself back up.
+         */
+        if (pointers.size < 2) {
+          endNavigation();
         }
-    };
+
+        return;
+      }
+
+      if (id !== null && id !== ownerId) {
+        return;
+      }
+
+      cancelOwner();
+    },
+
+    /* Drop EVERYTHING - a window blur, an unmount, a lost capture. */
+    abandon() {
+      cancelOwner();
+      endNavigation();
+      pointers.clear();
+    },
+
+    isTracking(pointerId) {
+      return pointers.has(pointerId);
+    },
+
+    activeCount() {
+      return trackedCount();
+    },
+
+    /* What the one-pointer interaction is doing right now. */
+    state() {
+      if (navigation) {
+        return "navigate";
+      }
+
+      return phase;
+    },
+
+    reset() {
+      this.abandon();
+    },
+  };
 }
 
 export default createGestureRecognizer;

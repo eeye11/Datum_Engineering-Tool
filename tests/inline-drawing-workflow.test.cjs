@@ -112,7 +112,11 @@ async function run() {
 
   if (model && state) {
     const before = (state.objects || []).length;
-    const object = model.geometryFactories.line({ x: 0, y: 0 }, { x: 80, y: 0 }, {});
+    const object = model.geometryFactories.line(
+      { x: 0, y: 0 },
+      { x: 80, y: 0 },
+      {},
+    );
 
     model.addObject(state, object);
     model.commitDrawingChange(state, model.snapshotDrawing(state));

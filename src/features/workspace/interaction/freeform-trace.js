@@ -85,7 +85,7 @@ const TOOL = "freeform-polygon";
  * ============================================================ */
 
 function distance(a, b) {
-    return Math.hypot(b.x - a.x, b.y - a.y);
+  return Math.hypot(b.x - a.x, b.y - a.y);
 }
 
 /*
@@ -93,24 +93,24 @@ function distance(a, b) {
  * the sampling step (is this point far enough from the last one?) and RDP.
  */
 export function pointSegmentDistance(point, a, b) {
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
 
-    const lengthSquared = dx * dx + dy * dy;
+  const lengthSquared = dx * dx + dy * dy;
 
-    if (lengthSquared <= 1e-12) {
-        return distance(point, a);
-    }
+  if (lengthSquared <= 1e-12) {
+    return distance(point, a);
+  }
 
-    const t = Math.max(
-        0,
-        Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared)
-    );
+  const t = Math.max(
+    0,
+    Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared),
+  );
 
-    return distance(point, {
-        x: a.x + t * dx,
-        y: a.y + t * dy
-    });
+  return distance(point, {
+    x: a.x + t * dx,
+    y: a.y + t * dy,
+  });
 }
 
 /*
@@ -121,60 +121,64 @@ export function pointSegmentDistance(point, a, b) {
  * point it closes from.
  */
 export function simplifyPolyline(points, tolerance) {
-    const source = Array.isArray(points) ? points : [];
+  const source = Array.isArray(points) ? points : [];
 
-    if (source.length <= 2) {
-        return source.map((point) => ({ x: point.x, y: point.y }));
+  if (source.length <= 2) {
+    return source.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  const limit = Math.max(Number(tolerance) || 0, 0);
+
+  if (limit <= 0) {
+    return source.map((point) => ({ x: point.x, y: point.y }));
+  }
+
+  const keep = new Uint8Array(source.length);
+
+  keep[0] = 1;
+  keep[source.length - 1] = 1;
+
+  const stack = [[0, source.length - 1]];
+
+  while (stack.length) {
+    const [first, last] = stack.pop();
+
+    if (last <= first + 1) {
+      continue;
     }
 
-    const limit = Math.max(Number(tolerance) || 0, 0);
+    let furthest = -1;
+    let furthestDistance = 0;
 
-    if (limit <= 0) {
-        return source.map((point) => ({ x: point.x, y: point.y }));
+    for (let index = first + 1; index < last; index += 1) {
+      const offset = pointSegmentDistance(
+        source[index],
+        source[first],
+        source[last],
+      );
+
+      if (offset > furthestDistance) {
+        furthestDistance = offset;
+        furthest = index;
+      }
     }
 
-    const keep = new Uint8Array(source.length);
+    if (furthest > 0 && furthestDistance > limit) {
+      keep[furthest] = 1;
 
-    keep[0] = 1;
-    keep[source.length - 1] = 1;
-
-    const stack = [[0, source.length - 1]];
-
-    while (stack.length) {
-        const [first, last] = stack.pop();
-
-        if (last <= first + 1) {
-            continue;
-        }
-
-        let furthest = -1;
-        let furthestDistance = 0;
-
-        for (let index = first + 1; index < last; index += 1) {
-            const offset = pointSegmentDistance(source[index], source[first], source[last]);
-
-            if (offset > furthestDistance) {
-                furthestDistance = offset;
-                furthest = index;
-            }
-        }
-
-        if (furthest > 0 && furthestDistance > limit) {
-            keep[furthest] = 1;
-
-            stack.push([first, furthest], [furthest, last]);
-        }
+      stack.push([first, furthest], [furthest, last]);
     }
+  }
 
-    const simplified = [];
+  const simplified = [];
 
-    for (let index = 0; index < source.length; index += 1) {
-        if (keep[index]) {
-            simplified.push({ x: source[index].x, y: source[index].y });
-        }
+  for (let index = 0; index < source.length; index += 1) {
+    if (keep[index]) {
+      simplified.push({ x: source[index].x, y: source[index].y });
     }
+  }
 
-    return simplified;
+  return simplified;
 }
 
 /*
@@ -182,15 +186,15 @@ export function simplifyPolyline(points, tolerance) {
  * jitters in place must not produce a chain of zero-length edges.
  */
 export function appendTracePoint(points, point, minimum) {
-    const last = points[points.length - 1];
+  const last = points[points.length - 1];
 
-    if (last && distance(last, point) < minimum) {
-        return false;
-    }
+  if (last && distance(last, point) < minimum) {
+    return false;
+  }
 
-    points.push({ x: point.x, y: point.y });
+  points.push({ x: point.x, y: point.y });
 
-    return true;
+  return true;
 }
 
 /* ============================================================
@@ -198,11 +202,11 @@ export function appendTracePoint(points, point, minimum) {
  * ============================================================ */
 
 function screenPixelsToUnits(pixels) {
-    const scale =
-        enggDrawingState.BASE_PIXELS_PER_UNIT *
-        Math.max(Number(drawingState.camera?.zoom) || 1, 0.25);
+  const scale =
+    enggDrawingState.BASE_PIXELS_PER_UNIT *
+    Math.max(Number(drawingState.camera?.zoom) || 1, 0.25);
 
-    return pixels / Math.max(scale, 1e-9);
+  return pixels / Math.max(scale, 1e-9);
 }
 
 /*
@@ -214,44 +218,46 @@ function screenPixelsToUnits(pixels) {
  * completely untouched.
  */
 export function beginFreeformTrace(event) {
-    if (
-        drawingState.activeTool !== TOOL ||
-        !event ||
-        event.button !== 0 ||
-        editorState.freeformTrace
-    ) {
-        return false;
-    }
+  if (
+    drawingState.activeTool !== TOOL ||
+    !event ||
+    event.button !== 0 ||
+    editorState.freeformTrace
+  ) {
+    return false;
+  }
 
-    const resolution = resolvePointerEvent(event);
+  const resolution = resolvePointerEvent(event);
 
-    const start =
-        resolution.effectiveConstructionPoint ||
-        resolution.rawPointerPoint;
+  const start =
+    resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
 
-    if (!start) {
-        return false;
-    }
+  if (!start) {
+    return false;
+  }
 
-    /*
-     * A TRACE CONTINUES A POLYGON THAT IS ALREADY BEING CLICKED? No - the two
-     * workflows are alternatives. If vertices have already been placed by
-     * clicking, this press is the next CLICK vertex and belongs to the click
-     * workflow, so the trace does not start.
-     */
-    const placed = drawingState.interaction?.points;
+  /*
+   * A TRACE CONTINUES A POLYGON THAT IS ALREADY BEING CLICKED? No - the two
+   * workflows are alternatives. If vertices have already been placed by
+   * clicking, this press is the next CLICK vertex and belongs to the click
+   * workflow, so the trace does not start.
+   */
+  const placed = drawingState.interaction?.points;
 
-    editorState.freeformTrace = {
-        pointerId: event.pointerId,
-        startScreen: { x: event.clientX, y: event.clientY },
-        start: { x: start.x, y: start.y },
-        points: [],
-        moving: false,
-        preceding: Array.isArray(placed) && placed.length ? placed.map((point) => ({ ...point })) : [],
-        committed: false
-    };
+  editorState.freeformTrace = {
+    pointerId: event.pointerId,
+    startScreen: { x: event.clientX, y: event.clientY },
+    start: { x: start.x, y: start.y },
+    points: [],
+    moving: false,
+    preceding:
+      Array.isArray(placed) && placed.length
+        ? placed.map((point) => ({ ...point }))
+        : [],
+    committed: false,
+  };
 
-    return true;
+  return true;
 }
 
 /*
@@ -261,65 +267,65 @@ export function beginFreeformTrace(event) {
  * before that it is just a press, and the release will be a click.
  */
 export function moveFreeformTrace(event, point) {
-    const session = editorState.freeformTrace;
+  const session = editorState.freeformTrace;
 
-    if (!session || !point) {
-        return false;
+  if (!session || !point) {
+    return false;
+  }
+
+  if (!session.moving) {
+    const travel = Math.hypot(
+      event.clientX - session.startScreen.x,
+      event.clientY - session.startScreen.y,
+    );
+
+    if (travel < TRACE_START_PX) {
+      return false;
     }
 
-    if (!session.moving) {
-        const travel = Math.hypot(
-            event.clientX - session.startScreen.x,
-            event.clientY - session.startScreen.y
-        );
-
-        if (travel < TRACE_START_PX) {
-            return false;
-        }
-
-        session.moving = true;
-
-        /*
-         * THE PRESS IS THE FIRST VERTEX. Recorded now, from where the student
-         * pressed, so the traced outline begins at the button-down point.
-         */
-        session.points = [{ ...session.start }];
-
-        setToolMessage("Trace the polygon - release to close it");
-    }
-
-    const minimum = screenPixelsToUnits(TRACE_SAMPLE_PX);
-
-    if (session.points.length >= TRACE_MAX_POINTS) {
-        return true;
-    }
-
-    appendTracePoint(session.points, point, minimum);
+    session.moving = true;
 
     /*
-     * THE PREVIEW IS THE ORDINARY POLYGON PREVIEW.
-     *
-     * The points go into the interaction, so the canvas draws them through the
-     * same preview every clicked polygon uses - one preview implementation, not
-     * a second one for tracing.
+     * THE PRESS IS THE FIRST VERTEX. Recorded now, from where the student
+     * pressed, so the traced outline begins at the button-down point.
      */
-    publishTrace(session, point);
+    session.points = [{ ...session.start }];
 
+    setToolMessage("Trace the polygon - release to close it");
+  }
+
+  const minimum = screenPixelsToUnits(TRACE_SAMPLE_PX);
+
+  if (session.points.length >= TRACE_MAX_POINTS) {
     return true;
+  }
+
+  appendTracePoint(session.points, point, minimum);
+
+  /*
+   * THE PREVIEW IS THE ORDINARY POLYGON PREVIEW.
+   *
+   * The points go into the interaction, so the canvas draws them through the
+   * same preview every clicked polygon uses - one preview implementation, not
+   * a second one for tracing.
+   */
+  publishTrace(session, point);
+
+  return true;
 }
 
 function publishTrace(session, currentPoint) {
-    const points = session.points;
+  const points = session.points;
 
-    enggDrawingState.setInteraction(drawingState, {
-        points: points.map((point) => ({ ...point })),
-        currentPoint: currentPoint ? { ...currentPoint } : null,
-        startPoint: points[0] || null,
-        snapGeometry: points.slice(1).map((end, index) => ({
-            start: points[index],
-            end
-        }))
-    });
+  enggDrawingState.setInteraction(drawingState, {
+    points: points.map((point) => ({ ...point })),
+    currentPoint: currentPoint ? { ...currentPoint } : null,
+    startPoint: points[0] || null,
+    snapGeometry: points.slice(1).map((end, index) => ({
+      start: points[index],
+      end,
+    })),
+  });
 }
 
 /*
@@ -331,113 +337,117 @@ function publishTrace(session, currentPoint) {
  * `commitFreeformPolygon`, and the session cleared - once, and only once.
  */
 export function finishFreeformTrace(event, point) {
-    const session = editorState.freeformTrace;
+  const session = editorState.freeformTrace;
 
-    if (!session) {
-        return false;
-    }
+  if (!session) {
+    return false;
+  }
 
-    if (event && itemTravelsAgentless(event, session)) {
-        /* A release far from the press is a drag even if no move arrived. */
-        moveFreeformTrace(event, point);
-    }
+  if (event && itemTravelsAgentless(event, session)) {
+    /* A release far from the press is a drag even if no move arrived. */
+    moveFreeformTrace(event, point);
+  }
 
-    if (!session.moving) {
-        editorState.freeformTrace = null;
-
-        return false;
-    }
-
+  if (!session.moving) {
     editorState.freeformTrace = null;
 
-    if (session.committed) {
-        return true;
-    }
+    return false;
+  }
 
-    session.committed = true;
+  editorState.freeformTrace = null;
 
-    /*
-     * THE RELEASE POINT IS PART OF THE SHAPE, unless it is the first vertex by
-     * accident - the shape closes back to the first vertex anyway.
-     */
-
-    const last = session.points[session.points.length - 1];
-
-    if (point && last && distance(last, point) > screenPixelsToUnits(TRACE_SAMPLE_PX)) {
-        session.points.push({ x: point.x, y: point.y });
-    }
-
-    const simplified = simplifyPolyline(
-        session.points,
-        screenPixelsToUnits(TRACE_SIMPLIFY_PX)
-    );
-
-    /*
-     * THE TRACED SHAPE IS A POLYGON LIKE ANY OTHER. It goes through the one
-     * commit function, so the type, the style, the source block and the undo
-     * entry are identical to a clicked polygon's.
-     */
-    const interaction = {
-        points: simplified,
-        currentPoint: simplified[simplified.length - 1] || null,
-        startPoint: simplified[0] || null
-    };
-
-    /*
-     * A HALF-FINISHED CLICK POLYGON IS PUT BACK, NOT MERGED. The trace was an
-     * alternative to clicking, so the vertices that were already placed are
-     * restored to the interaction when the trace cannot be committed.
-     */
-    const object = commitFreeformPolygon(interaction);
-
-    if (!object && session.preceding.length) {
-        enggDrawingState.setInteraction(drawingState, {
-            points: session.preceding,
-            currentPoint: session.preceding[session.preceding.length - 1],
-            startPoint: session.preceding[0]
-        });
-
-        renderCurrentDrawing();
-    }
-
+  if (session.committed) {
     return true;
+  }
+
+  session.committed = true;
+
+  /*
+   * THE RELEASE POINT IS PART OF THE SHAPE, unless it is the first vertex by
+   * accident - the shape closes back to the first vertex anyway.
+   */
+
+  const last = session.points[session.points.length - 1];
+
+  if (
+    point &&
+    last &&
+    distance(last, point) > screenPixelsToUnits(TRACE_SAMPLE_PX)
+  ) {
+    session.points.push({ x: point.x, y: point.y });
+  }
+
+  const simplified = simplifyPolyline(
+    session.points,
+    screenPixelsToUnits(TRACE_SIMPLIFY_PX),
+  );
+
+  /*
+   * THE TRACED SHAPE IS A POLYGON LIKE ANY OTHER. It goes through the one
+   * commit function, so the type, the style, the source block and the undo
+   * entry are identical to a clicked polygon's.
+   */
+  const interaction = {
+    points: simplified,
+    currentPoint: simplified[simplified.length - 1] || null,
+    startPoint: simplified[0] || null,
+  };
+
+  /*
+   * A HALF-FINISHED CLICK POLYGON IS PUT BACK, NOT MERGED. The trace was an
+   * alternative to clicking, so the vertices that were already placed are
+   * restored to the interaction when the trace cannot be committed.
+   */
+  const object = commitFreeformPolygon(interaction);
+
+  if (!object && session.preceding.length) {
+    enggDrawingState.setInteraction(drawingState, {
+      points: session.preceding,
+      currentPoint: session.preceding[session.preceding.length - 1],
+      startPoint: session.preceding[0],
+    });
+
+    renderCurrentDrawing();
+  }
+
+  return true;
 }
 
 /* Whether a release is far enough from the press to be a drag. */
 function itemTravelsAgentless(event, session) {
-    if (!event || !Number.isFinite(event.clientX)) {
-        return false;
-    }
+  if (!event || !Number.isFinite(event.clientX)) {
+    return false;
+  }
 
-    return (
-        Math.hypot(
-            event.clientX - session.startScreen.x,
-            event.clientY - session.startScreen.y
-        ) >= TRACE_START_PX
-    );
+  return (
+    Math.hypot(
+      event.clientX - session.startScreen.x,
+      event.clientY - session.startScreen.y,
+    ) >= TRACE_START_PX
+  );
 }
 
 /* Abandon a trace without committing anything. */
 export function cancelFreeformTrace() {
-    if (!editorState.freeformTrace) {
-        return false;
-    }
+  if (!editorState.freeformTrace) {
+    return false;
+  }
 
-    editorState.freeformTrace = null;
+  editorState.freeformTrace = null;
 
-    return true;
+  return true;
 }
 
 export default {
-    TRACE_START_PX,
-    TRACE_SAMPLE_PX,
-    TRACE_SIMPLIFY_PX,
-    TRACE_MAX_POINTS,
-    pointSegmentDistance,
-    simplifyPolyline,
-    appendTracePoint,
-    beginFreeformTrace,
-    moveFreeformTrace,
-    finishFreeformTrace,
-    cancelFreeformTrace
+  TRACE_START_PX,
+  TRACE_SAMPLE_PX,
+  TRACE_SIMPLIFY_PX,
+  TRACE_MAX_POINTS,
+  pointSegmentDistance,
+  simplifyPolyline,
+  appendTracePoint,
+  beginFreeformTrace,
+  moveFreeformTrace,
+  finishFreeformTrace,
+  cancelFreeformTrace,
 };

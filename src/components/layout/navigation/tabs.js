@@ -19,26 +19,26 @@
 
 /* Make the drawing section the active one and draw into it. */
 function showDrawingWorkspace() {
-    const document = globalThis.document;
+  const document = globalThis.document;
 
-    if (!document) {
-        return;
-    }
+  if (!document) {
+    return;
+  }
 
-    document.querySelectorAll(".review-content").forEach((section) => {
-        section.classList.toggle("active", section.id === "drawing");
-    });
+  document.querySelectorAll(".review-content").forEach((section) => {
+    section.classList.toggle("active", section.id === "drawing");
+  });
 
-    /*
-     * THE CANVAS IS MEASURED FROM ITS OWN ELEMENT, so it needs its real size
-     * before anything is projected into it. Imported HERE rather than at the top
-     * of the file to keep the entry point's load order unchanged - the editor
-     * wires itself to the page as it is evaluated, and a top-level import would
-     * pull it forward.
-     */
-    import("../workspace/canvas-render.js").then(({ renderCurrentDrawing }) => {
-        renderCurrentDrawing();
-    });
+  /*
+   * THE CANVAS IS MEASURED FROM ITS OWN ELEMENT, so it needs its real size
+   * before anything is projected into it. Imported HERE rather than at the top
+   * of the file to keep the entry point's load order unchanged - the editor
+   * wires itself to the page as it is evaluated, and a top-level import would
+   * pull it forward.
+   */
+  import("../workspace/canvas-render.js").then(({ renderCurrentDrawing }) => {
+    renderCurrentDrawing();
+  });
 }
 
 showDrawingWorkspace();

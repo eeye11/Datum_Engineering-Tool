@@ -26,23 +26,26 @@
 import enggNoteEditor from "./note-editor.js";
 import enggDrawingState from "../../model/drawing-state.js";
 
-export { LABEL_CAPABLE_TOOLS, toolTakesLabel as toolTakesCreationLabel } from "../../../features/workspace/dynamics/dynamics-label.js";
+export {
+  LABEL_CAPABLE_TOOLS,
+  toolTakesLabel as toolTakesCreationLabel,
+} from "../../../features/workspace/dynamics/dynamics-label.js";
 
 /* Where a symbol's label is drawn: its own anchor, in drawing units. */
 function anchorOf(object) {
-    const geometry = object?.geometry || {};
+  const geometry = object?.geometry || {};
 
-    if (
-        Number.isFinite(Number(geometry.start?.x)) &&
-        Number.isFinite(Number(geometry.end?.x))
-    ) {
-        return {
-            x: (Number(geometry.start.x) + Number(geometry.end.x)) / 2,
-            y: (Number(geometry.start.y) + Number(geometry.end.y)) / 2
-        };
-    }
+  if (
+    Number.isFinite(Number(geometry.start?.x)) &&
+    Number.isFinite(Number(geometry.end?.x))
+  ) {
+    return {
+      x: (Number(geometry.start.x) + Number(geometry.end.x)) / 2,
+      y: (Number(geometry.start.y) + Number(geometry.end.y)) / 2,
+    };
+  }
 
-    return geometry.position || geometry.center || geometry.origin || null;
+  return geometry.position || geometry.center || geometry.origin || null;
 }
 
 /*
@@ -56,68 +59,73 @@ function anchorOf(object) {
  * The whole interaction is one line of text on the sheet. Escape leaves the
  * object exactly as it is - a cancelled label never deletes what was drawn.
  */
-export function creationLabelPrompt(object, { state = null, cameraSignal = null, onDone = null } = {}) {
-    if (!object) {
-        return false;
-    }
+export function creationLabelPrompt(
+  object,
+  { state = null, cameraSignal = null, onDone = null } = {},
+) {
+  if (!object) {
+    return false;
+  }
 
-    const anchor = anchorOf(object);
+  const anchor = anchorOf(object);
 
-    if (!anchor) {
-        return false;
-    }
+  if (!anchor) {
+    return false;
+  }
 
-    enggNoteEditor.open({
-        multiline: false,
+  enggNoteEditor.open({
+    multiline: false,
 
-        /* THE ON-DRAWING PRESENTATION - see note-editor.js. */
-        labelField: true,
+    /* THE ON-DRAWING PRESENTATION - see note-editor.js. */
+    labelField: true,
 
-        text: typeof object.name === "string" ? object.name : "",
-        title: "Name",
-        placeholder: "",
-        object,
-        point: anchor,
-        state,
-        cameraSignal,
-        zoom: Number(state?.camera?.zoom) || 1,
+    text: typeof object.name === "string" ? object.name : "",
+    title: "Name",
+    placeholder: "",
+    object,
+    point: anchor,
+    state,
+    cameraSignal,
+    zoom: Number(state?.camera?.zoom) || 1,
 
-        onApply: (text) => {
-            const next = String(text ?? "").trim();
-            const live =
-                (state?.objects || []).find((candidate) => candidate?.id === object.id) || object;
-            const before = typeof live.name === "string" ? live.name : "";
+    onApply: (text) => {
+      const next = String(text ?? "").trim();
+      const live =
+        (state?.objects || []).find(
+          (candidate) => candidate?.id === object.id,
+        ) || object;
+      const before = typeof live.name === "string" ? live.name : "";
 
-            /*
-             * ONE UNDOABLE EDIT, and only when the text really changed. The
-             * label is written with the name so the sheet and the panel agree.
-             */
-            if (before !== next) {
-                const previous = state ? enggDrawingState.snapshotDrawing(state) : null;
+      /*
+       * ONE UNDOABLE EDIT, and only when the text really changed. The
+       * label is written with the name so the sheet and the panel agree.
+       */
+      if (before !== next) {
+        const previous = state ? enggDrawingState.snapshotDrawing(state) : null;
 
-                live.name = next;
-                live.label = next;
+        live.name = next;
+        live.label = next;
 
-                if (previous) {
-                    enggDrawingState.commitDrawingChange(state, previous);
-                }
-            }
-
-            if (typeof onDone === "function") {
-                onDone();
-            }
-        },
-
-        onCancel: () => {
-            if (typeof onDone === "function") {
-                onDone();
-            }
+        if (previous) {
+          enggDrawingState.commitDrawingChange(state, previous);
         }
-    });
+      }
 
-    return true;
+      if (typeof onDone === "function") {
+        onDone();
+      }
+    },
+
+    onCancel: () => {
+      if (typeof onDone === "function") {
+        onDone();
+      }
+    },
+  });
+
+  return true;
 }
 
 export default {
-    creationLabelPrompt
+  creationLabelPrompt,
 };

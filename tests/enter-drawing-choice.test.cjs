@@ -61,7 +61,9 @@ async function run() {
   check(
     "and it is the only active workspace section",
     document.querySelectorAll(".review-content.active").length === 1,
-    [...document.querySelectorAll(".review-content.active")].map((n) => n.id).join(", "),
+    [...document.querySelectorAll(".review-content.active")]
+      .map((n) => n.id)
+      .join(", "),
   );
 
   console.log("\nWritten Solution is gone");
@@ -90,7 +92,9 @@ async function run() {
   check(
     "there is no workspace tab strip",
     document.querySelectorAll(".tab[data-tab]").length === 0,
-    [...document.querySelectorAll(".tab[data-tab]")].map((n) => n.dataset.tab).join(", "),
+    [...document.querySelectorAll(".tab[data-tab]")]
+      .map((n) => n.dataset.tab)
+      .join(", "),
   );
 
   check(
@@ -101,17 +105,30 @@ async function run() {
   console.log("\nThe drawing workspace is intact");
   console.log("-------------------------------");
 
-  check("the canvas is there", Boolean(document.querySelector(".drawing-canvas")));
-  check("the menu bar is there", Boolean(document.querySelector(".datum-menubar")));
+  check(
+    "the canvas is there",
+    Boolean(document.querySelector(".drawing-canvas")),
+  );
+  check(
+    "the menu bar is there",
+    Boolean(document.querySelector(".datum-menubar")),
+  );
   check(
     "the Objects, Features and Source tabs are there",
     ["objects", "features", "source"].every((tab) =>
-      Boolean(document.querySelector(`[data-panel-tab="${tab}"], [data-tab="${tab}"]`)),
+      Boolean(
+        document.querySelector(
+          `[data-panel-tab="${tab}"], [data-tab="${tab}"]`,
+        ),
+      ),
     ),
   );
   check(
     "the drawing tool list is there",
-    Boolean(document.getElementById("drawingToolList") || document.querySelector(".drawing-tool-list")),
+    Boolean(
+      document.getElementById("drawingToolList") ||
+      document.querySelector(".drawing-tool-list"),
+    ),
   );
 
   console.log(`\n${pass} passed, ${fail} failed\n`);

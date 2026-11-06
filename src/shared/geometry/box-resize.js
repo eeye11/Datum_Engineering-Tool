@@ -29,41 +29,41 @@ export const MIN_BOX_SIZE = 0.5;
 
 /* A box as its four corners, in the object's own rotated frame. */
 function boxCorners(position, width, height, rotationDegrees) {
-    const radians = ((Number(rotationDegrees) || 0) * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    const centre = {
-        x: Number(position.x) + Number(width) / 2,
-        y: Number(position.y) - Number(height) / 2
-    };
+  const radians = ((Number(rotationDegrees) || 0) * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const centre = {
+    x: Number(position.x) + Number(width) / 2,
+    y: Number(position.y) - Number(height) / 2,
+  };
 
-    /*
-     * The SAME order `rectangleCorners` uses everywhere else: top-left,
-     * top-right, bottom-right, bottom-left, in world space.
-     */
-    return [
-        [-width / 2, height / 2],
-        [width / 2, height / 2],
-        [width / 2, -height / 2],
-        [-width / 2, -height / 2]
-    ].map(([dx, dy]) => ({
-        x: centre.x + dx * cos - dy * sin,
-        y: centre.y + dx * sin + dy * cos
-    }));
+  /*
+   * The SAME order `rectangleCorners` uses everywhere else: top-left,
+   * top-right, bottom-right, bottom-left, in world space.
+   */
+  return [
+    [-width / 2, height / 2],
+    [width / 2, height / 2],
+    [width / 2, -height / 2],
+    [-width / 2, -height / 2],
+  ].map(([dx, dy]) => ({
+    x: centre.x + dx * cos - dy * sin,
+    y: centre.y + dx * sin + dy * cos,
+  }));
 }
 
 /* A world point, expressed in the box's un-rotated frame. */
 function toBoxFrame(point, centre, rotationDegrees) {
-    const radians = (-(Number(rotationDegrees) || 0) * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
-    const dx = Number(point.x) - centre.x;
-    const dy = Number(point.y) - centre.y;
+  const radians = (-(Number(rotationDegrees) || 0) * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const dx = Number(point.x) - centre.x;
+  const dy = Number(point.y) - centre.y;
 
-    return {
-        x: centre.x + dx * cos - dy * sin,
-        y: centre.y + dx * sin + dy * cos
-    };
+  return {
+    x: centre.x + dx * cos - dy * sin,
+    y: centre.y + dx * sin + dy * cos,
+  };
 }
 
 /**
@@ -75,77 +75,87 @@ function toBoxFrame(point, centre, rotationDegrees) {
  * @returns {{width:number, height:number, position:{x:number,y:number}}|null}
  */
 export function resizeBoxFromCorner(geometry, handleIndex, point) {
-    if (!geometry || !point) {
-        return null;
-    }
+  if (!geometry || !point) {
+    return null;
+  }
 
-    const width = Number(geometry.width);
-    const height = Number(geometry.height);
+  const width = Number(geometry.width);
+  const height = Number(geometry.height);
 
-    if (!Number.isFinite(width) || !Number.isFinite(height) || !geometry.position) {
-        return null;
-    }
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !geometry.position
+  ) {
+    return null;
+  }
 
-    const rotation = Number(geometry.rotation) || 0;
-    const radians = (rotation * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
+  const rotation = Number(geometry.rotation) || 0;
+  const radians = (rotation * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
 
-    /*
-     * WHERE THE BOX IS NOW, IN ITS OWN FRAME. In that frame the box is
-     * axis-aligned, so the opposite corner is simply the point across it.
-     */
-    const centre = {
-        x: Number(geometry.position.x) + width / 2,
-        y: Number(geometry.position.y) - height / 2
-    };
+  /*
+   * WHERE THE BOX IS NOW, IN ITS OWN FRAME. In that frame the box is
+   * axis-aligned, so the opposite corner is simply the point across it.
+   */
+  const centre = {
+    x: Number(geometry.position.x) + width / 2,
+    y: Number(geometry.position.y) - height / 2,
+  };
 
-    const local = toBoxFrame(point, centre, rotation);
+  const local = toBoxFrame(point, centre, rotation);
 
-    const corners = [
-        { x: centre.x - width / 2, y: centre.y + height / 2 },
-        { x: centre.x + width / 2, y: centre.y + height / 2 },
-        { x: centre.x + width / 2, y: centre.y - height / 2 },
-        { x: centre.x - width / 2, y: centre.y - height / 2 }
-    ];
+  const corners = [
+    { x: centre.x - width / 2, y: centre.y + height / 2 },
+    { x: centre.x + width / 2, y: centre.y + height / 2 },
+    { x: centre.x + width / 2, y: centre.y - height / 2 },
+    { x: centre.x - width / 2, y: centre.y - height / 2 },
+  ];
 
-    const opposite = corners[(handleIndex + 2) % 4];
+  const opposite = corners[(handleIndex + 2) % 4];
 
-    /* The dragged corner, clamped so the box can never invert. */
-    const moving = {
-        x:
-            handleIndex === 1 || handleIndex === 2
-                ? Math.max(local.x, opposite.x + MIN_BOX_SIZE)
-                : Math.min(local.x, opposite.x - MIN_BOX_SIZE),
-        y:
-            handleIndex === 0 || handleIndex === 1
-                ? Math.max(local.y, opposite.y + MIN_BOX_SIZE)
-                : Math.min(local.y, opposite.y - MIN_BOX_SIZE)
-    };
+  /* The dragged corner, clamped so the box can never invert. */
+  const moving = {
+    x:
+      handleIndex === 1 || handleIndex === 2
+        ? Math.max(local.x, opposite.x + MIN_BOX_SIZE)
+        : Math.min(local.x, opposite.x - MIN_BOX_SIZE),
+    y:
+      handleIndex === 0 || handleIndex === 1
+        ? Math.max(local.y, opposite.y + MIN_BOX_SIZE)
+        : Math.min(local.y, opposite.y - MIN_BOX_SIZE),
+  };
 
-    const nextWidth = Math.abs(moving.x - opposite.x);
-    const nextHeight = Math.abs(moving.y - opposite.y);
+  const nextWidth = Math.abs(moving.x - opposite.x);
+  const nextHeight = Math.abs(moving.y - opposite.y);
 
-    /* The box's centre, still in its own frame. */
-    const nextCentre = {
-        x: (moving.x + opposite.x) / 2,
-        y: (moving.y + opposite.y) / 2
-    };
+  /* The box's centre, still in its own frame. */
+  const nextCentre = {
+    x: (moving.x + opposite.x) / 2,
+    y: (moving.y + opposite.y) / 2,
+  };
 
-    /* Back into the world, then back into the stored top-left anchor. */
-    const worldCentre = {
-        x: centre.x + (nextCentre.x - centre.x) * cos - (nextCentre.y - centre.y) * sin,
-        y: centre.y + (nextCentre.x - centre.x) * sin + (nextCentre.y - centre.y) * cos
-    };
+  /* Back into the world, then back into the stored top-left anchor. */
+  const worldCentre = {
+    x:
+      centre.x +
+      (nextCentre.x - centre.x) * cos -
+      (nextCentre.y - centre.y) * sin,
+    y:
+      centre.y +
+      (nextCentre.x - centre.x) * sin +
+      (nextCentre.y - centre.y) * cos,
+  };
 
-    return {
-        width: nextWidth,
-        height: nextHeight,
-        position: {
-            x: worldCentre.x - nextWidth / 2,
-            y: worldCentre.y + nextHeight / 2
-        }
-    };
+  return {
+    width: nextWidth,
+    height: nextHeight,
+    position: {
+      x: worldCentre.x - nextWidth / 2,
+      y: worldCentre.y + nextHeight / 2,
+    },
+  };
 }
 
 /**
@@ -158,75 +168,85 @@ export function resizeBoxFromCorner(geometry, handleIndex, point) {
  * @param {"top"|"right"|"bottom"|"left"} side
  */
 export function resizeBoxFromSide(geometry, side, point) {
-    if (!geometry || !point) {
-        return null;
-    }
+  if (!geometry || !point) {
+    return null;
+  }
 
-    const width = Number(geometry.width);
-    const height = Number(geometry.height);
+  const width = Number(geometry.width);
+  const height = Number(geometry.height);
 
-    if (!Number.isFinite(width) || !Number.isFinite(height) || !geometry.position) {
-        return null;
-    }
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !geometry.position
+  ) {
+    return null;
+  }
 
-    const rotation = Number(geometry.rotation) || 0;
-    const radians = (rotation * Math.PI) / 180;
-    const cos = Math.cos(radians);
-    const sin = Math.sin(radians);
+  const rotation = Number(geometry.rotation) || 0;
+  const radians = (rotation * Math.PI) / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
 
-    const centre = {
-        x: Number(geometry.position.x) + width / 2,
-        y: Number(geometry.position.y) - height / 2
-    };
+  const centre = {
+    x: Number(geometry.position.x) + width / 2,
+    y: Number(geometry.position.y) - height / 2,
+  };
 
-    const local = toBoxFrame(point, centre, rotation);
-    const left = centre.x - width / 2;
-    const right = centre.x + width / 2;
-    const top = centre.y + height / 2;
-    const bottom = centre.y - height / 2;
+  const local = toBoxFrame(point, centre, rotation);
+  const left = centre.x - width / 2;
+  const right = centre.x + width / 2;
+  const top = centre.y + height / 2;
+  const bottom = centre.y - height / 2;
 
-    let nextLeft = left;
-    let nextRight = right;
-    let nextTop = top;
-    let nextBottom = bottom;
+  let nextLeft = left;
+  let nextRight = right;
+  let nextTop = top;
+  let nextBottom = bottom;
 
-    if (side === "left") {
-        nextLeft = Math.min(local.x, right - MIN_BOX_SIZE);
-    } else if (side === "right") {
-        nextRight = Math.max(local.x, left + MIN_BOX_SIZE);
-    } else if (side === "top") {
-        nextTop = Math.max(local.y, bottom + MIN_BOX_SIZE);
-    } else if (side === "bottom") {
-        nextBottom = Math.min(local.y, top - MIN_BOX_SIZE);
-    } else {
-        return null;
-    }
+  if (side === "left") {
+    nextLeft = Math.min(local.x, right - MIN_BOX_SIZE);
+  } else if (side === "right") {
+    nextRight = Math.max(local.x, left + MIN_BOX_SIZE);
+  } else if (side === "top") {
+    nextTop = Math.max(local.y, bottom + MIN_BOX_SIZE);
+  } else if (side === "bottom") {
+    nextBottom = Math.min(local.y, top - MIN_BOX_SIZE);
+  } else {
+    return null;
+  }
 
-    const nextWidth = Math.abs(nextRight - nextLeft);
-    const nextHeight = Math.abs(nextTop - nextBottom);
-    const nextCentre = {
-        x: (nextLeft + nextRight) / 2,
-        y: (nextTop + nextBottom) / 2
-    };
+  const nextWidth = Math.abs(nextRight - nextLeft);
+  const nextHeight = Math.abs(nextTop - nextBottom);
+  const nextCentre = {
+    x: (nextLeft + nextRight) / 2,
+    y: (nextTop + nextBottom) / 2,
+  };
 
-    const worldCentre = {
-        x: centre.x + (nextCentre.x - centre.x) * cos - (nextCentre.y - centre.y) * sin,
-        y: centre.y + (nextCentre.x - centre.x) * sin + (nextCentre.y - centre.y) * cos
-    };
+  const worldCentre = {
+    x:
+      centre.x +
+      (nextCentre.x - centre.x) * cos -
+      (nextCentre.y - centre.y) * sin,
+    y:
+      centre.y +
+      (nextCentre.x - centre.x) * sin +
+      (nextCentre.y - centre.y) * cos,
+  };
 
-    return {
-        width: nextWidth,
-        height: nextHeight,
-        position: {
-            x: worldCentre.x - nextWidth / 2,
-            y: worldCentre.y + nextHeight / 2
-        }
-    };
+  return {
+    width: nextWidth,
+    height: nextHeight,
+    position: {
+      x: worldCentre.x - nextWidth / 2,
+      y: worldCentre.y + nextHeight / 2,
+    },
+  };
 }
 
 export default {
-    MIN_BOX_SIZE,
-    boxCorners,
-    resizeBoxFromCorner,
-    resizeBoxFromSide
+  MIN_BOX_SIZE,
+  boxCorners,
+  resizeBoxFromCorner,
+  resizeBoxFromSide,
 };

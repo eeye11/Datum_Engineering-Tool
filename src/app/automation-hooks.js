@@ -33,7 +33,6 @@ import enggDrawingState from "../shared/model/drawing-state.js";
 import enggSheets from "../components/layout/workspace/sheets.js";
 import enggOpenPopup from "../components/layout/toolbar/open-popup.js";
 import enggUi from "../shared/ui/ui.js";
-import enggWrittenReferences from "../shared/solution/written-references.js";
 
 /*
  * ============================================================
@@ -122,8 +121,7 @@ export function installAutomationHooks(target = window) {
         enggSheets,
         enggTemplates,
         enggTransforms,
-        enggUi,
-        enggWrittenReferences
+        enggUi
     });
 
     /*

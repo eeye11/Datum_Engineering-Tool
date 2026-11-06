@@ -33,9 +33,9 @@
 
 /* The pointer type the last canvas gesture used, for tolerance decisions. */
 export const POINTER_KINDS = Object.freeze({
-    MOUSE: "mouse",
-    TOUCH: "touch",
-    PEN: "pen"
+  MOUSE: "mouse",
+  TOUCH: "touch",
+  PEN: "pen",
 });
 
 /*
@@ -44,9 +44,9 @@ export const POINTER_KINDS = Object.freeze({
  * Read as "how far from the ink may the pointer be and still mean the ink?".
  */
 export const HIT_PIXELS = Object.freeze({
-    mouse: 4,
-    pen: 6,
-    touch: 14
+  mouse: 4,
+  pen: 6,
+  touch: 14,
 });
 
 /*
@@ -55,9 +55,9 @@ export const HIT_PIXELS = Object.freeze({
  * kind, because these are things the student aims AT rather than through.
  */
 export const HANDLE_PIXELS = Object.freeze({
-    mouse: 9,
-    pen: 11,
-    touch: 20
+  mouse: 9,
+  pen: 11,
+  touch: 20,
 });
 
 /*
@@ -81,26 +81,27 @@ let penActive = false;
  * the starting point for a canvas that has not been touched yet.
  */
 export function preferredPointerKind() {
-    try {
-        if (globalThis.matchMedia?.("(pointer: coarse)")?.matches) {
-            return POINTER_KINDS.TOUCH;
-        }
-    } catch {
-        /* A test environment has no matchMedia; the default stands. */
+  try {
+    if (globalThis.matchMedia?.("(pointer: coarse)")?.matches) {
+      return POINTER_KINDS.TOUCH;
     }
+  } catch {
+    /* A test environment has no matchMedia; the default stands. */
+  }
 
-    return POINTER_KINDS.MOUSE;
+  return POINTER_KINDS.MOUSE;
 }
 
 /* The kind a pointer event reports, normalised to the three we know. */
 export function pointerKindOf(event) {
-    const reported = event && typeof event.pointerType === "string" ? event.pointerType : "";
+  const reported =
+    event && typeof event.pointerType === "string" ? event.pointerType : "";
 
-    if (reported === POINTER_KINDS.TOUCH || reported === POINTER_KINDS.PEN) {
-        return reported;
-    }
+  if (reported === POINTER_KINDS.TOUCH || reported === POINTER_KINDS.PEN) {
+    return reported;
+  }
 
-    return POINTER_KINDS.MOUSE;
+  return POINTER_KINDS.MOUSE;
 }
 
 /*
@@ -112,25 +113,29 @@ export function pointerKindOf(event) {
  * the pen is the finer instrument, and a palm beside it is not a mouse either.
  */
 export function setPointerKind(kind) {
-    if (kind === POINTER_KINDS.TOUCH || kind === POINTER_KINDS.PEN || kind === POINTER_KINDS.MOUSE) {
-        currentKind = kind;
-    }
+  if (
+    kind === POINTER_KINDS.TOUCH ||
+    kind === POINTER_KINDS.PEN ||
+    kind === POINTER_KINDS.MOUSE
+  ) {
+    currentKind = kind;
+  }
 
-    return currentKind;
+  return currentKind;
 }
 
 export function getPointerKind() {
-    return currentKind;
+  return currentKind;
 }
 
 export function setPenActive(active) {
-    penActive = Boolean(active);
+  penActive = Boolean(active);
 
-    return penActive;
+  return penActive;
 }
 
 export function isPenActive() {
-    return penActive;
+  return penActive;
 }
 
 /*
@@ -141,16 +146,16 @@ export function isPenActive() {
  * finger, a stylus and a mouse differ in exactly one place.
  */
 export function bodyTolerance(view, zoom = 1) {
-    const pixels = HIT_PIXELS[view || currentKind] ?? HIT_PIXELS.mouse;
+  const pixels = HIT_PIXELS[view || currentKind] ?? HIT_PIXELS.mouse;
 
-    return pixels / Math.max(Number(zoom) || 1, 0.25);
+  return pixels / Math.max(Number(zoom) || 1, 0.25);
 }
 
 /* The handle tolerance, in drawing units, for the current camera. */
 export function handleTolerance(view, zoom = 1) {
-    const pixels = HANDLE_PIXELS[view || currentKind] ?? HANDLE_PIXELS.mouse;
+  const pixels = HANDLE_PIXELS[view || currentKind] ?? HANDLE_PIXELS.mouse;
 
-    return pixels / Math.max(Number(zoom) || 1, 0.25);
+  return pixels / Math.max(Number(zoom) || 1, 0.25);
 }
 
 /*
@@ -161,26 +166,24 @@ export function handleTolerance(view, zoom = 1) {
  * a touch target at finger scale.
  */
 export function minimumTargetRadius(view, zoom = 1) {
-    const pixels =
-        (view || currentKind) === POINTER_KINDS.MOUSE
-            ? 0
-            : TOUCH_TARGET_PX / 2;
+  const pixels =
+    (view || currentKind) === POINTER_KINDS.MOUSE ? 0 : TOUCH_TARGET_PX / 2;
 
-    return pixels / Math.max(Number(zoom) || 1, 0.25);
+  return pixels / Math.max(Number(zoom) || 1, 0.25);
 }
 
 export default {
-    POINTER_KINDS,
-    HIT_PIXELS,
-    HANDLE_PIXELS,
-    TOUCH_TARGET_PX,
-    preferredPointerKind,
-    pointerKindOf,
-    setPointerKind,
-    getPointerKind,
-    setPenActive,
-    isPenActive,
-    bodyTolerance,
-    handleTolerance,
-    minimumTargetRadius
+  POINTER_KINDS,
+  HIT_PIXELS,
+  HANDLE_PIXELS,
+  TOUCH_TARGET_PX,
+  preferredPointerKind,
+  pointerKindOf,
+  setPointerKind,
+  getPointerKind,
+  setPenActive,
+  isPenActive,
+  bodyTolerance,
+  handleTolerance,
+  minimumTargetRadius,
 };

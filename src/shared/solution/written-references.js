@@ -214,11 +214,44 @@ let renderAttached = () => {};
  * MathJax arrives separately: its script loads asynchronously so the page
  * does not wait for it. Until it is ready the solution is shown as plain
  * text, and it is rendered again as soon as MathJax has started.
+ *
+ * THIS MODULE FETCHES IT, ONCE. The <script> tag used to sit in index.html,
+ * which put a third-party CDN module in the path of every start-up - for a
+ * page that no longer has a solution view at all. The tag is gone; the engine
+ * is requested the first time this renderer is actually asked to render, and
+ * never otherwise.
  */
+const MATHJAX_SRC =
+  "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js";
+
+let mathJaxLoading = false;
+
 function mathJax() {
-  return typeof window.MathJax?.typesetPromise === "function"
-    ? window.MathJax
-    : null;
+  if (typeof window.MathJax?.typesetPromise === "function") {
+    return window.MathJax;
+  }
+
+  if (
+    !mathJaxLoading &&
+    document?.getElementById("MathJax-script") === null
+  ) {
+    mathJaxLoading = true;
+
+    const script = document.createElement("script");
+
+    script.id = "MathJax-script";
+    script.async = true;
+    script.src = MATHJAX_SRC;
+    script.addEventListener("load", () => {
+      Promise.resolve(window.MathJax?.startup?.promise).then(() =>
+        renderAttached(),
+      );
+    });
+
+    document.head.appendChild(script);
+  }
+
+  return null;
 }
 
 /*
@@ -387,6 +420,13 @@ function attach() {
 
       return;
     }
+
+    /*
+     * ASK FOR THE ENGINE BEFORE THE FIRST FIGURE IS BUILT. `mathJax()` starts
+     * the fetch; it is called up front so the download overlaps the figure
+     * work instead of starting after it.
+     */
+    mathJax();
 
     let cursor = 0;
 
@@ -905,14 +945,12 @@ function attach() {
 
   renderAttached = renderSolution;
 
-  if (!mathJax()) {
-    document
-      .getElementById("MathJax-script")
-      ?.addEventListener("load", () => {
-        Promise.resolve(window.MathJax?.startup?.promise).then(refreshAll);
-      });
-  }
-
+  /*
+   * THE FIRST RENDER ASKS FOR MATHJAX; there is no tag in the page to wait on.
+   * `mathJax()` starts the fetch and, once the engine is up, renders again on
+   * its own - so this pass paints the plain text and the typeset version
+   * arrives when the engine does.
+   */
   refreshAll();
 }
 

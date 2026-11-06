@@ -37,7 +37,6 @@ import enggDocumentFile from "../file/document-file.js";
 import enggDrawingReference from "../references/drawing-reference.js";
 import { enggDrawingSheets } from "../../features/workspace/index.js";
 import { loadDrawing } from "../../features/workspace/commands/document-commands.js";
-import { render as renderSolution } from "../solution/written-references.js";
 import enggSolutionState from "../solution/solution-state.js";
 import { onDatumEvent } from "./events.js";
 
@@ -63,7 +62,7 @@ export const API_VERSION = 1;
  * every caller either way.
  */
 function solutionSource() {
-    return document.getElementById("solutionEditor")
+    return globalThis.document.getElementById("solutionEditor")
         || { get value() { return enggSolutionState.getSource(); }, set value(text) { enggSolutionState.setSource(text); } };
 }
 
@@ -178,9 +177,49 @@ function setSolution(latex) {
         setSolutionSource(source.value);
     }
 
-    renderSolution();
+    renderSolutionIfShown();
 
     return { ok: true };
+}
+
+/*
+ * ============================================================
+ * THE SOLUTION RENDERER IS LOADED ONLY WHEN IT IS USED
+ * ============================================================
+ *
+ * `written-references.js` used to be imported by the entry point, so the whole
+ * module - the drawing-figure renderer, its MathJax wiring, and a "re-render
+ * everything on focus" listener - was fetched, parsed and evaluated on every
+ * start-up. It dragged the sheet controller and the reference renderer into
+ * the bundle's first load as well.
+ *
+ * The Written Solution workspace is gone from the page, so none of that can be
+ * shown: the source has no editor and no preview to render into. The module is
+ * therefore loaded on demand - the first `setSolution` that has a view to draw
+ * into - and never on boot. An embed that only reads or writes the source (all
+ * the API needs) never pays for it at all.
+ */
+let solutionRenderer = null;
+
+function renderSolutionIfShown() {
+    /*
+     * NOTHING TO DRAW INTO: no renderer, no work. A page with no solution view
+     * is exactly the page this application ships, and loading a renderer whose
+     * first act is to find its editor and bail would be a cost with no output.
+     */
+    if (!globalThis.document.getElementById("solutionPreview")) {
+        return;
+    }
+
+    if (!solutionRenderer) {
+        solutionRenderer = import("../solution/written-references.js")
+            .then((module) => module.render)
+            .catch(() => null);
+    }
+
+    Promise.resolve(solutionRenderer)
+        .then((render) => render?.())
+        .catch(() => {});
 }
 
 /*

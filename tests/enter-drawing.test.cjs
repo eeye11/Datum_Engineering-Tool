@@ -56,7 +56,9 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   await whenReady();
   await wait(400);
 
-  const loc = require(path.join(__dirname, "helpers", "source-path.cjs")).locate;
+  const loc = require(
+    path.join(__dirname, "helpers", "source-path.cjs"),
+  ).locate;
   const { enggDrawingSheets } = require(loc("sheet-controller.js"));
 
   console.log("\nThe application opens on the drawing workspace");
@@ -81,9 +83,18 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   console.log("\nThe written solution is gone");
   console.log("-----------------------------");
 
-  check("no written-solution section", document.getElementById("writing") === null);
-  check("no written-solution editor", document.getElementById("solutionEditor") === null);
-  check("no Enter Drawing control", document.getElementById("solutionEnterDrawing") === null);
+  check(
+    "no written-solution section",
+    document.getElementById("writing") === null,
+  );
+  check(
+    "no written-solution editor",
+    document.getElementById("solutionEditor") === null,
+  );
+  check(
+    "no Enter Drawing control",
+    document.getElementById("solutionEnterDrawing") === null,
+  );
   check(
     "no return-to-solution control",
     document.getElementById("drawingReturnToSolution") === null,
@@ -92,19 +103,29 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   console.log("\nThe drawing workspace is wired");
   console.log("-------------------------------");
 
-  check("the canvas is there", Boolean(document.querySelector(".drawing-canvas")));
-  check("the menu bar is there", Boolean(document.querySelector(".datum-menubar")));
+  check(
+    "the canvas is there",
+    Boolean(document.querySelector(".drawing-canvas")),
+  );
+  check(
+    "the menu bar is there",
+    Boolean(document.querySelector(".datum-menubar")),
+  );
   check(
     "the tool list is there",
     Boolean(
       document.getElementById("drawingToolList") ||
-        document.querySelector(".drawing-tool-list"),
+      document.querySelector(".drawing-tool-list"),
     ),
   );
   check(
     "the Objects, Features and Source tabs are there",
     ["objects", "features", "source"].every((tab) =>
-      Boolean(document.querySelector(`[data-panel-tab="${tab}"], [data-tab="${tab}"]`)),
+      Boolean(
+        document.querySelector(
+          `[data-panel-tab="${tab}"], [data-tab="${tab}"]`,
+        ),
+      ),
     ),
   );
 
@@ -113,7 +134,11 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const sheetsBefore = enggDrawingSheets.all().length;
 
-  check("the document opens with a sheet", sheetsBefore >= 1, String(sheetsBefore));
+  check(
+    "the document opens with a sheet",
+    sheetsBefore >= 1,
+    String(sheetsBefore),
+  );
 
   let created = null;
 
