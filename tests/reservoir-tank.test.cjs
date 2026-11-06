@@ -647,12 +647,23 @@ test("the four corner handles resize the vessel and keep it upright", async () =
     m.state.activeTool = "select";
     m.state.selection.selectedObjectIds = [vessel.id];
 
-    m.schema.writeField(vessel, "vesselWidth", 40);
-    m.schema.writeField(vessel, "vesselHeight", 30);
-    vessel.geometry = { ...vessel.geometry, position: { x: 0, y: 0 } };
+    /*
+     * THE RESET IS WRITTEN TO THE LIVE OBJECT. Each corner's commit replaced
+     * the object list, so the captured reference is detached and writing to
+     * it would leave the document holding the previous corner's geometry.
+     */
+    const current = m.state.objects.find((object) => object.id === vessel.id);
+
+    current.geometry = {
+      ...current.geometry,
+      position: { x: 0, y: 0 },
+      width: 40,
+      height: 30,
+      rotation: 0,
+    };
 
     const handle = m.handles
-      .editableHandlesFor(vessel)
+      .editableHandlesFor(current)
       .find((candidate) => candidate.kind === `vessel-corner${index}`);
 
     assert.ok(handle, `corner ${index} has a handle`);
@@ -673,7 +684,10 @@ test("the four corner handles resize the vessel and keep it upright", async () =
     m.drag.updateManipulationDrag(pointer("pointermove", target));
     m.drag.finishManipulationDrag(pointer("pointerup", target));
 
-    const rect = m.vessel.vesselRect(vessel);
+    /* The result is read from the document, not from a detached reference. */
+    const rect = m.vessel.vesselRect(
+      m.state.objects.find((object) => object.id === vessel.id),
+    );
 
     assert.ok(
       rect.width >= m.vessel.MIN_VESSEL_SIDE &&
@@ -709,33 +723,60 @@ test("the boundary handles resize one wall at a time, and never turn the vessel 
    * World y grows UP, so dragging the LID handle DOWN the screen lowers its
    * world y and shrinks the vessel from the top.
    *
-   * Each handle sits a small GAP outside its wall, so the pointer is aimed at
-   * the wall's own position (x = 0, 50, 20, 20) rather than at the handle.
+   * THE WALL FOLLOWS THE POINTER BY THE DISTANCE IT TRAVELLED, not to the
+   * pointer's absolute position. Each handle sits a small GAP outside its wall,
+   * so the grab starts at the handle and the wall moves by the same delta - a
+   * drag that went nowhere would otherwise still resize the vessel. The
+   * expected wall is therefore the original wall plus the pointer's travel.
    */
   const cases = [
-    ["vessel-edge-left", { x: -10, y: 20 }, (r) => r.width === 50 && Math.abs(r.position.x + 10) < 1],
-    ["vessel-edge-right", { x: 50, y: 20 }, (r) => r.width === 50 && Math.abs(r.position.x) < 1],
-    ["vessel-edge-top", { x: 20, y: 28 }, (r) => r.height === 28 && Math.abs(r.position.y) < 1],
-    ["vessel-edge-bottom", { x: 20, y: 12 }, (r) => r.height === 28 && Math.abs(r.position.y - 12) < 1],
+    ["vessel-edge-left", { x: -10, y: 20 }, (r) => Math.abs(r.width - 47) < 1 && Math.abs(r.position.x + 7) < 1],
+    ["vessel-edge-right", { x: 50, y: 20 }, (r) => Math.abs(r.width - 47) < 1 && Math.abs(r.position.x) < 1],
+    ["vessel-edge-top", { x: 20, y: 28 }, (r) => Math.abs(r.height - 25) < 1 && Math.abs(r.position.y) < 1],
+    ["vessel-edge-bottom", { x: 20, y: 12 }, (r) => Math.abs(r.height - 25) < 1 && Math.abs(r.position.y - 15) < 1],
   ];
+
+  /*
+   * THE POINTER IS AIMED AT THE WALL, so the travel is the distance from the
+   * HANDLE (3 units outside the wall) to the wall - not the wall's absolute
+   * position. Each case therefore moves its wall by 3 units.
+   */
 
   for (const [kind, target, ok] of cases) {
     m.state.activeTool = "select";
     m.state.selection.selectedObjectIds = [vessel.id];
 
-    m.schema.writeField(vessel, "vesselWidth", 40);
-    m.schema.writeField(vessel, "vesselHeight", 40);
-    vessel.geometry = { ...vessel.geometry, position: { x: 0, y: 0 } };
+    /*
+     * EACH CASE STARTS FROM A FRESH 40x40 VESSEL AT THE ORIGIN. The previous
+     * case's commit replaced the object list, so the reset is written to the
+     * LIVE object - writing it to the captured reference would leave the
+     * document holding the previous case's geometry.
+     */
+    const current = m.state.objects.find((object) => object.id === vessel.id);
+
+    current.geometry = {
+      ...current.geometry,
+      position: { x: 0, y: 0 },
+      width: 40,
+      height: 40,
+      rotation: 0,
+    };
 
     const handle = m.handles
-      .editableHandlesFor(vessel)
+      .editableHandlesFor(current)
       .find((candidate) => candidate.kind === kind);
 
     m.drag.beginManipulationDrag(pointer("pointerdown", handle.point));
     m.drag.updateManipulationDrag(pointer("pointermove", target));
     m.drag.finishManipulationDrag(pointer("pointerup", target));
 
-    const rect = m.vessel.vesselRect(vessel);
+    /*
+     * THE COMMIT REPLACES THE OBJECT LIST, so the vessel is re-read from the
+     * document rather than held from before the drag - the reference captured
+     * above is detached once the undo entry is written.
+     */
+    const live = m.state.objects.find((object) => object.id === vessel.id);
+    const rect = m.vessel.vesselRect(live);
 
     assert.ok(
       ok(rect),
@@ -746,7 +787,7 @@ test("the boundary handles resize one wall at a time, and never turn the vessel 
         rect.height >= m.vessel.MIN_VESSEL_SIDE,
     );
     assert.equal(
-      m.vessel.fluidLevelPercentOf(vessel),
+      m.vessel.fluidLevelPercentOf(live),
       50,
       `${kind} kept the level percentage`,
     );
@@ -756,11 +797,18 @@ test("the boundary handles resize one wall at a time, and never turn the vessel 
   m.state.activeTool = "select";
   m.state.selection.selectedObjectIds = [vessel.id];
 
-  m.schema.writeField(vessel, "vesselWidth", 40);
-  vessel.geometry = { ...vessel.geometry, position: { x: 0, y: 0 } };
+  const collapsing = m.state.objects.find((object) => object.id === vessel.id);
+
+  collapsing.geometry = {
+    ...collapsing.geometry,
+    position: { x: 0, y: 0 },
+    width: 40,
+    height: 40,
+    rotation: 0,
+  };
 
   const left = m.handles
-    .editableHandlesFor(vessel)
+    .editableHandlesFor(collapsing)
     .find((candidate) => candidate.kind === "vessel-edge-left");
 
   m.drag.beginManipulationDrag(pointer("pointerdown", left.point));
@@ -772,7 +820,7 @@ test("the boundary handles resize one wall at a time, and never turn the vessel 
   );
 
   assert.equal(
-    m.vessel.vesselRect(vessel).width,
+    m.vessel.vesselRect(m.state.objects.find((object) => object.id === vessel.id)).width,
     m.vessel.MIN_VESSEL_SIDE,
     "it collapses rather than inverting",
   );
@@ -796,14 +844,17 @@ test("dragging a handle never moves the whole object", async () => {
   m.drag.updateManipulationDrag(pointer("pointermove", target));
   m.drag.finishManipulationDrag(pointer("pointerup", target));
 
+  /* The commit replaces the object list, so the result is read from the sheet. */
+  const resized = m.state.objects.find((object) => object.id === vessel.id);
+
   /* The corner opposite the grabbed one is what stays put. */
   assert.deepEqual(
-    vessel.geometry.position,
+    resized.geometry.position,
     { x: 0, y: 0 },
     "the opposite corner did not move",
   );
-  assert.equal(vessel.geometry.width, 50, "only the grabbed side grew");
-  assert.equal(vessel.geometry.height, 30);
+  assert.equal(resized.geometry.width, 50, "only the grabbed side grew");
+  assert.equal(resized.geometry.height, 30);
 });
 
 test("a completed vessel moves as a whole through the ordinary body drag", async () => {
@@ -818,9 +869,9 @@ test("a completed vessel moves as a whole through the ordinary body drag", async
   const centre = m.vessel.vesselRect(vessel).centre;
 
   /*
-   * THE DELTA IS GRID-ALIGNED. The sheet's grid spacing is 7.5 units and grid
-   * snapping is on by default, so a 30 x 15 drag lands on 22.5 x 15 - the same
-   * snapping every other object gets.
+   * THE DELTA IS THE POINTER'S OWN. `reset` turns grid snapping off, so the
+   * body follows the drag exactly - 30 x 15 - rather than being pulled onto a
+   * spacing line.
    */
   m.drag.beginManipulationDrag(pointer("pointerdown", centre));
   m.drag.updateManipulationDrag(
@@ -830,12 +881,14 @@ test("a completed vessel moves as a whole through the ordinary body drag", async
     pointer("pointerup", { x: centre.x + 30, y: centre.y + 15 }),
   );
 
+  const moved = m.state.objects.find((object) => object.id === vessel.id);
+
   assert.deepEqual(
-    vessel.geometry.position,
-    { x: 22.5, y: 15 },
+    moved.geometry.position,
+    { x: 30, y: 15 },
     "the vessel moved by the drag's delta",
   );
-  assert.equal(vessel.geometry.width, 40, "and did not resize");
+  assert.equal(moved.geometry.width, 40, "and did not resize");
 });
 
 /* ============================================================
@@ -1622,10 +1675,25 @@ test("a vessel saved and reopened comes back identical and upright", async () =>
   assert.ok(reopened, "the vessel came back");
   assert.equal(reopened.id, before.id, "with its id");
   assert.equal(reopened.name, before.name, "its name");
-  assert.equal(reopened.geometry.position.x, before.geometry.position.x);
-  assert.equal(reopened.geometry.position.y, before.geometry.position.y);
-  assert.equal(reopened.geometry.width, before.geometry.width);
-  assert.equal(reopened.geometry.height, before.geometry.height);
+
+  /*
+   * THE SOURCE WRITES AND READS DECIMALS, so a coordinate round-trips
+   * through a text form. Equal to a drawing unit's rounding, not bit-for-bit
+   * - a strict float comparison would fail on the last bit of a value the
+   * sheet draws identically.
+   */
+  assert.ok(
+    Math.abs(reopened.geometry.position.x - before.geometry.position.x) < 1e-9,
+  );
+  assert.ok(
+    Math.abs(reopened.geometry.position.y - before.geometry.position.y) < 1e-9,
+  );
+  assert.ok(
+    Math.abs(reopened.geometry.width - before.geometry.width) < 1e-9,
+  );
+  assert.ok(
+    Math.abs(reopened.geometry.height - before.geometry.height) < 1e-9,
+  );
   assert.equal(m.vessel.vesselStyleOf(reopened), "closed");
   assert.equal(m.vessel.fluidLevelPercentOf(reopened), 65);
   assert.equal(reopened.style.stroke, "#336699");
@@ -1741,13 +1809,17 @@ test("a pipe ending on a vessel wall is attached, follows it, and makes no elbow
   m.ds.addObject(m.state, run);
   m.pipeTool.reconcileFluidConnections(run, m.state.objects);
 
+  /* The commit replaces the object list - both features are read back live. */
+  const liveVessel = () => m.state.objects.find((object) => object.id === vessel.id);
+  const liveRun = () => m.state.objects.find((object) => object.id === run.id);
+
   assert.equal(
-    run.engineering?.vesselId,
+    liveRun().engineering?.vesselId,
     vessel.id,
     "the pipe is attached to the vessel",
   );
   assert.equal(
-    run.engineering?.vesselPort,
+    liveRun().engineering?.vesselPort,
     "end",
     "at the end that touches the wall",
   );
@@ -1758,18 +1830,18 @@ test("a pipe ending on a vessel wall is attached, follows it, and makes no elbow
   );
 
   /* RESIZE: the held end stays on the wall it was attached to. */
-  m.schema.writeField(vessel, "vesselWidth", 70);
+  m.schema.writeField(liveVessel(), "vesselWidth", 70);
   assert.deepEqual(
-    run.geometry.end,
+    liveRun().geometry.end,
     { x: 70, y: 15 },
     "the end followed the wall",
   );
 
   /* MOVE: the attached end moves with the vessel. */
-  vessel.geometry = { ...vessel.geometry, position: { x: 10, y: 10 } };
-  m.vessel.followVessel(vessel, m.state.objects);
+  liveVessel().geometry = { ...liveVessel().geometry, position: { x: 10, y: 10 } };
+  m.vessel.followVessel(liveVessel(), m.state.objects);
   assert.deepEqual(
-    run.geometry.end,
+    liveRun().geometry.end,
     { x: 80, y: 25 },
     "the end followed the vessel",
   );
@@ -1781,7 +1853,7 @@ test("a pipe ending on a vessel wall is attached, follows it, and makes no elbow
   m.pipeTool.reconcileFluidConnections(crossing, m.state.objects);
 
   assert.equal(
-    crossing.engineering?.vesselId,
+    m.state.objects.find((object) => object.id === crossing.id)?.engineering?.vesselId,
     undefined,
     "a crossing pipe is not attached",
   );
@@ -1815,23 +1887,26 @@ test("a pipe held on a tank's lid lets go when the tank becomes a Reservoir", as
   m.ds.addObject(m.state, run);
   m.pipeTool.reconcileFluidConnections(run, m.state.objects);
 
+  const liveRun2 = () => m.state.objects.find((object) => object.id === run.id);
+  const liveVesselRef = () => m.state.objects.find((object) => object.id === vessel.id);
+
   assert.equal(
-    run.engineering?.vesselId,
+    liveRun2().engineering?.vesselId,
     vessel.id,
     "held on the lid of the tank",
   );
 
-  const start = { ...run.geometry.start };
+  const start = { ...liveRun2().geometry.start };
 
-  m.schema.writeField(vessel, "vesselStyle", "open");
+  m.schema.writeField(liveVesselRef(), "vesselStyle", "open");
 
   assert.equal(
-    run.engineering?.vesselId,
+    liveRun2().engineering?.vesselId,
     undefined,
     "an open mouth holds nothing",
   );
   assert.deepEqual(
-    run.geometry.start,
+    liveRun2().geometry.start,
     start,
     "and the pipe stays where it was drawn",
   );

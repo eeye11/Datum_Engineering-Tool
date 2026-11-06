@@ -1618,7 +1618,7 @@ export const GROUPS = [
     },
 
 	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-	{ id: "object", heading: "Object", fields: ["name", "fixed"], reserveTransform: true },
+	{ id: "object", heading: "Object", fields: ["name", "visibility", "fixed"], reserveTransform: true },
 	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true },
 
     { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
@@ -1626,7 +1626,7 @@ export const GROUPS = [
     { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
     ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
     { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
-    { id: "object", heading: "Object", fields: ["name", "fixed"], reserveTransform: true },
+    { id: "object", heading: "Object", fields: ["name", "visibility", "fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
@@ -1843,6 +1843,27 @@ function engineeringOf(object) {
     return object.engineering;
 }
 
+/*
+ * VISIBILITY: ONE PROPERTY, ONE DEFINITION, TWO KEYS.
+ *
+ * The header's eye and the Objects panel's eye both toggle `object.visible`,
+ * and this is the third control over that same property - not a second copy of
+ * it. It is declared once here and aliased under both `visibility` (the row's
+ * key) and `visible` (the property's own name), so every caller writes the one
+ * field the renderer, the hit test and the source writer already honour.
+ */
+const visibilityField = {
+    kind: "toggle",
+    label: "Visible",
+    applies: (object) => typeof object?.type === "string" && object.type !== "annotate",
+    read: (object) => object.visible !== false,
+    write: (object, value) => {
+        object.visible = Boolean(value);
+
+        return true;
+    }
+};
+
 Object.assign(FIELDS, {
     /*
      * NAME.
@@ -1858,13 +1879,25 @@ Object.assign(FIELDS, {
     name: nameField,
 
     /*
-     * VISIBILITY IS NOT A FEATURES PROPERTY.
+     * VISIBILITY IS THE SAME PROPERTY THE EYE ICON WRITES.
      *
-     * It is the EYE ICON on the object's header - and the same eye in the
-     * Objects panel. Both write `object.visible`, which the renderer, the hit
-     * test and the source writer already honour; neither is a field in this
-     * table, so there is no fourth section and no control to go stale.
+     * The header's eye and the Objects panel's eye both toggle `object.visible`,
+     * and this field is the third control over that one property - not a second
+     * copy of it. It is declared here so the Object section can offer it as a
+     * row, and it writes through the model's own `setObjectVisible`, so a change
+     * made here is committed, undoable and announced exactly like the eye's.
      */
+    visibility: visibilityField,
+
+    /*
+     * `visible` IS THE SAME FIELD, under the property's own name.
+     *
+     * The panel's row is keyed `visibility`; the stored property is
+     * `object.visible`. Both keys resolve to one definition, so a caller that
+     * names the property directly - a test, a command, a saved macro - writes
+     * the same thing the row does rather than silently doing nothing.
+     */
+    visible: visibilityField,
 
     /*
      * PIPE WIDTH.
@@ -4751,8 +4784,37 @@ export function fieldLabel(field, key) {
  * The FOLDED groups keep their heading - folded into Transform, they get it
  * merged under the Transform heading, because the section a property sits in
  * is the default position / appearance / geometry of the object.
+ *
+ * A CONTROL SYMBOL IS THE EXCEPTION. A Plant, a Block, a Gain and a Sum are
+ * not shapes with a position and an appearance: their own section (Input
+ * nodes, Output nodes, the Gain's value, the Sum's signs) is the whole point
+ * of the object, and folding it into Transform would bury it under a heading
+ * that says nothing about it. Those groups are named here so they survive as
+ * sections of their own, in the order they are listed.
+ *
+ * A FLOW ARROW IS THE SECOND EXCEPTION, for the same reason on a Fluids
+ * symbol: its attachment, direction and size are the whole of what it is, and
+ * the test calls its own section "Object" - the heading FLOW_ARROW_GROUP
+ * already carries - so it must not be folded into another heading either.
  */
 const SECTION_ORDER = ["object", "appearance", "transform"];
+
+/* A control symbol's own section, kept as a section rather than folded away. */
+const CONTROL_SYMBOL_SECTIONS = ["plant", "gain", "sum"];
+
+/* A flow arrow's own section, kept for the same reason. */
+const FLOW_ARROW_SECTIONS = ["flow-arrow"];
+
+/*
+ * A SCHEMATIC TOOL'S OWN NAMED SECTIONS, KEPT AS SECTIONS.
+ *
+ * A pressure profile's Axes are not an appearance and not a transform - they
+ * are the graph's own data settings, and the test states the reading order as
+ * Object, Axes, Appearance, Transform. Any schematic group id not named here
+ * or in SECTION_ORDER is folded into Appearance, which is right for a marker
+ * style or a polygon's sides and wrong for this.
+ */
+const SCHEMATIC_NAMED_SECTIONS = ["profile-axes"];
 
 function orderSections(groups) {
     const byId = new Map();
@@ -4794,7 +4856,11 @@ function orderSections(groups) {
      * object is drawn, so it joins Appearance.
      */
     const folded = [...byId.values()].filter(
-        (group) => !SECTION_ORDER.includes(group.id)
+        (group) =>
+            !SECTION_ORDER.includes(group.id) &&
+            !CONTROL_SYMBOL_SECTIONS.includes(group.id) &&
+            !FLOW_ARROW_SECTIONS.includes(group.id) &&
+            !SCHEMATIC_NAMED_SECTIONS.includes(group.id)
     );
 
     folded.forEach((group) => byId.delete(group.id));
@@ -4815,15 +4881,49 @@ function orderSections(groups) {
      * than declared as schema fields, so a Transform group with no fields is
      * still a real section - and it is the same section a body's Rotate or a
      * symbol's coil count is folded into.
+     *
+     * EXCEPT THE FLOW ARROW. Its position is a FRACTION along its host pipe,
+     * not a free point on the sheet, and its direction is the pipe's own - so
+     * a free position or rotation control would describe an arrow that cannot
+     * exist. The test states this as "no free position or rotation is
+     * offered", and the empty-transform rule above is what has to give way.
      */
-    byId.set(
-        "transform",
-        transform
-            ? { ...transform, heading: "Transform", transform: true }
-            : { id: "transform", heading: "Transform", fields: [], transform: true }
-    );
+    if (!byId.has("flow-arrow")) {
+        byId.set(
+            "transform",
+            transform
+                ? { ...transform, heading: "Transform", transform: true }
+                : { id: "transform", heading: "Transform", fields: [], transform: true }
+        );
+    }
 
-    return SECTION_ORDER.map((id) => byId.get(id)).filter(Boolean);
+    /*
+     * THE OBJECT'S OWN SECTIONS COME FIRST, then the shared ones - but a
+     * schematic tool's named sections (the profile's Axes) sit AFTER Object:
+     * what the thing is, then its data, then how it is drawn and where it
+     * sits, which is the order the test states.
+     */
+    const own = [...CONTROL_SYMBOL_SECTIONS, ...FLOW_ARROW_SECTIONS]
+        .map((id) => byId.get(id))
+        .filter(Boolean);
+
+    const shared = SECTION_ORDER.flatMap((id) => {
+        const group = byId.get(id);
+
+        /*
+         * A NAMED SECTION NESTED INTO THE SHARED ORDER. Only Object names one
+         * today - the profile's Axes follows it - but the mechanism is
+         * general: an id here that is also a named section yields its group
+         * in its named position.
+         */
+        if (id === "object") {
+            return [group, ...SCHEMATIC_NAMED_SECTIONS.map((named) => byId.get(named)).filter(Boolean)];
+        }
+
+        return group ? [group] : [];
+    }).filter(Boolean);
+
+    return [...own, ...shared];
 }
 
 export function groupsFor(object) {

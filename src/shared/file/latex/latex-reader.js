@@ -741,10 +741,22 @@ export function readLatexDrawing(source, options = {}) {
             } else if ((key === "xscale" || key === "yscale") && value && !isPicture) {
                 const s = Number(value);
                 if (Number.isFinite(s)) composeAfter(frame, key === "xscale" ? { ...IDENTITY, a: s } : { ...IDENTITY, d: s });
+            } else if ((key === "shift" || key === "xshift" || key === "yshift") && isPicture) {
+                /*
+                 * PRINT POSITION ONLY, like the picture's own `scale` above.
+                 *
+                 * The scale and the shift are ONE print transform - the page fit
+                 * the writer applied - and the reader's contract is to undo it,
+                 * not half of it. Dropping only the scale while applying the
+                 * shift reopened a fitted drawing at its authored SIZE but at
+                 * the PRINTED position, offset by the whole shift; undoing both
+                 * returns the drawing to where it was drawn, and a scope's own
+                 * shift inside the picture still applies as TikZ applies it.
+                 */
             } else if (key === "shift" && value) {
                 const p = coordinateValue(value.replace(/^\{|\}$/g, "").trim().replace(/^\(([\s\S]*)\)$/, "$1"), { ...frame, matrix: IDENTITY }, null, new Map(), index);
                 if (p) composeAfter(frame, { ...IDENTITY, e: p.x, f: p.y });
-            } else if ((key === "xshift" || key === "yshift") && value) {
+            } else if ((key === "xshift" || key === "yshift") && value && !isPicture) {
                 const mm = lengthMm(value, frame[key === "xshift" ? "ux" : "uy"]);
                 if (mm !== null) composeAfter(frame, key === "xshift" ? { ...IDENTITY, e: mm } : { ...IDENTITY, f: mm });
             } else if (key === "rotate" && value) {

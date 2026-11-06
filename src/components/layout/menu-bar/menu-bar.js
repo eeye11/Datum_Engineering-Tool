@@ -310,15 +310,25 @@ function placePanelAgainstWindow(label, panel) {
   window.addEventListener("scroll", onMove, { capture: true, passive: true });
   window.addEventListener("resize", onMove, { passive: true });
 
-  const observer = new globalThis.MutationObserver(() => {
-    if (!panel.isConnected) {
-      window.removeEventListener("scroll", onMove, { capture: true });
-      window.removeEventListener("resize", onMove);
-      observer.disconnect();
-    }
-  });
+  /*
+   * AN ENGINE WITHOUT MutationObserver STILL GETS A WORKING MENU.
+   *
+   * The observer only tidies up the two listeners above once the panel leaves
+   * the document. Where it does not exist - a test DOM, an older engine - the
+   * menu must still open and place itself, so the cleanup is skipped rather
+   * than the whole placement throwing.
+   */
+  if (typeof globalThis.MutationObserver === "function") {
+    const observer = new globalThis.MutationObserver(() => {
+      if (!panel.isConnected) {
+        window.removeEventListener("scroll", onMove, { capture: true });
+        window.removeEventListener("resize", onMove);
+        observer.disconnect();
+      }
+    });
 
-  observer.observe(panel.parentNode ?? panel, { childList: true });
+    observer.observe(panel.parentNode ?? panel, { childList: true });
+  }
 }
 
 function placeSubmenu(row, sub) {

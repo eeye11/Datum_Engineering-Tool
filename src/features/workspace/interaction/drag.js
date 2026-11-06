@@ -484,6 +484,20 @@ export function updateManipulationDrag(
         /^corner[0-3]$/.test(editorState.manipulationDrag.kind);
 
     /*
+     * A VESSEL'S WALL, CORNER AND BODY HANDLES READ THE RAW POINTER.
+     *
+     * The vessel publishes its own corners, edge midpoints and centre as snap
+     * candidates, and the drag's anchor is the handle itself - so the
+     * inference pulled every move straight back onto the feature it started
+     * from, and a wall could not be dragged at all nor the tank moved as a
+     * whole. What these handles write is a BOUNDARY or a BODY POSITION, not a
+     * point to be aligned with anything, so they take the pointer as it is.
+     */
+    const draggingVesselHandle =
+        enggVessel.isVesselType(editorState.manipulationDrag.object?.type) &&
+        /^(vessel-(edge|corner|level)|equipment-body)/.test(editorState.manipulationDrag.kind);
+
+    /*
      * GEOMETRY IS RESOLVED THROUGH THE SHARED SNAP PIPELINE.
      *
      * A feature, an endpoint and a body all write REAL geometry, so snapping
@@ -513,7 +527,7 @@ export function updateManipulationDrag(
         Boolean(event.shiftKey);
 
     const resolution =
-        resizingPipe || editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body" || rotating
+        resizingPipe || draggingVesselHandle || editorState.manipulationDrag.group || editorState.manipulationDrag.kind === "body" || rotating
             ? { rawPointerPoint: canvasPointFromEvent(event, false), effectiveConstructionPoint: canvasPointFromEvent(event, false), snapCandidate: null, inference: null, guideline: null }
             : draggingDimension || draggingAnnotate || draggingSumNode
             ? resolvePointerEvent(event)
@@ -523,7 +537,7 @@ export function updateManipulationDrag(
               );
 
     const point =
-        draggingDimension || draggingAnnotate || draggingSumNode
+        draggingDimension || draggingAnnotate || draggingSumNode || draggingVesselHandle
             ? resolution.rawPointerPoint ||
               resolution.effectiveConstructionPoint
             : resolution.effectiveConstructionPoint;
@@ -1441,50 +1455,11 @@ function applyManipulation(
         return true;
     }
 
-    /* ============================================================
- * HELPERS FOR THE SCHEMATIC DRAGS
- * ============================================================ */
-
-/*
- * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
- *
- * A level's line and its fill come from its VESSEL, so a tank that grew or
- * turned takes its levels with it AT THE SAME PERCENTAGE - a half-full tank
- * stays half full - without the level storing a second copy of where it is.
- */
-function refreshLevelsOf(vessel, objects = []) {
-    (objects || []).forEach((object) => {
-        if (enggFluidLevel.isFluidLevelType(object?.type) && object.engineering?.vesselId === vessel.id) {
-            enggFluidLevel.refreshFluidLevel(object, objects);
-        }
-    });
-}
-
-/*
- * WHETHER A BODY DRAG IS THE GENERIC TRANSLATE OR A TOOL'S OWN MOVE.
- *
- * The schematic objects are translated by their own branches above, because
- * each is constrained by something: a reducer by its pipe, a level by its
- * vessel, a direction arrow by its run. Letting the generic translate reach
- * them would move geometry the model derives, so they are answered here first.
- */
-function schematicBodyDrag(object) {
-    return (
-        enggReducer.isReducerType(object?.type) ||
-        enggEquipment.isEquipmentType(object?.type) ||
-        enggFluidLevel.isFluidLevelType(object?.type) ||
-        enggFlowArrows.isFlowDirectionType(object?.type)
-    );
-}
-
-const bodyDragRouted = schematicBodyDrag;
-
-void bodyDragRouted;
-
     const original =
         drag.originals?.[object.id]?.geometry;
 
     if (object.type === "point") {
+        console.log("TRACE point branch");
         const target =
             g.position || g.point || g;
 
@@ -2377,6 +2352,7 @@ void bodyDragRouted;
     }
 
     if (isRectangleLike(object)) {
+        console.log("TRACE rectangle branch, kind:", drag.kind, "object:", object.type);
         if (object.metadata?.stressElement && drag.kind.startsWith("corner")) {
             Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
             return;
@@ -2398,7 +2374,7 @@ void bodyDragRouted;
         );
 
         if (Number.isFinite(cornerIndex)) {
-            const resized = resizeBoxFromCorner(original.geometry, cornerIndex, point);
+            const resized = resizeBoxFromCorner(original, cornerIndex, point);
 
             if (resized) {
                 g.width = resized.width;
@@ -2516,6 +2492,46 @@ void bodyDragRouted;
         }
     }
 }
+
+/* ============================================================
+ * HELPERS FOR THE SCHEMATIC DRAGS
+ * ============================================================ */
+
+/*
+ * RE-SEAT EVERY LEVEL ON A VESSEL after it moved or resized.
+ *
+ * A level's line and its fill come from its VESSEL, so a tank that grew or
+ * turned takes its levels with it AT THE SAME PERCENTAGE - a half-full tank
+ * stays half full - without the level storing a second copy of where it is.
+ */
+function refreshLevelsOf(vessel, objects = []) {
+    (objects || []).forEach((object) => {
+        if (enggFluidLevel.isFluidLevelType(object?.type) && object.engineering?.vesselId === vessel.id) {
+            enggFluidLevel.refreshFluidLevel(object, objects);
+        }
+    });
+}
+
+/*
+ * WHETHER A BODY DRAG IS THE GENERIC TRANSLATE OR A TOOL'S OWN MOVE.
+ *
+ * The schematic objects are translated by their own branches above, because
+ * each is constrained by something: a reducer by its pipe, a level by its
+ * vessel, a direction arrow by its run. Letting the generic translate reach
+ * them would move geometry the model derives, so they are answered here first.
+ */
+function schematicBodyDrag(object) {
+    return (
+        enggReducer.isReducerType(object?.type) ||
+        enggEquipment.isEquipmentType(object?.type) ||
+        enggFluidLevel.isFluidLevelType(object?.type) ||
+        enggFlowArrows.isFlowDirectionType(object?.type)
+    );
+}
+
+const bodyDragRouted = schematicBodyDrag;
+
+void bodyDragRouted;
 
 /* ============================================================
  * THE ELBOW'S OWN DRAGS
