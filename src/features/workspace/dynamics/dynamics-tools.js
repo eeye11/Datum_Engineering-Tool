@@ -355,9 +355,33 @@ export function openDynamicsMenu(button, familyId, { onActivate, onMessage } = {
  * tool wants one. Nothing here is a per-tool implementation - a tool that
  * needs a different start edits the object after it is built.
  */
+/*
+ * A DEFAULT INK IS BLACK, NOT THE THEME'S.
+ *
+ * The sheet's `styleDefaults` carry the theme's default line colour (a dark teal
+ * on a light sheet, ice on a dark one) so new geometry reads against whichever
+ * paper the interface is in. That colour is interface, not drawing: writing it
+ * onto a feature makes the drawing itself teal, and makes it change when the
+ * theme changes. The value the SHEET gives a new feature is black - the same
+ * value a saved document outside the application holds - so a Dynamics object's
+ * default is `DRAWING_INK` unless the student chose otherwise.
+ */
+export const DRAWING_INK = "#000000";
+
+/*
+ * The style a new Dynamics object starts with. It is the sheet's own defaults
+ * with the ink resolved to black (see above) - never the theme's.
+ */
 export function dynamicsCreationStyle() {
     return {
-        ...drawingState.styleDefaults
+        ...drawingState.styleDefaults,
+
+        /* The drawing's own ink, not the interface theme's. */
+        stroke:
+            drawingState.styleDefaults?.strokeExplicit &&
+            drawingState.styleDefaults.stroke
+                ? drawingState.styleDefaults.stroke
+                : DRAWING_INK,
     };
 }
 

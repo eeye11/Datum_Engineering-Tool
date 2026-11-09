@@ -225,7 +225,7 @@ console.log("\n  a Moment is placed, and THEN asked about\n");
   );
 
   check(
-    "the moment is committed before the popup is opened",
+    "the moment is committed before the value is asked for",
     (() => {
       const addAt = preview.indexOf("addObject(");
       const promptAt = preview.indexOf("openMomentValuePrompt(");
@@ -236,9 +236,16 @@ console.log("\n  a Moment is placed, and THEN asked about\n");
   );
 
   check(
-    "and it uses the SHARED value popup",
-    /\bopenLoadValuePopup\(\{/.test(preview),
-    "a bespoke moment dialog would be a second thing to learn",
+    "and the question is asked ON THE DRAWING, not in a popup",
+    /\bopenPlacementValueField\(\{/.test(preview) &&
+      !/\bopenLoadValuePopup\(\{/.test(preview),
+    "a popup covers the object it is asking about; the field is typed where the value reads",
+  );
+
+  check(
+    "and the field opens EMPTY rather than suggesting a number",
+    /value:\s*""/.test(preview),
+    "a suggested number is a value the student never entered",
   );
 
   check(
@@ -269,7 +276,7 @@ console.log("\n  a unit control is never narrower than its own symbol\n");
   const popupUnit = css.match(/\.drawing-creation-dimension-unit \{[^}]*\}/);
 
   check(
-    "the popup's unit control has NO fixed width",
+    "the value popup's unit control has NO fixed width",
     popupUnit && !/min-width:\s*\d+px/.test(popupUnit[0]),
     "a fixed width is what clipped kN·m - a select cannot grow past one",
   );

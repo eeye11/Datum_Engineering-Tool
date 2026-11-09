@@ -4,8 +4,9 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
-import { openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
-import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { openPlacementValueField } from "../../../shared/ui/editors/placement-value-field.js";
+import { readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { cameraSignal, renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { distanceToSegment, isRectangleLike, objectPoints } from "../interaction/hit-testing.js";
@@ -1364,55 +1365,72 @@ export function continueDistributedLoadBuild(
 
     /*
      * ========================================================
-     * THE POINT'S MAGNITUDE IS ASKED FOR, PER POINT
+     * THE POINT'S MAGNITUDE IS ASKED FOR, PER POINT, ON THE DRAWING
      * ========================================================
      *
      * Placing a profile point fixes WHERE it acts; its magnitude is a
-     * physical value, so it is asked for rather than guessed from a cursor
-     * distance. The cursor's offset along the load's direction is offered as
-     * the SUGGESTION, so a student who is happy with the size they dragged
-     * presses Enter, and one who wants a round number types it.
+     * physical value, so it is asked for. It is asked for as ONE EMPTY LINE OF
+     * TEXT at the point itself, not as a popup - and the cursor's offset is
+     * NOT offered as a suggestion, because a suggestion is a value the student
+     * never entered. An empty answer is Unknown; a typed number, or a typed
+     * unit after it (`3 kN/m`), is theirs.
      *
-     * The point is NOT committed until the popup is confirmed. Cancelling
+     * The point is NOT committed until the field is committed. Cancelling
      * removes it, so a profile never gains a point whose value nobody gave -
      * which is the state the old flow could reach by clicking quickly.
+     *
+     * THE BOTTOM BAR SAYS WHAT THE OPEN FIELD IS ASKING FOR. The current step
+     * belongs in one place, and while the value is being entered that step is
+     * the entry itself.
      */
-    const station =
-        draft.points.length
-            ? draft.points[draft.points.length - 1]
-            : null;
+    setToolMessage(
+        "Enter the magnitude for this load point"
+    );
 
-    const suggested =
-        station && Number.isFinite(station.magnitude)
-            ? station.magnitude
-            : 0;
-
-    openLoadValuePopup({
-        title: "Varying Load Point",
-        label: `Point ${draft.points.length} Magnitude`,
-        value: Number(suggested).toFixed(2),
-        unit: loadUnitOfInteraction(interaction),
-
-        /*
-         * THE BOTTOM BAR SAYS WHAT THE OPEN POPUP IS ASKING FOR. The current
-         * step belongs in one place, and while the value is being entered that
-         * step is the entry itself.
-         */
-        onOpen: () => {
-            setToolMessage(
-                "Enter the magnitude for this load point"
-            );
+    openPlacementValueField({
+        object: {
+            type: "point",
+            geometry: { position: point }
         },
+        value: "",
+        state: drawingState,
+        cameraSignal,
 
-        onConfirm: confirmed => {
+        onApply: confirmed => {
+            const answer = readStaticsValue(
+                confirmed.text,
+                loadUnitOfInteraction(interaction)
+            );
+
+            /*
+             * A REFUSED ANSWER IS KEPT IN THE FIELD. A profile point is a
+             * number (a symbol is not a length along an axis), so a symbol is
+             * not silently turned into zero - it stays in the field with the
+             * reason, which is what `ok: false` means to the editor.
+             */
+            if (
+                answer.kind !== "number" &&
+                answer.kind !== "unknown"
+            ) {
+                return {
+                    ok: false,
+                    error: "Enter a number for this load point"
+                };
+            }
+
             commitDistributedLoadPoint({
                 resolution,
                 point,
                 draft,
                 interaction,
-                magnitude: confirmed.value,
-                unit: confirmed.unit
+                magnitude:
+                    answer.kind === "number"
+                        ? answer.value
+                        : null,
+                unit: answer.unit || loadUnitOfInteraction(interaction)
             });
+
+            return undefined;
         },
 
         onCancel: () => {
@@ -1480,10 +1498,19 @@ function commitDistributedLoadPoint({
                 Math.abs(existingPoint.t - t) < 1e-6
         );
 
-    const entry = {
-        t,
-        magnitude: Math.max(0, Number(magnitude) || 0)
-    };
+    /*
+     * AN UNKNOWN POINT IS NOT ZERO. A student who confirmed an EMPTY field has
+     * not said the load is nothing there - they have said they have not worked
+     * it out yet. So the point is kept at the station it was placed at, with no
+     * magnitude, rather than being silently given a measurement of zero.
+     */
+    const entry =
+        magnitude === null || magnitude === undefined
+            ? { t }
+            : {
+                  t,
+                  magnitude: Math.max(0, Number(magnitude) || 0)
+              };
 
     if (existing >= 0) {
         points[existing] = entry;
@@ -1763,22 +1790,22 @@ export function takeDistributedLoadVector(
 
     /*
      * ========================================================
-     * THE MAGNITUDE IS ASKED FOR IN A POPUP
+     * THE MAGNITUDE IS ASKED FOR ON THE DRAWING
      * ========================================================
      *
-     * The cursor sets the DIRECTION, and its distance is offered as the
-     * SUGGESTED magnitude - so a student who is happy with the size they
-     * dragged simply presses Enter, and one who wants a round number types
-     * it. Either way the value is a real physical load the student stated,
-     * not a screen distance silently reinterpreted.
+     * The cursor sets the DIRECTION and how far the arrows reach. The NUMBER is
+     * a physical load, so it is asked for - as ONE EMPTY LINE OF TEXT in the
+     * middle of the loaded region, not as a popup over the drawing. The
+     * cursor's distance is NOT offered as a suggested magnitude: a suggestion
+     * is a value the student never entered, and accepting it would answer the
+     * question for them. An empty answer is Unknown; a number is theirs.
      *
-     * The load is not created until the popup is confirmed, so a cancelled
-     * popup leaves nothing behind - the same guarantee the creation-size
-     * popup gives for a Beam.
+     * The load is not created until the field is committed, so Escape leaves
+     * nothing behind - the same guarantee a cancelled popup gave.
      */
-    openLoadMagnitudePopup({
+    openLoadMagnitudeField({
         direction: degrees,
-        suggestedMagnitude: length
+        drawnHeight: length
     });
 
     return true;
@@ -1790,11 +1817,11 @@ export function takeDistributedLoadVector(
  * Kept separate from the gesture that chose the direction so the two
  * questions do not share a code path: the direction comes from the pointer
  * and is settled here, the magnitude comes from the student's own entry and
- * is settled in the popup's callback.
+ * is settled when the field is committed.
  */
-function openLoadMagnitudePopup({
+function openLoadMagnitudeField({
     direction,
-    suggestedMagnitude
+    drawnHeight
 }) {
     const interaction =
         drawingState.interaction;
@@ -1803,36 +1830,76 @@ function openLoadMagnitudePopup({
         interaction.loadUnit ??
         enggLoadProfile.DEFAULT_LOAD_UNIT;
 
-    openLoadValuePopup({
-        title: "Distributed Load",
-        label: "Magnitude",
-        value: Number(suggestedMagnitude).toFixed(2),
-        unit,
+    const start = interaction.loadStart;
+    const end = interaction.loadEnd;
 
-        /*
-         * THE BOTTOM BAR REPORTS THE OPEN POPUP'S QUESTION. The current step
-         * is said in one place, and while the value is being entered that step
-         * is the entry itself.
-         */
-        onOpen: () => {
-            setToolMessage(
-                "Enter the load magnitude"
+    /*
+     * THE FIELD OPENS IN THE MIDDLE OF THE REGION THE LOAD SPANS - where the
+     * load's own magnitude annotation is drawn - so the number is typed where
+     * it will read on the sheet.
+     */
+    const anchor =
+        start && end
+            ? {
+                  type: "point",
+                  geometry: {
+                      position: {
+                          x: (start.x + end.x) / 2,
+                          y: (start.y + end.y) / 2
+                      }
+                  }
+              }
+            : null;
+
+    if (!anchor) {
+        setToolMessage(
+            "Distributed load cancelled"
+        );
+
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    setToolMessage(
+        "Enter the load magnitude"
+    );
+
+    openPlacementValueField({
+        object: anchor,
+        value: "",
+        state: drawingState,
+        cameraSignal,
+
+        onApply: confirmed => {
+            const answer = readStaticsValue(
+                confirmed.text,
+                unit
             );
-        },
 
-        onConfirm: confirmed => {
             commitConstantLoadFromPopup({
                 direction,
-                magnitude: confirmed.value,
-                unit: confirmed.unit,
+                magnitude:
+                    answer.kind === "number"
+                        ? answer.value
+                        : null,
+                unit: answer.unit || unit,
 
                 /*
                  * THE DRAWN HEIGHT IS THE CLICK'S, NOT THE TYPED VALUE. The
                  * distance the student pulled out from the span is how far the
                  * arrows reach; the number confirmed here is the label.
                  */
-                drawnHeight: suggestedMagnitude
+                drawnHeight,
+
+                /* The statement the field's answer made - see below. */
+                magnitudeLabel:
+                    answer.kind === "symbol"
+                        ? answer.text
+                        : null
             });
+
+            return undefined;
         },
 
         onCancel: () => {
@@ -1840,24 +1907,33 @@ function openLoadMagnitudePopup({
                 "Distributed load cancelled"
             );
 
+            removeConstantLoadPreview();
             renderCurrentDrawing();
         }
     });
 }
 
+/* A cancelled load leaves nothing drawn. */
+function removeConstantLoadPreview() {
+    if (drawingState.interaction) {
+        drawingState.interaction.preview = null;
+    }
+}
+
 /*
- * Commit the constant load the popup confirmed.
+ * Commit the constant load the field confirmed.
  *
  * The same commit the direct path used, with two differences: the
- * magnitude is the number the student typed rather than the cursor
- * distance, and the UNIT they chose is recorded on the load so the drawing
- * and the Features panel state it the same way.
+ * magnitude is the number the student typed (or null, for Unknown) rather
+ * than the cursor distance, and the UNIT they stated is recorded on the load
+ * so the drawing and the Features panel state it the same way.
  */
 function commitConstantLoadFromPopup({
     direction,
     magnitude,
     unit,
-    drawnHeight
+    drawnHeight,
+    magnitudeLabel = null
 }) {
     const previous =
         enggDrawingState.snapshotDrawing(
@@ -1880,6 +1956,17 @@ function commitConstantLoadFromPopup({
         renderCurrentDrawing();
 
         return;
+    }
+
+    removeConstantLoadPreview();
+
+    /*
+     * A SYMBOL STAYS A SYMBOL. A student who typed `w` for the magnitude has
+     * stated a load, not a number: the label is kept verbatim so the annotation
+     * and the panel print `w` rather than a zero nobody entered.
+     */
+    if (magnitudeLabel) {
+        created.magnitudeLabel = magnitudeLabel;
     }
 
     enggDrawingState.commitDrawingChange(
@@ -2005,25 +2092,36 @@ function commitConstantLoad(
         return null;
     }
 
-    /*
-     * THE MAGNITUDE IS THE ONE THE DRAG CHOSE, not the draft's - the draft is
-     * built without a cursor here, so it can only be the region. Passing the
-     * drag's own length in keeps the committed intensity identical to the one
-     * the student was shown.
-     */
-    const loadMagnitude =
-        Math.max(
-            0,
-            Number(
-                magnitude ?? draft.magnitude
-            ) || 0
-        );
-
-    if (loadMagnitude <= 0) {
+    if (!Number.isFinite(direction)) {
         return null;
     }
 
-    if (!Number.isFinite(direction)) {
+    /*
+     * AN UNKNOWN MAGNITUDE IS AN ANSWER, NOT A REFUSAL.
+     *
+     * A student who confirms an EMPTY field has said they have not worked the
+     * magnitude out yet. The load is still placed - on the region and in the
+     * direction they drew - and its magnitude is marked Unknown, which is what
+     * the Features panel already knows how to print. Treating that as "no
+     * magnitude" and returning null would make the empty answer silently throw
+     * away a load the student had just placed.
+     */
+    const unknownMagnitude =
+        magnitude === null ||
+        magnitude === undefined ||
+        magnitude === "";
+
+    /* The number the gesture or the field settled on; 0 when it is Unknown. */
+    const loadMagnitude = unknownMagnitude
+        ? 0
+        : Math.max(
+              0,
+              Number(
+                  magnitude ?? draft.magnitude
+              ) || 0
+          );
+
+    if (!unknownMagnitude && loadMagnitude <= 0) {
         return null;
     }
 
@@ -2072,6 +2170,15 @@ function commitConstantLoad(
 
     object.geometry.direction =
         direction;
+
+    /*
+     * THE UNKNOWN MARK, WRITTEN WHERE THE PANEL AND THE ANNOTATION READ IT. A
+     * number clears it; an empty answer sets it.
+     */
+    object.unknownValues = {
+        ...(object.unknownValues || {}),
+        magnitude: unknownMagnitude
+    };
 
     if (interaction.loadSourceId) {
         object.parentId =

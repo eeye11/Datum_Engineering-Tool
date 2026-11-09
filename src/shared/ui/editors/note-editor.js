@@ -192,6 +192,19 @@ function focusField(input) {
 }
 
 /*
+ * A LABEL FIELD OPENS EMPTY, so its caret goes AT THE START of the box rather
+ * than after the end of the text - an empty field has no end to sit after, and
+ * an empty value opens with the caret already where the first character goes.
+ */
+function focusFieldForInput(input, empty) {
+  focusField(input);
+
+  if (empty) {
+    input?.setSelectionRange?.(0, 0);
+  }
+}
+
+/*
  * POSITION THE PROMPT BESIDE THE ANCHOR.
  *
  * The prompt opens BELOW-RIGHT of the node when that fits, because the drawing
@@ -343,6 +356,12 @@ function openLabelField(options, anchor) {
   host.setAttribute("role", "group");
   host.setAttribute("aria-label", "Label");
 
+  host.dataset.empty = String(!String(options.text ?? "").length);
+
+  if (options.placeBeside === true) {
+    host.classList.add("drawing-label-entry-beside");
+  }
+
   host.innerHTML = fieldMarkup(
     false,
     "",
@@ -370,6 +389,26 @@ function openLabelField(options, anchor) {
     input.style.background = "transparent";
   }
 
+  /*
+   * AN EMPTY LABEL FIELD SHOWS ITS OWN BOX.
+   *
+   * A field that already holds words IS its box - the underline reaches as far
+   * as the text. An EMPTY one underlines nothing, which looks like nothing was
+   * opened at all, so while it is empty it carries a faint outline at the size
+   * of its typing area. The outline goes the moment a character is typed; the
+   * field is closed by then in the usual case, and the drawing is left with no
+   * box in it either way.
+   */
+  if (options.labelField === true) {
+    const mark = () => {
+      host.dataset.empty = String(!input.value.length);
+    };
+
+    input.addEventListener("input", mark);
+
+    mark();
+  }
+
   const place = () => {
     const rect =
       typeof options.anchor === "function" ? options.anchor() : anchor;
@@ -386,11 +425,55 @@ function openLabelField(options, anchor) {
     const zoom = Number(options.zoom) > 0 ? Number(options.zoom) : 1;
     const size = Math.max(10, Math.round(14 * Math.min(1.6, Math.max(0.7, zoom))));
 
-    host.style.left = `${Math.round(rect.left + 4)}px`;
-    host.style.top = `${Math.round(rect.top - size)}px`;
     host.style.fontSize = `${size}px`;
     input.style.fontSize = `${size}px`;
     input.style.lineHeight = `${Math.round(size * 1.2)}px`;
+
+    /*
+     * BESIDE THE ANCHOR, WHEN THE CALLER ASKS FOR IT.
+     *
+     * A label is written where it will be drawn, so it sits ON its anchor. A
+     * VALUE - a force's magnitude at its arrowhead - has no drawn text of its
+     * own to sit on, and sitting on the arrowhead would put the field over the
+     * arrow it names. So a value is hung just off the anchor, level with it, on
+     * the side with room - never over the drawing it belongs to.
+     */
+    if (options.placeBeside === true) {
+      const nodeX = Number(rect.left) || 0;
+      const nodeY = Number(rect.top) || 0;
+
+      const width = host.offsetWidth || 120;
+      const height = host.offsetHeight || size * 2;
+      const gap = Math.max(8, Math.round(size * 0.9));
+
+      const margin = 6;
+      const windowWidth = Number(globalThis.window?.innerWidth) || width + margin * 2;
+      const windowHeight =
+        Number(globalThis.window?.innerHeight) || height + margin * 2;
+      const right = Math.min(visibleRight(), windowWidth) - margin;
+      const bottom = windowHeight - margin;
+
+      /* To the RIGHT of the anchor when the value fits there, otherwise LEFT. */
+      let left =
+        nodeX + gap + width <= right
+          ? nodeX + gap
+          : nodeX - gap - width;
+
+      /* CENTRED on the anchor's line, so it reads as belonging to that point. */
+      let top = nodeY - height / 2;
+
+      left = Math.max(margin, Math.min(left, right - width));
+      top = Math.max(margin, Math.min(top, bottom - height));
+
+      host.style.left = `${Math.round(left)}px`;
+      host.style.top = `${Math.round(top)}px`;
+      host.dataset.side = left < nodeX ? "left" : "right";
+
+      return;
+    }
+
+    host.style.left = `${Math.round(rect.left + 4)}px`;
+    host.style.top = `${Math.round(rect.top - size)}px`;
   };
 
   options.place = place;
@@ -410,12 +493,26 @@ function openLabelFlow(options, anchor) {
   const place = openLabelField(options, anchor);
   const input = openDialog.querySelector("#noteText");
 
+  /*
+   * THE ANSWER IS APPLIED BEFORE THE FIELD GOES AWAY, AND A REFUSED ONE KEEPS
+   * IT OPEN - the same contract every other on-drawing editor has. Without
+   * this an answer the caller cannot use would close the field and leave the
+   * student with no sign of why it was not taken.
+   */
   const apply = () => {
     const text = input ? input.value : "";
 
+    const result = options.onApply?.(text);
+
+    if (result && result.ok === false) {
+      input?.focus?.();
+
+      return false;
+    }
+
     close();
 
-    options.onApply?.(text);
+    return true;
   };
 
   const cancel = () => {
@@ -437,9 +534,13 @@ function openLabelFlow(options, anchor) {
       return;
     }
 
-    finished = true;
-
-    apply();
+    /*
+     * A REFUSED ANSWER LEAVES THE FIELD UP AND STILL LISTENING. Latching
+     * `finished` before the answer was known meant a press elsewhere with an
+     * unusable value locked the field open for good - it would no longer react
+     * to any press at all.
+     */
+    finished = apply() === true;
   };
 
   stopOutsidePress = () => {
@@ -453,7 +554,7 @@ function openLabelFlow(options, anchor) {
   }
 
   place();
-  focusField(input);
+  focusFieldForInput(input, !String(input?.value ?? "").length);
 
   return openDialog;
 }

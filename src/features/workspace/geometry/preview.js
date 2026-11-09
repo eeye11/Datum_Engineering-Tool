@@ -11,7 +11,7 @@ import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import { analysisAxisForPlacement } from "../statics/analysis-tools.js";
 import { isAnnotationTool } from "../annotate/annotation-tool.js";
 import { annotateInstruction, isAnnotateTool, updateAnnotateAnchorPreview } from "../annotate/annotate-creation.js";
-import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { cameraSignal, renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { isProcessPlotTool, processPathInstruction } from "../thermodynamics/process-path.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { dimensionSelectionInstruction } from "../annotate/dimension-placement.js";
@@ -27,7 +27,8 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
-import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { applyStaticsValue, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { openPlacementValueField } from "../../../shared/ui/editors/placement-value-field.js";
 import { ROUTE_PHASE, ELBOW_PHASE, routeInstruction, routeSegmentPreview, elbowGesturePreview, elbowInstruction } from "../interaction/pipe-duct-tool.js";
 import { inlinePreviewAt } from "../interaction/fluids-schematic-tool.js";
 import { createDynamicsPreview } from "../dynamics/dynamics-model.js";
@@ -2098,17 +2099,17 @@ function staticsPreviewType(
 
         /*
          * ========================================================
-         * NOW ASK WHAT ITS MAGNITUDE IS
+         * NOW ASK WHAT ITS MAGNITUDE IS, ON THE DRAWING
          * ========================================================
          *
          * THE ORDER IS THE REQUIREMENT: place the moment, see it on the sheet,
          * and only then answer for it. Asking first would be asking about
-         * something not yet drawn - the same mistake the creation-size popup
-         * avoids by keeping the geometry on screen while the number is typed.
+         * something not yet drawn - the same mistake a creation popup avoids by
+         * keeping the geometry on screen while the number is typed.
          *
-         * It is the SAME popup a Point Force and a load magnitude use, with
-         * the MOMENT units, so the student learns one value box rather than
-         * one per quantity.
+         * It is the SAME on-drawing field a Point Force and a load magnitude
+         * use - one line of text at the moment's own anchor, not a popup - so
+         * the student learns one place to answer rather than one per quantity.
          */
         openMomentValuePrompt(stored, previousObjects);
 
@@ -2123,46 +2124,39 @@ function staticsPreviewType(
      * three places the model already keeps those states. So `M`, `250` and an
      * empty box all work, and none of them is silently turned into zero.
      *
+     * THE FIELD STARTS EMPTY, even though the moment was just placed: it was
+     * placed by ONE click, so there is no cursor distance and no suggestion to
+     * offer. An empty box is Unknown, which is exactly what a freshly placed
+     * moment is until the student says otherwise.
+     *
      * EXPORTED because a moment has TWO creation paths - the two-stage one on a
      * body, and the single-click one in free space - and both must ask the SAME
-     * question through the SAME popup. A copy of this in the other path would
+     * question through the SAME field. A copy of this in the other path would
      * be a second place for `M` to mean a number.
      */
     export function openMomentValuePrompt(object, previousObjects) {
-        openLoadValuePopup({
-            title: "Applied Moment",
-            label: "Magnitude",
+        setToolMessage(
+            "Enter the moment magnitude - leave it empty for Unknown"
+        );
 
-            value: Number(object.geometry.magnitude) || "",
+        openPlacementValueField({
+            object,
+            value: "",
+            state: drawingState,
+            cameraSignal,
 
-            unit: momentUnit(object),
-
-            /*
-             * A MOMENT IS STATED IN A MOMENT UNIT. The popup is shared with
-             * forces and loads, whose units are N and kN/m, so the list is
-             * given here rather than assumed - offering kN/m for a moment
-             * would name the wrong quantity entirely.
-             */
-            units: MOMENT_UNITS,
-
-            onOpen: () => {
-                setToolMessage(
-                    "Enter the moment magnitude - leave it empty for Unknown"
-                );
-            },
-
-            onConfirm: (confirmed) => {
+            onApply: (confirmed) => {
                 const answer = readStaticsValue(
-                    confirmed.text ?? "",
-                    confirmed.unit
+                    confirmed.text,
+                    momentUnit(object)
                 );
 
                 if (answer.kind === "number") {
                     /*
                      * THE STORED MAGNITUDE IS IN THE BASE UNIT, N·m. The
-                     * unit control says how it is WRITTEN, and the panel
-                     * converts base -> display for reading - so a number
-                     * typed in kN·m is taken back to N·m before it is
+                     * student writes the unit in the field (`2.5 kN·m`), and
+                     * the panel converts base -> display for reading - so a
+                     * number typed in kN·m is taken back to N·m before it is
                      * stored. Without this, typing 2.5 against a kN·m
                      * moment stored 2.5 N·m and the moment became a
                      * thousandth of what the student entered.
@@ -2234,8 +2228,8 @@ function staticsPreviewType(
      * pairs a student actually writes. This used to be its own literal list,
      * which disagreed with the one on the load profile - the two code paths
      * offered different units for the same quantity. `unitsFor("moment")` is
-     * the ONE list, so the popup and the Features panel offer the same
-     * choices and a unit added to the table appears in both.
+     * the ONE list, so the field the student types into and the Features panel
+     * read the same unit, and a unit added to the table is accepted by both.
      */
     const MOMENT_UNITS =
         enggQuantities?.unitsFor?.("moment") ||

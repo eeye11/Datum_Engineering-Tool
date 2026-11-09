@@ -53,7 +53,7 @@ test("group movement preserves magnitude offsets and resizing scales them as vec
     assert.deepEqual(force.geometry.magnitudeOffset, { x: 30, y: -15 });
 });
 
-test("force labels default beyond the tail and remain inside selection bounds after moving", async () => {
+test("force labels default beyond the arrowhead and remain inside selection bounds after moving", async () => {
     const { default: drawing } = await import("../src/shared/model/drawing-state.js");
     const { default: annotations } = await import("../src/features/workspace/model/annotations/annotation-model.js");
     const { default: loads } = await import("../src/features/workspace/model/analysis/load-profile.js");
@@ -65,9 +65,15 @@ test("force labels default beyond the tail and remain inside selection bounds af
     assert.ok(label);
     const drawn = loads.forceGeometry(state, force.geometry);
     const anchor = annotations.annotationAnchor(label, state);
-    assert.ok((anchor.x - drawn.tail.x) * (drawn.head.x - drawn.tail.x) +
-        (anchor.y - drawn.tail.y) * (drawn.head.y - drawn.tail.y) < 0,
-        "default label lies behind the tail, away from the arrowhead");
+    /*
+     * PAST THE HEAD, NOT BEHIND THE TAIL. The creation field asks for the
+     * magnitude beside the arrowhead, so the committed number must stay on
+     * that side - anchoring it to the tail moved it across the arrow the
+     * moment Enter was pressed.
+     */
+    assert.ok((anchor.x - drawn.head.x) * (drawn.head.x - drawn.tail.x) +
+        (anchor.y - drawn.head.y) * (drawn.head.y - drawn.tail.y) > 0,
+        "default label lies beyond the arrowhead it names");
 
     force.geometry.magnitudeOffset = { x: 120, y: 80 };
     const movedLabel = annotations.derivedAnnotation(force, state);

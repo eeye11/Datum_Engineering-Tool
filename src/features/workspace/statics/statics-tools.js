@@ -25,7 +25,13 @@ export const STATICS_TOOL_MENUS = {
      * Moment layer to pass through and no Couple variant to choose.
      */
     load: [
-        { id: "point-force", label: "Point Load", iconLabel: "Point Force" },
+        /*
+         * `iconLabel` IS THE ICON'S OWN KEY in the toolbar's art table, not the
+         * label's text. It is spelled here because a label and its icon key are
+         * not the same field - and a mismatch would mean a blank button, not a
+         * wrong picture.
+         */
+        { id: "point-force", label: "Point Load", iconLabel: "Point Load" },
         { id: "distributed-load", label: "Distributed Load" },
         {
             id: "varying-distributed-load",

@@ -9,7 +9,7 @@ import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import { defaultFixedFor, toolAppearance, toolSetting } from "../../../components/layout/panels/features-pane.js";
 import { analysisSourceBody, diagramPrerequisiteMessage } from "../statics/analysis-tools.js";
-import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { cameraSignal, renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { COORDINATE_SYSTEM_LENGTH, COORDINATE_SYSTEM_TYPE, staticsForceLineWidth } from "../constants.js";
 import { arcThroughThreePoints, distance, rectangleGeometry, resolveCentrepointArc } from "./construction-geometry.js";
 import { commitCreatedFeature } from "./creation-commit.js";
@@ -20,7 +20,8 @@ import { carnotCycleFeatures } from "../model/thermodynamics/carnot-cycle.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
-import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { applyStaticsValue, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
+import { openPlacementValueField } from "../../../shared/ui/editors/placement-value-field.js";
 import { LOAD_BUILD_PHASES, beginDistributedLoadConstruction, continueDistributedLoadBuild, distributedLoadDirectionCursor, distributedLoadPointOnBody, distributedLoadRegionMidpoint, isVaryingLoadTool, startDistributedLoadBuild, takeDistributedLoadEnd, takeDistributedLoadStart, takeDistributedLoadVector } from "../statics/load-tool.js";
 import { commitMomentPlacement } from "./preview.js";
 import { beginStaticsAttachment, continueStaticsAttachment, staticsBodyAtPoint } from "../statics/statics-attachment.js";
@@ -2165,19 +2166,24 @@ export function beginOrCompleteGeometry(
 
         /*
          * ========================================================
-         * A POINT FORCE ASKS FOR ITS MAGNITUDE, IN A POPUP
+         * A POINT FORCE ASKS FOR ITS MAGNITUDE ON THE DRAWING
          * ========================================================
          *
          * The drag already decided WHERE the force acts and WHICH WAY it
-         * points, and the cursor distance is offered as the SUGGESTED
-         * magnitude - so a student happy with the size they dragged presses
-         * Enter, and one who wants a round number types it. Either way the
-         * stored magnitude is a real physical value the student stated, not a
-         * screen distance silently reinterpreted.
+         * points. What it does NOT know is the magnitude - that is a physical
+         * value the student states, so it is asked for.
          *
-         * The force is NOT created until the popup is confirmed, so a
-         * cancelled popup leaves nothing behind - the same guarantee the
-         * creation-size popup gives for a Beam.
+         * IT IS ASKED FOR AS AN EMPTY LINE OF TEXT ON THE SHEET, at the
+         * force's own anchor - not as a popup. The popup covered the arrow it
+         * was asking about, and it offered the drag's cursor distance as a
+         * suggested number; that suggestion was a value nobody entered, and
+         * pressing Enter 'answered' with a figure the program made up. The
+         * field now starts EMPTY and stays empty unless the student types:
+         * an empty answer is Unknown, a number is that number, and a symbol is
+         * their own.
+         *
+         * The force is NOT created until the field is committed, so Escape
+         * leaves nothing behind - the same guarantee a cancelled popup gave.
          *
          * THE CURSOR-DRIVEN CREATION IS UNTOUCHED. The drag still defines the
          * application point, the direction and the initial drawn length; this
@@ -2188,44 +2194,32 @@ export function beginOrCompleteGeometry(
             drawingState.activeTool ===
             "point-force"
         ) {
-            const geometry =
-                object.geometry || {};
-
-            const suggested =
-                Number(geometry.magnitude) || 0;
-
             // Keep the completed arrow visible while its value is pending.
             // It enters the document only after confirmation, as one undo step.
             drawingState.interaction.phase = "point-force-value";
             drawingState.interaction.preview = object;
+            drawingState.interaction.previewObjects = [object];
             renderCurrentDrawing();
 
-            openLoadValuePopup({
-                title: "Point Load",
-                label: "Magnitude",
-                value: suggested.toFixed(2),
-                unit: enggLoadProfile.DEFAULT_FORCE_UNIT,
+            setToolMessage(
+                "Enter the force magnitude"
+            );
+
+            openPlacementValueField({
+                object,
 
                 /*
-                 * A FORCE IS STATED IN kN OR N.
-                 *
-                 * The popup is shared with the load magnitudes, so its unit
-                 * list is given here rather than assumed - a force offered
-                 * kN/m would name the wrong quantity entirely. These are the
-                 * force units, and the student picks which to read in.
+                 * AT THE ARROWHEAD. The magnitude is typed where the finished
+                 * number is written - at the tip of the arrow the drag drew -
+                 * and the field hangs just off that point, so it names the
+                 * force without covering it.
                  */
-                units: enggLoadProfile.FORCE_UNITS,
+                point: object.geometry.end || null,
+                value: "",
+                state: drawingState,
+                cameraSignal,
 
-                onOpen: () => {
-                    // Keep the completed arrow visible until the value is accepted.
-                    drawingState.interaction.previewObjects = [object];
-                    renderCurrentDrawing();
-                    setToolMessage(
-                        "Enter the force magnitude"
-                    );
-                },
-
-                onConfirm: confirmed => {
+                onApply: confirmed => {
                     /*
                      * WHAT THE TYPED ANSWER MEANS.
                      *
@@ -2243,8 +2237,8 @@ export function beginOrCompleteGeometry(
                      * annotation and the panel then report.
                      */
                     const answer = readStaticsValue(
-                        confirmed.text ?? "",
-                        confirmed.unit
+                        confirmed.text,
+                        enggLoadProfile.DEFAULT_FORCE_UNIT
                     );
 
                     const magnitude =
@@ -2281,7 +2275,7 @@ export function beginOrCompleteGeometry(
                     if (answer.kind === "number") {
                         enggLoadProfile.setForceUnit(
                             object.geometry,
-                            confirmed.unit
+                            answer.unit || enggLoadProfile.DEFAULT_FORCE_UNIT
                         );
                     }
 
@@ -2325,19 +2319,6 @@ export function beginOrCompleteGeometry(
 
                     renderProperties();
                     renderCurrentDrawing();
-
-                    /*
-                     * AND NOW ITS NAME, TYPED ON THE DRAWING. The magnitude was
-                     * asked for first - it is what the arrow IS - and the name
-                     * comes after, when there is a symbol on the sheet to name.
-                     */
-                    creationLabelPrompt(object, {
-                        state: drawingState,
-                        onDone: () => {
-                            renderProperties();
-                            renderCurrentDrawing();
-                        }
-                    });
                 },
 
     /*

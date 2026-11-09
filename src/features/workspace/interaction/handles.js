@@ -30,7 +30,7 @@ import { translateObject } from "../geometry/transforms.js";
 import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
-import { DYNAMICS_SIZES } from "../dynamics/dynamics-tools.js";
+
 import { isSum, plantNodePosition, plantValue } from "../../../shared/model/plant.js";
 
 /*
@@ -432,16 +432,14 @@ function dynamicsHandles(
         });
     }
 
-    if (object.type === "particle" && g.position) {
-        /* The marker's own size grip, on the marker's rim. */
-        handles.push({
-            kind: "dynamics-radius",
-            point: {
-                x: g.position.x + Number(g.markerRadius || DYNAMICS_SIZES.particleRadius),
-                y: g.position.y
-            }
-        });
-    }
+    /*
+     * A PARTICLE HAS NO SIZE GRIP. Its grips are its position alone - the one
+     * thing that defines it - and the radius handle that used to sit on its rim
+     * is deleted rather than hidden: resizing a particle by dragging its outline
+     * would make a Dynamics particle a different kind of object from the
+     * Statics particle it is meant to be, and the redrawing code it served no
+     * longer exists.
+     */
 
     if (Number.isFinite(Number(g.amplitude)) && g.start && g.end) {
         /*

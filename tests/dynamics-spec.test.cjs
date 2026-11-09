@@ -284,11 +284,15 @@ test("a Rigid Body takes its size from the gesture, and resizes from a corner", 
 test("only the analytical tools ask for a label as they are created", async () => {
   const m = await modules();
 
+  /*
+   * A POINT LOAD IS DELIBERATELY ABSENT. It already asks for its magnitude in
+   * the on-drawing value field as it is created, so a second label field straight
+   * afterwards opened two boxes for one placement.
+   */
   assert.deepEqual([...m.label.LABEL_CAPABLE_TOOLS].sort(), [
     "distributed-load",
     "dynamics-angular-vector",
     "dynamics-polar-vector",
-    "force",
     "moment",
     "varying-distributed-load",
   ]);

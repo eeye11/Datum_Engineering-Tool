@@ -21,8 +21,10 @@ import {
 } from "../dynamics/dynamics-tools.js";
 import { createDynamicsObject } from "../dynamics/dynamics-model.js";
 import { promptForDynamicsLabel, toolTakesLabel } from "../dynamics/dynamics-label.js";
+import { isDynamicsVector, promptForVectorMagnitude } from "../dynamics/dynamics-vector-value.js";
 import { drawingState as dynamicsDrawingState } from "../editor-state.js";
 import { renderCurrentDrawing as redrawDynamicsSheet } from "../../../components/layout/workspace/canvas-render.js";
+import enggDrawingStateModule from "../../../shared/model/drawing-state.js";
 
 /*
  * Build the Dynamics object, add it as one undoable action, select it and
@@ -65,6 +67,16 @@ export function createDynamicsFeature(
         object.geometry.attachedTo = metadata.attachedTo;
     }
 
+    /*
+     * THE SNAPSHOT BEFORE THE OBJECT EXISTED. A vector's magnitude prompt commits
+     * its answer as its own undo entry on top of this one, so the snapshot must
+     * be taken before the add - the same shape the moment and point-force paths
+     * use.
+     */
+    const previous = enggDrawingStateModule.snapshotDrawing(
+      dynamicsDrawingState,
+    );
+
     commitCreatedFeature(object);
 
     /*
@@ -82,6 +94,30 @@ export function createDynamicsFeature(
     );
 
     renderProperties();
+
+    /*
+     * THE TWO VECTORS ASK FOR THEIR MAGNITUDE BEFORE THEIR NAME - exactly as a
+     * Point Force and an Applied Moment ask for theirs.
+     *
+     * A Polar Vector or an Angular Vector is a stated quantity with a direction,
+     * so placing one commits the symbol and then asks what it measures, in the
+     * same on-drawing field the Statics tools use - at its arrowhead, never in a
+     * popup. The name step comes after the magnitude has been committed.
+     */
+    if (
+        isDynamicsVector(object) &&
+        !toolTakesLabel(resolved)
+    ) {
+        promptForVectorMagnitude(object, {
+            state: dynamicsDrawingState,
+            previous,
+            onDone: () => {
+                renderProperties();
+                redrawDynamicsSheet();
+            }
+        });
+        return object;
+    }
 
     /*
      * THE OPTIONAL LABEL IS PART OF CREATING THE SYMBOL.

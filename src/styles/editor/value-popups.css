@@ -570,6 +570,42 @@
     line-height: 1.2;
 }
 
-.drawing-inline-entry.drawing-label-entry input.drawing-label-entry-input::placeholder {
+/*
+ * AN EMPTY LABEL FIELD STILL SHOWS WHERE IT IS.
+ *
+ * A field with words in it is its own box - the underline reaches as far as the
+ * text. An empty one underlines nothing at all, which reads as "nothing opened".
+ * While it is empty it gets a faint outline at the width of its typing area; the
+ * outline goes on the first keystroke, and with it the field.
+ */
+.drawing-inline-entry.drawing-label-entry[data-empty="true"] input.drawing-label-entry-input {
+    border-bottom-color: transparent;
+    outline: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
+    outline-offset: 2px;
+    border-radius: 1px;
+}
+
+/*
+ * A VALUE'S FIELD HANGS OFF ITS POINT, NOT ON IT.
+ *
+ * A force's magnitude is written beside its arrowhead, so the field that asks
+ * for it is placed beside that point - level with it, on whichever side has
+ * room. It has no drawn text to sit on, so the dotted underline is replaced by
+ * the same faint outline an empty label carries: the box is visible, it is
+ * clearly not part of the drawing, and it disappears with the field.
+ */
+.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside {
+    padding: 1px 3px;
+    background: color-mix(in srgb, var(--datum-surface) 72%, transparent);
+    border-radius: 2px;
+}
+
+.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside input.drawing-label-entry-input {
+    border-bottom: 0;
+    outline: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
+    outline-offset: 2px;
+}
+
+.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside input.drawing-label-entry-input::placeholder {
     color: transparent;
 }

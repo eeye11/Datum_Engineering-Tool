@@ -138,7 +138,8 @@ function particle(position, style) {
      * Features panel offers an Outline Colour for it, but the circle itself is
      * a fill with no pen around it.
      */
-    const ink = style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#193335";
+    /* THE DEFAULT INK IS BLACK, not the theme's (see dynamicsCreationStyle). */
+    const ink = style?.fill && style.fill !== "none" ? style.fill : style?.stroke || "#000000";
 
     const object = enggDrawingState.geometryFactories.particle(
         at(position),
@@ -187,7 +188,8 @@ function rigidBody(position, style, size = null, corner = null) {
     const width = dragged ? Number(dragged.width) : RIGID_BODY_WIDTH;
     const height = dragged ? Number(dragged.height) : RIGID_BODY_HEIGHT;
     const center = dragged && corner ? { x: corner.x, y: corner.y } : at(position);
-    const stroke = style?.stroke || drawingState.styleDefaults?.stroke || "#193335";
+    /* THE DEFAULT INK IS BLACK, not the theme's. */
+    const stroke = style?.stroke || drawingState.styleDefaults?.stroke || "#000000";
 
     /*
      * AN ORDINARY UNFILLED RECTANGLE, like the Rectangle tool draws.

@@ -178,9 +178,31 @@ const suggested = model.suggestPlacement(
   }),
   state(force())
 );
+/*
+ * BEYOND THE ARROWHEAD, NOT PAST THE TAIL.
+ *
+ * This force is drawn from the origin UP the page (`end` at y: -30), so its
+ * arrowhead is above the origin and the label must be further up still. It used
+ * to be anchored to the tail, which put it below - the far side of the arrow
+ * from the head. The check is written against the force's own drawn geometry
+ * rather than a fixed direction, because "beside the arrow" is a question about
+ * where the head is, not about which way is down.
+ */
+const drawnForce = model.forceGeometry
+  ? model.forceGeometry(state(force()), force().geometry)
+  : null;
+const head = drawnForce?.head || force().geometry.end;
+const tail = drawnForce?.tail || force().geometry.start;
+
 check(
-  "is beside the arrow, not on it",
-  Math.abs(suggested.x) < 1 && suggested.y > 0,
+  "is beyond the arrowhead, not past the tail",
+  (suggested.x - head.x) * (head.x - tail.x) +
+    (suggested.y - head.y) * (head.y - tail.y) > 0,
+  true
+);
+check(
+  "and clear of the line itself",
+  Math.abs(suggested.x - head.x) > 0 || Math.abs(suggested.y - head.y) > 0,
   true
 );
 

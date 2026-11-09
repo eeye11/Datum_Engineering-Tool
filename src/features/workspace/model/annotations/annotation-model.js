@@ -2465,13 +2465,19 @@ function annotationAnchor(
        */
       const standoff = 10;
 
-      if (object.type === "force") {
-        return {
-          x: start.x - direction.x * standoff,
-          y: start.y - direction.y * standoff + 1
-        };
-      }
-
+      /*
+       * A FORCE'S VALUE SITS BEYOND ITS ARROWHEAD - THE SAME SIDE THE STUDENT
+       * TYPED IT ON.
+       *
+       * It used to stand off the arrow's TAIL (`start - direction * standoff`),
+       * which is the far end of the arrow from the head. The creation field now
+       * opens beside the ARROWHEAD, so committing a value moved the number to
+       * the other side of the force the moment Enter was pressed - the text
+       * jumped across the arrow it names.
+       *
+       * A small sideways shift would not fix it either - the answer belongs
+       * where the question was asked, and that is past the head.
+       */
       return {
         x: end.x + direction.x * standoff,
         y:

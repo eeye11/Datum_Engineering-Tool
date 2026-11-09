@@ -33,23 +33,33 @@ import { creationLabelPrompt as creationLabel } from "../../../shared/ui/editors
  * WHICH TOOLS ASK FOR A LABEL AS THEY ARE CREATED.
  *
  * A label is an ANNOTATION - a name given to something the student will refer to
- * again. It is useful on the directed and analytical objects (a force F, a
- * velocity v, a moment M) and it is noise on the shapes that are drawn for their
- * own sake: a particle, a body, a spring or a reference line needs no name to be
+ * again. It is useful on the directed and analytical objects (a velocity v, a
+ * moment M) and it is noise on the shapes that are drawn for their own sake: a
+ * particle, a body, a spring or a reference line needs no name to be
  * understood, and interrupting every placement to ask for one slows the drawing
  * down for nothing.
+ *
+ * A POINT LOAD IS NOT IN THE LIST. A force already asks for its magnitude as it
+ * is created, in the same on-drawing field - so asking a second question
+ * immediately afterwards opened a SECOND field right beside the first, with no
+ * change of subject between them. The force's name is still typed in Features
+ * whenever the student wants one.
  *
  * So this is a PER-TOOL LIST, not a universal prompt. A tool absent from it is
  * created immediately, and its Name can still be typed in Features afterwards.
  *
- * The Statics analytical tools - a point force, a couple moment, a distributed
- * load - are in the list too; they are the same kind of object and use the same
- * inline field (`openCreationLabelField`).
+ * The Statics analytical tools - a couple moment, a distributed load - are in
+ * the list too; they are the same kind of object and use the same inline field
+ * (`openCreationLabelField`).
+ *
+ * THE TWO DYNAMICS VECTORS ARE NOT IN THE LIST, and that is deliberate. A Polar
+ * Vector and an Angular Vector ask for their MAGNITUDE first, in the same
+ * on-drawing field a Point Force and a Moment use - so asking for a name
+ * immediately afterwards opened a SECOND field right beside the first, with no
+ * change of subject between them. Their name step comes AFTER the magnitude
+ * (`dynamics-vector-value.js`), which is what the moment path does too.
  */
 export const LABEL_CAPABLE_TOOLS = Object.freeze([
-  "dynamics-polar-vector",
-  "dynamics-angular-vector",
-  "force",
   "moment",
   "distributed-load",
   "varying-distributed-load",
