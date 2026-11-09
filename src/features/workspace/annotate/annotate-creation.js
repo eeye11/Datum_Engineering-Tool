@@ -382,10 +382,10 @@ export function commitAnnotate(options) {
    * annotate layer, and a static import here would close that loop at load
    * time.
    *
-   * The feature is committed BEFORE this runs, so cancelling the editor leaves
-   * the (empty or defaulted) annotation in place rather than removing it - the
-   * placement is its own act and the writing is another, exactly as the note
-   * panel has always worked.
+   * The feature is committed BEFORE this runs, so the node has a stable id and
+   * is on the sheet while its box is open. Cancelling a NEW, never-written note
+   * removes it again (it was placed by mistake); cancelling an edit of existing
+   * text restores the text. See `openNoteEditorFor`.
    *
    * THE CLICK IS THE NODE. The editor is the inline prompt, so it is handed the
    * point the student placed the feature at (`nodePoint`) and opens beside that
@@ -461,6 +461,42 @@ function openPlacedTextEditor(object, nodePoint) {
 
     openNoteEditorFor?.(object, nodePoint);
   });
+}
+
+/*
+ * ========================================================
+ * ENTER: A TEXT NODE WHERE THE POINTER LAST WAS
+ * ========================================================
+ *
+ * Enter on an idle canvas opens a text box at the pointer, exactly as the Note
+ * tool does when it is clicked - so a student can write a line beside what they
+ * are drawing without leaving the tool they are using. It is ONE path:
+ * `createAnnotateObject` makes the node, and `openNoteEditorFor` opens the same
+ * editor a placed note opens, which is a box on the drawing space.
+ *
+ * NOTHING IS WRITTEN. The node starts with an empty string; the student types.
+ */
+export function beginTextNodeAt(point) {
+  if (
+    !point ||
+    !Number.isFinite(Number(point.x)) ||
+    !Number.isFinite(Number(point.y))
+  ) {
+    return null;
+  }
+
+  const object = commitAnnotate({
+    kind: "note",
+    position: { x: Number(point.x), y: Number(point.y) },
+  });
+
+  if (!object) {
+    return null;
+  }
+
+  setToolMessage("Text placed - type into the box; Ctrl+Enter commits, Esc cancels");
+
+  return object;
 }
 
 function annotatePlacedMessage(kind) {

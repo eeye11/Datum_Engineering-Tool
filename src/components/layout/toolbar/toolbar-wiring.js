@@ -3,6 +3,7 @@
  */
 
 import { applyStyleControls, setupColourControl } from "../panels/colour-picker.js";
+import { installFontSizeControl } from "../panels/font-size-control.js";
 import { FILE_ACTIONS, drawingFileNew, drawingFileOpen, drawingFileSave, newDrawing, openDrawing, saveDrawing } from "../../../features/workspace/commands/document-commands.js";
 import { drawingColor, drawingLineType, drawingThickness, drawingZoomOut } from "../../../features/workspace/dom.js";
 import { editorState } from "../../../features/workspace/editor-state.js";
@@ -259,6 +260,12 @@ export function installToolbarWiring() {
          */
         setupColourControl();
     }
+
+    /*
+     * THE TEXT SIZE. Its own module, because it commits a property rather than a
+     * line style - but the same `style` object and the same undo entry.
+     */
+    installFontSizeControl();
 
     if (
         drawingLineType

@@ -1,0 +1,2259 @@
+/*
+ * ========================================================
+ * CREATING A FEATURE BY PRESS, HOLD, DRAG AND RELEASE
+ * ========================================================
+ *
+ * A construction tool used to take its points one CLICK at a time:
+ *
+ *     click first point
+ *       -> move
+ *       -> click second point
+ *       -> committed
+ *
+ * That is two deliberate presses for one gesture. The student has
+ * already said where the feature begins when they press the button, and
+ * they have already said where it ends when they let go, so the second
+ * press carries no information the release does not.
+ *
+ * So an applicable tool now takes its two cursor-defined points from
+ * ONE press:
+ *
+ *     mousedown at the first point
+ *       -> hold, drag: the preview follows the cursor continuously
+ *       -> mouseup: the feature is committed at the released point
+ *
+ * ---------------------------------------------------------------------------
+ * THIS WRAPS THE EXISTING PIPELINE; IT DOES NOT REIMPLEMENT IT
+ * ---------------------------------------------------------------------------
+ *
+ * The whole point of this module is that it adds a LIFETIME and nothing
+ * else. Everything that already worked - the snapping, the inference, the
+ * live preview, the geometry each tool builds, the size popup, the single
+ * undo entry - is reached through exactly the same entry point the click
+ * used, `beginOrCompleteGeometry`:
+ *
+ *     pointerdown  ->  begin    (the phase that waited for a first click)
+ *     pointermove  ->  (the existing mousemove already redraws the preview)
+ *     pointerup    ->  complete (the phase that waited for a second click)
+ *
+ * So a Line is still built by the Line factory, a Circle by the Circle
+ * factory, and a snapped point is still the resolver's own answer on the
+ * frame of the release. No geometry, no data model and no snapping rule
+ * is touched here.
+ *
+ * ---------------------------------------------------------------------------
+ * WHICH TOOLS, AND WHY NOT ALL OF THEM
+ * ---------------------------------------------------------------------------
+ *
+ * A tool takes part only when its feature is genuinely defined by the
+ * first point and the point under the cursor. That is true of a Line, a
+ * Rectangle, a Circle, a Triangle's second corner, the two-point half of
+ * a Polygon and an Arc, a Point Force, and every Statics span - a Beam,
+ * a Cable, a Shaft, a Connection, a Reference Line.
+ *
+ * It is NOT true of the tools that take a FLOW of points - a polyline,
+ * a truss, a varying load - where each point is a separate decision and
+ * a release has no single meaning. Those keep their click workflow.
+ *
+ * Nor is it true of the single-click placement tools - a support, a
+ * moment, a point, a coordinate system - which have no second point to
+ * take from a release at all.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TRAILING CLICK IS SWALLOWED
+ * ---------------------------------------------------------------------------
+ *
+ * A pointer interaction in a browser also fires a `click` on release.
+ * Left alone it would arrive at `handleCanvasClick` and be read as a
+ * second point - starting a fresh construction at the released position,
+ * which is the "click, move, click" behaviour this replaces, still
+ * running underneath the drag. So a drag that began and ended on the
+ * canvas marks the click as consumed, and the click handler honours that
+ * mark exactly once.
+ */
+import { isAnnotationTool } from "../annotate/annotation-tool.js";
+import { beginAnnotateDragAnchor, completeAnnotateAt, isGeometricAnnotateTool, isEditableAnnotate } from "../annotate/annotate-creation.js";
+import { isDimensionTool } from "../annotate/dimension-tool.js";
+import { drawingState, editorState } from "../editor-state.js";
+import { beginOrCompleteGeometry } from "../geometry/geometry-creation.js";
+import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
+import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
+import { renderFeatures } from "../../../components/layout/panels/features-pane.js";
+import enggDrawingState from "../../../shared/model/drawing-state.js";
+import enggPipeDuct from "../model/fluids/pipe-duct.js";
+import { objectAtPoint, hitTestAnnotateTarget } from "./hit-testing.js";
+import { isClickClickTool, isMultiStepTool } from "../../../components/layout/toolbar/tool-classification.js";
+import {
+    ROUTE_PHASE,
+    ELBOW_PHASE,
+    commitRouteSegment,
+    resolveRouteStart,
+    elbowGesturePreview,
+    elbowInstruction,
+    pipeEndAt,
+    commitElbowGesture
+} from "./pipe-duct-tool.js";
+import { JUNCTION_PHASE, commitJunctionGesture, junctionGesturePreview } from "./junction-tool.js";
+import { beginFreeformTrace, finishFreeformTrace, moveFreeformTrace } from "./freeform-trace.js";
+import {
+    beginFlowArrowSession,
+    beginFreeArrowSession,
+    moveFlowArrowSession,
+    moveFreeArrowSession,
+    commitFlowArrowSession,
+    commitFreeArrowSession
+} from "./flow-arrow-tool.js";
+import {
+    VESSEL_PHASE,
+    LEVEL_PHASE,
+    DIRECTION_PHASE,
+    PROFILE_PHASE,
+    FLOW_PROFILE_PHASE,
+    SECTION_PHASE,
+    commitInlineAt,
+    commitVesselDrag,
+    commitFluidLevelAt,
+    commitFlowDirectionAt,
+    commitProfileDrag,
+    commitFlowProfileDrag,
+    commitSectionDrag,
+    schematicPreviewAt
+} from "./fluids-schematic-tool.js";
+
+void LEVEL_PHASE;
+void DIRECTION_PHASE;
+
+/*
+ * THE SCHEMATIC TOOLS, AS THE CANVAS SEES THEM.
+ *
+ * A DRAG tool takes a press and a release and commits at the release; a CLICK
+ * tool commits at the press itself, because its object is placed by one point
+ * and there is nothing to drag out.
+ */
+const SCHEMATIC_DRAG_TOOLS = {
+    "reservoir-tank": VESSEL_PHASE,
+    "pressure-profile": PROFILE_PHASE,
+    "flow-profile": FLOW_PROFILE_PHASE,
+    "section-plane": SECTION_PHASE
+};
+
+const SCHEMATIC_CLICK_TOOLS = [
+    "reducer-expander",
+    "pump",
+    "valve",
+    "flow-meter",
+    "fluid-level",
+    "flow-direction-diagram"
+];
+import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { resolvePointerEvent } from "./pointer.js";
+import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS } from "../statics/analysis-tools.js";
+import {
+    DYNAMICS_PLACEMENT_TOOLS,
+    DYNAMICS_SPAN_TOOLS,
+    DYNAMICS_ANGLE_TOOLS,
+    DYNAMICS_BOX_TOOLS
+} from "../dynamics/dynamics-tools.js";
+import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { beginMathDrag, finishMathDrag, moveMathDrag } from "../math/math-creation.js";
+import { MATH_TOOL_IDS } from "../math/math-tools.js";
+import { beginMathStroke, finishMathStroke, mathSketchArmed, moveMathStroke } from "../math/math-sketch.js";
+import { isMathTool } from "../math/math-tools.js";
+
+/*
+ * The Geometry tools whose feature is a start point and an end point.
+ *
+ * A Triangle and a Polygon take one more point after this one, so the
+ * drag supplies their FIRST span and the tool's own remaining steps
+ * carry the rest - the multi-point workflow is preserved, one gesture at
+ * a time.
+ *
+ * THE REFERENCE ARC IS THE ARC TOOL BY ANOTHER NAME.
+ *
+ * It draws through the same phases - centre, sweep, or three points on the
+ * curve - and every one of them is a point under the cursor. It was missing
+ * here because it is a separate tool ID, so a student who dragged a
+ * reference arc got no preview and no completion: the release had nothing to
+ * finish, because this list said the tool was not a drag tool at all.
+ *
+ * The pair are listed ADJACENT, so the arc and its reference twin are read
+ * together and can never drift apart.
+ */
+const DRAG_GEOMETRY_TOOLS = [
+    "line",
+    "rectangle",
+    "stress-element",
+    "boundary-stress",
+    "control-volume",
+    "tank",
+    "turbine-compressor",
+    "nozzle-diffuser",
+    "rankine-cycle",
+    "reheat-rankine-cycle",
+    "vapor-compression-cycle",
+    "brayton-cycle",
+    "diesel-cycle",
+    "otto-cycle",
+    "carnot-cycle",
+    "saturation-curve",
+    "process-plot",
+    "piston-cylinder",
+    "piston-cylinder-stoppers",
+    "circle",
+    "triangle",
+    "polygon",
+
+    /*
+     * The Freeform Polygon is NOT here, although it reads like a drag tool.
+     * It is listed in PROGRESSIVE_TOOLS above, where the reason is written
+     * out; keeping it here as well would leave two lists disagreeing about
+     * the same tool, and the disagreement is exactly what broke it.
+     */
+    "arc",
+    "reference-arc",
+
+    /*
+     * THE COORDINATE SYSTEM IS A DRAG, NOT A CLICK.
+     *
+     * Its press is the origin and its release is the positive X direction,
+     * which is exactly the two points one gesture supplies. It used to be a
+     * single-click placement with a fixed axis length, so the student could
+     * put an origin down and had no way to say which way the axes ran.
+     */
+    "coordinate-system-2d"
+];
+
+/*
+ * Tools that take a FLOW of points rather than one start and one end.
+ *
+ * Named explicitly, so "this tool is not a drag tool" is a statement
+ * somebody made rather than something a future reader has to infer from
+ * a list of exceptions.
+ */
+const PROGRESSIVE_TOOLS = [
+    "polyline",
+    "truss",
+
+    /*
+     * THE FREEFORM POLYGON IS A FLOW TOOL TOO.
+     *
+     * It reads as a drag tool - it is a shape, and the gesture that finishes
+     * it is a drag back onto the first vertex - but every vertex is a
+     * separate decision and the student may sit on a vertex for as long as
+     * they like before choosing the next one. Treating the press as the start
+     * of a drag session took the click workflow away from it: the press armed
+     * a session whose release tried to finish a span, so vertices stopped
+     * being placed and the polygon could not be built at all.
+     *
+     * The closing gesture is a press ON the first vertex, which the geometry
+     * creation layer recognises as a close - see `freeform-polygon` in
+     * geometry-creation.js. That decision needs the press, not a release.
+     */
+    "freeform-polygon"
+];
+/*
+ * Tools whose input is a single point, but where holding and dragging should
+ * place the feature at the RELEASED point.
+ */
+const SINGLE_POINT_DRAG_TOOLS = [
+    "point"
+];
+
+/*
+ * THE DYNAMICS TOOLS THAT ARE FINISHED BY ONE CLICK.
+ *
+ * A Particle has no extent to drag and an Angular Vector is placed at its
+ * centre with a default radius and sweep. A Rigid Body joined them until it
+ * became a drag-sized rectangle - it is now a span tool, so it is deliberately
+ * absent here.
+ */
+const CLICK_PLACED_DYNAMICS_TOOLS = new Set([
+    "dynamics-particle",
+    "dynamics-angular-vector"
+]);
+
+
+/*
+ * The distributed-load tools, whose SPAN is a start and an end like a Line's.
+ *
+ * Their construction continues past the span - a constant load is then sized
+ * by one cursor vector, a varying load by a sequence of profile points - so
+ * only the SPAN step is a drag. The rest keeps its own interaction, which is
+ * why these tools are handled by name rather than by a blanket rule.
+ */
+const LOAD_SPAN_TOOLS = [
+    "distributed-load",
+    "varying-distributed-load"
+];
+
+/*
+ * The phases a RELEASE completes.
+ *
+ * These are the phases that already hold an anchor and are waiting for the
+ * point under the cursor - which is exactly what the release supplies. A
+ * phase that is not here is not a span waiting for a point: a Polygon waiting
+ * for its side count is waiting for a typed answer, and a load's VECTOR and
+ * BUILD steps walk through their own construction.
+ */
+const DRAG_CONTINUE_PHASES = [
+    "first-point",
+    "statics-span",
+    "polygon-centre",
+    "polygon-first",
+
+    /*
+     * The arc's phases, one per point it is still waiting for.
+     *
+     * A centrepoint arc takes centre, start, end; a three-point arc takes
+     * three points on the curve. Each of those steps is a point under the
+     * cursor, so each is finished by a release - and every one of them is
+     * listed, because a phase left off this list would strand the arc
+     * half-built after the student let go of it.
+     */
+    "arc-centre",
+    "arc-sweep",
+    "arc-first",
+    "arc-second",
+
+    /*
+     * A LOAD'S SPAN, once it holds its first end.
+     *
+     * `distributed-load-span` is a span traced in empty space, where the
+     * press set the start; `distributed-load-end` is the same on a body, one
+     * gesture later. In both, the release supplies the second end.
+     */
+    "distributed-load-span",
+    "distributed-load-end",
+
+    /*
+     * A DYNAMICS SPAN OR ANGLE, once it holds its first point.
+     *
+     * A spring, a damper, a vector, a trajectory or a pulley anchors on the
+     * press and takes its far end - or, for an angle tool, its radius - from
+     * the release, exactly as a Line does. A phase left off this list would
+     * strand the symbol half-built after the student let go, so both are
+     * listed beside the phases they mirror.
+     */
+    "dynamics-span",
+    "dynamics-angle"
+];
+
+/*
+ * The phases a PRESS supplies a point to.
+ *
+ * A load dropped on a body first answers "which body?" (one gesture), then
+ * waits in `distributed-load-start` for the loaded region's first end. There
+ * is no anchor yet, so the press IS that end - the same role the first of the
+ * old two clicks played - and the release supplies the second.
+ */
+const DRAG_PRESS_POINT_PHASES = [
+    "distributed-load-start"
+];
+
+/*
+ * Whether the active tool creates its feature by press-drag-release.
+ *
+ * Asked of the TOOL, and only of the tool. Whether the current press is
+ * one of these tools' creations is then decided from the interaction
+ * state, so a press that lands on an existing feature with such a tool
+ * armed still belongs to the ordinary selection path.
+ */
+export function isDragCreationTool(
+    toolId
+) {
+    /*
+     * PHASE 1 RESET: no legacy tool is a drag-creation tool any
+     * more. Press-drag-release creates nothing; presses fall
+     * through to the ordinary selection path.
+     */
+    if (isLegacyResetTool(toolId)) {
+        return false;
+    }
+
+    if (!toolId) {
+        return false;
+    }
+
+    /*
+     * A geometric ANNOTATE tool - a leader, a callout, an arrow - IS a
+     * start and an end, so it takes both workflows just like a Line does.
+     * Its press begins its anchor and its release commits it, through the
+     * creation layer's own functions (see below), not through the geometry
+     * construction pipeline - because an annotation is not geometry.
+     */
+    if (isGeometricAnnotateTool(toolId)) {
+        return true;
+    }
+
+    /*
+     * A dimension, an annotation and an analysis diagram are not
+     * two-point shapes: they collect references or name a body. They go
+     * through the construction pipeline for its SNAPPING, which is why
+     * they are construction tools at all, but their completion is their
+     * own affair and a drag would take it away from them.
+     */
+    if (
+        isDimensionTool(toolId) ||
+        isAnnotationTool(toolId) ||
+        toolId === "analysis" ||
+
+        /*
+         * AND THE THREE DIAGRAMS, BY THEIR REAL IDS.
+         *
+         * The list named `"analysis"`, which is not a tool id - the diagrams
+         * are `shear-force-diagram`, `bending-moment-diagram` and
+         * `axial-force-diagram`. So the exclusion never matched, the diagrams
+         * fell through to the geometry list below, and a press with one armed
+         * began a drag session instead of naming the member. Asked of the
+         * diagram table so a fourth diagram is covered without another edit.
+         */
+        Object.prototype.hasOwnProperty.call(
+            ANALYSIS_DIAGRAM_TOOLS,
+            toolId
+        )
+    ) {
+        return false;
+    }
+
+    /*
+     * PIPE / DUCT IS THE DRAG TOOL ABOVE ALL OTHERS.
+     *
+     * A run of pipework is defined ENTIRELY by where the student pressed and
+     * where they let go, so it is the clearest case of a drag creation there
+     * is. It is named here, ahead of the geometry pipeline, because it does not
+     * use the generic phase machine at all - it has its own session below - but
+     * the answer to "is this a drag tool" must still be yes.
+     */
+    if (toolId === "pipe-duct") {
+        return true;
+    }
+
+    /*
+     * THE ELBOW IS A DRAG TOOL BY THE SAME ARGUMENT: its two ends are where the
+     * student pressed and where they let go.
+     */
+    if (toolId === "elbow") {
+        return true;
+    }
+
+    /*
+     * AND THE JUNCTION IS ONE TOO: the press places its hub and the drag sets
+     * its main-run direction. Without this it is armed but inert - the press
+     * never reaches its session below, so nothing is created.
+     */
+    if (toolId === "junction") {
+        return true;
+    }
+
+    /*
+     * AND THE FLOW ARROW IS ONE TOO: the press attaches to the pipe under it
+     * and the drag slides the arrow along that pipe's centreline. Without this
+     * it is armed but inert - the press never reaches its session below.
+     */
+    if (toolId === "flow-arrow") {
+        return true;
+    }
+
+    /*
+     * THE FREEFORM POLYGON IS THE ONE PROGRESSIVE TOOL THAT ALSO DRAWS BY DRAG.
+     *
+     * It is asked BEFORE the progressive branch below, because that branch is
+     * what keeps a flow tool on its click workflow - and the polygon is the one
+     * flow tool that now has a gesture of its own as well. Everything about it
+     * is decided in its own module; this only says the press belongs to it.
+     */
+    if (toolId === "freeform-polygon") {
+        return true;
+    }
+
+    /*
+     * A MATH VECTOR AND A COORDINATE GRAPH ARE DRAWN BY ONE GESTURE.
+     *
+     * The press is the tail (or the first corner) and the release is the head
+     * (or the opposite corner), so both are drag tools. The other Math tools
+     * are click-driven and are deliberately absent.
+     */
+    if (toolId === MATH_TOOL_IDS.vector || toolId === MATH_TOOL_IDS.plot) {
+        return true;
+    }
+
+    /*
+     * A MATH TOOL IN SKETCH MODE IS A TRACE TOOL. Its stroke is captured by the
+     * shared press-move-release session, so the press belongs to it.
+     */
+    if (mathSketchArmed()) {
+        return true;
+    }
+
+    /*
+     * THE OTHER MATH TOOLS ARE CLICK-DRIVEN, NOT DRAG TOOLS.
+     *
+     * A Point, an Equation, a plotted Curve, a Tangent and a Slope Triangle
+     * take their inputs from clicks, so a press with one armed must fall
+     * through to the click router rather than arming a drag session that would
+     * swallow it. Naming them here is what keeps the drag pipeline from
+     * claiming a press the tool never asked for.
+     */
+    if (isMathTool(toolId)) {
+        return false;
+    }
+
+    /*
+     * The progressive tools keep their own click-driven construction.
+     */
+    if (PROGRESSIVE_TOOLS.includes(toolId)) {
+        return false;
+    }
+
+    /*
+     * BOTH DISTRIBUTED LOADS TAKE THEIR SPAN FROM A DRAG.
+     *
+     * The span is a start and an end, exactly as a Line's is, so it is one
+     * gesture. Their later steps - the magnitude/direction vector, the profile
+     * points - are their own and are left alone by this module.
+     */
+    if (LOAD_SPAN_TOOLS.includes(toolId)) {
+        return true;
+    }
+
+    if (SINGLE_POINT_DRAG_TOOLS.includes(toolId)) {
+        return true;
+    }
+
+    /*
+     * A DYNAMICS TOOL CREATES THROUGH THE SAME GESTURE IT DECLARES.
+     *
+     * Every Dynamics tool is a press-drag-release creation - a placement tool
+     * places on the press, a span takes its two terminals from the gesture, a
+     * box or an angle tool takes its second point from the release. Without
+     * this branch the press fell through to the selection path and no creation
+     * session was armed, so every Dynamics tool armed, previewed nothing and
+     * created nothing - the tool LOOKED dead even though its model, renderer
+     * and writer were all in place. Asked of the tool tables rather than of a
+     * second hand-written list, so a tool added to the library is covered here
+     * without another edit.
+     */
+    if (
+        DYNAMICS_PLACEMENT_TOOLS[toolId] ||
+        DYNAMICS_SPAN_TOOLS[toolId] ||
+        DYNAMICS_ANGLE_TOOLS[toolId] ||
+        DYNAMICS_BOX_TOOLS[toolId]
+    ) {
+        return true;
+    }
+
+    /*
+     * THE SCHEMATIC TOOLS HAVE THE SAME TWO GESTURES AS EVERYTHING ELSE.
+     *
+     * A schematic drag tool - the vessel, the two profiles, the section trace -
+     * takes its whole object from one press-drag-release, and a schematic click
+     * tool - an inline symbol, the level, the direction arrow - is placed on the
+     * press itself. Both are told apart below, in their own sessions; here they
+     * only have to be recognised, or the press falls straight through to the
+     * selection path and the tool creates nothing at all.
+     */
+    if (SCHEMATIC_DRAG_TOOLS[toolId] || SCHEMATIC_CLICK_TOOLS.includes(toolId)) {
+        return true;
+    }
+
+    /*
+     * A single-click placement tool has no second point to take from a
+     * release: a support, a particle or a reference point is placed where
+     * the press landed. A Moment is NOT in this table (it is placed in
+     * free space by a click), so it is excluded by name below.
+     */
+    if (
+        STATICS_PLACEMENT_TOOLS[toolId] ||
+        toolId === "moment"
+    ) {
+        return false;
+    }
+
+    /*
+     * A Statics span - a Beam, a Cable, a Shaft, a Connection, a
+     * Reference Line, a Point Force - IS a two-point creation, so it
+     * takes part. Asked of the span table because that table is the
+     * authoritative statement of which Statics tools span two points.
+     */
+    if (STATICS_SPAN_TOOLS[toolId]) {
+        return true;
+    }
+
+    return DRAG_GEOMETRY_TOOLS.includes(toolId);
+}
+
+/*
+ * Whether a press at this point would SELECT something rather than
+ * begin a new feature.
+ *
+ * The same rule the click pipeline applies, asked the same way: with a
+ * creation tool armed, a press on an existing feature selects it. It is
+ * answered from the RAW pointer position, before any snapping has pulled
+ * the cursor to a nearby feature that the student did not aim at.
+ */
+function pressSelectsExistingObject(
+    event
+) {
+    const raw =
+        canvasPointFromEvent(
+            event,
+            false
+        );
+
+    if (!raw) {
+        return false;
+    }
+
+    return Boolean(
+        objectAtPoint(raw)
+    );
+}
+
+/*
+ * Begin (or continue) a creation from a press.
+ *
+ * Returns true when the press belongs to the drag workflow, so the caller
+ * leaves it alone and lets the pointerup commit the next point.
+ *
+ * THREE CASES, decided by the phase the press arrives in:
+ *
+ *   IDLE: the press STARTS the feature. The press is the first point, so
+ *   the existing construction entry point is called here, exactly as the
+ *   first click used to be.
+ *
+ *   A "CONTINUE" PHASE: the construction already holds its anchor - a
+ *   Triangle's first corner, an Arc's centre, a load's span start - and is
+ *   waiting for the point under the cursor. Nothing is called on the press:
+ *   the release supplies that point, and the fixed anchor is left exactly
+ *   where the earlier gesture put it.
+ *
+ *   A "PRESS TAKES A POINT" PHASE: the tool is waiting for the FIRST end of
+ *   a span that only a body selection preceded (`distributed-load-start`).
+ *   There is no anchor yet, so the press itself is that end - the entry point
+ *   is called here, exactly as the first of the two clicks used to be.
+ */
+export function beginCreationDrag(
+    event
+) {
+    if (
+        editorState.creationDrag ||
+        !isDragCreationTool(
+            drawingState.activeTool
+        )
+    ) {
+        return false;
+    }
+
+    const phase =
+        drawingState.interaction.phase;
+
+    const idle =
+        phase === "idle";
+
+    // Written notes are editing targets, including a cycle's temperature
+    // labels. An armed geometry tool must not start a shape through the text -
+    // and the tool is KEPT armed, so editing a label never disarms the pencil.
+    if (idle && ["line", "rectangle", "circle"].includes(drawingState.activeTool)) {
+        const pointed = objectAtPoint(canvasPointFromEvent(event, false));
+        if (isEditableAnnotate(pointed)) {
+            return false;
+        }
+    }
+
+    const continues =
+        DRAG_CONTINUE_PHASES.includes(phase);
+
+    const takesPoint =
+        DRAG_PRESS_POINT_PHASES.includes(phase);
+
+    /*
+     * A GEOMETRIC ANNOTATE TOOL ARMS ITS ANCHOR AND LETS THE RELEASE COMMIT IT.
+     *
+     * A leader, a callout and an arrow are the annotation world's two-point
+     * constructs. They do not use `phase` or the geometry construction
+     * pipeline at all - they are marks, not geometry - so they are handled
+     * HERE, ahead of the phase logic below, and the WORK is handed to the
+     * creation layer so there is exactly one implementation of "place a
+     * leader", shared with the click-move-click path.
+     *
+     * The press does not build anything yet for the same reason the geometry
+     * tools do not: a plain click must fall through to the click handler,
+     * which is the FIRST click of click-move-click. Only once the pointer has
+     * travelled (see moveCreationDrag) is the anchor actually begun.
+     */
+    if (isGeometricAnnotateTool(drawingState.activeTool)) {
+        /*
+         * On a CONTINUE - the anchor is already held, so this press is the
+         * second end and the release will commit it. Nothing to start here.
+         */
+        const annotateArmed =
+            drawingState.interaction.annotateStage === "anchor";
+
+        /*
+         * A press on an existing feature is NOT refused here either - it is
+         * NOTED, so a drag from existing geometry can still begin the leader
+         * while a plain click still falls through to selection. This is the
+         * same deferral the geometry tools use below, for the same reason: a
+         * leader that attaches to a feature must be startable by pressing on
+         * that feature.
+         */
+        const annotateOnExisting =
+            !annotateArmed &&
+            pressSelectsExistingObject(event);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            annotateTool: drawingState.activeTool,
+            annotateArmed,
+            pressResolution: annotateArmed
+                ? null
+                : resolvePointerEvent(event),
+                startScreen: {
+                    x: event.clientX,
+                    y: event.clientY
+                },
+
+                moved: false,
+
+                /*
+                 * WHERE THE PRESS LANDED, IN MODEL COORDINATES.
+                 *
+                 * A click that never travels asks ONE question on release: was there
+                 * something under the pointer? That is answered against the raw model
+                 * position the press had - not a snapped one, which could have pulled
+                 * the answer onto a feature the student did not aim at. See
+                 * finishCreationClick.
+                 */
+                pressPoint: annotateArmed
+                    ? null
+                    : resolvePointerEvent(event).rawPointerPoint,
+
+                onExisting: annotateOnExisting
+            };
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * PIPE / DUCT TAKES ITS WHOLE RUN FROM THE ONE GESTURE
+     * ========================================================
+     *
+     * A run has its own tiny session rather than the geometry phase machine,
+     * for one reason: the phase machine is built around a construction that
+     * stays ALIVE across clicks, and a run does not - it begins at the press
+     * and ends at the release, and each leg is committed the moment it is let
+     * go. Holding it in `phase` would mean a half-drawn run existed between
+     * gestures, which is exactly the "no ghost geometry" state the task
+     * forbids.
+     *
+     * The press records the RESOLVED start point (already snapped) and the
+     * previous run, if the press landed on its far endpoint. Nothing is
+     * written to the document yet - only when the release commits it.
+     */
+    if (drawingState.activeTool === "pipe-duct") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        const { start, previous } = resolveRouteStart(pressPoint);
+
+        // Publish the anchor immediately, including for a fast gesture whose
+        // release arrives before the first pointermove is delivered.
+        enggDrawingState.setInteraction(drawingState, {
+            routeSegmentStart: start,
+            startPoint: start
+        });
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            pipeDuct: true,
+            start,
+            previousRun: previous,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false,
+            pressPoint: pressPoint
+                ? {
+                      x: pressPoint.x,
+                      y: pressPoint.y
+                  }
+                : null,
+            committedCount:
+                Number(drawingState.interaction.routeCommittedCount) || 0
+        };
+
+        return true;
+    }
+
+    /*
+     * THE ELBOW TAKES ITS WHOLE FITTING FROM THE ONE GESTURE TOO.
+     *
+     * The press is the first end - already snapped, so a press the snap pulled
+     * onto a pipe endpoint starts ON that endpoint and will connect - and the
+     * run, if there is one, is remembered so the release can attach to it. The
+     * second end is resolved on the release, through the same snapping.
+     */
+    /*
+     * A JUNCTION IS PLACED THE SAME WAY, AND MEASURES THE SAME WAY: the press
+     * is the HUB and the drag DIRECTION is the main run. The DISTANCE means
+     * nothing and is deliberately never stored.
+     */
+    if (drawingState.activeTool === "junction") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            junction: true,
+            start: pressPoint
+                ? { x: pressPoint.x, y: pressPoint.y }
+                : null,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
+        };
+
+        return true;
+    }
+
+    /*
+     * THE FLOW ARROW'S PRESS IS AN ATTACHMENT, NOT A POINT.
+     *
+     * A press on a valid Pipe / Duct arms a session naming that pipe and the
+     * fraction along it the press landed at; a press anywhere else starts
+     * nothing, and `beginFlowArrowSession` returning false leaves this press to
+     * the ordinary selection path - the same answer a bare click gives.
+     */
+    if (drawingState.activeTool === "flow-arrow") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        /*
+         * ON A PIPE: the attached flow-direction indicator, as before.
+         */
+        if (beginFlowArrowSession(event, resolution)) {
+            return true;
+        }
+
+        /*
+         * ANYWHERE ELSE: a FREE arrow, drawn from the press to the release.
+         *
+         * This is what makes the tool produce a real object everywhere - the
+         * arrow has its own geometry, its own row in the Objects list, handles,
+         * a Features tab, a source block and an Undo entry - rather than
+         * marking the sheet with a preview that nothing can select.
+         */
+        if (beginFreeArrowSession(event, resolution)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /*
+     * A SCHEMATIC CLICK TOOL PLACES ON THE PRESS.
+     *
+     * The inline fittings, the equipment, the level and the direction arrow are
+     * all placed by ONE point - where the student clicked - so the object is
+     * committed at the press and there is no drag to finish. The pointer's RAW
+     * position is used: these tools decide which pipe or vessel was clicked, and
+     * a construction snap must not move that decision onto something else.
+     */
+    if (SCHEMATIC_CLICK_TOOLS.includes(drawingState.activeTool)) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.rawPointerPoint || resolution.effectiveConstructionPoint;
+
+        if (!point) {
+            return false;
+        }
+
+        const tool = drawingState.activeTool;
+
+        if (tool === "fluid-level") {
+            commitFluidLevelAt(point);
+        } else if (tool === "flow-direction-diagram") {
+            commitFlowDirectionAt(point);
+        } else {
+            commitInlineAt(tool, point);
+        }
+
+        return true;
+    }
+
+    /*
+     * A SCHEMATIC DRAG TOOL TAKES ITS WHOLE OBJECT FROM THE ONE GESTURE.
+     *
+     * The press is the first corner (a vessel, a graph frame) or the first end
+     * (a section trace); the release is the other. Nothing is written until the
+     * release, so Escape leaves no half-built object behind.
+     */
+    if (SCHEMATIC_DRAG_TOOLS[drawingState.activeTool]) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            schematicTool: drawingState.activeTool,
+            phase: SCHEMATIC_DRAG_TOOLS[drawingState.activeTool],
+            start: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
+            style: { ...(drawingState.styleDefaults || {}) },
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
+        };
+
+        return true;
+    }
+
+    if (drawingState.activeTool === "elbow") {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        const startMatch = pipeEndAt(pressPoint);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            elbow: true,
+            start: startMatch
+                ? { ...startMatch.point }
+                : pressPoint
+                  ? { x: pressPoint.x, y: pressPoint.y }
+                  : null,
+            startMatch,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
+        };
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * THE FREEFORM POLYGON'S SECOND WAY OF BEING DRAWN
+     * ========================================================
+     *
+     * A press with the Freeform Polygon armed arms a TRACE session - press,
+     * trace, release - beside the click workflow it has always had. The session
+     * records nothing until the pointer has actually travelled, so a press that
+     * does not move is still an ordinary click placing a vertex. See
+     * freeform-trace.js for the whole rule.
+     */
+    if (drawingState.activeTool === "freeform-polygon") {
+        if (beginFreeformTrace(event)) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                freeformTrace: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /*
+     * A MATH VECTOR OR COORDINATE GRAPH TAKES ITS WHOLE OBJECT FROM THE ONE
+     * GESTURE. The press is the first point and the release the second; nothing
+     * is written until the release, so Escape leaves no half-built object.
+     */
+    if (mathSketchArmed()) {
+        if (beginMathStroke(event)) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                mathStroke: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    if (
+        drawingState.activeTool === MATH_TOOL_IDS.vector ||
+        drawingState.activeTool === MATH_TOOL_IDS.plot
+    ) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        if (beginMathDrag(event, resolvePointerEvent(event))) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                mathDrag: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /*
+     * A press that is neither the start of a feature nor the next point of
+     * one belongs to whatever else is running - a load being built, a
+     * truss, a dimension - and is left to that.
+     */
+    if (
+        !idle &&
+        !continues &&
+        !takesPoint
+    ) {
+        return false;
+    }
+
+    /*
+     * A MATH TOOL THAT IS NOT A DRAG TOOL NEVER ARMS A DRAG SESSION.
+     *
+     * The Vector and the Graph are handled above; every other Math tool takes
+     * its inputs from clicks, so a press with one armed belongs to the click
+     * router. Without this the generic session below would be armed for it and
+     * the press would be swallowed - the tool would arm, print its instruction
+     * and create nothing.
+     */
+    if (isMathTool(drawingState.activeTool)) {
+        return false;
+    }
+
+    /*
+     * A DYNAMICS SPAN OR BOX TOOL SHOWS ITS GHOST AS SOON AS IT IS ARMED - see
+     * the block above, which sets the phase on the press.
+     */
+    if (
+        idle &&
+        (DYNAMICS_SPAN_TOOLS[drawingState.activeTool] ||
+            DYNAMICS_BOX_TOOLS[drawingState.activeTool])
+    ) {
+        /*
+         * THE PHASE IS SET WITH NO ANCHOR YET, so the ghost appears the moment
+         * the tool is used rather than only after the drag has travelled. The
+         * anchor is filled in by the drag (see moveCreationDrag); a press that
+         * never travels is still an ordinary click, which the browser's own
+         * `click` handles through the normal pipeline.
+         */
+        const press = resolvePointerEvent(event);
+
+        enggDrawingState.setInteraction(drawingState, {
+            ...press,
+            phase: "dynamics-span",
+            toolId: drawingState.activeTool,
+            startPoint: null,
+            currentPoint: press.effectiveConstructionPoint,
+            points: []
+        });
+    } else if (idle && DYNAMICS_ANGLE_TOOLS[drawingState.activeTool]) {
+        const press = resolvePointerEvent(event);
+
+        enggDrawingState.setInteraction(drawingState, {
+            ...press,
+            phase: "dynamics-angle",
+            toolId: drawingState.activeTool,
+            startPoint: null,
+            currentPoint: press.effectiveConstructionPoint,
+            points: []
+        });
+    }
+
+    if (SINGLE_POINT_DRAG_TOOLS.includes(drawingState.activeTool)) {
+        const onExisting =
+            idle && pressSelectsExistingObject(event);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false,
+            onExisting,
+            pressPoint: (() => {
+                const raw = resolvePointerEvent(event).rawPointerPoint;
+
+                return raw
+                    ? { x: raw.x, y: raw.y }
+                    : null;
+            })(),
+            singlePointTool: drawingState.activeTool,
+            pressResolution: null
+        };
+
+        return true;
+    }
+
+    /*
+     * A DYNAMICS PLACEMENT TOOL PLACES ON THE CLICK, NOT ON A DRAG.
+     *
+     * A Particle or a Reference Point is finished by one click; the release
+     * below supplies that click through `singlePointTool`, exactly as the
+     * shared Point tool does. Named here rather than added to that list so
+     * the Dynamics library keeps one source of its own tool kinds.
+     */
+    /*
+     * A Rigid Body is drawn between two corners, so it is not a click-placement
+     * tool any more: only the particle and the angular vector are, and both
+     * are named rather than derived from `placement`, which the body also used
+     * to share.
+     */
+    if (
+        DYNAMICS_PLACEMENT_TOOLS[drawingState.activeTool] &&
+        CLICK_PLACED_DYNAMICS_TOOLS.has(drawingState.activeTool)
+    ) {
+        const onExisting =
+            idle && pressSelectsExistingObject(event);
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false,
+            onExisting,
+            pressPoint: (() => {
+                const raw = resolvePointerEvent(event).rawPointerPoint;
+
+                return raw
+                    ? { x: raw.x, y: raw.y }
+                    : null;
+            })(),
+            singlePointTool: drawingState.activeTool,
+            pressResolution: null
+        };
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * A PRESS ON AN EXISTING FEATURE IS NOT DECIDED YET
+     * ========================================================
+     *
+     * It used to be refused here, so that a press on a beam selected the beam
+     * rather than starting something through it. That is right for a CLICK and
+     * wrong for a DRAG: a student drawing a new Line that begins at a beam's
+     * endpoint is pressing ON the beam, and refusing the press meant the drag
+     * was never armed - the feature did not start from the mouse-down point,
+     * and only appeared (based on the release) once the cursor had left the
+     * geometry. Starting a run of members from a joint is exactly the case that
+     * broke.
+     *
+     * So the press is ARMED either way and the decision is deferred to the
+     * gesture, which is the only thing that can actually tell them apart:
+     *
+     *     press on existing, no travel -> a CLICK; the browser's own click
+     *                                     selects the feature (see
+     *                                     pressSelectsExistingObject below)
+     *     press on existing, travel    -> a DRAG; the active tool owns it and
+     *                                     starts at the mouse-down/snapped point
+     *
+     * `onExisting` records which case this is so the release can do the right
+     * thing - commit a creation for a drag, or leave the click to selection.
+     */
+    const onExisting =
+        idle && pressSelectsExistingObject(event);
+
+    /*
+     * ========================================================
+     * THE PRESS IS ARMED, BUT THE CONSTRUCTION IS NOT STARTED
+     * ========================================================
+     *     * Starting the feature on the press LOOKED right and was the source of the
+     * worst defect in this module. A browser fires a `click` on a plain press
+     * and release, so the sequence for one click was:
+     *
+     *     pointerdown   beginOrCompleteGeometry  -> the first point
+     *     pointerup     (no travel, left waiting)
+     *     click         beginOrCompleteGeometry  -> the SAME point again
+     *
+     * and the second call completed the feature AT ITS OWN START POINT - a
+     * zero-length line that opened its size popup before the student had moved.
+     * Click-move-click was impossible: every first click created something.
+     *
+     * So the press no longer builds anything by itself. It ARMS this session,
+     * keeping the resolved point the press would have used, and the
+     * construction is started only when the pointer has actually travelled far
+     * enough to be a DRAG (see moveCreationDrag). A press that never travels is
+     * left completely alone, and the browser's own `click` starts the feature
+     * through the ordinary click pipeline - which is exactly the first click of
+     * click-move-click.
+     *
+     * A "CONTINUE" PHASE is different and unchanged: the construction already
+     * holds its anchor, so the release supplies the next point. Nothing needs
+     * deferring because nothing was started here in the first place.
+     */
+    const startsHere =
+        idle || takesPoint;
+
+    editorState.creationDrag = {
+        pointerId: event.pointerId,
+
+        /*
+         * THE POINT THE PRESS WOULD START FROM, RESOLVED AGAINST THE MODEL.
+         *
+         * Held here rather than applied, so the construction is begun with the
+         * geometry of the press itself - through the same resolver a click uses
+         * - and never with a coordinate re-read from a later move, which could
+         * have snapped to something else.
+         */
+        pressResolution: startsHere
+            ? resolvePointerEvent(event)
+            : null,
+
+        /*
+         * WHERE THE PRESS LANDED, IN SCREEN PIXELS.
+         *
+         * The gesture is classified on RELEASE, by how far the pointer
+         * actually travelled - see finishCreationDrag. Screen pixels are the
+         * right measure for that and only for that: whether a hand moved is a
+         * fact about the pointer, while the feature being built is measured in
+         * world coordinates and always has been.
+         */
+        startScreen: {
+            x: event.clientX,
+            y: event.clientY
+        },
+
+        moved: false,
+
+        /*
+         * THE RAW PRESS POSITION, for a click that never travels. See
+         * finishCreationClick.
+         */
+        pressPoint: startsHere
+            ? (resolvePointerEvent(event).rawPointerPoint || null)
+            : null,
+
+        /*
+         * THE PRESS LANDED ON AN EXISTING FEATURE. It is not a decision, only
+         * a note: the drag path uses it so a press that never travels is left
+         * to the click pipeline (which selects that feature), while a press
+         * that travels lets the tool start from the same point.
+         */
+        onExisting
+    };
+
+    return true;
+}
+
+/*
+ * How far the pointer must travel before a press is a DRAG rather than a click.
+ *
+ * A few pixels: enough that hand tremor, a touch tap that slides slightly, or a
+ * trackpad's small drift are all still CLICKS, and far less than the distance
+ * anyone moves a cursor while deliberately drawing something. Getting this wrong
+ * in the small direction turns a click into an accidental zero-length feature;
+ * getting it wrong in the large direction makes a short drag need a second
+ * click.
+ */
+export const DRAG_THRESHOLD_PX = 4;
+
+/*
+ * ========================================================
+ * A BARE CLICK WITH A DRAG TOOL LEAVES THE TOOL
+ * ========================================================
+ *
+ * The ONE rule every creation tool shares:
+ *
+ *     press, drag, release on empty canvas   -> create the feature
+ *     press, release without travel          -> back to Select, create nothing
+ *     press on an existing feature, no drag  -> back to Select, select it
+ *
+ * A drag tool's gesture is already classified on release (see
+ * finishCreationDrag); what was missing was the second half. A bare click used
+ * to fall through to `handleCanvasClick`, which for a two-point tool read it as
+ * the FIRST POINT of click-move-click - so the tool stayed armed and a second
+ * click (or no click at all) was needed to get out of it.
+ *
+ * The decision belongs here, beside the threshold and the session that knows
+ * how far the pointer travelled, rather than in the click router: the tool, the
+ * gesture and the thing under the pointer are all facts this module already
+ * owns, and the router can stay a list of tool-specific rules.
+ *
+ * WHAT IS DELIBERATELY NOT INCLUDED
+ * ---------------------------------
+ *   - a press that TRAVELLED is a drag. It is never read as a click, however
+ *     briefly the pointer pauses before the release.
+ *   - a tool with an EXPLICIT REQUIRED INPUT (a dimension collecting
+ *     references, a Label or a Leader attaching to a feature, a Resultant
+ *     being told which force) is not a drag tool at all, so it never reaches
+ *     here - see `isDragCreationTool`.
+ *   - a construction that is PART-WAY through its own steps (a Triangle after
+ *     its first corner, an Arc after its centre, a load after its span) is not
+ *     abandoned: those steps are real decisions, and Escape is the established
+ *     way to give them up.
+ */
+export function finishCreationClick(session) {
+    /*
+     * The caller has read the session out of `editorState` and cleared it.
+     * Without one there was no press with a creation tool, so there is nothing
+     * to reinterpret.
+     */
+    if (
+        !session ||
+        session.moved ||
+        session.pipeDuct ||
+        session.singlePointTool
+    ) {
+        return false;
+    }
+
+    /*
+     * THE DECISION IS ONLY FOR A TOOL THAT DRAWS WITH A GESTURE. A tool that
+     * places a point, or that is mid-way through several points, keeps the
+     * click it was given.
+     */
+    if (
+        !isDragCreationTool(
+            drawingState.activeTool
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        isClickClickTool(
+            drawingState.activeTool
+        )
+    ) {
+        return false;
+    }
+
+    if (
+        isMultiStepTool(
+            drawingState.activeTool
+        ) &&
+        drawingState.interaction.phase !==
+            "idle"
+    ) {
+        return false;
+    }
+
+    /*
+     * A CLICK, NOT A DRAG: the click is answered like a Select click - the
+     * feature under the press is selected, or the selection is cleared - and the
+     * ARMED TOOL STAYS ARMED.
+     *
+     * It used to switch to Select, so every stray click ended the tool and the
+     * student had to re-arm it before drawing the next feature. The tool now
+     * ends only on a deliberate act: a click or tap on EMPTY canvas, the tool
+     * button again, Escape, or choosing another tool. Those are the same rules
+     * the canvas already applies to every tool (see `shouldExitToSelectOnClick`
+     * and the Escape handler), so one gesture is never interpreted twice.
+     */
+    const hit =
+        session.pressPoint
+            ? objectAtPoint(
+                  session.pressPoint
+              )
+            : null;
+
+    enggDrawingState.selectObject(
+        drawingState,
+        hit ? hit.id : null
+    );
+
+    renderProperties();
+    renderFeatures();
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * The point a traced polygon records, resolved through the shared pipeline so a
+ * trace can still snap to existing geometry - the same candidates, tolerance and
+ * indicators every other construction uses.
+ */
+function freeformTracePoint(event) {
+    const resolution = resolvePointerEvent(event);
+
+    return (
+        resolution.rawPointerPoint ||
+        null
+    );
+}
+
+/*
+ * Track how far the pointer has travelled during a creation press - and, the
+ * moment it has travelled far enough to be a DRAG, actually start the feature.
+ *
+ * THIS IS WHERE THE DEFERRED START HAPPENS. beginCreationDrag deliberately does
+ * not build anything on the press; it arms this session and keeps the press's
+ * own resolved point. The first movement past the threshold is what turns the
+ * armed press into a running construction:
+ *
+ *     pointerdown            arm, no construction
+ *     pointermove (>= 4px)   beginOrCompleteGeometry(press point)  -> first point
+ *     pointerup              beginOrCompleteGeometry(release point)-> commit
+ *
+ * The construction is begun with the PRESS'S point, not this move's - the
+ * member must start exactly where the student pressed, however far the cursor
+ * has already travelled by the time the threshold is crossed.
+ */
+export function moveCreationDrag(event) {
+    const session = editorState.creationDrag;
+
+    if (!session) {
+        return;
+    }
+
+    /*
+     * A TRACED FREEFORM POLYGON FOLDS ITS POINTS AS THE POINTER MOVES.
+     *
+     * Its preview is the ordinary polygon preview, so the points are published
+     * into the interaction every frame - through the same commit and the same
+     * renderer a clicked polygon uses. Nothing here knows anything else about
+     * the polygon's geometry.
+     */
+    if (session.freeformTrace) {
+        moveFreeformTrace(event, freeformTracePoint(event));
+
+        return;
+    }
+
+    /* A MATH STROKE IS RECORDED AS THE POINTER MOVES. */
+    if (session.mathStroke) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        moveMathStroke(
+            event,
+            resolution.effectiveConstructionPoint || resolution.rawPointerPoint
+        );
+
+        return;
+    }
+
+    /* A MATH DRAG PREVIEWS THE OBJECT IT WILL CREATE. */
+    if (session.mathDrag) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        moveMathDrag(event, resolvePointerEvent(event));
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * PIPE / DUCT KEEPS ITS LIVE PREVIEW ON THE INTERACTION
+     * ========================================================
+     *
+     * The shared preview reads the interaction (see preview.js), so the run
+     * being dragged is published there every frame - the start, the resolved
+     * cursor and the cross-section. The preview is then generated by the SAME
+     * function the committed feature uses, so the two boundary lines cannot
+     * move when the button is released.
+     *
+     * THE SNAP GEOMETRY IS PUBLISHED TOO. The moving end snaps to the start, to
+     * a run already placed or to a corner - through exactly the candidates, the
+     * tolerance and the indicators every other construction publishes. It is
+     * the run's CENTRELINE that is published, never its two walls.
+     *
+     * ========================================================
+     * AND IT RECORDS THAT THE GESTURE IS A DRAG, NOT A CLICK
+     * ========================================================
+     *
+     * THIS IS THE ONE THING THIS BRANCH MUST NOT FORGET. The release decides
+     * whether to commit a run or to do nothing from `session.moved`, and the
+     * generic path below is the only place that set it - so a pipe-duct press
+     * that travelled never became a drag. The release then took the "click"
+     * branch: it CLEARED the interaction, which is what made the live preview
+     * vanish, and returned before `commitRouteSegment` - so the run was never
+     * created. The student saw a preview while dragging and nothing at all on
+     * release, which is exactly the reported defect.
+     *
+     * So the SAME threshold the rest of this module uses classifies the
+     * gesture here too: once the pointer has travelled far enough to be a
+     * drag, the run is armed for commitment. A press that never travels stays
+     * a click and still commits nothing - the honest outcome for a tool that
+     * was not given a length.
+     */
+    /*
+     * THE FREE FLOW ARROW PREVIEWS THE ARROW IT WILL COMMIT.
+     *
+     * It is drawn through the free-arrow painter (no attachment), from the press
+     * to the cursor, and its release always creates one - a press with no travel
+     * releases the default-length arrow, so the tool never leaves the student
+     * with a preview and nothing placed.
+     */
+    if (session.freeArrow) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        if (point) {
+            moveFreeArrowSession(session, point);
+        }
+
+        return;
+    }
+
+    /*
+     * A SCHEMATIC DRAG PREVIEWS THE OBJECT IT WILL CREATE.
+     *
+     * The preview is built by the SAME function the commit uses - see
+     * `schematicPreviewAt` - so a vessel's box, a graph's frame or a section
+     * trace does not change shape when the button is released.
+     */
+    if (session.schematicTool) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        session.currentPoint = point || null;
+
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: session.schematicTool,
+            phase: session.phase,
+            preview: schematicPreviewAt(session.schematicTool, session, point),
+            snapGeometry: session.start && point ? [{ start: session.start, end: point }] : []
+        });
+
+        return;
+    }
+
+    if (session.pipeDuct) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.start;
+
+        const routeEngineering =
+            drawingState.interaction.routeEngineering ||
+            enggPipeDuct.defaultPipeEngineering();
+
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: "pipe-duct",
+            phase: ROUTE_PHASE,
+            startPoint: session.start,
+            routeSegmentStart: session.start,
+            routeEngineering,
+            previousRun: session.previousRun,
+            routeCommittedCount: session.committedCount || 0,
+            snapGeometry: [
+                {
+                    start: session.start,
+                    end: point
+                }
+            ],
+            snapToolId: "pipe-duct"
+        });
+
+        session.currentPoint = point;
+
+        return;
+    }
+
+    /*
+     * THE ELBOW PREVIEWS ITS OWN TWO BOUNDARIES while it is dragged.
+     *
+     * The preview is published on the interaction, so the shared preview
+     * renderer draws it - and it is built by the SAME function the commit uses,
+     * so the curved walls do not move on release. The moving end is snapped by
+     * the shared resolver before it is published, which is what lets a dragged
+     * elbow land exactly on a pipe endpoint and connect.
+     */
+    /* A junction previews its contour while the drag sets its main run. */
+    if (session.junction) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.start;
+
+        session.currentPoint = point;
+
+        const main = enggPipeDuct.directionOf(session.start, point) || { x: 1, y: 0 };
+
+        const interaction = {
+            fluidsTool: "junction",
+            phase: JUNCTION_PHASE,
+            junctionStart: session.start,
+            junctionMainDirection: main,
+            junctionEngineering: drawingState.interaction.junctionEngineering,
+            snapGeometry: session.start ? [{ start: session.start, end: point }] : [],
+            snapToolId: "junction"
+        };
+
+        interaction.preview = junctionGesturePreview(interaction, point);
+
+        enggDrawingState.setInteraction(drawingState, interaction);
+
+        return;
+    }
+
+    if (session.elbow) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.start;
+
+        session.currentPoint = point;
+
+        const interaction = {
+            fluidsTool: "elbow",
+            phase: ELBOW_PHASE,
+            startPoint: session.start,
+            elbowStart: session.start,
+            elbowStartMatch: session.startMatch || null,
+            elbowAngle:
+                Number(drawingState.interaction.elbowAngle) || undefined,
+            elbowBendRadius:
+                Number(drawingState.interaction.elbowBendRadius) || undefined,
+            snapGeometry: session.start
+                ? [{ start: session.start, end: point }]
+                : [],
+            snapToolId: "elbow"
+        };
+
+        interaction.preview = elbowGesturePreview(interaction, point);
+
+        enggDrawingState.setInteraction(drawingState, interaction);
+
+        setToolMessage(elbowInstruction());
+
+        return;
+    }
+
+    /*
+     * THE FLOW ARROW SLIDES ALONG ITS PIPE WHILE IT IS DRAGGED.
+     *
+     * The cursor is projected onto the host's centreline every frame, so the
+     * preview is always ON the pipe whatever the pointer does. The projection
+     * is what makes the movement parallel to the pipe's edges: the fraction
+     * along the run is the only degree of freedom the drag has.
+     */
+    if (session.flowArrow) {
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        if (point) {
+            moveFlowArrowSession(session, point);
+        }
+
+        return;
+    }
+
+    if (!session.moved) {
+        const dx = event.clientX - session.startScreen.x;
+        const dy = event.clientY - session.startScreen.y;
+
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) {
+            return;
+        }
+
+        session.moved = true;
+
+        if (session.singlePointTool) {
+            return;
+        }
+
+        /*
+         * A GEOMETRIC ANNOTATE TOOL BEGINS ITS ANCHOR HERE.
+         *
+         * The press armed the session; the first real movement is what
+         * commits to a drag, so the anchor is begun now - from the PRESS's
+         * point, through the creation layer's own function, so a dragged
+         * leader and a two-clicked leader share one implementation.
+         */
+        if (
+            session.annotateTool &&
+            !session.annotateArmed &&
+            session.pressResolution
+        ) {
+            const resolution = session.pressResolution;
+
+            const target = hitTestAnnotateTarget(
+                resolution.effectiveConstructionPoint ||
+                    resolution.rawPointerPoint
+            );
+
+            beginAnnotateDragAnchor(
+                resolution.effectiveConstructionPoint ||
+                    resolution.rawPointerPoint,
+                target ? target.id : null
+            );
+
+            session.pressResolution = null;
+
+            return;
+        }
+
+        /*
+         * START THE FEATURE NOW. A press that is really a drag has been
+         * recognised, so the deferred first point is applied through the same
+         * construction entry point a click would use - and the live preview
+         * follows from here on, exactly as it does for click-move-click.
+         */
+        if (session.pressResolution) {
+            beginOrCompleteGeometry(
+                session.pressResolution
+            );
+
+            session.pressResolution = null;
+
+            /*
+             * If nothing started - the tool routed itself elsewhere, or the
+             * point could not be resolved - the release has nothing to finish,
+             * so the session is dropped and the release is left to whatever else
+             * is running.
+             */
+            if (
+                !DRAG_CONTINUE_PHASES.includes(
+                    drawingState.interaction.phase
+                )
+            ) {
+                editorState.creationDrag = null;
+            }
+        }
+    }
+}
+
+/*
+ * Complete a creation on release.
+ *
+ * TWO GESTURES ARRIVE HERE, AND THEY ARE NOT THE SAME THING.
+ *
+ *   THE POINTER MOVED   the student pressed, dragged, and let go - one
+ *                       gesture that says both ends, so the feature is
+ *                       committed at the released point.
+ *
+ *   THE POINTER DID NOT  the student simply CLICKED. For a tool that draws
+ *                       with a gesture that is not a creation at all: it
+ *                       returns to Select, selecting whatever was under the
+ *                       press - see finishCreationClick.
+ *
+ * WITHOUT THE DISTINCTION the two workflows cannot both exist. The press
+ * started the feature and armed this session, so a plain click was completed on
+ * release at its own start point - a zero-length line, committed, before the
+ * student had even moved. Click-move-click was therefore impossible: every first
+ * click created something.
+ *
+ * The final cursor position is the second point, resolved through the
+ * same snapping pipeline a click would have used - so a snap to an
+ * endpoint is committed exactly as it was previewed.
+ *
+ * Returns true when this release owned the gesture, so the trailing
+ * click is swallowed rather than read as a new first point. A CLICK with a
+ * tool that keeps its click workflow is NOT swallowed: it is that tool's own
+ * next step, and the browser's click for it must reach the click router
+ * untouched.
+ */
+export function finishCreationDrag(
+    event
+) {
+    const session =
+        editorState.creationDrag;
+
+    if (!session) {
+        return false;
+    }
+
+    /*
+     * ========================================================
+     * A CLICK IS NEVER CONSUMED
+     * ========================================================
+     *
+     * A release that never travelled is the FIRST CLICK of the click-move-click
+     * workflow, not a drag that failed. It is offered to the shared decision
+     * first, and only a click that decision ANSWERS is consumed - every other
+     * one returns false, so the browser's own click reaches the click router
+     * and starts (or continues) the construction.
+     *
+     * It is read BEFORE any branch below, and before the session is dropped, so
+     * no tool-specific path can accidentally swallow it - which is exactly the
+     * fault this guard exists to prevent.
+     */
+    if (
+        !session.moved &&
+        finishCreationClick(session)
+    ) {
+        return true;
+    }
+
+    if (!session.moved) {
+        return false;
+    }
+
+    /*
+     * A TRACED POLYGON IS CLOSED ON RELEASE.
+     *
+     * The release is the final vertex joined back to the first, committed
+     * through the same polygon commit the click workflow uses. A press that
+     * never travelled returns false, so the browser's click places the vertex
+     * exactly as before - and the session is dropped once, so a release can
+     * never close the same polygon twice.
+     */
+    if (session.freeformTrace) {
+        editorState.creationDrag = null;
+
+        return finishFreeformTrace(
+            event,
+            freeformTracePoint(event)
+        );
+    }
+
+    /*
+     * A MATH DRAG COMMITS AT THE RELEASE. A press that never travelled creates
+     * nothing - a zero-length vector and a zero-size graph are not objects - and
+     * the tool stays armed for a real drag.
+     */
+    if (session.mathStroke) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        editorState.creationDrag = null;
+
+        const resolution = resolvePointerEvent(event);
+
+        /*
+         * A PRESS THAT NEVER TRAVELLED IS A CLICK, NOT A STROKE. The session
+         * is dropped and false is returned, so the browser's click reaches the
+         * click router exactly as it would for any other tool - which is what
+         * keeps a tap from being swallowed by a trace that never started.
+         */
+        if (!session.moved) {
+            finishMathStroke(event, null);
+
+            return false;
+        }
+
+        return finishMathStroke(
+            event,
+            resolution.effectiveConstructionPoint || resolution.rawPointerPoint
+        );
+    }
+
+    if (session.mathDrag) {
+        editorState.creationDrag = null;
+
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        if (!session.moved) {
+            return false;
+        }
+
+        finishMathDrag(resolvePointerEvent(event));
+
+        return true;
+    }
+
+    // A pipe's release is authoritative: coalesced or missing move events
+    // must not turn a real drag into a click that silently draws nothing.
+    if (session.pipeDuct && !session.moved) {
+        session.moved = Math.hypot(
+            event.clientX - session.startScreen.x,
+            event.clientY - session.startScreen.y
+        ) >= DRAG_THRESHOLD_PX;
+    }
+
+    editorState.creationDrag = null;
+
+    /*
+     * A CLICK, NOT A DRAG.
+     *
+     * The construction is left exactly as the press left it - holding its
+     * first point and waiting for the next one - and the trailing click is
+     * NOT consumed, because that click IS the second point of the
+     * click-move-click workflow.
+     *
+     * FOR A PIPE / DUCT THE CLICK IS SIMPLY NOTHING. A run is defined by a
+     * drag, so a press-and-release that never travelled draws no run at all:
+     * the interaction is dropped here and the browser's click falls through to
+     * the ordinary selection path, which is the honest outcome for a tool that
+     * was not given a length.
+     */
+    if (session.pipeDuct && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            preview: null,
+            phase: "idle"
+        });
+        renderCurrentDrawing();
+    }
+
+    if (session.elbow && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: "elbow",
+            preview: null,
+            phase: "idle"
+        });
+        renderCurrentDrawing();
+    }
+
+    if (session.freeArrow && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: "flow-arrow",
+            preview: null,
+            phase: "idle"
+        });
+        renderCurrentDrawing();
+    }
+
+    /*
+     * A SCHEMATIC DRAG THAT NEVER MOVED LEAVES NOTHING BEHIND.
+     *
+     * A vessel, a graph frame or a section trace needs two points; a press with
+     * no travel has only one, so the preview is dropped and the tool stays armed
+     * for a real drag. The trailing click is consumed by the caller, so nothing
+     * is placed at the click either - the gesture simply did not make a shape.
+     */
+    if (session.schematicTool && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            fluidsTool: session.schematicTool,
+            preview: null,
+            phase: "idle"
+        });
+
+        renderCurrentDrawing();
+
+        return true;
+    }
+
+    if (!session.moved) {
+        return false;
+    }
+
+    /*
+     * A SCHEMATIC DRAG COMMITS AT THE RELEASE.
+     *
+     * The release is the object's other corner (or its other end), resolved
+     * through the same snapping the preview used - so the box the student saw is
+     * the box they get.
+     */
+    if (session.schematicTool) {
+        const resolution = resolvePointerEvent(event);
+
+        const end = resolution.effectiveConstructionPoint || resolution.rawPointerPoint || session.currentPoint;
+
+        if (session.schematicTool === "reservoir-tank") {
+            commitVesselDrag(session.start, end);
+        } else if (session.schematicTool === "pressure-profile") {
+            commitProfileDrag(session.start, end);
+        } else if (session.schematicTool === "flow-profile") {
+            commitFlowProfileDrag(session.start, end);
+        } else if (session.schematicTool === "section-plane") {
+            commitSectionDrag(session.start, end);
+        }
+
+        enggDrawingState.setInteraction(drawingState, { preview: null, phase: "idle" });
+
+        renderCurrentDrawing();
+
+        return true;
+    }
+
+    /*
+     * ========================================================
+     * THE FREE FLOW ARROW COMMITS AT THE RELEASE
+     * ========================================================
+     *
+     * A press that travelled draws the arrow the student dragged; a press that
+     * did not is still a placement, and creates the default-length arrow - so the
+     * tool always produces a real, editable object rather than a mark on the
+     * sheet that cannot be selected, saved or undone.
+     */
+    if (session.freeArrow) {
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.previewEnd ||
+            null;
+
+        commitFreeArrowSession(session, point);
+
+        return true;
+    }
+    /*
+     * ========================================================
+     * PIPE / DUCT COMMITS ITS RUN AT THE RELEASE
+     * ========================================================
+     *
+     * The release is the run's far end. The leg is committed as a real
+     * Pipe / Duct feature, an Elbow is generated at the corner when this leg
+     * continues a previous run through a genuine turn - at ANY angle - and the
+     * whole thing is one undoable operation (see pipe-duct-tool.js).
+     *
+     * A completed pipe returns to Select so the next gesture can select or
+     * move it. A failed, zero-length run leaves the drawing tool armed.
+     */
+    if (session.pipeDuct) {
+        const resolution = resolvePointerEvent(event);
+
+        const end =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.currentPoint;
+
+        const path = commitRouteSegment(
+            session.start,
+            end,
+            {
+                previousRun: session.previousRun,
+                routeEngineering:
+                    drawingState.interaction.routeEngineering,
+                routeCommittedCount: session.committedCount || 0
+            }
+        );
+
+        if (!path) {
+            enggDrawingState.setInteraction(drawingState, {
+                preview: null,
+                phase: "idle",
+                snapGeometry: []
+            });
+            renderCurrentDrawing();
+        }
+
+        /*
+         * THE TOOL STAYS ARMED AFTER A RUN IS COMMITTED.
+         *
+         * A path is drawn as a sequence of legs, so the next leg must follow the
+         * release of this one with no second press on the button. The run's far
+         * end is remembered as the next start (see `resolveRouteStart`), so a
+         * continuous path still connects; the tool ends on a click on empty
+         * canvas, Escape, its own button or another tool.
+         */
+
+        return true;
+    }
+
+    /*
+     * THE ELBOW COMMITS AT THE RELEASE.
+     *
+     * The release is the fitting's second end, resolved through the same
+     * snapping a click would use - so a release beside a pipe's end attaches
+     * exactly where the indicator showed it would. The tool stays armed, so a
+     * student can place another elbow straight away.
+     */
+    /*
+     * THE JUNCTION COMMITS AT THE RELEASE. The hub is the press; the MAIN RUN
+     * is the direction the pointer travelled. The distance is never stored.
+     */
+    if (session.junction) {
+        const resolution = resolvePointerEvent(event);
+
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.currentPoint ||
+            session.start;
+
+        const created = commitJunctionGesture(session.start, point, {
+            junctionEngineering: drawingState.interaction.junctionEngineering
+        });
+
+        if (!created) {
+            enggDrawingState.setInteraction(drawingState, {
+                fluidsTool: "junction",
+                preview: null,
+                phase: "idle",
+                snapGeometry: []
+            });
+
+            renderCurrentDrawing();
+        }
+
+        return true;
+    }
+
+    if (session.elbow) {
+        const resolution = resolvePointerEvent(event);
+
+        const end =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint ||
+            session.currentPoint;
+
+        const created = commitElbowGesture(session.start, end, {
+            elbowStartMatch: session.startMatch || null,
+            elbowAngle: drawingState.interaction.elbowAngle,
+            elbowBendRadius: drawingState.interaction.elbowBendRadius
+        });
+
+        if (!created) {
+            enggDrawingState.setInteraction(drawingState, {
+                fluidsTool: "elbow",
+                preview: null,
+                phase: "idle",
+                snapGeometry: []
+            });
+
+            renderCurrentDrawing();
+        }
+
+        return true;
+    }
+
+    /*
+     * THE FLOW ARROW COMMITS AT THE RELEASE, wherever the drag settled.
+     *
+     * One arrow at the fraction the pointer projected to, as one undoable
+     * change. The tool stays armed: the next press places another.
+     */
+    if (session.flowArrow) {
+        commitFlowArrowSession(session);
+
+        return true;
+    }
+
+    /*
+     * A GEOMETRIC ANNOTATE TOOL COMMITS AT THE RELEASE.
+     *
+     * The anchor was begun when the drag was recognised (moveCreationDrag);
+     * the release supplies the second end and the creation layer commits the
+     * mark - through the SAME function the second click reaches, so the two
+     * workflows cannot produce different features.
+     */
+    if (session.annotateTool) {
+        const resolution = resolvePointerEvent(event);
+        const point =
+            resolution.effectiveConstructionPoint ||
+            resolution.rawPointerPoint;
+
+        if (point) {
+            completeAnnotateAt(point);
+        }
+
+        return true;
+    }
+
+    if (session.singlePointTool) {
+        beginOrCompleteGeometry(
+            resolvePointerEvent(event)
+        );
+
+        return true;
+    }
+
+    if (
+        DRAG_CONTINUE_PHASES.includes(
+            drawingState.interaction.phase
+        )
+    ) {
+        beginOrCompleteGeometry(
+            resolvePointerEvent(event)
+        );
+    }
+
+    /*
+     * The release ends the gesture whether or not the phase was still
+     * completable - it may have been cancelled mid-drag - so the click is
+     * consumed either way.
+     */
+    return true;
+}

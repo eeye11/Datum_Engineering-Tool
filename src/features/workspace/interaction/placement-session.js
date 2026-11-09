@@ -43,8 +43,16 @@ export const PLACEMENT_INSTRUCTION =
  *
  *   strokes      the reconstructed strokes, in the editor's own coordinates
  *   calibration  the graph's origin and tick spacing, or null
+ *   preview      the finished object or a builder for it, or null
  *   commit       called with the placement transform when the student clicks
  *   cancel       called if the placement is abandoned
+ *
+ * THE PREVIEW IS THE OBJECT, WHEN THERE IS ONE. A sketch used to be previewed
+ * as its strokes alone, and the student then received a boxed graph with axes
+ * and a grid - a different picture from the one they placed. So when an editor
+ * can describe the finished object, `preview` carries it (or a function of the
+ * placement that builds it), and the canvas draws THAT, through the ordinary
+ * renderer, under the same transform the commit applies.
  */
 export function beginPlacement(sketch, options = {}) {
   if (!sketch || !Array.isArray(sketch.strokes) || !sketch.strokes.length) {
@@ -54,6 +62,7 @@ export function beginPlacement(sketch, options = {}) {
   editorState.pendingPlacement = {
     strokes: sketch.strokes,
     calibration: sketch.calibration || null,
+    preview: sketch.preview || null,
     commit: options.commit || sketch.commit || null,
     cancel: options.cancel || sketch.cancel || null,
     placement: null,
@@ -110,6 +119,7 @@ export function movePlacement(point) {
     preview: {
       placement,
       strokes: session.strokes,
+      ...(session.preview ? { object: objectFor(session.preview, placement) } : {}),
       style: { stroke: "#1f5c38" },
     },
   });
@@ -124,6 +134,25 @@ export function movePlacement(point) {
   renderCurrentDrawing();
 
   return true;
+}
+
+/*
+ * THE OBJECT TO DRAW FOR A PLACEMENT.
+ *
+ * `preview` may be the object itself or a function that builds it from the
+ * placement - a function, because the box only exists once the student's cursor
+ * has chosen it. Either way the renderer draws an ordinary math-plot, not a
+ * special preview shape.
+ */
+function objectFor(builder, placement) {
+  try {
+    return typeof builder === "function" ? builder(placement) : builder;
+  } catch (error) {
+    /* A preview that cannot be built must not break the placement. */
+    console.error("Placement preview could not be built", error);
+
+    return null;
+  }
 }
 
 /* ============================================================

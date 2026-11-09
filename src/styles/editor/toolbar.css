@@ -478,6 +478,90 @@
 }
 
 /*
+ * ==========================================================================
+ * THE FONT SIZE CONTROL
+ *
+ * A NUMBER AND ITS UNIT, in the same row and the same height as the three line
+ * properties. It is wider than an icon button because it has to SHOW a value -
+ * a size control that only showed an icon would make the student open it to
+ * find out what size their text is.
+ *
+ * The field is the control; the icon is a label for it, not a button, so
+ * clicking anywhere in the box puts the caret in the number.
+ * ==========================================================================
+ */
+.drawing-strip-font-control {
+    flex: 0 0 auto;
+    height: 26px;
+}
+
+.drawing-strip-font {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-sm);
+    box-sizing: border-box;
+    color: var(--cad-ink);
+    cursor: text;
+    display: inline-flex;
+    gap: 2px;
+    height: 26px;
+    padding: 0 6px 0 5px;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.drawing-strip-font:hover {
+    background: var(--datum-input-hover);
+    border-color: var(--datum-green);
+}
+
+.drawing-strip-font:has(:focus-visible) {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.drawing-strip-font svg {
+    display: block;
+    flex: 0 0 auto;
+    height: 15px;
+    opacity: 0.75;
+    width: 15px;
+}
+
+/*
+ * THE NUMBER: narrow, tabular and borderless, so it reads as a value inside the
+ * box rather than a form field dropped into the toolbar.
+ */
+.drawing-strip-font-input {
+    -moz-appearance: textfield;
+    appearance: textfield;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font-family: inherit;
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    min-width: 0;
+    outline: none;
+    padding: 0;
+    text-align: center;
+    width: 26px;
+}
+
+.drawing-strip-font-input::-webkit-outer-spin-button,
+.drawing-strip-font-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.drawing-strip-font-unit {
+    color: var(--datum-muted);
+    font-size: 10.5px;
+    line-height: 1;
+}
+
+/*
  * THE OPEN AND FOCUS STATE.
  *
  * `:has(:focus-visible)` asks for KEYBOARD focus specifically. Plain

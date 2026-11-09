@@ -35,7 +35,21 @@ const assert = require("node:assert/strict");
 const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 const { locate, modulePath } = require("./helpers/source-path.cjs");
 
-test.after(() => {});
+/*
+ * THE BOOTED PAGE IS CLOSED WHEN THE FILE FINISHES.
+ *
+ * Booting starts jsdom's clock and the source-render debounce, and neither
+ * stops on its own. Every assertion in this file passes, so the runner prints
+ * its eight verdicts and then WAITS - which reads as a hang rather than as a
+ * result. `window.close()` clears those timers.
+ *
+ * IT IS CLOSED ONCE, after the last test, and never between tests: an earlier
+ * `close()` left the later ones with a torn-down page.
+ */
+test.after(async () => {
+  await new Promise((resolve) => setImmediate(resolve));
+  page?.window?.close?.();
+});
 
 let page = null;
 let modules = null;

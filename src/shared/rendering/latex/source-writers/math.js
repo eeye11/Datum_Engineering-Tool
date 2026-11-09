@@ -62,6 +62,103 @@ function styleOf(object) {
   return { definitions, options: options.length ? options : ["draw=black"] };
 }
 
+/*
+ * A SKETCHED CURVE'S OWN GEOMETRY, IN DRAWING UNITS.
+ *
+ * The component stores its vertices (`points`) and the Bezier chain fitted
+ * through them (`segments`), both in the graph's coordinates. These read the
+ * two in the box's units so the source can state them, and the `TikZ` spline of
+ * the same chain so the compiled picture is the curve the canvas draws.
+ */
+function endpointValues(component) {
+  return Array.isArray(component.points)
+    ? component.points.filter(validPoint)
+    : [];
+}
+
+/* The chain in drawing units - every control point, mapped by the one rule. */
+function drawingSegments(object, component) {
+  const segments = Array.isArray(component.segments) ? component.segments : [];
+
+  return segments
+    .map((segment) => enggMathModel.drawingSegment(object, segment))
+    .filter(Boolean);
+}
+
+function controlValues(object, component) {
+  return drawingSegments(object, component).map((segment) => [
+    segment.from.x,
+    segment.from.y,
+    segment.control1.x,
+    segment.control1.y,
+    segment.control2.x,
+    segment.control2.y,
+    segment.to.x,
+    segment.to.y,
+  ]);
+}
+
+/* A sketched curve as one `\draw ... (a) .. controls (c1) and (c2) .. (b)` path. */
+function splineCommand(object, component, options) {
+  const segments = drawingSegments(object, component);
+
+  if (!segments.length) {
+    return null;
+  }
+
+  const start = point(segments[0].from.x, segments[0].from.y);
+
+  const pieces = segments.map(
+    (segment) =>
+      `.. controls ${point(segment.control1.x, segment.control1.y)} and ${point(
+        segment.control2.x,
+        segment.control2.y,
+      )} .. ${point(segment.to.x, segment.to.y)}`,
+  );
+
+  return `\\draw[${options.join(", ")}] ${start} ${pieces.join(" ")};`;
+}
+
+/*
+ * THE DISPLAY SWITCHES A GRAPH IS WRITTEN BY.
+ *
+ * A sketch writes no tick NUMBERS, whatever its stored setting says - the same
+ * rule the canvas draws by - because the source is a picture of the graph and
+ * the two must agree. The reader in this module is shared with test bundles
+ * that may hold an older copy of the model, so the rule is applied here too
+ * rather than assumed to be on the model.
+ */
+function displayOf(object) {
+  const geometry = object?.geometry || {};
+  const sketch = geometry.mode === "sketch";
+
+  const fromModel =
+    typeof enggMathModel.gridDisplay === "function"
+      ? enggMathModel.gridDisplay(object)
+      : { showGrid: geometry.showGrid !== false };
+
+  return {
+    sketch,
+    showGrid: fromModel.showGrid !== false,
+    showTickLabels: sketch ? false : fromModel.showTickLabels !== false,
+  };
+}
+
+/*
+ * THE GRID'S VALUES, at the graph's own resolution.
+ *
+ * A sketch draws a finer grid than its labelled ticks, and its source must draw
+ * the same lines - otherwise the compiled picture has fewer divisions than the
+ * canvas the student approved.
+ */
+function gridValuesOf(min, max, spacing, divisions) {
+  if (typeof enggMathModel.gridValues === "function") {
+    return enggMathModel.gridValues(min, max, spacing, divisions);
+  }
+
+  return enggMathModel.tickValues(min, max, spacing);
+}
+
 function withDefinitions(definitions, commands) {
   const body = commands.filter(Boolean);
 
@@ -296,6 +393,14 @@ function serializePlot(object) {
   const geometry = object.geometry || {};
   const frame = mapping.frame;
 
+  /*
+   * A SKETCH IS AN UNNUMBERED GRID. Its source draws the same lines, ticks and
+   * axes the canvas does and prints no numbers beside them - so the compiled
+   * picture and the canvas agree. The MATHEMATICAL fields below (limits, tick
+   * spacing) are still written: the numbering is what is gone, not the numbers.
+   */
+  const display = displayOf(object);
+
   const commands = [];
 
   /* The box. */
@@ -319,8 +424,26 @@ function serializePlot(object) {
     geometry.yTickSpacing,
   );
 
-  if (geometry.showGrid !== false) {
-    xTicks.forEach((value) => {
+  const xGrid = display.showGrid
+    ? gridValuesOf(
+        mapping.limits.xMin,
+        mapping.limits.xMax,
+        geometry.xTickSpacing,
+        geometry.gridDivisions,
+      )
+    : [];
+
+  const yGrid = display.showGrid
+    ? gridValuesOf(
+        mapping.limits.yMin,
+        mapping.limits.yMax,
+        geometry.yTickSpacing,
+        geometry.gridDivisions,
+      )
+    : [];
+
+  if (display.showGrid) {
+    xGrid.forEach((value) => {
       const at = enggMathModel.graphToDrawing(object, {
         x: value,
         y: mapping.limits.yMin,
@@ -331,7 +454,7 @@ function serializePlot(object) {
       }
     });
 
-    yTicks.forEach((value) => {
+    yGrid.forEach((value) => {
       const at = enggMathModel.graphToDrawing(object, {
         x: mapping.limits.xMin,
         y: value,
@@ -343,7 +466,23 @@ function serializePlot(object) {
     });
   }
 
-  if (geometry.showXAxis !== false) {
+  /*
+   * THE AXES ARE WRITTEN WHERE ZERO IS - IF IT IS IN RANGE. The same rule as
+   * the canvas (`draw-math.js`): an axis whose zero is outside the limits is
+   * not drawn and not written, so the compiled picture and the canvas cannot
+   * place an axis differently.
+   */
+  const xAxisVisible =
+    geometry.showXAxis !== false &&
+    mapping.origin.y >= mapping.bottom - 1e-9 &&
+    mapping.origin.y <= mapping.top + 1e-9;
+
+  const yAxisVisible =
+    geometry.showYAxis !== false &&
+    mapping.origin.x >= mapping.left - 1e-9 &&
+    mapping.origin.x <= mapping.right + 1e-9;
+
+  if (xAxisVisible) {
     commands.push(
       line(
         { x: mapping.left, y: mapping.origin.y },
@@ -353,7 +492,7 @@ function serializePlot(object) {
     );
   }
 
-  if (geometry.showYAxis !== false) {
+  if (yAxisVisible) {
     commands.push(
       line(
         { x: mapping.origin.x, y: mapping.bottom },
@@ -363,9 +502,11 @@ function serializePlot(object) {
     );
   }
 
-  if (geometry.showTickLabels !== false) {
+  if (display.showTickLabels) {
     xTicks.forEach((value) => {
-      const at = enggMathModel.graphToDrawing(object, { x: value, y: 0 });
+      const at = xAxisVisible
+        ? enggMathModel.graphToDrawing(object, { x: value, y: 0 })
+        : null;
 
       if (at && Math.abs(value) > 1e-9) {
         commands.push(
@@ -378,7 +519,9 @@ function serializePlot(object) {
     });
 
     yTicks.forEach((value) => {
-      const at = enggMathModel.graphToDrawing(object, { x: 0, y: value });
+      const at = yAxisVisible
+        ? enggMathModel.graphToDrawing(object, { x: 0, y: value })
+        : null;
 
       if (at && Math.abs(value) > 1e-9) {
         commands.push(
@@ -391,7 +534,7 @@ function serializePlot(object) {
     });
   }
 
-  if (String(geometry.xLabel ?? "").trim()) {
+  if (xAxisVisible && String(geometry.xLabel ?? "").trim()) {
     commands.push(
       node(
         { x: mapping.right + 2, y: mapping.origin.y },
@@ -401,7 +544,7 @@ function serializePlot(object) {
     );
   }
 
-  if (String(geometry.yLabel ?? "").trim()) {
+  if (yAxisVisible && String(geometry.yLabel ?? "").trim()) {
     commands.push(
       node(
         { x: mapping.origin.x, y: mapping.top + 2 },
@@ -429,7 +572,7 @@ function serializePlot(object) {
       component.originalTrace.length > 1
     ) {
       commands.push(
-        pathThrough(component.originalTrace, [
+        pathThrough(enggMathModel.graphStrokesToDrawing(object, [component.originalTrace])[0] || [], [
           ...componentOptions,
           "dashed",
           "line width=0.2pt",
@@ -437,13 +580,33 @@ function serializePlot(object) {
       );
     }
 
-    enggMathModel.plotFunctionStrokes(object, component).forEach((stroke) => {
-      const drawn = pathThrough(stroke, componentOptions);
+    if (component.mode !== "sketch") {
+      enggMathModel.plotFunctionStrokes(object, component).forEach((stroke) => {
+        const drawn = pathThrough(stroke, componentOptions);
 
-      if (drawn) {
-        commands.push(drawn);
+        if (drawn) {
+          commands.push(drawn);
+        }
+      });
+    }
+
+    /*
+     * A SKETCHED CURVE IS WRITTEN AS ONE `TikZ` SPLINE, not a polyline.
+     *
+     * Its geometry IS its Bezier chain (`segments`), stored in graph
+     * coordinates and mapped into drawing units here. A polyline through its
+     * vertices would be a different picture from the one on the sheet, and a
+     * polyline through its samples would write hundreds of points that mean
+     * nothing on their own. Every control point is stated, so the curve is
+     * rebuilt exactly by reading the source back.
+     */
+    if (component.mode === "sketch") {
+      const spline = splineCommand(object, component, componentOptions);
+
+      if (spline) {
+        commands.push(spline);
       }
-    });
+    }
 
     commands.push(
       meta(
@@ -457,6 +620,61 @@ function serializePlot(object) {
           ["visible", component.visible === false ? "off" : "on"],
           ["fit", component.fitType || "none"],
           ["fitExpression", `"${String(component.fitExpression ?? "")}"`],
+          /*
+           * THE SKETCHED PATH IS WRITTEN OUT IN FULL. A sketched curve's
+           * geometry is the student's own - it cannot be re-derived from an
+           * expression the way a plotted one can - so every point is stated
+           * and the reader rebuilds the identical curve from it. The original
+           * trace is kept too, as `trace=`, so "show the stroke I drew" still
+           * works after a reload.
+           */
+          ...(component.mode === "sketch"
+            ? [
+                /*
+                 * THE CURVE IS WRITTEN FROM ITS OWN GEOMETRY, in drawing units.
+                 *
+                 * A sketched curve is stored as its vertices plus the Bezier
+                 * chain fitted through them; the chain IS the curve the canvas
+                 * draws. Writing it out (control points included) means the
+                 * reader rebuilds exactly the curve on the sheet - where
+                 * writing only the vertices lost a peak the simplifier judged
+                 * collinear.
+                 */
+                [
+                  "curve",
+                  `"${endpointValues(component)
+                    .map((at) => `${num(at.x, 3)}:${num(at.y, 3)}`)
+                    .join(" ")}"`,
+                ],
+                /*
+                 * A SPLINE IS WRITTEN ONLY WHEN THERE IS ONE. A straight sketched
+                 * segment has no Bezier chain, and an empty `spline=""` on its
+                 * line is a field that says nothing - writing it made the first
+                 * save and the second differ for no reason.
+                 */
+                ...(controlValues(object, component).length
+                  ? [
+                      [
+                        "spline",
+                        `"${controlValues(object, component)
+                          .map((set) => set.map((at) => num(at, 4)).join(","))
+                          .join(" ")}"`,
+                      ],
+                    ]
+                  : []),
+                [
+                  "trace",
+                  `"${(enggMathModel.graphStrokesToDrawing(object, [
+                    Array.isArray(component.originalTrace)
+                      ? component.originalTrace
+                      : [],
+                  ])[0] || [])
+                    .map((at) => `${num(at.x, 3)}:${num(at.y, 3)}`)
+                    .join(" ")}"`,
+                ],
+                ["shape", component.correction?.kind || "curve"],
+              ]
+            : []),
         ]),
       ),
     );
@@ -476,10 +694,47 @@ function serializePlot(object) {
         ["xmax", num(mapping.limits.xMax)],
         ["ymin", num(mapping.limits.yMin)],
         ["ymax", num(mapping.limits.yMax)],
-        ["xtick", geometry.xTickSpacing ?? ""],
-        ["ytick", geometry.yTickSpacing ?? ""],
+        /*
+         * AN UNSET SPACING IS WRITTEN AS NOTHING, never as `0`. A zero reads
+         * back as a spacing the student chose and would be divided by - and it
+         * made a write, read and second write disagree about the same graph.
+         */
+        [
+          "xtick",
+          Number.isFinite(Number(geometry.xTickSpacing)) &&
+          Number(geometry.xTickSpacing) > 0
+            ? num(geometry.xTickSpacing)
+            : "",
+        ],
+        [
+          "ytick",
+          Number.isFinite(Number(geometry.yTickSpacing)) &&
+          Number(geometry.yTickSpacing) > 0
+            ? num(geometry.yTickSpacing)
+            : "",
+        ],
         ["grid", geometry.showGrid !== false ? "on" : "off"],
+        ["griddiv", Number(geometry.gridDivisions) || 1],
+        /*
+         * WHERE THE RANGE CAME FROM. `bounds=auto` says the four limits are
+         * calculated from the geometry; `bounds=manual` says they are the
+         * student's own and must not be recalculated on reopen. The READER
+         * keeps the mode, so an automatic graph stays automatic across a save.
+         */
+        ["bounds", geometry.boundsMode === "manual" ? "manual" : "auto"],
         ["equal", geometry.equalUnits !== false ? "on" : "off"],
+        /*
+         * THE STUDENT'S OWN POINTS, in graph coordinates. They are the only
+         * points a sketch states: the samples behind a stroke and the control
+         * points of a fitted curve are geometry, not user-defined points, and
+         * are never written here.
+         */
+        [
+          "points",
+          `"${(Array.isArray(geometry.points) ? geometry.points : [])
+            .map((entry) => `${num(entry.x, 4)}:${num(entry.y, 4)}`)
+            .join(" ")}"`,
+        ],
       ]),
     ),
     ...commands,

@@ -94,54 +94,30 @@ import enggCanvasPalette from "./canvas-palette.js";
     }
 
     /*
-     * HOW MUCH BIGGER THAN ITS STORED SIZE A FONT IS PAINTED.
+     * TEXT IS PAINTED AT ITS STORED SIZE - THE ZOOM IS THE CAMERA'S JOB.
      *
-     * The restriction is deliberately WEAKER than the camera's: at 400% zoom a
-     * word at four times its size would cover the drawing it labels, and at 25%
-     * it would be unreadable. So the text follows the zoom only within a band -
-     * past either end it stops, and the drawing keeps scaling around it.
+     * This used to multiply a stored font size by `sqrt(zoom)` (clamped to
+     * 0.55..1.6) so text "responded" to zoom. It was wrong twice over: the
+     * whole sheet is already scaled by the camera, so a label grew by
+     * `zoom * sqrt(zoom)` while the geometry around it grew by `zoom` - the
+     * annotation drifted out of proportion with the drawing as the student
+     * zoomed - and the export, which states a fixed physical size, disagreed
+     * with the screen by that same factor.
      *
-     * A square root rather than the zoom itself is the curve: it keeps the text
-     * responding visibly across the whole range instead of hitting the ceiling
-     * within the first two zoom steps, which is what a student actually notices.
+     * A document's text has ONE size, stated in its style, and the viewport
+     * scales it with everything else. That is what makes the screen, the export
+     * and a reopened file agree, and it is the rule the brief states: element
+     * sizes are document properties, never functions of the viewport.
      */
-    const TEXT_SCALE_MIN = 0.55;
-    const TEXT_SCALE_MAX = 1.6;
-
-    function textScale(state) {
-        const zoom = Number(state?.camera?.zoom);
-
-        if (!Number.isFinite(zoom) || zoom <= 0) {
-            return 1;
-        }
-
-        const scaled = Math.sqrt(zoom);
-
-        return Math.min(TEXT_SCALE_MAX, Math.max(TEXT_SCALE_MIN, scaled));
-    }
-
-    /*
-     * A stored font size, in the size it is actually painted at.
-     *
-     * EVERY `font-size` the renderer emits goes through this, so there is one
-     * place that decides how text responds to zoom and no site can disagree
-     * with another. There is the HARD CEILING and FLOOR here too, in absolute
-     * pixels: a note stored at 30 stays readable at extreme zoom-out, and one
-     * stored at 4 does not become a hairline at extreme zoom-in.
-     */
-    const FONT_PX_MIN = 6;
-    const FONT_PX_MAX = 64;
-
-    function zoomedFont(base, state) {
+    function zoomedFont(base) {
         const size = Number(base);
 
         if (!Number.isFinite(size) || size <= 0) {
             return base;
         }
 
-        const scaled = size * textScale(state ?? { camera: { zoom: activeZoom } });
-
-        return Math.min(FONT_PX_MAX, Math.max(FONT_PX_MIN, scaled));
+        /* A paint floor only: a 2 px word on a screen is invisible, not small. */
+        return Math.max(4, size);
     }
 
     /*
@@ -153,7 +129,7 @@ import enggCanvasPalette from "./canvas-palette.js";
      * the same value, set once per frame.
      */
     function zoomedFontHere(base) {
-        return zoomedFont(base, null);
+        return zoomedFont(base);
     }
 
     function createSvgElement(type, attributes = {}) {
@@ -501,17 +477,25 @@ import enggCanvasPalette from "./canvas-palette.js";
         activeTheme = theme;
     }
 
+/*
+ * ONLY NAMES THIS MODULE DECLARES. `TEXT_SCALE_MIN`, `TEXT_SCALE_MAX`,
+ * `textScale`, `FONT_PX_MIN` and `FONT_PX_MAX` were the old zoom-multiplier
+ * constants: a stored size used to be multiplied by `sqrt(zoom)` and clamped
+ * between them. Text is now painted at its stored size - see `zoomedFont` - so
+ * the constants went, and their names were left behind in the list below. A
+ * name in an `export { }` clause that the module does not declare is a MODULE
+ * LOAD ERROR in ES modules, so the whole renderer failed to load and every
+ * test that boots the application failed with it.
+ *
+ * THE LIST IS KEPT FLAT - one name per line, no comments between the names -
+ * because the module-export check reads it as text.
+ */
 export {
     SVG_NAMESPACE,
     LABEL_OFFSET_PX,
     activeZoom,
     activeTheme,
     paintColour,
-    TEXT_SCALE_MIN,
-    TEXT_SCALE_MAX,
-    textScale,
-    FONT_PX_MIN,
-    FONT_PX_MAX,
     zoomedFont,
     zoomedFontHere,
     createSvgElement,

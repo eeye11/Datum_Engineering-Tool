@@ -162,6 +162,13 @@ export function armMathTool(toolId, mode = null) {
 export function openGraphEditor(mode, graph = null) {
   if (mode === "sketch") {
     return enggMathSketchEditor.openSketchEditor(graph, {
+      /*
+       * THE EDITOR'S OWN -5..5 FRAME IS THE SKETCH'S COORDINATE SYSTEM, so the
+       * geometry it hands back is already in graph coordinates and a new sketch
+       * is committed into a box with those limits. A graph being edited keeps
+       * its own limits, which is why they are read from it rather than assumed.
+       */
+      targetGeometry: graph?.geometry || null,
       onApply: (result) => beginGraphPlacement(result, graph, "sketch"),
       onCancel: () => finishGraphEditing(),
     });
@@ -171,6 +178,89 @@ export function openGraphEditor(mode, graph = null) {
     onApply: (result) => beginGraphPlacement(result, graph, "plot"),
     onCancel: () => finishGraphEditing(),
   });
+}
+
+/*
+ * THE GRAPH A PLACEMENT WILL COMMIT, as an object the renderer can draw.
+ *
+ * It is built from the same result the commit uses, scaled by the same
+ * placement transform, so the box, the axes, the tick spacing and every curve
+ * under the cursor are the ones that land. It carries no id and is never added
+ * to the document: it is a preview object, drawn by the ordinary renderer.
+ */
+function previewObject(result, mode, placement) {
+  const geometry = result?.geometry || {};
+
+  const scale = placement?.scale || 1;
+
+  const position = placement
+    ? enggGridPlacement.applyPlacement(geometry.position, placement)
+    : geometry.position;
+
+  if (mode !== "sketch") {
+    /*
+     * A Plot's curves are sampled from its expressions through its own box, so
+     * the preview only needs the box scaled about the anchor.
+     */
+    return {
+      type: "math-plot",
+      style: { ...(result?.style || {}) },
+      geometry: {
+        ...geometry,
+        position,
+        width: (Number(geometry.width) || 200) * scale,
+        height: (Number(geometry.height) || 200) * scale,
+        mode: "plot",
+      },
+    };
+  }
+
+  const strokes = (result?.strokes || []).map((stroke) => ({
+    ...stroke,
+    points: enggGridPlacement.applyPlacementToPoints(stroke.points || [], placement),
+    original: enggGridPlacement.applyPlacementToPoints(
+      stroke.original || stroke.points || [],
+      placement,
+    ),
+  }));
+
+  return {
+    type: "math-plot",
+    style: { ...(result?.style || {}) },
+    geometry: {
+      ...geometry,
+      position,
+      width: (Number(geometry.width) || 200) * scale,
+      height: (Number(geometry.height) || 200) * scale,
+      mode: "sketch",
+      showTickLabels: false,
+      /*
+       * THE STROKES HERE ARE ALREADY IN DRAWING UNITS - `applyPlacementToPoints`
+       * has just mapped each one - while the object's own paths are stored in
+       * graph coordinates. This flag tells the readers of these paths that this
+       * preview carries drawing-space points, so nothing maps them twice.
+       */
+      __drawingSpace: true,
+      functions: strokes.map((stroke) => ({
+        id: stroke.id || "preview-function",
+        mode: "sketch",
+        expression: "",
+        variable: "x",
+        domain: { min: -5, max: 5 },
+        visible: true,
+        style: null,
+        points: stroke.points,
+        segments: stroke.segments || [],
+        originalTrace: stroke.original,
+        showOriginalTrace: stroke.showOriginalTrace === true,
+        smoothing: 0,
+        correction: stroke.correction || null,
+        fitType: "none",
+        fitExpression: "",
+        showFitExpression: false,
+      })),
+    },
+  };
 }
 
 /*
@@ -236,6 +326,14 @@ function beginGraphPlacement(result, existing, mode) {
       calibration: enggGridPlacement.graphCalibration({
         geometry: { ...geometry, mode },
       }),
+      /*
+       * THE OBJECT THIS PLACEMENT WILL BECOME, shown by the canvas exactly as
+       * it will be committed. A sketch's preview used to draw the ink alone,
+       * so the student placed a few lines and got a boxed graph with axes -
+       * which is not the thing they were aiming. The commit applies the SAME
+       * transform to the SAME object, so the preview is the placement.
+       */
+      preview: (placement) => previewObject(result, mode, placement),
     },
     {
       commit: (placement) => {

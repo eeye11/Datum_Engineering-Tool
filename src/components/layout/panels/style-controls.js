@@ -25,6 +25,7 @@ import {
     drawingThickness
 } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
+import { syncFontSizeControl } from "./font-size-control.js";
 
 /*
  * THE LINE PATTERNS, as SVG `stroke-dasharray`.
@@ -91,6 +92,16 @@ export function syncStyleControls() {
         lineType: style.lineType,
         stroke: style.stroke
     });
+
+    /*
+     * THE FONT SIZE RIDES WITH THE OTHER STYLE CONTROLS.
+     *
+     * It is the same kind of value - a property of the selection, or of the next
+     * object drawn - so it is synced from the same place. It has its own module
+     * because it owns a commit path of its own, not because it is a different
+     * system: the property it shows is `style.fontSize`.
+     */
+    syncFontSizeControl();
 }
 
 /*

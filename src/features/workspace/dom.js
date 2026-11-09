@@ -80,6 +80,15 @@ export const drawingColor = dom?.getElementById("drawingColor");
 export const drawingLineType = dom?.getElementById("drawingLineType");
 
 /*
+ * THE QUICK-ACCESS TEXT SIZE, in points.
+ *
+ * One property (`style.fontSize`) reaches it from here: the Features panel's
+ * field writes the same property, and `syncStyleControls` keeps both controls
+ * showing the model's value.
+ */
+export const drawingFontSize = dom?.getElementById("drawingFontSize");
+
+/*
  * SPECIAL SYMBOLS, in the quick-access style strip beside Line Type. It opens
  * the Symbols list the Annotate category uses; see workspace-controls.js.
  */

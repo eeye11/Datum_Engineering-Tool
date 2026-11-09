@@ -17,6 +17,7 @@ import enggFlowArrows from "../../features/workspace/model/fluids/flow-arrows.js
 import enggPressureProfile from "../../features/workspace/model/fluids/pressure-profile.js";
 import enggSectionPlane from "../../features/workspace/model/fluids/section-plane.js";
 import enggMathModel from "../../features/workspace/math/math-model.js";
+import enggDimensionModel from "../../features/workspace/model/dimensions/dimension-model.js";
 
 /*
  * ========================================================
@@ -219,6 +220,57 @@ function flowPathPoints(object, state = {}) {
     return null;
 }
 
+/*
+ * The points a dimension is DRAWN through, from the model's own graphics.
+ *
+ * Reached through the installed model rather than by an import, the way the
+ * rest of the view layer reaches it, so this module stays free of a cycle with
+ * the dimension model (which imports the drawing state).
+ */
+function dimensionBoundsPoints(object, state) {
+    const model = enggDimensionModel;
+
+    if (!model || typeof model.graphicsFor !== "function") {
+        return [];
+    }
+
+    try {
+        const graphics = model.graphicsFor(object, state);
+
+        if (!graphics) return [];
+
+        const points = [
+            ...(graphics.line || []),
+            ...(graphics.arc || []),
+            ...(graphics.extensions || []).flat(),
+            graphics.leader?.from,
+            graphics.leader?.to,
+            ...(graphics.arrowheads || []).map((head) => head.at),
+        ].filter(Boolean);
+
+        /*
+         * THE NUMBER'S OWN BOX JOINS THEM. It stands off the dimension line, and
+         * on a long label it is the outermost part of the dimension - so a box
+         * measured without it would be smaller than the ink and would frame the
+         * label rather than the dimension.
+         */
+        const frame = graphics.textFrame;
+        const width = Number(frame?.width) || 0;
+        const height = Number(frame?.height) || 0;
+
+        if (frame && Number.isFinite(Number(frame.x)) && Number.isFinite(Number(frame.y))) {
+            points.push(
+                { x: frame.x - width / 2, y: frame.y - height / 2 },
+                { x: frame.x + width / 2, y: frame.y + height / 2 }
+            );
+        }
+
+        return points.filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    } catch {
+        return [];
+    }
+}
+
 export function selectionBounds(objects, selectedIds, state = {}) {
     const ids = new Set(selectedIds);
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
@@ -246,6 +298,20 @@ export function selectionBounds(objects, selectedIds, state = {}) {
         if (["circle", "arc"].includes(object.type) && g.center) {
             return [{ x: g.center.x - g.radius, y: g.center.y - g.radius },
                 { x: g.center.x + g.radius, y: g.center.y + g.radius }];
+        }
+        /*
+         * A DIMENSION'S BOUNDS ARE WHAT IT DRAWS, NOT ITS PLACEMENT POINT.
+         *
+         * A dimension stores one point (the dimension line's placement) and
+         * generates everything else, so measuring it from its stored geometry
+         * gave a ONE-POINT box - a small square at the dimension line's own
+         * point, which is what an earlier selection frame was drawing over the
+         * value. The drawn extent - both witness lines, the dimension line, the
+         * arc or leader, and the number - is the honest box, and it is the one
+         * the Fit, the print and the selection frame all want.
+         */
+        if (object.type === "dimension") {
+            return dimensionBoundsPoints(object, state);
         }
         if (object.metadata?.thermodynamicsKind === "process-path") return processPathPoints(g);
         if (DYNAMICS_OWN_TYPES.has(object.type)) {

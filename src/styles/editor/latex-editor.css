@@ -240,9 +240,20 @@
     background: var(--datum-menu-hover);
 }
 
-/* ---- phone width: the window fills the screen ---- */
+/*
+ * ---- phone width: the window fills the screen ----
+ *
+ * THIS IS NOT ONE OF THE PANEL BREAKPOINTS. The panel progression in
+ * `responsive.css` is full -> compact -> icon-only, and it describes the
+ * WORKSPACE; the LaTeX editor is a docked dialog floating OVER that layout, so
+ * its only narrow-width question is "does the window still fit on the screen?".
+ * Keeping it out of the panel series is what stops one shared list of widths
+ * from having to describe two unrelated things - and the `lte` query is
+ * deliberately `height`-aware as well, because a phone in landscape is short
+ * rather than narrow.
+ */
 
-@media (max-width: 460px) {
+@media (max-width: 460px), (max-height: 560px) {
     .datum-latex-editor {
         bottom: 16px;
         height: calc(100vh - 32px);

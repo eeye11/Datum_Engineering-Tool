@@ -256,17 +256,29 @@ test("clicking empty canvas with an annotation tool returns to Select", async ()
   assert.equal(m.state.selection.selectedObjectIds.length, 0);
 });
 
-test("clicking empty canvas with an idle construction tool returns to Select", async () => {
+test("a click-click tool keeps a click on empty canvas: it is the shape's first corner", async () => {
   const page = await ready();
   const { m } = sheet();
 
-  /* A construction tool with no shape started and nothing under the pointer. */
+  /*
+   * A TRUSS'S FIRST CLICK IS ITS FIRST JOINT, NOT A DISMISSAL.
+   *
+   * This case used to assert that arming `truss` and clicking empty canvas
+   * returned to Select - which contradicts this file's own header ("a
+   * click-click shape's first corner is a real step of its workflow") and the
+   * tool classification (a multi-step tool keeps its click; see
+   * `shouldExitToSelectOnClick`). The tool was right and the example was wrong.
+   *
+   * The dismissal case is covered by the test above, which uses a tool with
+   * nothing to build.
+   */
   m.ds.setActiveTool(m.state, "truss");
   m.ds.clearInteraction(m.state);
 
   clickAt(page, { x: 10, y: 10 });
 
-  assert.equal(m.state.activeTool, "select");
+  assert.equal(m.state.activeTool, "truss", "the tool stays armed");
+  assert.equal(m.state.interaction.phase, "truss-construct", "and the construction began");
 });
 
 /* ============================================================

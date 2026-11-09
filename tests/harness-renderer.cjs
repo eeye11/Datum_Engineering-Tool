@@ -36,6 +36,15 @@ const MODULES = [
   "enggMeasurement",
   "enggAnnotationModel",
   "enggAnalysisDependencies",
+  /*
+   * THE MATH MODEL, WHICH THE MATH PAINTERS REACH FOR.
+   *
+   * `draw-math.js` draws a plot's axes, grid, ticks and curves by asking the
+   * model for the mapping, the tick values and the display switches - so a test
+   * that renders a plot without it publishes nothing and every plot fails to
+   * draw. The page gets it from the script tags; here it is named.
+   */
+  "enggMathModel",
 ];
 
 /*
@@ -53,6 +62,7 @@ const SCRIPTS = [
   "body-frames.js",
   "feature-geometry.js",
   "drawing-state.js",
+  "math-model.js",
   "renderer.js",
 ];
 

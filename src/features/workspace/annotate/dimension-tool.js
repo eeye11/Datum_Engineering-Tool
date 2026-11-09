@@ -2,15 +2,14 @@
  * The Dimension tool: choosing and committing a measurement.
  */
 
-import { referenceSummary } from "../model/dimensions/dimension-driving.js";
-import { openDimensionEditor } from "../../../shared/ui/editors/dimension-editor.js";
+import { openDimensionTextEditor } from "../../../shared/ui/editors/dimension-text-editor.js";
 
 import enggMeasurement from "../../../shared/geometry/measurement-core.js";
 import enggFluidsTools from "../model/fluids/fluids-tools.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDimensionModel from "../model/dimensions/dimension-model.js";
 import enggDimensionCandidates from "../model/dimensions/dimension-candidates.js";
-import { openLoadValuePopup } from "../../../shared/ui/editors/load-value-popup.js";
+
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -170,26 +169,33 @@ export function commitDimension(
     placement,
     defaultLabel = ""
 ) {
-    if (["dimension", "angle", "smart-dimension", "variable-dimension"].includes(drawingState.activeTool)) {
-        enggDrawingState.clearInteraction(drawingState);
-        const savedRefs = structuredClone(refs);
-        const savedPlacement = { ...placement };
-        openLoadValuePopup({
-            title: dimensionType === "angular" ? "Angle" : "Dimension", label: "Magnitude (include units if needed)", value: defaultLabel,
-            expression: true, requireContent: true,
-            onConfirm: answer => commitDimensionNow({
-                dimensionType, refs: savedRefs, placement: savedPlacement,
-                dimensionKind: "variable", content: answer.text.trim()
-            }),
-            onCancel: () => {
-                enggDrawingState.clearInteraction(drawingState);
-                setToolMessage("Dimension cancelled");
-                renderCurrentDrawing();
-            }
-        });
-        return null;
+    /*
+     * THE DIMENSION IS PLACED FIRST, AND NAMED ON THE PAGE.
+     *
+     * A dimension is written INTO the drawing, and its label is in-page text on
+     * that drawing - so creating one must not stop at a modal question. It is
+     * committed with its measured (generated) value - or the label the student
+     * asked for - and the in-place text field then opens over the NUMBER, which
+     * is where the text lives. Escape on that field abandons only the edit; the
+     * dimension stays, showing its own measurement.
+     *
+     * This is the same field the double-click gesture opens
+     * (`openDimensionValuePrompt`), so a dimension is created and edited through
+     * ONE editor rather than two interfaces for the same text.
+     */
+    const object = commitDimensionNow({
+        dimensionType,
+        refs,
+        placement,
+        dimensionKind: String(defaultLabel || "").trim() ? "variable" : "smart",
+        content: String(defaultLabel || "").trim()
+    });
+
+    if (object) {
+        openDimensionValuePrompt(object);
     }
-    return commitDimensionNow({ dimensionType, refs, placement });
+
+    return object;
 }
 
 /* Preserve references, undo history, and save data for authored dimensions. */
@@ -256,23 +262,65 @@ function commitDimensionNow({
     return object;
 }
 
-/* Reopen content or measured/driving properties without replacing references. */
+/*
+ * REOPEN THE DIMENSION'S TEXT, IN PLACE, WITHOUT REPLACING ITS REFERENCES.
+ *
+ * THE NUMBER IS EDITABLE WHERE IT IS DRAWN. The field opens over the glyphs on
+ * the drawing (see dimension-text-editor.js), so changing what a dimension
+ * says is a change to that text in that place - not a modal question, and not
+ * a second object. The dimension keeps its id, its references and its
+ * measurement; only the text it displays is rewritten.
+ *
+ * WHAT IS EDITED IS THE DIMENSION'S OWN VALUE FIELD, not a new free-text
+ * label: the dimension becomes a `variable` (driven) annotation stating what
+ * the student typed, which is the same state the Features panel's Magnitude
+ * field writes. That is what keeps the text, the panel and the source in step -
+ * all three read the one field.
+ *
+ * Escape abandons the edit and leaves the dimension exactly as it was.
+ */
 export function openDimensionValuePrompt(object) {
     if (!object || object.type !== "dimension") return false;
-    openDimensionEditor({
-        title: object.dimensionType === "angular" ? "Angle" : "Dimension",
-        value: object.dimensionKind === "variable" ? object.content : enggDimensionModel.formatMeasurement(object, drawingState),
-        references: referenceSummary(object, drawingState),
-        onApply: ({ value }) => {
-            const current = drawingState.objects.find(candidate => candidate.id === object.id);
-            if (!current) return { ok: false, error: "This dimension was deleted." };
+
+    const current = () => drawingState.objects.find(candidate => candidate.id === object.id) || null;
+
+    /*
+     * A REFERENCE THAT NO LONGER RESOLVES IS NOT SILENTLY OVERWRITTEN. Its text
+     * would be a claim about geometry that is not there, so the edit is refused
+     * with the reason rather than accepted with the drawing left broken.
+     */
+    const anchor = current();
+
+    if (!anchor) return false;
+
+    const graphics = enggDimensionModel.graphicsFor(anchor, drawingState);
+
+    if (!graphics) {
+        setToolMessage("This dimension cannot be edited until the geometry it measures exists");
+        return false;
+    }
+
+    openDimensionTextEditor({
+        object: anchor,
+        value: anchor.dimensionKind === "variable"
+            ? anchor.content
+            : enggDimensionModel.formatMeasurement(anchor, drawingState),
+        world: graphics.textFrame
+            ? { x: graphics.textFrame.x, y: graphics.textFrame.y }
+            : anchor.placement,
+        state: drawingState,
+        onApply: (value) => {
+            const target = current();
+            if (!target) return { ok: false, error: "This dimension was deleted." };
+            const text = String(value ?? "").trim();
+            if (!text) return { ok: false, error: "Enter a label for this dimension." };
             const previous = enggDrawingState.snapshotDrawing(drawingState);
-            current.dimensionKind = "variable";
-            current.content = value;
-            current.mode = "driven";
-            current.drivingValue = null;
-            current.label = null;
-            delete current.dimensionError;
+            target.dimensionKind = "variable";
+            target.content = text;
+            target.mode = "driven";
+            target.drivingValue = null;
+            target.label = null;
+            delete target.dimensionError;
             enggDrawingState.commitDrawingChange(drawingState, previous);
             renderProperties(); renderCurrentDrawing();
             setToolMessage("Dimension updated");

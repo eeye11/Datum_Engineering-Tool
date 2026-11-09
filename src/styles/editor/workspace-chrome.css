@@ -851,12 +851,12 @@ body.datum-topbar-hidden .drawing-top-rail::after {
     --rail-hide-width: 42px;
 }
 
-@media (max-width: 900px) {
-    /* The word "Hide" goes at this width - see `responsive.css`. */
-    .drawing-top-rail {
-        --rail-hide-width: 30px;
-    }
-}
+/*
+ * THE NARROW-WIDTH OVERRIDE LIVES WITH THE OTHER BREAKPOINTS. It is declared in
+ * `responsive.css`, beside the breakpoint that hides the word "Hide" - so all
+ * of the width rules sit in ONE descending series rather than being scattered
+ * through the file that happens to use one of them.
+ */
 
 /*
  * INSIDE THE RAIL, THE BARS ARE SIZED BY THE TRACK.

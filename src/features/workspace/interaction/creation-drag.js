@@ -1872,17 +1872,31 @@ export function finishCreationDrag(
      * accidentally swallow the click - which is exactly the fault this guard
      * exists to prevent.
      */
-    if (
-        !session.moved &&
-        finishCreationClick(session)
-    ) {
-        return true;
-    }
-
     if (!session.moved) {
+        /*
+         * THE DECISION IS ASKED WITH THE SESSION STILL ATTACHED, so a tool
+         * that needs the press's own facts can read them; it is dropped on
+         * both paths immediately afterwards.
+         */
+        const answered =
+            finishCreationClick(session);
+
         editorState.creationDrag = null;
+
+        /*
+         * A click the decision ANSWERED is consumed here and the browser's own
+         * click that follows is dropped by the caller; a click it DECLINED
+         * returns false, so that click reaches the router and starts the
+         * construction.
+         */
+        if (answered) {
+            return true;
+        }
+
         return false;
     }
+
+    editorState.creationDrag = null;
 
     /*
      * A TRACED POLYGON IS CLOSED ON RELEASE.
@@ -1908,17 +1922,6 @@ export function finishCreationDrag(
      * the tool stays armed for a real drag.
      */
     if (session.mathStroke) {
-        if (!session.moved) {
-            const dx = event.clientX - session.startScreen.x;
-            const dy = event.clientY - session.startScreen.y;
-
-            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-        }
-
-        editorState.creationDrag = null;
-
-        const resolution = resolvePointerEvent(event);
-
         /*
          * A PRESS THAT NEVER TRAVELLED IS A CLICK, NOT A STROKE. The session
          * is dropped and false is returned, so the browser's click reaches the
@@ -1926,10 +1929,15 @@ export function finishCreationDrag(
          * keeps a tap from being swallowed by a trace that never started.
          */
         if (!session.moved) {
+            editorState.creationDrag = null;
             finishMathStroke(event, null);
 
             return false;
         }
+
+        editorState.creationDrag = null;
+
+        const resolution = resolvePointerEvent(event);
 
         return finishMathStroke(
             event,
@@ -1938,16 +1946,17 @@ export function finishCreationDrag(
     }
 
     if (session.mathDrag) {
+        const travelled =
+            session.moved ||
+            Math.hypot(
+                event.clientX - session.startScreen.x,
+                event.clientY - session.startScreen.y
+            ) >= DRAG_THRESHOLD_PX;
+
         editorState.creationDrag = null;
 
-        if (!session.moved) {
-            const dx = event.clientX - session.startScreen.x;
-            const dy = event.clientY - session.startScreen.y;
-
-            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
-        }
-
-        if (!session.moved) {
+        /* A press that never travelled is a click, and is left to the router. */
+        if (!travelled) {
             return false;
         }
 

@@ -297,6 +297,7 @@
  * separate, so a palette can make the sheet differ from its surround.
  */
 .drawing-canvas {
+    position: relative;
     background-color: var(--canvas-background);
 }
 

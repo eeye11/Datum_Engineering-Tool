@@ -1,4 +1,9 @@
-import { dimensionLabelSize } from "../../../../shared/geometry/dimension-layout.js";
+import {
+  dimensionArrowMm,
+  dimensionLabelSize,
+  dimensionPenMm,
+  DIMENSION_DEFAULT_FONT_PT,
+} from "../../../../shared/geometry/dimension-layout.js";
 /*
  * The Dimension object.
  *
@@ -86,6 +91,18 @@ const ORIENTATIONS = {
 const DEFAULT_PRECISION = 2;
 
 /*
+ * The stand-off and overshoot of a witness line, in drawing units (mm).
+ *
+ * Chosen as physical drafting sizes rather than screen sizes: 1.5 mm clear of
+ * the geometry and 2 mm past the dimension line is what a hand-drawn dimension
+ * does, and it is large enough to stay legible in a printed figure. They are
+ * declared HERE, above every consumer, because a `const` is not hoisted and a
+ * value read before its declaration is a load-time error.
+ */
+export const WITNESS_STANDOFF_MM = 1.5;
+export const WITNESS_OVERSHOOT_MM = 2;
+
+/*
  * ========================================================
  * CREATION
  * ========================================================
@@ -142,6 +159,16 @@ function createDimension({
   }
   const normalisedRefs = normaliseReferences(refs);
 
+  const textStyle = {
+    fontSize: DIMENSION_DEFAULT_FONT_PT,
+    textAlign: "center",
+    bold: false,
+    italic: false,
+    ...style,
+  };
+
+  const fontSize = Number(textStyle.fontSize) > 0 ? Number(textStyle.fontSize) : DIMENSION_DEFAULT_FONT_PT;
+
   return {
     id: newDimensionId(),
     name: name || dimensionLabel(dimensionType),
@@ -196,8 +223,32 @@ function createDimension({
        */
       showUnits: true,
       precision: null,
-      ...style,
+
+      /*
+       * THE LABEL'S TYPE IS A DOCUMENT PROPERTY, STATED HERE.
+       *
+       * `fontSize` is in POINTS - the number the Features panel, the
+       * quick-access control and the exported `\fontsize` all quote - and it
+       * defaults to the readable 11 pt rather than being left absent for three
+       * consumers to answer differently. `textAlign`, `bold`, `italic` and the
+       * differential `offsetX`/`offsetY` (in drawing units) belong to the label
+       * as well; they never touch the measurement, the defining points or the
+       * dimension line's placement.
+       */
+      ...textStyle,
+      fontSize,
     },
+
+    /*
+     * THE LABEL'S TYPE, AS THE OBJECT'S OWN PROPERTIES TOO.
+     *
+     * `style` is where the document keeps appearance and is what the panel, the
+     * quick-access control and the source read. `fontSize` beside it is the
+     * object's OWN statement of its type, so a consumer that has the object but
+     * not its style still has the size - and the two are kept equal below, so
+     * there is never a second, conflicting value.
+     */
+    fontSize,
 
     /*
      * True until a reference stops resolving. Not a flag the user
@@ -1182,6 +1233,21 @@ function formatMeasurement(
   if (override) {
     return override;
   }
+
+  /*
+   * A MEASUREMENT WITH NO NUMBER BEHIND IT STILL OWES ITS READER A VALUE.
+   *
+   * The definition's prefix is what tells a reader WHICH quantity is stated - `R`
+   * for a radius, `\u00d8` for a diameter - and it is decided by the dimension's
+   * TYPE, which does not depend on the geometry resolving. So a dimension whose
+   * references are momentarily absorbed has a prefix to draw even when it has no
+   * number, and the caller (`graphicsFor`) can still draw the construction.
+   */
+  const definition =
+    enggMeasurement.DIMENSION_TYPES[
+      dimension.dimensionType
+    ];
+
   const measurement = measurementFor(
     dimension,
     state
@@ -1191,10 +1257,7 @@ function formatMeasurement(
     return null;
   }
 
-  const definition =
-    enggMeasurement.DIMENSION_TYPES[
-      dimension.dimensionType
-    ];
+
 
   const precision = resolvePrecision(dimension, state);
 
@@ -1217,8 +1280,6 @@ function formatMeasurement(
     rounded,
     precision
   );
-
-  const prefix = definition?.prefix || "";
 
   /*
    * THE UNIT IS THE DRAWING'S. A dimension reads the geometry in drawing units,
@@ -1258,6 +1319,14 @@ function formatMeasurement(
    * unmeasurable in those contexts. The fallback below is the same rule
    * written twice, which is the cost of the models being loadable apart.
    */
+  /*
+   * THE TYPE'S PREFIX, READ AT THE POINT IT IS USED. The local that held it was
+   * declared twice (once before the measurement was made and once after), which
+   * is a SyntaxError in a module - the whole dimension model failed to load. One
+   * declaration, here, beside the unit it belongs with.
+   */
+  const prefix = definition?.prefix || "";
+
   if (!formatter) {
     return measurement.angular
       ? `${prefix}${value}°`
@@ -1668,6 +1737,12 @@ function dimensionDirection(dimension, points) {
   }
 }
 
+/*
+ * A UNIT VECTOR, with a defined answer for a vector of no length.
+ *
+ * The +X fallback is for a caller that has already established the span is
+ * degenerate and needs SOME direction; it is never used to invent a dimension.
+ */
 function normalise(vector) {
   const length = Math.hypot(vector.x, vector.y);
 
@@ -1690,6 +1765,44 @@ function perpendicular(direction) {
 }
 
 /*
+ * ========================================================
+ * THE SIDE A DIMENSION STANDS OFF ON
+ * ========================================================
+ *
+ * ALWAYS A WORLD-DERIVED NORMAL, never the raw perpendicular.
+ *
+ * A HORIZONTAL dimension stands off VERTICALLY and a VERTICAL one HORIZONTALLY,
+ * whatever the measured points are - that is the whole of what makes it a
+ * horizontal or a vertical dimension rather than an aligned one. Deriving the
+ * normal from the stored direction alone was right for a level span and wrong
+ * for everything else: a rectangle's width dimension whose two anchors were
+ * not exactly level got a normal a fraction off vertical, and because the
+ * dimension's position is a POINT on that plane, a slightly tilted plane
+ * threw the line across the sheet.
+ *
+ * An ALIGNED dimension keeps the true perpendicular, because following the
+ * measured segment is what it is for.
+ */
+function dimensionNormal(dimension, direction) {
+  const orientation = dimension?.orientation;
+
+  const type = dimension?.dimensionType;
+
+  if (
+    type === "horizontal" ||
+    (orientation === ORIENTATIONS.horizontal && type !== "vertical")
+  ) {
+    return { x: 0, y: 1 };
+  }
+
+  if (type === "vertical" || orientation === ORIENTATIONS.vertical) {
+    return { x: 1, y: 0 };
+  }
+
+  return perpendicular(direction);
+}
+
+/*
  * Where the dimension text is drawn, and which way up.
  *
  * A dimension is only readable if its text is upright. A dimension
@@ -1705,7 +1818,9 @@ function perpendicular(direction) {
 function textFrame(
   position,
   direction,
-  fontSize = 11
+  fontSize = DIMENSION_DEFAULT_FONT_PT,
+  label = null,
+  alignment = "center"
 ) {
   const { x, y } = direction;
 
@@ -1721,9 +1836,29 @@ function textFrame(
       : angle;
 
   return {
+    /*
+     * The centre, under BOTH names (`x`/`y` for the model's readers, `center`
+     * for the renderer and the source writer), and the EXTENT the number
+     * occupies there.
+     *
+     * The extent is not decoration: the hit test needs a box to click, the
+     * source writer needs to know where the line may be interrupted, and the
+     * differential label offset is limited to it. All three read this one
+     * measurement.
+     */
     x: position.x,
     y: position.y,
+    center: { x: position.x, y: position.y },
+    width: label ? label.halfWidth * 2 : 0,
+    height: label ? label.halfHeight * 2 : 0,
     fontSize,
+    /*
+     * THE TYPE HEIGHT IN DRAWING UNITS (mm), which is what a renderer paints - a
+     * stored size in points is a print figure, and re-converting it to pixels is
+     * how a label came to be drawn at several times its document size.
+     */
+    fontWorld: label ? label.fontWorld : 0,
+    alignment,
     angle: normalised,
     flip: angle > 90 || angle < -90,
     vertical: Math.abs(normalised) > 45 && Math.abs(normalised) < 135,
@@ -1738,16 +1873,18 @@ function linearGraphics(
 ) {
   const points = measurePoints(dimension, state);
 
-  if (!points) {
+  if (!points || points.length < 2) {
     return null;
   }
 
-  const [first, second] = points;
+  const [rawFirst, rawSecond] = points;
 
   const direction = dimensionDirection(
     dimension,
     points
   );
+
+  const axis = normalise(direction);
 
   /*
    * The dimension line is offset from the geometry by where the user
@@ -1755,47 +1892,291 @@ function linearGraphics(
    * direction. The offset is signed, so placing the dimension on the
    * other side of the beam puts it there rather than snapping it
    * back.
+   *
+   * THE NORMAL IS WORLD-DERIVED AND POINTS "OUT": up for a horizontal
+   * dimension, +X for a vertical one. `dimensionNormal` answers the axis; a
+   * negative offset (a dimension placed ABOVE the geometry it measures) then
+   * puts the line above, the witness lines run upward, and the number reads on
+   * the far side of the line from the outline - which is the drafting
+   * convention in both directions, not only below.
    */
-  const anchor = perpendicular(direction);
+  const anchor = dimensionNormal(dimension, axis);
 
-  const midpoint = {
-    x: (first.x + second.x) / 2,
-    y: (first.y + second.y) / 2,
-  };
+  /*
+   * ========================================================
+   * THE DEFINING POINTS ORTHOGONAL TO THE MEASURED DIRECTION
+   * ========================================================
+   *
+   * A horizontal dimension measures the distance along X, so its defining
+   * points sit on the two measured points' own verticals: `(first.x, along)`
+   * and `(second.x, along)`. A vertical dimension does the same along Y, and
+   * an aligned one uses the measured points untouched. This is what makes the
+   * dimension line parallel to the measured direction even when the measured
+   * points are not level (a rectangle whose anchors sit a fraction apart in Y
+   * still gets a level line), and it is why the value and the drawn span are
+   * the same number by construction.
+   */
+  const across = perpendicular(axis);
+
+  const alongCoordinate = (point) =>
+    point.x * across.x + point.y * across.y;
+
+  /*
+   * THE MEASURED DIRECTION'S OWN PLANE IS THE ONE THROUGH THE MEASURED SPAN,
+   * LEVEL WITH ITS MIDPOINT - not the placement's plane. A horizontal dimension
+   * of a rectangle's bottom edge therefore measures along that edge: the two
+   * defining points are level with each other AND with the outline, and the
+   * witness lines run from the outline to the dimension line, as a drawing
+   * shows. Taking the placement's own level instead would have put the defining
+   * points ON the dimension line, leaving nothing to witness - and a witness
+   * line whose ends are in the wrong place is worse than none.
+   */
+  const measuredAlong = alongCoordinate({
+    x: (rawFirst.x + rawSecond.x) / 2,
+    y: (rawFirst.y + rawSecond.y) / 2,
+  });
+
+  const first = projectPoint(rawFirst, across, measuredAlong);
+  const second = projectPoint(rawSecond, across, measuredAlong);
 
   /*
    * How far the placement is from the geometry, along the
    * dimension's own normal. Signed so the user chooses the side.
    */
-  const offset =
-    (dimension.placement.x - midpoint.x) *
-      anchor.x +
-    (dimension.placement.y - midpoint.y) *
-      anchor.y;
-
-  const plane=dimension.placement.x*anchor.x+dimension.placement.y*anchor.y;
-  const project=point=>{
-    const delta=plane-point.x*anchor.x-point.y*anchor.y;
-    return {x:point.x+anchor.x*delta,y:point.y+anchor.y*delta};
+  const midpoint = {
+    x: (first.x + second.x) / 2,
+    y: (first.y + second.y) / 2,
   };
-  const lineStart=project(first);
-  const lineEnd=project(second);
+
+  const rawOffset =
+    (dimension.placement.x - midpoint.x) * anchor.x +
+    (dimension.placement.y - midpoint.y) * anchor.y;
 
   /*
-   * Extension lines run from the measured points out to the
-   * dimension line. They are part of the dimension's description and
-   * are never ordinary Line features - they exist for as long as the
-   * dimension does and cannot be selected on their own.
+   * A PLACEMENT ON THE OUTLINE IS PUSHED OFF IT BY THE OUTLINE'S OWN INK.
+   *
+   * A dimension dropped straight on the edge it measures has a zero offset - no
+   * room for a dimension line, a witness line or a number. Half a pen of
+   * clearance is the least that puts the construction clear of the outline's own
+   * ink; a placement that already stands clear is left exactly where the student
+   * put it. The clearance is in DRAWING UNITS, so it is a physical millimetre.
    */
-  const extensionStart = {...lineStart};
-  const extensionEnd = {...lineEnd};
-  const label=dimensionLabelSize(text,state,dimension.style);
-  const side=offset<0 ? -1 : 1;
-  const clearance=label.halfHeight+label.gap;
-  const textAnchor = {
-    x:(lineStart.x+lineEnd.x)/2+anchor.x*clearance*side,
-    y:(lineStart.y+lineEnd.y)/2+anchor.y*clearance*side
+  const inkClearance = dimensionPenMm(dimension.style) / 2;
+
+  const offset =
+    Math.abs(rawOffset) < inkClearance
+      ? (rawOffset < 0 ? -1 : 1) * inkClearance
+      : rawOffset;
+
+  /*
+   * ========================================================
+   * THE DIMENSION LINE IS A PROJECTION OF THE MEASURED SPAN
+   * ========================================================
+   *
+   * Both defining points are projected onto the plane the user placed the
+   * dimension on, ALONG THE DIMENSION'S OWN NORMAL. That is what keeps the
+   * line PARALLEL to the measured direction (its two ends come from the same
+   * two points), lets the student choose the side and the distance with one
+   * placement point, and stops a horizontal dimension from turning into a
+   * diagonal one when the geometry it measures is not level.
+   */
+  const plane = dimension.placement.x * anchor.x + dimension.placement.y * anchor.y;
+  const lineStart = projectPlane(first, anchor, plane);
+  const lineEnd = projectPlane(second, anchor, plane);
+
+  const label = dimensionLabelSize(text, state, dimension.style);
+
+  /*
+   * ========================================================
+   * WITNESS LINES: FROM THE MEASURED POINT, PAST THE LINE
+   * ========================================================
+   *
+   * An engineering witness line starts a small STAND-OFF from the geometry it
+   * measures (so it does not touch the outline) and runs a small OVERSHOOT past
+   * the dimension line (so the arrowhead has something to meet). Both lengths
+   * are stated here, in drawing units, so the canvas and the TikZ source draw
+   * the same two segments - a witness line that stopped AT the dimension line
+   * on the canvas and one that overshot in TikZ would be two different
+   * drawings.
+   *
+   * The stand-off is measured FROM THE MEASURED POINT ALONG THE WITNESS LINE,
+   * which is the normal direction, so it is a real 1.5 mm of paper whether the
+   * dimension line is 10 mm away or 100 mm away. The overshoot is added at the
+   * line's end, in the same direction.
+   */
+  const standoff = WITNESS_STANDOFF_MM;
+  const overshoot = WITNESS_OVERSHOOT_MM;
+
+  /*
+   * A WITNESS LINE RUNS ALONG THE DIMENSION'S NORMAL, IN WORLD TERMS.
+   *
+   * The measured point and the dimension line are on two parallel planes whose
+   * distance apart IS the offset; a witness line therefore joins them along the
+   * normal, from a stand-off clear of the outline out past the line. Using the
+   * parallel planes rather than the raw point-to-line vector is what keeps the
+   * two witness lines PARALLEL and perpendicular to their dimension line when
+   * the measured edge is not exactly level - which is what a drafting reader
+   * checks first.
+   */
+  const witness = (measured, linePoint) => {
+    const onLine = validPoint(linePoint) ? linePoint : projectPlane(measured, anchor, plane);
+
+    const reach = Math.abs(offset);
+
+    /*
+     * A dimension placed ON the geometry has no witness line to draw: the two
+     * points coincide, and a zero-length segment (or one invented from a unit
+     * vector) is not construction geometry, it is noise.
+     */
+    if (reach <= 1e-9) {
+      return null;
+    }
+
+    /* The normal pointing from the measured point TOWARDS its dimension line. */
+    const toward = { x: onLine.x - measured.x, y: onLine.y - measured.y };
+
+    /*
+     * A MEASURED POINT THAT IS ALREADY ON THE PLANE HAS NO WITNESS LINE.
+     *
+     * This happens for every dimension whose measured direction is not the
+     * nominal one - a horizontal dimension of a sloped edge, whose defining
+     * points lie on the level through the placement. There is no gap for a
+     * witness line to bridge, and `normalise` would answer a zero vector with a
+     * made-up +X direction: a witness line drawn sideways along the dimension
+     * line, which is not construction geometry at all. The dimension line still
+     * spans between those two points, so the construction stays complete.
+     */
+    if (Math.hypot(toward.x, toward.y) <= 1e-9) {
+      return null;
+    }
+
+    const toLine = normalise(toward);
+
+    /*
+     * A stand-off longer than the gap would leave a witness line running the
+     * wrong way. It is limited to a third of the gap, leaving the line visible
+     * and still reaching past the dimension line.
+     */
+    const used = Math.min(standoff, reach * 0.33);
+    const past = Math.min(overshoot, Math.max(0, reach - used) * 0.5);
+
+    return [
+      { x: measured.x + toLine.x * used, y: measured.y + toLine.y * used },
+      { x: onLine.x + toLine.x * past, y: onLine.y + toLine.y * past },
+    ];
   };
+
+  const extensions = [
+    witness(first, lineStart),
+    witness(second, lineEnd),
+  ].filter(Boolean);
+
+  /*
+   * ========================================================
+   * WHICH WAY THE ARROWHEADS FACE
+   * ========================================================
+   *
+   * The engineering convention: arrows point OUTWARDS, towards the witness
+   * lines, and sit inside the span. When the span is too short for the heads to
+   * fit between the witness lines they are turned round and drawn OUTSIDE the
+   * span, so the number of the measurement is still the distance between the
+   * heads.
+   *
+   * The rule compares the line with the space the heads need.
+   */
+  const arrowStyle = decideArrowStyle(lineStart, lineEnd, offset, dimension.style);
+
+  const lineParallel = normalise({
+    x: lineEnd.x - lineStart.x,
+    y: lineEnd.y - lineStart.y,
+  });
+
+  /*
+   * THE NUMBER FOLLOWS THE LINE IT SITS ON.
+   *
+   * A horizontal line gets level text, a vertical one text reading upward - and
+   * an aligned dimension running down-hill gets text along its own line, never
+   * upside down (the frame's own flip decides that). Reading the LINE rather than
+   * the nominal orientation is what keeps an aligned label on its dimension line
+   * when the measured edge is not level.
+   */
+  const textDirection = numberParallel(lineParallel)
+    ? lineParallel
+    : numberParallel(axis)
+      ? axis
+      : { x: 1, y: 0 };
+
+  /*
+   * THE TEXT SITS ON THE FAR SIDE OF THE LINE FROM THE GEOMETRY.
+   *
+   * Above a horizontal dimension, beside a vertical one, and on the outer side
+   * of any other - which is where a reader looks for it and where the number
+   * cannot be mistaken for part of the feature being measured. The clearance
+   * includes the label's own depth so the glyphs never touch the line.
+   */
+  const side = offset < 0 ? -1 : 1;
+  const clearance = label.halfHeight + label.gap;
+
+  /*
+   * A DELIBERATE TEXT REPOSITION, kept small.
+   *
+   * `style.offsetX` / `style.offsetY` are drawing units (mm) the student moved
+   * the label by; they move the label ONLY - never the dimension line, never
+   * the defining points, never the measurement. The offset is clamped to the
+   * label's own extent so a stray value cannot detach the text from its
+   * dimension.
+   */
+  const allow = {
+    x: label.halfWidth + label.gap,
+    y: Math.max(label.halfHeight + label.gap, 2),
+  };
+
+  const labelOffset = {
+    x: clampNumber(dimension.style?.offsetX, -allow.x, allow.x),
+    y: clampNumber(dimension.style?.offsetY, -allow.y, allow.y),
+  };
+
+  /*
+   * `side` IS THE SIDE OF THE LINE THE MEASURED GEOMETRY IS NOT ON.
+   *
+   * A positive offset means the line was placed along `anchor` from the measured
+   * points, so the geometry lies on the -anchor side and the number goes on the
+   * +anchor side; a negative offset reverses both. The result is always: number
+   * outermost, outline nearest the witness lines.
+   *
+   * THE SIDE OF THE PLACEMENT, NOT OF THE PAGE.
+   *
+   * The placement is where the student put the dimension LINE, and the witness
+   * lines run from the geometry to it - so the geometry lies on the side of the
+   * line that faces AWAY from the placement, and the number goes on the
+   * placement's own side, just past the line. A dimension placed below a
+   * rectangle reads below its line; one placed above it reads above. The same
+   * rule holds for a line placed to either side of a vertical dimension, so no
+   * dimension type hard-codes a side.
+   */
+  const textAnchor = {
+    x: (lineStart.x + lineEnd.x) / 2 + anchor.x * clearance * side + labelOffset.x,
+    y: (lineStart.y + lineEnd.y) / 2 + anchor.y * clearance * side + labelOffset.y,
+  };
+
+  /*
+   * A NUMBER SET RIGHT OR LEFT IS STILL THE DIMENSION'S NUMBER.
+   *
+   * A left- or right-aligned label is moved half its own width so the alignment
+   * turns about the SAME point rather than about a corner - the middle of the
+   * dimension line - which keeps the text over its measurement however it is
+   * justified. Centre alignment needs no shift, so the default construction is
+   * untouched.
+   */
+  const alignment = dimensionTextAlignment(dimension.style);
+
+  if (alignment === "left") {
+    textAnchor.x += label.halfWidth * lineParallel.x;
+    textAnchor.y += label.halfWidth * lineParallel.y;
+  } else if (alignment === "right") {
+    textAnchor.x -= label.halfWidth * lineParallel.x;
+    textAnchor.y -= label.halfWidth * lineParallel.y;
+  }
 
   return {
     kind: "linear",
@@ -1803,30 +2184,139 @@ function linearGraphics(
     measurement,
     text,
 
+    /* The two points actually measured - the defining points. */
+    points: [rawFirst, rawSecond],
+
+    /* The defining points placed on the measured direction's own planes. */
+    anchors: [first, second],
+
     line: [lineStart, lineEnd],
-    extensions: [
-      [first, extensionStart],
-      [second, extensionEnd],
-    ],
+    extensions,
+    arrowStyle,
 
     /*
-     * Arrowheads point INWARD at the measured extent when the
-     * dimension line is longer than the gap, which is the
-     * convention outside the arrowheads. Inside is used when there is
-     * no room between them, and pointing them outward would put
-     * them beyond the witness lines - describing a different
-     * measurement than the one being stated.
+     * THE ARROWHEADS, AS PLACES AND DIRECTIONS rather than a style name.
+     *
+     * The renderer draws a triangle from these and the source writer turns them
+     * into a TikZ head, so both are told the same tip and the same way round.
      */
-    arrowStyle: decideArrowStyle(
-      lineStart,
-      lineEnd,
-      offset
-    ),
+    arrowheads: linearArrowheads(lineStart, lineEnd, arrowStyle),
 
-    textFrame: textFrame(textAnchor, direction, dimension.style?.fontSize || 11),
+    label,
+    /*
+     * WHICH SIDE OF THE DIMENSION LINE THE NUMBER HAS TO BE ON, for a caller
+     * that needs the boundary rather than the centre - see `dimensionTextBounds`.
+     */
+    textSide: side,
+
+    textFrame: textFrame(
+      textAnchor,
+      textDirection,
+      label.fontPt,
+      label,
+      alignment
+    ),
     textAnchor,
   };
 }
+
+/*
+ * A point moved onto a plane defined by a unit normal: the point keeps its
+ * position ALONG the plane and takes the plane's own distance ALONG the normal.
+ */
+function projectPoint(point, normal, planeValue) {
+  const delta = planeValue - (point.x * normal.x + point.y * normal.y);
+
+  return { x: point.x + normal.x * delta, y: point.y + normal.y * delta };
+}
+
+/* The same projection, for the dimension-line plane itself. */
+function projectPlane(point, normal, planeValue) {
+  return projectPoint(point, normal, planeValue);
+}
+
+/* Whether a value is a usable point. */
+function validPoint(point) {
+  return Boolean(
+    point && Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.y)),
+  );
+}
+
+/* A finite number inside a range, or zero. */
+function clampNumber(value, minimum, maximum) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number === 0) {
+    return 0;
+  }
+
+  return Math.min(maximum, Math.max(minimum, number));
+}
+
+
+
+/* Whether a vector has a direction at all. */
+function numberParallel(vector) {
+  return Number.isFinite(vector?.x) && Number.isFinite(vector?.y) && Math.hypot(vector.x, vector.y) > 1e-9;
+}
+
+/* The label's horizontal alignment, from its own style. */
+function dimensionTextAlignment(style = {}) {
+  return ["left", "center", "right"].includes(style?.textAlign) ? style.textAlign : "center";
+}
+
+
+
+/*
+ * The two arrowheads of a linear dimension.
+ *
+ * Inside: each head sits at its own end of the line and points along the line
+ * towards the other end - towards the measured limit.
+ *
+ * Outside: each head is moved just beyond its end and points back IN towards
+ * the span, which is the same measurement stated when there is no room for the
+ * heads in it.
+ */
+function linearArrowheads(lineStart, lineEnd, arrowStyle) {
+  const along = { x: lineEnd.x - lineStart.x, y: lineEnd.y - lineStart.y };
+  const length = Math.hypot(along.x, along.y);
+
+  if (length < 1e-9) {
+    return [];
+  }
+
+  const unit = { x: along.x / length, y: along.y / length };
+
+  if (arrowStyle === "outside") {
+    const reach = ARROW_OUTSIDE_MM;
+
+    return [
+      {
+        at: { x: lineStart.x - unit.x * reach, y: lineStart.y - unit.y * reach },
+        direction: unit,
+      },
+      {
+        at: { x: lineEnd.x + unit.x * reach, y: lineEnd.y + unit.y * reach },
+        direction: { x: -unit.x, y: -unit.y },
+      },
+    ];
+  }
+
+  /*
+   * INSIDE: each head sits IN the span at its own end and points OUT, at the
+   * witness line it meets. That is the drawing convention, and it is also what
+   * puts the head between the witness lines rather than outside them - a head
+   * drawn on the far side of the measured point would state a distance longer
+   * than the one the number gives.
+   */
+  return [
+    { at: lineStart, direction: { x: -unit.x, y: -unit.y } },
+    { at: lineEnd, direction: unit },
+  ];
+}
+
+/* How far outside its end an outside arrowhead sits, in drawing units. */
+const ARROW_OUTSIDE_MM = 3;
 
 /*
  * Which way the arrowheads point.
@@ -1839,7 +2329,8 @@ function linearGraphics(
 function decideArrowStyle(
   lineStart,
   lineEnd,
-  offset
+  offset,
+  style = {}
 ) {
   const length = Math.hypot(
     lineEnd.x - lineStart.x,
@@ -1847,20 +2338,26 @@ function decideArrowStyle(
   );
 
   /*
-   * A SHORT DIMENSION LINE TAKES INSIDE ARROWS.
-   *
-   * The test compares the line against the space the arrows need, not against a
-   * fixed number: a straight dimension between two close points and a diameter
-   * across a small circle are both "short" relative to their own geometry, and a
-   * hard six-unit cutoff called a 2-unit circle's diameter long enough to put its
-   * arrows outside. The offset is added because a dimension standing well clear of
-   * the geometry has room for outside arrows even when the line itself is short.
+   * A SPAN WITH NO LENGTH HAS NO ROOM FOR ANY HEAD. It is not a dimension that
+   * can state a distance, but it is also not one to throw: the caller draws
+   * what it can, and outside heads are the honest choice for a zero span.
    */
-  const reach = Math.max(1e-6, Math.abs(offset));
+  if (length < 1e-9) {
+    return "outside";
+  }
 
-  return length < reach * 6
-    ? "inside"
-    : "outside";
+  /*
+   * THE THRESHOLD IS THE SPACE THE HEADS THEMSELVES NEED.
+   *
+   * Two heads, each `dimensionArrowMm` long, plus a little clear of the text:
+   * a dimension line shorter than that cannot hold both heads inside, so they
+   * go outside and the number still states the distance between them. It is
+   * derived from the DOCUMENT's arrow size, not from a screen unit, so the
+   * decision is the same on the canvas, in the export and at any zoom.
+   */
+  const needed = dimensionArrowMm(style) * 2 + 6;
+
+  return length < needed ? "outside" : "inside";
 }
 
 /*
@@ -1949,6 +2446,19 @@ function arcLengthGraphics(
 
   const midpoint = arc[Math.floor(arc.length / 2)] || outerStart;
 
+  /*
+   * THE LABEL SITS OUTSIDE THE MEASURED ARC, on the far side of the dimension
+   * arc from the centre. Placed ON the arc it would be written through by the
+   * arc and the arrowheads; this is the same clearance the angular dimension
+   * uses, measured from the label's own size.
+   */
+  const radial = normalise({ x: midpoint.x - centre.x, y: midpoint.y - centre.y });
+  const label = dimensionLabelSize(text, state, dimension.style);
+  const textAnchor = {
+    x: midpoint.x + radial.x * (label.halfHeight + label.gap),
+    y: midpoint.y + radial.y * (label.halfHeight + label.gap),
+  };
+
   return {
     kind: "arc-length",
     dimensionType: dimension.dimensionType,
@@ -1974,7 +2484,15 @@ function arcLengthGraphics(
       }
     ],
     text,
-    textFrame: textFrame(midpoint, text)
+    label,
+    textFrame: textFrame(
+      textAnchor,
+      { x: 1, y: 0 },
+      label.fontPt,
+      label,
+      dimensionTextAlignment(dimension.style)
+    ),
+    textAnchor,
   };
 }
 
@@ -2125,33 +2643,95 @@ function radialGraphics(
       : { x: 1, y: 0 }
   );
 
-  const outer =
-    dimension.dimensionType === "diameter"
-      ? radius * 2
-      : radius;
+  const diameter = dimension.dimensionType === "diameter";
 
+  /*
+   * ========================================================
+   * THE POINT ON THE CIRCUMFERENCE THE DIMENSION IS DRAWN ALONG
+   * ========================================================
+   *
+   * THE PLACEMENT NAMES A DIRECTION, NOT A DISTANCE. A radial dimension starts
+   * at the centre, so a student almost always places it ON the feature; taking
+   * that placement as the head's position would make the head's reach depend on
+   * how far from the centre they happened to click. The direction it names is
+   * what they chose; the distance is the feature's own radius.
+   */
   const edge = {
     x: centre.x + direction.x * radius,
     y: centre.y + direction.y * radius,
   };
 
-  const tip = {
-    x: centre.x + direction.x * outer,
-    y: centre.y + direction.y * outer,
+  /*
+   * THE OPPOSITE CROSSING OF THE CIRCUMFERENCE. A diameter's line runs from
+   * here THROUGH the centre to `edge`, which is what makes it read as a
+   * diameter; a radius has no far end beyond the centre it starts from.
+   */
+  const far = {
+    x: centre.x - direction.x * radius,
+    y: centre.y - direction.y * radius,
+  };
+
+  /* The two ends of the line that is DRAWN: through the body, or centre to surface. */
+  const start = diameter ? far : centre;
+  const end = edge;
+
+  /*
+   * ========================================================
+   * THE LEADER AND ITS ARROW
+   * ========================================================
+   *
+   * A RADIUS IS DRAWN AS A LEADER: an arrow at the point where it meets the
+   * circumference, pointing INTO the surface, a short radial run outward and a
+   * horizontal shoulder carrying the text. A DIAMETER IS DRAWN THROUGH the
+   * circle with a head at each end on the circumference, pointing outward at
+   * the surface - the heads sit ON the circle, which is where the measurement
+   * starts and ends.
+   *
+   * The placement decides where the leader turns and where its text stands, so
+   * the student can keep a radius clear of the rest of the drawing; the head
+   * and the arc it touches never move, because they are derived from the
+   * feature's own centre and radius.
+   */
+  const label = dimensionLabelSize(text, state, dimension.style);
+
+  /*
+   * THE LEADER'S SHOULDER, AT THE PLACEMENT'S OWN RADIUS.
+   *
+   * The label stands just outside the circle along the placement's direction, on
+   * a shoulder that runs LEVEL with the text - which is how a radius label is
+   * written on a drawing. The radial run starts a small way clear of the surface
+   * and the shoulder runs outwards from it, never back through the body.
+   */
+  const side = direction.x >= 0 ? 1 : -1;
+
+  const radialReach = radius + label.gap * 2;
+
+  const outwardPoint = {
+    x: centre.x + direction.x * radialReach,
+    y: centre.y + direction.y * radialReach,
+  };
+
+  const shoulder = { x: outwardPoint.x + side * label.gap * 2, y: outwardPoint.y };
+
+  const textAnchor = {
+    x: shoulder.x + side * (label.halfWidth + label.gap),
+    y: shoulder.y,
   };
 
   /*
-   * A diameter is drawn THROUGH the circle, which is what makes it
-   * read as a diameter: the line crosses the centre and touches
-   * both sides. A radius stops at the centre.
+   * THE HEADS.
+   *
+   * A RADIUS has one, at the surface, pointing OUT through it - the direction
+   * the measurement runs. A DIAMETER has one at each crossing, each pointing
+   * OUT at the arc it touches, so the line reads as a measurement ACROSS the
+   * body rather than a single arrow aimed at it.
    */
-  const start =
-    dimension.dimensionType === "diameter"
-      ? {
-          x: centre.x - direction.x * radius,
-          y: centre.y - direction.y * radius,
-        }
-      : centre;
+  const arrowheads = diameter
+    ? [
+        { at: far, direction: { x: -direction.x, y: -direction.y } },
+        { at: edge, direction },
+      ]
+    : [{ at: edge, direction }];
 
   return {
     kind: "radial",
@@ -2159,37 +2739,32 @@ function radialGraphics(
     measurement,
     centre,
     edge,
-    line: [start, tip],
+    far,
+    label,
+    line: [start, end],
+    arrowheads,
+    shoulder,
     /*
      * ARROWS FIT INSIDE A BIG ENOUGH DIAMETER, OUTSIDE A SMALL ONE.
      *
-     * `outside` was hard-coded, so a diameter whose line crossed the whole
-     * circle still pushed its arrowheads past the ends of the line - leaving the
-     * arrows outside the geometry and the line bare. `decideArrowStyle` is the
-     * existing rule for exactly this, and the placement's distance from the
-     * centre is the room available: a diameter placed near the circumference has
-     * little, and asks for outside arrows; one placed through the middle has room
-     * and keeps them inside, which is how a diameter is conventionally drawn.
+     * `decideArrowStyle` compares the drawn span with the space the document's
+     * heads need, so a small circle's diameter is stated with outside arrows
+     * while a large one keeps them inside.
      */
     arrowStyle:
       dimension.dimensionType === "diameter"
-        ? decideArrowStyle(start, tip, Math.hypot(toPlacement.x, toPlacement.y))
+        ? decideArrowStyle(start, end, Math.hypot(toPlacement.x, toPlacement.y), dimension.style)
         : "outside",
-    leader: {
-      from: tip,
-      to: {
-        x: dimension.placement.x,
-        y: dimension.placement.y,
-      },
-    },
+    /*
+     * A RADIUS'S LEADER RUNS FROM ITS SURFACE OUT TO THE TEXT'S SHOULDER. A
+     * DIAMETER'S DOES NOT: its line already crosses the circle, and a second
+     * line from the circumference to a far placement would read as a leader to
+     * something else.
+     */
+    leader: diameter ? null : { from: outwardPoint, to: shoulder },
     text,
-    textFrame: textFrame(
-      {
-        x: (edge.x + tip.x) / 2,
-        y: (edge.y + tip.y) / 2,
-      },
-      direction
-    ),
+    textFrame: textFrame(textAnchor, { x: 1, y: 0 }, label.fontPt, label, dimensionTextAlignment(dimension.style)),
+    textAnchor,
   };
 }
 
@@ -2276,6 +2851,51 @@ function angularGraphics(
   const label=dimensionLabelSize(text,state,dimension.style);
   const labelRadius=radius+Math.abs(bisector.x)*label.halfWidth+Math.abs(bisector.y)*label.halfHeight+label.gap/2;
 
+  /*
+   * THE ANGLE'S ARROWHEADS POINT ALONG THE ARC, into each leg.
+   *
+   * An angular dimension is bounded by its two legs, so its heads sit at the
+   * arc's ends and point along the arc TOWARDS the legs - the same convention
+   * as a linear dimension's heads pointing at its witness lines. Their
+   * direction is the arc's tangent there, which is perpendicular to the leg.
+   */
+  /*
+   * WHICH TANGENT IS THE ONE POINTING INWARD depends on which way round the
+   * arc was swept, so the two candidates are built and the one that shares a
+   * direction with the arc is taken. The bisector is the inward direction at
+   * both ends, so it is the test: whichever tangent has the positive dot with
+   * it points into the measured sector.
+   */
+  /*
+   * THE HEADS POINT AT THE LEGS THEY MEET.
+   *
+   * At each end of the arc the head's tip sits ON the arc and points ALONG the
+   * arc AWAY from the measured sector - out towards the leg, which is the same
+   * convention a linear dimension's heads follow at their witness lines. The
+   * tangent pointing away from the sector is the negative of the inward one, so
+   * it is built directly rather than guessed: the inward tangent is the one
+   * sharing a direction with the bisector, and the head takes its opposite.
+   */
+  const awayFromArcAt = (leg) => {
+    const first = normalise({ x: leg.y, y: -leg.x });
+    const second = normalise({ x: -leg.y, y: leg.x });
+
+    const inward =
+      first.x * bisector.x + first.y * bisector.y >= 0 ? first : second;
+
+    return { x: -inward.x, y: -inward.y };
+  };
+
+  const arcEnds = [
+    { at: arcPoints[0], direction: awayFromArcAt(a) },
+    { at: arcPoints[arcPoints.length - 1], direction: awayFromArcAt(b) },
+  ];
+
+  const textAnchor = {
+    x: vertex.x + bisector.x * labelRadius,
+    y: vertex.y + bisector.y * labelRadius,
+  };
+
   return {
     kind: "angular",
     rightAngle,
@@ -2283,24 +2903,33 @@ function angularGraphics(
     measurement,
     vertex,
     arc: arcPoints,
+    /*
+     * THE LEGS AS CONSTRUCTION LINES, drawn from the vertex out past the arc -
+     * the same witness convention a linear dimension uses. They are drawn DASHED
+     * on the canvas and in the source, because they are reference, not
+     * measurement.
+     */
     extensions: [
-      [vertex, { x: vertex.x + a.x * radius, y: vertex.y + a.y * radius }],
-      [vertex, { x: vertex.x + b.x * radius, y: vertex.y + b.y * radius }],
+      [vertex, { x: vertex.x + a.x * (radius + radius * 0.08), y: vertex.y + a.y * (radius + radius * 0.08) }],
+      [vertex, { x: vertex.x + b.x * (radius + radius * 0.08), y: vertex.y + b.y * (radius + radius * 0.08) }],
     ],
     arrowStyle: "outside",
+    /*
+     * A RIGHT ANGLE IS DRAWN AS ITS SQUARE MARKER, so it needs no heads - the
+     * two short lines meeting at the corner ARE the statement. Every other
+     * angle carries a head at each end of its arc.
+     */
+    arrowheads: rightAngle ? [] : arcEnds,
+    label,
     text,
     textFrame: textFrame(
-      {
-        x:
-          vertex.x +
-          bisector.x * labelRadius,
-        y:
-          vertex.y +
-          bisector.y * labelRadius,
-      },
-      {x:1,y:0},
-      dimension.style?.fontSize || 11
+      textAnchor,
+      { x: 1, y: 0 },
+      label.fontPt,
+      label,
+      dimensionTextAlignment(dimension.style)
     ),
+    textAnchor,
   };
 }
 
@@ -2616,6 +3245,8 @@ const enggDimensionModel = {
   formatMeasurement,
   graphicsFor,
   isResolved,
+  WITNESS_STANDOFF_MM,
+  WITNESS_OVERSHOOT_MM,
   measurePoints,
   measurementFor,
   newDimensionId,

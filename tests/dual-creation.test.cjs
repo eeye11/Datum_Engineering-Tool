@@ -101,10 +101,35 @@ check(
 check(
   "a release that never moved returns FALSE, so the trailing click is NOT consumed",
   (() => {
+    /*
+     * THE `!session.moved` BRANCH is read as a whole - from the guard to its
+     * closing brace - because the branch asks the shared decision first and
+     * then declines. What must be true is that a DECLINED click returns false
+     * without consuming anything.
+     */
     const start = drag.indexOf("export function finishCreationDrag");
     const at = drag.indexOf("if (!session.moved) {", start);
-    const body = drag.slice(at, at + 80);
-    return at > 0 && /return false;/.test(body);
+
+    if (at < 0) {
+      return false;
+    }
+
+    let depth = 0;
+    let end = at;
+
+    for (let index = drag.indexOf("{", at); index < drag.length; index += 1) {
+      if (drag[index] === "{") depth += 1;
+      if (drag[index] === "}") depth -= 1;
+
+      if (depth === 0) {
+        end = index + 1;
+        break;
+      }
+    }
+
+    const body = drag.slice(at, end);
+
+    return /finishCreationClick\(session\)/.test(body) && /return false;/.test(body);
   })(),
   "consuming it would swallow the very click that is the first point",
 );

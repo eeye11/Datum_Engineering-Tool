@@ -1009,13 +1009,31 @@ export function openNoteEditorFor(object, atPoint = null) {
                 renderCurrentDrawing();
             },
 
-            onCancel: () => {
+            onCancel: ({ startedEmpty } = {}) => {
                 const current = currentObject();
-                if (current && canvasText) current.text = originalText;
+
+                /*
+                 * A NEW, NEVER-WRITTEN NOTE IS REMOVED ON CANCEL. It was
+                 * created empty with its box open, so cancelling means "not
+                 * here after all" - leaving an empty node behind would be an
+                 * invisible object the student has to hunt for.
+                 */
+                if (current && startedEmpty && !String(current.text || "").length) {
+                    const previous = enggDrawingState.snapshotDrawing(drawingState);
+                    drawingState.objects = drawingState.objects.filter(
+                        (candidate) => candidate.id !== current.id,
+                    );
+                    enggDrawingState.commitDrawingChange(drawingState, previous);
+                    enggDrawingState.clearSelection?.(drawingState);
+                } else if (current && canvasText) {
+                    current.text = originalText;
+                }
+
                 endTextEntry();
 
                 setToolMessage("Annotation edit cancelled");
 
+                renderProperties();
                 renderCurrentDrawing();
             }
         });
@@ -1060,11 +1078,23 @@ export function openNoteEditorFor(object, atPoint = null) {
             renderCurrentDrawing();
         },
 
-        onCancel: () => {
+        onCancel: ({ startedEmpty } = {}) => {
             endTextEntry();
+
+            if (startedEmpty && !String(object.text || "").length) {
+                const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+                drawingState.objects = drawingState.objects.filter(
+                    (candidate) => candidate.id !== object.id,
+                );
+
+                enggDrawingState.commitDrawingChange(drawingState, previous);
+                enggDrawingState.clearSelection?.(drawingState);
+            }
 
             setToolMessage("Note edit cancelled");
 
+            renderProperties();
             renderCurrentDrawing();
         }
     });

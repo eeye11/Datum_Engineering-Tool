@@ -210,14 +210,13 @@ export function installCanvasEvents() {
                         event.stopPropagation();
 
                         /*
-                         * THE STANDARD VALUE POPUP, NOT A DIMENSION EDITOR.
+                         * ONE CLICK EDITS THE NUMBER, TWO EDITS IT TOO.
                          *
-                         * A double-click on a dimension opens the SAME value
-                         * box a Length, a Force and a moment magnitude use - the
-                         * one the student already knows - and NEVER the World
-                         * Scale question. A scale is a property of the SHEET,
-                         * and it was being asked every time somebody wanted to
-                         * change a number.
+                         * The in-page field opens over the glyphs themselves
+                         * (see dimension-text-editor.js) - there is no dialog,
+                         * no popup and no second window - so the second click
+                         * of a double-click is simply another way in. The
+                         * dimension's identity and geometry are untouched.
                          */
                         openDimensionValuePrompt(pointed);
 

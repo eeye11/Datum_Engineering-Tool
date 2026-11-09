@@ -402,20 +402,28 @@
 /*
  * THE FIELD ITSELF IS THE NOTE WHILE IT IS BEING WRITTEN.
  *
- * It sits over the drawing at the note's own anchor, in the note's own type,
- * with a transparent background - so the sheet shows through and the words look
- * like the words. The boundary is deliberately faint: it marks the editable
- * area while editing and is removed with the element when the text is
- * committed, so nothing box-like is left in the drawing.
+ * It is a CHILD OF THE CANVAS, absolutely positioned in the canvas's pixel
+ * frame - the frame the viewport projects into - so it sits at the note's own
+ * anchor and travels with the drawing through zoom, pan and a window resize.
+ * The background is a theme surface behind the sheet's own canvas colour, so an
+ * EMPTY note still shows a visible box to click into instead of vanishing; the
+ * boundary is deliberately faint, marks the editable area while editing, and is
+ * removed with the element when the text is committed - nothing box-like is
+ * left in the drawing.
  */
 .drawing-canvas-text-editor {
-    position: fixed;
-    z-index: 1000;
+    position: absolute;
+    z-index: 20;
     box-sizing: border-box;
-    border: 1px solid color-mix(in srgb, var(--datum-green) 45%, transparent);
+    border: 1px solid var(--datum-green);
     border-radius: 2px;
-    background: transparent;
+    background: color-mix(in srgb, var(--datum-canvas) 92%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--datum-green) 20%, transparent);
     pointer-events: auto;
+}
+
+.drawing-canvas-text-editor:focus-within {
+    border-color: var(--datum-green);
 }
 .drawing-canvas-text-editor textarea {
     display: block;
@@ -435,6 +443,35 @@
     resize: none;
     overflow: hidden;
     white-space: pre;
+}
+
+/*
+ * A DIMENSION'S NUMBER, EDITED WHERE IT IS DRAWN.
+ *
+ * The same in-page box as a note's, sized to the one line it holds. It is
+ * centred on the number it replaces, so the typed text lands exactly where the
+ * old text stood, and its own boundary is the only box the student sees - it
+ * disappears with the field on commit, leaving the drawing's text alone.
+ */
+.drawing-dimension-text-editor {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.drawing-dimension-text-editor input.drawing-dimension-text-field {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 0 3px;
+    margin: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    font-family: Arial, sans-serif;
+    caret-color: var(--datum-green);
 }
 
 .drawing-insert-symbol {

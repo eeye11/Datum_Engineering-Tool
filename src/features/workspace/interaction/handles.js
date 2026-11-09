@@ -635,6 +635,107 @@ function elbowConnectionState(object) {
     return attached === 1 ? "partial" : "standalone";
 }
 
+/*
+ * WHERE A DIMENSION'S ONE CONTROL SITS.
+ *
+ * BESIDE THE NUMBER, NEVER OVER IT, AND OFF THE LINE.
+ *
+ * The control is the dimension-line offset - the one thing about a dimension
+ * that is the student's to choose - so it is drawn on the side the number is
+ * NOT on, level with the number and clear of it. Anything drawn on the line
+ * under the glyphs reads as a mark in the drawing or hides the value the
+ * student selected the dimension to look at.
+ *
+ * THE CLEARANCE IS THE LABEL'S OWN MEASURED WIDTH, from the model's frame - so
+ * a long label pushes the handle further out than a short one, at every zoom,
+ * and the handle can never be nearer than the text is wide.
+ *
+ * The handle still moves the placement, which is the dimension line's offset:
+ * the drag layer projects the pointer onto the dimension's own normal, so where
+ * the handle starts along the line does not change what the gesture does - it
+ * only decides how far from the number it sits.
+ */
+function dimensionControlPoint(line, anchor, graphics) {
+    const [from, to] = line;
+
+    const along = { x: to.x - from.x, y: to.y - from.y };
+
+    const length = Math.hypot(along.x, along.y);
+
+    if (!(length > 1e-9)) {
+        return anchor;
+    }
+
+    const unit = { x: along.x / length, y: along.y / length };
+
+    const scale =
+        (enggDrawingState.BASE_PIXELS_PER_UNIT || 1) *
+        (Number(drawingState.camera?.zoom) || 1) ||
+        1;
+
+    /*
+     * THE SCREEN CLEARANCE IS THE ONLY VIEWPORT-AWARE PART, and it is a CONTROL,
+     * not a drawing element: the grip must stay a comfortable grab distance away
+     * in PIXELS whatever the zoom. Everything about the LABEL - its measured
+     * width, the side it sits on - comes from the model in document units,
+     * unchanged by the viewport.
+     */
+
+    const midpoint = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+
+    /*
+     * THE SIDE THE NUMBER IS ON, AND ITS CLEARANCE.
+     *
+     * The offset is the vector from the line's midpoint to the number, and it
+     * is NOT necessarily perpendicular to the line: a horizontal dimension's
+     * number sits ABOVE it, a vertical one's BESIDE it. So the vector is used
+     * as it is - a fraction of it to travel along the line, the rest to stand
+     * off it - rather than being resolved into a normal built from the line.
+     */
+    const toNumber = { x: anchor.x - midpoint.x, y: anchor.y - midpoint.y };
+    const reach = Math.hypot(toNumber.x, toNumber.y);
+
+    const { width = 0, height = 0 } = graphics?.textFrame || {};
+
+    const alongExtent = Math.abs(unit.x) * width + Math.abs(unit.y) * height;
+    const acrossExtent = Math.abs(unit.x) * height + Math.abs(unit.y) * width;
+
+    const breath = 10 / scale;
+
+    if (!(reach > 1e-9)) {
+        /* No number to stand clear of: sit on the line, which is all the drag needs. */
+        return midpoint;
+    }
+
+    const toward = { x: toNumber.x / reach, y: toNumber.y / reach };
+
+    /*
+     * THE CONTROL STANDS ON THE OPPOSITE SIDE OF THE LINE FROM THE NUMBER.
+     *
+     * `graphics.textSide` is the model's own answer (+1/-1 along the dimension's
+     * normal) to which side the number sits on; the grip is placed on the other
+     * one, level with the number and past the end of its box. That is what keeps
+     * a grip off the words at every zoom without hiding, shrinking or moving the
+     * text itself.
+     */
+    const travel = Math.min(alongExtent / 2 + reach * 0.5 + breath, Math.max(0, length / 2 - 1e-6));
+    const across = breath + acrossExtent / 2;
+
+    /*
+     * WHICH WAY ALONG THE LINE. The number is centred on the line, so there is
+     * no side to prefer - and the control always goes towards the START of the
+     * dimension, like a handle on any other feature's first defining point. A
+     * sign taken from the number's own tiny sideways offset would flip the
+     * handle from one end to the other for a placement a fraction to one side.
+     */
+    const sign = -1;
+
+    return {
+        x: midpoint.x + unit.x * travel * sign - toward.x * across,
+        y: midpoint.y + unit.y * travel * sign - toward.y * across
+    };
+}
+
 function manipulationHandles(
     object
 ) {
@@ -787,38 +888,56 @@ function manipulationHandles(
      * losing it would put the dimension back on top of the thing it
      * measures.
      */
+    /*
+     * A DIMENSION'S HANDLES ARE ITS GEOMETRY'S, NOT ITS NUMBER'S.
+     *
+     * The number is text: it is edited in place and never a handle, so no
+     * handle is ever drawn over it. What the dimension DOES have is one control
+     * - its placement point, which sets the dimension line's offset from the
+     * geometry while keeping its relationship with the measured points.
+     *
+     * THE CONTROL IS SITTING ON THE LINE, a little off the label.
+     *
+     * A handle drawn AT the text overlapped and obstructed the very value the
+     * student had selected it to work on. Drawn at the text's position but
+     * nudged along the dimension line to one side, it is off the number and on
+     * the line the student is choosing, so it reads as "move this line" rather
+     * than "move this word".
+     *
+     * The defining points themselves are not handles: a dimension measures
+     * existing geometry, and moving a measurement endpoint by dragging would
+     * change where the dimension claims to measure without moving the thing it
+     * measures - a number describing a different object. The dimension follows
+     * its source geometry when that geometry moves, which is the correct way for
+     * its extent to change.
+     */
     if (
         object.type === "dimension"
     ) {
         const graphics =
             safeDimensionGraphics(object);
 
-        /*
-         * THE HANDLE SITS ON THE DIMENSION'S TEXT.
-         *
-         * A dimension is moved to make its number legible, and the number is
-         * the thing the student aims at - so the grab target IS the text.
-         *
-         * It used to be the dimension LINE's first point, which is at one end
-         * of the line rather than under the number: pressing the text missed
-         * the handle entirely, so a dimension could only be moved by first
-         * selecting it and then pressing somewhere else. Using the text
-         * anchor makes "press the number and drag it" work directly, and it
-         * is the same point the renderer places the text at.
-         */
+        const line = Array.isArray(graphics?.line) && graphics.line.length === 2
+            ? graphics.line
+            : null;
+
         const anchor =
             graphics?.textAnchor ||
-            graphics?.line?.[0] ||
+            line?.[0] ||
             graphics?.arc?.[0];
 
         if (!anchor) {
             return [];
         }
 
+        const point = line
+            ? dimensionControlPoint(line, anchor, graphics)
+            : anchor;
+
         return [
             {
                 kind: "annotation-offset",
-                point: anchor
+                point
             }
         ];
     }

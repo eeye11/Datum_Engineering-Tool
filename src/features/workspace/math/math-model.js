@@ -182,10 +182,30 @@ export function graphFrame(graph) {
 export function graphLimits(graph) {
   const geometry = graph?.geometry || {};
 
-  const read = (key) =>
-    Number.isFinite(Number(geometry[key]))
-      ? Number(geometry[key])
-      : DEFAULT_GRAPH_LIMITS[key];
+  /*
+   * A SKETCH KEEPS THE RANGE THE STUDENT SET. Its vertical extent is part of
+   * what they are drawing against, so an unset one stays at the default rather
+   * than being fitted to whatever geometry happens to be on the canvas - a
+   * fitted Y range would move the grid under a stroke while it is being drawn.
+   */
+
+  /*
+   * A LIMIT IS READ ONLY WHEN IT IS ACTUALLY A NUMBER.
+   *
+   * `null`, `""` and `false` all coerce to finite numbers (`0`, `0`, `0`), so
+   * reading them as limits turned an unset -10..5 into 0..5 and quietly moved
+   * every coordinate. Anything that is not a number, or is a blank string, is
+   * "unset" and takes the default.
+   */
+  const read = (key) => {
+    const value = geometry[key];
+
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+        ? Number(value)
+        : DEFAULT_GRAPH_LIMITS[key];
+  };
 
   const xMin = read("xMin");
   const xMax = read("xMax");
@@ -195,7 +215,7 @@ export function graphLimits(graph) {
     xMax: xMax > xMin ? xMax : DEFAULT_GRAPH_LIMITS.xMax,
   };
 
-  if (geometry.yRangeExplicit === true) {
+  const explicitYRange = () => {
     const yMin = read("yMin");
     const yMax = read("yMax");
 
@@ -204,6 +224,15 @@ export function graphLimits(graph) {
       yMin: yMax > yMin ? yMin : DEFAULT_GRAPH_LIMITS.yMin,
       yMax: yMax > yMin ? yMax : DEFAULT_GRAPH_LIMITS.yMax,
     };
+  };
+
+  /*
+   * A SKETCH IS NEVER FITTED TO ITS OWN INK. Its vertical range is what the
+   * student configured (or the default), so it is returned as it stands - a
+   * fitted range would move the grid under a stroke while it is being drawn.
+   */
+  if (geometry.yRangeExplicit === true || geometry.mode === "sketch") {
+    return explicitYRange();
   }
 
   const fitted = fittedYRange(graph, x);
@@ -276,7 +305,70 @@ function fittedYRange(graph, x) {
  * limits ask for, centred in the available area. That is what makes a circle
  * of radius 1 look like a circle rather than an ellipse, and it is why the
  * mapping - not the box - is the authority on scale.
+ *
+ * A SQUARE GRAPH FILLS A WIDE BOX ONLY IF THE BOX IS SQUARE. The box is the
+ * graph's own dimensions in drawing units, and a graph whose equal-unit plot is
+ * square inside a 2:1 box has a lot of empty ink on either side of it. That is
+ * correct for a placed object - the box is the student's - but it is wrong for
+ * an EDITOR, which owns its frame. So an editor passes a box shaped like its
+ * canvas, and the mapping does the rest. Nothing here guesses at screen size.
  */
+/*
+ * THE DISPLAY SWITCHES A GRAPH IS DRAWN BY, resolved once.
+ *
+ * SKETCH MODE IS AN UNNUMBERED GRID. A Sketch uses the grid as a drawing aid -
+ * to align a stroke and to see where a point lands - not as a fully annotated
+ * mathematical plot. So a sketch never prints tick numbers and never puts a
+ * collection of markers at its intersections, while the NUMBERS themselves are
+ * untouched: the mapping, the tick spacing, snapping and coordinate editing all
+ * still use the real limits. A graph that was stored with `showTickLabels: true`
+ * is still an unnumbered sketch, because the mode is the authority on this, not
+ * a setting the student never asked for.
+ *
+ * A PLOT is unaffected: it keeps its labels unless the student turns them off.
+ */
+export function gridDisplay(graph) {
+  const geometry = graph?.geometry || {};
+  const sketch = geometry.mode === "sketch";
+
+  return {
+    sketch,
+    showGrid: geometry.showGrid !== false,
+    showTickLabels: sketch ? false : geometry.showTickLabels !== false,
+    showPointMarkers: false,
+  };
+}
+
+/* How far, as a share of the box, the ticks and labels extend past the plot area. */
+export const GRAPH_TICK_INSET = 0.035;
+
+/*
+ * THE INSET A GRAPH IS MAPPED WITH.
+ *
+ * A PLACED graph leaves a margin inside its box for the tick numbers that sit
+ * outside its plot area. The EDITOR has no outside - its box IS the canvas - so
+ * it states a zero inset of its own (`geometry.graphInset`), and the mapping uses
+ * it. That is the one place the two differ, and it is the graph's own property
+ * rather than a rule about where the graph is being drawn.
+ */
+export function graphInsetOf(graph) {
+  const inset = graph?.geometry?.graphInset;
+
+  if (!inset || typeof inset !== "object") {
+    return GRAPH_INSET;
+  }
+
+  const share = (value) =>
+    Number.isFinite(Number(value)) ? Math.max(0, Math.min(0.45, Number(value))) : 0;
+
+  return {
+    left: share(inset.left),
+    right: share(inset.right),
+    top: share(inset.top),
+    bottom: share(inset.bottom),
+  };
+}
+
 export function graphMapping(graph) {
   const frame = graphFrame(graph);
 
@@ -285,12 +377,13 @@ export function graphMapping(graph) {
   }
 
   const limits = graphLimits(graph);
+  const inset = graphInsetOf(graph);
 
   const available = {
-    left: frame.position.x + frame.width * GRAPH_INSET.left,
-    right: frame.position.x + frame.width * (1 - GRAPH_INSET.right),
-    bottom: frame.position.y + frame.height * GRAPH_INSET.bottom,
-    top: frame.position.y + frame.height * (1 - GRAPH_INSET.top),
+    left: frame.position.x + frame.width * inset.left,
+    right: frame.position.x + frame.width * (1 - inset.right),
+    bottom: frame.position.y + frame.height * inset.bottom,
+    top: frame.position.y + frame.height * (1 - inset.top),
   };
 
   let width = available.right - available.left;
@@ -311,9 +404,24 @@ export function graphMapping(graph) {
 
   if (equal) {
     /*
-     * ONE UNIT IS THE SAME LENGTH ON BOTH AXES. The smaller of the two
-     * candidate scales wins, so the whole range still fits, and the plot area
-     * is centred in what is left.
+     * ONE UNIT IS THE SAME LENGTH ON BOTH AXES.
+     *
+     * The plot AREA is the rectangle the limits map onto. With equal units its
+     * aspect is the limits' own (xSpan : ySpan), and the scale is what fits
+     * that rectangle inside the available box. The area is CARRIED BY THE
+     * LIMITS, NOT CENTRED IN THE BOX: its left edge is the x = xMin end of the
+     * available box and it grows from there, so `left` really is xMin and
+     * `right` really is xMax. Centring a plot area that is narrower than the
+     * box (and letting `left`/`right` name the centred rectangle's edges) is
+     * what made the drawing disagree with the axes: a tick was drawn at the
+     * centred rectangle's xMin while its label and the grid used the box's
+     * corners.
+     *
+     * THE PLOT AREA IS CENTRED IN THE BOX, so a graph whose range is squarer
+     * than its box keeps a symmetric margin rather than hugging one corner.
+     * Because the edges are centred TOGETHER, `left` is still exactly xMin and
+     * `bottom` exactly yMin - every grid line, tick and curve is placed from
+     * the same rectangle.
      */
     const scale = Math.min(width / xSpan, height / ySpan);
 
@@ -323,13 +431,13 @@ export function graphMapping(graph) {
     const centreX = (available.left + available.right) / 2;
     const centreY = (available.bottom + available.top) / 2;
 
-    width = plotWidth;
-    height = plotHeight;
-
     available.left = centreX - plotWidth / 2;
     available.right = centreX + plotWidth / 2;
     available.bottom = centreY - plotHeight / 2;
     available.top = centreY + plotHeight / 2;
+
+    width = plotWidth;
+    height = plotHeight;
   }
 
   return {
@@ -346,6 +454,12 @@ export function graphMapping(graph) {
     ySpan,
     scaleX: width / xSpan,
     scaleY: height / ySpan,
+    /*
+     * THE MATHEMATICAL ORIGIN, in the same frame as the grid and the curves.
+     * It is a POSITION, not a rule: when zero lies outside the limits this
+     * lands outside the plot area (px < left or > right) and the caller draws
+     * no axis there rather than forcing one to an edge.
+     */
     origin: {
       x: available.left + ((0 - limits.xMin) / xSpan) * width,
       y: available.bottom + ((0 - limits.yMin) / ySpan) * height,
@@ -397,6 +511,67 @@ export function drawingToGraph(graph, point) {
 }
 
 /*
+ * THE CANONICAL FORM OF ONE PATH POINT.
+ *
+ * A plot stores its skeletal paths in GRAPH coordinates and draws them through
+ * the mapping; the SOURCE writes drawing units, because that is what a TikZ
+ * `\draw (x,y)` means. These two functions are that conversion, applied
+ * wherever a path crosses between the two - so a saved curve is drawn at the
+ * same place after a reload, and changing the box or the limits does not move
+ * the stroke off the axis it was drawn against.
+ */
+export function drawingPointToGraph(graph, point) {
+  return drawingToGraph(graph, point) || copyPoint(point);
+}
+
+/*
+ * A SEGMENT, IN DRAWING UNITS.
+ *
+ * A sketched curve's Bezier chain is stored in graph coordinates; the source
+ * states it in drawing units because that is what a `\draw` means. Every
+ * control point is mapped by the same function, so the written spline is the
+ * drawn one.
+ */
+export function drawingSegment(graph, segment) {
+  const map = (at) => graphToDrawing(graph, at);
+
+  const converted = {
+    from: map(segment.from),
+    control1: map(segment.control1),
+    control2: map(segment.control2),
+    to: map(segment.to),
+  };
+
+  return converted.from && converted.control1 && converted.control2 && converted.to
+    ? converted
+    : null;
+}
+
+/* A drawn segment, taken back into the graph coordinates the object stores. */
+export function graphSegment(graph, segment) {
+  const map = (at) => drawingToGraph(graph, at);
+
+  const converted = {
+    from: map(segment.from),
+    control1: map(segment.control1),
+    control2: map(segment.control2),
+    to: map(segment.to),
+  };
+
+  return converted.from && converted.control1 && converted.control2 && converted.to
+    ? converted
+    : null;
+}
+
+export function graphStrokesToDrawing(graph, strokes) {
+  return (Array.isArray(strokes) ? strokes : []).map((stroke) =>
+    (Array.isArray(stroke) ? stroke : [])
+      .map((point) => graphToDrawing(graph, point))
+      .filter(Boolean),
+  );
+}
+
+/*
  * THE TICK VALUES OF ONE AXIS.
  *
  * A spacing the student typed is used as given; otherwise a "nice" step is
@@ -417,6 +592,25 @@ export function niceStep(span, target = 10) {
     normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10;
 
   return step * magnitude;
+}
+
+/*
+ * THE VALUES THE GRID USES, which need not be the labelled ticks.
+ *
+ * A sketch's grid is unnumbered but still a real grid, and a grid of 1-unit
+ * lines over -5..5 is thin on a large canvas. So a sketch draws a FINER grid
+ * (the labelled spacing divided by a whole number, or a finer nice step when
+ * there is no labelled spacing) while its ticks and snapping keep the
+ * configured value. The two never disagree: the finer lines are multiples of
+ * the same step, which is what makes snapping land on a visible line.
+ */
+export function gridValues(min, max, spacing = null, divisions = 1) {
+  const step =
+    Number.isFinite(Number(spacing)) && Number(spacing) > 0
+      ? Number(spacing) / Math.max(1, Math.round(Number(divisions) || 1))
+      : niceStep(Number(max) - Number(min), 20);
+
+  return tickValues(min, max, step);
 }
 
 export function tickValues(min, max, spacing = null) {
@@ -614,6 +808,14 @@ export function createPlotFunction(options = {}) {
 
 /* A sketched function component, from a reconstructed stroke. */
 export function createSketchFunction(reconstruction, options = {}) {
+  const points = Array.isArray(reconstruction?.points)
+    ? reconstruction.points.map(copyPoint).filter(Boolean)
+    : [];
+
+  const segments = Array.isArray(reconstruction?.segments)
+    ? reconstruction.segments
+    : [];
+
   return {
     id: options.id || nextPlotFunctionId(),
     mode: "sketch",
@@ -622,23 +824,49 @@ export function createSketchFunction(reconstruction, options = {}) {
     domain: { ...DEFAULT_DOMAIN },
     visible: options.visible !== false,
     style: options.style ? { ...options.style } : null,
-    points: Array.isArray(reconstruction?.points)
-      ? reconstruction.points.map(copyPoint)
-      : [],
-    segments: Array.isArray(reconstruction?.segments)
-      ? reconstruction.segments
-      : [],
+    points,
+    segments,
     originalTrace: Array.isArray(reconstruction?.original)
-      ? reconstruction.original.map(copyPoint)
+      ? reconstruction.original.map(copyPoint).filter(Boolean)
       : [],
     showOriginalTrace: options.showOriginalTrace === true,
     smoothing: Number.isFinite(Number(options.smoothing))
       ? Number(options.smoothing)
       : 0,
+    /*
+     * WHAT THE CORRECTION DID TO THIS STROKE, in words a test and a panel can
+     * read: `line`, `horizontal`, `vertical` or `curve`. It is recorded so the
+     * student can see that a stroke WAS straightened and so a source block can
+     * say which representation it holds - not so anything is re-derived from
+     * it. The geometry itself is always `points`/`segments`.
+     */
+    correction: options.correction ? { ...options.correction } : null,
     fitType: "none",
     fitExpression: "",
     showFitExpression: false,
   };
+}
+
+/*
+ * A STRAIGHT SKETCHED SEGMENT, from two points.
+ *
+ * A stroke the recogniser called straight is stored as exactly two points and
+ * no Bezier chain - the same reconstruction a hand-drawn line is reduced to -
+ * so the committed curve is a segment rather than hundreds of collinear ones.
+ */
+export function createSketchSegment(start, end, options = {}) {
+  if (!finitePoint(start) || !finitePoint(end)) {
+    return null;
+  }
+
+  return createSketchFunction(
+    {
+      points: [copyPoint(start), copyPoint(end)],
+      segments: [],
+      original: options.original || [],
+    },
+    options,
+  );
 }
 
 /* The functions a Plot owns, in the order they were added. */
@@ -674,14 +902,44 @@ export function plotFunctionStrokes(plot, component) {
   const segments = Array.isArray(component.segments) ? component.segments : [];
 
   if (segments.length) {
-    return [splinePoints(segments)];
+    /*
+     * THE SPLINE THE STUDENT DREW IS IN THE PLOT'S FRAME, AND SO IS THE BOX.
+     *
+     * A sketched path is stored in the plot's own graph coordinates. When the
+     * editor's frame and the placed box are not in the same proportions - a
+     * wide canvas committing a square plot, or the student changing the limits
+     * afterwards - the stored path has to be mapped through the graph mapping
+     * like every other curve. Reading it as drawing units is what made a stroke
+     * (and a point placed on it) drift off the axis it was drawn against.
+     */
+    return [splinePoints(segments).map((point) => graphPointToDrawing(plot, point))];
   }
 
   const points = Array.isArray(component.points)
     ? component.points.filter(finitePoint)
     : [];
 
-  return points.length > 1 ? [points] : [];
+  return points.length > 1
+    ? [points.map((point) => graphPointToDrawing(plot, point))]
+    : [];
+}
+
+/*
+ * A point of a stored path, in drawing units.
+ *
+ * A READER OPENED WITH `plot` ITSELF (one whose stored paths are already in
+ * drawing units) says so with `__drawingSpace`: its paths are returned as they
+ * are. Every other reader - the document's own plot - maps them from its graph
+ * coordinates.
+ */
+function graphPointToDrawing(plot, point) {
+  if (plot?.geometry?.__drawingSpace === true) {
+    return copyPoint(point);
+  }
+
+  const at = graphToDrawing(plot, point);
+
+  return at || copyPoint(point);
 }
 
 /* Every stroke of every visible function in a Plot. */
@@ -966,6 +1224,8 @@ export const FIT_TYPES = Object.freeze([
   "quadratic",
   "cubic",
 ]);
+
+
 
 export const FIT_DEGREES = Object.freeze({
   linear: 1,
@@ -1294,6 +1554,11 @@ export function createMathVector(start, end, options = {}) {
  * drawn inside it. Everything a plot IS lives on this one object, which is
  * what makes it selectable, movable, duplicable and deletable as a whole.
  */
+/* A limit from an options object - a real number, or the default. */
+function limitOption(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
 export function createMathPlot(position, width, height, options = {}) {
   if (!finitePoint(position)) {
     return null;
@@ -1312,29 +1577,64 @@ export function createMathPlot(position, width, height, options = {}) {
       position: copyPoint(position),
       width: w,
       height: h,
-      xMin: Number.isFinite(Number(options.xMin))
-        ? Number(options.xMin)
-        : DEFAULT_GRAPH_LIMITS.xMin,
-      xMax: Number.isFinite(Number(options.xMax))
-        ? Number(options.xMax)
-        : DEFAULT_GRAPH_LIMITS.xMax,
-      yMin: Number.isFinite(Number(options.yMin))
-        ? Number(options.yMin)
-        : DEFAULT_GRAPH_LIMITS.yMin,
-      yMax: Number.isFinite(Number(options.yMax))
-        ? Number(options.yMax)
-        : DEFAULT_GRAPH_LIMITS.yMax,
+      xMin: limitOption(options.xMin, DEFAULT_GRAPH_LIMITS.xMin),
+      xMax: limitOption(options.xMax, DEFAULT_GRAPH_LIMITS.xMax),
+      yMin: limitOption(options.yMin, DEFAULT_GRAPH_LIMITS.yMin),
+      yMax: limitOption(options.yMax, DEFAULT_GRAPH_LIMITS.yMax),
       xTickSpacing: Number.isFinite(Number(options.xTickSpacing))
         ? Number(options.xTickSpacing)
         : null,
       yTickSpacing: Number.isFinite(Number(options.yTickSpacing))
         ? Number(options.yTickSpacing)
         : null,
+      /*
+       * WHERE THE RANGE CAME FROM. `auto` means the limits are calculated from
+       * the geometry (and may be recalculated); `manual` means they are the
+       * student's own numbers and nothing may overwrite them. A graph that says
+       * nothing is automatic, which is the default a student would expect.
+       */
+      boundsMode: options.boundsMode === "manual" ? "manual" : "auto",
+      manualBounds:
+        options.boundsMode === "manual" &&
+        ["xMin", "xMax", "yMin", "yMax"].every((key) =>
+          Number.isFinite(Number(options[key])),
+        )
+          ? {
+              xMin: Number(options.xMin),
+              xMax: Number(options.xMax),
+              yMin: Number(options.yMin),
+              yMax: Number(options.yMax),
+            }
+          : null,
       showXAxis: options.showXAxis !== false,
       showYAxis: options.showYAxis !== false,
       showGrid: options.showGrid !== false,
       showMinorGrid: options.showMinorGrid === true,
       showTickLabels: options.showTickLabels !== false,
+      /*
+       * THE GRID'S RESOLUTION, in labelled intervals. A sketch draws a finer
+       * grid than its labelled ticks (see `gridValues`); a plot draws its
+       * grid at the labelled spacing unless the student asks for a subdivision.
+       */
+      gridDivisions: Number.isFinite(Number(options.gridDivisions))
+        ? Math.max(1, Math.min(10, Math.round(Number(options.gridDivisions))))
+        : 1,
+      /*
+       * THE STUDENT'S OWN POINTS. Numerical points placed in the sketch editor,
+       * in GRAPH coordinates. They are geometry the student defined - not the
+       * samples a stroke is drawn with and not the control points a fitted
+       * curve uses - so they are stored here, on the graph, and nothing else is
+       * ever written into this list.
+       */
+      points: Array.isArray(options.points)
+        ? options.points
+            .filter(finitePoint)
+            .map((entry) => ({
+              id: String(entry.id || ""),
+              x: Number(entry.x),
+              y: Number(entry.y),
+            }))
+        : [],
       xLabel: typeof options.xLabel === "string" ? options.xLabel : "x",
       yLabel: typeof options.yLabel === "string" ? options.yLabel : "y",
       equalUnits: options.equalUnits !== false,
@@ -1680,13 +1980,20 @@ const enggMathModel = {
   DEFAULT_GRAPH_LIMITS,
   MIN_GRAPH_SIDE,
   GRAPH_INSET,
+  graphInsetOf,
   graphFrame,
   graphLimits,
   graphMapping,
   graphToDrawing,
   drawingToGraph,
+  drawingPointToGraph,
+  graphStrokesToDrawing,
+  drawingSegment,
+  graphSegment,
   niceStep,
   tickValues,
+  gridValues,
+  gridDisplay,
   CURVE_MODES,
   DEFAULT_DOMAIN,
   CURVE_SAMPLES,

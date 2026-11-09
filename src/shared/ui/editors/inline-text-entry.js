@@ -179,6 +179,38 @@ function finitePoint(value) {
   return null;
 }
 
+/*
+ * THE DIMENSION'S TEXT POSITION, FROM THE MODEL.
+ *
+ * Reached by name on the installed model (the same way every other cross-
+ * layer reader in this codebase reaches it), so this module stays free of an
+ * import cycle with the drawing model and still reads the ONE derivation of
+ * where a dimension's number is.
+ */
+function dimensionTextAnchor(object) {
+  const model =
+    object?.__dimensionModel ||
+    globalThis.enggDimensionModel ||
+    null;
+
+  if (!model || typeof model.graphicsFor !== "function") {
+    return null;
+  }
+
+  const state = globalThis.enggDrawingState;
+
+  try {
+    const graphics = model.graphicsFor(object, state);
+    const frame = graphics?.textFrame;
+
+    return frame?.x !== undefined || frame?.y !== undefined
+      ? { x: frame.x, y: frame.y }
+      : finitePoint(frame?.center);
+  } catch {
+    return null;
+  }
+}
+
 export function modelPointForTextEntry(object) {
   if (!object || typeof object !== "object") {
     return null;
@@ -210,8 +242,24 @@ export function modelPointForTextEntry(object) {
     return finitePoint(object.placement) || finitePoint(geometry.position);
   }
 
+  /*
+   * A DIMENSION WRITES AT ITS NUMBER, NOT AT ITS PLACEMENT.
+   *
+   * The placement is the dimension LINE's point; the number stands off it, and
+   * on a linear dimension it is not even at the same place. The inline prompt
+   * must open over the glyphs the student clicked, so the point is the text
+   * frame the model computed - the same one the renderer draws and the hit
+   * test picks. The placement is the fallback for a dimension whose geometry
+   * cannot be resolved, where there is no frame to point at.
+   */
   if (object.type === "dimension") {
-    return finitePoint(object.placement) || finitePoint(geometry.position);
+    const frame = dimensionTextAnchor(object);
+
+    return (
+      finitePoint(frame) ||
+      finitePoint(object.placement) ||
+      finitePoint(geometry.position)
+    );
   }
 
   const kind = object.annotateKind;

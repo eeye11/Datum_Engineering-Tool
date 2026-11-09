@@ -24,12 +24,25 @@ test('dimension text size persists and controls layout, SVG, and TeX',()=>{
  const state=model.createDrawingState();
  const line=model.addObject(state,model.geometryFactories.line({x:0,y:0},{x:100,y:0}));
  const d=model.addObject(state,model.geometryFactories.dimension({dimensionType:'horizontal',dimensionKind:'variable',content:'L',refs:[{featureId:line.id,anchor:'start'},{featureId:line.id,anchor:'end'}],placement:{x:50,y:20}}));
+ /*
+  * A DIMENSION'S SIZE IS STATED IN POINTS, and that one number is the frame's
+  * type, the print size and the `\fontsize` in the source.
+  *
+  * Unlike a note (whose `fontSize` is canvas pixels), a dimension is a printed
+  * engineering annotation first: 11 is the value a drafter would write, it is
+  * what the source prints, and the panel quotes it unchanged. See
+  * `dimensionFontPt`.
+  */
  const small=dims.graphicsFor(d,state);
  assert.equal(schema.writeField(d,'dimensionTextSize',24),true);
- const large=dims.graphicsFor(d,state);assert.equal(large.textFrame.fontSize,24);
- assert.ok(large.textFrame.y>small.textFrame.y);
+ const large=dims.graphicsFor(d,state);
+
+ assert.equal(large.label.fontPt,24,'the print size is the size the panel states');
+ assert.ok(large.textFrame.fontSize>small.textFrame.fontSize,'a bigger size makes a bigger frame');
+ assert.ok(Math.abs(large.textFrame.y-20)>Math.abs(small.textFrame.y-20),'the label clears a taller type');
+
  const source=require(locate('annotations.js')).annotationSourceWriter(d,{state});
- assert.ok(source.includes('fontsize{18}'),source);
+ assert.ok(source.includes('fontsize{24}'),source);
  const saved=JSON.parse(model.serializeDrawing(state));
  assert.equal(saved.objects.find(o=>o.id===d.id).style.fontSize,24);
  assert.equal(schema.writeField(d,'dimensionTextSize',-5),false);

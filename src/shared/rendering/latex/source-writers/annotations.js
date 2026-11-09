@@ -42,6 +42,11 @@ import { workArrowPoints } from "../../../../features/workspace/model/thermodyna
 import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
+import {
+  dimensionArrowMm,
+  dimensionPens,
+  POINTS_PER_MM,
+} from "../../../geometry/dimension-layout.js";
 
 function finite(value, fallback = 0) {
   const number = Number(value);
@@ -607,7 +612,21 @@ function serializeMarks(object, kind) {
  * that derivation for the canvas (`graphicsFor`), and the source uses the SAME
  * result - so a dimension's compiled picture and its canvas picture cannot
  * state different numbers or sit in different places.
+ *
+ * A COMPLETE DIMENSION IS WRITTEN, NOT A LINE AND A NUMBER. The witness lines,
+ * the dimension line with its heads, the arc of an angle and the leader of a
+ * radius are all emitted, because that is what the canvas draws and what makes
+ * the exported picture a dimension rather than an arrow with a label near it.
+ *
+ * LINE WEIGHTS COME FROM THE ONE SHARED CONVERSION. `styleOptions` turns the
+ * model's own style into millimetres of paper (`dimensionPens` in
+ * `dimension-layout.js`) and writes that in printed points, and the witness
+ * lines and the heads are then scaled DOWN from it by the same ratios the canvas
+ * uses - so the printed hierarchy is the sheet's hierarchy, not a hairline
+ * beside a heavy outline. The one unit conversion is the shared `POINTS_PER_MM`.
  */
+
+
 
 function dimensionModel() {
   return enggDimensionModel || null;
@@ -621,83 +640,266 @@ function stateWithObjects(_object, allObjects, state) {
   return { objects: Array.isArray(allObjects) ? allObjects : [], units: "mm" };
 }
 
-function dimensionToTikz(graphics, colour, lineWidthPt) {
+/*
+ * ONE STROKE OF A DIMENSION, IN MILLIMETRES OF PAPER.
+ *
+ * The pens are the SHARED document-space ones the canvas paints
+ * (`dimensionPens` in `dimension-layout.js`), converted to printed points by
+ * the one unit conversion - not derived from a screen pixel figure and not
+ * scaled by an export reduction that would make the dimension thinner than the
+ * outline it sits beside. `arrows.meta` sizes are millimetres, so the head's
+ * length is the document's own `dimensionArrowMm`.
+ */
+function dimensionStroke(object, colour, pens, { dash = null } = {}) {
+  const style = object?.style || {};
+
+  const width = Number((pens * POINTS_PER_MM).toFixed(3));
+
+  const options = [`draw=${colour}`, `line width=${num(width, 3)}pt`];
+
+  if (dash) {
+    options.push(`dash pattern=${dash}`);
+  }
+
+  const strokeOpacity = Number(style.opacity);
+
+  if (Number.isFinite(strokeOpacity) && strokeOpacity > 0 && strokeOpacity < 1) {
+    options.push(`draw opacity=${num(strokeOpacity, 3)}`);
+  }
+
+  return options;
+}
+
+/* A segment through world points, in EXPORT space, with its own options. */
+function dimensionPath(points, options) {
+  const usable = (points || []).filter(valid);
+
+  if (usable.length < 2) {
+    return null;
+  }
+
+  const body = usable
+    .map((at, index) => `${index === 0 ? "" : "-- "}${point(finite(at.x), finite(at.y))}`)
+    .join(" ");
+
+  return `\\draw[${options.join(", ")}] ${body};`;
+}
+
+
+
+/*
+ * ONE ARROWHEAD, at a place, pointing a way.
+ *
+ * Written as a short line from a point BEHIND the tip to the tip itself,
+ * drawn with a `Latex` head on its END and sized from the document's own
+ * `dimensionArrowMm` - so the head points the way the canvas triangle points
+ * and is the same length, in millimetres, as the triangle on the sheet. The
+ * head is filled in the dimension's colour, as the triangle is.
+ *
+ * `arrows.meta` supplies `{Latex[length=...]}`; the export's preamble loads
+ * it (STANDALONE_LIBRARIES), so the block is a complete dimension in a clean
+ * editor.
+ */
+function dimensionArrowhead(tip, direction, options, lengthMm) {
+  if (!valid(tip) || !valid(direction)) {
+    return null;
+  }
+
+  const length = Math.hypot(Number(direction.x), Number(direction.y)) || 1;
+
+  const unit = { x: Number(direction.x) / length, y: Number(direction.y) / length };
+
+  /* A short back-off - the head is drawn ON the end of the run. */
+  const stub = Math.max(0.6, lengthMm * 0.6);
+
+  const from = { x: finite(tip.x) - unit.x * stub, y: finite(tip.y) - unit.y * stub };
+
+  /*
+   * THE HEAD IS THE PLAIN `{Latex}` EVERY TIKZ EDITOR KNOWS.
+   *
+   * Its length is the document's own `dimensionArrowMm`, which has a legible
+   * floor and is tied to the dimension line's pen - so the printed head keeps the
+   * sheet's proportion without needing a per-head size declaration. That
+   * declaration would have to be braced twice (`{{Latex[...]}}`) to survive the
+   * comma inside a `\draw[...]` option list, and a form a reader cannot easily
+   * edit is not what an export is for.
+   */
+  void lengthMm;
+
+  const head = "{Latex}";
+
+  return `\\draw[${[...options, `-${head}`].join(", ")}] ${point(
+    from.x,
+    from.y,
+  )} -- ${point(finite(tip.x), finite(tip.y))};`;
+}
+
+/*
+ * THE ONE TRANSFORM THAT APPLIES TO EVERY COORDINATE OF A DIMENSION.
+ *
+ * `point()` already maps a model coordinate through the export transform, so a
+ * dimension's coordinates are its measured points through that one transform -
+ * the same one the object outline beside it is written through. Nothing here
+ * invents a coordinate: the dimension line's ends come from the defining points,
+ * its position from the student's placement.
+ */
+function dimensionToTikz(object, graphics, colour) {
   if (!graphics) {
     return null;
   }
 
+  const pens = dimensionPens(object?.style || {});
+
+  const definitions = [];
   const commands = [];
 
-  const thin = `line width=${num(lineWidthPt, 3)}pt`;
+  const push = (written, defs) => {
+    if (written) {
+      commands.push(written);
+    }
 
-  (graphics.witnesses || []).forEach((witness) => {
-    const pair = Array.isArray(witness) ? witness : [witness?.from, witness?.to];
+    (defs || []).forEach((definition) => {
+      if (!definitions.includes(definition)) {
+        definitions.push(definition);
+      }
+    });
+  };
 
-    if (pair.length >= 2) {
-      commands.push(pathThrough(pair, colour, [thin, "dash pattern=on 4pt off 3pt"]));
+  const main = dimensionStroke(object, colour, pens.line);
+  const fine = dimensionStroke(object, colour, pens.witness, {
+    dash: "on 2pt off 1.5pt",
+  });
+  const leader = dimensionStroke(object, colour, pens.witness, {
+    dash: "on 2pt off 1.5pt",
+  });
+
+  /*
+   * THE WITNESS LINES, FIRST - they are what ties the measurement to the
+   * geometry, and their absence is what made an earlier export look like a
+   * floating arrow.
+   */
+  (graphics.extensions || []).forEach((pair) => {
+    if (Array.isArray(pair) && pair.length >= 2) {
+      push(dimensionPath(pair, fine));
     }
   });
 
   const line = graphics.line;
 
   if (Array.isArray(line) && line.length >= 2) {
-    const filled = graphics.arrowStyle !== "outside";
-
-    commands.push(
-      pathThrough(line, colour, [thin], filled ? "<{Latex}-{Latex}" : "{Latex}-{Latex}")
-    );
+    push(dimensionPath(line, main));
   }
 
+  /*
+   * THE ANGLE'S ARC OR THE ARC LENGTH'S SWEEP, drawn only where the dimension
+   * is that kind - a straight dimension has no arc and must not invent one.
+   */
   const arcPoints = (graphics.arc || []).filter(valid);
 
-  if (graphics.kind === "angular" && arcPoints.length >= 2) {
-    commands.push(pathThrough(arcPoints, colour, [thin]));
+  if (
+    (graphics.kind === "angular" || graphics.kind === "arc-length") &&
+    arcPoints.length >= 2
+  ) {
+    push(dimensionPath(arcPoints, main));
   }
 
-  if (graphics.kind === "arc-length" && arcPoints.length >= 2) {
-    commands.push(pathThrough(arcPoints, colour, [thin, "-{Latex}"]));
+  const lineLeader = graphics.leader;
+
+  if (lineLeader?.from && lineLeader?.to) {
+    push(dimensionPath([lineLeader.from, lineLeader.to], leader));
   }
 
-  const leader = graphics.leader;
 
-  if (leader?.from && leader?.to) {
-    commands.push(pathThrough([leader.from, leader.to], colour, [thin, "dash pattern=on 4pt off 3pt"]));
-  }
 
+  /*
+   * THE HEADS, AT THE PLACES AND DIRECTIONS THE MODEL STATES.
+   *
+   * A linear, radial or angular dimension states them explicitly - including
+   * the inside/outside convention and the diameter's two heads - so the source
+   * carries exactly the heads the canvas draws. A footprint with no list falls
+   * back to the ends of its own line, which is what every dimension drawn before
+   * the list existed meant.
+   */
+  const heads = Array.isArray(graphics.arrowheads) && graphics.arrowheads.length
+    ? graphics.arrowheads
+    : Array.isArray(line) && line.length === 2
+      ? [
+          { at: line[0], direction: { x: line[1].x - line[0].x, y: line[1].y - line[0].y } },
+          { at: line[1], direction: { x: line[0].x - line[1].x, y: line[0].y - line[1].y } },
+        ]
+      : [];
+
+  const arrowMm = dimensionArrowMm(object?.style || {});
+
+  heads.forEach((head) => {
+    push(dimensionArrowhead(head.at, head.direction, main, arrowMm), [...definitions]);
+  });
+
+  /*
+   * THE TEXT.
+   *
+   * At the frame's centre, in the frame's own type size and rotation, with a
+   * `fill=white` backing so the dimension line does not run through the number -
+   * the same clearance the canvas's glyph halo gives it. The size is the model's
+   * PRINT size in points - the number in the Features panel and the quick-access
+   * control - so the exported figure carries the sheet's physical type. The
+   * family and weight are the label's own, and the alignment is carried by the
+   * anchor, exactly as the canvas draws it.
+   */
   const frame = graphics.textFrame;
 
-  if (frame && valid(frame.center)) {
-    const width = Math.max(1, finite(frame.width, 8));
-    const height = Math.max(1, finite(frame.height, 5));
+  const textAt = frame ? { x: frame.x ?? frame.center?.x, y: frame.y ?? frame.center?.y } : null;
 
-    commands.push(
-      `\\draw[${colour}] (${num(finite(frame.center.x) - width / 2)},${num(
-        finite(frame.center.y) - height / 2
-      )}) rectangle (${num(finite(frame.center.x) + width / 2)},${num(
-        finite(frame.center.y) + height / 2
-      )});`
+  if (valid(textAt) && String(graphics.text ?? "").trim()) {
+    const sizePt = Number(graphics.label?.fontPt) || Number(frame?.fontSize) || 11;
+
+    const rotation = Number.isFinite(Number(frame?.angle)) && Math.abs(Number(frame.angle)) > 1e-6
+      ? `, rotate=${num(frame.angle)}`
+      : "";
+
+    const alignment = String(frame?.alignment || "center");
+
+    const anchor = alignment === "left" ? "west" : alignment === "right" ? "east" : "center";
+
+    const weight = String(object?.style?.bold) === "true" ? `\\bfseries` : "";
+
+    const family = labelFamily(object?.style);
+
+    push(
+      `\\node[anchor=${anchor}, fill=white, inner sep=1.5pt, font=${family}\\fontsize{${num(sizePt, 2)}}{${num(
+        sizePt * 1.2,
+        2,
+      )}}\\selectfont${weight}, text=${colour}${rotation}] at ${point(
+        finite(textAt.x),
+        finite(textAt.y),
+      )} {${texText(graphics.text)}};`,
     );
   }
 
-  const textAt =
-    frame && valid(frame)
-      ? frame
-      : frame && valid(frame.center)
-      ? frame.center
-      : Array.isArray(line) && line.length === 2
-        ? {
-            x: (finite(line[0].x) + finite(line[1].x)) / 2,
-            y: (finite(line[0].y) + finite(line[1].y)) / 2
-          }
-        : null;
+  return join(definitions, commands.filter(Boolean).join("\n"));
+}
 
-  if (textAt && String(graphics.text ?? "").trim()) {
-    commands.push(
-      `\\node[anchor=center, font=\\fontsize{${num((frame?.fontSize || 11)*0.75)}}{${num((frame?.fontSize || 11)*0.9)}}\\selectfont, text=${colour}${frame?.angle ? `, rotate=${num(frame.angle)}` : ""}] at ${point(finite(textAt.x), finite(textAt.y))} {${texText(graphics.text)}};`
-    );
+/*
+ * THE LABEL'S FONT FAMILY, AS LATEX SELECTS IT.
+ *
+ * The canvas paints a dimension's number in the sans-serif face it states. A
+ * sans face needs no package in a `standalone` document (`\sffamily` is what the
+ * default family already is), and a serif note chooses `\rmfamily` - so the
+ * printed number is in the same face as the one on the sheet, with no package
+ * the preamble does not already load.
+ */
+function labelFamily(style) {
+  const family = String(style?.fontFamily || "");
+
+  if (/times/i.test(family)) {
+    return "\\rmfamily ";
   }
 
-  return commands.filter(Boolean).join("\n");
+  if (/courier/i.test(family)) {
+    return "\\ttfamily ";
+  }
+
+  return "\\sffamily ";
 }
 
 function serializeDimension(object, options) {
@@ -715,15 +917,8 @@ function serializeDimension(object, options) {
   }
 
   const colour = strokeOf(object);
-  const lineWidth = Number(object.style?.lineWidth) || 0.5;
 
-  const body = dimensionToTikz(
-    graphics,
-    colour,
-    Math.max(0.4, lineWidth * 0.56)
-  );
-
-  return body ? join(colourPrelude([object.style?.stroke]), body) : null;
+  return dimensionToTikz(object, graphics, colour);
 }
 
 /*

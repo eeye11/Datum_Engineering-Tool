@@ -28,6 +28,60 @@ import { fitDrawingToView } from "../../../components/layout/workspace/viewport.
 import { ROUTE_PHASE, ELBOW_PHASE, cancelRouteConstruction, cancelElbowConstruction } from "./pipe-duct-tool.js";
 import { removeLastFreeformVertex } from "../geometry/geometry-creation.js";
 import { formatDrawingSource } from "../commands/source-commands.js";
+import { beginTextNodeAt } from "../annotate/annotate-creation.js";
+import { openNoteEditorFor } from "./canvas-click.js";
+
+/*
+ * THE SELECTED TEXT NODE, if the selection is one a student can write into.
+ * A note is the free-text kind; a generated annotation's text is a reading of
+ * its feature, so it is not offered here.
+ */
+function activeTextNode() {
+    const selected = drawingState.selectedObjects?.length
+        ? drawingState.selectedObjects[drawingState.selectedObjects.length - 1]
+        : null;
+
+    const object = selected && typeof selected === "object"
+        ? selected
+        : drawingState.objects.find(candidate => candidate.id === selected);
+
+    /*
+     * A node WITH TEXT is written into; an empty one is a node the student has
+     * not written yet, so Enter is still "place another one". That keeps Enter
+     * from resurrecting a stale empty node instead of making a new one.
+     */
+    if (
+        object &&
+        object.type === "annotate" &&
+        object.annotateKind === "note" &&
+        String(object.text || "").length
+    ) {
+        return object;
+    }
+
+    return null;
+}
+
+/*
+ * WHERE THE POINTER LAST WAS, in drawing units.
+ *
+ * The canvas keeps the pointer's sheet position in editor state as it moves,
+ * so Enter places the text under the cursor - the same point a click would have
+ * used - rather than at a guessed corner.
+ */
+function pointerPlacementPoint() {
+    const at = editorState.pointerPosition || editorState.lastPointerPosition;
+
+    if (
+        at &&
+        Number.isFinite(Number(at.x)) &&
+        Number.isFinite(Number(at.y))
+    ) {
+        return { x: Number(at.x), y: Number(at.y) };
+    }
+
+    return null;
+}
 
 /*
  * Wire this part of the editor to the page. Called once, at start-up,
@@ -573,6 +627,36 @@ export function installKeyboardShortcuts() {
                 if (finished) {
                     event.preventDefault();
                     return;
+                }
+
+                /*
+                 * ENTER ON AN IDLE CANVAS PLACES A TEXT NODE.
+                 *
+                 * A student writing beside a drawing should not have to change
+                 * tool to add a line of text. The node is created empty at the
+                 * pointer's last place on the sheet and its box is opened on the
+                 * canvas - the SAME node and the SAME editor the Note tool
+                 * creates and opens (see `beginTextNodeAt`).
+                 *
+                 * ONLY WHEN NOTHING ELSE WANTS THE KEY: a running construction
+                 * is completed first, and a selected note is written into (or
+                 * deselected) before a new one is made.
+                 */
+                if (!editorState.modifySession && !editorState.pendingPlacement) {
+                    const selectedNote = activeTextNode();
+
+                    if (selectedNote) {
+                        event.preventDefault();
+                        openNoteEditorFor(selectedNote);
+                        return;
+                    }
+
+                    const at = pointerPlacementPoint();
+
+                    if (at && beginTextNodeAt(at)) {
+                        event.preventDefault();
+                        return;
+                    }
                 }
 
                 if (deselectIfJustCreated()) {

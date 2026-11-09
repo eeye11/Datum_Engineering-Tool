@@ -657,6 +657,17 @@ function openInline(options, anchor) {
  * panning or arming a tool waits until the entry is finished.
  */
 function openCanvasText(options) {
+  /*
+   * A VISIBLE BOX ON THE DRAWING SPACE, NOT A POPUP.
+   *
+   * The box is a child of the canvas element, positioned in the canvas's own
+   * pixel frame - the frame the viewport projects drawing coordinates into - so
+   * it sits AT the note's anchor and moves with the drawing when the student
+   * zooms, pans or resizes the window. A `position: fixed` prompt anchored to the
+   * window looked placed until anything moved; a box inside the canvas is part
+   * of the sheet.
+   */
+  const canvas = enggInlineEntry.canvasElement();
   const host = document.createElement("div");
   host.className = "drawing-canvas-text-editor";
   host.dataset.inline = "true";
@@ -678,16 +689,58 @@ function openCanvasText(options) {
    * menu now, and it inserts at THIS field's caret because the field is what
    * has focus.
    */
-  document.body.append(host);
+  (canvas || document.body).append(host);
   openDialog = host;
   let finished = false;
 
+  /*
+   * THE BOX IS WRITTEN IN THE NOTE'S OWN TYPE, AND THAT IS NOT CONDITIONAL.
+   *
+   * The styling used to happen only after the field had been PLACED - so on a
+   * page where the canvas has no measurable box (or ``projection`` has no
+   * camera to use) the field came up in the browser's default type, looking
+   * like a form rather than like the words it is editing. The type is a fact
+   * about the OBJECT, so it is applied first and the placement then only
+   * decides WHERE the box sits.
+   */
+  const typography = noteTextStyle(options.object?.style);
+
+  const applyTypography = (zoom) => {
+    const zoomed = Number(zoom) || 1;
+    const font = noteFontPixels(options.object?.style, zoomed);
+    const align = typography.align;
+
+    input.style.fontSize = `${font}px`;
+    input.style.lineHeight = `${font * typography.lineSpacing}px`;
+    input.style.fontFamily = typography.fontFamily;
+    input.style.fontWeight = typography.bold ? "bold" : "normal";
+    input.style.fontStyle = typography.italic ? "italic" : "normal";
+    input.style.textDecoration = typography.underline ? "underline" : "none";
+    input.style.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
+    input.style.color = /^#[0-9a-f]{6}$/i.test(String(options.object?.style?.stroke || ""))
+      ? options.object.style.stroke
+      : "var(--datum-ink)";
+
+    return font;
+  };
+
+  applyTypography(1);
+
   const place = () => {
-    const at = enggInlineEntry.clientPointForObject(options.object, {state:options.state});
-    if (!at) return;
-    const zoom = options.state?.camera?.zoom || 1;
-    const typography = noteTextStyle(options.object?.style);
-    const font = noteFontPixels(options.object?.style, zoom);
+    const box = enggInlineEntry.canvasBounds(
+      canvas || enggInlineEntry.canvasElement(),
+    );
+    const world = enggInlineEntry.modelPointForTextEntry(options.object);
+
+    if (!box || !world) return;
+
+    const projection = enggInlineEntry.createProjection(
+      options.state?.camera,
+      box,
+    );
+    const at = projection.toPixels(world);
+    const zoom = projection.scale / 2.4;
+    const font = applyTypography(zoom);
     const lines = String(input.value || " ").split("\n");
 
     /*
@@ -705,23 +758,21 @@ function openCanvasText(options) {
     host.style.top = `${at.y - height + font * 0.2}px`;
     host.style.width = `${width}px`;
     host.style.height = `${height}px`;
-    input.style.fontSize = `${font}px`;
-    input.style.lineHeight = `${font * typography.lineSpacing}px`;
-    input.style.fontFamily = typography.fontFamily;
-    input.style.fontWeight = typography.bold ? "bold" : "normal";
-    input.style.fontStyle = typography.italic ? "italic" : "normal";
-    input.style.textDecoration = typography.underline ? "underline" : "none";
-    input.style.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
-    input.style.color = /^#[0-9a-f]{6}$/i.test(String(options.object?.style?.stroke || ""))
-      ? options.object.style.stroke
-      : "var(--datum-ink)";
   };
+  /*
+   * A NEW NODE CANCELLED WHILE STILL EMPTY LEAVES NOTHING BEHIND.
+   *
+   * Escape on a note that was just placed and never written is the student
+   * saying "not here after all", so the node is removed rather than left as an
+   * invisible, unselectable object. A node that already had text keeps it.
+   */
+  const startedEmpty = !String(options.text || "").length;
   const finish = (cancel = false) => {
     if (finished) return;
     finished = true;
     const text = input.value;
     close();
-    if (cancel) options.onCancel?.();
+    if (cancel) options.onCancel?.({ startedEmpty });
     else options.onApply?.(text);
   };
   closeCurrent = () => finish(true);

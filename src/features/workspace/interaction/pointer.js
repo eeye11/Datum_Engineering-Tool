@@ -1129,7 +1129,18 @@ export function updateInteractionFeedback(
                 }
               : null;
 
+    /*
+     * THE POINTER'S PLACE ON THE SHEET IS REMEMBERED.
+     *
+     * A keyboard action that places something - Enter creates a text node - has
+     * no event of its own, so it uses the last point the pointer was at. It is
+     * the same drawing coordinate a click there would produce, because it is
+     * read from the same resolution.
+     */
     if (readable) {
+        editorState.pointerPosition = { x: readable.x, y: readable.y };
+
+        /*
         /*
          * THE ORDINATE, IN THE GRAPH'S OWN UNITS.
          *

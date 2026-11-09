@@ -808,6 +808,51 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
         if (preview.placement) {
             const placement = preview.placement;
 
+            /*
+             * THE FINISHED OBJECT, WHERE THE EDITOR CAN DESCRIBE ONE.
+             *
+             * A graph being placed is drawn as the graph it will become - its
+             * box, axes, grid and curves - through the same renderer the sheet
+             * uses. The ink alone was the old preview, and it was a different
+             * picture from the committed object: a handful of strokes placed,
+             * a boxed graph with axes produced.
+             */
+            if (preview.object) {
+                const group = createSvgElement("g");
+
+                group.classList.add("drawing-placement-object");
+                group.setAttribute("opacity", "0.72");
+
+                appendEntity(
+                    group,
+                    { ...preview.object, isPreview: true },
+                    state,
+                    bounds
+                );
+
+                /* The anchor: the point that lands on the page grid. */
+                const anchorAt = toScreen({
+                    x: placement.anchor.x * placement.scale + placement.dx,
+                    y: placement.anchor.y * placement.scale + placement.dy
+                });
+
+                group.appendChild(
+                    createSvgElement("circle", {
+                        cx: anchorAt.x,
+                        cy: anchorAt.y,
+                        r: 4,
+                        fill: "none",
+                        stroke: style.stroke,
+                        "stroke-width": 1.5,
+                        "stroke-dasharray": "3 2"
+                    })
+                );
+
+                svg.appendChild(group);
+
+                return;
+            }
+
             const placed = (point) =>
                 toScreen({
                     x: point.x * placement.scale + placement.dx,

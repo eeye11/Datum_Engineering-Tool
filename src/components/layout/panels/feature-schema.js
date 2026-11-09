@@ -1397,12 +1397,21 @@ const FIELDS = {
             object.content = String(value).trim(); delete object.dimensionError; return true;
         }
     },
+    /*
+     * A DIMENSION'S TEXT SIZE, IN POINTS.
+     *
+     * The same `style.fontSize` the quick-access control in the menu bar writes,
+     * and the same number the exported `\fontsize` states - so the panel, the
+     * toolbar and the source all quote one value with no unit conversion between
+     * them. The range is a printed one (4..200 pt); the old 6..64 clamped a
+     * perfectly reasonable 72 pt title out of existence.
+     */
     dimensionTextSize: {
-        kind:"number",label:"Text size (px)",min:6,max:64,step:1,
+        kind:"number",label:"Text size (pt)",min:4,max:200,step:1,
         applies:object=>object.type === "dimension",
-        read:object=>object.style?.fontSize || 11,
+        read:object=>Number(object.style?.fontSize) > 0 ? Number(object.style.fontSize) : 11,
         write:(object,value)=>{
-            const size=Number(value);if(!Number.isFinite(size)||size<6||size>64)return false;
+            const size=Number(value);if(!Number.isFinite(size)||size<4||size>200)return false;
             object.style={...object.style,fontSize:size};return true;
         }
     },
@@ -1433,6 +1442,29 @@ const FIELDS = {
     ]}),
     noteIndent: noteStyleField("indent", "number", "Indent (mm)", {min:0,max:1000,step:1}),
     noteSpacing: noteStyleField("lineSpacing", "number", "Line spacing", {min:1,max:3,step:0.1}),
+    /*
+     * A DIMENSION IS DRAWN WITH A PEN, so it gets its own colour and thickness.
+     *
+     * It is NOT added to STROKE_TYPES: that set also drives the Fill section
+     * and the rotation handle, neither of which means anything for a
+     * measurement. So the three pen fields are repeated here, against the
+     * dimension alone - the same read and write helpers, so the panel row, the
+     * canvas and the generated source stay one value.
+     */
+    dimensionStroke: {
+        kind:"colour", label:"Dimension colour",
+        applies: object => object.type === "dimension",
+        read: strokeOf,
+        write: setStroke
+    },
+    dimensionLineWidth: {
+        kind:"choice", label:"Dimension thickness",
+        applies: object => object.type === "dimension",
+        read: thicknessOf,
+        /* The same writer the shape thickness uses: one validation, one form. */
+        write: (object, value) => FIELDS.lineWidth.write(object, value),
+        options: THICKNESS_OPTIONS.map(({ value, label }) => ({ value, label }))
+    },
     dimensionMeasurement: {
         kind:"readonly", label:"Measurement",
         applies: object => object.type === "dimension",
@@ -2170,7 +2202,7 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
-    { id: "dimension", heading: "Dimension", fields: ["dimensionContent", "dimensionTextSize", "dimensionMeasurement", "dimensionReferences", "dimensionStatus"] },
+    { id: "dimension", heading: "Dimension", fields: ["dimensionContent", "dimensionStroke", "dimensionLineWidth", "dimensionTextSize", "dimensionMeasurement", "dimensionReferences", "dimensionStatus"] },
     { id: "plant", heading: "Plant", fields: ["plantInputs", "plantOutputs", "plantShowNodeLabels", "plantLabel", "blockLabel", "blockLowerLabel", "plantNodeLabel"] },
     { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
     { id: "gain", heading: "Gain", fields: ["gainValue"] },

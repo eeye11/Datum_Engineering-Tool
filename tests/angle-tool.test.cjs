@@ -24,8 +24,11 @@ test('Angle picks two lines, previews a true right angle, asks for a label and k
  model.setActiveTool(state,'angle');click({x:-20,y:0});assert.equal(state.interaction.dimensionStage,'first');
  click({x:10,y:40});assert.equal(state.interaction.dimensionStage,'placement');
  click({x:30,y:20});
- const popup=document.querySelector('.drawing-creation-dimension');assert.equal(popup.getAttribute('aria-label'),'Angle');
- const input=popup.querySelector('input');assert.ok(input.value.includes('90'),'default label is the actual angle');
+ const popup=document.querySelector('.drawing-creation-dimension');
+ assert.equal(popup,null,'placing an angle opens no popup');
+ const creation=document.querySelector('.drawing-dimension-text-editor');
+ assert.ok(creation,'the angle label is edited on the page');
+ const input=creation.querySelector('input');assert.ok(input.value.includes('90'),'default label is the actual angle');
  input.value='θ';input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
  await Promise.resolve();
  /*
@@ -40,9 +43,17 @@ test('Angle picks two lines, previews a true right angle, asks for a label and k
  assert.ok(Math.abs(g.measurement.value-90)<1e-9);
  const saved=JSON.parse(model.serializeDrawing(state));const loaded=saved.objects.find(o=>o.id===d.id);
  assert.equal(dimensions.formatMeasurement(loaded,saved),'θ');assert.equal(dimensions.graphicsFor(loaded,saved).rightAngle,true);
+ /*
+  * THE ANGLE'S LABEL IS EDITED WHERE IT IS DRAWN: the in-page field, over the
+  * number, announced as an angle rather than as a length - and Enter commits it.
+  */
  require(locate('dimension-tool.js')).openDimensionValuePrompt(d);
- const editor=document.querySelector('.dimension-value-editor');assert.equal(editor.getAttribute('aria-label'),'Angle');
- editor.querySelector('input').value='90°';editor.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+ const editor=document.querySelector('.drawing-dimension-text-editor');
+ assert.ok(editor,'the angle label opens in place');
+ assert.equal(editor.getAttribute('aria-label'),'Edit angle label');
+ const field=editor.querySelector('input');
+ field.value='90°';
+ field.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
  assert.equal(state.objects.find(o=>o.id===d.id).content,'90°');
 });
 test('right-angle corners remain accurate for rotated geometry; near-right angles stay arcs',()=>{

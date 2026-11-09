@@ -257,7 +257,10 @@ const graph = graphEditor.openSketchEditor(null, {
 
 const graphSvg = graph.querySelector("[data-sketch-svg]");
 
+/* The canvas is measured, so the test gives it the box a stage would. */
 giveBox(graphSvg, 900, 520);
+
+graph.__datumSketch.refresh();
 
 check("it opens with a drawing surface", Boolean(graphSvg));
 
@@ -268,6 +271,33 @@ check(
 );
 
 check("with no strokes yet", paths(graphSvg) === 0, String(paths(graphSvg)));
+
+/*
+ * THE UNNUMBERED GRID.
+ *
+ * A sketch's grid is a drawing aid, so its lines and ticks are drawn and NO
+ * number is printed anywhere on the canvas. The numeric system is untouched -
+ * the mapping, the spacing and snapping all still use it - which is what the
+ * coordinate and snap tests prove.
+ */
+check(
+  "a sketch prints no numbers on its grid or axes",
+  graphSvg.querySelectorAll('[data-label="tick"]').length === 0,
+  [...graphSvg.querySelectorAll("text")].map((node) => node.textContent).join(", "),
+);
+
+check(
+  "while keeping the axis names, which are not numbers",
+  [...graphSvg.querySelectorAll('[data-label="axis-name"]')].map((node) => node.textContent).join("") ===
+    "xy",
+  [...graphSvg.querySelectorAll("text")].map((node) => node.textContent).join(", "),
+);
+
+check(
+  "and no markers at grid intersections",
+  graphSvg.querySelectorAll("circle").length === 0,
+  String(graphSvg.querySelectorAll("circle").length),
+);
 
 pointer(graphSvg, "pointerdown", 300, 300);
 
@@ -294,25 +324,85 @@ check(
   String(paths(graphSvg)),
 );
 
+check(
+  "drawn as the correction, because Corrected is the default view",
+  graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 1,
+  String(graphSvg.querySelectorAll(".sketch-corrected-stroke").length),
+);
+
 drawStroke(graphSvg, { x: 300, y: 400 }, { x: 600, y: 400 });
 
 check(
   "a second stroke is added",
-  paths(graphSvg) === 2,
-  String(paths(graphSvg)),
+  graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 2,
+  String(graphSvg.querySelectorAll(".sketch-corrected-stroke").length),
 );
 
 click(graph.querySelector("[data-sketch-undo]"));
 
 check(
   "Undo removes one stroke",
-  paths(graphSvg) === 1,
-  String(paths(graphSvg)),
+  graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 1,
+  String(graphSvg.querySelectorAll(".sketch-corrected-stroke").length),
 );
 
 click(graph.querySelector("[data-sketch-redo]"));
 
-check("Redo puts it back", paths(graphSvg) === 2, String(paths(graphSvg)));
+check(
+  "Redo puts it back",
+  graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 2,
+  String(graphSvg.querySelectorAll(".sketch-corrected-stroke").length),
+);
+
+/* THE THREE VIEWS. */
+click(graph.querySelector('[data-sketch-view="original"]'));
+
+check(
+  "the Original view draws the strokes as they were drawn",
+  graphSvg.querySelectorAll(".sketch-raw-stroke").length === 2 &&
+    graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 0,
+);
+
+click(graph.querySelector('[data-sketch-view="overlay"]'));
+
+check(
+  "the Overlay view draws both",
+  graphSvg.querySelectorAll(".sketch-raw-stroke").length === 2 &&
+    graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 2,
+);
+
+click(graph.querySelector('[data-sketch-view="corrected"]'));
+
+check(
+  "and Corrected draws only the correction",
+  graphSvg.querySelectorAll(".sketch-raw-stroke").length === 0 &&
+    graphSvg.querySelectorAll(".sketch-corrected-stroke").length === 2,
+);
+
+/* POINTS: ONLY THE STUDENT'S OWN. */
+click(graph.querySelector("[data-sketch-tool-point]"));
+pointer(graphSvg, "pointerdown", 450, 260);
+pointer(graphSvg, "pointerup", 450, 260);
+
+const withPoint = graph.__datumSketch.stats();
+
+check(
+  "a click with the Point tool places exactly one point",
+  withPoint.points.length === 1,
+  JSON.stringify(withPoint.points),
+);
+
+check(
+  "and it is drawn as a marker",
+  graphSvg.querySelectorAll("[data-sketch-handle]").length === 1,
+  String(graphSvg.querySelectorAll("[data-sketch-handle]").length),
+);
+
+check(
+  "with no marker for the hundreds of stroke samples",
+  graphSvg.querySelectorAll("circle").length === 2,
+  `${graphSvg.querySelectorAll("circle").length} circles for ${withPoint.strokes.reduce((total, n) => total + n, 0)} samples`,
+);
 
 /* An existing graph loads visibly. */
 graphEditor.closeSketchEditor();
@@ -339,12 +429,9 @@ const reopenedGraph = graphEditor.openSketchEditor(existing, {
 
 const reopenedGraphSvg = reopenedGraph.querySelector("[data-sketch-svg]");
 
-/*
- * THE FRAME PAINTER DRAWS THE GRAPH'S OWN FUNCTIONS TOO, so a reopened sketch
- * shows its curve twice over: once as the frame's function component and once
- * as the editor's own stroke. Both are the same geometry, and both are visible
- * - which is the point. What matters is that the canvas is not blank.
- */
+giveBox(reopenedGraphSvg, 900, 520);
+reopenedGraph.__datumSketch.refresh();
+
 check(
   "an existing graph loads its strokes visibly",
   paths(reopenedGraphSvg) >= 1,
@@ -355,6 +442,11 @@ check(
   "and its frame with them",
   lines(reopenedGraphSvg) > 20,
   String(lines(reopenedGraphSvg)),
+);
+
+check(
+  "and it is still unnumbered",
+  reopenedGraphSvg.querySelectorAll('[data-label="tick"]').length === 0,
 );
 
 graphEditor.closeSketchEditor();

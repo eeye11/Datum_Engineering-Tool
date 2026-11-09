@@ -140,14 +140,14 @@ console.log("\n  the release uses the same decision, and consumes its click\n");
 
 check(
   "a release without travel is offered to the shared decision",
-  /!session\.moved &&\s*\n\s*finishCreationClick\(session\)/.test(releaseSection),
+  /if \(!session\.moved\) \{[\s\S]{0,600}?finishCreationClick\(session\)/.test(
+    releaseSection,
+  ),
 );
 
 check(
   "and the trailing browser click is swallowed when it has been answered",
-  /if \(\s*!session\.moved &&\s*\n?\s*finishCreationClick\(session\)\s*\n?\s*\) \{\s*\n\s*return true;/.test(
-    releaseSection,
-  ),
+  /if \(answered\) \{\s*return true;/.test(releaseSection),
   "otherwise the same click would also be read as a first point",
 );
 

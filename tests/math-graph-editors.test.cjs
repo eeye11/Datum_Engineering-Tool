@@ -275,14 +275,15 @@ check("the Sketch Editor opens", Boolean(sketchEditor));
 
 check(
   "and it is titled for the graph",
-  sketchEditor?.querySelector(".plot-editor-title")?.textContent.trim() ===
+  sketchEditor?.querySelector(".sketch-app-title")?.textContent.trim() ===
     "Graph - Sketch",
 );
 
 check(
-  "it has Draw and Erase",
-  Boolean(sketchEditor.querySelector('[data-sketch-tool="draw"]')) &&
-    Boolean(sketchEditor.querySelector('[data-sketch-tool="erase"]')),
+  "it has Draw, Point and Erase",
+  Boolean(sketchEditor.querySelector('[data-sketch-tool-draw]')) &&
+    Boolean(sketchEditor.querySelector('[data-sketch-tool-point]')) &&
+    Boolean(sketchEditor.querySelector('[data-sketch-tool-erase]')),
 );
 
 check(
@@ -299,7 +300,46 @@ check(
 
 check(
   "and a drawing surface",
-  Boolean(sketchEditor.querySelector("[data-sketch-preview]")),
+  Boolean(sketchEditor.querySelector("[data-sketch-svg]")),
+);
+
+/*
+ * THE REDESIGNED SHELL.
+ *
+ * The old editor had a tall tools sidebar, a fixed-size preview and no point
+ * control at all. The replacement is a compact icon toolbar, a canvas that
+ * fills the stage, a collapsible inspector and a view selector - so a check for
+ * "the editor opened" no longer says anything about the interface.
+ */
+check(
+  "the canvas is the dominant element, inside a stage and not a fixed box",
+  Boolean(sketchEditor.querySelector(".sketch-stage [data-sketch-svg]")) &&
+    !/viewBox="0 0 900/.test(sketchEditor.innerHTML),
+);
+
+check(
+  "the inspector holds the point editor and the sketch settings",
+  Boolean(sketchEditor.querySelector("[data-sketch-inspector] [data-sketch-points]")) &&
+    Boolean(sketchEditor.querySelector("[data-sketch-inspector] [data-sketch-field=\"xMin\"]")) &&
+    Boolean(sketchEditor.querySelector("[data-sketch-inspector] [data-sketch-toggle-setting=\"snap\"]")),
+);
+
+check(
+  "and the view selector offers Original, Corrected and Overlay",
+  ["original", "corrected", "overlay"].every((view) =>
+    Boolean(sketchEditor.querySelector(`[data-sketch-view="${view}"]`)),
+  ),
+);
+
+check(
+  "with Corrected chosen by default, so the result is visible at once",
+  sketchEditor.querySelector('[data-sketch-view="corrected"]').classList.contains("active"),
+);
+
+check(
+  "and the correction settings are present",
+  Boolean(sketchEditor.querySelector("[data-sketch-strength]")) &&
+    Boolean(sketchEditor.querySelector('[data-sketch-toggle-setting="straighten"]')),
 );
 
 check(

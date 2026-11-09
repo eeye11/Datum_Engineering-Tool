@@ -7,12 +7,23 @@
  * unless it must lose to something later.
  *
  * The build inlines these imports into one stylesheet.
+ *
+ * THE WIDTH BREAKPOINTS ARE ONE DESCENDING SERIES, which is why graph-sketch
+ * sits BEFORE responsive: its own hierarchy (1180 -> 980 -> 900 -> 620) starts
+ * above the panels' (900 -> 760 -> 620 -> 460), and the two read as one
+ * progression down the sheet. A file whose breakpoints restart at a WIDER view
+ * than the ones already written would read as a second, conflicting scale.
+ *
+ * graph-sketch's rules are all scoped to the graph editor's `.sketch-*`
+ * classes, so moving it here changes nothing in what it applies to - only where
+ * the media queries are declared.
  */
 @import url("./editor/workspace-chrome.css");
 @import url("./editor/settings-and-pickers.css");
 @import url("./editor/toolbar.css");
 @import url("./editor/side-panels.css");
 @import url("./editor/features-panel.css");
+@import url("./editor/graph-sketch.css");
 @import url("./editor/responsive.css");
 @import url("./editor/canvas.css");
 @import url("./editor/sheets-and-references.css");

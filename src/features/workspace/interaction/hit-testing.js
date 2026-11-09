@@ -516,15 +516,19 @@ function dimensionContainsPoint(
     }
 
     /*
-     * The TEXT, so the number can be grabbed as well as the line.
+     * THE TEXT, AS A BOX AROUND THE GLYPHS.
+     *
+     * The number is drawn as text CENTRED on the frame's centre, so the frame
+     * carries a centre and no extent - and testing the point against that centre
+     * alone made the label a single-pixel target. The box is built from the
+     * label's own measured size (the model's `label`), padded by the tolerance,
+     * turned with the frame's angle, so what is pickable is what is drawn.
      */
     if (
-        graphics.textFrame &&
-        distanceToSegment(
+        pointInQuad(
             point,
-            graphics.textFrame,
-            graphics.textFrame
-        ) <= tolerance
+            dimensionTextHitBox(graphics, tolerance)
+        )
     ) {
         return true;
     }
@@ -564,6 +568,101 @@ function dimensionContainsPoint(
             to &&
             distanceToSegment(point, from, to) <= tolerance
     );
+}
+
+/*
+ * THE BOX A DIMENSION'S NUMBER OCCUPIES, in world coordinates.
+ *
+ * From the model's own measured label (`graphics.label`, in drawing units)
+ * around the frame's centre, turned by the frame's angle - so an upright
+ * dimension's label is an upright box and a vertical dimension's is the tall
+ * one that is drawn. Padded by the pick tolerance, so the number is as easy to
+ * hit as the line is.
+ *
+ * Null when there is no label: a dimension with no text has nothing to click.
+ * `pointInQuad` answers false for that.
+ */
+function dimensionTextHitBox(graphics, tolerance) {
+    const frame = graphics?.textFrame;
+
+    const centre = frame
+        ? { x: frame.x ?? frame.center?.x, y: frame.y ?? frame.center?.y }
+        : null;
+
+    const label = graphics?.label;
+
+    if (
+        !label ||
+        !centre ||
+        !Number.isFinite(centre.x) ||
+        !Number.isFinite(centre.y) ||
+        !String(graphics.text ?? "").trim()
+    ) {
+        return null;
+    }
+
+    const pad = Number(tolerance) || 0;
+
+    const halfWidth = Math.max(0, Number(label.halfWidth) || 0) + pad;
+    const halfHeight = Math.max(0, Number(label.halfHeight) || 0) + pad;
+
+    const radians = ((Number(frame.angle) || 0) * Math.PI) / 180;
+
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+
+    const corner = (dx, dy) => ({
+        x: centre.x + dx * cos - dy * sin,
+        y: centre.y + dx * sin + dy * cos,
+    });
+
+    return [
+        corner(-halfWidth, -halfHeight),
+        corner(halfWidth, -halfHeight),
+        corner(halfWidth, halfHeight),
+        corner(-halfWidth, halfHeight),
+    ];
+}
+
+/*
+ * Whether a point is inside a quadrilateral given in order.
+ *
+ * Four half-plane tests are exact for a convex quad, which a text box is - and
+ * an empty or malformed box answers false rather than being treated as
+ * everything.
+ */
+function pointInQuad(point, quad) {
+    if (
+        !point ||
+        !Array.isArray(quad) ||
+        quad.length !== 4 ||
+        quad.some((corner) => !corner || !Number.isFinite(corner.x) || !Number.isFinite(corner.y))
+    ) {
+        return false;
+    }
+
+    let sign = 0;
+
+    for (let index = 0; index < 4; index += 1) {
+        const a = quad[index];
+        const b = quad[(index + 1) % 4];
+
+        const cross = (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
+
+        if (Math.abs(cross) < 1e-12) {
+            continue;
+        }
+
+        const side = cross > 0 ? 1 : -1;
+
+        if (sign === 0) {
+            sign = side;
+        } else if (side !== sign) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /*

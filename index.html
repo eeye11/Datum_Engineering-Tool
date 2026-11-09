@@ -500,6 +500,44 @@
                     </span>
                     </div>
 
+                    <!--
+                    =========================================================
+                    FONT SIZE: THE QUICK-ACCESS TEXT SIZE CONTROL
+                    =========================================================
+
+                    A NUMBER FIELD WITH ITS UNIT, beside the line properties and in
+                    the same box as the other value controls. It edits the ONE
+                    `style.fontSize` every text object already carries:
+
+                      a selected text object or dimension label  that object's
+                        size, changed in place, undoable, and written to the
+                        source on the same commit;
+                      nothing text-like selected              the default for the
+                        next text drawn.
+
+                    IT IS NOT A SECOND SIZE SYSTEM. The Features panel's Font Size
+                    field and this input are two views of one property, so
+                    `syncStyleControls` writes both from the model and either one
+                    can be the door onto the same value.
+
+                    THE UNIT IS STATED, because a size without one is a guess.
+                    Text annotations state their size in points, which is also what
+                    the source prints (`\fontsize{11pt}`) and what a drafter
+                    writes - so the number in this field is the number in the
+                    exported document.
+                    -->
+                    <div class="drawing-strip-field drawing-strip-font-control"
+                    title="Text size in points">
+                    <label class="drawing-strip-font" for="drawingFontSize">
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M4 16L9 4l5 12"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M6 12h6"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M15 9h3M16.5 9v6M15 15h3"/></svg>
+                    <input id="drawingFontSize" class="drawing-strip-font-input"
+                    type="number" inputmode="decimal" step="1" min="4" max="200"
+                    value="11" aria-label="Text size in points"
+                    title="Text size: 11 pt">
+                    <span class="drawing-strip-font-unit" aria-hidden="true">pt</span>
+                    </label>
+                    </div>
+
                     <span class="drawing-style-strip-divider" aria-hidden="true"></span>
 
                     <!--

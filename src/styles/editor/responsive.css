@@ -65,6 +65,16 @@
     .drawing-topbar-hide .header-hide-text {
         display: none;
     }
+
+    /*
+     * THE RAIL'S HIDE BUTTON NARROWS WITH ITS LABEL. The word "Hide" goes at
+     * this width, so the room reserved for the button in the toolset bar's
+     * padding narrows with it - otherwise the reservation outlives the words it
+     * was sized for and clips the last toolset for nothing.
+     */
+    .drawing-top-rail {
+        --rail-hide-width: 30px;
+    }
 }
 
 @media (max-width: 760px) {

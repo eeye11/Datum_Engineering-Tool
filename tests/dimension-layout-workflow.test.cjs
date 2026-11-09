@@ -22,7 +22,9 @@ test('diagonal placement stays aligned and keeps the Dimension tool armed',async
   preview.updatePreview({rawPointerPoint:point,effectiveConstructionPoint:point});
   assert.equal(state.interaction.dimensionChoice,'aligned');
   click(point);
-  const input=document.querySelector('.drawing-creation-dimension input');input.value='L';
+  /* Placement creates the dimension and opens its IN-PAGE field - no popup. */
+  assert.equal(document.querySelector('.drawing-creation-dimension'),null);
+  const input=document.querySelector('.drawing-dimension-text-editor input');input.value='L';
   input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
   await Promise.resolve();
   /* The Dimension tool stays armed after committing one; Escape or empty canvas ends it. */

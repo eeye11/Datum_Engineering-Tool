@@ -4,13 +4,14 @@ const {bootApp,whenReady}=require('./helpers/boot-app.cjs');
 const {locate}=require('./helpers/source-path.cjs');
 const {window,document,error}=bootApp();
 if(error)throw error;
-let state,model,dimensions,drag,canvas;
+let state,model,dimensions,drag,canvas,handles;
 before(async()=>{
  await whenReady();
  ({drawingState:state}=require(locate('editor-state.js')));
  model=require(locate('drawing-state.js')).default;
  dimensions=require(locate('dimension-model.js')).default;
  drag=require(locate('drag.js'));
+ handles=require(locate('handles.js'));
  canvas=document.querySelector('.drawing-canvas');
  Object.defineProperties(canvas,{clientWidth:{value:900,configurable:true},clientHeight:{value:600,configurable:true}});
  canvas.getBoundingClientRect=()=>({left:0,top:0,width:900,height:600});
@@ -26,7 +27,14 @@ for(const kind of ['smart','variable']){
   const line=model.addObject(state,model.geometryFactories.line({x:-50,y:0},{x:50,y:0}));
   const d=model.addObject(state,model.geometryFactories.dimension({dimensionType:'horizontal',refs:[{featureId:line.id,anchor:'start'},{featureId:line.id,anchor:'end'}],placement:{x:0,y:30},dimensionKind:kind,content:kind==='variable'?'L':''}));
   model.commitDrawingChange(state,before);model.selectObject(state,d.id);
-  const start=dimensions.graphicsFor(d,state).textFrame;
+  /*
+   * THE HANDLE IS ON THE DIMENSION LINE, BESIDE THE NUMBER - never over it. So
+   * the drag starts at the handle the editor actually offers, not at the text's
+   * own centre (which is now the number's editable area, not a grab point).
+   */
+  const handle=handles.editableHandlesFor(state.objects.find(item=>item.id===d.id))[0];
+  assert.equal(handle.kind,'annotation-offset');
+  const start=handle.point;
   assert.equal(drag.beginManipulationDrag(event(start)),true);
   for(const dy of [5,10,15,15,15,20,10,-10]){
    drag.updateManipulationDrag(event({x:start.x,y:start.y+dy}));
@@ -36,7 +44,7 @@ for(const kind of ['smart','variable']){
   drag.finishManipulationDrag(event({x:start.x,y:start.y-10}));
   assert.deepEqual(state.objects.find(item=>item.id===line.id).geometry,line.geometry,'moving the annotation never resizes its geometry');
   const moved=state.objects.find(item=>item.id===d.id);
-  const next=dimensions.graphicsFor(moved,state).textFrame;
+  const next=handles.editableHandlesFor(moved)[0].point;
   assert.equal(drag.beginManipulationDrag(event(next)),true);
   drag.updateManipulationDrag(event({x:next.x,y:next.y+7}));drag.updateManipulationDrag(event({x:next.x,y:next.y+7}));
   drag.finishManipulationDrag(event({x:next.x,y:next.y+7}));

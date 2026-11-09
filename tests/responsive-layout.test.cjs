@@ -363,19 +363,44 @@ check(
 console.log("\n  the breakpoints are viewport-based, and progressive\n");
 
 {
-  const widths = [...css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)/g)]
+  /*
+   * THE PANEL BREAKPOINTS, AND ONLY THOSE.
+   *
+   * The progression this checks is the WORKSPACE's: full -> compact ->
+   * icon-only, driven by the panel widths. Other components have their own
+   * width queries for their own reasons - the graph editor's toolbar folds at
+   * 1180, the LaTeX dock fills the screen below 460 - and they are not part of
+   * this progression. Reading every `max-width` query in the sheet asserted
+   * something nobody designed: that unrelated dialogs happen to be declared in
+   * descending order too.
+   *
+   * So the file that OWNS the progression is read on its own. A breakpoint
+   * added there out of order still fails, which is the rule that matters.
+   */
+  const panelCss = fs
+    .readFileSync(path.join(SOURCE_ROOT, "styles", "editor", "responsive.css"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "");
+
+  const widths = [...panelCss.matchAll(/@media\s*\(max-width:\s*(\d+)px\)/g)]
     .map((m) => Number(m[1]))
     .filter((w) => w <= 900);
 
+  /*
+   * AND THEY ARE A PROGRESSION, NOT A SET. A width that appears twice in a row
+   * is one breakpoint, not two, so repeats are collapsed before the descent is
+   * checked - 900, 900, 760 reads as 900, 760.
+   */
+  const steps = widths.filter((w, i) => i === 0 || w !== widths[i - 1]);
+
   check(
     "there are several viewport breakpoints for the panels",
-    widths.length >= 3,
+    steps.length >= 3,
     `found ${widths.join(", ")}`,
   );
 
   check(
     "and they descend, so the progression is full -> compact -> icon-only",
-    widths.every((w, i) => i === 0 || w <= widths[i - 1]),
+    steps.every((w, i) => i === 0 || w < steps[i - 1]),
     `order: ${widths.join(", ")}`,
   );
 

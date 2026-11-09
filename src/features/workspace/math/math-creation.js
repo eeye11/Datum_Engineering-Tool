@@ -467,7 +467,11 @@ export function commitGraphFromPlot(result, existing, placement = null) {
 export function commitGraphFromSketch(result, existing, placement = null) {
   const strokes = Array.isArray(result?.strokes) ? result.strokes : [];
 
-  if (!strokes.length) {
+  const points = Array.isArray(result?.geometry?.points)
+    ? result.geometry.points
+    : [];
+
+  if (!strokes.length && !points.length) {
     return null;
   }
 
@@ -496,12 +500,43 @@ export function commitGraphFromSketch(result, existing, placement = null) {
     }),
   );
 
+  const settings = result?.geometry || {};
+
   if (existing) {
     const previous = enggDrawingState.snapshotDrawing(drawingState);
 
+    /*
+     * AN EDIT KEEPS THE OBJECT AND REPLACES WHAT THE EDITOR OWNS. The id, the
+     * name, the style and every relationship a Point or a Tangent holds to it
+     * survive; the curves, the points and the coordinate settings are the
+     * student's new answer. The position is untouched - the graph is already
+     * where they put it.
+     */
     existing.geometry = {
       ...existing.geometry,
       mode: "sketch",
+      showTickLabels: false,
+      xMin: Number.isFinite(Number(settings.xMin)) ? Number(settings.xMin) : existing.geometry.xMin,
+      xMax: Number.isFinite(Number(settings.xMax)) ? Number(settings.xMax) : existing.geometry.xMax,
+      yMin: Number.isFinite(Number(settings.yMin)) ? Number(settings.yMin) : existing.geometry.yMin,
+      yMax: Number.isFinite(Number(settings.yMax)) ? Number(settings.yMax) : existing.geometry.yMax,
+      yRangeExplicit: true,
+      xTickSpacing:
+        Number.isFinite(Number(settings.xTickSpacing)) && Number(settings.xTickSpacing) > 0
+          ? Number(settings.xTickSpacing)
+          : null,
+      yTickSpacing:
+        Number.isFinite(Number(settings.yTickSpacing)) && Number(settings.yTickSpacing) > 0
+          ? Number(settings.yTickSpacing)
+          : null,
+      gridDivisions: Number.isFinite(Number(settings.gridDivisions))
+        ? Number(settings.gridDivisions)
+        : existing.geometry.gridDivisions,
+      showGrid: settings.showGrid !== false,
+      showXAxis: settings.showXAxis !== false,
+      showYAxis: settings.showYAxis !== false,
+      equalUnits: settings.equalUnits !== false,
+      points: points.map((entry) => ({ ...entry })),
       functions,
     };
 
@@ -514,53 +549,132 @@ export function commitGraphFromSketch(result, existing, placement = null) {
     return existing;
   }
 
-  return commitSketchPlot(placed, { showOriginalTrace: true });
+  return commitSketchPlot(placed, {
+    showOriginalTrace: true,
+    geometry: settings,
+    points,
+    /*
+     * THE BOX GROWS WITH THE PLACEMENT, and is otherwise the range at a
+     * readable size. The strokes are already in graph coordinates, so the
+     * placement has already been applied to them above.
+     */
+    position: settings.position || { x: 0, y: 0 },
+    unitSize: settings.unitSize,
+  });
 }
 
 /* ============================================================
  * PLOT - SKETCH MODE
  * ============================================================
  *
- * The student draws the whole graph - axes, straight lines, curves - and the
- * strokes are reconstructed into ONE Plot. Each stroke becomes a function
- * component of that plot, so the curves are parts of the graph rather than
- * separate drawings that happen to sit on it.
+ * The student draws the whole graph - straight lines, curves and their own
+ * points - and the strokes are reconstructed into ONE Plot. Each stroke becomes
+ * a function component of that plot, so the curves are parts of the graph rather
+ * than separate drawings that happen to sit on it.
  *
- * The plot's box is the bounding box of everything drawn, and its coordinate
- * limits default to the standard -5..5 until the student sets them in Plot
- * Settings. Nothing is invented: the geometry is where they drew it, and the
- * numbers are the ones the panel states.
+ * THE STROKES ARE IN GRAPH COORDINATES, because that is what the editor drew
+ * them in: a stroke from (0, 0) to (5, 5) means the graph's own 0 to 5, not a
+ * count of pixels. So the box and the limits are derived from them together:
+ * the plot covers the student's configured range, with equal units, and the
+ * default box is the size a graph should be on the sheet. Nothing is invented -
+ * the numbers are the ones the editor shows in its point table.
+ *
+ * A BOX THAT COVERS THE RANGE, NOT ONE THAT HUGS THE INK. Sizing the box to the
+ * bounding box of the strokes made a graph whose ink was small and off-centre
+ * draw as a tiny plot, and moving it moved the range under it. The range is the
+ * graph's coordinate system and the box is its paper.
  */
 export function commitSketchPlot(strokes, options = {}) {
   const list = (Array.isArray(strokes) ? strokes : []).filter(
     (stroke) => stroke && Array.isArray(stroke.points) && stroke.points.length > 1,
   );
 
-  if (!list.length) {
+  if (!list.length && !(Array.isArray(options.points) && options.points.length)) {
     return null;
   }
 
-  const all = list.flatMap((stroke) => stroke.points);
+  const geometry = options.geometry || {};
 
-  const minX = Math.min(...all.map((point) => point.x));
-  const maxX = Math.max(...all.map((point) => point.x));
-  const minY = Math.min(...all.map((point) => point.y));
-  const maxY = Math.max(...all.map((point) => point.y));
+  /*
+   * A LIMIT IS A NUMBER OR IT IS UNSET. `null` and `""` coerce to 0, which
+   * would turn an unset -10..5 into 0..5 on commit - so only a genuine number
+   * (or a non-blank numeric string) is read as the student's range.
+   */
+  const readLimit = (key, fallback) => {
+    const value = geometry[key];
 
-  const width = Math.max(enggMathModel.MIN_GRAPH_SIDE, maxX - minX);
-  const height = Math.max(enggMathModel.MIN_GRAPH_SIDE, maxY - minY);
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))) {
+      return Number(value);
+    }
+
+    return fallback;
+  };
+
+  let xMin = readLimit("xMin", enggMathModel.DEFAULT_GRAPH_LIMITS.xMin);
+  let xMax = readLimit("xMax", enggMathModel.DEFAULT_GRAPH_LIMITS.xMax);
+  let yMin = readLimit("yMin", enggMathModel.DEFAULT_GRAPH_LIMITS.yMin);
+  let yMax = readLimit("yMax", enggMathModel.DEFAULT_GRAPH_LIMITS.yMax);
+
+  if (!(xMax > xMin)) {
+    xMin = enggMathModel.DEFAULT_GRAPH_LIMITS.xMin;
+    xMax = enggMathModel.DEFAULT_GRAPH_LIMITS.xMax;
+  }
+
+  if (!(yMax > yMin)) {
+    yMin = enggMathModel.DEFAULT_GRAPH_LIMITS.yMin;
+    yMax = enggMathModel.DEFAULT_GRAPH_LIMITS.yMax;
+  }
+
+  /*
+   * THE DEFAULT BOX: A GRAPH'S RANGE AT A READABLE SIZE, with equal units, so
+   * the box's proportions are the range's and a circle stays a circle.
+   */
+  const inset = enggMathModel.GRAPH_INSET;
+  const plotShareX = 1 - inset.left - inset.right;
+  const plotShareY = 1 - inset.top - inset.bottom;
+
+  const unit = Number(options.unitSize) > 0 ? Number(options.unitSize) : 18;
+
+  const width = Math.max(
+    enggMathModel.MIN_GRAPH_SIDE,
+    ((xMax - xMin) * unit) / plotShareX,
+  );
+
+  const height = Math.max(
+    enggMathModel.MIN_GRAPH_SIDE,
+    ((yMax - yMin) * unit) / plotShareY,
+  );
 
   const object = enggMathModel.createMathPlot(
-    { x: minX, y: minY },
+    options.position || { x: 0, y: 0 },
     width,
     height,
     {
       ...mathOptions(),
+      ...geometry,
       mode: "sketch",
+      showTickLabels: false,
+      xMin,
+      xMax,
+      yMin,
+      yMax,
+      yRangeExplicit: true,
+      /*
+       * THE MODE TRAVELS WITH THE RANGE. An automatic graph is saved as
+       * automatic so reopening it follows its geometry again; a manual one keeps
+       * the four numbers the student typed.
+       */
+      boundsMode: geometry.boundsMode === "manual" ? "manual" : "auto",
+      points: Array.isArray(options.points) ? options.points : [],
       functions: list.map((stroke) =>
         enggMathModel.createSketchFunction(stroke, {
           showOriginalTrace: options.showOriginalTrace === true,
           smoothing: Number(options.smoothing) || 0,
+          correction: stroke.correction || null,
         }),
       ),
     },

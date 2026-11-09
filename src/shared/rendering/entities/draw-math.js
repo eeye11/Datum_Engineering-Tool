@@ -35,6 +35,37 @@ function strokeOf(style) {
   return paintColour(style?.stroke || enggTheme.defaultLineColour());
 }
 
+/*
+ * THE DISPLAY SWITCHES A GRAPH IS DRAWN BY.
+ *
+ * The dispatcher is imported directly rather than reached through the global:
+ * the page's script tags publish the model globally, but under `require` there
+ * is no shared scope, and a painter that cannot answer this would silently draw
+ * a sketch's numbers - the one thing the sketch must not do.
+ */
+function gridDisplayOf(entity) {
+  if (typeof enggMathModel.gridDisplay === "function") {
+    return enggMathModel.gridDisplay(entity);
+  }
+
+  const geometry = entity?.geometry || {};
+
+  return {
+    sketch: geometry.mode === "sketch",
+    showGrid: geometry.showGrid !== false,
+    showTickLabels: geometry.mode !== "sketch" && geometry.showTickLabels !== false,
+  };
+}
+
+/* The values a graph's grid is drawn at, whichever build of the model is loaded. */
+function gridValuesOf(min, max, spacing, divisions) {
+  if (typeof enggMathModel.gridValues === "function") {
+    return enggMathModel.gridValues(min, max, spacing, divisions);
+  }
+
+  return enggMathModel.tickValues(min, max, spacing);
+}
+
 function widthOf(style) {
   return scaledStrokeWidth(Number(style?.lineWidth) || 0.5);
 }
@@ -108,7 +139,22 @@ function text(
   svg,
   at,
   content,
-  { fill, size = 12, anchor = "middle", baseline = "middle", extra = {} },
+  {
+    fill,
+    size = 12,
+    anchor = "middle",
+    baseline = "middle",
+    extra = {},
+    /*
+     * WHAT KIND OF LABEL THIS IS, stated in the markup.
+     *
+     * It matters because a SKETCH prints no numbers: a grid tick's number is
+     * suppressed there while the axis NAMES are kept, and a reader (or a test)
+     * can tell the two apart by this attribute rather than by guessing from the
+     * text.
+     */
+    role = null,
+  } = {},
 ) {
   if (!String(content ?? "").trim()) {
     return null;
@@ -123,6 +169,7 @@ function text(
     "text-anchor": anchor,
     "dominant-baseline": baseline,
     "pointer-events": "none",
+    ...(role ? { "data-label": role } : {}),
     ...extra,
   });
 
@@ -491,9 +538,25 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
   const muted = paintColour(enggTheme.defaultLineColour());
   const geometry = entity.geometry || {};
 
+  /*
+   * WHETHER THIS IS A NUMBERED PLOT OR AN UNNUMBERED SKETCH.
+   *
+   * A Sketch's grid is a drawing aid: its lines are drawn, its ticks are marks
+   * on the axes, and NO NUMBER is printed beside them. The numeric system is
+   * still there - the mapping, the spacing and the student's own points all use
+   * it - it is simply not annotated, because a sketch is not a calculated plot.
+   * A Plot keeps its labels.
+   */
+  const display = gridDisplayOf(entity);
+
   const frame = mapping.frame;
 
-  /* The box, so the graph is visibly a placed object. */
+  /*
+   * The box, so the graph is visibly a placed object. It is TAGGED as the
+   * frame: the box and the axes are both solid lines, and a reader - a test, or
+   * a future feature that wants to know where the plot area ends - must be able
+   * to tell one from the other.
+   */
   const corners = [
     { x: frame.position.x, y: frame.position.y },
     { x: frame.position.x + frame.width, y: frame.position.y },
@@ -505,6 +568,7 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
     line(svg, corners[index], corners[(index + 1) % 4], {
       stroke,
       width: Math.max(0.5, width * 0.6),
+      extra: { "data-graph-part": "frame" },
     });
   }
 
@@ -519,11 +583,36 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
     geometry.yTickSpacing,
   );
 
-  /* The grid, behind the axes. */
-  if (geometry.showGrid !== false) {
+  /*
+   * THE GRID, BEHIND THE AXES, at its own resolution.
+   *
+   * A sketch draws a finer grid than its labelled ticks - a 1-unit grid over
+   * -5..5 is thin on a large canvas - while those ticks, and snapping, keep the
+   * configured value. The finer lines are multiples of the same step, so a point
+   * snapped to the grid always lands on a visible line.
+   */
+  const xGrid = display.showGrid
+    ? gridValuesOf(
+        mapping.limits.xMin,
+        mapping.limits.xMax,
+        geometry.xTickSpacing,
+        geometry.gridDivisions,
+      )
+    : [];
+
+  const yGrid = display.showGrid
+    ? gridValuesOf(
+        mapping.limits.yMin,
+        mapping.limits.yMax,
+        geometry.yTickSpacing,
+        geometry.gridDivisions,
+      )
+    : [];
+
+  if (display.showGrid) {
     const gridWidth = Math.max(0.4, width * 0.5);
 
-    xTicks.forEach((value) => {
+    xGrid.forEach((value) => {
       const at = enggMathModel.graphToDrawing(entity, {
         x: value,
         y: mapping.limits.yMin,
@@ -539,7 +628,7 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
       }
     });
 
-    yTicks.forEach((value) => {
+    yGrid.forEach((value) => {
       const at = enggMathModel.graphToDrawing(entity, {
         x: mapping.limits.xMin,
         y: value,
@@ -556,10 +645,29 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
     });
   }
 
-  /* The axes, through the origin when it is in range. */
+  /*
+   * THE AXES: WHERE ZERO ACTUALLY IS, OR NOWHERE.
+   *
+   * `origin` is the position of (0, 0) in the SAME frame the grid and the
+   * curves are drawn in, so it is NOT forced to the middle of the box and NOT
+   * forced to an edge. If zero is outside the configured limits - a graph of
+   * 2..8 has no y = 0 in it - the corresponding axis is not inside the plotting
+   * area and is therefore not drawn, rather than being pushed onto an edge and
+   * pretending the value exists there.
+   */
   const origin = mapping.origin;
 
-  if (geometry.showXAxis !== false) {
+  const xAxisVisible =
+    geometry.showXAxis !== false &&
+    origin.y >= mapping.bottom - 1e-9 &&
+    origin.y <= mapping.top + 1e-9;
+
+  const yAxisVisible =
+    geometry.showYAxis !== false &&
+    origin.x >= mapping.left - 1e-9 &&
+    origin.x <= mapping.right + 1e-9;
+
+  if (xAxisVisible) {
     line(
       svg,
       toScreen({ x: mapping.left, y: origin.y }),
@@ -567,11 +675,12 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
       {
         stroke,
         width,
+        extra: { "data-graph-part": "axis" },
       },
     );
   }
 
-  if (geometry.showYAxis !== false) {
+  if (yAxisVisible) {
     line(
       svg,
       toScreen({ x: origin.x, y: mapping.bottom }),
@@ -579,15 +688,22 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
       {
         stroke,
         width,
+        extra: { "data-graph-part": "axis" },
       },
     );
   }
 
-  /* The ticks, and their labels. */
+  /*
+   * THE TICKS ARE MARKS ON THE AXES, so a tick is drawn only where its axis
+   * exists. A hidden X axis (because y = 0 is out of range) does not leave a
+   * row of floating marks at the bottom of the plot area.
+   */
   const tickLength = 4;
 
   xTicks.forEach((value) => {
-    const at = enggMathModel.graphToDrawing(entity, { x: value, y: 0 });
+    const at = xAxisVisible
+      ? enggMathModel.graphToDrawing(entity, { x: value, y: 0 })
+      : null;
 
     if (!at) {
       return;
@@ -605,16 +721,19 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
       },
     );
 
-    if (geometry.showTickLabels !== false && Math.abs(value) > 1e-9) {
+    if (display.showTickLabels && Math.abs(value) > 1e-9) {
       text(svg, { x: screen.x, y: screen.y + 14 }, numberText(value), {
         fill: stroke,
         size: 10,
+        role: "tick",
       });
     }
   });
 
   yTicks.forEach((value) => {
-    const at = enggMathModel.graphToDrawing(entity, { x: 0, y: value });
+    const at = yAxisVisible
+      ? enggMathModel.graphToDrawing(entity, { x: 0, y: value })
+      : null;
 
     if (!at) {
       return;
@@ -632,28 +751,31 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
       },
     );
 
-    if (geometry.showTickLabels !== false && Math.abs(value) > 1e-9) {
+    if (display.showTickLabels && Math.abs(value) > 1e-9) {
       text(svg, { x: screen.x - 8, y: screen.y }, numberText(value), {
         fill: stroke,
         size: 10,
         anchor: "end",
+        role: "tick",
       });
     }
   });
 
-  /* The axis names, at the ends of the axes. */
-  if (String(geometry.xLabel ?? "").trim()) {
+  /* The axis names, at the ends of the axes that are actually drawn. */
+  if (xAxisVisible && String(geometry.xLabel ?? "").trim()) {
     text(svg, { x: mapping.right + 10, y: origin.y }, geometry.xLabel, {
       fill: stroke,
       size: 12,
       anchor: "start",
+      role: "axis-name",
     });
   }
 
-  if (String(geometry.yLabel ?? "").trim()) {
+  if (yAxisVisible && String(geometry.yLabel ?? "").trim()) {
     text(svg, { x: origin.x, y: mapping.top - 10 }, geometry.yLabel, {
       fill: stroke,
       size: 12,
+      role: "axis-name",
     });
   }
 
@@ -717,9 +839,34 @@ export function drawPlotFunctions({ svg, entity, style, toScreen }) {
       });
     }
 
-    const strokes = enggMathModel.plotFunctionStrokes(entity, component);
+    /*
+     * A COMPONENT WHOSE GEOMETRY CANNOT BE READ IS SKIPPED, NOT FATAL.
+     *
+     * `plotFunctionStrokes` reads `segments` and `points`, and a component
+     * written by another code path - a preview, a restored source block - may
+     * carry neither. One bad component must not take the whole graph's
+     * drawing (or its SOURCE, which is written from this painter's data) down
+     * with it.
+     */
+    let strokes;
+
+    try {
+      strokes = enggMathModel.plotFunctionStrokes(entity, component);
+    } catch (error) {
+      console.error("A graph function could not be drawn", error);
+
+      return;
+    }
+
+    if (!Array.isArray(strokes)) {
+      return;
+    }
 
     strokes.forEach((points) => {
+      if (!Array.isArray(points)) {
+        return;
+      }
+
       path(svg, points.map(toScreen), {
         stroke: componentStroke,
         width: componentWidth,

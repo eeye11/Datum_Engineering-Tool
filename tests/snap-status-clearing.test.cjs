@@ -399,10 +399,29 @@ const phaseTables = [
   extract("updatePreview"),
 ];
 
-const loadPhases = source.slice(
-  source.indexOf("const CONSTRUCTION_ACTIVE_PHASES"),
-  source.indexOf("const CONSTRUCTION_ACTIVE_PHASES") + 1200,
-);
+/*
+ * THE WHOLE LIST, NOT A FIXED WINDOW.
+ *
+ * This used to read 1200 characters from the declaration - a guess at how long
+ * the list would stay. It has since grown past that, so the phases near its END
+ * (`polygon-sides`, the slope-triangle steps) were never seen and were reported
+ * as having no message anywhere, when they are listed exactly like their
+ * neighbours. The list is now read to its closing bracket.
+ */
+function arraySource(name) {
+  const start = source.indexOf(`const ${name}`);
+
+  if (start < 0) {
+    return "";
+  }
+
+  const open = source.indexOf("[", start);
+  const close = source.indexOf("]", open);
+
+  return open >= 0 && close > open ? source.slice(start, close + 1) : source.slice(start);
+}
+
+const loadPhases = arraySource("CONSTRUCTION_ACTIVE_PHASES");
 
 const described = [...phasesWritten].filter((phase) => {
   if (phase === "idle") {

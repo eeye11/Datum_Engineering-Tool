@@ -512,6 +512,20 @@ export function updatePreview(
             }
         );
 
+        /*
+         * THE STATUS IS REBUILT HERE TOO.
+         *
+         * Every other branch in this function answers the cursor afresh, so a
+         * snap the pointer has LEFT cannot stay printed - and this one used to
+         * return without doing it, which left whatever the cursor was aligned
+         * with a moment ago showing beside the Dynamics instruction for as long
+         * as the ghost followed the pointer.
+         */
+        reportConstructionStatus(
+            resolution,
+            dynamicsInstruction(drawingState.activeTool)
+        );
+
         return;
     }
 
