@@ -12,7 +12,7 @@ import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../..
 import { DYNAMICS_TOOL_MENUS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
-import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openPolygonMenu, openToolSubmenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
+import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openMathModeSubmenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 import { MATH_REFERENCE_TOOLS as MATH_REFERENCE_TOOL_IDS, MATH_TOOL_GROUPS, MATH_MODE_LABELS, MATH_MODES, activeMathMode, armMathTool, mathToolHasModes } from "../../../features/workspace/math/math-tools.js";
 
 // Keep inline sections open independently across toolbar redraws.
@@ -102,7 +102,7 @@ function renderToolGroup(group) {
 function openMathModeMenu(button, toolId) {
     const active = drawingState.activeTool === toolId ? activeMathMode() : null;
 
-    openToolSubmenu(
+    openMathModeSubmenu(
         button,
         MATH_MODES.map(mode => ({
             id: mode,

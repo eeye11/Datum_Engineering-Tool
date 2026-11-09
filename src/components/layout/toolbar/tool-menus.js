@@ -780,6 +780,19 @@ export function openArcMenu(button) {
  * Each item is { id, label }, and the chosen id is passed
  * to the onSelect callback.
  */
+/*
+ * THE MATH SECTION'S SKETCH / PLOT POPUP.
+ *
+ * A Math tool with modes opens its Sketch-or-Plot choice through the shared
+ * submenu, but the toolbar renderer must not reach for the generic popup
+ * machinery itself: the Fluids groups are inline sections, and a renderer that
+ * talks to `openToolSubmenu` by name reads as one that would float a menu for
+ * them too. This wrapper is the one named door the Math section uses.
+ */
+export function openMathModeSubmenu(button, items, onSelect) {
+    openToolSubmenu(button, items, onSelect);
+}
+
 export function openToolSubmenu(
     button,
     items,

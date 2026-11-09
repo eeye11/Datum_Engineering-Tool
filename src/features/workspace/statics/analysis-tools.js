@@ -1527,9 +1527,29 @@ export function commitAnalysisInput() {
         createResultant(chosen);
     }
 
-    // The completed analysis returns control to selection.
+    /*
+     * THE OPERATION IS FINISHED, so the interaction is cleared but the TOOL
+     * stays armed - the same "place another one" shape every placement tool
+     * has. Escape is how the student leaves it.
+     */
     enggDrawingState.clearInteraction(drawingState);
-    activateTool("select");
+    drawingState.interaction.phase = "analysis-input";
+    drawingState.interaction.analysisKind = toolId;
+
+    /*
+     * FORCE COMPONENTS LEAVES ITS RESULT SELECTED. The pair it just drew is
+     * the thing the student will want to move or annotate, so it stays lit -
+     * and a force-components click REPLACES its input anyway, so a carried
+     * selection cannot taint the next reading. A Resultant is different: its
+     * inputs were chosen by toggling forces in and out, so a stale list would
+     * make the next click REMOVE a force the student means to add, and the
+     * selection is reset for the next placement.
+     */
+    if (toolId !== "force-components") {
+        drawingState.selection.selectedObjectIds = [];
+    }
+
+    setToolMessage(analysisInputMessage(toolId));
 
     renderProperties();
     renderCurrentDrawing();
