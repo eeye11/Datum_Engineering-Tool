@@ -59,7 +59,6 @@ import {
   loadSamples,
   num,
   point,
-  sketchStrokeCommands,
   sourceMapFor,
   staticsTextNodes,
   styleOptions,
@@ -74,7 +73,7 @@ import { NOMINAL_ARROW_HEAD_PT } from "../../../../tool-library/shared/primitive
 import enggDiagramEquations from "../../../../features/workspace/model/analysis/diagram-equations.js";
 import bodyFrames from "../../../geometry/body-frames.js";
 import { COMPONENT_COLOURS } from "../../component-colours.js";
-import { sketchPointsOf as canvasSketchPointsOf } from "../../analysis-render.js";
+
 
 /* ============================================================
  * HELPERS
@@ -1358,34 +1357,18 @@ const DIAGRAM_AXES = {
 
 /*
  * ============================================================
- * A SKETCH THAT BELONGS TO SOME OTHER OBJECT
+ * A SKETCH IS WRITTEN AS THE FEATURES IT IS MADE OF
  * ============================================================
  *
- * A Resultant and a Force Components object carry strokes of the student's own
- * vector diagram as `geometry.sketchElements`, in WORLD coordinates - the same
- * record shape an analysis diagram uses. The canvas draws them, so the source
- * must too: an object whose strokes are on the sheet and missing from the source
- * is exactly the "the sketch is gone" failure, and it is not specific to an SFD.
+ * A sketch's strokes are ordinary Line, Polyline and Arc features parented to
+ * the diagram, so they are written by the ordinary writers - one command per
+ * feature, in that feature's own style, exactly as any other line on the sheet.
  *
- * The projection is the identity, because these points are already model-space.
- * `sketchStrokeCommands` writes each element through the object's own style, so
- * the strokes keep the colour, width and opacity of the object they belong to.
+ * There is deliberately nothing here that reads a diagram's ink out of its own
+ * geometry. The old `objectSketchCommands` did exactly that, from a
+ * `sketchElements` list that was not made of features; keeping it would be a
+ * second source format for the same drawing, free to disagree with the first.
  */
-export function objectSketchCommands(object) {
-  const elements = object?.geometry?.sketchElements;
-
-  if (!Array.isArray(elements) || !elements.length) {
-    return [];
-  }
-
-  const options = splitOptions(styleOptions({ ...(object.style || {}), lineType: "solid" })).options;
-
-  return sketchStrokeCommands(elements, {
-    pointsOf: (element) => sketchPointsOf(element),
-    toModel: (at) => ({ x: Number(at.x) || 0, y: Number(at.y) || 0 }),
-    options,
-  });
-}
 
 export function diagramKind(type, geometry) {
   const declared = String(geometry?.diagramType || "").toLowerCase();
@@ -1439,16 +1422,13 @@ function diagramValueScale(geometry, width) {
 
   const equations = enggDiagramEquations;
 
+  /*
+   * ONLY A PLOT HAS A PEAK TO READ. A sketch's strokes are ordinary features
+   * with their own geometry, so there is no list here to measure - and the
+   * diagram's own stored scale is what they were drawn against.
+   */
   if (geometry.mode === "plot" && equations) {
     peak = equations.peakMagnitude(equations.readPlot(geometry));
-  } else {
-    (Array.isArray(geometry.sketchElements) ? geometry.sketchElements : []).forEach((element) => {
-      sketchPointsOf(element).forEach((at) => {
-        if (Number.isFinite(at?.y)) {
-          peak = Math.max(peak, Math.abs(at.y));
-        }
-      });
-    });
   }
 
   const chosen = usable ? Math.max(Math.abs(finite(set.from)), Math.abs(finite(set.to)), peak) : peak;
@@ -1473,31 +1453,17 @@ function onDiagramAxis(geometry, unitHeight) {
 }
 
 /*
- * THE POINTS A SKETCH ELEMENT IS DRAWN THROUGH.
- *
- * THIS IS THE CANVAS'S RULE, NOT A SECOND OPINION ABOUT IT. The sheet draws a
- * sketch with `sketchPointsOf` (analysis-render.js): a LINE through its two
- * ends, a THREE-POINT CURVE (the only curve the editor creates) through its
- * Start, Bend and End, and a legacy curve through as many points as were
- * clicked.
- *
- * THE RULE ITSELF NOW LIVES IN ONE PLACE. It was re-implemented here, and the
- * copy read `element.points` alone - which is what a `curve3` does not have. So
- * every curved stroke of a hand-drawn SFD, BMD or AFD was drawn on the canvas
- * and MISSING from the generated source. `sketchPointsOf` is re-exported from
- * `analysis-render.js` so the generator and the canvas cannot disagree again.
- */
-export function sketchPointsOf(element) {
-  return canvasSketchPointsOf(element);
-}
-
-/*
  * A DIAGRAM'S CURVE IS ITS OWN STORED RESULT.
  *
  * A Plot stores expressions and their ranges; those are evaluated with the
  * application's own equation engine and sampled exactly as the canvas samples
- * them. A Sketch stores its points. Nothing is fabricated: an empty plot
- * produces no curve rather than a demonstration one.
+ * them. Nothing is fabricated: an empty plot produces no curve rather than a
+ * demonstration one.
+ *
+ * A SKETCH HAS NO CURVE HERE. Its strokes are ordinary Line, Polyline and Arc
+ * features parented to the diagram, and they are written by the ordinary
+ * writers - so this function answers with no marks for a sketch, and the
+ * diagram's own frame is all it contributes.
  */
 export function diagramMarks(geometry) {
   const range = geometry.localRange;
@@ -1533,21 +1499,7 @@ export function diagramMarks(geometry) {
     return { marks, unitHeight };
   }
 
-  const elements = Array.isArray(geometry.sketchElements) ? geometry.sketchElements : [];
-
-  const marks = elements
-    .map((element) => {
-      const points = sketchPointsOf(element).map((at) => place(at.x, at.y));
-
-      if (points.length < 2) {
-        return null;
-      }
-
-      return { kind: element.kind === "line" ? "line" : "curve", points };
-    })
-    .filter(Boolean);
-
-  return { marks, unitHeight };
+  return { marks: [], unitHeight };
 }
 
 function serializeDiagram(entity, object) {
@@ -1671,27 +1623,13 @@ function serializeDiagram(entity, object) {
   });
 
   /*
-   * A PLOT-MODE DIAGRAM'S SKETCH IS STILL PART OF THE DRAWING.
+   * A SKETCH'S STROKES ARE NOT WRITTEN HERE.
    *
-   * `diagramMarks` writes EITHER the sketch OR the plotted curve, because a
-   * diagram has one mode at a time. But a diagram can still HOLD sketch strokes
-   * (a student who sketched and then plotted; the Sketch Editor writes them and
-   * does not clear the plot), and those strokes are geometry the model owns.
-   * Writing them as well means the source never loses content the document still
-   * has. An empty list writes nothing, so a pure plot is unaffected; a stroke
-   * that the plot already draws identically is not repeated.
+   * They are ordinary features parented to the diagram, so the ordinary writer
+   * emits them as their own commands. Writing them again from the diagram would
+   * be a second source for the same ink - and the old code did exactly that,
+   * from a `sketchElements` list that no longer exists.
    */
-  if (geometry.mode === "plot") {
-    const written = new Set(commands.map((command) => command.trim()));
-
-    objectSketchCommands(object).forEach((command) => {
-      if (!written.has(command.trim())) {
-        written.add(command.trim());
-        commands.push(command);
-      }
-    });
-  }
-
   return commands.join("\n");
 }
 
@@ -1999,17 +1937,7 @@ function serializeStaticsObjectAtScale(object, options = {}) {
 
   const nodes = generateStaticsTextNodes(entity);
 
-  /*
-   * THE OBJECT'S OWN SKETCH STROKES, AFTER ITS SHAPE.
-   *
-   * A Resultant or a Force Components object can carry the student's vector
-   * diagram (see `objectSketchCommands`). They are ordinary drawing content, so
-   * they are written with the object they belong to - never dropped because they
-   * are not the type's main shape.
-   */
-  const sketches = objectSketchCommands(object).join("\n");
-
-  const parts = [geometry, sketches, nodes].filter(
+  const parts = [geometry, nodes].filter(
     (part) => typeof part === "string" && part.trim() !== "",
   );
 

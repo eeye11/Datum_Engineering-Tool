@@ -33,7 +33,7 @@ test('search works by name, glyph, category and TeX command',()=>{
  assert.equal(dialog.querySelectorAll('[data-symbol-id]').length,1);
  assert.equal(dialog.querySelector('[data-symbol-id]').dataset.symbolId,'nabla');picker.close();
 });
-test('choosing a symbol places that glyph, returns to Select, and exports the chosen glyph',async()=>{
+test('choosing a symbol places that glyph, keeps the tool armed, and exports the chosen glyph',async()=>{
  const {handleAnnotateClick}=require(locate('annotate-creation.js'));
  model.setActiveTool(state,'symbol');
  handleAnnotateClick({effectiveConstructionPoint:{x:0,y:0}});
@@ -45,7 +45,10 @@ test('choosing a symbol places that glyph, returns to Select, and exports the ch
  await Promise.resolve();
  const placed=state.objects.find(o=>o.annotateKind==='symbol');assert.ok(placed);
  assert.equal(placed.geometry.symbolId,'greek-upper-psi');
- assert.equal(annotations.textOf(placed),'Ψ');assert.equal(state.activeTool,'select');
+ assert.equal(annotations.textOf(placed),'Ψ');
+ /* The Symbol tool stays armed; the choice is spent, so the next click reopens the picker. */
+ assert.equal(state.activeTool,'symbol');
+ assert.equal(state.interaction.annotateSymbolId,null);
  const {annotationSourceWriter}=require(locate('annotations.js'));
  const source=annotationSourceWriter(placed);assert.ok(source.includes('$\\Psi$'),source);
  const restored=JSON.parse(model.serializeDrawing(state)).objects.find(o=>o.id===placed.id);

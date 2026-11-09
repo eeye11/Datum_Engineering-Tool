@@ -8,9 +8,7 @@ import { activateTool, initialToolMessage } from "../../../components/layout/too
 import { openToolSubmenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
-import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { beginAnalysisDiagram, analysisDiagramIntroMessage, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS } from "./analysis-tools.js";
-import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { activeAnalysisMode, armAnalysisDiagram, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS } from "./analysis-tools.js";
 
 export const STATICS_TOOL_MENUS = {
     body: [
@@ -233,6 +231,15 @@ export function openAnalysisModeMenu(
         return;
     }
 
+    /*
+     * THE ARMED MODE IS MARKED, so a student who reopens the popup can see
+     * which one is running rather than having to remember.
+     */
+    const active =
+        drawingState.activeTool === toolId
+            ? activeAnalysisMode()
+            : null;
+
     openToolSubmenu(
         button,
         ANALYSIS_DIAGRAM_MODES.map(
@@ -240,39 +247,25 @@ export function openAnalysisModeMenu(
                 id: mode,
                 label:
                     ANALYSIS_DIAGRAM_MODE_LABELS[mode] ||
-                    mode
+                    mode,
+                state: active === mode ? "Active" : null
             })
         ),
         mode => {
-            const previous =
-                drawingState.activeTool;
-
-            void previous;
-
             /*
              * THE MODE IS STORED ON THE INTERACTION, then the tool is
              * armed. `beginAnalysisDiagram` reads it back, so the frame the
              * student sees is the one they asked for - a Plot starts with an
              * expression ready to type, a Sketch starts empty.
+             *
+             * The order is not written here: `armAnalysisDiagram` owns it, so
+             * this menu and the toolbar's inline list cannot disagree about
+             * which step comes first.
              */
-            activateTool(toolId);
-
-            enggDrawingState.setInteraction(
-                drawingState,
-                {
-                    analysisMode: mode
-                }
+            armAnalysisDiagram(
+                toolId,
+                mode
             );
-
-            beginAnalysisDiagram(toolId);
-
-            setToolMessage(
-                analysisDiagramIntroMessage(
-                    null
-                )
-            );
-
-            renderCurrentDrawing();
         }
     );
 }

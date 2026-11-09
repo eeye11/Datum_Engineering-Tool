@@ -673,7 +673,22 @@ function createGeometryObject(type, geometry, options = {}) {
         "flow-direction-diagram": "Flow Direction",
         "flow-profile": "Flow Profile",
         "pressure-profile": "Pressure Profile",
-        "section-plane": "Section Plane"
+        "section-plane": "Section Plane",
+
+        /*
+         * THE MATH / ANALYSIS OBJECTS.
+         *
+         * Each is its own feature type, so a Point, a Vector, a Function
+         * Curve, a Coordinate Graph, an Equation, a Tangent / Normal and a
+         * Slope Triangle are told apart in the Objects list, the Feature Tree
+         * and the source - and each is numbered within its own kind.
+         */
+        "math-point": "Point",
+        "math-vector": "Vector",
+        "math-plot": "Graph",
+        "math-equation": "Equation",
+        "math-tangent": "Tangent",
+        "math-slope-triangle": "Slope Triangle"
     }[type] || type;
 
     /*
@@ -2430,14 +2445,27 @@ let onObjectCommitted = null;
 
 function commitDrawingChange(state, previousObjects) {
     refreshCalloutReferences(state);
-    const previousIds = new Set((Array.isArray(previousObjects) ? previousObjects : previousObjects?.objects || []).map(object => object.id));
-    const created = state.objects.some(object => !previousIds.has(object.id));
-    const creatingTool = state.activeTool;
-    if ((created || ["move", "rotate", "mirror", "trim", "extend"].includes(creatingTool)) && creatingTool && creatingTool !== "select") {
-        queueMicrotask(() => {
-            if (state.activeTool === creatingTool) setActiveTool(state, "select");
-        });
-    }
+    /*
+     * A COMMITTED OBJECT DOES NOT DISARM ITS TOOL.
+     *
+     * This used to schedule a return to Select after every commit made with a
+     * non-Select tool armed - a created feature, a move, a rotate, a mirror, a
+     * trim, an extend. That made every tool in every category ONE-SHOT: draw a
+     * beam, and the Beam tool was gone; place a particle, and the Particle tool
+     * was gone. The student had to re-arm the tool for each object, which is
+     * the opposite of what a drawing tool is for.
+     *
+     * The rule is now the one the whole application shares: a tool stays armed
+     * until the student ends it - Escape, a click on empty canvas with nothing
+     * pending, its own button, or another tool. Creating an object selects it
+     * (the commit does that) and leaves the tool ready for the next one.
+     *
+     * A MODIFY SESSION STILL ENDS WITH ITS OPERATION, and it does so through
+     * its own state machine (`modifySession`), not through this generic reset:
+     * a move, a rotate or a mirror is a one-off act on a selection, not a tool
+     * that makes more of the same thing. Ending it here as well would be a
+     * second, conflicting answer to the same question.
+     */
     maintainDrivingDimensions(state, previousObjects);
     /*
      * Keep every Analysis object true of its sources, HERE, before
@@ -2545,7 +2573,34 @@ function restoreObjects(state, objects) {
  */
 function restoreDocument(state, document) {
     if (document && Array.isArray(document.objects)) {
-        restoreObjects(state, document.objects);
+        /*
+         * A SAVED DRAWING IS MIGRATED ON THE WAY IN.
+         *
+         * A file written before the Plot existed carries a `math-graph` and
+         * one or more `math-curve` objects. They are folded into a single Plot
+         * here - once, at load - so the student's graph and its curves come
+         * back as the one object they now are, and no code path has to read
+         * the old shape afterwards.
+         *
+         * The migration is reached through the Math model by name rather than
+         * imported, because this module is the bottom of the model and the
+         * Math layer sits above it. A drawing with no Math objects is
+         * untouched, and a failure to migrate leaves the objects as they were
+         * rather than losing them.
+         */
+        let objects = document.objects;
+
+        try {
+            const math = globalThis.enggMathModel;
+
+            if (math && typeof math.migrateLegacyMath === "function") {
+                objects = math.migrateLegacyMath(objects).objects;
+            }
+        } catch {
+            /* A migration failure must not stop the drawing from opening. */
+        }
+
+        restoreObjects(state, objects);
     }
 
     if (document?.units) {
@@ -3431,6 +3486,13 @@ const enggDrawingState = {
     setThemeLineColour,
     createGeometryObject,
     geometryObjectFromSource,
+    migrateLegacyMath(objects) {
+        const math = globalThis.enggMathModel;
+
+        return math && typeof math.migrateLegacyMath === "function"
+            ? math.migrateLegacyMath(objects)
+            : { objects, migrated: [] };
+    },
     geometryFactories,
     addObject,
     removeObject,

@@ -22,13 +22,16 @@ import { addProcessPoint, isProcessPlotTool } from "../thermodynamics/process-pa
 import { objectAtPoint } from "./hit-testing.js";
 import { handleModifyClick } from "../commands/modify-tools.js";
 import { resolvePointerEvent } from "./pointer.js";
-import { shouldExitToSelectOnClick, CLICK_CLICK_TOOLS } from "../../../components/layout/toolbar/tool-classification.js";
+import { shouldExitToSelectOnClick } from "../../../components/layout/toolbar/tool-classification.js";
 import { activateTool, canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
 import { placeBlock, placeGain, placePlant, placeSum } from "../controls/plant-tool.js";
 import { plantNodeAtPoint } from "../../../shared/model/plant.js";
 import { handleSignalLineClick } from "../controls/signal-line-tool.js";
+import { handleMathClick } from "../math/math-creation.js";
+import { isMathTool } from "../math/math-tools.js";
+import { commitPlacement, placementPending } from "./placement-session.js";
 
 export function handleCanvasClick(
     event
@@ -41,6 +44,24 @@ export function handleCanvasClick(
      */
     if (isLegacyResetTool(drawingState.activeTool)) {
         event.preventDefault();
+        return;
+    }
+
+    /*
+     * A FINISHED SKETCH WAITING TO BE PLACED OWNS THE CLICK.
+     *
+     * The student pressed Apply in an editor, and the sketch is following the
+     * cursor. This click is where it belongs - so it is committed here, at the
+     * point the student chose, and nothing else is allowed to read the click
+     * as a selection or as the start of a new feature.
+     */
+    if (placementPending()) {
+        event.preventDefault();
+
+        commitPlacement(
+            canvasPointFromEvent(event, false)
+        );
+
         return;
     }
     /*
@@ -125,6 +146,21 @@ export function handleCanvasClick(
 
     if (drawingState.activeTool === "signal-line") {
         handleSignalLineClick(resolution.effectiveConstructionPoint);
+        return;
+    }
+
+    /*
+     * THE MATH TOOLS, BEFORE EVERYTHING ELSE.
+     *
+     * A Math tool's click is its own input - a placement, a graph, a curve, a
+     * contact point, a position along a line - and it must not be reinterpreted
+     * as a selection or as the start of a construction. The tool's own handler
+     * decides what the click means from the tool and the stage, and returns
+     * true when it consumed it; a false hands the click back to the shared
+     * rules below, which is what makes a bare click with a Sketch curve armed
+     * mean "I am finished with this tool".
+     */
+    if (isMathTool(drawingState.activeTool) && handleMathClick(resolution)) {
         return;
     }
 
@@ -238,6 +274,8 @@ export function handleCanvasClick(
 
         return;
     }
+
+
 
     /*
      * THE DIMENSION TOOLS, BEFORE THE CONSTRUCTION PIPELINE.
@@ -385,22 +423,22 @@ export function handleCanvasClick(
      * dimension collecting references, a construction part-way through its
      * points, a press-drag-release - has already consumed it above.
      *
-     * THE ONE EXCEPTION IS A CLICK-CLICK SHAPE'S FIRST CORNER. A Line,
-     * Rectangle or Circle is drawn click-move-click, so with nothing started an
-     * empty click is the point the student is aiming at and goes to the
-     * construction branch below. Those tools are named in CLICK_CLICK_TOOLS, so
-     * the distinction is stated once, beside the classification that owns it.
+     * THE EXCEPTIONS ARE THE CLASSIFIER'S, NOT THIS BRANCH'S. A Line, a
+     * Rectangle, an Arc or a Truss takes an empty click as the first input of
+     * its construction, not as a dismissal, and `shouldExitToSelectOnClick` is
+     * the one place that answer lives. This branch used to hold a SECOND,
+     * hardcoded copy of it - the click-click list only - so a tool that the
+     * classifier correctly kept (a Truss, a Pipe run) was dropped into Select
+     * here the moment it was armed, before its handler ever saw the click.
+     *
+     * Two copies of the same rule is how the Truss came to be unstartable by
+     * clicking; asking the one function keeps the next tool from the same fate.
      */
     if (
-        drawingState.activeTool !==
-            "select" &&
         drawingState.interaction.phase ===
             "idle" &&
-        !(
-            CLICK_CLICK_TOOLS.includes(
-                drawingState.activeTool
-            ) &&
-            !drawingState.interaction.startPoint
+        shouldExitToSelectOnClick(
+            drawingState.activeTool
         )
     ) {
         activateTool("select");
@@ -948,6 +986,15 @@ export function openNoteEditorFor(object, atPoint = null) {
             state: drawingState,
             cameraSignal,
 
+            /*
+             * WRITING THE TEXT DOES NOT END THE TOOL.
+             *
+             * A note, a label or a callout is a creation tool: placing one and
+             * writing it is ONE operation, and the tool stays armed for the next
+             * one - exactly as a Line stays armed after its second click. The
+             * editor closing is not the student saying "I am finished with this
+             * tool"; Escape, empty canvas or another tool is.
+             */
             onApply: (text) => {
                 const current = currentObject();
                 if (current) {
@@ -955,7 +1002,6 @@ export function openNoteEditorFor(object, atPoint = null) {
                     enggDrawingState.commitDrawingChange(drawingState, previousTextObjects);
                 }
                 endTextEntry();
-                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation updated");
 
@@ -967,7 +1013,6 @@ export function openNoteEditorFor(object, atPoint = null) {
                 const current = currentObject();
                 if (current && canvasText) current.text = originalText;
                 endTextEntry();
-                enggDrawingState.setActiveTool(drawingState, "select");
 
                 setToolMessage("Annotation edit cancelled");
 

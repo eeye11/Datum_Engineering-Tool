@@ -115,6 +115,12 @@ const sandbox = {
   window: { enggFeatureGeometry: global.window.enggFeatureGeometry },
   setToolMessage: () => {},
   cancelModifySession: () => {},
+  /*
+   * A COMPLETED TRIM OR EXTEND ENDS THE MODIFY SESSION. The sandbox records
+   * that it was asked, so a test can tell "the operation finished" from "the
+   * operation failed and left the tool armed".
+   */
+  endModifySession: () => { sandbox.endedSessions = (sandbox.endedSessions || 0) + 1; },
   renderProperties: () => {},
   renderCurrentDrawing: () => {},
   drawingState: state,

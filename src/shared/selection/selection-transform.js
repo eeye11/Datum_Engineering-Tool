@@ -16,6 +16,7 @@ import enggFluidLevel from "../../features/workspace/model/fluids/fluid-level.js
 import enggFlowArrows from "../../features/workspace/model/fluids/flow-arrows.js";
 import enggPressureProfile from "../../features/workspace/model/fluids/pressure-profile.js";
 import enggSectionPlane from "../../features/workspace/model/fluids/section-plane.js";
+import enggMathModel from "../../features/workspace/math/math-model.js";
 
 /*
  * ========================================================
@@ -37,7 +38,7 @@ import enggSectionPlane from "../../features/workspace/model/fluids/section-plan
  * Only the SELECTED objects' geometry is read, so unselected features can never
  * stretch or shift the box.
  */
-function flowPathPoints(object) {
+function flowPathPoints(object, state = {}) {
     const g = object.geometry || {};
 
     if (object.type === "pipe-duct") {
@@ -192,6 +193,29 @@ function flowPathPoints(object) {
         return [span.start, span.end, ...enggSectionPlane.sectionArrows(object).flatMap((arrow) => [arrow.start, arrow.end])];
     }
 
+    /*
+     * THE MATH OBJECTS' INK.
+     *
+     * Each is measured from the SAME geometry its renderer draws - a plot's
+     * box, a triangle's three corners - so the selection box fits what is on
+     * the sheet rather than a stored anchor. A plot's box already encloses its
+     * curves, so the box is the whole of its ink.
+     */
+    if (object.type === "math-plot") {
+        const frame = enggMathModel.graphFrame(object);
+
+        return frame
+            ? [
+                  { x: frame.position.x, y: frame.position.y },
+                  { x: frame.position.x + frame.width, y: frame.position.y + frame.height }
+              ]
+            : [];
+    }
+
+    if (object.type === "math-slope-triangle") {
+        return [g.start, g.end, g.corner].filter(Boolean);
+    }
+
     return null;
 }
 
@@ -200,7 +224,7 @@ export function selectionBounds(objects, selectedIds, state = {}) {
     const points = objects.filter(object => ids.has(object.id)).flatMap(object => {
         const g = object.geometry || {};
         if (object.type === "annotate") return annotate.boundsOf(object, state);
-        const ink = flowPathPoints(object);
+        const ink = flowPathPoints(object, state);
         if (ink) return ink;
         if (object.type === "truss" && g.members?.length) {
             return g.members.flatMap(member => [member.start, member.end]).filter(Boolean);

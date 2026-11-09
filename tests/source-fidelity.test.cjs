@@ -55,6 +55,7 @@ const statics = loadModule("statics.js");
 const style = loadModule("tikz-style.js");
 const sync = loadModule("source-synchronization.js");
 const managerModule = loadModule("drawing-source-manager.js");
+const modelBounds = loadModule("model-bounds.js");
 
 const SCREEN_PIXELS_PER_LINE_WIDTH = 2.4;
 
@@ -224,6 +225,18 @@ check(
 console.log("\nAnalysis diagram");
 console.log("----------------");
 
+/*
+ * A SKETCH IS ITS STROKES, AND ITS STROKES ARE FEATURES.
+ *
+ * A sketch used to be a list of graph-local points stored on the diagram, and
+ * the writer projected them onto the axis. That list is gone: a stroke is an
+ * ordinary Line, Polyline or Arc feature parented to the diagram, drawn in
+ * WORLD space where the student drew it, and written by the ordinary writer.
+ *
+ * So the fidelity question is now a simpler one - does the stroke reach the
+ * source at the coordinates it was drawn at? - and the answer is checked
+ * against the stroke's own geometry rather than against a projection.
+ */
 const sketchDiagram = {
   id: "diagram-1",
   type: "analysis-diagram",
@@ -233,71 +246,50 @@ const sketchDiagram = {
     end: { x: 30, y: -40 },
     localRange: { from: 0, to: 10 },
     mode: "sketch",
-    sketchElements: [
-      { id: "e-line", kind: "line", start: { x: 0, y: 0 }, end: { x: 5, y: 4 } },
-      { id: "e-curve", kind: "curve3", start: { x: 5, y: 4 }, bend: { x: 7, y: 8 }, end: { x: 10, y: 0 } },
-      { id: "e-legacy", kind: "curve", points: [{ x: 2, y: 1 }, { x: 3, y: 2 }, { x: 4, y: 1 }] },
-    ],
+    unitHeight: 0.96,
   },
   style: { ...BLACK_STYLE },
 };
 
-/*
- * A SKETCH'S STROKES, AS THE CANVAS PLACES THEM.
- *
- * A sketch element stores GRAPH-LOCAL points - x is a station along the body,
- * y is the value - and the sheet projects them onto the diagram's own axis
- * (`analysisSketchMarks`). Here the diagram runs from x=-30 to x=30 over a
- * 0..10 range, and the peak value (8) is fitted to 16% of that span, so one
- * unit of value is 0.96 drawing units and one station is 6 units across.
- *
- * The assertions state the RESULT of that projection, which is what makes them
- * a fidelity check: the source has to place the stroke where the canvas places
- * it, not merely contain a command.
- */
-const STATION = 6;
-const PER_VALUE = 0.96;
-const onAxis = (x, value) => ({ x: -30 + x * STATION, y: -40 + value * PER_VALUE });
-
-/*
- * THE DIAGRAM DECLARES ITS OWN SCALE (see `unitHeight` above), and that is what
- * the projection uses - so the fixture states it explicitly rather than relying
- * on a value derived from the strokes it is about to check.
- */
-sketchDiagram.geometry.unitHeight = PER_VALUE;
-
 const sketchSource = statics.staticsSourceWriter(sketchDiagram);
 
-const lineStart = onAxis(0, 0);
-const lineEnd = onAxis(5, 4);
-const bend = onAxis(7, 8);
-const curveEnd = onAxis(10, 0);
-
 check(
-  "a sketch's lines reach the source",
-  sketchSource.includes(`(${lineStart.x},${lineStart.y}) -- (${lineEnd.x},${lineEnd.y})`),
-  sketchSource,
-);
-check(
-  "a sketch's THREE-POINT curve reaches the source",
-  sketchSource.includes(`(${lineEnd.x},${lineEnd.y}) -- (${bend.x},${bend.y}) -- (${curveEnd.x},${curveEnd.y})`),
-  sketchSource,
-);
-check(
-  "a legacy multi-point curve reaches the source",
-  sketchSource.includes(`(${onAxis(2, 1).x},${onAxis(2, 1).y}) -- (${onAxis(3, 2).x},${onAxis(3, 2).y})`),
+  "a sketch diagram writes its frame and no curve of its own",
+  commandsOf(sketchSource).length === 2,
   sketchSource,
 );
 
-const emptySketch = statics.staticsSourceWriter({
-  ...sketchDiagram,
-  geometry: { ...sketchDiagram.geometry, sketchElements: [] },
-});
+/*
+ * THE STROKE, AS A FEATURE. It is written by the ordinary Line writer, so the
+ * command is the line's own two ends - the same numbers the student drew.
+ */
+const stroke = {
+  id: "stroke-1",
+  type: "line",
+  name: "Line 1",
+  parentId: sketchDiagram.id,
+  geometry: { start: { x: 0, y: 0 }, end: { x: 30, y: 40 } },
+  style: { ...BLACK_STYLE },
+  engineering: {
+    plane: "XY",
+    discipline: "statics",
+    analysisSketch: "analysis-sketch",
+    sketchOf: sketchDiagram.id,
+  },
+};
+
+const strokeSource = statics.staticsSourceWriter(stroke);
 
 check(
-  "an empty sketch adds no curve, and none is invented",
-  commandsOf(emptySketch).length === 2,
-  emptySketch,
+  "a sketch stroke reaches the source at the coordinates it was drawn at",
+  strokeSource.includes("(0,0) -- (30,40)"),
+  strokeSource,
+);
+
+check(
+  "and the diagram does not write it a second time",
+  !sketchSource.includes("(0,0) -- (30,40)"),
+  sketchSource,
 );
 
 const plotted = statics.staticsSourceWriter({
@@ -306,7 +298,6 @@ const plotted = statics.staticsSourceWriter({
   geometry: {
     ...sketchDiagram.geometry,
     mode: "plot",
-    sketchElements: undefined,
     expressions: [
       {
         id: "x1",
@@ -346,6 +337,15 @@ sync.addSourceWriter(statics.staticsSourceWriter);
 const drawing = [
   beamObject({ id: "beam-a" }),
   { ...sketchDiagram, id: "sfd-a" },
+
+  /*
+   * THE SKETCH'S STROKE, AS A FEATURE OF THE DRAWING.
+   *
+   * It is a Line parented to the diagram, so it is written by the ordinary
+   * writer and transformed by the drawing's one export transform - exactly as
+   * any other line on the sheet.
+   */
+  { ...stroke, id: "stroke-a", parentId: "sfd-a" },
   {
     id: "pin-a",
     type: "pin-support",
@@ -376,8 +376,35 @@ drawing.forEach((object) =>
 
 const source = manager.getSource();
 
+/*
+ * THE TRANSFORM THE WRITER ACTUALLY USED.
+ *
+ * `exportTransformFor` asks the installed bounds provider first. The
+ * application installs one at start-up (`document-commands.js`), and the
+ * harness does not - so without this the writer and this test would each
+ * measure the drawing differently, and the test would be checking a transform
+ * the source was never written with.
+ *
+ * The provider is the model-bounds measurement itself, which is what the
+ * application publishes: the same extent Fit All uses.
+ */
+globalThis.enggDrawnBoundsProvider = (objects) =>
+  modelBounds.drawnBoundsPoints(objects, 1);
+
 const exportSpace = sync.exportTransformFor(drawing);
-const exportedBend = exportSpace.point(bend.x, bend.y);
+
+/*
+ * THE SOURCE WRITES COORDINATES TO FOUR DECIMALS, so the expectation is
+ * rounded the same way. Comparing the raw float would fail on a drawing that
+ * was placed correctly, which is a test of the formatter rather than of the
+ * placement.
+ */
+const rounded = (value) => Number(value.toFixed(4));
+
+const exportedStrokeEnd = exportSpace.point(
+  stroke.geometry.end.x,
+  stroke.geometry.end.y,
+);
 
 check(
   "every object of the drawing is in the source",
@@ -385,9 +412,11 @@ check(
 );
 
 check(
-  "the sketch's curve is in the complete document",
-  source.includes(`(${exportedBend.x},${exportedBend.y})`),
-  `expected (${exportedBend.x},${exportedBend.y})\n${source}`,
+  "the sketch's stroke is in the complete document",
+  source.includes(
+    `(${rounded(exportedStrokeEnd.x)},${rounded(exportedStrokeEnd.y)})`,
+  ),
+  `expected (${rounded(exportedStrokeEnd.x)},${rounded(exportedStrokeEnd.y)})\n${source}`,
 );
 
 /*
@@ -403,8 +432,9 @@ const pinAnchor = exportSpace.point(pinObject.geometry.position.x, pinObject.geo
 
 check(
   "a support is drawn from its anchor, in export space",
-  source.includes(`(${pinAnchor.x},${pinAnchor.y})`) || source.includes("(30,60)"),
-  `expected (${pinAnchor.x},${pinAnchor.y})\n${source}`,
+  source.includes(`(${rounded(pinAnchor.x)},${rounded(pinAnchor.y)})`) ||
+    source.includes("(30,60)"),
+  `expected (${rounded(pinAnchor.x)},${rounded(pinAnchor.y)})\n${source}`,
 );
 
 check(

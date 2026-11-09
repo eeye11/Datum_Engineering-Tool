@@ -8,7 +8,7 @@ import { renderCurrentDrawing } from "../../../components/layout/workspace/canva
 import { twoPointSpanOf } from "../annotate/dimension-inference.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { cancelModifySession } from "../commands/modify-tools.js";
+import { cancelModifySession, endModifySession } from "../commands/modify-tools.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 
@@ -571,7 +571,7 @@ export function trimObjectToBoundary(
         previous
     );
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage(
         "Trimmed line"
@@ -701,7 +701,7 @@ export function trimSegmentAtCursor(target, clickPoint, objects) {
 
     enggDrawingState.commitDrawingChange(drawingState, previous);
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage("Trimmed");
 
@@ -787,7 +787,7 @@ export function extendObjectToBoundary(
         previous
     );
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage(
         "Extended line"

@@ -4,6 +4,8 @@ import { calloutReferenceAt } from "../model/annotations/callout-reference.js";
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
+import enggMathModel from "../math/math-model.js";
 import { resizeStressElement } from "../../../shared/geometry/stress-element.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import enggAnnotate from "../model/annotations/annotate-model.js";
@@ -1925,6 +1927,160 @@ function applyManipulation(
             g.start = { x: point.x, y: point.y };
         } else {
             g.end = { x: point.x, y: point.y };
+        }
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * THE MATH OBJECTS' HANDLES
+     * ========================================================
+     *
+     * Each branch writes the SAME field the Features panel writes, so a drag
+     * and a typed value are the same edit. A handle that would break a
+     * mathematical relationship - a plotted curve's control point, a
+     * Plot-generated construction's direction - is not offered, and is refused
+     * here as well so no path can reach it.
+     */
+    if (object.type === "math-point") {
+        if (drag.kind === "position") {
+            g.position = { x: point.x, y: point.y };
+        } else if (drag.kind === "math-label") {
+            g.labelOffset = {
+                x: point.x - g.position.x,
+                y: point.y - g.position.y
+            };
+        }
+
+        return;
+    }
+
+    if (object.type === "math-vector") {
+        if (drag.kind === "start" || drag.kind === "end") {
+            g[drag.kind] = { x: point.x, y: point.y };
+        } else if (drag.kind === "math-label") {
+            g.labelOffset = {
+                x: point.x - g.end.x,
+                y: point.y - g.end.y
+            };
+        }
+
+        return;
+    }
+
+    if (object.type === "math-plot") {
+        const original = drag.originals?.[object.id]?.geometry || g;
+
+        if (drag.kind === "position" || drag.kind === "body") {
+            const dx = point.x - drag.start.x;
+            const dy = point.y - drag.start.y;
+
+            g.position = {
+                x: original.position.x + dx,
+                y: original.position.y + dy
+            };
+
+            return;
+        }
+
+        if (/^corner[0-3]$/.test(drag.kind)) {
+            const corners = enggFeatureGeometry.rectangleCorners(original);
+            const index = Number(drag.kind.slice(-1));
+            const anchor = corners[(index + 2) % 4];
+            const corner = corners[index];
+
+            const target = {
+                x: corner.x + point.x - drag.start.x,
+                y: corner.y + point.y - drag.start.y
+            };
+
+            const width = Math.max(1, Math.abs(target.x - anchor.x));
+            const height = Math.max(1, Math.abs(target.y - anchor.y));
+
+            g.position = {
+                x: Math.min(anchor.x, target.x),
+                y: Math.min(anchor.y, target.y)
+            };
+            g.width = width;
+            g.height = height;
+        }
+
+        return;
+    }
+
+    if (object.type === "math-tangent") {
+        if (drag.kind === "math-contact") {
+            /*
+             * MOVING THE CONTACT POINT RE-DERIVES THE CONSTRUCTION. A Plot
+             * construction's direction is its parent's, so it is recomputed
+             * from the curve at the new point; a Sketch one keeps the direction
+             * the student drew.
+             */
+            const curve = drawingState.objects.find((candidate) => candidate.id === g.parentCurveId);
+
+            g.contact = { x: point.x, y: point.y };
+
+            if (object.engineering?.mode === "plot" && curve) {
+                const strokes = enggMathModel.curveStrokes(curve, g.functionId || null);
+                const tangent = strokes.length ? enggMathModel.pathDirectionAt(strokes[0], point) : null;
+                const direction = enggMathModel.constructionDirection(
+                    object.engineering?.constructionType || "tangent",
+                    tangent
+                );
+
+                if (direction) {
+                    g.direction = direction;
+                }
+            }
+
+            const ends = enggMathModel.constructionEnds(g.contact, g.direction, g.length);
+
+            if (ends) {
+                g.start = ends.start;
+                g.end = ends.end;
+            }
+
+            return;
+        }
+
+        if (drag.kind === "start" || drag.kind === "end") {
+            /*
+             * THE ENDS SET THE LENGTH, and a Plot construction's direction
+             * stays constrained: the end is projected onto the construction's
+             * own line, so a drag can lengthen it but never turn it away from
+             * its parent.
+             */
+            const direction = g.direction;
+
+            if (!direction) {
+                return;
+            }
+
+            const dx = point.x - g.contact.x;
+            const dy = point.y - g.contact.y;
+
+            const along = dx * direction.x + dy * direction.y;
+            const length = Math.max(1, Math.abs(along) * 2);
+
+            const ends = enggMathModel.constructionEnds(g.contact, direction, length);
+
+            if (ends) {
+                g.length = length;
+                g.start = ends.start;
+                g.end = ends.end;
+            }
+
+            return;
+        }
+
+        return;
+    }
+
+    if (object.type === "math-slope-triangle") {
+        if (drag.kind === "start" || drag.kind === "end") {
+            g[drag.kind] = { x: point.x, y: point.y };
+            g.corner = { x: g.end.x, y: g.start.y };
         }
 
         return;

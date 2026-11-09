@@ -52,6 +52,7 @@ import enggPressureProfile from "../../../features/workspace/model/fluids/pressu
 import enggFlowProfile from "../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../features/workspace/model/fluids/section-plane.js";
 import enggQuantities from "../../../shared/units/quantities.js";
+import enggMathModel from "../../../features/workspace/math/math-model.js";
 
 const COORDINATE_SYSTEM = "coordinate-system-2d";
 
@@ -127,7 +128,16 @@ const FILLABLE = new Set([
     "valve",
     "flow-meter",
     "reservoir-tank",
-    "pressure-profile"
+    "pressure-profile",
+
+    /*
+     * THE MATH OBJECTS THAT ENCLOSE A REGION: a Plot's background and a Slope
+     * Triangle's interior. A Point, a Vector, an Equation and a Tangent are
+     * open marks, so they are not here - their fill is transparent by default
+     * and has nothing to fill.
+     */
+    "math-plot",
+    "math-slope-triangle"
 ]);
 
 /*
@@ -195,7 +205,20 @@ const STROKE_TYPES = new Set([
     	"fluid-level",
     	"flow-direction-diagram",
     	"pressure-profile",
-    	"section-plane"
+    	"section-plane",
+
+    	/*
+    	 * THE MATH OBJECTS ARE DRAWN WITH A PEN TOO, so every one of them gets the
+    	 * same Line Style, Outline Colour and Thickness the rest of the drawing
+    	 * uses. An Equation is the exception: its ink is its text, so it takes the
+    	 * colour and the fill but not a line style - see its own section.
+    	 */
+    	"math-point",
+    	"math-vector",
+    	"math-plot",
+    	"math-equation",
+    	"math-tangent",
+    	"math-slope-triangle"
     ]);
 
 /*
@@ -666,6 +689,609 @@ const nameField = {
         object.label = name;
 
         return true;
+    }
+};
+
+/* ============================================================
+ * THE MATH / ANALYSIS FIELDS
+ * ============================================================
+ *
+ * Declared as a table of their own and spread into `FIELDS`, so the Math
+ * section's properties are written in one place and the shared table stays
+ * readable. Each field states its own `applies`, so a property is offered only
+ * on the object that has it.
+ *
+ * THE OBJECT'S NAME IS NOT ITS DISPLAY LABEL. `name` is the Objects-list
+ * identity; a Point's drawn text is `labelMode` + `labelText`, and a Vector's
+ * is its `label`. The two are deliberately separate fields.
+ */
+const MATH_TYPES = Object.freeze({
+    point: "math-point",
+    vector: "math-vector",
+    plot: "math-plot",
+    equation: "math-equation",
+    tangent: "math-tangent",
+    slopeTriangle: "math-slope-triangle"
+});
+
+function mathEngineering(object) {
+    if (!object.engineering || typeof object.engineering !== "object") {
+        object.engineering = {};
+    }
+
+    return object.engineering;
+}
+
+function mathGeometry(object) {
+    if (!object.geometry || typeof object.geometry !== "object") {
+        object.geometry = {};
+    }
+
+    return object.geometry;
+}
+
+function mathNumberField(key, label, extra = {}) {
+    return {
+        kind: "number",
+        label,
+        ...extra,
+        read: (object) => {
+            const value = Number(object.geometry?.[key]);
+
+            return Number.isFinite(value) ? value : 0;
+        },
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return false;
+            }
+
+            mathGeometry(object)[key] = number;
+
+            return true;
+        }
+    };
+}
+
+function mathToggleField(key, label, extra = {}) {
+    return {
+        kind: "toggle",
+        label,
+        ...extra,
+        read: (object) => object.engineering?.[key] === true,
+        write: (object, value) => {
+            mathEngineering(object)[key] = Boolean(value);
+
+            return true;
+        }
+    };
+}
+
+const MATH_FIELDS = {
+    /* ---------------------------------------------------------- Point */
+    mathLabelMode: {
+        kind: "choice",
+        label: "Label Mode",
+        applies: (object) => object.type === MATH_TYPES.point,
+        read: (object) => object.engineering?.labelMode || "name",
+        write: (object, value) => {
+            if (!["name", "coordinates", "custom"].includes(value)) {
+                return false;
+            }
+
+            mathEngineering(object).labelMode = value;
+
+            return true;
+        },
+        options: [
+            { value: "name", label: "Object Label" },
+            { value: "coordinates", label: "Coordinates" },
+            { value: "custom", label: "Custom Text" }
+        ]
+    },
+
+    mathLabelText: {
+        kind: "text",
+        label: "Label Text",
+        applies: (object) => object.type === MATH_TYPES.point && object.engineering?.labelMode === "custom",
+        read: (object) => String(object.engineering?.labelText ?? ""),
+        write: (object, value) => {
+            mathEngineering(object).labelText = String(value ?? "");
+
+            return true;
+        }
+    },
+
+    mathShowCoordinates: mathToggleField("showCoordinates", "Show Coordinate Values", {
+        applies: (object) => object.type === MATH_TYPES.point
+    }),
+
+    mathShowXProjection: mathToggleField("showXProjection", "Show X Projection", {
+        applies: (object) => object.type === MATH_TYPES.point
+    }),
+
+    mathShowYProjection: mathToggleField("showYProjection", "Show Y Projection", {
+        applies: (object) => object.type === MATH_TYPES.point
+    }),
+
+    mathSnapMode: {
+        kind: "choice",
+        label: "Snap Mode",
+        applies: (object) => object.type === MATH_TYPES.point,
+        read: (object) => object.engineering?.snapMode || "auto",
+        write: (object, value) => {
+            if (!["auto", "grid", "object", "none"].includes(value)) {
+                return false;
+            }
+
+            mathEngineering(object).snapMode = value;
+
+            return true;
+        },
+        options: [
+            { value: "auto", label: "Automatic" },
+            { value: "grid", label: "Grid" },
+            { value: "object", label: "Object" },
+            { value: "none", label: "None" }
+        ]
+    },
+
+    /*
+     * PARENT GRAPH, PARENT CURVE AND LABEL POSITION ARE NOT FEATURES ROWS.
+     *
+     * A parent is a RELATIONSHIP established by where the object was placed -
+     * a point drawn on a curve belongs to that curve, a curve plotted on a
+     * graph belongs to that graph - not a setting a student edits. Exposing a
+     * reference id as a field would let them point an object at a parent it
+     * was never drawn on, and the geometry would then describe something the
+     * drawing does not show.
+     *
+     * A label's position is dragged by its own handle on the sheet, so a pair
+     * of numeric rows for it would be a second control over the same fact.
+     */
+
+    /* --------------------------------------------------------- Vector */
+    mathShowComponents: mathToggleField("showComponents", "Show Component Arrows", {
+        applies: (object) => object.type === MATH_TYPES.vector
+    }),
+
+    mathShowProjectionGuides: mathToggleField("showProjectionGuides", "Show Projection Guides", {
+        applies: (object) => object.type === MATH_TYPES.vector
+    }),
+
+    mathShowComponentLabels: mathToggleField("showComponentLabels", "Show Component Labels", {
+        applies: (object) => object.type === MATH_TYPES.vector
+    }),
+
+    mathShowMagnitude: mathToggleField("showMagnitude", "Show Magnitude", {
+        applies: (object) => object.type === MATH_TYPES.vector
+    }),
+
+    mathShowDirection: mathToggleField("showDirection", "Show Direction", {
+        applies: (object) => object.type === MATH_TYPES.vector
+    }),
+
+    /*
+     * A VECTOR'S LENGTH IS ITS HEAD HANDLE.
+     *
+     * Dragging the head sets the length and the direction together, which is
+     * what a vector IS - so a numeric Length row would be a second control
+     * over the same two facts, and the two would have to be kept in step.
+     */
+
+    /* ---------------------------------------------------------- Graph */
+    mathGraphXMin: mathNumberField("xMin", "X Minimum", {
+        applies: (object) => object.type === MATH_TYPES.plot
+    }),
+    mathGraphXMax: mathNumberField("xMax", "X Maximum", {
+        applies: (object) => object.type === MATH_TYPES.plot
+    }),
+    /*
+     * A TYPED Y LIMIT IS THE STUDENT'S OWN RANGE.
+     *
+     * Until one is typed, the Y range is FITTED to the graph's functions - which
+     * is what makes `x^2` visible instead of drawn above the plot area. The
+     * moment a limit is entered, `yRangeExplicit` records that the range is
+     * theirs, and it is never re-fitted behind their back.
+     */
+    mathGraphYMin: {
+        ...mathNumberField("yMin", "Y Minimum", {
+            applies: (object) => object.type === MATH_TYPES.plot
+        }),
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return false;
+            }
+
+            const geometry = mathGeometry(object);
+
+            geometry.yMin = number;
+            geometry.yRangeExplicit = true;
+
+            return true;
+        }
+    },
+    mathGraphYMax: {
+        ...mathNumberField("yMax", "Y Maximum", {
+            applies: (object) => object.type === MATH_TYPES.plot
+        }),
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return false;
+            }
+
+            const geometry = mathGeometry(object);
+
+            geometry.yMax = number;
+            geometry.yRangeExplicit = true;
+
+            return true;
+        }
+    },
+
+    mathGraphXTick: {
+        kind: "number",
+        label: "X Tick Spacing",
+        step: 0.5,
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => Number(object.geometry?.xTickSpacing) || 0,
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number) || number < 0) {
+                return false;
+            }
+
+            mathGeometry(object).xTickSpacing = number > 0 ? number : null;
+
+            return true;
+        }
+    },
+
+    mathGraphYTick: {
+        kind: "number",
+        label: "Y Tick Spacing",
+        step: 0.5,
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => Number(object.geometry?.yTickSpacing) || 0,
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number) || number < 0) {
+                return false;
+            }
+
+            mathGeometry(object).yTickSpacing = number > 0 ? number : null;
+
+            return true;
+        }
+    },
+
+    mathGraphShowXAxis: {
+        kind: "toggle",
+        label: "Show X Axis",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => object.geometry?.showXAxis !== false,
+        write: (object, value) => setGeometryFlag(object, "showXAxis", value)
+    },
+
+    mathGraphShowYAxis: {
+        kind: "toggle",
+        label: "Show Y Axis",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => object.geometry?.showYAxis !== false,
+        write: (object, value) => setGeometryFlag(object, "showYAxis", value)
+    },
+
+    mathGraphShowGrid: {
+        kind: "toggle",
+        label: "Show Grid",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => object.geometry?.showGrid !== false,
+        write: (object, value) => setGeometryFlag(object, "showGrid", value)
+    },
+
+    mathGraphShowMinorGrid: {
+        kind: "toggle",
+        label: "Minor Grid",
+        applies: (object) => object.type === MATH_TYPES.plot && object.geometry?.showGrid !== false,
+        read: (object) => object.geometry?.showMinorGrid === true,
+        write: (object, value) => setGeometryFlag(object, "showMinorGrid", value)
+    },
+
+    mathGraphShowTickLabels: {
+        kind: "toggle",
+        label: "Show Tick Labels",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => object.geometry?.showTickLabels !== false,
+        write: (object, value) => setGeometryFlag(object, "showTickLabels", value)
+    },
+
+    mathGraphXLabel: {
+        kind: "text",
+        label: "X-axis Label",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => String(object.geometry?.xLabel ?? "x"),
+        write: (object, value) => setGeometryText(object, "xLabel", value)
+    },
+
+    mathGraphYLabel: {
+        kind: "text",
+        label: "Y-axis Label",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => String(object.geometry?.yLabel ?? "y"),
+        write: (object, value) => setGeometryText(object, "yLabel", value)
+    },
+
+    mathGraphEqualUnits: {
+        kind: "toggle",
+        label: "Equal Unit Scaling",
+        applies: (object) => object.type === MATH_TYPES.plot,
+        read: (object) => object.geometry?.equalUnits !== false,
+        write: (object, value) => setGeometryFlag(object, "equalUnits", value)
+    },
+
+    /*
+     * A GRAPH'S WIDTH AND HEIGHT ARE ITS CORNER AND EDGE HANDLES.
+     *
+     * Resizing the box on the sheet is the direct control, and it is the one
+     * that keeps the plot area's proportions visible while it is being changed.
+     * Numeric rows for the same two numbers would be a second control over the
+     * same fact.
+     */
+
+    /* ---------------------------------------------------------- Curve */
+
+    /*
+     * A CURVE'S CREATION MODE IS NOT A FEATURES ROW.
+     *
+     * Sketch and Plot are chosen in the toolbar's mode popup, which is where
+     * the student picks how the curve is made. Repeating the answer here would
+     * be a second place the same choice is stated, and the two could disagree.
+     * What the panel DOES show is the settings that belong to the mode the
+     * curve was made in - an expression for a Plot, a fit for a Sketch - and
+     * each of those is gated on the mode itself.
+     */
+
+    /*
+     * A PLOT'S FUNCTIONS ARE A LIST, NOT A FIELD.
+     *
+     * Each function has its own expression, variable, domain and visibility,
+     * and a plot may hold several - so they are rendered by the panel itself
+     * (`plotFunctionsMarkup`), exactly as a pressure profile's data table is.
+     * A single "Expression" row could only ever describe one of them.
+     */
+
+    /* ------------------------------------------------------- Equation */
+    mathEquationContent: {
+        kind: "text",
+        label: "Expression Content",
+        applies: (object) => object.type === MATH_TYPES.equation,
+        read: (object) => String(object.engineering?.content ?? ""),
+        write: (object, value) => {
+            mathEngineering(object).content = String(value ?? "");
+
+            return true;
+        }
+    },
+
+    mathEquationFontSize: {
+        kind: "number",
+        label: "Font Size",
+        min: 6,
+        max: 96,
+        step: 1,
+        applies: (object) => object.type === MATH_TYPES.equation,
+        read: (object) => Number(object.engineering?.fontSize) || 16,
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number) || number < 6 || number > 96) {
+                return false;
+            }
+
+            mathEngineering(object).fontSize = number;
+
+            return true;
+        }
+    },
+
+    mathEquationAlign: {
+        kind: "segmented",
+        label: "Horizontal Alignment",
+        applies: (object) => object.type === MATH_TYPES.equation,
+        read: (object) => object.engineering?.align || "center",
+        write: (object, value) => {
+            if (!["left", "center", "right"].includes(value)) {
+                return false;
+            }
+
+            mathEngineering(object).align = value;
+
+            return true;
+        },
+        options: [
+            { value: "left", label: "Left" },
+            { value: "center", label: "Centre" },
+            { value: "right", label: "Right" }
+        ]
+    },
+
+    mathEquationVerticalAlign: {
+        kind: "segmented",
+        label: "Vertical Alignment",
+        applies: (object) => object.type === MATH_TYPES.equation,
+        read: (object) => object.engineering?.verticalAlign || "middle",
+        write: (object, value) => {
+            if (!["top", "middle", "bottom"].includes(value)) {
+                return false;
+            }
+
+            mathEngineering(object).verticalAlign = value;
+
+            return true;
+        },
+        options: [
+            { value: "top", label: "Top" },
+            { value: "middle", label: "Middle" },
+            { value: "bottom", label: "Bottom" }
+        ]
+    },
+
+    mathEquationDisplayMode: {
+        kind: "segmented",
+        label: "Math Display Mode",
+        applies: (object) => object.type === MATH_TYPES.equation,
+        read: (object) => object.engineering?.displayMode || "display",
+        write: (object, value) => {
+            if (!["inline", "display"].includes(value)) {
+                return false;
+            }
+
+            mathEngineering(object).displayMode = value;
+
+            return true;
+        },
+        options: [
+            { value: "inline", label: "Inline" },
+            { value: "display", label: "Display" }
+        ]
+    },
+
+    /* ------------------------------------------------ Tangent / Normal */
+    mathConstructionType: {
+        kind: "segmented",
+        label: "Construction Type",
+        applies: (object) => object.type === MATH_TYPES.tangent,
+        read: (object) => object.engineering?.constructionType || "tangent",
+        write: (object, value) => {
+            if (!["tangent", "normal"].includes(value)) {
+                return false;
+            }
+
+            const engineering = mathEngineering(object);
+
+            if (engineering.constructionType === value) {
+                return true;
+            }
+
+            engineering.constructionType = value;
+
+            /*
+             * CHANGING THE TYPE UPDATES THE OBJECT, it does not create a second
+             * one. The direction is turned a quarter turn about the contact
+             * point, and the two ends are rebuilt from it - so the construction
+             * the student is looking at becomes the other construction.
+             */
+            const geometry = mathGeometry(object);
+            const direction = geometry.direction;
+
+            if (direction) {
+                const turned =
+                    value === "normal"
+                        ? { x: -direction.y, y: direction.x }
+                        : { x: direction.y, y: -direction.x };
+
+                const ends = enggMathModel.constructionEnds(
+                    geometry.contact,
+                    turned,
+                    geometry.length
+                );
+
+                if (ends) {
+                    geometry.direction = turned;
+                    geometry.start = ends.start;
+                    geometry.end = ends.end;
+                }
+            }
+
+            return true;
+        },
+        options: [
+            { value: "tangent", label: "Tangent" },
+            { value: "normal", label: "Normal" }
+        ]
+    },
+
+    /*
+     * A TANGENT / NORMAL HAS NO CREATION MODE.
+     *
+     * It is one construction, derived from its parent curve's local direction
+     * at the contact point. There is no Sketch variant to report, so the row
+     * that used to state one is gone rather than left showing a value that no
+     * longer means anything.
+     */
+
+    /*
+     * A CONSTRUCTION'S LINE LENGTH IS ITS ENDPOINT HANDLES.
+     *
+     * Dragging either end lengthens the line along its own direction, which is
+     * the direct control and the one that shows the result while it is being
+     * changed. A numeric Length row would be a second control over the same
+     * fact.
+     */
+
+    /* ------------------------------------------------- Slope Triangle */
+
+    /*
+     * A SLOPE TRIANGLE HAS NO CREATION MODE AND NO PARENT ROW.
+     *
+     * It is derived from a parent line and two positions along it, and the
+     * parent is a RELATIONSHIP established by where the triangle was drawn -
+     * not a setting. Its two positions are its endpoint handles.
+     */
+
+    mathSlopeShowRise: {
+        kind: "toggle",
+        label: "Show Rise",
+        applies: (object) => object.type === MATH_TYPES.slopeTriangle,
+        read: (object) => object.engineering?.showRise !== false,
+        write: (object, value) => {
+            mathEngineering(object).showRise = Boolean(value);
+
+            return true;
+        }
+    },
+
+    mathSlopeShowRun: {
+        kind: "toggle",
+        label: "Show Run",
+        applies: (object) => object.type === MATH_TYPES.slopeTriangle,
+        read: (object) => object.engineering?.showRun !== false,
+        write: (object, value) => {
+            mathEngineering(object).showRun = Boolean(value);
+
+            return true;
+        }
+    },
+
+    mathSlopeShowValue: {
+        kind: "toggle",
+        label: "Show Slope Value",
+        applies: (object) => object.type === MATH_TYPES.slopeTriangle,
+        read: (object) => object.engineering?.showSlope === true,
+        write: (object, value) => {
+            mathEngineering(object).showSlope = Boolean(value);
+
+            return true;
+        }
+    },
+
+    mathSlopeRightAngle: {
+        kind: "toggle",
+        label: "Right-Angle Marker",
+        applies: (object) => object.type === MATH_TYPES.slopeTriangle,
+        read: (object) => object.engineering?.showRightAngle !== false,
+        write: (object, value) => {
+            mathEngineering(object).showRightAngle = Boolean(value);
+
+            return true;
+        }
     }
 };
 
@@ -1447,7 +2073,21 @@ const FIELDS = {
             return true;
         },
         label: "Text"
-    }
+    },
+
+    /* ============================================================
+     * THE MATH / ANALYSIS FIELDS
+     * ============================================================
+     *
+     * Every one of these is a property of the object's own model, read and
+     * written through the same `readField`/`writeField` seam as every other
+     * field - so a typed value and a dragged handle are the same edit.
+     *
+     * A field that does not apply to the selected object is dropped by
+     * `groupsFor`, so a Point never shows a curve's domain and a graph never
+     * shows a vector's components.
+     */
+    ...MATH_FIELDS
 };
 
 function setGeometryFlag(object, key, value) {
@@ -4926,6 +5566,202 @@ function orderSections(groups) {
     return [...own, ...shared];
 }
 
+/*
+ * ============================================================
+ * THE MATH / ANALYSIS SECTIONS
+ * ============================================================
+ *
+ * Object and Appearance are the shared foundation, exactly as they are for
+ * every other tool. A tool's OWN settings are a separate, collapsible dropdown
+ * at the SAME level - Graph Settings, Point Settings, Curve Settings - rather
+ * than being folded into Object or Appearance, so the panel reads as one list
+ * of sections and the tool's own controls are one press away.
+ *
+ * TRANSFORM IS DELIBERATELY ABSENT FROM EVERY MATH TOOL.
+ *
+ * A Math object's position, size, endpoints, control points and rotation are
+ * all manipulated DIRECTLY on the drawing - by dragging the object, by its
+ * corner and edge handles, by its endpoint and control-point handles, by its
+ * rotation handle. A Features row for any of them would be a second control
+ * over the same fact, and the two would have to be kept in step for no gain.
+ * The shared Transform section is therefore not offered at all: an empty
+ * heading, or one holding only rows that duplicate the canvas, is worse than
+ * no heading.
+ *
+ * WHAT IS NOT HERE, AND WHY.
+ *
+ *   Parent Graph / Parent Curve   These are RELATIONSHIPS, established by
+ *                                 where the object was placed, not settings a
+ *                                 student edits. Exposing a reference id as a
+ *                                 text field would let them point an object at
+ *                                 a graph it was never drawn on.
+ *   Width / Height / Length       Resizing handles.
+ *   X Shift / Y Shift             Dragging the object.
+ *   Rotate                        The rotation handle.
+ *   Label position                The label handle.
+ *   Domain ends                   The domain handles on a plotted curve.
+ */
+const MATH_GROUPS = Object.freeze({
+    point: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["stroke", "lineWidth", "customWidth"]
+        },
+        {
+            id: "math-point-settings",
+            heading: "Point Settings",
+            collapsible: true,
+            fields: [
+                "mathLabelMode",
+                "mathLabelText",
+                "mathShowCoordinates",
+                "mathShowXProjection",
+                "mathShowYProjection",
+                "mathSnapMode"
+            ]
+        }
+    ],
+
+    vector: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["lineType", "stroke", "lineWidth", "customWidth"]
+        },
+        {
+            id: "math-vector-settings",
+            heading: "Vector Settings",
+            collapsible: true,
+            fields: [
+                "mathShowComponents",
+                "mathShowProjectionGuides",
+                "mathShowComponentLabels",
+                "mathShowMagnitude",
+                "mathShowDirection"
+            ]
+        }
+    ],
+
+    /*
+     * THE PLOT: THE BOX, THE COORDINATE SETTINGS AND THE FUNCTIONS INSIDE IT.
+     *
+     * One dropdown holds everything that is about the PLOT rather than about
+     * its appearance: the four limits, the tick spacing, the equal-unit switch,
+     * the axis and grid switches, the labels - and the list of functions drawn
+     * on it. The functions are a LIST, so they are rendered by the panel itself
+     * (see `plotFunctionsMarkup`), exactly as a pressure profile's data table
+     * is; everything else is an ordinary row.
+     */
+    plot: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"]
+        },
+        {
+            id: "math-plot-settings",
+            heading: "Graph Settings",
+            collapsible: true,
+            fields: [
+                "mathGraphXMin",
+                "mathGraphXMax",
+                "mathGraphYMin",
+                "mathGraphYMax",
+                "mathGraphXTick",
+                "mathGraphYTick",
+                "mathGraphEqualUnits",
+                "mathGraphShowXAxis",
+                "mathGraphShowYAxis",
+                "mathGraphShowGrid",
+                "mathGraphShowMinorGrid",
+                "mathGraphShowTickLabels",
+                "mathGraphXLabel",
+                "mathGraphYLabel"
+            ]
+        }
+    ],
+
+    equation: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["stroke", "lineWidth", "customWidth", "fillMode", "fill"]
+        },
+        {
+            id: "math-equation-settings",
+            heading: "Equation Settings",
+            collapsible: true,
+            fields: [
+                "mathEquationContent",
+                "mathEquationFontSize",
+                "mathEquationAlign",
+                "mathEquationVerticalAlign",
+                "mathEquationDisplayMode"
+            ]
+        }
+    ],
+
+    tangent: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["lineType", "stroke", "lineWidth", "customWidth"]
+        },
+        {
+            id: "math-construction-settings",
+            heading: "Construction Settings",
+            collapsible: true,
+            fields: ["mathConstructionType"]
+        }
+    ],
+
+    slopeTriangle: [
+        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        {
+            id: "appearance",
+            heading: "Appearance",
+            fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"]
+        },
+        {
+            id: "math-triangle-settings",
+            heading: "Triangle Settings",
+            collapsible: true,
+            fields: [
+                "mathSlopeShowRise",
+                "mathSlopeShowRun",
+                "mathSlopeShowValue",
+                "mathSlopeRightAngle"
+            ]
+        }
+    ]
+});
+
+/* Which set of sections a Math object uses, from its own type. */
+export function mathGroupsFor(object) {
+    switch (object?.type) {
+        case MATH_TYPES.point:
+            return MATH_GROUPS.point;
+        case MATH_TYPES.vector:
+            return MATH_GROUPS.vector;
+        case MATH_TYPES.plot:
+            return MATH_GROUPS.plot;
+        case MATH_TYPES.equation:
+            return MATH_GROUPS.equation;
+        case MATH_TYPES.tangent:
+            return MATH_GROUPS.tangent;
+        case MATH_TYPES.slopeTriangle:
+            return MATH_GROUPS.slopeTriangle;
+        default:
+            return null;
+    }
+}
+
 export function groupsFor(object) {
     if (!object) {
         return [];
@@ -4933,6 +5769,29 @@ export function groupsFor(object) {
 
     if (isSignalLine(object)) {
         return [];
+    }
+
+    /*
+     * A MATH OBJECT HAS ITS OWN SECTIONS: the shared Object and Appearance,
+     * then ONE collapsible dropdown holding the tool's own settings.
+     *
+     * A GROUP WITH NO APPLICABLE ROWS IS DROPPED, so a Sketch curve never shows
+     * an Expression row and a Plot curve never shows a Fit row - the panel
+     * states only what the selected object actually has. That is also why an
+     * empty tool-specific dropdown can never appear: it is filtered out by the
+     * same rule that filters an empty Appearance.
+     */
+    const math = mathGroupsFor(object);
+
+    if (math) {
+        return math
+            .map((group) => ({
+                ...group,
+                fields: group.fields
+                    .map((key) => ({ key, definition: definitionOf(key) }))
+                    .filter((entry) => entry.definition && entry.definition.applies(object))
+            }))
+            .filter((group) => group.transform || group.fields.length);
     }
 
     /*
@@ -5270,7 +6129,15 @@ const TYPE_LABELS = {
     "slider-connection": "Slider Connection",
     dimension: "Dimension",
     annotation: "Annotation",
-    annotate: "Annotation"
+    annotate: "Annotation",
+
+    /* The Math / Analysis objects, named for what they are. */
+    "math-point": "Point",
+    "math-vector": "Vector",
+    "math-plot": "Graph",
+    "math-equation": "Equation",
+    "math-tangent": "Tangent",
+    "math-slope-triangle": "Slope Triangle"
 };
 
 export function typeLabelOf(object) {
@@ -5442,7 +6309,15 @@ const TYPE_ICON_KEYS = {
     "pressure-tap": "Pressure Tap",
     "flow-direction-diagram": "Flow Direction Diagram",
     "pressure-profile": "Pressure Profile",
-    "section-plane": "Section Plane"
+    "section-plane": "Section Plane",
+
+    /* The Math / Analysis objects wear the artwork of the tool that made them. */
+    "math-point": "Math Point",
+    "math-vector": "Math Vector",
+    "math-plot": "Coordinate Graph",
+    "math-equation": "Equation",
+    "math-tangent": "Tangent Normal",
+    "math-slope-triangle": "Slope Triangle"
 };
 
 const ANNOTATE_ICON_KEYS = {

@@ -35,6 +35,15 @@ export function commitCreatedFeature(
             drawingState
         );
 
+    /*
+     * A SKETCH IS NOT DRAWN ON THE SHEET ANY MORE.
+     *
+     * A stroke used to be adopted into a selected sketch-mode diagram as it was
+     * committed here. The Sketch Editor is now the one place a sketch is drawn,
+     * and it commits its own features on Apply - so there is nothing to adopt,
+     * and adopting as well would give a student two ways to add ink to a
+     * diagram, which is exactly what the editor replaces.
+     */
     enggDrawingState.addObject(
         drawingState,
         object

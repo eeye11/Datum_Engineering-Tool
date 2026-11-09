@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { migrateLegacySketch } from "../statics/analysis-sketch.js";
 import enggErrorLog from "../../../app/error-log.js";
 import enggDrawingExport from "../../../shared/file/document-export.js";
 import enggDocumentFile from "../../../shared/file/document-file.js";
@@ -1739,6 +1740,25 @@ function sizeOfFile(file) {
     return Number.isFinite(size) ? size : null;
 }
 
+/*
+ * Convert every legacy sketch in the open document into real features.
+ *
+ * Asked of the DIAGRAMS rather than of a saved flag, so a file that was already
+ * converted is a no-op: `migrateLegacySketch` returns immediately when a
+ * diagram has no `sketchElements`, and the list is removed when it does.
+ */
+function migrateLegacySketches() {
+    (drawingState.objects || [])
+        .filter(
+            object =>
+                object.type === "analysis-diagram" &&
+                Array.isArray(object.geometry?.sketchElements)
+        )
+        .forEach(diagram =>
+            migrateLegacySketch(diagram, drawingState)
+        );
+}
+
 export function loadDrawing(
     payload,
     fileName,
@@ -1961,6 +1981,25 @@ function applyLoadedDocument(data, fileName, previous, result) {
     enggDrawingState.refreshAnalysisObjects(
         drawingState
     );
+
+    /*
+     * ========================================================
+     * A SKETCH SAVED BY THE OLD SYSTEM IS CONVERTED, NOT LOST
+     * ========================================================
+     *
+     * A drawing saved before the Sketch system was replaced carries its
+     * hand-drawn strokes in `geometry.sketchElements` - graph-local points that
+     * were never features. Those strokes are the student's work, so they are
+     * turned into real Line and Polyline features belonging to the diagram, and
+     * the old list is removed.
+     *
+     * It runs HERE, after the sheet is in the editor and before the change is
+     * committed, so the conversion is part of opening the file: one undoable
+     * step, and a document that is clean the moment it is open. Running it
+     * lazily on first render would leave a window in which the old list and the
+     * new features both existed.
+     */
+    migrateLegacySketches();
 
     syncWorkspaceSettingToggles();
 

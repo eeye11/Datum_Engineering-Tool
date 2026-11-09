@@ -149,6 +149,7 @@ const SCHEMATIC_CLICK_TOOLS = [
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS } from "../statics/analysis-tools.js";
 import {
     DYNAMICS_PLACEMENT_TOOLS,
     DYNAMICS_SPAN_TOOLS,
@@ -156,6 +157,10 @@ import {
     DYNAMICS_BOX_TOOLS
 } from "../dynamics/dynamics-tools.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
+import { beginMathDrag, finishMathDrag, moveMathDrag } from "../math/math-creation.js";
+import { MATH_TOOL_IDS } from "../math/math-tools.js";
+import { beginMathStroke, finishMathStroke, mathSketchArmed, moveMathStroke } from "../math/math-sketch.js";
+import { isMathTool } from "../math/math-tools.js";
 
 /*
  * The Geometry tools whose feature is a start point and an end point.
@@ -392,7 +397,22 @@ export function isDragCreationTool(
     if (
         isDimensionTool(toolId) ||
         isAnnotationTool(toolId) ||
-        toolId === "analysis"
+        toolId === "analysis" ||
+
+        /*
+         * AND THE THREE DIAGRAMS, BY THEIR REAL IDS.
+         *
+         * The list named `"analysis"`, which is not a tool id - the diagrams
+         * are `shear-force-diagram`, `bending-moment-diagram` and
+         * `axial-force-diagram`. So the exclusion never matched, the diagrams
+         * fell through to the geometry list below, and a press with one armed
+         * began a drag session instead of naming the member. Asked of the
+         * diagram table so a fourth diagram is covered without another edit.
+         */
+        Object.prototype.hasOwnProperty.call(
+            ANALYSIS_DIAGRAM_TOOLS,
+            toolId
+        )
     ) {
         return false;
     }
@@ -446,6 +466,38 @@ export function isDragCreationTool(
      */
     if (toolId === "freeform-polygon") {
         return true;
+    }
+
+    /*
+     * A MATH VECTOR AND A COORDINATE GRAPH ARE DRAWN BY ONE GESTURE.
+     *
+     * The press is the tail (or the first corner) and the release is the head
+     * (or the opposite corner), so both are drag tools. The other Math tools
+     * are click-driven and are deliberately absent.
+     */
+    if (toolId === MATH_TOOL_IDS.vector || toolId === MATH_TOOL_IDS.plot) {
+        return true;
+    }
+
+    /*
+     * A MATH TOOL IN SKETCH MODE IS A TRACE TOOL. Its stroke is captured by the
+     * shared press-move-release session, so the press belongs to it.
+     */
+    if (mathSketchArmed()) {
+        return true;
+    }
+
+    /*
+     * THE OTHER MATH TOOLS ARE CLICK-DRIVEN, NOT DRAG TOOLS.
+     *
+     * A Point, an Equation, a plotted Curve, a Tangent and a Slope Triangle
+     * take their inputs from clicks, so a press with one armed must fall
+     * through to the click router rather than arming a drag session that would
+     * swallow it. Naming them here is what keeps the drag pipeline from
+     * claiming a press the tool never asked for.
+     */
+    if (isMathTool(toolId)) {
+        return false;
     }
 
     /*
@@ -947,6 +999,48 @@ export function beginCreationDrag(
     }
 
     /*
+     * A MATH VECTOR OR COORDINATE GRAPH TAKES ITS WHOLE OBJECT FROM THE ONE
+     * GESTURE. The press is the first point and the release the second; nothing
+     * is written until the release, so Escape leaves no half-built object.
+     */
+    if (mathSketchArmed()) {
+        if (beginMathStroke(event)) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                mathStroke: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    if (
+        drawingState.activeTool === MATH_TOOL_IDS.vector ||
+        drawingState.activeTool === MATH_TOOL_IDS.plot
+    ) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        if (beginMathDrag(event, resolvePointerEvent(event))) {
+            editorState.creationDrag = {
+                pointerId: event.pointerId,
+                mathDrag: true,
+                startScreen: { x: event.clientX, y: event.clientY },
+                moved: false
+            };
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /*
      * A press that is neither the start of a feature nor the next point of
      * one belongs to whatever else is running - a load being built, a
      * truss, a dimension - and is left to that.
@@ -958,6 +1052,20 @@ export function beginCreationDrag(
     ) {
         return false;
     }
+
+    /*
+     * A MATH TOOL THAT IS NOT A DRAG TOOL NEVER ARMS A DRAG SESSION.
+     *
+     * The Vector and the Graph are handled above; every other Math tool takes
+     * its inputs from clicks, so a press with one armed belongs to the click
+     * router. Without this the generic session below would be armed for it and
+     * the press would be swallowed - the tool would arm, print its instruction
+     * and create nothing.
+     */
+    if (isMathTool(drawingState.activeTool)) {
+        return false;
+    }
+
     /*
      * A DYNAMICS SPAN OR BOX TOOL SHOWS ITS GHOST AS SOON AS IT IS ARMED - see
      * the block above, which sets the phase on the press.
@@ -1353,6 +1461,39 @@ export function moveCreationDrag(event) {
         return;
     }
 
+    /* A MATH STROKE IS RECORDED AS THE POINTER MOVES. */
+    if (session.mathStroke) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        moveMathStroke(
+            event,
+            resolution.effectiveConstructionPoint || resolution.rawPointerPoint
+        );
+
+        return;
+    }
+
+    /* A MATH DRAG PREVIEWS THE OBJECT IT WILL CREATE. */
+    if (session.mathDrag) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        moveMathDrag(event, resolvePointerEvent(event));
+
+        return;
+    }
+
     /*
      * ========================================================
      * PIPE / DUCT KEEPS ITS LIVE PREVIEW ON THE INTERACTION
@@ -1713,6 +1854,37 @@ export function finishCreationDrag(
     }
 
     /*
+     * ========================================================
+     * A CLICK IS NEVER CONSUMED
+     * ========================================================
+     *
+     * A release that never travelled is the FIRST CLICK of the click-move-click
+     * workflow, not a drag that failed. It is offered to the shared decision
+     * first, and only a click that decision ANSWERS is consumed - every other
+     * one returns false, so the browser's own click reaches the click router
+     * and starts (or continues) the construction.
+     *
+     * THE SESSION IS DROPPED HERE, ON BOTH PATHS. `beginCreationDrag` refuses to
+     * start while a session exists, so leaving this one behind would lose the
+     * NEXT press - which is the second click of a two-click tool.
+     *
+     * It is read BEFORE any branch below, so no tool-specific path can
+     * accidentally swallow the click - which is exactly the fault this guard
+     * exists to prevent.
+     */
+    if (
+        !session.moved &&
+        finishCreationClick(session)
+    ) {
+        return true;
+    }
+
+    if (!session.moved) {
+        editorState.creationDrag = null;
+        return false;
+    }
+
+    /*
      * A TRACED POLYGON IS CLOSED ON RELEASE.
      *
      * The release is the final vertex joined back to the first, committed
@@ -1730,6 +1902,60 @@ export function finishCreationDrag(
         );
     }
 
+    /*
+     * A MATH DRAG COMMITS AT THE RELEASE. A press that never travelled creates
+     * nothing - a zero-length vector and a zero-size graph are not objects - and
+     * the tool stays armed for a real drag.
+     */
+    if (session.mathStroke) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        editorState.creationDrag = null;
+
+        const resolution = resolvePointerEvent(event);
+
+        /*
+         * A PRESS THAT NEVER TRAVELLED IS A CLICK, NOT A STROKE. The session
+         * is dropped and false is returned, so the browser's click reaches the
+         * click router exactly as it would for any other tool - which is what
+         * keeps a tap from being swallowed by a trace that never started.
+         */
+        if (!session.moved) {
+            finishMathStroke(event, null);
+
+            return false;
+        }
+
+        return finishMathStroke(
+            event,
+            resolution.effectiveConstructionPoint || resolution.rawPointerPoint
+        );
+    }
+
+    if (session.mathDrag) {
+        editorState.creationDrag = null;
+
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        if (!session.moved) {
+            return false;
+        }
+
+        finishMathDrag(resolvePointerEvent(event));
+
+        return true;
+    }
+
     // A pipe's release is authoritative: coalesced or missing move events
     // must not turn a real drag into a click that silently draws nothing.
     if (session.pipeDuct && !session.moved) {
@@ -1737,22 +1963,6 @@ export function finishCreationDrag(
             event.clientX - session.startScreen.x,
             event.clientY - session.startScreen.y
         ) >= DRAG_THRESHOLD_PX;
-    }
-
-    /*
-     * A CLICK WITH A DRAG TOOL LEAVES THE TOOL.
-     *
-     * Read BEFORE the session is dropped, because the decision is made from the
-     * gesture the session recorded. The event's trailing click is CONSUMED - it
-     * has been answered here, and must not also be read as a first point or as a
-     * fresh selection - so true is returned and the caller sets the consumed
-     * flag.
-     */
-    if (
-        !session.moved &&
-        finishCreationClick(session)
-    ) {
-        return true;
     }
 
     editorState.creationDrag = null;

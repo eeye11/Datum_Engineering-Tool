@@ -409,6 +409,28 @@ import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
     }
 
     function analysisValueScale(geometry, rangeWidth, peak) {
+        /*
+         * A SKETCH'S OWN SCALE COMES FIRST.
+         *
+         * A sketch's strokes are ordinary features drawn against a fixed
+         * units-per-value, and that figure is stored on the diagram
+         * (`unitHeight`). It is the authoritative one: re-deriving a scale from
+         * whatever happens to be drawn would make a stroke move when another
+         * stroke was added or erased, although the student's geometry had not
+         * changed.
+         *
+         * A Plot has no such figure - its scale is fitted to its expressions -
+         * so it falls through to the range and peak below.
+         */
+        const declared = Number(geometry.unitHeight);
+
+        if (Number.isFinite(declared) && declared > 0) {
+            return {
+                unitHeight: declared,
+                set: true,
+            };
+        }
+
         const set = geometry.yRange;
 
         const from = Number(set?.from);
@@ -454,259 +476,6 @@ import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
 
             set: false,
         };
-    }
-
-    /*
-     * ========================================================
-     * A SKETCH DIAGRAM'S STROKES, IN WORLD COORDINATES
-     * ========================================================
-     *
-     * THE ONE PLACE a hand-drawn diagram is turned into world-space marks,
-     * used by the renderer that DRAWS it and by anything that has to test
-     * against it - box selection, fit bounds, hit testing. That is the whole
-     * point of extracting it: a selection rectangle and the ink it is drawn
-     * over must be the same geometry, and two implementations of "where is
-     * this stroke" are two chances for them to disagree.
-     *
-     * WHAT IS WRONG WITHOUT IT. A sketch element stores GRAPH-LOCAL points:
-     * x is a station on the member, y is the value in kN or kN·m. The sheet
-     * draws them at `along(x, value)`, which maps the x onto the member's own
-     * length and the value onto the frame's scale. Testing selection against
-     * the RAW stored points tests numbers that are not on the sheet at all, so
-     * a box drawn over the ink finds nothing.
-     *
-     * The return shape mirrors `analysisPlotMarks`, so a caller can treat a
-     * sketched and a plotted diagram the same way:
-     *
-     *   { kind: "curve", id, points: [worldPoint, …] }
-     */
-    /*
-     * THE OBJECT, OR ITS GEOMETRY.
-     *
-     * Callers have both at hand - the renderer holds the geometry, while a
-     * bounds or hit-test path holds the object - and answering either is what
-     * keeps a caller from having to know the difference. A diagram passed as its
-     * geometry is the same diagram.
-     */
-    function analysisSketchMarks(source) {
-        const geometry = source && source.geometry ? source.geometry : source;
-        const elements = Array.isArray(geometry?.sketchElements)
-            ? geometry.sketchElements
-            : [];
-
-        if (!elements.length) {
-            return [];
-        }
-
-        const localRange = geometry.localRange;
-        const start = geometry.start;
-        const end = geometry.end;
-
-        if (!localRange || !start || !end) {
-            return [];
-        }
-
-        const rangeWidth = localRange.to - localRange.from;
-
-        if (!(rangeWidth > 0)) {
-            return [];
-        }
-
-        /*
-         * The peak is taken from the sketch's own points, because a sketch
-         * has no equations to read one from. This is the same value the
-         * drawing path uses, so the marks and the ink cannot be on different
-         * scales.
-         */
-        let peak = 0;
-
-        elements.forEach(element => {
-            sketchPointsOf(element).forEach(point => {
-                if (Number.isFinite(point.y)) {
-                    peak = Math.max(peak, Math.abs(point.y));
-                }
-            });
-        });
-
-        const { unitHeight: scale } = analysisValueScale(
-            geometry,
-            rangeWidth,
-            peak
-        );
-
-        /*
-         * `scale`, not `unitHeight`: the two differ exactly when the student
-         * has set a y-range, and using the wrong one would put the strokes on
-         * one scale and the axis on another.
-         */
-        const along = (x, value) => ({
-            x:
-                start.x +
-                (end.x - start.x) *
-                    ((x - localRange.from) / rangeWidth),
-
-            y: start.y + value * scale,
-        });
-
-        return elements
-            .map(element => {
-                const points = sketchPointsOf(element);
-
-                if (points.length < 2) {
-                    return null;
-                }
-
-                return {
-                    kind: element.kind === "line" ? "line" : "curve",
-                    id: element.id,
-                    points: points.map(point =>
-                        along(point.x, point.y)
-                    ),
-                };
-            })
-            .filter(Boolean);
-    }
-
-    /*
-     * DRAW THE STUDENT'S SKETCH
-     * ========================================================
-     *
-     * The hand-drawn half of an analysis diagram, and the twin of
-     * appendAnalysisPlot above.
-     *
-     * THE SAME PROJECTION, because the two must agree exactly. A student
-     * who sketches an SFD and then plots the same diagram should get the
-     * same shape in the same place - so both read x as a fraction of the
-     * member's own length and both use the same fixed units-per-frame-height.
-     * A sketch and a plot that sat on different scales would make the two
-     * modes look like two different quantities.
-     *
-     * THE MARKS COME FROM `analysisSketchMarks`, so what is drawn here is
-     * exactly what a selection rectangle is tested against - one projection,
-     * used twice rather than written twice.
-     */
-    function appendAnalysisSketch(
-        svg,
-        geometry,
-        toScreen,
-        tint
-    ) {
-        const elements = Array.isArray(geometry.sketchElements)
-            ? geometry.sketchElements
-            : [];
-
-        if (!elements.length) {
-            return;
-        }
-
-        const localRange = geometry.localRange;
-        const start = geometry.start;
-        const end = geometry.end;
-
-        if (!localRange || !start || !end) {
-            return;
-        }
-
-        const rangeWidth = localRange.to - localRange.from;
-
-        if (!(rangeWidth > 0)) {
-            return;
-        }
-
-        const strokeOptions = {
-            fill: "none",
-            stroke: tint,
-            "stroke-width": 1.8,
-            "stroke-linejoin": "round",
-            "stroke-linecap": "round",
-        };
-
-        /*
-         * DRAWN FROM THE SHARED MARKS. The projection that places this ink is
-         * `analysisSketchMarks`, which box selection also tests against - so a
-         * rectangle drawn over a stroke provably covers the stroke, rather
-         * than covering a second, separate calculation of where it is.
-         */
-        analysisSketchMarks(geometry).forEach(mark => {
-            const screen = mark.points.map(toScreen);
-
-            if (screen.length < 2) {
-                return;
-            }
-
-            if (mark.kind === "line") {
-                svg.appendChild(
-                    createSvgElement("line", {
-                        x1: screen[0].x,
-                        y1: screen[0].y,
-                        x2: screen[1].x,
-                        y2: screen[1].y,
-                        ...strokeOptions,
-                    })
-                );
-
-                return;
-            }
-
-            /*
-             * THE SAME QUADRATIC THE EDITOR DRAWS. If the sheet smoothed it
-             * differently from the dialog, the student would place a curve
-             * and get a different curve - so the rule is stated once here and
-             * once there rather than approximated twice.
-             */
-            const d = [`M ${screen[0].x} ${screen[0].y}`];
-
-            for (let i = 1; i < screen.length - 1; i++) {
-                const mid = {
-                    x: (screen[i].x + screen[i + 1].x) / 2,
-                    y: (screen[i].y + screen[i + 1].y) / 2,
-                };
-
-                d.push(
-                    `Q ${screen[i].x} ${screen[i].y} ${mid.x} ${mid.y}`
-                );
-            }
-
-            const last = screen[screen.length - 1];
-
-            d.push(`L ${last.x} ${last.y}`);
-
-            svg.appendChild(
-                createSvgElement("path", {
-                    d: d.join(" "),
-                    ...strokeOptions,
-                })
-            );
-        });
-    }
-
-    /*
-     * The points an element is drawn through. A LINE has two, a THREE-POINT
-     * CURVE has its Start, Bend and End, and a legacy curve has as many as were
-     * clicked.
-     *
-     * `curve3` WAS MISSING, and its absence was not cosmetic: this function is
-     * what both the RENDERER and the box-selection test read, so a three-point
-     * curve returned no points at all - it was never drawn on the sheet, and it
-     * could never be selected. The one curve tool the editor actually creates
-     * was the one curve the sheet could not draw.
-     */
-    function sketchPointsOf(element) {
-        if (!element) {
-            return [];
-        }
-
-        if (element.kind === "line") {
-            return [element.start, element.end];
-        }
-
-        if (element.kind === "curve3") {
-            return [element.start, element.bend, element.end].filter(
-                point => point && Number.isFinite(point.x)
-            );
-        }
-
-        return Array.isArray(element.points) ? element.points : [];
     }
 
     /*
@@ -973,21 +742,19 @@ import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
 
         let peak = 0;
 
+        /*
+         * ONLY A PLOT HAS A PEAK TO READ.
+         *
+         * A sketch's strokes are ordinary features now, so their extent is
+         * their own geometry's - not something this diagram can measure from a
+         * list it no longer holds. A sketch therefore falls through with a peak
+         * of zero, and the readout uses the diagram's own scale, which is what
+         * the strokes were drawn against.
+         */
         if (geometry.mode === "plot" && equations) {
             peak = equations.peakMagnitude(
                 equations.readPlot(geometry)
             );
-        } else if (geometry.mode === "sketch") {
-            (geometry.sketchElements || []).forEach(element => {
-                sketchPointsOf(element).forEach(point => {
-                    if (Number.isFinite(point.y)) {
-                        peak = Math.max(
-                            peak,
-                            Math.abs(point.y)
-                        );
-                    }
-                });
-            });
         }
 
         const { unitHeight } = analysisValueScale(
@@ -1026,9 +793,6 @@ export {
     tickValues,
     numberText,
     analysisValueScale,
-    analysisSketchMarks,
-    appendAnalysisSketch,
-    sketchPointsOf,
     appendAnalysisPlot,
     equationLabels,
     analysisValueAt

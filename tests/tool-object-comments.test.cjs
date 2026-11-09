@@ -62,6 +62,7 @@ const writers = {
   annotations: loadModule("annotations.js"),
   thermodynamics: loadModule("thermodynamics.js"),
   fluids: loadModule("fluids.js"),
+  math: loadModule("math.js"),
 };
 
 /* ============================================================ the inventory */
@@ -228,6 +229,8 @@ function declaredTypes(id) {
       return [...writers.fluids.FLUIDS_SOURCE_TYPES];
     case "annotations":
       return [...writers.annotations.ANNOTATION_SOURCE_TYPES];
+    case "math":
+      return [...writers.math.MATH_SOURCE_TYPES];
     default:
       return [];
   }
@@ -306,6 +309,45 @@ function objectFor(id, type) {
     };
   }
 
+  if (id === "math") {
+    /*
+     * EACH MATH TYPE NEEDS THE GEOMETRY ITS OWN WRITER READS. A point needs a
+     * position, a vector two ends, a plot a box and its functions, a tangent a
+     * contact and two ends, a slope triangle three corners. A fixture that
+     * omitted them would be testing the writer's refusal, not its output.
+     */
+    const geometry = {
+      position: point(10, 10),
+      start: point(0, 0),
+      end: point(40, 0),
+      contact: point(20, 0),
+      corner: point(40, 0),
+      width: 200,
+      height: 200,
+      xMin: -5,
+      xMax: 5,
+      yMin: -5,
+      yMax: 5,
+      functions: [
+        {
+          id: "function-1",
+          mode: "plot",
+          expression: "x^2",
+          variable: "x",
+          domain: { min: -5, max: 5 },
+          visible: true,
+        },
+      ],
+    };
+
+    return {
+      ...base,
+      geometry,
+      engineering: { discipline: "math", mathType: type, content: "E = mc^2" },
+      label: "A",
+    };
+  }
+
   /* annotations */
   return {
     ...base,
@@ -325,6 +367,7 @@ function write(id, object) {
     annotations: (o) => writers.annotations.annotationSourceWriter(o),
     thermodynamics: (o) => writers.thermodynamics.thermodynamicsSourceWriter(o),
     fluids: (o) => writers.fluids.fluidsSourceWriter(o),
+    math: (o) => writers.math.mathSourceWriter(o),
   };
 
   return table[id](object);

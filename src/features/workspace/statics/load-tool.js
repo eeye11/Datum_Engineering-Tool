@@ -12,7 +12,7 @@ import { distanceToSegment, isRectangleLike, objectPoints } from "../interaction
 import { cancelInteraction } from "../interaction/selection.js";
 import { staticsAttachedStyle, staticsBodyAtPoint } from "./statics-attachment.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+
 
 /*
  * THE DISTRIBUTED LOAD, AS ONE CONTINUOUS FEATURE
@@ -1887,8 +1887,13 @@ function commitConstantLoadFromPopup({
         previous
     );
 
+    /*
+     * THE LOAD TOOL STAYS ARMED. A member usually carries several loads, and
+     * returning to Select after each one made the load tools one-shot. The new
+     * load is selected (below) and the tool waits for the next span; Escape,
+     * empty canvas or another tool ends it.
+     */
     cancelInteraction();
-    activateTool("select");
 
     setToolMessage(
         "Distributed load created"
@@ -2244,7 +2249,7 @@ export function finishDistributedLoadConstruction() {
         object.id
     );
 
-    activateTool("select");
+    /* The load tool stays armed; see the note on the other commit path above. */
 
     setToolMessage(
         "Distributed load created"

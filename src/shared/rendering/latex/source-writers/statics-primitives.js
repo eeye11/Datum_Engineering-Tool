@@ -117,51 +117,6 @@ export function exportPoint(candidate) {
     return exportTransformInEffect ? exportTransformInEffect.point(x, y) : { x, y };
 }
 
-/*
- * ============================================================
- * SKETCH STROKES - ONE WRITER FOR EVERY TOOL THAT CARRIES THEM
- * ============================================================
- *
- * An SFD, BMD or AFD can hold hand-drawn strokes; a Resultant holds the same
- * kind of thing (its vector triangle, its closing line). All of them are
- * `{ kind, start, bend, end, points }` records in GRAPH-LOCAL or MODEL space,
- * and all of them must reach the source in the same way - otherwise one tool's
- * sketch is drawn on the sheet and missing from TeX, which is exactly the
- * failure this module exists to prevent.
- *
- * The caller supplies `toModel`, the projection from an element's own points to
- * MODEL space (the transform in effect converts model space to export space),
- * and the points an element is drawn through (`pointsOf`). The path is written
- * as a polyline through those points - the same shape the canvas draws - so a
- * `curve3` becomes the two-segment quadratic it is on screen and a legacy
- * many-point curve its chain of segments.
- *
- * Returns one command per element (or null for an element with no drawable
- * extent), and never invents a stroke: an empty list writes nothing.
- */
-export function sketchStrokeCommands(elements, { pointsOf, toModel, options }) {
-    const list = Array.isArray(elements) ? elements : [];
-    const commands = [];
-
-    list.forEach((element) => {
-        const local = pointsOf(element);
-
-        if (!Array.isArray(local) || local.length < 2) {
-            return;
-        }
-
-        const placed = local.map((at) => toModel(at));
-
-        const body = placed
-            .map((at, index) => (index === 0 ? point(at.x, at.y) : `-- ${point(at.x, at.y)}`))
-            .join(" ");
-
-        commands.push(`\\draw[${options.join(", ")}] ${body};`);
-    });
-
-    return commands;
-}
-
 /* ============================================================
  * COLOURS
  * ============================================================
@@ -1519,7 +1474,6 @@ export default {
     num,
     point,
     exportPoint,
-    sketchStrokeCommands,
     normaliseHex,
     colourName,
     colourDefinition,

@@ -6,7 +6,7 @@
  * appendEntity (entity-render.js) builds. It returns true when the feature
  * is finished, so no later renderer in the table runs for it.
  */
-import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, MAX_TICKS_PER_AXIS, analysisFrameExtents, analysisValueScale, appendAnalysisPlot, appendAnalysisSketch, numberText, tickValues } from "../analysis-render.js";
+import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, MAX_TICKS_PER_AXIS, analysisFrameExtents, analysisValueScale, appendAnalysisPlot, numberText, tickValues } from "../analysis-render.js";
 import { applyStyle, createSvgElement, paintColour, scaledStrokeWidth, zoomedFontHere } from "../svg-primitives.js";
 import enggDiagramEquations from "../../../features/workspace/model/analysis/diagram-equations.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
@@ -889,35 +889,24 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
 
                 /*
                  * ========================================================
-                 * A SKETCH, DRAWN ON THE SHEET
+                 * A SKETCH IS NOT DRAWN HERE ANY MORE
                  * ========================================================
                  *
-                 * The hand-drawn half of an analysis diagram. Its elements
-                 * are ENGINEERING points - x being the body's longitudinal
-                 * station and y the value on the vertical axis - and they are
-                 * projected through the same `toScreen` as everything else,
-                 * so a sketch lines up with the axis it was drawn against.
+                 * The hand-drawn half of a diagram used to be drawn from
+                 * `geometry.sketchElements` - graph-local points that were not
+                 * features, projected onto the axis by this renderer.
                  *
-                 * DRAWN HERE, NOT AS FEATURES. An element is not a Line in
-                 * the document: it belongs to the diagram, moves with it and
-                 * is deleted with it. As a document feature a student could
-                 * select it on its own, drag it off the diagram it belongs
-                 * to, and delete it while the diagram remained - none of
-                 * which is something a part of a diagram should be able to
-                 * do.
+                 * Those strokes are now ORDINARY FEATURES: a Line, a Polyline
+                 * or an Arc, parented to the diagram. They are drawn by the
+                 * ordinary entity pass, in their own style, exactly as any
+                 * other line on the sheet - so there is nothing to draw here,
+                 * and no second projection that could disagree with the one
+                 * the student's own geometry already has.
                  *
-                 * The same colour as the plotted alternative, because it IS
-                 * the same thing: the student's answer for this diagram, in
-                 * whichever of the two modes they chose to give it.
+                 * A drawing saved before that change is converted on open (see
+                 * `analysis-sketch.js` -> `migrateLegacySketch`), so this
+                 * renderer never sees a `sketchElements` list at all.
                  */
-                if (geometry.mode === "sketch") {
-                    appendAnalysisSketch(
-                        svg,
-                        geometry,
-                        toScreen,
-                        tint
-                    );
-                }
             } else if (entity.type === "truss") {
                 /*
                  * A truss is drawn as the structure the student

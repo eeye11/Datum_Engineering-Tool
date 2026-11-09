@@ -24,7 +24,7 @@ import { constructionFeedbackMessage, inferenceLabel, snapTypeLabel, updateInter
 import { STATICS_CHILD_TOOLS, STATICS_SPAN_TOOLS, bodyPlacementLocations, isBodyAttachedTool, staticsBodyMessage, staticsSpanInstruction, staticsToolPointCount } from "../statics/statics-tools.js";
 import { isArcTool } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+
 import { trussSnapGeometry, trussStageMessage } from "../statics/truss-tool.js";
 import { isSupportType } from "../../../shared/model/feature-types.js";
 import { applyStaticsValue, openLoadValuePopup, readStaticsValue } from "../../../shared/ui/editors/load-value-popup.js";
@@ -2072,7 +2072,12 @@ function staticsPreviewType(
             stored.id
         );
 
-        activateTool("select");
+        /*
+         * THE MOMENT TOOL STAYS ARMED. A free moment is placed by one click and
+         * a member often carries several; returning to Select after each one
+         * made the tool one-shot. The new moment is selected and the tool waits
+         * for the next placement until Escape, empty canvas or another tool.
+         */
 
         renderProperties();
         renderCurrentDrawing();

@@ -419,7 +419,11 @@ export function commitAnnotate(options) {
  * The Symbol tool used to hand back to Select after one placement. Every tool
  * in DAETUM ends on a deliberate act - a click on empty canvas, its own button,
  * Escape, or another tool - and placing a feature is not one of them, so a
- * second symbol is now placed by the same click that placed the first.
+ * second symbol is placed by the same click that placed the first.
+ *
+ * THE NAME IS KEPT FOR ITS CALL SITES, not because it returns to Select: it
+ * does not, and has not since the tool was made persistent. Renaming it would
+ * touch every caller for no behaviour change.
  */
 function returnToSelect() {
   setToolMessage("Symbol placed - pick the next symbol to place");
@@ -547,18 +551,19 @@ export function handleAnnotateClick(resolution) {
   if (!geometric) {
     /*
      * ========================================================
-     * SYMBOL: CHOOSE FROM THE LIBRARY, THEN PLACE ONCE
+     * SYMBOL: CHOOSE FROM THE LIBRARY, THEN PLACE
      * ========================================================
      *
-     * The Symbol tool places ONE symbol and returns to Select. The symbol is
-     * chosen from the searchable library FIRST - so the student sees the glyph
-     * before committing to it - and the choice is held on the interaction
-     * (`annotateSymbolId`) until the placement click.
+     * The symbol is chosen from the searchable library FIRST - so the student
+     * sees the glyph before committing to it - and the choice is held on the
+     * interaction (`annotateSymbolId`) until the placement click.
      *
      * A first click with nothing chosen OPENS THE PICKER rather than placing the
-     * default; once a symbol is chosen, the next click PLACES it and the tool
-     * hands back to Select. That is the whole workflow the requirement asks for,
-     * and it keeps one placement per operation.
+     * default; once a symbol is chosen, the next click PLACES it. The tool then
+     * STAYS ARMED, exactly as every other creation tool does: the choice is spent
+     * with the placement, so the next click opens the picker again and the student
+     * can place a second symbol without re-arming the tool. Escape, empty canvas
+     * or another tool ends it.
      */
     if (kind === "symbol") {
       const chosen = interaction.annotateSymbolId;
@@ -595,9 +600,10 @@ export function handleAnnotateClick(resolution) {
       });
 
       /*
-       * ONE SYMBOL PER OPERATION, THEN BACK TO SELECT. The interaction's symbol
-       * choice is spent with the placement, and the tool is put back to Select
-       * so a stray click does not place a second symbol.
+       * THE CHOICE IS SPENT WITH THE PLACEMENT, THE TOOL IS NOT. Clearing the
+       * symbol means the next click opens the picker rather than silently
+       * placing the same glyph again - which is what keeps a stray click from
+       * placing a second symbol without the student choosing one.
        */
       enggDrawingState.setInteraction(drawingState, {
         annotateSymbolId: null

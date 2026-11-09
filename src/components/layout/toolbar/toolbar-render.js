@@ -3,7 +3,7 @@
  */
 
 import { disciplineToolGroups, drawingToolGroups, engineeringTools } from "./tools.js";
-import { ANALYSIS_DIAGRAM_TOOLS, ANALYSIS_DIAGRAM_MODES, ANALYSIS_DIAGRAM_MODE_LABELS, beginAnalysisDiagram, analysisDiagramIntroMessage, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
+import { ANALYSIS_DIAGRAM_TOOLS, STATICS_ANALYSIS_TOOLS, runStaticsAnalysis } from "../../../features/workspace/statics/analysis-tools.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { drawingToolMessage, toolHeading, toolList } from "../../../features/workspace/dom.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
@@ -12,7 +12,8 @@ import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../..
 import { DYNAMICS_TOOL_MENUS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
-import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
+import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openPolygonMenu, openToolSubmenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
+import { MATH_REFERENCE_TOOLS as MATH_REFERENCE_TOOL_IDS, MATH_TOOL_GROUPS, MATH_MODE_LABELS, MATH_MODES, activeMathMode, armMathTool, mathToolHasModes } from "../../../features/workspace/math/math-tools.js";
 
 // Keep inline sections open independently across toolbar redraws.
 const expandedToolbarSections = {
@@ -23,7 +24,15 @@ const expandedToolbarSections = {
     "dynamics-bodies": false,
     "dynamics-kinematics": false,
     "dynamics-mechanical": false,
-    "shear-force-diagram": false,
+
+    /*
+     * THE DIAGRAMS ARE NOT INLINE SECTIONS.
+     *
+     * `shear-force-diagram` used to be listed here, which made its Sketch and
+     * Plot buttons expand UNDER it inside the sidebar. They are a popup now, so
+     * the key is gone - a key here would wrap the button in an inline
+     * subsection that nothing ever fills.
+     */
     "reference-arc": false,
     arc: false,
     polygon: false,
@@ -77,7 +86,76 @@ function renderToolGroup(group) {
     `;
 }
 
+/*
+ * OPEN SKETCH OR PLOT FOR A MATH TOOL.
+ *
+ * Sketch and Plot are two approaches to ONE tool, so the first press asks which
+ * and the tool is armed from HERE rather than from the toolbar click: arming on
+ * the press and then stopping would leave a tool active, waiting on a choice
+ * the student has not been shown.
+ *
+ * The list is the ordinary submenu, so the positioning, the click-outside
+ * dismissal and the keyboard handling are the ones every other submenu already
+ * has - and the armed mode is marked, so a student reopening it can see which
+ * one is running.
+ */
+function openMathModeMenu(button, toolId) {
+    const active = drawingState.activeTool === toolId ? activeMathMode() : null;
+
+    openToolSubmenu(
+        button,
+        MATH_MODES.map(mode => ({
+            id: mode,
+            label: MATH_MODE_LABELS[mode] || mode,
+            state: active === mode ? "Active" : null
+        })),
+        mode => {
+            armMathTool(toolId, mode);
+        }
+    );
+}
+
 function renderToolbarTool(tool) {
+    /*
+     * A MATH TOOL WITH MODES IS ONE BUTTON THAT OPENS A POPUP.
+     *
+     * Sketch and Plot are two approaches to ONE tool, so the tool's button is
+     * the tool and the two modes are offered in a POPUP beside it - exactly the
+     * presentation the Statics diagrams use, and the same submenu machinery
+     * (positioning, click-outside dismissal, keyboard handling).
+     *
+     * A POPUP, NOT AN INLINE LIST. The two are different things in this
+     * toolbar: an inline list expands IN PLACE under its button and stays open
+     * (the Arc and Polygon method lists, the Statics feature groups), while a
+     * popup opens beside the button, is dismissed by a press anywhere else, and
+     * is the shape a tool uses when its children are a CHOICE rather than a
+     * set of commands. Sketch and Plot are a choice, so they are a popup.
+     *
+     * The armed mode is the one that stays lit, read from the interaction, so
+     * the button and the running tool cannot disagree.
+     */
+    if (mathToolHasModes(tool.id)) {
+        return renderToolButton({
+            ...tool,
+            submenu: true,
+            childToolIds: MATH_MODES.map((mode) => `${tool.id}:${mode}`)
+        });
+    }
+
+    /*
+     * THE MATH SECTION'S REFERENCE TOOLS ARE LISTED DIRECTLY.
+     *
+     * Coordinate System, Reference Point and Reference Line are ordinary
+     * commands under the Reference heading - not expandable groups. The
+     * Coordinate System's 2D/3D choice is a Statics submenu, and offering it
+     * here would put a second level under a heading the specification says has
+     * none. The tool arms the 2D system directly, which is the only one the 2D
+     * canvas can draw.
+     */
+    if (MATH_REFERENCE_TOOL_IDS.includes(tool.id)) {
+        return renderToolButton(tool);
+    }
+
     if (!Object.hasOwn(expandedToolbarSections, tool.id) && !tool.collapsible) {
         return renderToolButton(tool);
     }
@@ -109,11 +187,6 @@ function renderToolbarTool(tool) {
           })).join("")
         : FLUIDS_TOOL_MENUS[tool.id]
         ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
-        : tool.id === "shear-force-diagram"
-        ? ANALYSIS_DIAGRAM_MODES.map(mode =>
-            renderToolButton({ id: tool.id, label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode })
-                .replace('data-tool-id=', `data-analysis-diagram-mode="${mode}" data-tool-id=`)
-        ).join("")
         : tool.id === "coordinate-system"
         ? [
             { id: "coordinate-system-2d", label: "2D Coordinate System", iconLabel: "Coordinate System" },
@@ -195,17 +268,25 @@ export function renderEngineeringTools(
     if (
         safeCategory ===
             "GEOMETRY" ||
+        safeCategory === "MATH / ANALYSIS" ||
         disciplineToolGroups[safeCategory]
     ) {
         /*
-         * GEOMETRY and STATICS are organised into labelled
-         * sections; every other discipline stays a flat
-         * list of tools.
+         * GEOMETRY, STATICS and MATH / ANALYSIS are organised into labelled
+         * sections; every other discipline stays a flat list of tools.
+         *
+         * MATH / ANALYSIS IS THE SAME SHAPE AS STATICS: Select, then the
+         * category headings with their tools listed directly underneath. It
+         * is a table of its own (`MATH_TOOL_GROUPS`) rather than a branch in
+         * this file, so the section's organisation is stated where its tools
+         * are.
          */
         const groups =
             safeCategory === "GEOMETRY"
                 ? drawingToolGroups
-                : disciplineToolGroups[safeCategory];
+                : safeCategory === "MATH / ANALYSIS"
+                  ? MATH_TOOL_GROUPS
+                  : disciplineToolGroups[safeCategory];
 
         toolList.innerHTML =
             groups
@@ -255,14 +336,21 @@ export function renderEngineeringTools(
                             button.dataset
                                 .toolId;
 
-                        if (button.dataset.analysisDiagramMode) {
+                        /*
+                         * A MATH TOOL WITH MODES OPENS ITS SKETCH / PLOT POPUP.
+                         *
+                         * The tool is not armed by this press: arming it and
+                         * then stopping would leave a tool running that is
+                         * waiting on a choice the student has not been shown.
+                         * The popup arms it, through the Math section's own
+                         * arming function, so the toolbar and the tool cannot
+                         * disagree about which mode is running.
+                         */
+                        if (mathToolHasModes(toolId)) {
                             event.preventDefault();
                             event.stopPropagation();
-                            activateTool(toolId);
-                            drawingState.interaction.analysisMode = button.dataset.analysisDiagramMode;
-                            beginAnalysisDiagram(toolId);
-                            setToolMessage(analysisDiagramIntroMessage(null));
-                            renderCurrentDrawing();
+
+                            openMathModeMenu(button, toolId);
                             return;
                         }
 
@@ -296,6 +384,22 @@ export function renderEngineeringTools(
                             event.preventDefault();
                             activatePolygonMode(button.dataset.polygonMode)
                                 .then(() => renderEngineeringTools(activeCategory()));
+                            return;
+                        }
+
+                        /*
+                         * A MATH REFERENCE TOOL IS A COMMAND, NOT A GROUP.
+                         *
+                         * It is listed directly under the Reference heading,
+                         * so a press arms it - it must not be read as a press
+                         * on an expandable section, which is what the table
+                         * below would otherwise do for the Coordinate System.
+                         */
+                        if (MATH_REFERENCE_TOOL_IDS.includes(toolId)) {
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            activateTool(toolId);
                             return;
                         }
 

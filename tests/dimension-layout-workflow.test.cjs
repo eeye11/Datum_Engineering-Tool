@@ -15,7 +15,7 @@ before(async()=>{
 });
 after(()=>window.close());
 function click(point,altKey=false){const p=model.engineeringToScreen(point,{width:900,height:600},state);placement.handleDimensionClick({rawPointerPoint:point},{clientX:p.x,clientY:p.y,altKey});}
-test('diagonal placement stays aligned and returns to Select',async()=>{
+test('diagonal placement stays aligned and keeps the Dimension tool armed',async()=>{
  state.objects=[];model.addObject(state,model.geometryFactories.line({x:0,y:0},{x:100,y:60}));
  for(const point of [{x:50,y:110},{x:140,y:30}]){
   model.setActiveTool(state,'dimension');click({x:0,y:0});click({x:100,y:60});
@@ -24,7 +24,9 @@ test('diagonal placement stays aligned and returns to Select',async()=>{
   click(point);
   const input=document.querySelector('.drawing-creation-dimension input');input.value='L';
   input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
-  await Promise.resolve();assert.equal(state.activeTool,'select');
+  await Promise.resolve();
+  /* The Dimension tool stays armed after committing one; Escape or empty canvas ends it. */
+  assert.equal(state.activeTool,'dimension');
   const d=state.objects.filter(object=>object.type==='dimension').at(-1);
   assert.equal(d.dimensionType,'aligned');
   assert.ok(Math.abs(dimensions.measurementFor(d,state).value-Math.hypot(100,60))<1e-7);

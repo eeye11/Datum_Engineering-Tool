@@ -93,7 +93,6 @@ function wideSheet() {
         end: { x: 215, y: -60 },
         localRange: { from: 0, to: 10 },
         mode: "sketch",
-        sketchElements: [],
       },
       style: { stroke: "#000000", lineWidth: "thin" },
     },

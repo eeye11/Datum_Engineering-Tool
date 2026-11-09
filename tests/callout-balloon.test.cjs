@@ -40,7 +40,8 @@ test('Leader is removed; a two-click Callout creates an editable numbered balloo
  assert.equal(marker.text,'1');assert.equal(marker.style.arrowhead,'closed');assert.equal(marker.style.align,'center');
  assert.deepEqual(marker.geometry.position,{x:-30,y:60});assert.deepEqual(marker.geometry.end,{x:-30,y:60});
  assert.equal(marker.targetFeatureId,body.id);assert.equal(marker.anchorRef.featureId,body.id);
- assert.equal(state.activeTool,'select');
+ /* The Callout tool stays armed after placing one; Escape or empty canvas ends it. */
+ assert.equal(state.activeTool,'callout');
  const input=document.querySelector('.drawing-canvas-text-editor textarea');assert.ok(input);assert.equal(document.activeElement,input);
  input.value='A';input.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(live().text,'A');
  input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));

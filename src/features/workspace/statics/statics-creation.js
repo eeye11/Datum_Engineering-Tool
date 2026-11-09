@@ -10,7 +10,7 @@ import { openMomentValuePrompt } from "../geometry/preview.js";
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { STATICS_PLACEMENT_TOOLS } from "./statics-tools.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+
 import { attachableStaticsType, isSupportType } from "../../../shared/model/feature-types.js";
 
 export function createStaticsFeature(
@@ -359,13 +359,20 @@ export function createStaticsFeature(
         stored.id
     );
 
+    /*
+     * THE TOOL STAYS ARMED AFTER A PLACEMENT.
+     *
+     * A support, a particle, a reference point or a moment is placed by one
+     * click, and the student usually wants several of them - four supports on
+     * one beam, a row of particles. Returning to Select after each one made
+     * every Statics placement tool one-shot. The object is selected (above) and
+     * the tool is left ready for the next placement; Escape, empty canvas or
+     * another tool ends it.
+     */
     if (isSupportType(type)) {
         renderProperties();
-        activateTool("select");
         return;
     }
-
-    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

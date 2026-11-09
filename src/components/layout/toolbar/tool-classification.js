@@ -28,16 +28,16 @@
  * to escape. So the classification is stated explicitly and read by the click
  * router, rather than inferred case by case from what each tool happens to do.
  *
- * WHY THE PATH SET IS NOT WRITTEN OUT HERE
- * ----------------------------------------
- * "Which tools can make their feature from ONE press-drag-release" is already
- * answered, precisely, by `isDragCreationTool` in the creation layer - it is the
- * same fact the drag pipeline itself keys on. A second hand-written list here
- * would be a second answer, free to disagree with the first, so the question is
- * asked of that one function rather than restated.
+ * WHY THERE IS NO "DRAG TOOL" LIST HERE ANY MORE
+ * ----------------------------------------------
+ * The drag pipeline owns which tools can be made by press-drag-release, and it
+ * said so here once. The exit rule no longer needs to ask that question: a bare
+ * click ends every tool except the ones that MAKE something from the click
+ * (point tools, note/table) or that are building from clicks (click-click and
+ * multi-step). Which gesture a constructor also accepts is not what decides
+ * whether an idle click on empty canvas dismisses it.
  */
 
-import { isDragCreationTool } from "../../../features/workspace/interaction/creation-drag.js";
 import {
     DYNAMICS_SPAN_TOOLS,
     DYNAMICS_ANGLE_TOOLS,
@@ -64,6 +64,15 @@ export const POINT_TOOLS = [
     "reference-point",
     "gain",
     "sum",
+
+    /*
+     * A MATH POINT AND A MATH EQUATION ARE PLACED BY THE CLICK ITSELF, so the
+     * click that makes them must never be read as "I am finished with this
+     * tool". The other Math tools are drag or multi-step tools and are listed
+     * where they belong.
+     */
+    "math-point",
+    "math-equation",
 
     /*
      * THE DYNAMICS PLACEMENT TOOLS PLACE ON ONE CLICK TOO.
@@ -121,9 +130,45 @@ export const REQUIRED_INPUT_TOOLS = [
     "tolerance",
     "symbol",
 
+    /*
+     * A NOTE AND A TABLE ARE PLACED BY THE CLICK ITSELF.
+     *
+     * They were reaching neither this list nor the point tools, so the bare
+     * click that makes them was read as "I am finished with this tool" - the
+     * note tool armed, took its click as a dismissal, and nothing was placed.
+     */
+    "note",
+    "table",
+
     /* The analysis children are told which force(s) they read. */
     "resultant",
     "force-components",
+
+    /*
+     * THE THREE DIAGRAMS ARE TOLD WHICH MEMBER THEY BELONG TO.
+     *
+     * A diagram's first click names its body and its second places it, so
+     * every click while the tool is armed is an input - including one on empty
+     * canvas, which is where the student is positioning the frame. Without
+     * this, a click on empty space was read as "I am finished with this tool"
+     * and dropped the student into Select halfway through a placement.
+     */
+    "shear-force-diagram",
+    "bending-moment-diagram",
+    "axial-force-diagram",
+
+    /*
+     * THE MATH TOOLS THAT TAKE THEIR INPUT FROM CLICKS.
+     *
+     * A Function Curve in Plot mode names its graph, a Tangent / Normal names
+     * its curve and contact point, and a Slope Triangle names its parent and
+     * then two positions along it. Every one of those clicks is a REAL STEP of
+     * the tool's workflow, so a click on empty canvas must not be read as a
+     * dismissal halfway through.
+     */
+    "math-curve",
+    "math-tangent",
+    "math-slope-triangle",
 
     /* The legacy annotation tool attaches to what it labels. */
     "annotation"
@@ -245,9 +290,42 @@ function dynamicsMultiStepIds() {
     return dynamicsMenuToolIds;
 }
 
+/*
+ * ========================================================
+ * THE TOOL TABLES THE TOOLBAR DOES NOT OWN
+ * ========================================================
+ *
+ * `MULTI_STEP_TOOLS` above is the toolbar's own list. A Truss and a Pipe / Duct
+ * are Statics and Fluids tools whose tables live elsewhere, and they were
+ * missing from it - so a bare click on an armed Truss answered "this is not a
+ * multi-step tool", the router read the click as a dismissal, and the Truss
+ * could not be started with a click at all.
+ *
+ * `isConstructionTool` already asks these tables, which is what kept the
+ * click PIPELINE right; only the classification had drifted. Asked here as
+ * well, so the two agree by construction and a tool added to either table is
+ * covered without another edit.
+ *
+ * READ LAZILY. These modules reach back into the toolbar, so importing their
+ * tables at load time closes a cycle - see the note above `dynamicsMenuToolIds`.
+ */
+let constructionMultiStepIds = null;
+
+function constructionMultiStepToolIds() {
+    if (!constructionMultiStepIds) {
+        constructionMultiStepIds = new Set([
+            "truss",
+            "pipe-duct"
+        ]);
+    }
+
+    return constructionMultiStepIds;
+}
+
 export function isMultiStepTool(toolId) {
     return dynamicsMultiStepIds().includes(toolId ?? null) ||
-    MULTI_STEP_TOOLS.includes(toolId ?? null);
+        constructionMultiStepToolIds().has(toolId ?? null) ||
+        MULTI_STEP_TOOLS.includes(toolId ?? null);
 }
 
 /*
@@ -317,6 +395,14 @@ export const CLICK_CLICK_TOOLS = [
     "coordinate-system-2d",
 
     /*
+     * THE MATH TOOLS THAT TAKE CLICK-MOVE-CLICK AS WELL AS A DRAG. A Vector and
+     * a Coordinate Graph are drawn by a drag, and a bare click with either
+     * armed is the first point of that gesture - not a request to stop.
+     */
+    "math-vector",
+    "math-plot",
+
+    /*
      * PIPE / DUCT KEEPS ITS CLICK TOO.
      *
      * A run is drawn by press-drag-release, so its TRAILING click has always to
@@ -335,16 +421,59 @@ export function isClickClickTool(toolId) {
     );
 }
 
+/*
+ * ========================================================
+ * SHOULD A BARE CLICK ON EMPTY CANVAS END THIS TOOL?
+ * ========================================================
+ *
+ * The rule, stated once for the whole application:
+ *
+ *   CLICK-TO-CREATE  the click MAKES the object, so it never ends the tool.
+ *   ANYTHING ELSE    a click that is not an input ends the tool.
+ *
+ * "An input" means a real step of the tool's own workflow, and the two families
+ * that own such steps are the MULTI-STEP tools (a triangle's next corner, a
+ * load's span) and the REQUIRED-INPUT tools (a dimension collecting references,
+ * a resultant naming its force). Their clicks are consumed by their own state
+ * machines before this question is ever asked of empty canvas, so this function
+ * answers only what a click that reached the canvas WITH NOTHING PENDING means.
+ *
+ * IT USED TO ASK "is this a drag tool?" AND THAT WAS NARROWER THAN THE RULE.
+ * A tool that is neither a point tool, a multi-step tool, a click-click tool nor
+ * a drag tool answered `false` - which meant it kept the click forever and the
+ * student was trapped in it. That is now an EXIT: every tool that does not make
+ * its object from the click itself leaves on one.
+ */
 export function shouldExitToSelectOnClick(toolId) {
+    /* Click-to-create keeps creating; Select is already Select. */
     if (clickKeepsTool(toolId)) {
         return false;
     }
 
-    if (isMultiStepTool(toolId) || isClickClickTool(toolId)) {
+    /*
+     * A CONSTRUCTOR'S CLICK IS ITS FIRST INPUT, NOT AN EXIT.
+     *
+     * A Line, a Beam, a Triangle or a Pipe run is drawn click-move-click as
+     * well as by drag, and a multi-step tool's click is the next corner. Ending
+     * the tool on those would take away half the workflow - so they keep the
+     * click here, and the router decides from the INTERACTION whether the click
+     * is a step (a construction in progress) or a dismissal (nothing started on
+     * empty canvas).
+     */
+    if (isClickClickTool(toolId) || isMultiStepTool(toolId)) {
         return false;
     }
 
-    return isDragCreationTool(toolId) === true;
+    /*
+     * EVERYTHING ELSE LEAVES ON A BARE CLICK.
+     *
+     * This is the half that used to be too narrow: it answered "is this a drag
+     * tool?", so a tool in no list at all kept the click forever and trapped
+     * the student. Any tool that is not click-to-create and not a constructor
+     * has nothing to do with a bare click on empty canvas, so it hands the
+     * canvas back to Select.
+     */
+    return true;
 }
 
 const enggToolClassification = {

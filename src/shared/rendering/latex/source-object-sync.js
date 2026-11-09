@@ -53,6 +53,7 @@ import {
   baseStyleFromSource,
   schematicReaderFor
 } from "./source-readers/fluids-schematic-readers.js";
+import { isMathBlock, mathReaderFor } from "./source-readers/math.js";
 
 /*
  * THE FLOW ARROW'S READER, RESOLVED WHEN A BLOCK NEEDS IT.
@@ -932,6 +933,69 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
      * come back under the name the student gave it.
      */
     const blockName = block.name || nameFromBlockText(blockText) || null;
+
+    /*
+     * THE MATH OBJECTS ARE READ FROM THEIR OWN METADATA LINE.
+     *
+     * A Math block's geometry is not a shape the one-shape rule can recognise -
+     * a graph is a box plus axes plus a grid, a curve is a path plus an
+     * expression - so it is read BEFORE that rule, from the `% DAETUM MATH:`
+     * line the writer emits. A block whose metadata is unreadable falls through
+     * to the ordinary report: the object keeps its last valid form and the
+     * student is told the block could not be read.
+     */
+    const mathReader =
+      (previous == null || String(previous?.type || "").startsWith("math-")) && isMathBlock(blockText)
+        ? mathReaderFor(blockText)
+        : null;
+
+    const math = mathReader
+      ? mathReader(blockText, {
+          previous,
+          hostExists: (hostId) => byId.has(hostId) || contents.blocks.some((candidate) => candidate.id === hostId)
+        })
+      : null;
+
+    if (math) {
+      if (!previous) {
+        created.push({
+          id: block.id,
+          object: {
+            ...math,
+            id: block.id,
+            ...(blockName ? { name: blockName } : {}),
+            style: { ...(math.style || {}) },
+            engineering: { ...(math.engineering || {}) },
+            content: { ...(math.engineering || {}) }
+          },
+          geometry: math.geometry,
+          block
+        });
+
+        return;
+      }
+
+      updates.push({
+        id: block.id,
+        object: previous,
+        schematic: math,
+        type: math.type,
+        block
+      });
+
+      return;
+    }
+
+    if (mathReader) {
+      invalid.push({
+        id: block.id,
+        beginLine: block.beginLine,
+        endLine: block.endLine,
+        message: `Object "${previous?.name || block.id}" keeps its last valid form: its Math metadata could not be read.`
+      });
+
+      return;
+    }
 
     if (schematic) {
       if (!previous) {

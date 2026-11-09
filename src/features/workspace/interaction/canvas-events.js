@@ -31,6 +31,7 @@ import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import { selectionBounds, selectionCorners, selectionMembers } from "../../../shared/selection/selection-transform.js";
+import { movePlacement, placementPending } from "./placement-session.js";
 
 // Use the same unsnapped hit targets as dragging, so the cursor shows
 // exactly where a press can move the selection.
@@ -562,6 +563,27 @@ export function installCanvasEvents() {
         drawingCanvas.addEventListener(
             "pointermove",
             event => {
+                /*
+                 * A SKETCH WAITING TO BE PLACED FOLLOWS THE POINTER.
+                 *
+                 * It is checked first, because while a placement is pending
+                 * the pointer is choosing WHERE the finished sketch goes - not
+                 * hovering, not dragging, not selecting. The preview is
+                 * recomputed from the cursor and the page grid on every move,
+                 * so the student sees the exact position the click will use.
+                 */
+                if (placementPending()) {
+                    movePlacement(
+                        canvasPointFromEvent(event, false)
+                    );
+
+                    updateDrawingCoordinates(
+                        event
+                    );
+
+                    return;
+                }
+
                 if (!editorState.manipulationDrag && !editorState.creationDrag) {
                     const point = canvasPointFromEvent(event, false);
                     const target = drawingState.activeTool === "select" ? boundarySelectionAtPoint(point) || objectAtPoint(point) : null;

@@ -4,8 +4,9 @@
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
-import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
 import enggNoteEditor from "../../../shared/ui/editors/note-editor.js";
+import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
+import enggPlacementSession from "./placement-session.js";
 import { drawToolDefinitions } from "../../../components/layout/toolbar/tools.js";
 import { cycleAnnotationKind } from "../annotate/annotation-tool.js";
 import { nudgeSelection } from "./arrow-movement.js";
@@ -21,6 +22,8 @@ import { activateTool, performRedo, performUndo } from "../../../components/layo
 import { activeCategory, closeCoordinateSystemMenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { cancelTrussConstruction } from "../statics/truss-tool.js";
+import enggMathEquationEditor from "../math/math-equation-editor.js";
+import enggMathSketch from "../math/math-sketch.js";
 import { fitDrawingToView } from "../../../components/layout/workspace/viewport.js";
 import { ROUTE_PHASE, ELBOW_PHASE, cancelRouteConstruction, cancelElbowConstruction } from "./pipe-duct-tool.js";
 import { removeLastFreeformVertex } from "../geometry/geometry-creation.js";
@@ -312,6 +315,29 @@ export function installKeyboardShortcuts() {
                 return;
             }
 
+            /*
+             * ========================================================
+             * ESCAPE: ONE PATH, IN A FIXED ORDER
+             * ========================================================
+             *
+             * Escape means "cancel what is in progress", and what counts as
+             * "in progress" depends on how far the student got. Rather than
+             * adding a branch per tool as each one is built - which is how a
+             * tool added tomorrow ends up with no Escape at all - the order is
+             * stated once here:
+             *
+             *   1. A DIALOG closes first. The note and plot editors preview the
+             *      student's half-typed text or equations onto the sheet, so they
+             *      own the key while they are open.
+             *   2. AN IN-PROGRESS CONSTRUCTION is discarded next - a truss, a
+             *      pipe leg, an elbow, a half-built shape.
+             *   3. THE TOOL ITSELF is then cancelled, which returns to Select.
+             *
+             * Steps 2 and 3 are the SAME cancellation for every tool: a
+             * construction that keeps temporary state registers a rollback, and
+             * `cancelInteraction()` clears the interaction, the preview, the
+             * popups and the tool. There is deliberately no per-section rule.
+             */
             if (
                 event.key ===
                 "Escape"
@@ -333,16 +359,17 @@ export function installKeyboardShortcuts() {
                  * step of building a feature, it owns Enter and Escape while it
                  * is open, and nothing on the canvas may act behind its back.
                  *
-                 * SKETCH BEFORE PLOT. Both may be open at once in principle,
-                 * and the sketch editor consumes a first Escape to abandon an
-                 * unfinished stroke - which is what the student almost always
-                 * means when they press it mid-drawing. Offering the plot
-                 * editor first would close the wrong dialog.
+                 * THE SKETCH EDITOR IS ONE OF THEM, and it is offered FIRST.
+                 * It consumes a first Escape to abandon an unfinished stroke or
+                 * erase - which is what the student almost always means when
+                 * they press it mid-drawing - and only closes on a second one.
+                 * Offering the plot editor first would close the wrong dialog.
                  *
                  * Each returns true only if it actually consumed the key, so a
                  * dialog that is not open falls through rather than swallowing
                  * the Escape the canvas needs.
                  */
+
                 if (
                     enggSketchEditor?.handleEscape?.()
                 ) {
@@ -350,10 +377,25 @@ export function installKeyboardShortcuts() {
                 }
 
                 /*
+                 * A SKETCH WAITING TO BE PLACED IS CANCELLED NEXT.
+                 *
+                 * It is not a dialog - the editor has already closed - but it
+                 * is an unfinished operation, and Escape is what abandons one.
+                 * The placement preview goes, the tool returns to Select, and
+                 * nothing is committed: the student asked to stop, and stopping
+                 * means stopping.
+                 */
+                if (
+                    enggPlacementSession?.cancelPlacement?.()
+                ) {
+                    return;
+                }
+
+                /*
                  * THE NOTE EDITOR ESCAPES TOO. It is the same kind of
                  * dialog as the others - it owns Escape while it is
-                 * open - so it is offered the key the same way, after
-                 * the sketch editor and before the plot editor.
+                 * open - so it is offered the key the same way, before
+                 * the plot editor.
                  */
                 if (
                     enggNoteEditor?.handleEscape?.()
@@ -368,11 +410,46 @@ export function installKeyboardShortcuts() {
                 }
 
                 /*
+                 * THE INLINE EQUATION EDITOR OWNS ESCAPE WHILE IT IS OPEN.
+                 *
+                 * It is anchored to the drawing and previews the mathematics
+                 * onto the sheet, so it is a dialog in exactly the sense the
+                 * others are - and Escape must close it before anything on the
+                 * canvas is considered.
+                 */
+                if (
+                    enggMathEquationEditor?.closeEquationEditor?.()
+                ) {
+                    return;
+                }
+
+                /*
+                 * A MATH STROKE IN PROGRESS IS THROWN AWAY, and the tool stays
+                 * armed - the same two-step rule every other construction
+                 * follows. Nothing was written to the document, so dropping the
+                 * session is the rollback.
+                 */
+                if (
+                    enggMathSketch?.cancelMathStroke?.()
+                ) {
+                    editorState.creationDrag = null;
+
+                    renderCurrentDrawing();
+
+                    return;
+                }
+
+                /*
                  * A truss in progress is the one operation that is
                  * explicitly reversible mid-way: Esc throws the
                  * whole construction away, including the automatic
                  * cleanup, so the drawing the student made before
                  * pressing Enter is still what they get back.
+                 *
+                 * THE TOOL IS LEFT ARMED: what Escape discards is the
+                 * CONSTRUCTION, not the tool. Pressing Escape again, or clicking
+                 * empty canvas, is what returns to Select - the same two-step
+                 * rule every other construction follows.
                  */
                 if (
                     drawingState.interaction
@@ -405,6 +482,7 @@ export function installKeyboardShortcuts() {
                 /*
                  * THE SAME GUARANTEE FOR AN ELBOW: nothing is written until
                  * the release, so Escape only drops the fitting being dragged.
+                 * The tool stays armed for the next fitting, as above.
                  */
                 if (
                     drawingState.interaction.phase === ELBOW_PHASE ||

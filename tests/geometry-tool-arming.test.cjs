@@ -88,22 +88,39 @@ check(
 
 console.log("\n  Re-arming from the submenu keeps the tool armed\n");
 
+/*
+ * THE WINDOW IS THE WHOLE `isPlacementTool` EXPRESSION, not a fixed number of
+ * characters. A character count is a second, invisible limit on how much may be
+ * written inside that expression - and adding one more clause to it (the
+ * analysis diagrams) pushed the arc and polygon entries past the old 1400 and
+ * failed three checks that had nothing to do with the change.
+ */
+const placementExpression = (() => {
+  const start = activateToolBody.indexOf("const isPlacementTool");
+
+  if (start < 0) {
+    return "";
+  }
+
+  const end = activateToolBody.indexOf(";", start);
+
+  return activateToolBody.slice(start, end);
+})();
+
 check(
   "arc counts as a placement tool",
-  /isPlacementTool[\s\S]{0,1400}?(?:toolId|requestedTool) === "arc"/.test(activateToolBody),
+  /(?:toolId|requestedTool) === "arc"/.test(placementExpression),
   "otherwise the submenu would toggle it back to Select",
 );
 
 check(
   "the reference-arc variant counts too",
-  /isPlacementTool[\s\S]{0,1400}?(?:toolId|requestedTool) === "reference-arc"/.test(
-    activateToolBody,
-  ),
+  /(?:toolId|requestedTool) === "reference-arc"/.test(placementExpression),
 );
 
 check(
   "polygon counts as a placement tool",
-  /isPlacementTool[\s\S]{0,1400}?(?:toolId|requestedTool) === "polygon"/.test(activateToolBody),
+  /(?:toolId|requestedTool) === "polygon"/.test(placementExpression),
 );
 
 check(

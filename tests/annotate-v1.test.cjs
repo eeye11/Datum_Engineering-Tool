@@ -290,8 +290,14 @@ console.log("\n  the Symbol tool chooses from a picker, then places one\n");
   );
 
   check(
-    "and returns to Select after one placement",
-    /returnToSelect\(\)/.test(creation),
+    "and keeps the tool armed after a placement",
+    /*
+     * The Symbol tool used to hand back to Select after one placement. It now
+     * follows the global contract: the placement is committed, the symbol
+     * choice is spent, and the tool stays armed for the next one.
+     */
+    /returnToSelect\(\)/.test(creation) &&
+      !/returnToSelect\(\)[\s\S]{0,200}?activateTool\(\s*"select"/.test(creation),
   );
 }
 

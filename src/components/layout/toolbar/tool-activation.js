@@ -34,6 +34,7 @@ import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
 import { isLegacyResetTool, legacyPlaceholderMessage } from "./phase-reset.js";
+import { isMathTool, mathInstruction } from "../../../features/workspace/math/math-tools.js";
 
 export function activate2DCoordinateSystemTool() {
     /*
@@ -209,6 +210,23 @@ export function activateTool(
         Boolean(STATICS_PLACEMENT_TOOLS[requestedTool]) ||
         Boolean(STATICS_SPAN_TOOLS[requestedTool]) ||
         isBodyAttachedTool(requestedTool) ||
+
+        /*
+         * A DIAGRAM TOOL PLACES A FEATURE, so re-pressing it keeps it armed
+         * rather than toggling it off. Without this, choosing the other mode
+         * while the tool was already active read as a re-click of the same
+         * tool and dropped the student into Select - so switching Sketch to
+         * Plot cancelled the tool instead of changing the mode.
+         *
+         * ASKED OF THE STATICS TABLE, not of the analysis module. This file is
+         * imported BY `analysis-tools` (for `activateTool`), so reading a
+         * binding from it here would close a cycle - and a cycle that is read
+         * at module-evaluation time is a hang, not an error. The diagram tools
+         * are Statics child tools, so the table that already lists them is the
+         * right place to ask.
+         */
+        Boolean(STATICS_CHILD_TOOLS[requestedTool]?.type) &&
+        requestedTool.endsWith("-diagram") ||
         /*
          * A DYNAMICS TOOL IS A PLACEMENT TOOL TOO, by the same reasoning:
          * every Dynamics tool places a feature, whether the gesture ends on
@@ -229,6 +247,15 @@ export function activateTool(
         requestedTool === "otto-cycle" ||
         requestedTool === "carnot-cycle" ||
         requestedTool === "point" ||
+
+        /*
+         * EVERY MATH TOOL PLACES A FEATURE, so re-pressing one keeps it armed
+         * rather than toggling it off. Without this, choosing the other mode
+         * while the tool was already active read as a re-click of the same
+         * tool and dropped the student into Select - so switching Sketch to
+         * Plot cancelled the tool instead of changing the mode.
+         */
+        isMathTool(requestedTool) ||
         requestedTool === "arc" ||
         requestedTool === "reference-arc" ||
         requestedTool === "polygon" ||
@@ -489,6 +516,15 @@ export function initialToolMessage(
      */
     if (isAnalysisInputTool(toolId)) {
         return analysisInputMessage(toolId);
+    }
+
+    /*
+     * A MATH TOOL CARRIES ITS OWN OPENING INSTRUCTION, built from the tool and
+     * the mode it is armed in - so the bottom bar and the tool cannot describe
+     * different things.
+     */
+    if (isMathTool(toolId)) {
+        return mathInstruction(toolId, drawingState.interaction?.mathMode || null);
     }
 
     /*

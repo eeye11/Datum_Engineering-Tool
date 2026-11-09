@@ -14,6 +14,7 @@ import {
     DYNAMICS_BOX_TOOLS
 } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { canvasPointFromEvent } from "./tool-activation.js";
+import { isMathTool } from "../../../features/workspace/math/math-tools.js";
 
 export function isConstructionTool(
     toolId
@@ -45,6 +46,19 @@ export function isConstructionTool(
              * layer reads anchors off these features already.
              */
             return (
+                /*
+                 * EVERY MATH TOOL IS A CONSTRUCTION TOOL.
+                 *
+                 * A Math tool takes its points through the shared click and
+                 * drag pipelines - a Point commits on one aimed click, a Vector
+                 * and a Graph take their two points from a gesture, a Curve, a
+                 * Tangent and a Slope Triangle collect their inputs click by
+                 * click - and all of them pick up snapping and inference
+                 * exactly as Statics does. Without this branch the click router
+                 * never handed a Math tool its clicks, so the tools armed,
+                 * printed their instruction and created nothing.
+                 */
+                isMathTool(toolId) ||
                 [
                 "point",
                 "line",

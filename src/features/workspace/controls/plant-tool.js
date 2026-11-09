@@ -3,7 +3,6 @@ import { BLOCK_KIND, DEFAULT_PLANT_FILL, GAIN_KIND, PLANT_KIND, SUM_KIND } from 
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
 const CONTROL_DIMENSIONS = {
@@ -103,7 +102,12 @@ function placeControlBlock(point, kind) {
         dialog.remove();
         renderProperties();
         renderCurrentDrawing();
-        activateTool("select");
+        /*
+         * THE TOOL STAYS ARMED. A Plant or a Block is placed one at a time and a
+         * diagram is made of several; returning to Select after each one made
+         * the Controls placement tools one-shot. Escape, empty canvas or another
+         * tool ends it.
+         */
     };
 
     form.addEventListener("submit", (event) => {
@@ -199,7 +203,7 @@ export function placeGain(point) {
     enggDrawingState.commitDrawingChange(drawingState, previousObjects);
     renderProperties();
     renderCurrentDrawing();
-    activateTool("select");
+    /* The Gain tool stays armed; see the note in the Plant dialog's finish(). */
     return object;
 }
 
@@ -229,6 +233,6 @@ export function placeSum(point) {
     enggDrawingState.commitDrawingChange(drawingState, previousObjects);
     renderProperties();
     renderCurrentDrawing();
-    activateTool("select");
+    /* The Sum tool stays armed; see the note in the Plant dialog's finish(). */
     return object;
 }

@@ -1019,16 +1019,14 @@ export function objectIntersectsSelection(
      * covered by one case, and they behave identically: that is the requirement
      * that the three must not be three implementations.
      *
-     * WHAT IS TESTED IS WHAT IS DRAWN. A sketched diagram is projected by
-     * `analysisSketchMarks`, and a plotted one by `analysisPlotMarks` - the
-     * SAME functions the renderer draws from - so a rectangle drawn over the
-     * ink covers the ink.
+     * WHAT IS TESTED IS WHAT IS DRAWN. A plotted diagram is projected by
+     * `analysisPlotMarks` - the SAME function the renderer draws from - so a
+     * rectangle drawn over the curve covers the curve.
      *
-     * TESTING THE RAW STORED POINTS IS THE DEFECT THIS FIXES. A sketch element
-     * holds GRAPH-LOCAL numbers (a station and a value), not points on the
-     * sheet, so a box over a curve compared with numbers that are not where the
-     * curve is found nothing at all - which is why a student could click a
-     * diagram but never sweep one up.
+     * A SKETCH IS NOT TESTED HERE. Its strokes are ordinary features, so a box
+     * over them catches the strokes themselves - which is what a student
+     * expects, and what lets a stroke be selected, moved and deleted on its
+     * own.
      */
     if (object.type === "analysis-diagram") {
         return diagramMarks(geometry).some(mark =>
@@ -1228,9 +1226,13 @@ export function distributedLoadArrowScreenLength(
  * THE STROKES A DIAGRAM DRAWS, IN WORLD COORDINATES
  * ========================================================
  *
- * A sketched diagram's strokes come from the renderer's `analysisSketchMarks`
- * and a plotted one's from `analysisPlotMarks` - the very functions the sheet
- * draws with - so selection and rendering are one geometry, not two.
+ * A PLOTTED diagram's curve comes from the renderer's `analysisPlotMarks` - the
+ * very function the sheet draws with - so selection and rendering are one
+ * geometry, not two.
+ *
+ * A SKETCH HAS NO MARKS HERE. Its strokes are ordinary Line, Polyline and Arc
+ * features, so they are box-selected by the ordinary pass, as the features they
+ * are. Reading them out of the diagram as well would test the same ink twice.
  *
  * Every mark is normalised to `{ points: [...] }` here, because a plot mark may
  * be a curve (many points) or a vertical line (two), and the intersection test
@@ -1243,10 +1245,15 @@ function diagramMarks(geometry) {
         return [];
     }
 
+    /*
+     * ONLY A PLOT HAS MARKS OF ITS OWN. A sketch's strokes are features, so
+     * they are caught by the ordinary pass - but the DIAGRAM still has a frame,
+     * and that is what the fallback below tests.
+     */
     const marks =
         geometry?.mode === "plot"
             ? renderer.analysisPlotMarks?.(geometry) || []
-            : renderer.analysisSketchMarks?.(geometry) || [];
+            : [];
 
     const normalised = marks
         .map((mark) => ({
@@ -1269,13 +1276,23 @@ function diagramMarks(geometry) {
      * on the sheet that no selection rectangle could reach, which reads as the
      * tool being broken rather than as there being nothing selected.
      *
+     * THE AXIS IS PART OF IT. The frame is a thin outline, so a rectangle drawn
+     * across the middle of the graph - where the student actually aims - would
+     * miss it. The zero axis runs through that middle and is drawn, so it is
+     * tested too.
+     *
      * The frame is asked of the SAME function the renderer lays it out with, so
      * the region tested is the region drawn.
      */
     if (!normalised.length) {
         const frame = diagnosticFrame(geometry, renderer);
 
-        return frame ? [{ points: frame }] : [];
+        const axis =
+            geometry?.start && geometry?.end
+                ? [{ points: [geometry.start, geometry.end] }]
+                : [];
+
+        return [...axis, ...(frame ? [{ points: frame }] : [])];
     }
 
     return normalised;

@@ -88,6 +88,11 @@ function capture(
  * the one definition of what a feature's points are. A
  * rotation is carried at the same time, so an oriented
  * feature does not suddenly lose its angle.
+ *
+ * EVERY point the feature is drawn through is moved, because a property that
+ * described only the well-known keys would leave a shape the student drew
+ * partly on the original. The named keys come first for readability; the
+ * scan below catches the rest.
  */
 function offsetFeature(
     feature,
@@ -126,6 +131,39 @@ function offsetFeature(
         });
     }
 
+    /*
+     * A VERTEX LIST UNDER ANOTHER NAME IS STILL GEOMETRY.
+     *
+     * `points` above covers a Polyline and a Freeform Polygon. Every other
+     * multi-point shape keeps its vertices under a name of its own, and a paste
+     * that moved only the generic keys left those sitting on the original - so
+     * the copy landed partly in place and partly offset. Any array of points in
+     * the geometry is treated as geometry, which covers the shapes that exist
+     * today and any vertex list added tomorrow, without a second list to keep in
+     * step with the model.
+     *
+     * Members are skipped: they are moved above, point by point, and a member is
+     * an object with ends rather than a point, so it would otherwise be moved
+     * twice and land at double the offset.
+     */
+    Object.keys(geometry).forEach(key => {
+        if (key === "points" || key === "members") {
+            return;
+        }
+
+        const value = geometry[key];
+
+        if (
+            Array.isArray(value) &&
+            value.length &&
+            value.every(
+                item => item && typeof item === "object" && "x" in item
+            )
+        ) {
+            value.forEach(move);
+        }
+    });
+
     if (
         geometry.center &&
         Number.isFinite(geometry.center.x)
@@ -140,12 +178,40 @@ function offsetFeature(
 }
 
 /*
- * The features to create, with fresh identities and the
- * internal parent links rebuilt.
+ * ============================================================
+ * THE FEATURES TO CREATE, AS INDEPENDENT COPIES
+ * ============================================================
  *
- * `createdIds` is filled in as each feature is added, so a
- * child pasted after its parent can be pointed at the copy
- * rather than at the original.
+ * A copy must be a NEW feature: it keeps everything that makes it the same
+ * KIND of thing - type, geometry, style, engineering metadata, parameters -
+ * and loses only what identifies it. Three groups of key are handled here,
+ * and they are all "where this feature sits", never "what this feature is".
+ *
+ *   1. IDENTITY                 `id` and `parentId` are regenerated, so the copy
+ *                               has its own row in the Feature Tree.
+ *
+ *   2. INTERNAL LINKS           A parent that was ALSO copied is re-pointed at
+ *                               the copy, so a load pasted with its beam sits on
+ *                               the pasted beam - not on the original, which is
+ *                               the bug that would otherwise make pasting a
+ *                               connected group silently attach to the old
+ *                               drawing.
+ *
+ *   3. EXTERNAL LINKS           A parent that was NOT copied is DROPPED, not
+ *                               kept. `parentId` is the one field the Feature
+ *                               Tree nests by and the one the dependent-feature
+ *                               systems follow - deleting a body deletes its
+ *                               children, moving one carries them. A copy left
+ *                               pointing at the ORIGINAL body would therefore be
+ *                               dragged around and deleted by something the
+ *                               student never copied, which is the "do not break
+ *                               unrelated attached objects" failure.
+ *
+ * DERIVED FEATURES ARE COPIED TOO. A Resultant is refused by the Move TOOL
+ * because its position is re-derived from its parents; that is a rule about
+ * moving, not about existing. A copy of one is a perfectly good independent
+ * reading of the copied forces, and refusing it here would make Duplicate
+ * behave differently for Statics children than for everything else.
  */
 function prepare(
     clipboard,
@@ -202,6 +268,12 @@ function prepare(
             if (
                 mapped === undefined
             ) {
+                /*
+                 * THE ORIGINAL IS STILL IN THE DRAWING, so the copy must not
+                 * claim it as a parent. `delete` rather than reassignment, so
+                 * the field is absent rather than null - which is what the
+                 * serialiser and the Feature Tree both expect of a root.
+                 */
                 delete features[index]
                     .parentId;
             }

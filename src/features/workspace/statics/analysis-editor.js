@@ -11,18 +11,35 @@
  * (`#drawingProperties`, `#drawingFeaturesBack`), which were what sat above the
  * Objects list and pushed it down the panel.
  *
- * WHAT REMAINS IS NOT FEATURES CONTENT. Sketch and Plot are the two modes of the
- * analysis-diagram editor, opened from a feature's own property row and from the
- * placement commit. They are a dialog, not a panel, and they are still needed -
- * so they stay here, with the one import they depend on.
+ * BOTH MODES HAVE A DIALOG, and they are different dialogs because they are
+ * different jobs:
+ *
+ *   Plot    a list of expressions, typed
+ *   Sketch  a drawing workspace, drawn
+ *
+ * The Sketch Editor is the freehand one: the student draws with a mouse, a
+ * finger or a stylus, and DAETUM works out whether each stroke is a straight
+ * line or a curve and reconstructs it. There is no geometry-type control in it,
+ * because the recogniser decides that - see `shared/ui/editors/sketch-editor.js`.
+ *
+ * WHAT APPLY PRODUCES. The editor's recognised strokes become ordinary DAETUM
+ * features - a Line for a straight stroke, a Polyline for a curved one -
+ * parented to the diagram. They are not a private point list on the diagram:
+ * they are features, so they are selectable, editable, written to the source
+ * and undone like anything else.
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDiagramEquations from "../model/analysis/diagram-equations.js";
-import enggDrawingRenderer from "../../../shared/rendering/renderer.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
 import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
+import enggPlacementSession from "../interaction/placement-session.js";
+import enggGridPlacement from "../../../shared/placement/grid-placement.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
+import {
+    ANALYSIS_SKETCH_MARKER,
+    sketchStrokesOf
+} from "./analysis-sketch.js";
 
 import { drawingState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
@@ -72,10 +89,9 @@ export function openAnalysisEditorFor(object) {
 /*
  * EITHER MODE, BY NAME.
  *
- * The Features tab offers an editor per half of the diagram (Sketch Editor and
- * Plot Editor), so a plot can be opened on a diagram saved as a sketch and vice
- * versa. That is the SAME dialog, opened on the SAME model - only the half being
- * edited differs - so there is no second editing path to keep in step.
+ * Plot opens the expression editor; Sketch opens the drawing workspace. Both
+ * are the same object's editor, so a student who placed a Sketch and then opens
+ * the Plot Editor gets the plot of the same diagram.
  */
 export function openAnalysisEditorMode(object, mode) {
     if (!object || !object.geometry) {
@@ -86,7 +102,9 @@ export function openAnalysisEditorMode(object, mode) {
         return isAnalysedDiagram(object) ? openPlotEditorFor(object, object.geometry) : false;
     }
 
-    return openSketchEditorFor(object, object.geometry);
+    return isAnalysedDiagram(object)
+        ? openSketchEditorFor(object, object.geometry)
+        : false;
 }
 
 function openPlotEditorFor(object, geometry) {
@@ -156,114 +174,77 @@ function openPlotEditorFor(object, geometry) {
 }
 
 /*
- * OPENING A SKETCH.
+ * ========================================================
+ * OPENING A SKETCH
+ * ========================================================
  *
- * The twin of the Plot branch above, and deliberately the same shape: the
- * same title, the same range, the same preview-then-apply contract, the same
- * legacy-cleanup. The only difference is that what is being edited is a list
- * of drawn elements rather than a list of equations.
+ * The drawing workspace, loaded with the diagram's existing strokes so a
+ * reopened sketch is edited rather than replaced.
  *
- * The sketch elements live on the feature's own geometry, and nowhere else.
- * They are not ordinary Lines on the sheet: a line drawn here belongs to the
- * diagram, moves with it, and is deleted with it. Storing them as document
- * features would make each one an independent thing the student could
- * select, move and delete on its own - and a sketch element that can be
- * dragged off its own diagram is not part of any diagram.
+ * WHAT APPLY DOES. The editor hands back recognised strokes - each one already
+ * classified as a line or a curve, with its clean points. They are committed as
+ * ordinary features parented to the diagram:
+ *
+ *   straight  a LINE, through its two ends
+ *   curved    a POLYLINE, through its smoothed points
+ *
+ * The diagram's previous strokes are replaced by the new set, because the
+ * editor is the whole sketch: a stroke the student erased there must not
+ * survive here. The replacement is ONE undoable change, so Undo puts the whole
+ * previous sketch back.
  */
 function openSketchEditorFor(object, geometry) {
     const editor = enggSketchEditor;
-    const equations = enggDiagramEquations;
 
-    if (!editor || !equations) {
+    if (!editor) {
         return false;
     }
 
-    const before =
-        enggDrawingState.snapshotDrawing(
-            drawingState
-        );
+    const before = enggDrawingState.snapshotDrawing(drawingState);
+
+    const existing = sketchStrokesOf(object).map(stroke => ({
+        id: stroke.id,
+        kind: stroke.type === "line" ? "straight" : "curved",
+        points: strokePointsOf(stroke),
+        original: strokePointsOf(stroke)
+    }));
 
     editor.open({
-        title: `${
-            equations.titleFor(geometry.diagramType)
-        } - Sketch`,
+        title: `${enggDiagramEquations.titleFor(geometry.diagramType)} - Sketch`,
         range: geometry.localRange,
-        elements: geometry.sketchElements || [],
-
-        /*
-         * THE DIAGRAM'S OWN VERTICAL EXTENT.
-         *
-         * The sketch's y-scale is fixed when the editor opens, and this is the
-         * value it is fixed against: the same extent the PLOTTED mode draws to,
-         * so switching between drawing and plotting a diagram shows it at one
-         * size, and a sketch that is empty still has a real y-axis.
-         */
         yRange: Number(geometry.yRange) || Number(geometry.unitHeight) || 0,
+        yUnit: "",
+        elements: existing,
 
         /*
-         * THE ORDINATE'S UNIT, from the diagram's own axis definition - kN
-         * for a shear or axial diagram, kN·m for a bending moment. The Y-value
-         * popup states the number in it, so the student sees "250 kN" rather
-         * than a bare 250.
-         */
-        yUnit:
-            enggDrawingRenderer?.ANALYSIS_DIAGRAM_AXES?.[
-                geometry.diagramType
-            ]?.unit || "",
-
-        /*
-         * THE BODY'S ELEMENT STATIONS, for the graph's ticks.
+         * APPLY HANDS THE STROKES TO THE PLACEMENT, IT DOES NOT COMMIT THEM.
          *
-         * These are the same live references the diagram already derives from
-         * its source body on every pass, so the sketch's ticks are the real
-         * x-locations of the forces, supports, loads and connections on the
-         * member - and they follow the body, rather than being a second list
-         * the sketch would have to keep in step.
+         * The sketch is finished, but its POSITION is still the student's to
+         * choose - so the editor closes, the strokes follow the cursor, and the
+         * click on the page is what commits them. A diagram's sketch has no
+         * coordinate axes of its own, so it is placed by its bounding box with
+         * ordinary grid snapping - no origin is invented for it.
          */
-        stations: geometry.referencePositions || [],
-        onPreview: (elements) => {
-            geometry.sketchElements = elements;
-
-            /*
-             * The flag the renderer reads to decide whether the plot-area
-             * highlight is earned. It is derived from the elements rather
-             * than set by them, so it cannot disagree with what is actually
-             * there - and an empty sketch shows no highlight, which is the
-             * point of the flag.
-             */
-            geometry.sketchContent =
-                elements.length > 0;
-
-            renderCurrentDrawing();
-        },
-        onApply: (elements, metrics) => {
-            geometry.sketchElements = elements;
-
-            /*
-             * THE SCALE THE SKETCH WAS DRAWN AT IS STORED WITH IT.
-             *
-             * Graph-local y values mean nothing without the units-per-value
-             * the stroke was drawn to. Storing it here is what makes the sheet
-             * and the generated source place the curve at ONE height: both
-             * read `geometry.unitHeight` first, and re-deriving it from the
-             * strokes later (as a shortened curve would) is what used to make a
-             * saved sketch silently change size.
-             */
-            if (metrics && Number(metrics.unitHeight) > 0) {
-                geometry.unitHeight = Number(metrics.unitHeight);
-            }
-
-            geometry.sketchContent =
-                elements.length > 0;
-
-            enggDrawingState.commitDrawingChange(
-                drawingState,
-                before
+        onApply: elements => {
+            enggPlacementSession.beginPlacement(
+                {
+                    strokes: elements.map(element => ({
+                        points: element.points || []
+                    })),
+                    calibration: null
+                },
+                {
+                    commit: placement => {
+                        applySketchStrokes(object, elements, before, placement);
+                    },
+                    cancel: () => {
+                        renderCurrentDrawing();
+                        renderProperties();
+                    }
+                }
             );
-
-            renderCurrentDrawing();
-            renderProperties();
         },
+
         onCancel: () => {
             renderCurrentDrawing();
             renderProperties();
@@ -273,42 +254,95 @@ function openSketchEditorFor(object, geometry) {
     return true;
 }
 
+/* The points a committed stroke feature is made of. */
+function strokePointsOf(stroke) {
+    const geometry = stroke.geometry || {};
+
+    if (Array.isArray(geometry.points)) {
+        return geometry.points.map(point => ({ x: point.x, y: point.y }));
+    }
+
+    return [geometry.start, geometry.end]
+        .filter(Boolean)
+        .map(point => ({ x: point.x, y: point.y }));
+}
+
+/*
+ * COMMIT THE SKETCH AS FEATURES.
+ *
+ * The old strokes are removed and the new ones added in ONE change, so the
+ * student's Undo restores the sketch they had before they opened the editor -
+ * not one stroke at a time.
+ */
+function applySketchStrokes(object, elements, before, placement = null) {
+    sketchStrokesOf(object).forEach(stroke => {
+        enggDrawingState.removeObject(drawingState, stroke.id);
+    });
+
+    elements.forEach(element => {
+        /*
+         * THE PLACEMENT IS APPLIED TO THE POINTS BEFORE THEY BECOME FEATURES,
+         * so the committed strokes are where the student put them - and the
+         * preview they saw is the geometry they get.
+         */
+        const points = placement
+            ? enggGridPlacement.applyPlacementToPoints(element.points || [], placement)
+            : element.points || [];
+
+        if (points.length < 2) {
+            return;
+        }
+
+        const feature =
+            element.kind === "straight"
+                ? {
+                      type: "line",
+                      name: "Line",
+                      geometry: {
+                          start: { ...points[0] },
+                          end: { ...points[points.length - 1] }
+                      }
+                  }
+                : {
+                      type: "polyline",
+                      name: "Polyline",
+                      geometry: {
+                          points: points.map(point => ({ ...point }))
+                      }
+                  };
+
+        feature.parentId = object.id;
+        feature.style = { ...(object.style || {}) };
+        feature.engineering = {
+            plane: "XY",
+            discipline: "statics",
+            analysisSketch: ANALYSIS_SKETCH_MARKER,
+            sketchOf: object.id
+        };
+
+        enggDrawingState.addObject(drawingState, feature);
+    });
+
+    enggDrawingState.commitDrawingChange(drawingState, before);
+
+    renderCurrentDrawing();
+    renderProperties();
+}
+
 /*
  * ========================================================
  * THE EDITORS A FEATURE OFFERS, AND OPENING ONE BY ITS BUTTON
  * ========================================================
  *
- * The Features pane renders one button per editor a diagram has. The TWO halves
- * of an SFD, BMD or AFD - its hand-drawn strokes and its plotted curve - are BOTH
- * shown, because both exist on the one model the analysis tools create. Opening
- * either goes through `openAnalysisEditorMode`, which opens the SAME dialog the
- * placement commit opens, on the SAME object, with the same callbacks.
- *
- * The object's stored `mode` decides only which one the PLACEMENT opens; it is
- * not a reason to hide the other from the panel.
- */
-/*
- * Reference tools that produce an editable sketch of their own (a Resultant's
- * vector triangle, a Force Components' two resolved arrows) are Diagram tools
- * too: their strokes are ordinary drawing content and are edited by the same
- * Sketch Editor. They are listed here so the Features tab offers it, and their
- * sketch elements live on their own geometry, exactly as a diagram's do.
+ * A diagram offers BOTH editors, because both halves exist on the one model:
+ * its hand-drawn strokes and its plotted curve. Each opens the dialog for its
+ * own mode, on the same object.
  */
 export const ANALYSIS_EDITOR_TYPES = Object.freeze([
     "analysis-diagram",
     "shear-force-diagram",
     "bending-moment-diagram",
     "axial-force-diagram"
-]);
-
-/* The analysis tools whose Features tab carries a Sketch Editor. */
-export const SKETCH_EDITOR_TOOL_TYPES = Object.freeze([
-    "analysis-diagram",
-    "shear-force-diagram",
-    "bending-moment-diagram",
-    "axial-force-diagram",
-    "resultant",
-    "force-components"
 ]);
 
 /* The analysis tools whose Features tab carries a Plot Editor (they plot). */
@@ -328,20 +362,22 @@ export function analysisEditorsFor(object) {
         return [];
     }
 
-    const editors = [];
-
-    if (SKETCH_EDITOR_TOOL_TYPES.includes(object.type)) {
-        editors.push({ id: "sketch", label: "Drawing", button: "Sketch Editor" });
+    if (!PLOT_EDITOR_TOOL_TYPES.includes(object.type)) {
+        return [];
     }
 
-    if (PLOT_EDITOR_TOOL_TYPES.includes(object.type)) {
-        editors.push({ id: "plot", label: "Plot", button: "Plot Editor" });
-    }
-
-    return editors;
+    return [
+        { id: "sketch", label: "Drawing", button: "Sketch Editor" },
+        { id: "plot", label: "Plot", button: "Plot Editor" }
+    ];
 }
 
-/* The editor a diagram OPENS on when nobody names one: its own stored mode. */
+/*
+ * The editor a diagram OPENS on when nobody names one.
+ *
+ * Only a Plot has one. A Sketch is drawn on the sheet, so a sketch-mode diagram
+ * answers null rather than naming a dialog that no longer exists.
+ */
 export function defaultAnalysisEditorFor(object) {
     if (!isAnalysedDiagram(object)) {
         return null;
@@ -355,10 +391,9 @@ export function defaultAnalysisEditorFor(object) {
 /*
  * OPEN IT BY ID AND MODE.
  *
- * The Features button names the MODE it was rendered for, so that is what opens
- * - a student pressing "Plot Editor" on a sketched SFD gets its plot, and the
- * diagram's own stored mode is left alone (it is the placement's choice, not the
- * editor's). Without a mode the feature's stored mode decides.
+ * The Features button names the MODE it was rendered for, so that is what opens.
+ * A request for the Sketch mode is answered false: there is no sketch dialog,
+ * and the strokes are edited by selecting them on the sheet.
  */
 export function openAnalysisEditorForObject(objectId, mode = null) {
     const object = (drawingState.objects || []).find((candidate) => candidate.id === objectId);
@@ -368,7 +403,7 @@ export function openAnalysisEditorForObject(objectId, mode = null) {
     }
 
     if (mode === "sketch" || mode === "plot") {
-        if (!SKETCH_EDITOR_TOOL_TYPES.includes(object.type) && !isAnalysedDiagram(object)) {
+        if (!isAnalysedDiagram(object)) {
             return false;
         }
 
@@ -380,7 +415,6 @@ export function openAnalysisEditorForObject(objectId, mode = null) {
 
 export default {
     ANALYSIS_EDITOR_TYPES,
-    SKETCH_EDITOR_TOOL_TYPES,
     PLOT_EDITOR_TOOL_TYPES,
     analysisEditorsFor,
     defaultAnalysisEditorFor,

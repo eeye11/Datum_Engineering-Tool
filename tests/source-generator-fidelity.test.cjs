@@ -102,10 +102,6 @@ function reportedSheet() {
         diagramType: "sfd",
         mode: "sketch",
         unitHeight: 3,
-        sketchElements: [
-          { id: "s1", kind: "line", start: { x: 0, y: 0 }, end: { x: 5, y: 4 } },
-          { id: "s2", kind: "curve3", start: { x: 5, y: 4 }, bend: { x: 7, y: 8 }, end: { x: 10, y: 0 } },
-        ],
       },
       style: { stroke: "#000000", lineWidth: "thin", lineType: "solid", fill: "none", opacity: 1 },
     },
@@ -242,14 +238,60 @@ console.log("--------------------------------------------------");
 
 const diagramSource = statics.staticsSourceWriter(sheet[3], { transform: drawingFit });
 
-const place = (x, value) => ({
-  x: -215 + ((x - 0) / 10) * 430,
-  y: -60 + value * 3,
-});
+/*
+ * A SKETCH'S STROKES ARE FEATURES, SO THEY ARE WRITTEN AS FEATURES.
+ *
+ * The diagram itself writes its frame and nothing else; the strokes are
+ * ordinary Line and Polyline features parented to it, drawn in world space
+ * where the student drew them, and written by the ordinary writers. So the
+ * fidelity question is whether each stroke reaches the source at its own
+ * coordinates - not whether a projection of graph-local points does.
+ */
+const strokeLine = {
+  id: "s1",
+  type: "line",
+  name: "Line 1",
+  parentId: "sfd",
+  geometry: { start: { x: -215, y: -60 }, end: { x: 0, y: -48 } },
+  style: { stroke: "#000000", lineWidth: "thin", lineType: "solid", fill: "none", opacity: 1 },
+  engineering: { plane: "XY", discipline: "statics", analysisSketch: "analysis-sketch", sketchOf: "sfd" },
+};
 
-const lineEnd = drawingFit.point(place(5, 4).x, place(5, 4).y);
-const curveBend = drawingFit.point(place(7, 8).x, place(7, 8).y);
-const curveEnd = drawingFit.point(place(10, 0).x, place(10, 0).y);
+const strokeCurve = {
+  id: "s2",
+  type: "polyline",
+  name: "Polyline 1",
+  parentId: "sfd",
+  geometry: {
+    points: [
+      { x: 0, y: -48 },
+      { x: 86, y: -36 },
+      { x: 215, y: -60 },
+    ],
+  },
+  style: { stroke: "#000000", lineWidth: "thin", lineType: "solid", fill: "none", opacity: 1 },
+  engineering: { plane: "XY", discipline: "statics", analysisSketch: "analysis-sketch", sketchOf: "sfd" },
+};
+
+/*
+ * EACH STROKE IS WRITTEN BY THE WRITER FOR ITS OWN TYPE.
+ *
+ * A Line is a Statics feature and a Polyline is plain geometry, so they go to
+ * different writers - which is the point of strokes being ordinary features:
+ * nothing has to know that they are part of a diagram.
+ */
+const lineSource = statics.staticsSourceWriter(strokeLine, { transform: drawingFit });
+const curveSource = geometry.geometrySourceWriter(strokeCurve, { transform: drawingFit });
+
+const lineEnd = drawingFit.point(strokeLine.geometry.end.x, strokeLine.geometry.end.y);
+const curveBend = drawingFit.point(
+  strokeCurve.geometry.points[1].x,
+  strokeCurve.geometry.points[1].y,
+);
+const curveEnd = drawingFit.point(
+  strokeCurve.geometry.points[2].x,
+  strokeCurve.geometry.points[2].y,
+);
 
 /* The source writes numbers at 4 decimals, so points are compared numerically. */
 const hasPoint = (text, at) => {
@@ -265,24 +307,25 @@ const hasPoint = (text, at) => {
 };
 
 check(
-  "the sketch's line is written where the canvas draws it",
-  hasPoint(diagramSource, lineEnd),
-  `expected (${lineEnd.x},${lineEnd.y})\n${diagramSource}`,
+  "the sketch's line is written where the student drew it",
+  hasPoint(lineSource, lineEnd),
+  `expected (${lineEnd.x},${lineEnd.y})\n${lineSource}`,
 );
 check(
-  "the sketch's three-point curve is written through its bend",
-  hasPoint(diagramSource, curveBend),
-  diagramSource,
+  "the sketch's polyline is written through its bend",
+  hasPoint(curveSource, curveBend),
+  curveSource,
 );
 check(
   "and through its end",
-  hasPoint(diagramSource, curveEnd),
-  diagramSource,
+  hasPoint(curveSource, curveEnd),
+  curveSource,
 );
 
 check(
-  "an empty sketch invents no curve",
-  commandsOf(statics.staticsSourceWriter({ ...sheet[3], geometry: { ...sheet[3].geometry, sketchElements: [] } }, { transform: drawingFit })).length === 2,
+  "a sketch diagram writes its frame and no curve of its own",
+  commandsOf(diagramSource).length === 2,
+  diagramSource,
 );
 
 const plotMode = statics.staticsSourceWriter(
@@ -300,31 +343,20 @@ const plotMode = statics.staticsSourceWriter(
 );
 
 check("a plot-mode diagram draws its plotted curve", commandsOf(plotMode).length >= 3, plotMode);
+
+/*
+ * A PLOT DOES NOT WRITE A SKETCH.
+ *
+ * A plot's curve is generated from its expressions, and a hand-drawn stroke
+ * cannot belong to one - attaching ink to a plot would be the arbitrary edit
+ * that invalidates its defining relationship. So a plot-mode diagram writes its
+ * frame and its curve, and nothing else.
+ */
 check(
-  "and still writes its stored strokes",
-  /* The stroke's x-span is what identifies it: the curve starts at x=0 and ends at x=10. */
-  hasPoint(plotMode, drawingFit.point(place(0, 0).x, place(0, 0).y)) ||
-    hasPoint(plotMode, drawingFit.point(place(10, 0).x, place(10, 0).y)),
+  "and a plot writes no hand-drawn strokes",
+  !/analysis-sketch/.test(plotMode),
   plotMode,
 );
-
-/* A resultant's own per-object sketch is drawing content too. */
-const resultantSketch = statics.staticsSourceWriter(
-  {
-    id: "res",
-    type: "resultant",
-    geometry: {
-      start: { x: 0, y: 0 },
-      end: { x: 30, y: 40 },
-      position: { x: 0, y: 0 },
-      sketchElements: [{ id: "r1", kind: "line", start: { x: 1, y: 2 }, end: { x: 3, y: 4 } }],
-    },
-    style: { stroke: "#000000", lineWidth: "thin" },
-  },
-  { transform: smallFit },
-);
-
-check("a per-object sketch is serialised", resultantSketch.includes("(1,2) -- (3,4)"), resultantSketch);
 
 /* ======================================================== F. geometry */
 
@@ -379,11 +411,15 @@ check(
 check(
   "and a Fit-All box around the drawing includes the sketch's highest point",
   (() => {
+    /*
+     * THE STROKES' OWN POINTS, because that is where they are now. A sketch's
+     * ink is ordinary geometry, so the fit measures it as geometry - there is
+     * no projection to reproduce here.
+     */
     const sketchPoints = [
-      place(0, 0),
-      place(5, 4),
-      place(7, 8),
-      place(10, 0),
+      strokeLine.geometry.start,
+      strokeLine.geometry.end,
+      ...strokeCurve.geometry.points,
     ];
 
     return sketchPoints.every(
@@ -435,17 +471,28 @@ const manager = managerModule.createSourceManager();
 sync.setSourceWriter(geometry.geometrySourceWriter);
 sync.addSourceWriter(statics.staticsSourceWriter);
 
-sheet.forEach((object) => sync.writeObjectIntoSource(manager, object, { allObjects: sheet }));
+/*
+ * THE STROKES ARE PART OF THE DOCUMENT, AS FEATURES.
+ *
+ * They are written by the ordinary writers, so they appear under their own
+ * identity markers - which is what makes them selectable and highlightable in
+ * the source like anything else on the sheet.
+ */
+const documentObjects = [...sheet, strokeLine, strokeCurve];
+
+documentObjects.forEach((object) =>
+  sync.writeObjectIntoSource(manager, object, { allObjects: documentObjects }),
+);
 
 const documentSource = manager.getSource();
 
 check(
   "every object is in the document",
-  sheet.every((object) => documentSource.includes(`% DAETUM ID: ${object.id}`)),
+  documentObjects.every((object) => documentSource.includes(`% DAETUM ID: ${object.id}`)),
 );
 check(
   "once each, under one header",
-  sheet.every((object) => documentSource.split(`% DAETUM ID: ${object.id}`).length - 1 === 1),
+  documentObjects.every((object) => documentSource.split(`% DAETUM ID: ${object.id}`).length - 1 === 1),
 );
 check("including the sketch's curve", hasPoint(documentSource, curveBend), documentSource);
 check("with no teal anywhere", !documentSource.includes("193335"));

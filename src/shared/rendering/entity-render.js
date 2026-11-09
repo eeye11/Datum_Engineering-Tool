@@ -16,6 +16,7 @@ import { drawParticle, drawRigidBody } from "./entities/draw-bodies.js";
 import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
+import { MATH_RENDERERS } from "./entities/draw-math.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { isControlBlock, isGain, isSum } from "../model/plant.js";
@@ -111,7 +112,18 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         { matches: entity => entity.type === "flow-direction-diagram", draw: drawFlowDirection },
         { matches: entity => entity.type === "pressure-profile", draw: drawPressureProfile },
         { matches: entity => entity.type === "flow-profile", draw: drawFlowProfile },
-        { matches: entity => entity.type === "section-plane", draw: drawSectionPlane }
+        { matches: entity => entity.type === "section-plane", draw: drawSectionPlane },
+
+        /*
+         * THE MATH / ANALYSIS OBJECTS.
+         *
+         * Each is its own type with its own painter, and the table is built
+         * from the Math module's own list so a type added there is drawn here
+         * without a second edit. They are LAST because their types are unique -
+         * no earlier test can match one - and being last keeps the existing
+         * dispatch order untouched.
+         */
+        ...MATH_RENDERERS
     ];
 
     /*

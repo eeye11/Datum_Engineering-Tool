@@ -118,10 +118,21 @@ import { openColourPicker } from "../../../shared/ui/colour-picker.js";
 import { renderCurrentDrawing } from "../workspace/canvas-render.js";
 import { analysisEditorsFor, openAnalysisEditorForObject } from "../../../features/workspace/statics/analysis-editor.js";
 import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
+import enggMathModel from "../../../features/workspace/math/math-model.js";
 import enggVessel from "../../../features/workspace/model/fluids/reservoir-tank.js";
 
 let host = null;
 let dynamicsGeometryEditSnapshot = null;
+
+/*
+ * WHICH TOOL-SPECIFIC SECTIONS ARE OPEN.
+ *
+ * Keyed by the section's own id (`math-graph-settings`, `math-point-settings`
+ * ...), so the state survives a re-render and follows the student from one
+ * object of the same kind to the next. The shared sections are never in here:
+ * they are always open.
+ */
+const expandedFeatureSections = new Set();
 
 function element(id) {
     return globalThis.document.getElementById(id);
@@ -661,6 +672,69 @@ function profileDataMarkup(object) {
     );
 }
 
+/*
+ * ============================================================
+ * A PLOT'S FUNCTIONS
+ * ============================================================
+ *
+ * A Plot holds a LIST of functions, so they are edited as a list: one row per
+ * function, with its expression, its domain and a visibility switch, plus an
+ * Add button. Each edit writes the same `geometry.functions` the renderer
+ * samples and the source writer emits - so the table, the drawn curve and the
+ * TikZ are one fact, not three copies.
+ *
+ * A SKETCHED function has no expression to type: it is the student's own
+ * reconstructed path, and its row says so rather than offering a field that
+ * would have nothing to write into.
+ */
+function plotFunctionsMarkup(object) {
+    const functions = enggMathModel.plotFunctions(object);
+
+    const rows = functions
+        .map((component, index) => {
+            const plotted = component.mode === "plot";
+
+            const expression = plotted
+                ? `<input type="text" class="dfp-text" data-plot-function-expression="${escapeHtml(component.id)}" ` +
+                  `aria-label="Function ${index + 1} expression" value="${escapeHtml(component.expression)}" ` +
+                  `placeholder="x^2">`
+                : `<span class="dfp-readonly">Sketched curve</span>`;
+
+            const domain = plotted
+                ? `<input type="number" class="dfp-number" data-plot-function-domain="min" data-plot-function-id="${escapeHtml(component.id)}" ` +
+                  `aria-label="Function ${index + 1} domain minimum" value="${Number(component.domain?.min ?? 0)}" step="0.5">` +
+                  `<input type="number" class="dfp-number" data-plot-function-domain="max" data-plot-function-id="${escapeHtml(component.id)}" ` +
+                  `aria-label="Function ${index + 1} domain maximum" value="${Number(component.domain?.max ?? 0)}" step="0.5">`
+                : "";
+
+            return (
+                `<div class="dfp-row dfp-data-row" data-plot-function-row="${escapeHtml(component.id)}">` +
+                expression +
+                domain +
+                `<button type="button" class="dfp-button" data-plot-function-visible="${escapeHtml(component.id)}" ` +
+                `aria-pressed="${component.visible !== false}" ` +
+                `aria-label="${component.visible !== false ? "Hide" : "Show"} function ${index + 1}">` +
+                `${component.visible !== false ? "Shown" : "Hidden"}</button>` +
+                `<button type="button" class="dfp-button" data-plot-function-remove="${escapeHtml(component.id)}" ` +
+                `aria-label="Remove function ${index + 1}">Remove</button>` +
+                `</div>`
+            );
+        })
+        .join("");
+
+    return (
+        `<div class="dfp-row dfp-data-heading">` +
+        `<span class="dfp-row-label">Function</span>` +
+        `<span class="dfp-row-label">Domain</span>` +
+        `</div>` +
+        rows +
+        `<div class="dfp-row">` +
+        `<span class="dfp-row-label">${functions.length} function${functions.length === 1 ? "" : "s"}</span>` +
+        `<button type="button" class="dfp-button" data-plot-function-add="true">Add Function</button>` +
+        `</div>`
+    );
+}
+
 function stepIcon(direction) {    const path = direction === "up" ? "M4 10l4-4 4 4" : "M4 6l4 4 4-4";
 
     return (
@@ -767,6 +841,42 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
             return;
         }
 
+        /*
+         * A TOOL-SPECIFIC SECTION IS A COLLAPSIBLE DROPDOWN.
+         *
+         * Object, Appearance and Transform are the shared foundation and are
+         * always open - they are what every object has, and hiding them would
+         * make the panel's shape change from tool to tool. A tool's OWN
+         * settings (Graph Settings, Point Settings, Curve Settings ...) are a
+         * separate dropdown at the SAME level, closed by default, so the panel
+         * opens on the shared sections and the tool's own controls are one
+         * press away rather than pushing the shared ones off the screen.
+         *
+         * The open state is remembered per section id, so a student who opens
+         * Graph Settings and then selects another graph finds it still open.
+         */
+        if (group.collapsible) {
+            const open = expandedFeatureSections.has(id);
+
+            markup.push(
+                `<div class="dfp-section dfp-section-collapsible${open ? " is-open" : ""}" data-feature-group="${escapeHtml(id)}">` +
+                    `<button type="button" class="dfp-section-heading dfp-section-toggle" ` +
+                    `data-feature-section-toggle="${escapeHtml(id)}" ` +
+                    `aria-expanded="${open}" aria-controls="dfp-section-${escapeHtml(id)}">` +
+                    `<span class="dfp-section-toggle-label">${escapeHtml(group.heading)}</span>` +
+                    `<span class="dfp-section-caret" aria-hidden="true">` +
+                    `<svg viewBox="0 0 12 12" focusable="false"><path d="M2.5 4.25L6 7.75l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` +
+                    `</span>` +
+                    `</button>` +
+                    `<div class="dfp-section-body" id="dfp-section-${escapeHtml(id)}"${open ? "" : " hidden"}>` +
+                    rows +
+                    `</div>` +
+                    `</div>`
+            );
+
+            return;
+        }
+
         markup.push(
             group.plainHeading
                 ? `<div class="dfp-section dfp-section-bare" data-feature-group="${escapeHtml(id)}">${rows}</div>`
@@ -819,7 +929,20 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
             ENGINEERING_NO_ROTATE.has(object.engineering?.dynamicsType)
     );
 
-    if (objects.some((object) => supportsTransform(object))) {
+    /*
+     * A MATH OBJECT HAS NO TRANSFORM SECTION.
+     *
+     * Its position, size, endpoints, control points and rotation are all
+     * manipulated DIRECTLY on the drawing - by dragging the object, by its
+     * corner and edge handles, by its endpoint and control-point handles, by
+     * its rotation handle. A Transform section holding X Shift, Y Shift and
+     * Rotate would be a second control over facts the canvas already owns, and
+     * the two would have to be kept in step for no gain. The tool's own
+     * settings are a separate dropdown, drawn from the schema above.
+     */
+    const mathOnly = objects.every((object) => String(object?.type || "").startsWith("math-"));
+
+    if (!mathOnly && objects.some((object) => supportsTransform(object))) {
         const toolRows = transformFieldsMarkup(objects);
         const elbow = objects.every(
             (object) =>
@@ -883,6 +1006,26 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
         }
     }
 
+    /*
+     * A PLOT'S FUNCTIONS GO INSIDE ITS OWN SETTINGS DROPDOWN.
+     *
+     * They are part of what the plot IS - the curves drawn on it - so they
+     * belong with its coordinate settings rather than in a section of their
+     * own. The list is spliced into the Plot Settings body, after the rows the
+     * schema declared, so the dropdown reads: ranges, ticks, axes, grid,
+     * labels, then the functions.
+     */
+    if (objects.length === 1 && objects[0].type === "math-plot") {
+        const at = markup.findIndex((section) => section.includes('data-feature-group="math-plot-settings"'));
+
+        if (at >= 0) {
+            markup[at] = markup[at].replace(
+                /(<div class="dfp-section-body"[^>]*>)([\s\S]*?)(<\/div>\s*<\/div>\s*$)/,
+                `$1$2${plotFunctionsMarkup(objects[0])}$3`
+            );
+        }
+    }
+
     return headerMarkup(objects) + markup.join("");
 }
 
@@ -905,15 +1048,26 @@ function analysisEditorsMarkup(objects) {
         return "";
     }
 
+    /*
+     * THE DIAGRAM'S OWN MODE IS STATED, NOT LEFT TO BE INFERRED.
+     *
+     * The mode is read from the feature (`geometry.mode`), which is where the
+     * placement recorded it, so the panel and the drawing cannot disagree. The
+     * mode's own editor is marked current, so the student can see at a glance
+     * which one this diagram was made as.
+     */
+    const mode = object.geometry?.mode === "plot" ? "plot" : "sketch";
+
     const rows = editors
         .map(
             (editor) =>
                 `<div class="dfp-row" data-analysis-editor-row="${escapeHtml(editor.id)}">` +
                 `<span class="dfp-row-label">${escapeHtml(editor.label)}</span>` +
                 `<span class="dfp-row-control">` +
-                `<button type="button" class="dfp-button" ` +
+                `<button type="button" class="dfp-button${editor.id === mode ? " primary" : ""}" ` +
                 `data-analysis-editor="${escapeHtml(editor.id)}" ` +
-                `data-object-id="${escapeHtml(object.id)}">` +
+                `data-object-id="${escapeHtml(object.id)}"` +
+                `${editor.id === mode ? ' aria-current="true"' : ""}>` +
                 `${escapeHtml(editor.button)}</button>` +
                 `</span>` +
                 `</div>`
@@ -921,8 +1075,12 @@ function analysisEditorsMarkup(objects) {
         .join("");
 
     return (
-        `<div class="dfp-section" data-feature-group="analysis-editors">` +
-        `<div class="dfp-section-heading">Diagram Editors</div>` +
+        `<div class="dfp-section" data-feature-group="analysis-editors" data-analysis-mode="${mode}">` +
+        `<div class="dfp-section-heading">Diagram</div>` +
+        `<div class="dfp-row" data-analysis-mode-row="${mode}">` +
+        `<span class="dfp-row-label">Mode</span>` +
+        `<span class="dfp-row-control">${mode === "plot" ? "Plot" : "Sketch"}</span>` +
+        `</div>` +
         rows +
         `</div>`
     );
@@ -1029,6 +1187,32 @@ function commitProfileData(apply) {
     if (!apply(object)) {
         return false;
     }
+
+    enggDrawingState.commitDrawingChange(drawingState, previous);
+
+    renderCurrentDrawing();
+    refreshFeatures();
+
+    return true;
+}
+
+/*
+ * ONE EDIT TO A PLOT'S FUNCTION LIST.
+ *
+ * Snapshotted, applied and committed once, so Undo steps a function at a time
+ * and the table, the drawn curves and the source all change together. A locked
+ * plot is refused, exactly as every other field is.
+ */
+function commitPlotFunctions(apply) {
+    const object = selectedObjects().find((candidate) => candidate.type === "math-plot");
+
+    if (!object || object.locked === true) {
+        return false;
+    }
+
+    const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+    apply(object);
 
     enggDrawingState.commitDrawingChange(drawingState, previous);
 
@@ -1404,6 +1588,34 @@ export function installFeaturesPane() {
             return;
         }
 
+        /*
+         * A TOOL-SPECIFIC SECTION'S HEADING OPENS AND CLOSES IT.
+         *
+         * The section is redrawn from the remembered state rather than having
+         * its `hidden` attribute flipped in place, so the caret, the
+         * `aria-expanded` and the body cannot disagree - and a section that
+         * becomes empty on the next render is dropped by the same pass that
+         * draws it.
+         */
+        const sectionToggle = event.target.closest?.("[data-feature-section-toggle]");
+
+        if (sectionToggle) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const sectionId = sectionToggle.dataset.featureSectionToggle;
+
+            if (expandedFeatureSections.has(sectionId)) {
+                expandedFeatureSections.delete(sectionId);
+            } else {
+                expandedFeatureSections.add(sectionId);
+            }
+
+            renderFeatures();
+
+            return;
+        }
+
         const editorButton = event.target.closest?.("[data-analysis-editor]");
 
         if (editorButton) {
@@ -1457,6 +1669,70 @@ export function installFeaturesPane() {
             const index = Number(removePoint.dataset.profileRemove);
 
             commitProfileData((profile) => enggPressureProfile.removePoint(profile, index));
+
+            return;
+        }
+
+        /*
+         * A PLOT'S FUNCTION ROWS.
+         *
+         * Add, Remove and Show/Hide are ONE edit each - snapshotted, applied
+         * and committed once - so Undo steps a function at a time and the
+         * table, the drawn curve and the source all change together.
+         */
+        const addFunction = event.target.closest?.("[data-plot-function-add]");
+
+        if (addFunction) {
+            commitPlotFunctions((plot) => {
+                const limits = enggMathModel.graphLimits(plot);
+
+                plot.geometry = {
+                    ...plot.geometry,
+                    functions: [
+                        ...enggMathModel.plotFunctions(plot),
+                        enggMathModel.createPlotFunction({
+                            expression: "x",
+                            domain: { min: limits.xMin, max: limits.xMax }
+                        })
+                    ]
+                };
+            });
+
+            return;
+        }
+
+        const removeFunction = event.target.closest?.("[data-plot-function-remove]");
+
+        if (removeFunction) {
+            const id = removeFunction.dataset.plotFunctionRemove;
+
+            commitPlotFunctions((plot) => {
+                plot.geometry = {
+                    ...plot.geometry,
+                    functions: enggMathModel
+                        .plotFunctions(plot)
+                        .filter((component) => component.id !== id)
+                };
+            });
+
+            return;
+        }
+
+        const toggleFunction = event.target.closest?.("[data-plot-function-visible]");
+
+        if (toggleFunction) {
+            const id = toggleFunction.dataset.plotFunctionVisible;
+
+            commitPlotFunctions((plot) => {
+                plot.geometry = {
+                    ...plot.geometry,
+                    functions: enggMathModel.plotFunctions(plot).map((component) =>
+                        component.id === id
+                            ? { ...component, visible: component.visible === false }
+                            : component
+                    )
+                };
+            });
         }
     });
 
@@ -1466,6 +1742,75 @@ export function installFeaturesPane() {
      * same `engineering.points`.
      */
     host.addEventListener("change", (event) => {
+        /*
+         * A PLOT FUNCTION'S EXPRESSION OR DOMAIN, typed into its row.
+         *
+         * The expression is validated before it is written: an expression the
+         * evaluator cannot read would draw nothing, and storing it would leave
+         * the panel claiming a curve the sheet does not show.
+         */
+        const expressionField = event.target.closest?.("[data-plot-function-expression]");
+
+        if (expressionField) {
+            const id = expressionField.dataset.plotFunctionExpression;
+            const text = String(expressionField.value ?? "").trim();
+
+            if (text && !enggMathModel.curveExpressionValid(text)) {
+                expressionField.setAttribute("aria-invalid", "true");
+
+                return;
+            }
+
+            expressionField.removeAttribute("aria-invalid");
+
+            commitPlotFunctions((plot) => {
+                plot.geometry = {
+                    ...plot.geometry,
+                    functions: enggMathModel.plotFunctions(plot).map((component) =>
+                        component.id === id ? { ...component, expression: text } : component
+                    )
+                };
+            });
+
+            return;
+        }
+
+        const domainField = event.target.closest?.("[data-plot-function-domain]");
+
+        if (domainField) {
+            const id = domainField.dataset.plotFunctionId;
+            const key = domainField.dataset.plotFunctionDomain;
+            const value = Number(domainField.value);
+
+            if (!Number.isFinite(value)) {
+                return;
+            }
+
+            commitPlotFunctions((plot) => {
+                plot.geometry = {
+                    ...plot.geometry,
+                    functions: enggMathModel.plotFunctions(plot).map((component) => {
+                        if (component.id !== id) {
+                            return component;
+                        }
+
+                        const domain = { ...(component.domain || {}) };
+
+                        domain[key] = value;
+
+                        /* A domain that is not a range is refused, not stored. */
+                        if (!(domain.max > domain.min)) {
+                            return component;
+                        }
+
+                        return { ...component, domain };
+                    })
+                };
+            });
+
+            return;
+        }
+
         const cell = event.target.closest?.("[data-profile-cell]");
 
         if (cell) {

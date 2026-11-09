@@ -1,4 +1,13 @@
 import { fluidsToolGroups } from "../../../features/workspace/model/fluids/fluids-tools.js";
+/*
+ * THE MATH SIDEBAR TABLE, FROM ITS LEAF MODULE.
+ *
+ * `math-tool-groups.js` imports nothing, so folding its definitions in here
+ * cannot close a cycle - `math-tools.js` arms tools, and arming reaches this
+ * toolbar. Reading the table from the leaf keeps the label-to-id map complete
+ * without the two modules depending on each other.
+ */
+import { MATH_TOOL_GROUPS } from "../../../features/workspace/math/math-tool-groups.js";
 import { DYNAMICS_TOOL_GROUPS as dynamicsToolGroups } from "../../../features/workspace/dynamics/dynamics-hierarchy.js";
 
 const drawingIcon = content => `<svg viewBox="0 0 20 20" focusable="false" aria-hidden="true">${content}</svg>`;
@@ -431,7 +440,28 @@ export const toolIcons = {
 	Function: drawingIcon(`<path ${iconStroke} d="M4 14c2-8 4 4 6-3s4-5 6-5"/>`),
 	Vector: drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
 	Graph: drawingIcon(`<path ${iconStroke} d="M4 16V4M4 16h12M7 13l3-4 2 2 3-5"/>`),
-	Equation: drawingIcon(`<path ${iconStroke} d="M4 6h4M6 4v4M10 10h6M4 15h4"/>`)
+	Equation: drawingIcon(`<path ${iconStroke} d="M4 6h4M6 4v4M10 10h6M4 15h4"/>`),
+
+	/*
+	 * ========================================================
+	 * THE MATH / ANALYSIS ICONS
+	 * ========================================================
+	 *
+	 * One family, built from the same parts as every other icon: a 20x20
+	 * viewBox, the shared iconStroke, round caps and joins, no fills. Each says
+	 * what the tool MAKES rather than how it works, so a student scanning the
+	 * sidebar reads the drawing they are about to produce.
+	 *
+	 * The Point, Vector, Function and Equation artwork above is REUSED rather
+	 * than redrawn - a Math Point and a Geometry Point are the same mark - and
+	 * the three new ones are the graph, the tangent and the slope triangle.
+	 */
+	"Math Point": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
+	"Math Vector": drawingIcon(`<path ${iconStroke} d="M4 15L15 4M10 4h5v5"/>`),
+	"Function Curve": drawingIcon(`<path ${iconStroke} d="M3 15c2-9 4 5 7-2s4-6 7-6"/>`),
+	"Coordinate Graph": drawingIcon(`<rect ${iconStroke} x="3" y="3" width="14" height="14"/><path ${iconStroke} d="M3 10h14M10 3v14"/><path ${iconStroke} d="M5 13l2-2 2 1 3-4"/>`),
+	"Tangent Normal": drawingIcon(`<path ${iconStroke} d="M3 14c3-7 6 3 9-2s3-4 5-4"/><path ${iconStroke} d="M4 6L16 16"/><circle fill="currentColor" cx="10" cy="11" r="1.2"/>`),
+	"Slope Triangle": drawingIcon(`<path ${iconStroke} d="M4 16h12L4 5z"/><path ${iconStroke} d="M4 13h3v3"/>`)
 };
 
 /*
@@ -471,6 +501,14 @@ export const featureIcons = {
 	"slider-connection": toolIcons["Slider Connection"],
 
 	"coordinate-system-2d": toolIcons["Coordinate System"],
+
+	/* The Math / Analysis objects, each wearing its own tool's artwork. */
+	"math-point": toolIcons["Math Point"],
+	"math-vector": toolIcons["Math Vector"],
+	"math-plot": toolIcons["Coordinate Graph"],
+	"math-equation": toolIcons.Equation,
+	"math-tangent": toolIcons["Tangent Normal"],
+	"math-slope-triangle": toolIcons["Slope Triangle"],
 
 	    /*
 	     * THE FLUIDS FLOW PATHS.
@@ -826,12 +864,21 @@ export const disciplineToolGroups = {
 			 * still readable on its own, and it is what a student
 			 * would call it in a report.
 			 */
+			/*
+			 * EVERY DIAGRAM IS A SUBMENU PARENT.
+			 *
+			 * Sketch and Plot are two approaches to ONE tool, so the tool's button
+			 * is the tool and the two modes are offered in a popup beside it. All
+			 * three diagrams carry the flag, because all three offer the same two
+			 * modes - a flag on only the first would make the other two behave
+			 * differently for no reason the student could see.
+			 */
 			tools: [
 				{ id: "resultant", label: "Resultant" },
 				{ id: "force-components", label: "Force Components" },
 				{ id: "shear-force-diagram", label: "Shear Force (SFD)", submenu: true },
-				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)" },
-				{ id: "axial-force-diagram", label: "Axial Force (AFD)" }
+				{ id: "bending-moment-diagram", label: "Bending Moment (BMD)", submenu: true },
+				{ id: "axial-force-diagram", label: "Axial Force (AFD)", submenu: true }
 			]
 		},
 		{
@@ -889,8 +936,21 @@ const globalToolGroups = [
 
 const sidebarToolDefinitions = drawingToolGroups.flatMap(group => group.tools);
 const globalToolDefinitions = globalToolGroups.flatMap(group => group.tools);
+
+/*
+ * THE MATH / ANALYSIS TOOLS ARE SIDEBAR TOOLS TOO.
+ *
+ * They are declared in the Math section's own table (`MATH_TOOL_GROUPS`), so
+ * they are folded in here - which is what makes a label resolve to its id for
+ * the command index, the search and every caller that asks
+ * `drawToolLabelById`. Without them a Math label had no id, and a search result
+ * for "Function Curve" armed nothing.
+ */
+const mathToolDefinitions = MATH_TOOL_GROUPS.flatMap(group => group.tools);
+
 export const drawToolDefinitions = [
 	...sidebarToolDefinitions,
+	...mathToolDefinitions,
 	...globalToolDefinitions
 ];
 export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool => [tool.id, tool.label]));
@@ -936,5 +996,23 @@ export const engineeringTools = {
 	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
 	CONTROLS: ["Plant", "Block", "Input", "Output", "Sensor", "Controller", "Signal Line"],
-	"MATH / ANALYSIS": ["Point", "Function", "Vector", "Graph", "Equation"]
+	/*
+	 * MATH / ANALYSIS IS ORGANISED INTO SECTIONS, like Geometry and Statics, so
+	 * its tools are listed in `MATH_TOOL_GROUPS` (features/workspace/math/
+	 * math-tools.js) rather than here. This entry is kept as the category's
+	 * identity - the key the toolbar, the command index and the category
+	 * buttons all use - and its list is the flat fallback for a caller that
+	 * asks for one.
+	 */
+	"MATH / ANALYSIS": [
+		"Math Point",
+		"Math Vector",
+		"Coordinate Graph",
+		"Equation",
+		"Tangent Normal",
+		"Slope Triangle",
+		"Coordinate System",
+		"Reference Point",
+		"Reference Line"
+	]
 };

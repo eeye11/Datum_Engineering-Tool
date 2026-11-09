@@ -37,9 +37,9 @@
     display: flex;
     flex-direction: column;
 
-    width: 960px;
+    width: 1180px;
     max-width: calc(100vw - 48px);
-    height: 620px;
+    height: 720px;
     max-height: calc(100vh - 48px);
 
     background: var(--datum-surface);
@@ -51,17 +51,30 @@
 
 .plot-editor-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 12px;
 
-    padding: 12px 14px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--datum-border);
+}
+
+.plot-editor-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .plot-editor-title {
     font-size: 15px;
     font-weight: 600;
     color: var(--datum-green);
+}
+
+.plot-editor-description {
+    font-size: 12px;
+    color: var(--datum-muted);
 }
 
 .plot-editor-close {
@@ -78,38 +91,133 @@
     color: var(--datum-ink);
 }
 
+/*
+ * THE PREVIEW IS THE STAGE, AND IT TAKES THE ROOM.
+ *
+ * The graph is the answer to the only question the student has, so it is the
+ * largest thing on screen and the controls sit beside it rather than above it.
+ */
 .plot-editor-body {
     display: flex;
     flex: 1;
     min-height: 0;
 }
 
-.plot-editor-left,
-.plot-editor-right {
+.plot-editor-stage {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+
+    display: flex;
+    padding: 14px 16px;
+}
+
+.plot-editor-side {
+    width: 400px;
+    flex: 0 0 400px;
+
     display: flex;
     flex-direction: column;
+    gap: 12px;
 
-    padding: 12px 14px;
-    min-height: 0;
+    padding: 14px 16px;
+    border-left: 1px solid var(--datum-border);
+    overflow-y: auto;
 }
 
-.plot-editor-left {
-    width: 380px;
-    flex: 0 0 380px;
-    border-right: 1px solid var(--datum-border);
+.plot-editor-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.plot-editor-right {
-    flex: 1;
-}
-
-.plot-editor-section {
-    margin-bottom: 10px;
+.plot-editor-panel-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--datum-ink);
+}
+
+/* ------------------------------------------------------- settings groups */
+
+.plot-editor-group {
+    padding: 8px 10px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-rail);
+}
+
+.plot-editor-group-title {
+    margin-bottom: 6px;
+
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--datum-subtle);
+}
+
+.plot-editor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+}
+
+.plot-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+
+    font-size: 11px;
+    color: var(--datum-muted);
+}
+
+.plot-editor-field input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+
+    padding: 4px 6px;
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-input);
+    color: var(--datum-ink);
+
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+}
+
+.plot-editor-field input:focus {
+    outline: 2px solid var(--datum-green);
+    outline-offset: -1px;
+}
+
+.plot-editor-toggles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+}
+
+.plot-editor-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+
+    font-size: 11px;
+    color: var(--datum-ink);
+    cursor: pointer;
+}
+
+.plot-editor-toggle input {
+    margin: 0;
+    accent-color: var(--datum-green);
 }
 
 /* ==========================================================================
@@ -122,19 +230,16 @@
    ========================================================================== */
 
 .plot-editor-list {
-    flex: 1;
-    min-height: 0;
+    max-height: 240px;
     overflow-y: auto;
-
-    margin-bottom: 10px;
 }
 
 .plot-editor-card {
     display: flex;
-    align-items: flex-start;
-    gap: 10px;
+    flex-direction: column;
+    gap: 6px;
 
-    padding: 10px;
+    padding: 8px 10px;
     margin-bottom: 8px;
 
     border: 1px solid var(--datum-border);
@@ -142,8 +247,14 @@
     background: var(--datum-rail);
 }
 
+.plot-editor-card-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .plot-editor-card-number {
-    min-width: 20px;
+    min-width: 18px;
 
     font-size: 12px;
     font-weight: 700;
@@ -151,9 +262,69 @@
     font-variant-numeric: tabular-nums;
 }
 
-.plot-editor-card-main {
-    flex: 1;
+/* The swatch is the curve's own colour, so a card and its curve match. */
+.plot-editor-card-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    background: var(--datum-green);
+}
+
+.plot-editor-card-label {
+    font-size: 12px;
+    color: var(--datum-ink);
+}
+
+.plot-editor-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
     min-width: 0;
+}
+
+.plot-editor-domain {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.plot-editor-domain-label {
+    font-size: 11px;
+    color: var(--datum-muted);
+}
+
+.plot-editor-readonly {
+    font-size: 12px;
+    font-style: italic;
+    color: var(--datum-muted);
+}
+
+.plot-editor-empty {
+    padding: 10px;
+
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--datum-muted);
+    text-align: center;
+}
+
+.plot-editor-visible {
+    margin-left: auto;
+    padding: 2px 8px;
+
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    background: var(--datum-surface);
+    color: var(--datum-muted);
+
+    font-family: Arial, sans-serif;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.plot-editor-visible[aria-pressed="true"] {
+    border-color: var(--datum-green);
+    color: var(--datum-green);
 }
 
 .plot-editor-card-type {
@@ -330,12 +501,15 @@
 
 .plot-editor-graph {
     flex: 1;
+    min-width: 0;
     min-height: 0;
 
     width: 100%;
+    height: 100%;
+
     border: 1px solid var(--datum-border);
     border-radius: 3px;
-    background: var(--datum-surface);
+    background: var(--datum-canvas);
 }
 
 .plot-editor-graph-axis {
@@ -361,333 +535,6 @@
     fill: var(--datum-subtle);
     font-family: Arial, sans-serif;
     font-size: 13px;
-}
-
-/* ==========================================================================
-   THE SKETCH EDITOR
-   The twin of the plot editor, and deliberately the same shape and the same
-   size: a student switching between the two modes of one diagram should find
-   everything where they left it. The only real difference is the left panel,
-   which offers four tools instead of a list of equations.
-   ========================================================================== */
-.sketch-editor-tools {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 10px;
-}
-
-.sketch-editor-tool {
-    padding: 6px 10px;
-    font-size: 12px;
-    background: var(--datum-surface);
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    cursor: pointer;
-}
-
-.sketch-editor-tool:hover {
-    border-color: var(--datum-muted);
-}
-
-.sketch-editor-tool-active {
-    background: var(--datum-green);
-    border-color: var(--datum-green);
-    color: var(--datum-surface);
-    font-weight: 600;
-}
-
-.sketch-editor-hint {
-    margin-bottom: 12px;
-    font-size: 11px;
-    color: var(--datum-subtle);
-    font-style: italic;
-    min-height: 1.4em;
-}
-
-.sketch-editor-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    margin-bottom: 10px;
-}
-
-.sketch-editor-empty {
-    padding: 12px;
-    font-size: 12px;
-    color: var(--datum-subtle);
-    text-align: center;
-}
-
-.sketch-editor-element {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    margin-bottom: 6px;
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    background: var(--datum-rail);
-}
-
-.sketch-editor-element-selected {
-    border-color: var(--datum-green);
-    background: var(--datum-green-wash);
-}
-
-.sketch-editor-element-label {
-    flex: 1;
-    text-align: left;
-    font-size: 12px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-}
-
-.sketch-editor-element-delete {
-    background: none;
-    border: none;
-    font-size: 16px;
-    line-height: 1;
-    color: var(--datum-muted);
-    cursor: pointer;
-    padding: 0 4px;
-}
-
-.sketch-editor-element-delete:hover {
-    color: var(--datum-error);
-}
-
-.sketch-editor-detail {
-    padding: 8px;
-    border-top: 1px solid var(--datum-border);
-    font-size: 11px;
-    color: var(--datum-subtle);
-}
-
-.sketch-editor-detail-title {
-    margin-bottom: 6px;
-    font-weight: 600;
-    color: var(--datum-ink);
-}
-
-.sketch-editor-point {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-}
-
-.sketch-editor-point span {
-    min-width: 18px;
-    font-size: 10px;
-    color: var(--datum-muted);
-}
-
-.sketch-editor-point input {
-    flex: 1;
-    min-width: 0;
-    padding: 3px 4px;
-    font-size: 11px;
-    border: 1px solid var(--datum-border);
-    border-radius: 2px;
-}
-
-.sketch-editor .plot-editor-body {
-    flex-direction: column;
-}
-
-/*
- * THE SKETCH WORKSPACE IS WIDER THAN THE PLOT EDITOR.
- *
- * A plot is read as a list of equations, so its dialog can be narrower. A
- * sketch is read as a SHAPE, and the graph needs the room: the sketch gets a
- * wider dialog and a taller one, so the graph area above the controls is
- * genuinely larger rather than the same box with the parts rearranged.
- */
-.sketch-editor .plot-editor {
-    width: 1200px;
-    height: 780px;
-}
-
-/*
- * THE GRAPH TAKES THE WHOLE WIDTH, AND MOST OF THE HEIGHT.
- *
- * It is the part of the workspace the student actually reads, so it is given
- * a large, wide area rather than a column beside the controls. The lower row
- * holds the tools and the selected element's properties.
- */
-.sketch-editor-graph-area {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 10px 14px 6px;
-    display: flex;
-}
-
-.sketch-editor-graph-area .sketch-editor-graph {
-    flex: 1;
-    height: 100%;
-    min-height: 0;
-}
-
-/*
- * THE LOWER ROW: tools on one side, the selected element on the other.
- */
-.sketch-editor-lower {
-    display: flex;
-    flex: 0 0 auto;
-    max-height: 42%;
-    min-height: 0;
-    border-top: 1px solid var(--datum-border);
-    overflow: hidden;
-}
-
-.sketch-editor-lower .plot-editor-left {
-    width: 260px;
-    flex: 0 0 260px;
-    border-right: 1px solid var(--datum-border);
-    overflow-y: auto;
-}
-
-.sketch-editor-lower .plot-editor-right {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.sketch-editor-graph {
-    width: 100%;
-    border: 1px solid var(--datum-border);
-    border-radius: 3px;
-    background: var(--datum-surface);
-}
-
-.sketch-editor-axis {
-    stroke: var(--datum-muted);
-    stroke-width: 1.2;
-}
-
-/*
- * A TICK MARK ACROSS THE AXIS, and the value beneath it.
- *
- * The mark is short and crosses the axis, which is what makes a tick read as a
- * graduation rather than as part of the diagram. The label sits in the reserved
- * band below the plot, so it is always outside the drawing.
- */
-.sketch-editor-axis-mark {
-    stroke: var(--datum-muted);
-    stroke-width: 1;
-}
-
-.sketch-editor-tick-label,
-.sketch-editor-axis-label {
-    fill: var(--datum-muted);
-    font-family: Arial, sans-serif;
-    font-size: 10px;
-}
-
-/*
- * A BODY-ELEMENT TICK.
- *
- * A faint full-height vertical line at a station where something happens on
- * the parent body - a force, a support, a load boundary. Quiet enough to sit
- * behind the diagram, present enough to aim a new element at.
- */
-.sketch-editor-tick {
-    stroke: var(--datum-border);
-    stroke-width: 1;
-    stroke-dasharray: 3 3;
-}
-
-/*
- * A CONTROL POINT OF THE SELECTED ELEMENT: an endpoint, or a curve's Bend.
- *
- * Drawn with a white fill and a coloured rim so it reads on top of the stroke
- * it belongs to, and large enough to grab - it is the thing the student drags
- * to change the shape, so it has to be findable.
- */
-.sketch-editor-handle {
-    fill: var(--datum-surface);
-    stroke: var(--datum-green);
-    stroke-width: 2;
-    cursor: grab;
-    pointer-events: all;
-}
-
-.sketch-editor-handle:hover {
-    fill: var(--datum-green-tint);
-}
-
-/*
- * THE SNAP INDICATION.
- *
- * A hollow ring on the point the placement will use, in the same colour the
- * main canvas uses for a snap - so a student learns ONE indication and it
- * means the same thing in both places. Hollow rather than filled, because it
- * marks a point rather than hiding it.
- */
-.sketch-editor-snap {
-    fill: none;
-    stroke: var(--datum-focus);
-    stroke-width: 2;
-    pointer-events: none;
-}
-
-.sketch-editor-snap-label {
-    fill: var(--datum-focus);
-    font-family: Arial, sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-    paint-order: stroke;
-    pointer-events: none;
-    stroke: var(--datum-surface);
-    stroke-width: 3px;
-}
-
-.sketch-editor-stroke {
-    fill: none;
-    stroke: var(--datum-green);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
-
-/*
- * THE SELECTION IS A HEAVIER STROKE, NOT A DIFFERENT COLOUR. A selected
- * element must still be the colour it is on the sheet; recolouring it here
- * would make the dialog disagree with the drawing it is a preview of.
- */
-.sketch-editor-stroke-selected {
-    stroke-width: 3.5;
-}
-
-.sketch-editor-pending {
-    fill: none;
-    stroke: var(--datum-green);
-    stroke-width: 1.5;
-    stroke-dasharray: 4 3;
-    opacity: 0.7;
-}
-
-.sketch-editor-cursor-point {
-    fill: var(--datum-green);
-}
-
-/*
- * THE BEND HANDLE of a three-point curve. Shown only while the curve is
- * selected, because the Bend is a control point rather than part of the
- * finished diagram.
- */
-.sketch-editor-bend-handle {
-    fill: var(--datum-surface);
-    stroke: var(--datum-green);
-    stroke-width: 1.5;
-}
-
-.sketch-editor-label {
-    fill: var(--datum-subtle);
-    font-family: Arial, sans-serif;
-    font-size: 10px;
 }
 
 .plot-editor-actions {
@@ -725,4 +572,232 @@
 
 .plot-editor-actions button.primary:hover {
     background: var(--datum-green-hover);
+}
+
+/* ==========================================================================
+   THE SKETCH EDITOR
+
+   A DRAWING WORKSPACE, not a form. The canvas is the whole point, so it takes
+   the room: a toolbar of two tools above it and the actions below it, and
+   nothing else competing for attention.
+
+   There is deliberately no geometry-type control here. The student draws, and
+   the recogniser decides whether the stroke is a line or a curve - so the
+   interface has nothing to say about geometry at all.
+   ========================================================================== */
+
+.drawing-sketch-editor {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: rgba(255, 255, 255, 0.9);
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: var(--datum-ink);
+}
+
+.sketch-editor {
+    display: flex;
+    flex-direction: column;
+
+    width: 960px;
+    max-width: calc(100vw - 48px);
+    height: 640px;
+    max-height: calc(100vh - 48px);
+
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 4px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
+.sketch-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--datum-border);
+}
+
+.sketch-editor-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.sketch-editor-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--datum-green);
+}
+
+.sketch-editor-instruction {
+    font-size: 12px;
+    color: var(--datum-muted);
+}
+
+.sketch-editor-close {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--datum-muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.sketch-editor-close:hover {
+    color: var(--datum-ink);
+}
+
+/* ---------------------------------------------------------------- tools */
+
+.sketch-editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--datum-border);
+}
+
+.sketch-editor-tool {
+    padding: 6px 16px;
+    font-size: 12px;
+    font-weight: 600;
+
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    cursor: pointer;
+}
+
+.sketch-editor-tool:hover {
+    border-color: var(--datum-green);
+}
+
+.sketch-editor-tool.active {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+}
+
+.sketch-editor-hint {
+    margin-left: 6px;
+    font-size: 12px;
+    color: var(--datum-muted);
+}
+
+.sketch-editor-divider {
+    width: 1px;
+    height: 20px;
+    margin: 0 4px;
+    background: var(--datum-border);
+}
+
+.sketch-editor-tool:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.sketch-editor-tool:disabled:hover {
+    border-color: var(--datum-border);
+}
+
+/* --------------------------------------------------------------- canvas */
+
+.sketch-editor-canvas {
+    flex: 1;
+    min-height: 0;
+
+    display: flex;
+    align-items: stretch;
+
+    padding: 10px 14px;
+}
+
+.sketch-editor-svg {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+
+    background: var(--datum-canvas);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+
+    /*
+     * A FINGER DRAG DRAWS, IT DOES NOT SCROLL. Without this the browser claims
+     * the gesture for panning and the stroke never reaches the canvas - which
+     * is the whole touchscreen failure this line prevents.
+     */
+    touch-action: none;
+
+    /* A stylus is a pen, not a pointer: no text selection, no callout. */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+
+    cursor: crosshair;
+}
+
+.sketch-editor-svg-erase {
+    cursor: cell;
+}
+
+/* -------------------------------------------------------------- actions */
+
+.sketch-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    padding: 12px 14px;
+    border-top: 1px solid var(--datum-border);
+}
+
+.sketch-editor-actions button {
+    min-width: 84px;
+    padding: 7px 14px;
+
+    font-size: 12px;
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-ink);
+    cursor: pointer;
+}
+
+.sketch-editor-actions button:hover:not(:disabled) {
+    border-color: var(--datum-green);
+}
+
+.sketch-editor-actions button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.sketch-editor-actions button.primary {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+    font-weight: 600;
+}
+
+.sketch-editor-spacer {
+    flex: 1;
+}
+
+.sketch-editor-status {
+    font-size: 12px;
+    color: var(--datum-muted);
+    font-variant-numeric: tabular-nums;
 }

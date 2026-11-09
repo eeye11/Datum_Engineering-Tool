@@ -74,7 +74,15 @@ import { STATICS_TOOL_MENUS } from "../../../features/workspace/statics/statics-
 import {
   ANALYSIS_DIAGRAM_MODES,
   ANALYSIS_DIAGRAM_MODE_LABELS,
+  ANALYSIS_DIAGRAM_TOOLS,
+  armAnalysisDiagram,
 } from "../../../features/workspace/statics/analysis-tools.js";
+import {
+  MATH_MODE_LABELS,
+  MATH_MODES,
+  armMathTool,
+  mathToolHasModes,
+} from "../../../features/workspace/math/math-tools.js";
 import { MENUS } from "../menu-bar/menu-commands.js";
 import { isLegacyResetTool } from "./phase-reset.js";
 import * as registry from "../../../tool-library/registry/tool-registry.js";
@@ -315,18 +323,33 @@ function toolbarChildrenOf(toolId) {
 
 
 /*
- * THE SHEAR-FORCE PARENT HAS NO CHILDREN TABLE.
+ * THE DIAGRAM PARENTS HAVE NO CHILDREN TABLE.
  *
- * The toolbar gives `shear-force-diagram` its own inline list of the two ways a
- * diagram is drawn - Sketch and Plot - read from the analysis module's modes.
- * The SAME two lists are read here, so the parent is recognised as a group and
- * its rows are the labels the toolbar prints, not a copy of them.
+ * The toolbar gives each of the three diagrams a popup of the two ways it is
+ * drawn - Sketch and Plot - read from the analysis module's modes. The SAME
+ * lists are read here, so each parent is recognised as a group and its rows are
+ * the labels the toolbar prints, not a copy of them.
  */
-function analysisModeChildren() {
+function analysisModeChildren(toolId) {
   return ANALYSIS_DIAGRAM_MODES.map((mode) => ({
-    id: `shear-force-diagram:${mode}`,
+    id: `${toolId}:${mode}`,
     label: ANALYSIS_DIAGRAM_MODE_LABELS[mode] || mode,
     mode,
+
+    /*
+     * A SEARCH RESULT ARMS THE MODE IT NAMES.
+     *
+     * Without this the row fell through to `activateTool(tool.id)`, which arms
+     * the diagram tool with NO mode - so the placement began as a Sketch
+     * whatever the student had searched for, and "Plot" in the search field
+     * produced a sketch. The mode is carried on the child and armed through the
+     * one shared path, exactly as the toolbar's own popup does it.
+     */
+    run: () => {
+      openCategory("STATICS", null);
+
+      return armAnalysisDiagram(toolId, mode);
+    },
   }));
 }
 
@@ -480,7 +503,7 @@ function makeToolEntry({
     terms: toolTerms(tool.id, tool.label, sectionLabel, groupLabel, discipline),
     shortcut: tool.shortcut || null,
     ...toolStatus(tool.id),
-    run: () => activateTool(tool.id, discipline.key, groupId),
+    run: tool.run || (() => activateTool(tool.id, discipline.key, groupId)),
   };
 }
 
@@ -702,10 +725,32 @@ function armCreationMode(toolId, label) {
  * the toolbar renders - and each label becomes an id through the toolbar's own
  * `drawToolLabelById`, so the id a result arms is the id a click would arm.
  */
+/*
+ * THE SKETCH / PLOT CHILDREN OF A MATH TOOL.
+ *
+ * The command index lists what the toolbar offers, so a Math tool with modes
+ * offers its two modes here as well - and each one arms the tool through the
+ * Math section's own arming function, so the index and the toolbar cannot
+ * disagree about which mode is running.
+ */
+function mathModeChildren(toolId) {
+  return MATH_MODES.map((mode) => ({
+    id: `${toolId}:${mode}`,
+    label: `${MATH_MODE_LABELS[mode] || mode}`,
+    mode,
+    run: () => {
+      openCategory("MATH / ANALYSIS", null);
+
+      return armMathTool(toolId, mode);
+    },
+  }));
+}
+
 function groupEntries(discipline, sectionId, sectionLabel, tool) {
   const children =
     toolbarChildrenOf(tool.id) ||
-    (tool.id === "shear-force-diagram" ? analysisModeChildren() : null);
+    (ANALYSIS_DIAGRAM_TOOLS[tool.id] ? analysisModeChildren(tool.id) : null) ||
+    (mathToolHasModes(tool.id) ? mathModeChildren(tool.id) : null);
 
   if (children) {
     return { children, location: `${discipline.title} > ${sectionLabel} > ${tool.label}` };

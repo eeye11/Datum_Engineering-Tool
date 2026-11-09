@@ -846,6 +846,94 @@ function manipulationHandles(
             ];
     }
 
+    /*
+     * ========================================================
+     * THE MATH OBJECTS' HANDLES
+     * ========================================================
+     *
+     * Each handle manipulates the ACTUAL geometry or mathematical parameter:
+     * a point's position, a vector's two ends, a graph's box, a curve's domain
+     * ends or its control points, a construction's contact point and length, a
+     * triangle's two positions. None of them is a decorative grip.
+     */
+    if (object.type === "math-point") {
+        const handles = [];
+
+        if (g.position) {
+            handles.push({ kind: "position", point: g.position });
+        }
+
+        if (g.labelOffset) {
+            handles.push({
+                kind: "math-label",
+                point: {
+                    x: g.position.x + Number(g.labelOffset.x || 0),
+                    y: g.position.y + Number(g.labelOffset.y || 0)
+                }
+            });
+        }
+
+        return handles;
+    }
+
+    if (object.type === "math-vector") {
+        const handles = [
+            { kind: "start", point: g.start },
+            { kind: "end", point: g.end }
+        ];
+
+        if (g.labelOffset) {
+            handles.push({
+                kind: "math-label",
+                point: {
+                    x: g.end.x + Number(g.labelOffset.x || 0),
+                    y: g.end.y + Number(g.labelOffset.y || 0)
+                }
+            });
+        }
+
+        return handles;
+    }
+
+    /*
+     * A PLOT IS GRIPPED BY ITS BOX: four corners to resize it and a centre to
+     * move it. The functions inside it are NOT separately grabbable - they are
+     * parts of the plot, and a handle on one would let a student drag a curve
+     * away from the graph it belongs to.
+     */
+    if (object.type === "math-plot") {
+        const corners = rectangleCorners(g).map((point, index) => ({
+            kind: `corner${index}`,
+            point
+        }));
+
+        return [
+            ...corners,
+            {
+                kind: "position",
+                point: {
+                    x: g.position.x + g.width / 2,
+                    y: g.position.y + g.height / 2
+                }
+            }
+        ];
+    }
+
+    if (object.type === "math-tangent") {
+        return [
+            { kind: "math-contact", point: g.contact },
+            { kind: "start", point: g.start },
+            { kind: "end", point: g.end }
+        ].filter((handle) => handle.point);
+    }
+
+    if (object.type === "math-slope-triangle") {
+        return [
+            { kind: "start", point: g.start },
+            { kind: "end", point: g.end }
+        ].filter((handle) => handle.point);
+    }
+
     if (object.type === "line") {
         return [
                 { kind: "start", point: g.start },
@@ -1628,7 +1716,19 @@ function supportsRotationHandle(
          */
         "reducer-expander",
         "fluid-level",
-        "flow-direction-diagram"
+        "flow-direction-diagram",
+
+        /*
+         * A MATH POINT HAS NO ROTATION HANDLE - a dot has no orientation - and
+         * a COORDINATE GRAPH has none either: its axes are axis-aligned by
+         * definition, and turning the box would turn the mathematics with it.
+         * A plotted curve's direction is its expression's, so it does not turn
+         * freely either; a sketched one does, because it is the student's own
+         * geometry.
+         */
+        "math-point",
+        "math-plot",
+        "math-equation"
     ].includes(object.type);
 }
 
@@ -1907,7 +2007,19 @@ const CONSTRUCTION_ACTIVE_PHASES = [
      * the arrow is drawn, so the pointer belongs to the placement and
      * not to a direct drag on whatever happens to be under it.
      */
-    "moment-radius"
+    "moment-radius",
+
+    /*
+     * A MATH TOOL THAT IS PART-WAY THROUGH ITS INPUTS.
+     *
+     * A Tangent / Normal in Sketch mode holds its contact point while the
+     * student draws the direction, and a Slope Triangle in Plot mode holds its
+     * first position while the student picks the second. Both are running
+     * constructions: the pointer belongs to them, Escape cancels them, and a
+     * click on an existing feature is the next input rather than a selection.
+     */
+    "math-contact",
+    "math-slope-start"
 ];
 
 export function isConstructionInProgress() {

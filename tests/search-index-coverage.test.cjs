@@ -187,15 +187,21 @@ check(
   `missing: ${missingTools.join(", ")}`,
 );
 
+/*
+ * A DIAGRAM'S MODES ARE NOT TOOLS. `bending-moment-diagram:sketch` names the
+ * Sketch mode of the BMD tool, which is a mode of a tool the toolset draws -
+ * not a separate row. All three diagrams offer both modes, so all three are
+ * exempt, not only the SFD.
+ */
+const isDiagramMode = (id) =>
+  /^(shear-force|bending-moment|axial-force)-diagram:/.test(id);
+
 check(
   "every entry that names a tool names one the toolset really draws",
-  [
-    [...namedIds].filter(
-      (id) => !expectedTools.has(id) && !id.startsWith("shear-force-diagram:"),
-    ),
-  ].every((list) => list.length === 0),
+  [...namedIds].filter((id) => !expectedTools.has(id) && !isDiagramMode(id))
+    .length === 0,
   [...namedIds]
-    .filter((id) => !expectedTools.has(id) && !id.startsWith("shear-force-diagram:"))
+    .filter((id) => !expectedTools.has(id) && !isDiagramMode(id))
     .join(", "),
 );
 

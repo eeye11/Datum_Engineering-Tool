@@ -131,7 +131,6 @@ function diagram(diagramType, mode, expressions) {
       localRange: { from: 0, to: 5 },
       showZeroAxis: true,
       backgroundVisible: true,
-      sketchContent: mode === "sketch" ? true : undefined,
       expressions,
     },
     style: { stroke: "#000000", lineWidth: 0.5 },

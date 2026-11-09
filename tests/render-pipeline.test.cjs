@@ -169,7 +169,16 @@ const SANCTIONED = new Set([
   /* The Source tab's canvas overlay: editor chrome, view-only, like wiring. */
   "source-canvas-bridge.js",
   /* The Plant/Block label writes its own tspan exponent into the entity's SVG. */
-  "block-label.js"
+  "block-label.js",
+  /*
+   * THE SKETCH EDITOR'S CANVAS. It is editor chrome in exactly the sense the
+   * selection box and the snap marker are: a modal drawing surface that exists
+   * only while the editor is open, is never part of the document, and is never
+   * exported. Its strokes are committed as ordinary features and drawn by the
+   * renderer afterwards.
+   */
+  "sketch-editor.js",
+  "sketch-shell.js"
 ]);
 
 /* The drawing controller (src/features/workspace/) builds its own canvas overlay. */

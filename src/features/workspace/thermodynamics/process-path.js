@@ -5,7 +5,6 @@ import { drawingState } from "../editor-state.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
 import { commitCreatedFeature } from "../geometry/creation-commit.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isLegacyResetTool } from "../../../components/layout/toolbar/phase-reset.js";
 
@@ -96,7 +95,11 @@ export function finishProcessPath() {
     });
     object.parentId = interaction.sourceId;
     commitCreatedFeature(object);
-    activateTool("select");
+    /*
+     * THE PLOT TOOL STAYS ARMED. A cycle is often drawn as several paths, and
+     * the tool ends on Escape, empty canvas or another tool - not on the first
+     * path it completes.
+     */
     setToolMessage(tool === "process-path"
         ? "Process path created - drag a middle dot to curve a segment, or a state dot to move a state"
         : `${plotName(tool)} created - drag its dots to adjust`);

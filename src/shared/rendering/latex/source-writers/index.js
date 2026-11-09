@@ -31,6 +31,7 @@ import { annotationSourceWriter } from "./annotations.js";
 import { thermodynamicsSourceWriter } from "./thermodynamics.js";
 import { fluidsSourceWriter } from "./fluids.js";
 import { dynamicsSourceWriter } from "./dynamics.js";
+import { mathSourceWriter } from "./math.js";
 
 /*
  * The writers, in installation order. The synchronization layer asks the most
@@ -61,7 +62,17 @@ export const SOURCE_WRITERS = Object.freeze([
    * The Dynamics writer declines everything that is not a Dynamics object, so
    * a Line drawn with the Line tool is still written by Geometry.
    */
-  { id: "dynamics", writer: dynamicsSourceWriter }
+  { id: "dynamics", writer: dynamicsSourceWriter },
+
+  /*
+   * MATH / ANALYSIS LAST, SO IT IS ASKED FIRST.
+   *
+   * Its types are unique - no other writer can match a `math-*` object - so
+   * the position is about clarity rather than precedence: the newest category
+   * is consulted before the older ones, and a Math object is written by the
+   * Math writer whatever else is installed.
+   */
+  { id: "math", writer: mathSourceWriter }
 ]);
 
 /*

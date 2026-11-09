@@ -25,7 +25,7 @@ const widthIn = (t) => [...String(t).matchAll(/line width=([\d.]+)pt/g)].map((m)
 
 const sheet = [
   { id: "beam", type: "beam", geometry: { start: { x: -215, y: 0 }, end: { x: 215, y: 0 } }, style: { lineWidth: "thin" } },
-  { id: "sfd", type: "analysis-diagram", geometry: { start: { x: -215, y: -60 }, end: { x: 215, y: -60 }, localRange: { from: 0, to: 10 }, mode: "sketch", sketchElements: [] }, style: { lineWidth: "thin" } },
+  { id: "sfd", type: "analysis-diagram", geometry: { start: { x: -215, y: -60 }, end: { x: 215, y: -60 }, localRange: { from: 0, to: 10 }, mode: "sketch" }, style: { lineWidth: "thin" } },
   { id: "pin", type: "pin-support", geometry: { position: { x: -215, y: 0 }, orientation: Math.PI / 2 }, style: { lineWidth: "thin" } },
 ];
 

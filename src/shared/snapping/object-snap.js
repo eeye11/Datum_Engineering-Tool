@@ -4,6 +4,7 @@ import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggBodyFrames from "../geometry/body-frames.js";
 import enggFeatureGeometry from "../geometry/feature-geometry.js";
 import enggDrawingState from "../model/drawing-state.js";
+import enggMathModel from "../../features/workspace/math/math-model.js";
 
 /*
  * ========================================================
@@ -1054,6 +1055,83 @@ function addObjectCandidates(
             object.id,
             geometry.position || geometry.point || geometry
         );
+        return;
+    }
+
+    /*
+     * ========================================================
+     * THE MATH OBJECTS
+     * ========================================================
+     *
+     * A Math Point publishes its position, a Vector its two ends and its span,
+     * a Graph its origin and its axes, and a Curve its own path - so a new
+     * object can be placed ON the mathematics rather than by eye. The
+     * candidates are the same kinds every other feature publishes, so the
+     * priority and the wording are the shared ones.
+     */
+    if (object.type === "math-point") {
+        addCandidate(candidates, "endpoint", object.id, geometry.position);
+
+        return;
+    }
+
+    if (object.type === "math-vector") {
+        if (geometry.start && geometry.end) {
+            addCandidate(candidates, "endpoint", object.id, geometry.start);
+            addCandidate(candidates, "endpoint", object.id, geometry.end);
+
+            segmentCandidates(candidates, object.id, geometry.start, geometry.end, quarterSnap);
+        }
+
+        return;
+    }
+
+    /*
+     * A PLOT PUBLISHES ITS ORIGIN, ITS AXES AND ITS CURVES.
+     *
+     * The origin and the two axes are what a point is placed against; the
+     * curves are what a point is placed ON. All of them are candidates of the
+     * same kinds every other feature publishes, so the priority and the wording
+     * are the shared ones.
+     */
+    if (object.type === "math-plot") {
+        const mapping = enggMathModel.graphMapping(object);
+
+        if (mapping) {
+            addCandidate(candidates, "center", object.id, mapping.origin);
+
+            addSegment(
+                candidates,
+                object.id,
+                { x: mapping.left, y: mapping.origin.y },
+                { x: mapping.right, y: mapping.origin.y },
+                "endpoint"
+            );
+
+            addSegment(
+                candidates,
+                object.id,
+                { x: mapping.origin.x, y: mapping.bottom },
+                { x: mapping.origin.x, y: mapping.top },
+                "endpoint"
+            );
+        }
+
+        enggMathModel.plotStrokes(object).forEach((stroke) => {
+            stroke.forEach((at) => addCandidate(candidates, "endpoint", object.id, at));
+        });
+
+        return;
+    }
+
+    if (object.type === "math-tangent" || object.type === "math-slope-triangle") {
+        if (geometry.start && geometry.end) {
+            addCandidate(candidates, "endpoint", object.id, geometry.start);
+            addCandidate(candidates, "endpoint", object.id, geometry.end);
+
+            segmentCandidates(candidates, object.id, geometry.start, geometry.end, quarterSnap);
+        }
+
         return;
     }
 

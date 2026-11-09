@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { bootApp, whenReady } = require("./helpers/boot-app.cjs");
 
-test("clicking a point load creates its component arrows and returns to Select", async () => {
+test("clicking a point load creates its component arrows and keeps the tool armed", async () => {
     const app = bootApp();
     assert.equal(app.error, null);
     await whenReady();
@@ -21,6 +21,7 @@ test("clicking a point load creates its component arrows and returns to Select",
     assert.notEqual(components.geometry.horizontal.start.x, components.geometry.horizontal.end.x);
     assert.notEqual(components.geometry.vertical.start.y, components.geometry.vertical.end.y);
     assert.deepEqual(drawingState.selection.selectedObjectIds, [components.id]);
-    assert.equal(drawingState.activeTool, "select");
+    /* The analysis tool stays armed after a reading; Escape or empty canvas ends it. */
+    assert.equal(drawingState.activeTool, "force-components");
     app.dom.window.close();
 });

@@ -86,6 +86,99 @@ export const ANALYSIS_DIAGRAM_MODE_LABELS = {
 };
 
 /*
+ * ========================================================
+ * THE ONE WAY TO ARM A DIAGRAM IN A MODE
+ * ========================================================
+ *
+ * Sketch and Plot are two creation approaches within ONE tool, so there is one
+ * function that arms either. It is called from the toolbar's inline list, from
+ * the toolbar submenu and from the command index, and it is the only place the
+ * order of the three steps is written down:
+ *
+ *     arm the tool  ->  record the mode  ->  begin the placement
+ *
+ * The order matters. `activateTool` CLEARS the interaction, so a mode written
+ * before it would be thrown away; and `beginAnalysisDiagram` READS the mode, so
+ * a mode written after it would arrive too late and the student would get a
+ * Sketch when they asked for a Plot. Both of those faults existed, one in each
+ * of the two callers, because each caller wrote the sequence itself.
+ *
+ * SWITCHING MODE IS SAFE BY CONSTRUCTION. `beginAnalysisDiagram` resets the
+ * placement to its first stage, so an incomplete placement is abandoned rather
+ * than carried into the new mode - and nothing is committed, so a completed
+ * diagram is never converted or deleted by a mode change.
+ *
+ * A mode that is not one of the two is refused rather than defaulted: a caller
+ * that names a third thing has a bug, and silently arming a Sketch would hide
+ * it behind a diagram the student did not ask for.
+ */
+export function armAnalysisDiagram(
+    toolId,
+    mode
+) {
+    if (
+        !Object.prototype.hasOwnProperty.call(
+            ANALYSIS_DIAGRAM_TOOLS,
+            toolId
+        )
+    ) {
+        return false;
+    }
+
+    if (!ANALYSIS_DIAGRAM_MODES.includes(mode)) {
+        return false;
+    }
+
+    activateTool(toolId);
+
+    enggDrawingState.setInteraction(
+        drawingState,
+        {
+            analysisMode: mode
+        }
+    );
+
+    beginAnalysisDiagram(toolId);
+
+    setToolMessage(
+        analysisDiagramIntroMessage(null)
+    );
+
+    renderCurrentDrawing();
+
+    return true;
+}
+
+/*
+ * The mode a diagram tool is currently armed in, or null when it is not armed.
+ *
+ * Read by the toolbar so the Sketch / Plot button the student pressed is the
+ * one that stays lit, and by the Features panel so the active mode is stated
+ * rather than left to be inferred.
+ */
+export function activeAnalysisMode() {
+    const toolId =
+        drawingState.activeTool;
+
+    if (
+        !Object.prototype.hasOwnProperty.call(
+            ANALYSIS_DIAGRAM_TOOLS,
+            toolId
+        )
+    ) {
+        return null;
+    }
+
+    const mode =
+        drawingState.interaction
+            ?.analysisMode;
+
+    return ANALYSIS_DIAGRAM_MODES.includes(mode)
+        ? mode
+        : null;
+}
+
+/*
  * The quantity each diagram plots used to be listed here, keyed by feature
  * type, and the equation field in the Features panel was labelled from it.
  *
@@ -346,6 +439,27 @@ export function beginAnalysisDiagram(
      * body-attached Statics tool uses - select the tool, click the body,
      * place it - rather than a rule of its own.
      */
+    /*
+     * ========================================================
+     * SWITCHING MODE ABANDONS THE PLACEMENT, NOT THE DIAGRAM
+     * ========================================================
+     *
+     * Sketch and Plot are two approaches to one tool, so a student may change
+     * their mind after arming - and the honest thing to do is start the
+     * placement again in the other mode. What must NOT happen is either of the
+     * two faults this replaces:
+     *
+     *   the half-built placement surviving, so the next click commits a
+     *   diagram in the mode the student has just left; or
+     *
+     *   a diagram being created by the switch itself, which is what a
+     *   placement that had already named its body would do on the next click.
+     *
+     * So the placement is reset to its FIRST stage - no source, no height - and
+     * nothing is committed. A diagram that was already placed is a feature in
+     * the document and is not touched at all: it keeps its own mode, its own
+     * strokes and its own expressions, and the new placement is a new diagram.
+     */
     enggDrawingState.setInteraction(
         drawingState,
         {
@@ -354,6 +468,13 @@ export function beginAnalysisDiagram(
             analysisKind: diagramType,
             analysisMode: mode,
             sourceId: source?.id ?? null,
+
+            /*
+             * The preview of the abandoned placement goes with it, or the
+             * frame the student was positioning would stay drawn over the
+             * sheet while the new one is being placed.
+             */
+            analysisPlacement: null,
 
             /*
              * The starting height is the suggested offset below the
@@ -774,23 +895,33 @@ export function commitAnalysisAxis() {
 
     /*
      * ========================================================
-     * THE PLACEMENT IS FINISHED, SO THE TOOL STANDS DOWN
+     * THE PLACEMENT IS FINISHED, SO THE TOOL STAYS ARMED
      * ========================================================
      *
-     * Clearing the interaction removes the half-built placement, but the TOOL
-     * was still armed - so the very next pointer move re-entered the
-     * `analysis-axis` phase and rewrote the status line to "Place analysis
-     * axis" over a diagram that had already been committed. The student saw a
-     * finished diagram and an instruction to keep placing it.
+     * Clearing the interaction removes the half-built placement. The TOOL is
+     * deliberately left armed, in the SAME mode, because that is DAETUM's rule
+     * for every drawing tool: a tool remains active after a successful
+     * operation, and the next diagram is drawn without pressing the button
+     * again.
      *
-     * So the tool returns to Select, exactly as a completed Line or Beam does.
-     * The feature is already in the document and selected, so the Features
-     * panel shows it - and a second diagram is one click on the toolbar away
-     * rather than something the cursor is still half-committed to placing.
+     * It used to return to Select here, and the reason given was that the next
+     * pointer move re-entered the `analysis-axis` phase and rewrote the status
+     * line over a finished diagram. That was a real fault, but the cause was
+     * the interaction still being in the placement phase - not the tool being
+     * armed. `clearInteraction` above resets the phase to `idle`, so the
+     * placement cannot restart by itself, and the tool can stay armed without
+     * the stale instruction.
+     *
+     * The mode is re-armed explicitly rather than left to whatever the cleared
+     * interaction happens to hold, so the next diagram is the same kind as the
+     * one just placed - a student plotting a series of diagrams is not sent
+     * back to Sketch between them.
      */
-    enggDrawingState.setActiveTool(
+    enggDrawingState.setInteraction(
         drawingState,
-        "select"
+        {
+            analysisMode: mode
+        }
     );
 
     /*
@@ -821,8 +952,8 @@ export function commitAnalysisAxis() {
      */
     setToolMessage(
         mode === "plot"
-            ? "Diagram placed - enter its equation"
-            : "Diagram placed"
+            ? "Diagram placed - enter its equation. Click another member to place the next"
+            : "Diagram placed - draw its answer in the Sketch Editor. Click another member to place the next"
     );
 
     /*
@@ -842,9 +973,10 @@ export function commitAnalysisAxis() {
          * includes it. Opening it before would mean Apply could not also undo
          * the creation.
          *
-         * A Sketch has no dialog to open yet - it is drawn with the ordinary
-         * tools on the sheet - so it falls through to the message that says so,
-         * rather than opening something empty.
+         * A SKETCH OPENS THE SKETCH EDITOR, which is where it is drawn - the
+         * same dialog the Features tab offers, so there is one editing path and
+         * not two. If the editor cannot open (it is not loaded, or the object
+         * is not a diagram) the message above already says what to do.
          */
         if (
             openAnalysisEditorFor(
@@ -854,9 +986,6 @@ export function commitAnalysisAxis() {
             return true;
         }
 
-        setToolMessage(
-            "Reference axis placed - draw your diagram against it with the Line and Arc tools"
-        );
         return true;
     }
 

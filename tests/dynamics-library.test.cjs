@@ -742,7 +742,7 @@ test("the creation gesture holds the first anchor and the second point commits",
   m.activation.activateTool("select");
 });
 
-test("a click-placed Dynamics tool arms, places, and returns to Select", async () => {
+test("a click-placed Dynamics tool arms, places, and stays armed", async () => {
   const m = await modules();
   const state = m.editor.drawingState;
 
@@ -753,6 +753,8 @@ test("a click-placed Dynamics tool arms, places, and returns to Select", async (
 
   assert.equal(created.engineering.dynamicsType, "dynamics-particle");
   assert.ok(state.selection.selectedObjectIds.includes(created.id));
+  /* The tool stays armed after a placement; Escape or empty canvas ends it. */
+  assert.equal(state.activeTool, "dynamics-particle");
 });
 
 /* ============================================================== the model */

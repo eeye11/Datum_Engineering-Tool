@@ -157,28 +157,23 @@ check(
 
 console.log("\n  it reads a sketch too\n");
 
+/*
+ * A SKETCH IS READ AGAINST ITS OWN STORED SCALE.
+ *
+ * A sketch's strokes are ordinary features now, so the diagram has no list of
+ * points to take a peak from. What it does have is the units-per-value the
+ * strokes were drawn against (`unitHeight`), and that is what the readout
+ * scales by - so a cursor over a sketched diagram still reports a value.
+ */
 const sketch = {
   diagramType: "bmd",
   mode: "sketch",
   start: { x: 0, y: 0 },
   end: { x: 300, y: 0 },
   localRange: { from: 0, to: 300 },
-  sketchElements: [
-    {
-      id: "s1",
-      kind: "line",
-      start: { x: 0, y: 15 },
-      end: { x: 300, y: 15 },
-    },
-  ],
+  unitHeight: 2,
 };
 
-/*
- * The sketch's marks are not exported, so it is read through its own peak:
- * a flat line at 15 has a peak of 15, and the reader must scale by that
- * rather than by nothing. An empty sketch has no peak and therefore no
- * scale, which is the refusal case below rather than a zero.
- */
 const sketchRead = renderer.analysisValueAt(sketch, { x: 150, y: 0 });
 
 check(
@@ -188,18 +183,18 @@ check(
 );
 
 check(
-  "and a sketch with content has a usable scale",
+  "and a sketch with a stored scale has a usable value",
   typeof sketchRead.y === "number",
   `read ${sketchRead.y}`,
 );
 
 check(
-  "an empty sketch has no scale, so it says nothing",
+  "a sketch with no scale says nothing",
   renderer.analysisValueAt(
-    { ...sketch, sketchElements: [] },
+    { ...sketch, unitHeight: 0 },
     { x: 150, y: 0 },
   ) === null,
-  "an empty sketch reported a value it has no scale for",
+  "a sketch with no scale reported a value it cannot compute",
 );
 
 console.log("\n  and it refuses rather than guessing\n");

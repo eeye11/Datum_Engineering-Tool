@@ -792,6 +792,140 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             }
         }
 
+        /*
+         * A FINISHED SKETCH WAITING TO BE PLACED.
+         *
+         * The student has drawn in the editor and pressed Apply. The sketch is
+         * not committed yet: it follows the cursor until they click, and this
+         * is the drawing of it. It is drawn from the SAME points the commit
+         * will use, through the same transform, so what is under the pointer is
+         * what the click produces.
+         *
+         * The anchor is marked, because the anchor is the point that lands on
+         * the grid - and a student aligning a graph's origin needs to see which
+         * point that is.
+         */
+        if (preview.placement) {
+            const placement = preview.placement;
+
+            const placed = (point) =>
+                toScreen({
+                    x: point.x * placement.scale + placement.dx,
+                    y: point.y * placement.scale + placement.dy
+                });
+
+            const group = createSvgElement("g");
+
+            group.classList.add("drawing-placement-preview");
+            group.setAttribute("opacity", "0.72");
+
+            (preview.strokes || []).forEach((stroke) => {
+                const points = (stroke.points || []).map(placed);
+
+                if (points.length < 2) {
+                    return;
+                }
+
+                group.appendChild(
+                    createSvgElement("path", {
+                        d: points
+                            .map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`)
+                            .join(" "),
+                        fill: "none",
+                        stroke: style.stroke,
+                        "stroke-width": 1.8,
+                        "stroke-linecap": "round",
+                        "stroke-linejoin": "round"
+                    })
+                );
+            });
+
+            /* The anchor: the point that lands on the grid. */
+            const anchor = placed(placement.anchor);
+
+            group.appendChild(
+                createSvgElement("circle", {
+                    cx: anchor.x,
+                    cy: anchor.y,
+                    r: 4,
+                    fill: "none",
+                    stroke: style.stroke,
+                    "stroke-width": 1.5,
+                    "stroke-dasharray": "3 2"
+                })
+            );
+
+            svg.appendChild(group);
+
+            return;
+        }
+
+        /*
+         * A MATH OBJECT BEING DRAWN.
+         *
+         * A vector or a graph is previewed as the object it will become, drawn
+         * through the same painter the committed object uses - so the arrow or
+         * the box under the pointer is the one the release produces. A stroke
+         * is previewed as the student's own ink, which is what they are drawing.
+         */
+        if (preview.toolId && preview.stroke) {
+            const points = preview.stroke.map(toScreen);
+
+            if (points.length > 1) {
+                svg.appendChild(
+                    createSvgElement("path", {
+                        d: points.map((point, index) => `${index ? "L" : "M"} ${point.x} ${point.y}`).join(" "),
+                        fill: "none",
+                        stroke: style.stroke,
+                        "stroke-width": 1.8,
+                        "stroke-linecap": "round",
+                        "stroke-linejoin": "round",
+                        opacity: style.opacity
+                    })
+                );
+            }
+
+            return;
+        }
+
+        if (preview.toolId && preview.start && preview.end) {
+            const from = toScreen(preview.start);
+            const to = toScreen(preview.end);
+
+            if (preview.toolId === "math-plot") {
+                svg.appendChild(
+                    createSvgElement("rect", {
+                        x: Math.min(from.x, to.x),
+                        y: Math.min(from.y, to.y),
+                        width: Math.abs(to.x - from.x),
+                        height: Math.abs(to.y - from.y),
+                        fill: "none",
+                        stroke: style.stroke,
+                        "stroke-width": 1.5,
+                        "stroke-dasharray": "6 4",
+                        opacity: style.opacity
+                    })
+                );
+
+                return;
+            }
+
+            svg.appendChild(
+                createSvgElement("line", {
+                    x1: from.x,
+                    y1: from.y,
+                    x2: to.x,
+                    y2: to.y,
+                    stroke: style.stroke,
+                    "stroke-width": 1.5,
+                    "stroke-dasharray": "6 4",
+                    opacity: style.opacity
+                })
+            );
+
+            return;
+        }
+
         if (preview.type === "point") {
             const position = geometry.position || geometry.point || geometry;
             const screen = toScreen(position);

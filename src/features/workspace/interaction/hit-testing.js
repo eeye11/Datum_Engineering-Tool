@@ -6,6 +6,7 @@ import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { coordinateSystemArms } from "../../../shared/geometry/feature-handles.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggAnalysisDependencies from "../model/analysis/analysis-dependencies.js";
+import enggMathModel from "../math/math-model.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../model/analysis/rotational-arrow.js";
 import enggJunction from "../model/fluids/junction.js";
@@ -1669,6 +1670,120 @@ export function objectAtPoint(
                         point,
                         tolerance
                     );
+                }
+
+                /*
+                 * ========================================================
+                 * THE MATH OBJECTS
+                 * ========================================================
+                 *
+                 * Each is picked by its OWN drawn form, read from the same
+                 * model the renderer draws from - so what can be clicked is
+                 * exactly what is painted, and a graph is picked anywhere
+                 * inside its box rather than only on a one-pixel axis.
+                 */
+                if (object.type === "math-point") {
+                    return (
+                        geometry.position &&
+                        distance(point, geometry.position) <= tolerance * 2
+                    );
+                }
+
+                if (object.type === "math-vector") {
+                    return Boolean(
+                        geometry.start &&
+                            geometry.end &&
+                            (distanceToSegment(point, geometry.start, geometry.end) <= tolerance ||
+                                distance(point, geometry.start) <= tolerance * 2 ||
+                                distance(point, geometry.end) <= tolerance * 2)
+                    );
+                }
+
+                /*
+                 * A PLOT IS PICKED ANYWHERE INSIDE ITS BOX, and on any of its
+                 * curves. The box is the plotting area the student drew, so
+                 * aiming at the graph means aiming at the graph - not at a
+                 * one-pixel axis - and a curve is part of the same object, so
+                 * clicking it selects the plot it belongs to.
+                 */
+                if (object.type === "math-plot") {
+                    const frame = enggMathModel.graphFrame(object);
+
+                    if (
+                        frame &&
+                        point.x >= frame.position.x - tolerance &&
+                        point.x <= frame.position.x + frame.width + tolerance &&
+                        point.y >= frame.position.y - tolerance &&
+                        point.y <= frame.position.y + frame.height + tolerance
+                    ) {
+                        return true;
+                    }
+
+                    const strokes = enggMathModel.curveStrokes(object);
+
+                    return strokes.some((stroke) =>
+                        stroke.some(
+                            (current, index) =>
+                                index > 0 &&
+                                distanceToSegment(point, stroke[index - 1], current) <= tolerance
+                        )
+                    );
+                }
+
+                if (object.type === "math-equation") {
+                    /*
+                     * AN EQUATION IS PICKED ON ITS TEXT. Its ink is its words,
+                     * so the target is a box around the anchor sized from the
+                     * font - the same estimate the renderer draws with.
+                     */
+                    if (!geometry.position) {
+                        return false;
+                    }
+
+                    const size = Number(object.engineering?.fontSize) || 16;
+                    const lines = String(object.engineering?.content ?? "").split("\n");
+                    const longest = lines.reduce((most, line) => Math.max(most, line.length), 0);
+
+                    const width = Math.max(size, longest * size * 0.6);
+                    const height = Math.max(size, lines.length * size * 1.25);
+
+                    const align = object.engineering?.align || "center";
+
+                    const left =
+                        align === "left"
+                            ? geometry.position.x
+                            : align === "right"
+                              ? geometry.position.x - width
+                              : geometry.position.x - width / 2;
+
+                    return (
+                        point.x >= left - tolerance &&
+                        point.x <= left + width + tolerance &&
+                        point.y >= geometry.position.y - height / 2 - tolerance &&
+                        point.y <= geometry.position.y + height / 2 + tolerance
+                    );
+                }
+
+                if (object.type === "math-tangent") {
+                    return Boolean(
+                        geometry.start &&
+                            geometry.end &&
+                            distanceToSegment(point, geometry.start, geometry.end) <= tolerance
+                    );
+                }
+
+                if (object.type === "math-slope-triangle") {
+                    const triangle = enggMathModel.slopeTriangleGeometry(geometry.start, geometry.end);
+
+                    if (!triangle) {
+                        return false;
+                    }
+
+                    return [
+                        [triangle.start, triangle.corner],
+                        [triangle.corner, triangle.end],
+                        [triangle.start, triangle.end]
+                    ].some(([from, to]) => distanceToSegment(point, from, to) <= tolerance);
                 }
 
                 return false;

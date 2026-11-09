@@ -1218,6 +1218,71 @@
     text-transform: uppercase;
 }
 
+/*
+ * A TOOL-SPECIFIC SECTION IS A DROPDOWN.
+ *
+ * It sits at the SAME level as Object, Appearance and Transform - the same
+ * hairline above it, the same heading type - and differs only in that its
+ * heading is a button that opens and closes the rows beneath it. That is what
+ * keeps the panel's shape consistent: a student reads one list of sections and
+ * the tool's own settings are one of them, not a nested box inside another.
+ */
+.dfp-section-collapsible > .dfp-section-toggle {
+    align-items: center;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    justify-content: space-between;
+    margin-bottom: 0;
+    padding: 0 2px;
+    text-align: left;
+    width: 100%;
+}
+
+.dfp-section-collapsible > .dfp-section-toggle:hover {
+    color: var(--datum-ink);
+}
+
+.dfp-section-collapsible > .dfp-section-toggle:focus-visible {
+    outline: 2px solid var(--datum-green);
+    outline-offset: 1px;
+}
+
+.dfp-section-toggle-label {
+    color: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+}
+
+.dfp-section-caret {
+    display: inline-flex;
+    flex: 0 0 auto;
+    height: 10px;
+    transition: transform 0.12s ease;
+    width: 10px;
+}
+
+.dfp-section-caret svg {
+    height: 100%;
+    width: 100%;
+}
+
+.dfp-section-collapsible.is-open > .dfp-section-toggle .dfp-section-caret {
+    transform: rotate(180deg);
+}
+
+.dfp-section-body {
+    padding-top: 4px;
+}
+
+.dfp-section-body[hidden] {
+    display: none;
+}
+
 /* ---------------------------------------------------------- rows */
 
 .dfp-row {

@@ -8,15 +8,16 @@
  * centre happens to fall inside it - and it does so for the graph features
  * (SFD/BMD/AFD) as well as for bodies, loads and supports.
  *
- * THE DEFECT THIS PINS. A hand-drawn diagram's strokes are stored in
- * GRAPH-LOCAL coordinates: x is a station on the member, y is the value in kN
- * or kN·m. The sheet draws them through a projection that maps the station onto
- * the member's length and the value onto the frame's scale. Box selection used
- * to test the RAW stored numbers, which are not where the ink is, so a
- * rectangle drawn over a curve found nothing.
+ * A SKETCH'S STROKES ARE ORDINARY FEATURES. They used to be graph-local points
+ * stored on the diagram, projected onto the axis by the renderer - and box
+ * selection had to reproduce that projection or it tested numbers that were not
+ * where the ink was. They are Line, Polyline and Arc features now, drawn in
+ * world space, so the ordinary box-selection pass catches them as the features
+ * they are.
  *
- * The fix projects the strokes with the renderer's own `analysisSketchMarks`,
- * so the rectangle and the ink are the same geometry.
+ * A PLOT is still projected, because its curve is generated from expressions
+ * rather than drawn - and that projection is the renderer's own
+ * `analysisPlotMarks`, so the rectangle and the ink are the same geometry.
  */
 
 const { JSDOM } = require("jsdom");
@@ -48,6 +49,18 @@ global.Element = dom.window.Element;
 const state = require(modulePath("drawing-state.js")).default;
 const box = require(modulePath("box-selection.js"));
 const renderer = require(modulePath("renderer.js")).default;
+
+/*
+ * THE RENDERER IS PUBLISHED BY NAME, as the page publishes it.
+ *
+ * `box-selection` reaches for `enggDrawingRenderer` rather than importing it,
+ * because in the browser every script shares one scope. Under `require` there
+ * is no shared scope, so the name has to be put on the global - and it has to
+ * be put there HERE, because another test in the same run may already have set
+ * it to a different object.
+ */
+global.enggDrawingRenderer = renderer;
+global.window.enggDrawingRenderer = renderer;
 
 const st = state.createDrawingState();
 global.window.enggDrawing = { state: st };
@@ -87,116 +100,73 @@ console.log("\n  a rectangle selects what it CROSSES, not what it contains\n");
 }
 
 /* ============================================================
- * A SKETCHED DIAGRAM: the world-space defect
- * ============================================================ */
+ * A SKETCHED DIAGRAM: its strokes are ordinary features
+ * ============================================================
+ *
+ * A Sketch is no longer a private coordinate space inside the diagram. Its
+ * strokes are ordinary Line, Polyline and Arc features that belong to the
+ * diagram through `parentId`, drawn where the student drew them. So a box over
+ * a stroke catches the STROKE - which is what lets it be selected, moved and
+ * deleted on its own - and the diagram itself is selected from its frame.
+ */
 
 console.log(
-  "\n  a SKETCHED diagram is selected from its INK, not its raw values\n",
+  "\n  a SKETCHED diagram's strokes are selected as the features they are\n",
 );
 
 {
-  /*
-   * An SFD sketched on a 100-long member. The stored stroke is a line from
-   * graph x = 0, value 0 to graph x = 50, value 40 - GRAPH-LOCAL numbers.
-   *
-   * The sheet draws it from the member's start, along its length, up by the
-   * frame's scale - so the ink is NOT at (0,0)-(50,40) in world space.
-   */
   const diagram = state.geometryFactories["shear-force-diagram"](
     { x: 0, y: 0 },
     { x: 100, y: 0 },
   );
 
   diagram.geometry.mode = "sketch";
-  diagram.geometry.localRange = { from: 0, to: 100 };
-  diagram.geometry.sketchElements = [
-    {
-      id: "sketch-1",
-      kind: "line",
-      start: { x: 0, y: 0 },
-      end: { x: 50, y: 40 },
-    },
-  ];
 
-  const marks = renderer.analysisSketchMarks(diagram.geometry);
+  /* A stroke drawn in WORLD space, as the Sketch mode now draws them. */
+  const stroke = state.geometryFactories.line({ x: 0, y: 0 }, { x: 50, y: 40 });
+
+  stroke.parentId = diagram.id;
 
   check(
-    "the diagram's stroke projects to world-space marks",
-    marks.length === 1 && marks[0].points.length === 2,
-    JSON.stringify(marks),
-  );
-
-  const ink = marks[0].points;
-
-  check(
-    "and the marks are NOT the raw stored numbers",
-    ink[1].x !== 50 || ink[1].y !== 40,
-    `stored (50, 40) projected to (${ink[1].x}, ${ink[1].y})`,
-  );
-
-  /* Midpoint of the projected stroke, so the box is aimed at real ink. */
-  const mid = {
-    x: (ink[0].x + ink[1].x) / 2,
-    y: (ink[0].y + ink[1].y) / 2,
-  };
-
-  check(
-    "a rectangle over the MIDDLE of the drawn stroke selects the diagram",
-    box.objectIntersectsSelection(
-      diagram,
-      rect(mid.x - 2, mid.y - 2, mid.x + 2, mid.y + 2),
-    ) === true,
-    `box at (${mid.x}, ${mid.y})`,
+    "a rectangle over the middle of a stroke selects the stroke",
+    box.objectIntersectsSelection(stroke, rect(23, 18, 27, 22)) === true,
   );
 
   check(
-    "a rectangle over the RAW stored numbers does NOT",
-    box.objectIntersectsSelection(diagram, rect(48, 38, 52, 42)) === false,
-    "that is where the ink is not - the defect this fixes",
+    "and a rectangle away from it selects nothing",
+    box.objectIntersectsSelection(stroke, rect(900, 900, 950, 950)) === false,
   );
 
+  /*
+   * THE DIAGRAM IS STILL SELECTABLE ON ITS OWN. A sketch diagram with no plot
+   * has no curve to cross, so the box is aimed at the member it is drawn on -
+   * the same span the diagram's frame occupies.
+   */
   check(
-    "and a rectangle far away selects nothing",
-    box.objectIntersectsSelection(diagram, rect(900, 900, 950, 950)) === false,
+    "the diagram itself is selected from its own frame",
+    box.objectIntersectsSelection(diagram, rect(40, -5, 60, 5)) === true,
   );
 }
 
 /* ============================================================
- * A CURVE in a sketch, partly intersecting
+ * A CURVE stroke, partly intersecting
  * ============================================================ */
 
 console.log("\n  a partially-intersecting curve is selected\n");
 
 {
-  const diagram = state.geometryFactories["bending-moment-diagram"](
-    { x: 0, y: 0 },
-    { x: 200, y: 0 },
+  const curve = state.geometryFactories.polyline(
+    [
+      { x: 0, y: 0 },
+      { x: 100, y: 80 },
+      { x: 200, y: 0 },
+    ],
+    {},
   );
-
-  diagram.geometry.mode = "sketch";
-  diagram.geometry.localRange = { from: 0, to: 200 };
-  diagram.geometry.sketchElements = [
-    {
-      id: "sketch-1",
-      kind: "curve3",
-      start: { x: 0, y: 0 },
-      bend: { x: 100, y: 80 },
-      end: { x: 200, y: 0 },
-    },
-  ];
-
-  const marks = renderer.analysisSketchMarks(diagram.geometry);
-  const points = marks[0].points;
-
-  /* The highest point of the drawn curve. */
-  const peak = points.reduce((best, p) => (p.y > best.y ? p : best), points[0]);
 
   check(
     "a rectangle over ONLY the top of the curve selects it",
-    box.objectIntersectsSelection(
-      diagram,
-      rect(peak.x - 3, peak.y - 3, peak.x + 3, peak.y + 3),
-    ) === true,
+    box.objectIntersectsSelection(curve, rect(97, 77, 103, 83)) === true,
     "a small portion entering the box is enough",
   );
 }

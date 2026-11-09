@@ -19,12 +19,21 @@ before(async()=>{
 after(()=>window.close());
 function pointer(point){const p=model.engineeringToScreen(point,{width:900,height:600},state);return{clientX:p.x,clientY:p.y,button:0,pointerId:1};}
 function add(object){const previous=model.snapshotDrawing(state);const stored=model.addObject(state,object);model.commitDrawingChange(state,previous);return stored;}
-test('a completed creation returns any armed tool to Select; edits and incomplete drafts do not',async()=>{
+test('a completed creation keeps the armed tool; edits and incomplete drafts do not change it either',async()=>{
+ /*
+  * THE GLOBAL CONTRACT: a tool stays armed until the student ends it.
+  *
+  * This used to assert the opposite - that committing a creation returned any
+  * armed tool to Select - which made every tool in every category one-shot.
+  * Creating an object selects it and leaves the tool ready for the next one;
+  * Escape, a click on empty canvas with nothing pending, the tool's own button
+  * or another tool is what ends it.
+  */
  for(const tool of ['rectangle','point-force','dimension','note']){
   model.setActiveTool(state,tool);
   await Promise.resolve();assert.equal(state.activeTool,tool,'arming alone keeps the tool');
   add(model.geometryFactories.line({x:-10,y:-20},{x:10,y:-20}));
-  await Promise.resolve();assert.equal(state.activeTool,'select');
+  await Promise.resolve();assert.equal(state.activeTool,tool,'a completed creation keeps the tool armed');
  }
  model.setActiveTool(state,'rectangle');const before=model.snapshotDrawing(state);
  state.objects[0].geometry.end.x+=2;model.commitDrawingChange(state,before);
@@ -50,7 +59,9 @@ test('partial rectangle-to-line dimensions use endpoints, never infer an angle, 
  click({x:35,y:60});
  const input=document.querySelector('.drawing-creation-dimension input[type="text"]');assert.ok(input);
  input.value='65 mm';input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
- await Promise.resolve();assert.equal(state.activeTool,'select');
+ await Promise.resolve();
+ /* The Dimension tool stays armed after committing one; Escape or empty canvas ends it. */
+ assert.equal(state.activeTool,'dimension');
  const d=state.objects.find(o=>o.type==='dimension');
  assert.equal(dimensions.measurementFor(d,state).value,65);
  const free=model.geometryFactories.dimension({dimensionType:'horizontal',dimensionKind:'variable',content:'L',refs:[{kind:'canvas-point',point:{x:-50,y:80}},{kind:'canvas-point',point:{x:-10,y:80}}],placement:{x:-30,y:100}});
@@ -84,14 +95,16 @@ test('notes focus on canvas immediately, update while typing, and finish on Ente
  const created=commitAnnotate({kind:'note',position:{x:0,y:0}});
  await new Promise(resolve=>setTimeout(resolve,20));
  let input=document.querySelector('.drawing-canvas-text-editor textarea');assert.ok(input);
- assert.equal(document.activeElement,input);assert.equal(state.activeTool,'select');
+ assert.equal(document.activeElement,input);
+ /* The Note tool stays armed while its text is edited; Escape or empty canvas ends it. */
+ assert.equal(state.activeTool,'note');
  assert.equal(document.querySelector('.drawing-inline-entry'),null);
  input.value='Live text';input.dispatchEvent(new window.Event('input',{bubbles:true}));
  assert.equal(state.objects.find(o=>o.id===created.id).text,'Live text');
  /* A note is multi-line, so Enter writes a line and Ctrl+Enter finishes it. */
  input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}));
  assert.equal(document.querySelector('.drawing-canvas-text-editor'),null);
- assert.equal(state.activeTool,'select');
+ assert.equal(state.activeTool,'note');
  model.undo(state);assert.equal(state.objects.find(o=>o.id===created.id).text,'','typing is one undoable edit');
  const current=state.objects.find(o=>o.id===created.id);
  const {openNoteEditorFor}=require(locate('canvas-click.js'));

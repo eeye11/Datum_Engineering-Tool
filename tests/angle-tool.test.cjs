@@ -19,7 +19,7 @@ function fixture(){state.objects=[];model.clearInteraction(state);return state;}
 function line(a,b){return model.addObject(state,model.geometryFactories.line(a,b));}
 function dimension(a,b,point,options={}){return model.geometryFactories.dimension({dimensionType:'angular',refs:[{featureId:a.id,anchor:'start',endAnchor:'end'},{featureId:b.id,anchor:'start',endAnchor:'end'}],placement:point,...options});}
 function click(point){const p=model.engineeringToScreen(point,{width:900,height:600},state);placement.handleDimensionClick({rawPointerPoint:point},{clientX:p.x,clientY:p.y});}
-test('Angle picks two lines, previews a true right angle, asks for a label and returns to Select',async()=>{
+test('Angle picks two lines, previews a true right angle, asks for a label and keeps the tool armed',async()=>{
  fixture();const a=line({x:-40,y:0},{x:60,y:0});const b=line({x:10,y:-50},{x:10,y:70});
  model.setActiveTool(state,'angle');click({x:-20,y:0});assert.equal(state.interaction.dimensionStage,'first');
  click({x:10,y:40});assert.equal(state.interaction.dimensionStage,'placement');
@@ -27,7 +27,13 @@ test('Angle picks two lines, previews a true right angle, asks for a label and r
  const popup=document.querySelector('.drawing-creation-dimension');assert.equal(popup.getAttribute('aria-label'),'Angle');
  const input=popup.querySelector('input');assert.ok(input.value.includes('90'),'default label is the actual angle');
  input.value='θ';input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
- await Promise.resolve();assert.equal(state.activeTool,'select');
+ await Promise.resolve();
+ /*
+  * THE TOOL STAYS ARMED. A dimension is a creation tool: committing one selects
+  * it and leaves the tool ready for the next, exactly as a Line does. It ends on
+  * Escape, empty canvas or another tool.
+  */
+ assert.equal(state.activeTool,'angle');
  const d=state.objects.find(o=>o.type==='dimension');assert.equal(d.content,'θ');assert.equal(d.name,'Angle');
  assert.equal(d.sourceRefs[0].featureId,a.id);assert.equal(d.sourceRefs[1].featureId,b.id);
  const g=dimensions.graphicsFor(d,state);assert.equal(g.rightAngle,true);assert.equal(g.arc.length,3);assert.deepEqual(g.vertex,{x:10,y:0});

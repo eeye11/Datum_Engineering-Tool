@@ -350,19 +350,42 @@ export function objectBounds(object) {
       const ordinate = LABEL_REACH * 4;
       const right = LABEL_REACH * 2;
 
-      const sketches = Array.isArray(geometry.sketchElements)
-        ? geometry.sketchElements.flatMap((element) => everyPointIn(element))
-        : [];
+      /*
+       * A SKETCH'S STROKES ARE NOT PART OF THIS BOUNDS.
+       *
+       * They are ordinary features with bounds of their own, so they are
+       * measured by the ordinary pass - and including them here as well would
+       * count the same ink twice from a list the diagram no longer holds.
+       */
+      return {
+        minX: Math.min(start.x, end.x),
+        minY: Math.min(start.y, end.y) - ordinate,
+        maxX: Math.max(start.x, end.x) + right,
+        maxY: Math.max(start.y, end.y) + ordinate,
+      };
+    }
 
-      return unionBounds([
-        {
-          minX: Math.min(start.x, end.x),
-          minY: Math.min(start.y, end.y) - ordinate,
-          maxX: Math.max(start.x, end.x) + right,
-          maxY: Math.max(start.y, end.y) + ordinate,
-        },
-        pointsBounds(sketches),
-      ]);
+    /*
+     * THE MATH OBJECTS.
+     *
+     * A plot is its box, which already encloses every curve drawn inside it;
+     * everything else is the points its geometry mentions. The label reach
+     * below is added to all of them, so a point's label and a triangle's values
+     * are inside the figure.
+     */
+    case "math-plot": {
+      const position = pointOf(geometry.position);
+      const width = Math.abs(finite(geometry.width) ?? 0);
+      const height = Math.abs(finite(geometry.height) ?? 0);
+
+      return position
+        ? {
+            minX: position.x,
+            minY: position.y,
+            maxX: position.x + width,
+            maxY: position.y + height,
+          }
+        : null;
     }
 
     default:

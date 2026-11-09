@@ -209,6 +209,38 @@ function definingPoints(
         ]);
     }
 
+    /*
+     * ========================================================
+     * THE MATH OBJECTS
+     * ========================================================
+     *
+     * Each is defined by the points it is drawn through, so a move carries
+     * exactly those. A plotted curve's points are a SAMPLE of its expression,
+     * so they are not defining points - the curve moves with its graph, and a
+     * translation of the sample would be undone by the next re-sample.
+     */
+    if (type === "math-point") {
+        return valid([g.position]);
+    }
+
+    if (type === "math-vector" || type === "math-tangent" || type === "math-slope-triangle") {
+        return valid([g.start, g.end]);
+    }
+
+    if (type === "math-plot") {
+        const width = Number(g.width) || 0;
+        const height = Number(g.height) || 0;
+
+        return valid([
+            g.position,
+            g.position ? { x: g.position.x + width, y: g.position.y + height } : null
+        ]);
+    }
+
+    if (type === "math-equation") {
+        return valid([g.position]);
+    }
+
     if (type === "particle") {
         return valid([
             g.position
@@ -950,6 +982,42 @@ function translateObject(
 
         g.center.x += deltaX;
         g.center.y += deltaY;
+        return;
+    }
+
+    /*
+     * A MATH OBJECT MOVES BY ITS OWN GEOMETRY, through the same defining points
+     * every other feature uses. A plotted curve is the exception: its points are
+     * a sample of its expression, so they are re-derived rather than translated.
+     */
+    if (object.type === "math-plot") {
+        if (g.position) {
+            g.position.x += deltaX;
+            g.position.y += deltaY;
+        }
+
+        return;
+    }
+
+    if (object.type === "math-tangent") {
+        [g.contact, g.start, g.end].forEach((at) => {
+            if (at) {
+                at.x += deltaX;
+                at.y += deltaY;
+            }
+        });
+
+        return;
+    }
+
+    if (object.type === "math-slope-triangle") {
+        [g.start, g.end, g.corner].forEach((at) => {
+            if (at) {
+                at.x += deltaX;
+                at.y += deltaY;
+            }
+        });
+
         return;
     }
 

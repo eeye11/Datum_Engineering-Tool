@@ -69,6 +69,29 @@ export function beginModifySession(
     };
 }
 
+/*
+ * ============================================================
+ * A MODIFY SESSION ENDS WITH ITS OPERATION - AND ONLY THEN
+ * ============================================================
+ *
+ * Move, Rotate, Mirror, Trim and Extend are one-off acts on a selection, not
+ * tools that make more of the same thing. So a COMPLETED operation ends the
+ * session and returns to Select, while a FAILED one (nothing to trim, no
+ * boundary, a zero-length axis) leaves the tool armed so the student can try
+ * again without re-arming it.
+ *
+ * This used to be the other way round: every path called `cancelModifySession`,
+ * and the generic commit reset in the model also forced Select. The result was
+ * that a failed Trim dropped the student out of Trim, and the model's reset
+ * was doing the same job a second time. Now the session owns its own ending,
+ * and the model's reset is gone.
+ */
+export function endModifySession() {
+    cancelModifySession();
+
+    activateTool("select");
+}
+
 export function cancelModifySession() {
     /*
      * The toolbar highlight is cleared even when no
@@ -659,7 +682,7 @@ function commitMove(
         previous
     );
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage(
         "Moved selection"
@@ -726,7 +749,7 @@ function commitRotate(
         previous
     );
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage(
         "Rotated selection"
@@ -933,7 +956,7 @@ function commitMirror() {
         )
     );
 
-    cancelModifySession();
+    endModifySession();
 
     setToolMessage(
         mirrored.length === 1

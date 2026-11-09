@@ -3,7 +3,7 @@ import enggErrorLog from "../../app/error-log.js";
 import enggCanvasPalette from "./canvas-palette.js";
 import { ensureSvg, setActiveTheme, setActiveZoom, SVG_NAMESPACE } from "./svg-primitives.js";
 import { appendFeatureLabel } from "./annotation-render.js";
-import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysisFrameExtents, analysisPlotMarks, analysisSketchMarks, analysisValueAt, equationLabels } from "./analysis-render.js";
+import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysisFrameExtents, analysisPlotMarks, analysisValueAt, equationLabels } from "./analysis-render.js";
 import { appendEntity } from "./entity-render.js";
 import { renderCrosshair, renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
 import { renderPreview } from "./preview-render.js";
@@ -323,7 +323,6 @@ import { renderPreview } from "./preview-render.js";
         analysisFrameExtents,
         analysisPlotMarks,
         analysisValueAt,
-        analysisSketchMarks,
         equationLabels
     };
 

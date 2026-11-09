@@ -14,7 +14,7 @@ import { isStaticsBody, trussJointHandles } from "../interaction/handles.js";
 import { objectAtPoint } from "../interaction/hit-testing.js";
 import { beginMomentPlacement } from "../geometry/preview.js";
 import { STATICS_CHILD_TOOLS, STATICS_FEATURE_LABELS, staticsAttachmentId, staticsBodyMessage, staticsToolPointCount } from "./statics-tools.js";
-import { activateTool } from "../../../components/layout/toolbar/tool-activation.js";
+
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
@@ -787,13 +787,16 @@ function commitStaticsAttachment(
         object.id
     );
 
+    /*
+     * THE TOOL STAYS ARMED AFTER AN ATTACHED PLACEMENT, for the same reason it
+     * does after a free one: a support or a connection is placed one at a time
+     * and a member usually takes several. The new feature is selected; the tool
+     * waits for the next placement until Escape, empty canvas or another tool.
+     */
     if (isSupportType(type)) {
         renderProperties();
-        activateTool("select");
         return;
     }
-
-    activateTool("select");
 
     renderProperties();
     renderCurrentDrawing();

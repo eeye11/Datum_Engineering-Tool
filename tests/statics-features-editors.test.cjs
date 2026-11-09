@@ -64,7 +64,6 @@ function diagram(mode, kind = "sfd") {
       localRange: { from: 0, to: 10 },
       diagramType: kind,
       mode,
-      sketchElements: [],
     },
     style: { stroke: "#000000", lineWidth: 0.5 },
     engineering: { discipline: "statics", analysisKind: `${kind}-force-diagram` },
@@ -87,6 +86,13 @@ console.log("-----------------------------");
 const sketchDiagram = diagram("sketch");
 const plotDiagram = diagram("plot");
 
+/*
+ * A SKETCH HAS ITS OWN EDITOR.
+ *
+ * The Sketch Editor is the dedicated drawing workspace: the student draws, and
+ * DAETUM recognises each stroke as a line or a curve. It is offered beside the
+ * Plot Editor, because both halves exist on the one model.
+ */
 check(
   "a sketch-mode diagram offers the Sketch Editor",
   analysisEditor.analysisEditorsFor(sketchDiagram).some((entry) => entry.button === "Sketch Editor"),
@@ -97,6 +103,12 @@ check(
   "a plot-mode diagram offers the Plot Editor",
   analysisEditor.analysisEditorsFor(plotDiagram).some((entry) => entry.button === "Plot Editor"),
   JSON.stringify(analysisEditor.analysisEditorsFor(plotDiagram)),
+);
+
+check(
+  "and a sketch-mode diagram offers it too, because a plot can be added to one",
+  analysisEditor.analysisEditorsFor(sketchDiagram).some((entry) => entry.button === "Plot Editor"),
+  JSON.stringify(analysisEditor.analysisEditorsFor(sketchDiagram)),
 );
 
 check(
@@ -118,27 +130,33 @@ console.log("----------------");
 
 const sketchMarkup = features.featuresMarkupForSelection([sketchDiagram]);
 
-check("the Sketch Editor button is in the tab", sketchMarkup.includes("Sketch Editor"), sketchMarkup);
 check(
-  "as a real button, not a label",
+  "the tab states the diagram's mode",
+  sketchMarkup.includes('data-analysis-mode-row="sketch"'),
+  sketchMarkup,
+);
+check(
+  "with a Sketch Editor button",
   /<button[^>]*data-analysis-editor="sketch"/.test(sketchMarkup),
   sketchMarkup,
 );
 check(
-  "carrying the diagram it edits",
-  sketchMarkup.includes(`data-object-id="${sketchDiagram.id}"`),
+  "the Plot Editor is offered, carrying the diagram it edits",
+  /<button[^>]*data-analysis-editor="plot"/.test(sketchMarkup) &&
+    sketchMarkup.includes(`data-object-id="${sketchDiagram.id}"`),
+  sketchMarkup,
 );
 
 const plotMarkup = features.featuresMarkupForSelection([plotDiagram]);
 
 check("the Plot Editor button is in the tab for a plot", plotMarkup.includes("Plot Editor"), plotMarkup);
 check(
-  "and an SFD, BMD or AFD sketch-mode diagram offers the Plot Editor too",
-  /<button[^>]*data-analysis-editor="plot"/.test(sketchMarkup),
-  sketchMarkup,
+  "and the plot's mode is stated",
+  plotMarkup.includes('data-analysis-mode-row="plot"'),
+  plotMarkup,
 );
 check(
-  "while a plot-mode diagram still offers its Sketch Editor",
+  "a plot offers the Sketch Editor too, because a sketch can be added to one",
   analysisEditor.analysisEditorsFor(plotDiagram).some((entry) => entry.button === "Sketch Editor"),
   JSON.stringify(analysisEditor.analysisEditorsFor(plotDiagram)),
 );
@@ -177,30 +195,30 @@ const opened = [];
  * which one appeared - by its own accessible name - rather than calling an
  * internal function and trusting it.
  */
-const originalOpen = {};
+const plotModule = loadModule("plot-editor.js");
+const plotTarget = plotModule.default || plotModule;
+const originalPlotOpen = plotTarget.open;
 
-["sketch-editor.js", "plot-editor.js"].forEach((name) => {
-  const module = loadModule(name);
-  const target = module.default || module;
+plotTarget.open = (options = {}) => {
+  opened.push({ editor: "plot-editor.js", title: options.title });
+  return true;
+};
 
-  originalOpen[name] = target.open;
-
-  target.open = (options = {}) => {
-    opened.push({ editor: name, title: options.title });
-    return true;
-  };
-});
-
-const openedSketch = analysisEditor.openAnalysisEditorForObject(sketchDiagram.id, "sketch");
-
-check("pressing Sketch Editor opens the Sketch Editor", openedSketch === true && opened.some((entry) => entry.editor === "sketch-editor.js"), JSON.stringify(opened));
+/*
+ * A SKETCH HAS NO DIALOG TO OPEN.
+ *
+ * Asking for one answers false rather than opening something that no longer
+ * exists - and the caller falls through to the instruction that says where the
+ * strokes are drawn.
+ */
 check(
-  "with the diagram's own title",
-  opened.some((entry) => entry.title && entry.title.includes("Shear Force")),
+  "asking for the Sketch editor opens the Sketch Editor",
+  analysisEditor.openAnalysisEditorForObject(sketchDiagram.id, "sketch") === true,
   JSON.stringify(opened),
 );
 
-opened.length = 0;
+/* Close it, so the Plot probe below is not competing with an open dialog. */
+loadModule("sketch-editor.js").default?.close?.();
 
 const openedPlot = analysisEditor.openAnalysisEditorForObject(plotDiagram.id, "plot");
 
@@ -211,17 +229,18 @@ check(
 );
 
 check(
+  "with the diagram's own title",
+  opened.some((entry) => entry.title && entry.title.includes("Shear Force")),
+  JSON.stringify(opened),
+);
+
+check(
   "and never for an object that has no diagram",
-  analysisEditor.openAnalysisEditorForObject("beam-1", "sketch") === false,
+  analysisEditor.openAnalysisEditorForObject("beam-1", "plot") === false,
 );
 
 /* Restore, so nothing later in the process sees the probe. */
-["sketch-editor.js", "plot-editor.js"].forEach((name) => {
-  const module = loadModule(name);
-  const target = module.default || module;
-
-  target.open = originalOpen[name];
-});
+plotTarget.open = originalPlotOpen;
 
 /* ================================================= click wiring */
 
@@ -246,14 +265,19 @@ features.installFeaturesPane();
 model.selectObject(drawingState, sketchDiagram.id);
 features.renderFeatures();
 
-const button = host.querySelector("[data-analysis-editor='sketch']");
+const button = host.querySelector("[data-analysis-editor='plot']");
 
-check("the rendered pane contains the button", Boolean(button), host.innerHTML.slice(0, 400));
+check("the rendered pane contains the Plot Editor button", Boolean(button), host.innerHTML.slice(0, 400));
+
+check(
+  "and a Sketch Editor button beside it",
+  Boolean(host.querySelector("[data-analysis-editor='sketch']")),
+  host.innerHTML.slice(0, 400),
+);
 
 if (button) {
   const probe = [];
-  const module = loadModule("sketch-editor.js");
-  const target = module.default || module;
+  const target = plotTarget;
   const keep = target.open;
 
   target.open = () => {
