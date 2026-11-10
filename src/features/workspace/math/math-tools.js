@@ -44,6 +44,8 @@ import { renderEngineeringTools } from "../../../components/layout/toolbar/toolb
 import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import enggMathPlotEditor from "./math-plot-editor.js";
 import enggMathSketchEditor from "./math-sketch-editor.js";
+import { openSketchWorkspace } from "../../../shared/ui/sketch/sketch-workspace.js";
+import { sketchResultFromWorkspace } from "./math-sketch-bridge.js";
 import enggMathCreation from "./math-creation.js";
 import enggPlacementSession from "../interaction/placement-session.js";
 import enggGridPlacement from "../../../shared/placement/grid-placement.js";
@@ -161,6 +163,18 @@ export function armMathTool(toolId, mode = null) {
  */
 export function openGraphEditor(mode, graph = null) {
   if (mode === "sketch") {
+    /*
+     * THE UNIFIED WORKSPACE IS THE SKETCH EDITOR.
+     *
+     * Every sketch tool opens the same workspace, so the point system, the
+     * correction, the grid and the source are the same in all of them. The
+     * graph's own commit is supplied as the placement callback, which is the
+     * only part that is specific to a Graph.
+     */
+    return openUnifiedSketch(graph);
+  }
+
+  if (mode === "legacy-sketch") {
     return enggMathSketchEditor.openSketchEditor(graph, {
       /*
        * THE EDITOR'S OWN -5..5 FRAME IS THE SKETCH'S COORDINATE SYSTEM, so the
@@ -176,6 +190,34 @@ export function openGraphEditor(mode, graph = null) {
 
   return enggMathPlotEditor.openPlotEditor(graph, {
     onApply: (result) => beginGraphPlacement(result, graph, "plot"),
+    onCancel: () => finishGraphEditing(),
+  });
+}
+
+/*
+ * OPEN THE UNIFIED SKETCH WORKSPACE FOR A GRAPH.
+ *
+ * The workspace does the drawing, the points, the correction and the
+ * source; what is specific to a Graph is the commit, which is supplied here as
+ * the placement callback. A NEW graph goes to the placement session as before;
+ * an EXISTING one is committed in place, because reopening an object to change
+ * it must not move it.
+ */
+function openUnifiedSketch(graph) {
+  return openSketchWorkspace({
+    title: "Graph - Sketch",
+    onPlace: (placed) => {
+      const result = sketchResultFromWorkspace(placed, {
+        title: graph?.name || "Sketch",
+      });
+
+      if (graph) {
+        commitGraphFromSketch(result, graph);
+        return;
+      }
+
+      beginGraphPlacement(result, null, "sketch");
+    },
     onCancel: () => finishGraphEditing(),
   });
 }

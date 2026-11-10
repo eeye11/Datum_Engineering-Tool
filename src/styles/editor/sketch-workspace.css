@@ -1,0 +1,873 @@
+/* ==========================================================================
+ * THE UNIFIED SKETCH WORKSPACE
+ * ==========================================================================
+ *
+ * THE CANVAS IS THE WORKSPACE. It takes the whole window less the sidebar,
+ * and the sidebar is a fixed column beside it, not a page the canvas sits
+ * inside. The four properties tabs replace the sidebar's CONTENTS, so the
+ * canvas never moves when a tab changes - which is the difference between a
+ * workspace and four settings pages.
+ *
+ * NOTHING HERE SETS A DRAWING SIZE. Every dimension is `flex`, `minmax` or a
+ * share, so the same rules work at 1280x720 and 1920x1080, and the narrow
+ * rules below rearrange controls - never shrink the drawing.
+ * ========================================================================== */
+
+.sketch-ws-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+
+  padding: clamp(6px, 1.4vmin, 16px);
+
+  background: var(--datum-overlay, rgba(0, 0, 0, 0.35));
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  color: var(--datum-ink);
+}
+
+.sketch-ws {
+  display: flex;
+  flex-direction: column;
+
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  background: var(--datum-surface);
+  border: 1px solid var(--datum-border);
+  border-radius: 6px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------- header */
+
+.sketch-ws-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--datum-border);
+  background: var(--datum-panel);
+}
+
+.sketch-ws-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.sketch-ws-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sketch-ws-instruction {
+  font-size: 11px;
+  color: var(--datum-muted);
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60ch;
+}
+
+.sketch-ws-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.sketch-ws-close {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--datum-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sketch-ws-close:hover {
+  color: var(--datum-ink);
+}
+
+/* -------------------------------------------------------------- toolbar */
+
+.sketch-ws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--datum-border);
+}
+
+.sketch-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sketch-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  height: 28px;
+  padding: 0 9px;
+
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-tool svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sketch-tool:hover {
+  background: var(--datum-hover, rgba(0, 0, 0, 0.06));
+}
+
+.sketch-tool.is-active {
+  background: var(--datum-green-soft, rgba(31, 92, 56, 0.12));
+  border-color: var(--datum-green);
+  color: var(--datum-green);
+}
+
+.sketch-tool-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--datum-border);
+}
+
+.sketch-tool-spacer {
+  flex: 1 1 auto;
+}
+
+/* The auto-correct switch: an explicit, readable on/off indicator. */
+.sketch-auto-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  padding: 4px 9px;
+  border: 1px solid var(--datum-border);
+  border-radius: 999px;
+
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sketch-auto-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sketch-auto-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--datum-muted);
+}
+
+.sketch-auto-toggle input:checked + .sketch-auto-dot {
+  background: var(--datum-green);
+  box-shadow: 0 0 0 3px var(--datum-green-soft, rgba(31, 92, 56, 0.15));
+}
+
+/* ----------------------------------------------------------------- body */
+
+/*
+ * THE BODY IS THE WHOLE REMAINING HEIGHT - header, toolbar and footer taken
+ * off - so the canvas fills the window instead of sitting in it.
+ */
+.sketch-ws-body {
+  display: flex;
+  align-items: stretch;
+
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/*
+ * THE CANVAS TAKES EVERYTHING THE SIDEBAR DOES NOT.
+ *
+ * The sidebar is a fixed pixel width (resizable, 260-420px), so at a normal
+ * desktop width the canvas is roughly three quarters of the editor - which is
+ * the proportion the layout is for. It is never given a maximum, so it also
+ * uses a wide window rather than leaving it empty.
+ */
+.sketch-ws-canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+
+  position: relative;
+  padding: 6px;
+}
+
+.sketch-ws-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  background: var(--datum-canvas);
+  border: 1px solid var(--datum-border);
+  border-radius: 4px;
+
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+
+/* -------------------------------------------------------------- divider */
+
+.sketch-ws-divider {
+  flex: 0 0 5px;
+  width: 5px;
+
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  position: relative;
+}
+
+.sketch-ws-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 2px;
+  background: var(--datum-border);
+}
+
+.sketch-ws-divider:hover::after,
+.sketch-ws-divider:focus-visible::after {
+  background: var(--datum-green);
+}
+
+/* -------------------------------------------------------------- sidebar */
+
+/*
+ * THE SIDEBAR IS ITS OWN SCROLLER. The editor as a whole never scrolls: the
+ * canvas stays where it is and only this column moves, which is what keeps a
+ * long properties list from turning the editor into a page.
+ */
+.sketch-ws-sidebar {
+  flex: 0 0 330px;
+  width: 330px;
+  min-width: 0;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+
+  border-left: 1px solid var(--datum-border);
+  background: var(--datum-panel);
+}
+
+.sketch-ws-sidebar.is-collapsed {
+  display: none;
+}
+
+/*
+ * THE SIDEBAR HEAD.
+ *
+ * One title and one collapse control, where four tabs used to be. The sections
+ * below it are expandable blocks in the same column, so a student never leaves
+ * the panel to reach a setting.
+ */
+.sketch-ws-sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--datum-border);
+  background: var(--datum-surface);
+}
+
+.sketch-ws-sidebar-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--datum-muted);
+}
+
+.sketch-ws-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  padding: 8px 10px 16px;
+}
+
+.sketch-ws-collapse {
+  margin-left: auto;
+
+  width: 20px;
+  height: 20px;
+  padding: 0;
+
+  border: 1px solid var(--datum-border);
+  border-radius: 3px;
+  background: var(--datum-surface);
+
+  font-size: 12px;
+  color: var(--datum-muted);
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- sections */
+
+.sketch-section + .sketch-section {
+  margin-top: 4px;
+}
+
+.sketch-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  width: 100%;
+  padding: 6px 2px;
+
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--datum-border);
+
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-section:first-child .sketch-section-head {
+  border-top: 0;
+}
+
+.sketch-section-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid var(--datum-muted);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+
+  transform: rotate(90deg);
+  transition: transform 0.12s ease;
+}
+
+.sketch-section-head[aria-expanded="false"] .sketch-section-caret {
+  transform: rotate(0deg);
+}
+
+.sketch-section-badge {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--datum-muted);
+}
+
+.sketch-section-body {
+  padding: 2px 0 8px;
+}
+
+.sketch-section-body[hidden] {
+  display: none;
+}
+
+.sketch-note {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--datum-muted);
+}
+
+.sketch-empty {
+  margin: 2px 0 6px;
+  font-size: 11px;
+  color: var(--datum-muted);
+  font-style: italic;
+}
+
+/* ---------------------------------------------------------------- fields */
+
+.sketch-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+
+.sketch-field-label {
+  min-width: 54px;
+  font-size: 11px;
+  color: var(--datum-muted);
+}
+
+.sketch-field input,
+.sketch-field select {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  height: 25px;
+  padding: 0 5px;
+
+  border: 1px solid var(--datum-border);
+  border-radius: 3px;
+  background: var(--datum-surface);
+  color: var(--datum-ink);
+
+  font-size: 11.5px;
+}
+
+.sketch-field input[type="color"] {
+  padding: 1px;
+  height: 25px;
+  cursor: pointer;
+}
+
+.sketch-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+}
+
+.sketch-checks {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+
+.sketch-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  font-size: 11.5px;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-check input {
+  margin: 0;
+}
+
+.sketch-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.sketch-mini {
+  padding: 4px 8px;
+
+  border: 1px solid var(--datum-border);
+  border-radius: 3px;
+  background: var(--datum-surface);
+
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-mini:hover {
+  border-color: var(--datum-green);
+  color: var(--datum-green);
+}
+
+/* ------------------------------------------------------------- advanced */
+
+/*
+ * AN ADVANCED SUBSECTION IS FOLDED AWAY.
+ *
+ * Tick intervals and output options are real settings, but they are not what a
+ * student reaches for while drawing - so they live behind a summary that opens
+ * on demand, rather than in the main flow of the panel.
+ */
+.sketch-advanced {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--datum-border);
+}
+
+.sketch-advanced summary {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--datum-muted);
+  cursor: pointer;
+}
+
+.sketch-advanced[open] summary {
+  margin-bottom: 6px;
+  color: var(--datum-ink);
+}
+
+/* --------------------------------------------------------------- points */
+
+.sketch-points {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.sketch-point-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  width: 100%;
+  padding: 4px 6px;
+
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sketch-point-row:hover {
+  background: var(--datum-hover, rgba(0, 0, 0, 0.05));
+}
+
+.sketch-point-row.is-selected {
+  border-color: var(--datum-green);
+  background: var(--datum-green-soft, rgba(31, 92, 56, 0.1));
+}
+
+.sketch-point-swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--datum-green);
+}
+
+.sketch-point-name {
+  font-weight: 600;
+}
+
+.sketch-point-coords {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--datum-muted);
+  font-size: 10.5px;
+}
+
+.sketch-point-lock {
+  font-size: 9px;
+}
+
+
+
+/* ------------------------------------------------------------- geometry */
+
+.sketch-geometry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.sketch-geometry-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+
+.sketch-geometry-row.is-selected {
+  border-color: var(--datum-green);
+  background: var(--datum-green-soft, rgba(31, 92, 56, 0.1));
+}
+
+.sketch-geometry-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+
+  background: none;
+  border: 0;
+
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sketch-geometry-kind {
+  padding: 0 4px;
+
+  border-radius: 2px;
+  background: var(--datum-border);
+
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--datum-muted);
+}
+
+.sketch-geometry-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sketch-geometry-eye,
+.sketch-geometry-delete {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+
+  background: none;
+  border: 0;
+
+  font-size: 11px;
+  color: var(--datum-muted);
+  cursor: pointer;
+}
+
+.sketch-geometry-delete:hover {
+  color: var(--datum-error);
+}
+
+/* --------------------------------------------------------------- canvas */
+
+.sketch-grid-major {
+  stroke: var(--datum-grid-major, rgba(0, 0, 0, 0.09));
+  stroke-width: 1;
+}
+
+.sketch-grid-minor {
+  stroke: var(--datum-grid-minor, rgba(0, 0, 0, 0.05));
+  stroke-width: 1;
+}
+
+.sketch-axis-x,
+.sketch-axis-y {
+  stroke: var(--datum-axis, rgba(0, 0, 0, 0.45));
+  stroke-width: 1.2;
+}
+
+.sketch-tick {
+  stroke: var(--datum-axis, rgba(0, 0, 0, 0.45));
+  stroke-width: 1;
+}
+
+.sketch-tick-label {
+  fill: var(--datum-muted);
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+}
+
+/* ---- editing aids: never exported, never part of the drawing ---- */
+
+.sketch-aid-guide-line {
+  stroke: var(--datum-green);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.4;
+}
+
+.sketch-aid-point-mark {
+  fill: var(--datum-surface);
+  stroke: var(--datum-green);
+  stroke-width: 1.8;
+}
+
+
+
+.sketch-aid-point.is-selected .sketch-aid-point-mark {
+  stroke-width: 2.6;
+  fill: var(--datum-green-soft, rgba(31, 92, 56, 0.25));
+}
+
+.sketch-aid-point.is-locked .sketch-aid-point-mark {
+  stroke: var(--datum-error);
+}
+
+/*
+ * THE SNAP INDICATOR.
+ *
+ * A ring and a cross at the coordinate a click would land on. Each kind of
+ * place has its own weight: an intersection is the most definite, a midpoint
+ * the least - so the student can tell at a glance which one the pointer is on.
+ */
+.sketch-aid-snap-ring {
+  fill: var(--datum-green-soft, rgba(31, 92, 56, 0.18));
+  stroke: var(--datum-green);
+  stroke-width: 1.4;
+}
+
+.sketch-aid-snap-cross {
+  stroke: var(--datum-green);
+  stroke-width: 1.2;
+}
+
+.sketch-aid-snap.is-midpoint .sketch-aid-snap-ring {
+  fill: none;
+  stroke-dasharray: 2 2;
+}
+
+.sketch-aid-snap.is-anchor .sketch-aid-snap-ring {
+  stroke-width: 2.2;
+}
+
+.sketch-aid-point-label {
+  fill: var(--datum-muted);
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sketch-aid-live-stroke {
+  fill: none;
+  stroke: var(--datum-ink);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0.75;
+}
+
+.sketch-aid-placement-preview {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------- footer */
+
+.sketch-ws-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  flex: 0 0 auto;
+  padding: 7px 12px;
+  border-top: 1px solid var(--datum-border);
+  background: var(--datum-panel);
+
+  font-size: 11px;
+  color: var(--datum-muted);
+}
+
+.sketch-ws-status {
+  font-weight: 600;
+  color: var(--datum-ink);
+}
+
+.sketch-ws-counts,
+.sketch-ws-correction {
+  font-variant-numeric: tabular-nums;
+}
+
+.sketch-ws-spacer {
+  flex: 1 1 auto;
+}
+
+.sketch-ws-hint {
+  color: var(--datum-muted);
+}
+
+.sketch-ws-button {
+  padding: 5px 14px;
+
+  border: 1px solid var(--datum-border);
+  border-radius: 4px;
+  background: var(--datum-surface);
+
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-ws-button.is-primary {
+  border-color: var(--datum-green);
+  background: var(--datum-green);
+  color: var(--datum-surface);
+}
+
+.sketch-ws-button:hover {
+  filter: brightness(1.05);
+}
+
+/* --------------------------------------------------------- responsive */
+
+@media (max-width: 980px) {
+  .sketch-ws-overlay {
+    padding: 0;
+  }
+
+  .sketch-ws {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .sketch-ws-instruction {
+    display: none;
+  }
+
+  .sketch-tool-text {
+    display: none;
+  }
+
+  /* The sidebar folds over the canvas rather than shrinking it. */
+  .sketch-ws-sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+
+    width: min(320px, 86vw);
+
+    box-shadow: -12px 0 28px rgba(0, 0, 0, 0.18);
+  }
+
+  .sketch-ws-divider {
+    display: none;
+  }
+}
