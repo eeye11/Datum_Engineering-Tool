@@ -192,20 +192,16 @@ function open(options = {}) {
    * DRAWING
    * ======================================================== */
 
+  /*
+   * THE ZERO AXIS IS THE ONLY FRAME MARK.
+   *
+   * The box around the plotting area used to be drawn as a rectangle, which
+   * dressed the canvas up as a coordinate system with a visible extent. The
+   * frame is a MAPPING - the diagram's own x range and value extent - and the
+   * only line in it a student reads a value against is zero.
+   */
   function drawFrame() {
     const group = svgElement("g", { class: "sketch-editor-frame" });
-
-    group.appendChild(
-      svgElement("rect", {
-        x: frame.left,
-        y: frame.top,
-        width: frame.right - frame.left,
-        height: frame.bottom - frame.top,
-        fill: "none",
-        stroke: "#c9d3d0",
-        "stroke-width": 1,
-      }),
-    );
 
     /* The zero axis, which is the line the values are measured from. */
     group.appendChild(

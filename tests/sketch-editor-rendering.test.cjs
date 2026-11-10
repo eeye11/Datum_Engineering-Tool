@@ -141,9 +141,22 @@ check(
   String(paths(staticsSvg)),
 );
 
+/*
+ * The frame is the ZERO LINE, not a box.
+ *
+ * The editor used to outline the plotting area with a rectangle, which read as
+ * the coordinate system itself. The frame is a mapping, and the only line in it
+ * the student reads a value against is zero - so there is a line and no box.
+ */
 check(
   "but it does draw its frame",
-  staticsSvg.querySelectorAll("rect").length > 0,
+  staticsSvg.querySelectorAll(".sketch-editor-frame line").length > 0,
+);
+
+check(
+  "and no box is drawn around it",
+  staticsSvg.querySelectorAll(".sketch-editor-frame rect").length === 0,
+  String(staticsSvg.querySelectorAll(".sketch-editor-frame rect").length),
 );
 
 /* A stroke appears WHILE it is being drawn. */

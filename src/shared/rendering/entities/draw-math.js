@@ -549,28 +549,16 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
    */
   const display = gridDisplayOf(entity);
 
-  const frame = mapping.frame;
-
   /*
-   * The box, so the graph is visibly a placed object. It is TAGGED as the
-   * frame: the box and the axes are both solid lines, and a reader - a test, or
-   * a future feature that wants to know where the plot area ends - must be able
-   * to tell one from the other.
+   * NO BOX AROUND THE GRAPH.
+   *
+   * A graph used to be enclosed in a rectangle traced corner to corner, which
+   * read as the coordinate system itself - as though the student were working
+   * inside a boxed plot area. It is not: the graph's extent is a mapping, and
+   * what is drawn on the sheet is the grid and the two axes. The box is gone
+   * here, so it is gone from every graph and every sketch that shares this
+   * painter.
    */
-  const corners = [
-    { x: frame.position.x, y: frame.position.y },
-    { x: frame.position.x + frame.width, y: frame.position.y },
-    { x: frame.position.x + frame.width, y: frame.position.y + frame.height },
-    { x: frame.position.x, y: frame.position.y + frame.height },
-  ].map(toScreen);
-
-  for (let index = 0; index < 4; index += 1) {
-    line(svg, corners[index], corners[(index + 1) % 4], {
-      stroke,
-      width: Math.max(0.5, width * 0.6),
-      extra: { "data-graph-part": "frame" },
-    });
-  }
 
   const xTicks = enggMathModel.tickValues(
     mapping.limits.xMin,
@@ -649,8 +637,8 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
    * THE AXES: WHERE ZERO ACTUALLY IS, OR NOWHERE.
    *
    * `origin` is the position of (0, 0) in the SAME frame the grid and the
-   * curves are drawn in, so it is NOT forced to the middle of the box and NOT
-   * forced to an edge. If zero is outside the configured limits - a graph of
+   * curves are drawn in, so it is NOT forced to the middle of the plot area and
+   * NOT forced to an edge. If zero is outside the configured limits - a graph of
    * 2..8 has no y = 0 in it - the corresponding axis is not inside the plotting
    * area and is therefore not drawn, rather than being pushed onto an edge and
    * pretending the value exists there.
