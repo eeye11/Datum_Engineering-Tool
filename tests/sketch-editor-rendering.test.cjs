@@ -142,21 +142,17 @@ check(
 );
 
 /*
- * The frame is the ZERO LINE, not a box.
+ * NO COORDINATE SYSTEM IS DRAWN.
  *
- * The editor used to outline the plotting area with a rectangle, which read as
- * the coordinate system itself. The frame is a mapping, and the only line in it
- * the student reads a value against is zero - so there is a line and no box.
+ * The editor used to outline the plotting area with a rectangle, then with a
+ * zero line - either way a coordinate system the student did not ask for. The
+ * frame object remains as the MAPPING (a stroke still lands at the value it
+ * was drawn at), but nothing is painted for it.
  */
 check(
-  "but it does draw its frame",
-  staticsSvg.querySelectorAll(".sketch-editor-frame line").length > 0,
-);
-
-check(
-  "and no box is drawn around it",
-  staticsSvg.querySelectorAll(".sketch-editor-frame rect").length === 0,
-  String(staticsSvg.querySelectorAll(".sketch-editor-frame rect").length),
+  "and it draws no coordinate system",
+  staticsSvg.querySelectorAll("line, rect, text").length === 0,
+  String(staticsSvg.querySelectorAll("line, rect, text").length),
 );
 
 /* A stroke appears WHILE it is being drawn. */
@@ -277,34 +273,20 @@ graph.__datumSketch.refresh();
 
 check("it opens with a drawing surface", Boolean(graphSvg));
 
+/*
+ * NO COORDINATE SYSTEM IS DRAWN: no axes, no grid, no ticks, no box, and
+ * therefore no numbers or axis names either. The plane is a blank sheet, and
+ * the numbers survive only as the mapping that decides where a stroke lands.
+ */
 check(
-  "and the coordinate frame is drawn before anything is sketched",
-  lines(graphSvg) > 20,
-  String(lines(graphSvg)),
+  "and no coordinate system is drawn before anything is sketched",
+  lines(graphSvg) === 0 &&
+    graphSvg.querySelectorAll("rect").length === 0 &&
+    graphSvg.querySelectorAll("text").length === 0,
+  `${lines(graphSvg)} lines, ${graphSvg.querySelectorAll("rect").length} rects, ${graphSvg.querySelectorAll("text").length} texts`,
 );
 
 check("with no strokes yet", paths(graphSvg) === 0, String(paths(graphSvg)));
-
-/*
- * THE UNNUMBERED GRID.
- *
- * A sketch's grid is a drawing aid, so its lines and ticks are drawn and NO
- * number is printed anywhere on the canvas. The numeric system is untouched -
- * the mapping, the spacing and snapping all still use it - which is what the
- * coordinate and snap tests prove.
- */
-check(
-  "a sketch prints no numbers on its grid or axes",
-  graphSvg.querySelectorAll('[data-label="tick"]').length === 0,
-  [...graphSvg.querySelectorAll("text")].map((node) => node.textContent).join(", "),
-);
-
-check(
-  "while keeping the axis names, which are not numbers",
-  [...graphSvg.querySelectorAll('[data-label="axis-name"]')].map((node) => node.textContent).join("") ===
-    "xy",
-  [...graphSvg.querySelectorAll("text")].map((node) => node.textContent).join(", "),
-);
 
 check(
   "and no markers at grid intersections",
@@ -452,14 +434,14 @@ check(
 );
 
 check(
-  "and its frame with them",
-  lines(reopenedGraphSvg) > 20,
+  "and no coordinate system is drawn around them",
+  lines(reopenedGraphSvg) === 0,
   String(lines(reopenedGraphSvg)),
 );
 
 check(
-  "and it is still unnumbered",
-  reopenedGraphSvg.querySelectorAll('[data-label="tick"]').length === 0,
+  "and nothing is numbered",
+  reopenedGraphSvg.querySelectorAll("text").length === 0,
 );
 
 graphEditor.closeSketchEditor();

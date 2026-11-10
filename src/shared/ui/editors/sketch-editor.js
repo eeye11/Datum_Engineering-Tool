@@ -192,31 +192,7 @@ function open(options = {}) {
    * DRAWING
    * ======================================================== */
 
-  /*
-   * THE ZERO AXIS IS THE ONLY FRAME MARK.
-   *
-   * The box around the plotting area used to be drawn as a rectangle, which
-   * dressed the canvas up as a coordinate system with a visible extent. The
-   * frame is a MAPPING - the diagram's own x range and value extent - and the
-   * only line in it a student reads a value against is zero.
-   */
-  function drawFrame() {
-    const group = svgElement("g", { class: "sketch-editor-frame" });
 
-    /* The zero axis, which is the line the values are measured from. */
-    group.appendChild(
-      svgElement("line", {
-        x1: frame.left,
-        y1: frame.bottom,
-        x2: frame.right,
-        y2: frame.bottom,
-        stroke: "#8fa39d",
-        "stroke-width": 1,
-      }),
-    );
-
-    svg.appendChild(group);
-  }
 
   /* One recognised stroke, as the ink it is. */
   function drawStroke(entry, style = {}) {
@@ -266,10 +242,16 @@ function open(options = {}) {
     instruction: options.instruction || SKETCH_DEFAULT_INSTRUCTION,
   });
 
+  /*
+   * THE EDITOR SHOWS THE STUDENT'S INK AND NOTHING ELSE.
+   *
+   * No axes, no grid, no ticks, no box. The frame object stays, because it is
+   * the MAPPING that decides what value a stroke was drawn at - that arithmetic
+   * is what makes the committed geometry land where the diagram expects - but
+   * nothing is painted for it.
+   */
   function render() {
     svg.innerHTML = "";
-
-    drawFrame();
 
     session.getStrokes().forEach((entry) => drawStroke(entry));
 

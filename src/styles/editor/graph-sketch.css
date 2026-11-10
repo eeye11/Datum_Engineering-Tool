@@ -319,10 +319,7 @@
   cursor: default;
 }
 
-/* The grid, as drawn by the ordinary painter - see draw-math.js. */
-.sketch-canvas-frame line {
-  vector-effect: non-scaling-stroke;
-}
+
 
 .sketch-raw-stroke {
   pointer-events: none;

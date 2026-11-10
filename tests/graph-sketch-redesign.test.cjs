@@ -384,8 +384,8 @@ check(
 
 /* ================================================= unnumbered sketch */
 
-console.log("\nThe sketch's grid is drawn but not numbered");
-console.log("---------------------------------------------");
+console.log("\nThe sketch draws NO coordinate system at all");
+console.log("------------------------------------------------");
 
 const tickNumbers = svg.querySelectorAll('[data-label="tick"]');
 
@@ -395,10 +395,16 @@ check(
   [...tickNumbers].map((node) => node.textContent).join(", "),
 );
 
+/*
+ * NO GRID, AXES OR TICKS ARE PAINTED.
+ *
+ * The sketch plane is a blank sheet: the numbers are a mapping (a stroke still
+ * lands at the value it was drawn at), not a drawn ruled surface.
+ */
 check(
-  "there are grid lines to align against",
-  svg.querySelectorAll("line").length > 20,
-  String(svg.querySelectorAll("line").length),
+  "and no grid, axis or tick is drawn",
+  svg.querySelectorAll("line, rect").length === 0,
+  `${svg.querySelectorAll("line").length} lines, ${svg.querySelectorAll("rect").length} rects`,
 );
 
 check(
@@ -1024,15 +1030,13 @@ check(
   `${asymmetric.state.mapping.scaleX} x ${asymmetric.state.mapping.scaleY}`,
 );
 
+/*
+ * The origin is still published as a NUMBER (the mapping's own answer), but
+ * nothing is DRAWN for it: there are no axes to name.
+ */
 check(
-  "and the axis names lead both axes, off the origin's own position",
-  (() => {
-    const names = [
-      ...asymmetric.canvas.querySelectorAll('[data-label="axis-name"]'),
-    ].map((node) => node.textContent);
-
-    return names.length === 2 && names.includes("x") && names.includes("y");
-  })(),
+  "and nothing draws an axis name, because no axis is drawn",
+  asymmetric.canvas.querySelectorAll('[data-label="axis-name"]').length === 0,
 );
 
 sketchEditor.closeSketchEditor();
@@ -1046,18 +1050,13 @@ check(
 );
 
 /*
- * THE AXIS LINES ARE TAGGED, so a test asks for the axes rather than guessing
- * them from the dash pattern - the box is solid too, and counting solid lines
- * counted its four edges.
+ * The sketch paints no coordinate system anywhere, so there is nothing to draw
+ * an axis INTO - not for a zero in range and not for one out of it.
  */
-const axisLines = (canvasEl) =>
-  canvasEl.querySelectorAll('.sketch-canvas-frame line[data-graph-part="axis"]')
-    .length;
-
 check(
   "so no axis line is drawn for either zero",
-  axisLines(positive.canvas) === 0,
-  String(axisLines(positive.canvas)),
+  positive.canvas.querySelectorAll("line").length === 0,
+  String(positive.canvas.querySelectorAll("line").length),
 );
 
 sketchEditor.closeSketchEditor();

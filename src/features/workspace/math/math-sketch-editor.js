@@ -14,27 +14,25 @@
  * straightens the ones that are meant to be straight, smooths the ones that are
  * meant to be curved, and shows the result WHILE the sketch is being made.
  *
- * ONE COORDINATE SYSTEM, AND IT IS THE GRAPH'S
- * --------------------------------------------
+ * NO COORDINATE SYSTEM IS DRAWN
+ * -----------------------------
  *
- * Everything - pointer input, committed geometry, the two previews, Apply and
- * the source - is in GRAPH coordinates, the numbers a plot stores. The screen is
- * a projection of those numbers, and the projection is THE CANVAS'S OWN: the
- * editor builds a preview graph whose box is the canvas and calls
- * `enggMathModel.graphMapping` - the very function the grid, the axes, the
- * placed curves, the hit test and the source writer use. There is no second
- * positioning calculation in this file:
+ * There are no axes, no grid, no ticks and no box. The curriculum the student
+ * is working against decides what a stroke means; the editor's job is to take
+ * the ink and turn it into clean geometry, not to make them draw against a
+ * ruled plane they did not ask for.
+ *
+ * THE NUMBERS ARE STILL THERE, AS A MAPPING ONLY.
+ *
+ * Pointer input, committed geometry, the two previews, Apply and the source
+ * are all in GRAPH coordinates - the numbers a plot stores - so a stroke drawn
+ * now means the same number later. The projection is THE CANVAS'S OWN
+ * (`enggMathModel.graphMapping`, the function the placed curves, the hit test
+ * and the source writer use), and there is no second positioning calculation
+ * in this file:
  *
  *     toScreen(graphPoint)       through graphMapping(...)
  *     clientToGraph(clientX, ...) its exact inverse
- *
- * THE WHOLE CANVAS IS THE COORDINATE PLANE.
- *
- * There is no plotting rectangle inside the canvas and no margin around one:
- * xMin is the canvas's left edge, xMax its right, yMin its bottom and yMax its
- * top. So a resize changes the SCALE of the graph and nothing else, and zooming
- * into it is what "more pixels per unit" means - there is no second framing
- * layer that could disagree with the axes.
  *
  * The four numbers come from `math-graph-bounds.js`: CALCULATED from the
  * student's geometry by default (Automatic Bounds), or typed (Manual Bounds).
@@ -72,7 +70,7 @@ import enggMathModel from "./math-model.js";
 import enggMathGraphBounds from "./math-graph-bounds.js";
 import enggSketchCorrection from "./math-sketch-correction.js";
 import enggGridPlacement from "../../../shared/placement/grid-placement.js";
-import { drawMathGraph } from "../../../shared/rendering/entities/draw-math.js";
+
 import { createSvgElement } from "../../../shared/rendering/svg-primitives.js";
 import { sketchEditorMarkup } from "../../../shared/ui/editors/sketch-markup.js";
 import enggPlacementSession from "../interaction/placement-session.js";
@@ -580,48 +578,7 @@ export function openSketchEditor(graph, options = {}) {
     };
   }
 
-  /*
-   * THE GRAPH THE FRAME IS DRAWN FROM.
-   *
-   * `drawMathGraph` knows one thing about a graph: its box. This builds a box
-   * that IS the canvas - zero inset, the canvas's pixel size as its dimensions,
-   * and the bounds as its limits - so the grid, the axes and the ticks are laid
-   * out edge to edge. The stored geometry is untouched: this is a throwaway
-   * drawing frame.
-   */
-  function previewGraph() {
-    const box = canvasBox() || { width: 800, height: 520 };
-    const bounds = currentBounds();
 
-    return {
-      id: "graph-preview",
-      type: enggMathModel.MATH_PLOT_TYPE,
-      name: working.name,
-      style: { ...(working.style || {}) },
-      engineering: { ...(working.engineering || {}) },
-      geometry: {
-        ...working.geometry,
-        position: { x: 0, y: 0 },
-        width: Math.max(enggMathModel.MIN_GRAPH_SIDE, box.width),
-        height: Math.max(enggMathModel.MIN_GRAPH_SIDE, box.height),
-        xMin: bounds.xMin,
-        xMax: bounds.xMax,
-        yMin: bounds.yMin,
-        yMax: bounds.yMax,
-        yRangeExplicit: true,
-        /*
-         * NO INSET AND NO EQUAL-UNIT SQUARE IN THE EDITOR. The bounds ARE the
-         * canvas: an inner square centred in a wide canvas would leave the sides
-         * of the canvas outside the graph, which is exactly the empty margin this
-         * layout removes.
-         */
-        graphInset: { left: 0, right: 0, top: 0, bottom: 0 },
-        equalUnits: false,
-        showTickLabels: false,
-        functions: [],
-      },
-    };
-  }
 
   /*
    * PAN BY A SCREEN DISTANCE.
@@ -710,11 +667,11 @@ export function openSketchEditor(graph, options = {}) {
     }
 
     /*
-     * SNAPPING USES THE CONFIGURED NUMBERS, which is what makes an unnumbered
-     * grid still exact: the grid's lines are at multiples of the same step the
-     * snap rounds to, so a snapped point always lands on a visible line - and a
-     * graph with no spacing typed lands on the same "nice" step its lines are
-     * drawn at (`gridValues`), not on a pixel.
+     * SNAPPING USES THE CONFIGURED NUMBERS - the same step a graph's own grid
+     * uses - so a snapped point lands on a clean value rather than on a pixel.
+     * The plane draws no grid, so nothing is snapped to anything visible: this
+     * is rounding to exact numbers, which is what a student typing a value would
+     * do anyway.
      */
     return {
       x: Math.round(point.x / steps.x) * steps.x,
@@ -963,23 +920,7 @@ export function openSketchEditor(graph, options = {}) {
       : Math.max(span / 10, 1e-6);
   }
 
-  /* The frame: axes, unnumbered grid, ticks and any plotted curves. */
-  function drawFrame() {
-    const group = createSvgElement("g", { class: "sketch-canvas-frame" });
 
-    try {
-      drawMathGraph({
-        svg: group,
-        parentSvg: svg,
-        entity: previewGraph(),
-        style: working.style,
-        toScreen,
-      });
-    } catch (error) {
-      /* A frame that cannot be drawn must not take the student's ink with it. */
-      console.error("Graph frame could not be drawn", error);
-    }
-  }
 
   function drawStrokes() {
     const showRaw = view === "original" || view === "overlay";
@@ -1138,12 +1079,20 @@ export function openSketchEditor(graph, options = {}) {
     svg.appendChild(layer);
   }
 
+  /*
+   * THE SKETCH IS THE STUDENT'S INK, AND NOTHING ELSE.
+   *
+   * There is NO coordinate system drawn here: no axes, no grid, no ticks, no
+   * box. The graph's limits remain the MAPPING that turns a pointer position
+   * into the number a point is stored at - that arithmetic is what makes a
+   * stroke land where the student drew it - but the plane is a blank sheet, so
+   * the only thing on it is what was drawn.
+   */
   function draw() {
     sizeCanvas();
 
     svg.textContent = "";
 
-    drawFrame();
     drawStrokes();
     drawHandles();
   }
