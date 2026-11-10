@@ -32,7 +32,7 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDiagramEquations from "../model/analysis/diagram-equations.js";
 import enggPlotEditor from "../../../shared/ui/editors/plot-editor.js";
-import enggSketchEditor from "../../../shared/ui/editors/sketch-editor.js";
+import enggAnalysisSketchBridge from "./analysis-sketch-bridge.js";
 import enggPlacementSession from "../interaction/placement-session.js";
 import enggGridPlacement from "../../../shared/placement/grid-placement.js";
 import { renderCurrentDrawing } from "../../../components/layout/workspace/canvas-render.js";
@@ -194,27 +194,30 @@ function openPlotEditorFor(object, geometry) {
  * previous sketch back.
  */
 function openSketchEditorFor(object, geometry) {
-    const editor = enggSketchEditor;
-
-    if (!editor) {
-        return false;
-    }
-
+    /*
+     * THE UNIFIED WORKSPACE IS THE STATICS SKETCH EDITOR TOO.
+     *
+     * Every sketch tool opens the same editor, so the point system, the
+     * correction and the source are the same in all of them. What is specific to
+     * a diagram is the COMMIT, which the bridge supplies.
+     */
     const before = enggDrawingState.snapshotDrawing(drawingState);
 
     const existing = sketchStrokesOf(object).map(stroke => ({
         id: stroke.id,
-        kind: stroke.type === "line" ? "straight" : "curved",
+        type: stroke.type === "line" ? "line" : "curve",
+        name: stroke.name,
         points: strokePointsOf(stroke),
-        original: strokePointsOf(stroke)
+        segments: stroke.geometry?.segments || [],
+        style: stroke.style,
+        appearance: stroke.style
+            ? { colour: stroke.style.stroke, thickness: stroke.style.width }
+            : undefined
     }));
 
-    editor.open({
+    enggAnalysisSketchBridge.openDiagramSketch({
         title: `${enggDiagramEquations.titleFor(geometry.diagramType)} - Sketch`,
-        range: geometry.localRange,
-        yRange: Number(geometry.yRange) || Number(geometry.unitHeight) || 0,
-        yUnit: "",
-        elements: existing,
+        strokes: existing,
 
         /*
          * APPLY HANDS THE STROKES TO THE PLACEMENT, IT DOES NOT COMMIT THEM.
@@ -225,7 +228,16 @@ function openSketchEditorFor(object, geometry) {
          * coordinate axes of its own, so it is placed by its bounding box with
          * ordinary grid snapping - no origin is invented for it.
          */
-        onApply: elements => {
+        /*
+         * APPLY HANDS THE STROKES TO THE PLACEMENT, IT DOES NOT COMMIT THEM.
+         *
+         * The sketch is finished, but its POSITION is still the student's to
+         * choose - so the workspace closes, the strokes follow the cursor, and
+         * the click on the page is what commits them. A diagram's sketch has no
+         * coordinate axes of its own, so it is placed by its bounding box with
+         * ordinary grid snapping - no origin is invented for it.
+         */
+        onPlace: ({ elements }) => {
             enggPlacementSession.beginPlacement(
                 {
                     strokes: elements.map(element => ({

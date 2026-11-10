@@ -25,14 +25,20 @@
  * the renderer would have to learn.
  */
 
-import { normaliseAppearance, resolveColour } from "../../../shared/sketch/sketch-appearance.js";
+import {
+  normaliseAppearance,
+  resolveColour,
+} from "../../../shared/sketch/sketch-appearance.js";
 
 /* The strokes a plot draws, from the workspace's geometry. */
 export function strokesFromGeometry(geometry = []) {
   return (Array.isArray(geometry) ? geometry : [])
     .filter((element) => element && element.visible !== false)
     .map((element) => ({
-      points: (element.points || []).map((point) => ({ x: point.x, y: point.y })),
+      points: (element.points || []).map((point) => ({
+        x: point.x,
+        y: point.y,
+      })),
       segments: Array.isArray(element.segments) ? element.segments : [],
       closed: Boolean(element.closed) || element.kind === "circle",
       correction: element.correction || null,
@@ -77,12 +83,13 @@ export function styleFromGeometry(geometry = [], themeInk = "#000000") {
 
   const appearance = normaliseAppearance(first?.appearance);
 
-  const thickness = {
-    thin: 0.6,
-    normal: 1.2,
-    bold: 2,
-    heavy: 3,
-  }[appearance.thickness] || 1.2;
+  const thickness =
+    {
+      thin: 0.6,
+      normal: 1.2,
+      bold: 2,
+      heavy: 3,
+    }[appearance.thickness] || 1.2;
 
   return {
     stroke: resolveColour(appearance, themeInk),
@@ -100,10 +107,15 @@ export function styleFromGeometry(geometry = [], themeInk = "#000000") {
  * `geometry` is the placed box in drawing units; the strokes are the model
  * geometry the workspace produced, already transformed by the placement.
  */
-export function sketchResultFromWorkspace(placed, { title = "Sketch", themeInk = "#000000" } = {}) {
+export function sketchResultFromWorkspace(
+  placed,
+  { title = "Sketch", themeInk = "#000000" } = {},
+) {
   const transform = placed?.transform || { x: 0, y: 0, rotation: 0, scale: 1 };
 
   const strokes = strokesFromGeometry(placed?.geometry || []);
+
+  const extent = boundsOf(strokes);
 
   return {
     name: title,
@@ -112,15 +124,26 @@ export function sketchResultFromWorkspace(placed, { title = "Sketch", themeInk =
     style: styleFromGeometry(placed?.geometry || [], themeInk),
     appearance: placed?.appearance || null,
     /*
-     * THE BOX IS THE SKETCH'S OWN EXTENT, in drawing units. It is what the
-     * commit gives the plot, and it is derived from the geometry rather than
-     * assumed, so a small sketch is not committed inside a large empty box.
+     * THE BOX SITS WHERE THE INK IS.
+     *
+     * The strokes keep their own model coordinates - a curve drawn through the
+     * sketch origin has negative coordinates on one side - so the plot's box
+     * must be positioned at the stroke's own MINIMUM corner, not at (0, 0).
+     * Anchoring it at the origin put the box above and to the right of the
+     * drawing, which is why a small curve landed inside a large empty box with
+     * its ink stranded near the top edge.
+     *
+     * The transform is added on top, so a placed sketch's box and its ink move
+     * together.
      */
     geometry: {
       mode: "sketch",
-      position: { x: transform.x || 0, y: transform.y || 0 },
-      width: boundsOf(strokes).width,
-      height: boundsOf(strokes).height,
+      position: {
+        x: (transform.x || 0) + extent.x,
+        y: (transform.y || 0) + extent.y,
+      },
+      width: extent.width,
+      height: extent.height,
       showXAxis: false,
       showYAxis: false,
       showGrid: false,

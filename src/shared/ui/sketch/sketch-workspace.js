@@ -105,6 +105,10 @@ import { adapterFor, pointOnGeometry } from "../../sketch/sketch-geometry-adapte
 import { generateSource } from "../../sketch/sketch-source.js";
 import { parseSource, applyParsedSource } from "../../sketch/sketch-source-parser.js";
 import { alignTransform, placementPackage } from "../../sketch/sketch-placement.js";
+import { migrateSketch } from "../../sketch/sketch-migrate.js";
+
+/* The one arrowhead every axis uses, so the two cannot drift apart. */
+const AXIS_ARROW_ID = "sketch-axis-arrow";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -168,7 +172,22 @@ export function openSketchWorkspace(options = {}) {
   const divider = $("[data-sketch-divider]");
 
   /* ---- state ---- */
-  let document_ = options.document || createSketchDocument(options.initial || {});
+  /*
+   * A SAVED SKETCH IS MIGRATED BEFORE IT IS SHOWN.
+   *
+   * A document written by an older build may still carry points this build no
+   * longer has - a shape guide, say. Opening it without migrating would draw
+   * a point that cannot be selected or edited, so the migration runs first and
+   * reports what it did; the drawing itself is untouched.
+   */
+  const opening = options.document || options.initial || {};
+
+  const migrated = migrateSketch(opening);
+
+  let document_ = options.document
+    ? migrated.document
+    : createSketchDocument(migrated.document);
+
   let history = createHistory(document_);
 
   let tool = "draw";
@@ -186,7 +205,6 @@ export function openSketchWorkspace(options = {}) {
     showOriginal: true,
   };
   let lastCorrection = null;
-  let placement = null;
   let snapIndicator = null;
   let closed = false;
 
@@ -374,13 +392,118 @@ export function openSketchWorkspace(options = {}) {
       });
     }
 
-    /* The axes, through zero, only when zero is in view. */
+    /*
+     * THE AXES, THROUGH ZERO, WITH AN ARROWHEAD AT THE POSITIVE END.
+     *
+     * An engineering axis is drawn as a ray, not a segment: the arrow says which
+     * way the numbers grow. It is a MARKER, defined once and reused, so the two
+     * axes cannot end up with different arrowheads.
+     */
+    const marker = createSvg("marker", {
+      id: AXIS_ARROW_ID,
+      viewBox: "0 0 10 10",
+      refX: 9,
+      refY: 5,
+      markerWidth: 7,
+      markerHeight: 7,
+      orient: "auto-start-reverse",
+      markerUnits: "strokeWidth",
+    });
+
+    marker.appendChild(
+      createSvg("path", {
+        d: "M 0 0 L 10 5 L 0 10 z",
+        class: "sketch-axis-arrow",
+      }),
+    );
+
+    const defs = createSvg("defs");
+
+    defs.appendChild(marker);
+    layer.appendChild(defs);
+
+    const axisLine = (from, to, className) => {
+      const a = viewportToScreen(from, viewport);
+      const b = viewportToScreen(to, viewport);
+
+      layer.appendChild(
+        createSvg("line", {
+          x1: a.x,
+          y1: a.y,
+          x2: b.x,
+          y2: b.y,
+          class: className,
+          "marker-end": `url(#${AXIS_ARROW_ID})`,
+          "vector-effect": "non-scaling-stroke",
+        }),
+      );
+    };
+
     if (grid.showXAxis && visible.yMin <= 0 && visible.yMax >= 0) {
-      line({ x: visible.xMin, y: 0 }, { x: visible.xMax, y: 0 }, "sketch-axis-x", null);
+      axisLine({ x: visible.xMin, y: 0 }, { x: visible.xMax, y: 0 }, "sketch-axis-x");
     }
 
     if (grid.showYAxis && visible.xMin <= 0 && visible.xMax >= 0) {
-      line({ x: 0, y: visible.yMin }, { x: 0, y: visible.yMax }, "sketch-axis-y", null);
+      axisLine({ x: 0, y: visible.yMin }, { x: 0, y: visible.yMax }, "sketch-axis-y");
+    }
+
+    /*
+     * THE AXIS LABELS, INSIDE THE VIEW.
+     *
+     * The label sits just back from the arrow, INSIDE the canvas - not past it.
+     * Placing it beyond the arrow put the `x` outside the drawing area, where it
+     * was clipped and never seen, and put the `y` above the top edge, where it
+     * vanished altogether.
+     *
+     * So the x label hangs to the LEFT of the horizontal arrow's tip and the y
+     * label sits just BELOW the vertical arrow's tip, both anchored so the text
+     * grows away from the arrow rather than over it. The text is the student's
+     * own if they named the axes (a displacement graph writes `t`), and
+     * defaults to x and y.
+     */
+    if (grid.showAxisLabels) {
+      if (grid.showXAxis && visible.yMin <= 0 && visible.yMax >= 0) {
+        const xAt = viewportToScreen({ x: visible.xMax, y: 0 }, viewport);
+
+        const label = createSvg("text", {
+          x: Math.min(xAt.x - 10, viewport.width - 6),
+          y: xAt.y - 8,
+          class: "sketch-axis-label",
+          "text-anchor": "end",
+        });
+
+        label.textContent = grid.xAxisLabel || "x";
+        layer.appendChild(label);
+      }
+
+      if (grid.showYAxis && visible.xMin <= 0 && visible.xMax >= 0) {
+        const yAt = viewportToScreen({ x: 0, y: visible.yMax }, viewport);
+
+        const label = createSvg("text", {
+          x: yAt.x + 10,
+          y: Math.max(yAt.y + 20, 16),
+          class: "sketch-axis-label",
+          "text-anchor": "start",
+        });
+
+        label.textContent = grid.yAxisLabel || "y";
+        layer.appendChild(label);
+      }
+    }
+
+    /* The origin, when asked for: a small ring where the axes cross. */
+    if (grid.showOrigin && visible.xMin <= 0 && visible.xMax >= 0 && visible.yMin <= 0 && visible.yMax >= 0) {
+      const at = viewportToScreen({ x: 0, y: 0 }, viewport);
+
+      layer.appendChild(
+        createSvg("circle", {
+          cx: at.x,
+          cy: at.y,
+          r: 3.5,
+          class: "sketch-axis-origin",
+          "vector-effect": "non-scaling-stroke",
+        }),
+      );
     }
 
     if (grid.showTicks) {
@@ -557,21 +680,6 @@ export function openSketchWorkspace(options = {}) {
       );
     }
 
-    /* The placement preview, attached to the pointer. */
-    if (placement) {
-      const preview = placementPackage(document_, placement.transform, { include: {} });
-
-      preview.geometry.forEach((element) => {
-        const node = renderGeometry([element], {
-          toScreen: (point) => viewportToScreen(point, viewport),
-          modelScale: viewport.scale,
-          themeInk: themeInk(),
-        });
-
-        node.setAttribute("class", "sketch-aid-placement-preview");
-        layer.appendChild(node);
-      });
-    }
   }
 
   /* ========================================================
@@ -952,7 +1060,20 @@ export function openSketchWorkspace(options = {}) {
     set("showXAxis", grid.showXAxis);
     set("showYAxis", grid.showYAxis);
     set("showOrigin", grid.showOrigin);
+    set("showAxisLabels", grid.showAxisLabels);
     set("showMajorGrid", grid.showMajorGrid);
+
+    /* The label boxes show the current names, unless the student is typing. */
+    const xLabel = $("[data-sketch-axis-label=\"x\"]");
+    const yLabel = $("[data-sketch-axis-label=\"y\"]");
+
+    if (xLabel && document.activeElement !== xLabel) {
+      xLabel.value = grid.xAxisLabel || "x";
+    }
+
+    if (yLabel && document.activeElement !== yLabel) {
+      yLabel.value = grid.yAxisLabel || "y";
+    }
     set("showMinorGrid", grid.showMinorGrid);
     set("showTickLabels", grid.showTickLabels);
     set("showTicks", grid.showTicks);
@@ -1000,9 +1121,20 @@ export function openSketchWorkspace(options = {}) {
     }
 
     if (zoom) {
+      /*
+       * ZOOM IS SHOWN AGAINST THE FIT VIEW, AS A PERCENTAGE.
+       *
+       * "163 px/unit" is an accurate number and a useless one: it says nothing
+       * about whether the student is zoomed in or out. 100% is the view that
+       * holds the whole sketch, so 200% means twice that and 50% half - which
+       * is the reading every drawing application has taught.
+       */
       const viewport = currentViewport();
+      const fitted = fitScale();
 
-      zoom.textContent = `${Math.round(viewport.scale * 100) / 100} px/unit`;
+      const percent = fitted > 0 ? (viewport.scale / fitted) * 100 : 100;
+
+      zoom.textContent = `${Math.round(percent)}%`;
     }
   }
 
@@ -1124,12 +1256,6 @@ export function openSketchWorkspace(options = {}) {
 
     const model = pointerModel(event);
 
-    /* Placement mode: a click confirms the insertion. */
-    if (placement) {
-      confirmPlacement(model);
-      return;
-    }
-
     if (tool === "point") {
       const hit = nearestGeometry(model);
 
@@ -1222,13 +1348,39 @@ export function openSketchWorkspace(options = {}) {
       return;
     }
 
-    /* Draw. */
-    const start = snapped(model);
-
-    stroke = { points: [{ x: start.x, y: start.y }] };
+    /*
+     * DRAW, FROM WHERE THE POINTER IS.
+     *
+     * The stroke starts at the click, unsnapped - see the note in pointermove:
+     * the stroke is the fitting reference, so every sample of it is the model
+     * position the pointer was at.
+     */
+    stroke = { points: [{ x: model.x, y: model.y }] };
     drag = { kind: "stroke" };
     render();
   });
+
+  /*
+   * THE WHEEL ZOOMS ABOUT THE POINTER.
+   *
+   * The coordinate under the cursor stays under the cursor, which is what makes
+   * a wheel-zoom feel like a magnifier rather than a jump. Ctrl+wheel is what a
+   * trackpad sends for a pinch, and a plain wheel is what a mouse sends; both
+   * zoom here, because the sketch canvas has no scrolling of its own to want
+   * the wheel for.
+   */
+  svg.addEventListener(
+    "wheel",
+    (event) => {
+      event.preventDefault();
+
+      const step = event.deltaY * 0.0015;
+      const factor = Math.min(2.5, Math.max(0.4, Math.exp(step)));
+
+      zoomAround(factor, event.clientX, event.clientY);
+    },
+    { passive: false },
+  );
 
   svg.addEventListener("pointermove", (event) => {
     const model = pointerModel(event);
@@ -1242,7 +1394,7 @@ export function openSketchWorkspace(options = {}) {
      * disappears when the pointer is too far from any candidate, rather than
      * pretending a snap is available.
      */
-    if (tool === "point" && !drag && !placement) {
+    if (tool === "point" && !drag) {
       const at = snapped(model);
 
       snapIndicator = at.snapped ? { x: at.x, y: at.y, kind: at.kind } : null;
@@ -1250,19 +1402,6 @@ export function openSketchWorkspace(options = {}) {
     } else if (snapIndicator) {
       snapIndicator = null;
       renderCanvas();
-    }
-
-    if (placement) {
-      placement = {
-        ...placement,
-        transform: alignTransform(placement.anchor, model, {
-          rotation: placement.rotation,
-          scale: placement.scale,
-        }),
-      };
-
-      renderCanvas();
-      return;
     }
 
     if (!drag) {
@@ -1283,7 +1422,20 @@ export function openSketchWorkspace(options = {}) {
     }
 
     if (drag.kind === "stroke" && stroke) {
-      const at = snapped(model);
+      /*
+       * A DRAWN STROKE IS NOT SNAPPED.
+       *
+       * Snapping the freehand samples to the grid turned a smooth curve into a
+       * staircase of half-unit steps - and the corner detector then found a real
+       * turn at every step, so one arc came back as a composite of several
+       * pieces. The stroke is the FITTING REFERENCE: it has to carry the actual
+       * shape the student drew, tremor included, because that is what the fit
+       * reads to decide what the shape is.
+       *
+       * Snapping belongs to the tools that PLACE something - a point, a dragged
+       * anchor - not to the one that traces.
+       */
+      const at = model;
       const last = stroke.points[stroke.points.length - 1];
 
       if (Math.hypot(at.x - last.x, at.y - last.y) > 0.01) {
@@ -1377,12 +1529,22 @@ export function openSketchWorkspace(options = {}) {
    * ======================================================== */
 
   /*
-   * PLACE SKETCH IS AN EXPLICIT STEP.
+   * PLACE SKETCH HANDS THE SKETCH TO THE DRAWING.
    *
    * Nothing is inserted because the student finished drawing or changed a
-   * setting. The button validates the sketch, enters placement mode, and the
-   * next click on the canvas confirms - which is the only moment geometry
-   * leaves the editor.
+   * setting - the button is the explicit step. But the POSITION is chosen on the
+   * MAIN canvas, not on this one: the sketch belongs on the sheet, and that is
+   * where the student places it.
+   *
+   * There used to be a second placement mode here, inside the editor, which
+   * asked for a click on the sketch's own canvas first and then started the main
+   * canvas's placement on top of it. Two modes, one of them meaningless, and the
+   * click that was meant to confirm the first was read as the second's pointer
+   * move - so nothing was ever committed.
+   *
+   * Now there is one placement: this button closes the editor and hands the
+   * geometry to the drawing, where `onPlace` starts the placement session the
+   * student already knows from every other tool.
    */
   function beginPlacement() {
     if (!document_.geometry.length) {
@@ -1391,31 +1553,23 @@ export function openSketchWorkspace(options = {}) {
       return;
     }
 
+    /* The sketch goes to the drawing exactly as it stands, at the origin. */
+    confirmPlacement({ x: 0, y: 0 });
+  }
+
+  function confirmPlacement(target) {
     const resolved = resolvePoints(document_.points);
 
     const anchor = resolved[0]?.absolute || { x: 0, y: 0 };
 
-    placement = {
-      anchor,
-      rotation: 0,
-      scale: 1,
-      transform: alignTransform(anchor, anchor),
-    };
-
-    setStatus("Click on the canvas to place the sketch.");
-
-    renderCanvas();
-  }
-
-  function confirmPlacement(model) {
-    if (!placement) {
-      return;
-    }
-
-    const transform = alignTransform(placement.anchor, model, {
-      rotation: placement.rotation,
-      scale: placement.scale,
-    });
+    /*
+     * THE SKETCH KEEPS ITS OWN COORDINATES.
+     *
+     * The transform is the IDENTITY - the main canvas's placement session is
+     * what moves the geometry under the cursor, and it does that with its own
+     * transform. Translating here as well would move the sketch twice.
+     */
+    const transform = alignTransform(anchor, target || anchor);
 
     const include = {
       axes: Boolean($('[data-sketch-toggle="outAxes"]')?.checked),
@@ -1428,8 +1582,6 @@ export function openSketchWorkspace(options = {}) {
 
     const placed = placementPackage(document_, transform, { include });
 
-    placement = null;
-
     const result = {
       ...placed,
       document: document_,
@@ -1437,10 +1589,23 @@ export function openSketchWorkspace(options = {}) {
       transform,
     };
 
+    /*
+     * THE EDITOR CLOSES BEFORE THE COMMIT HANDLER RUNS.
+     *
+     * `onPlace` starts the MAIN canvas's placement session, and that session
+     * renders the drawing and waits for the next click on the page. Called
+     * while this overlay was still mounted, the handler's render happened under
+     * a full-screen modal: the session was created correctly, but the click
+     * that was meant to confirm it landed on the overlay instead of the canvas,
+     * and nothing was ever committed.
+     *
+     * Removing the overlay first means the handler runs against the page the
+     * student can actually click.
+     */
+    close();
+
     options.onPlace?.(result);
     options.onApply?.(result);
-
-    closeWorkspace();
   }
 
   /* ========================================================
@@ -1961,6 +2126,27 @@ export function openSketchWorkspace(options = {}) {
 
   $("[data-sketch-fit-bounds]")?.addEventListener("click", fitToGeometry);
 
+  /*
+   * THE AXIS LABELS ARE TEXT, NOT A NUMBER, so they are committed as they are
+   * typed - there is nothing half-built about a letter.
+   */
+  $$("[data-sketch-axis-label]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const axis = input.dataset.sketchAxisLabel;
+
+      apply(
+        setGrid(document_, {
+          [axis === "x" ? "xAxisLabel" : "yAxisLabel"]: input.value,
+        }),
+      );
+    });
+  });
+
+  /* ---- zoom controls ---- */
+  $("[data-sketch-zoom-in]")?.addEventListener("click", () => zoomBy(1 / 1.25));
+  $("[data-sketch-zoom-out]")?.addEventListener("click", () => zoomBy(1.25));
+  $("[data-sketch-zoom]")?.addEventListener("click", fitToGeometry);
+
   /* ---- keyboard ---- */
   dialog.addEventListener("keydown", (event) => {
     const inField = ["INPUT", "SELECT", "TEXTAREA"].includes(event.target?.tagName);
@@ -1974,12 +2160,7 @@ export function openSketchWorkspace(options = {}) {
     if (event.key === "Escape") {
       event.preventDefault();
 
-      if (placement) {
-        placement = null;
-        setStatus("Placement cancelled.");
-        renderCanvas();
-        return;
-      }
+
 
       if (inField) {
         event.target.blur();
@@ -1992,6 +2173,31 @@ export function openSketchWorkspace(options = {}) {
     }
 
     if (inField) {
+      return;
+    }
+
+    /*
+     * ZOOM FROM THE KEYBOARD, for a student without a wheel.
+     *
+     * `+` and `-` zoom about the centre of the view, and `0` fits the content
+     * again. They are checked before the tool shortcuts, because a plain `-` is
+     * not a tool key and would otherwise fall through.
+     */
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomBy(1 / 1.25);
+      return;
+    }
+
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      zoomBy(1.25);
+      return;
+    }
+
+    if (event.key === "0") {
+      event.preventDefault();
+      fitToGeometry();
       return;
     }
 
@@ -2071,6 +2277,27 @@ export function openSketchWorkspace(options = {}) {
     return setBounds(document_, withOriginInView(boundsOfPoints(points)), "auto");
   }
 
+  /* The scale of the view that would fit the whole sketch - the 100% mark. */
+  function fitScale() {
+    const points = geometryExtent();
+
+    const bounds = points.length
+      ? withOriginInView(boundsOfPoints(points))
+      : document_.bounds;
+
+    const size = canvasSize();
+
+    const fitted = createViewport({
+      bounds,
+      width: size.width,
+      height: size.height,
+      equal: document_.grid.equalScale !== false,
+      padding: 8,
+    });
+
+    return fitted.scale;
+  }
+
   function fitToGeometry() {
     const points = geometryExtent();
 
@@ -2079,6 +2306,57 @@ export function openSketchWorkspace(options = {}) {
     }
 
     apply(setBounds(document_, withOriginInView(boundsOfPoints(points)), "auto"));
+  }
+
+  /*
+   * ZOOM - THE VIEW CHANGES, THE GEOMETRY DOES NOT.
+   *
+   * Zooming is a change of BOUNDS: the range shrinks (zoom in) or grows (zoom
+   * out) about a fixed point, and every stored coordinate stays exactly where
+   * it was. That is the whole reason the viewport is derived from the bounds
+   * rather than stored alongside the geometry - a zoom cannot reach a point.
+   *
+   * It is also a change to the VIEW, not to the document, so it is not a
+   * history step: undoing a zoom would be undoing something the student never
+   * edited. Turning Automatic Bounds off first is what makes the zoom remain - 
+   * otherwise the next geometry change would refit and undo it.
+   */
+  function zoomBy(factor, anchor = null) {
+    if (!(factor > 0)) {
+      return;
+    }
+
+    const bounds = document_.bounds;
+
+    const centre = anchor || {
+      x: (bounds.xMin + bounds.xMax) / 2,
+      y: (bounds.yMin + bounds.yMax) / 2,
+    };
+
+    const next = {
+      xMin: centre.x + (bounds.xMin - centre.x) * factor,
+      xMax: centre.x + (bounds.xMax - centre.x) * factor,
+      yMin: centre.y + (bounds.yMin - centre.y) * factor,
+      yMax: centre.y + (bounds.yMax - centre.y) * factor,
+    };
+
+    /*
+     * A ZOOM IS A FIXED VIEW.
+     *
+     * Zooming while Automatic Bounds is on would be undone by the very next
+     * edit, because an automatic range follows the geometry. So zooming
+     * switches to the fixed range the student has just chosen - which is what
+     * they asked for by zooming - and Fit to content returns to automatic.
+     */
+    apply(setBounds(document_, next, "manual"), { refit: false });
+  }
+
+  function zoomAround(factor, clientX, clientY) {
+    const rect = svg.getBoundingClientRect();
+
+    const anchor = toModel({ x: clientX - rect.left, y: clientY - rect.top });
+
+    zoomBy(factor, anchor);
   }
 
   /* ========================================================
@@ -2101,6 +2379,8 @@ export function openSketchWorkspace(options = {}) {
 
   const api = {
     close,
+    /* What the migration changed on open - empty for a new document. */
+    migration: { changes: migrated.changes, migrated: migrated.migrated },
     getDocument: () => document_,
     getSource: (include) => generateSource(document_, { include }),
     applySource: (text) => {
@@ -2119,6 +2399,15 @@ export function openSketchWorkspace(options = {}) {
     fit: fitToGeometry,
     beginPlacement,
     isOpen: () => !closed,
+    /* Zoom is a view change: the same call the wheel and the buttons use. */
+    zoomIn: () => zoomBy(1 / 1.25),
+    zoomOut: () => zoomBy(1.25),
+    zoomBy,
+    zoomPercent: () => {
+      const fitted = fitScale();
+
+      return fitted > 0 ? Math.round((currentViewport().scale / fitted) * 100) : 100;
+    },
   };
 
   openWorkspace = api;

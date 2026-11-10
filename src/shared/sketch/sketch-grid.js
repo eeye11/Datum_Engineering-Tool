@@ -32,7 +32,15 @@ const DEFAULT_GRID = Object.freeze({
   showXAxis: true,
   showYAxis: true,
   showOrigin: true,
-  showAxisLabels: false,
+
+  /*
+   * THE AXES ARE LABELLED BY DEFAULT.
+   *
+   * An axis without a label is a line; an axis with one says what it measures.
+   * The arrow already shows the direction, and the letter names the quantity -
+   * together they are what makes the plane readable at a glance.
+   */
+  showAxisLabels: true,
 
   /*
    * THE AXIS LABELS ARE THEIR OWN TEXT, not a fixed "x" and "y". A student

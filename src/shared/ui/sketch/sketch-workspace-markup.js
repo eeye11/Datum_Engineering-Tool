@@ -195,6 +195,7 @@ function axesGridBody() {
     <div class="sketch-checks">
       ${checkbox("showXAxis", "X axis", { checked: true })}
       ${checkbox("showYAxis", "Y axis", { checked: true })}
+      ${checkbox("showAxisLabels", "Axis labels", { checked: true })}
       ${checkbox("showOrigin", "Origin", { checked: true })}
       ${checkbox("showMajorGrid", "Major grid", { checked: true })}
       ${checkbox("showMinorGrid", "Minor grid")}
@@ -208,7 +209,18 @@ function axesGridBody() {
     </div>
 
     <details class="sketch-advanced">
-      <summary>Tick intervals and formatting</summary>
+      <summary>Axis labels and tick intervals</summary>
+
+      <div class="sketch-field-grid">
+        <label class="sketch-field">
+          <span class="sketch-field-label">X label</span>
+          <input type="text" data-sketch-axis-label="x" value="x" aria-label="X axis label" maxlength="6">
+        </label>
+        <label class="sketch-field">
+          <span class="sketch-field-label">Y label</span>
+          <input type="text" data-sketch-axis-label="y" value="y" aria-label="Y axis label" maxlength="6">
+        </label>
+      </div>
 
       <div class="sketch-field-grid">
         ${numberField("majorX", "Major X", { step: "any" })}
@@ -337,7 +349,14 @@ export function sketchWorkspaceMarkup(options = {}) {
     <footer class="sketch-ws-footer">
       <span class="sketch-ws-status" data-sketch-status>Ready</span>
       <span class="sketch-ws-counts" data-sketch-counts></span>
-      <span class="sketch-ws-zoom" data-sketch-zoom></span>
+      <span class="sketch-ws-zoom">
+        <button type="button" class="sketch-ws-zoom-button" data-sketch-zoom-out
+            title="Zoom out" aria-label="Zoom out">&minus;</button>
+        <button type="button" class="sketch-ws-zoom-value" data-sketch-zoom
+            title="Fit to content" aria-label="Zoom level - click to fit"></button>
+        <button type="button" class="sketch-ws-zoom-button" data-sketch-zoom-in
+            title="Zoom in" aria-label="Zoom in">+</button>
+      </span>
       <span class="sketch-ws-spacer"></span>
       <span class="sketch-ws-hint" data-sketch-hint></span>
       <button type="button" class="sketch-ws-button" data-sketch-close>Cancel</button>

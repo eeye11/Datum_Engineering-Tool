@@ -702,6 +702,33 @@
   font-family: Arial, sans-serif;
 }
 
+/*
+ * THE AXIS ARROW, THE AXIS LETTER AND THE ORIGIN RING.
+ *
+ * The arrow is drawn in the axis colour and takes its size from the stroke's
+ * own width (`markerUnits: strokeWidth`), so it stays proportional at any zoom
+ * without a second size to maintain. The letter is deliberately larger than a
+ * tick number: it names the axis rather than annotating a point on it.
+ */
+.sketch-axis-arrow {
+  fill: var(--datum-axis, rgba(0, 0, 0, 0.55));
+}
+
+.sketch-axis-label {
+  fill: var(--datum-ink);
+  font-size: 13px;
+  font-style: italic;
+  font-family: Georgia, "Times New Roman", serif;
+  user-select: none;
+  pointer-events: none;
+}
+
+.sketch-axis-origin {
+  fill: var(--datum-canvas);
+  stroke: var(--datum-axis, rgba(0, 0, 0, 0.55));
+  stroke-width: 1.2;
+}
+
 /* ---- editing aids: never exported, never part of the drawing ---- */
 
 .sketch-aid-guide-line {
@@ -800,6 +827,51 @@
 .sketch-ws-counts,
 .sketch-ws-correction {
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * THE ZOOM CONTROL.
+ *
+ * A minus, the current level, a plus. The level is itself a button - clicking
+ * it fits the content again - so the way back from an accidental zoom is the
+ * number the student is already looking at.
+ */
+.sketch-ws-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+
+  border: 1px solid var(--datum-border);
+  border-radius: 4px;
+  background: var(--datum-surface);
+  overflow: hidden;
+}
+
+.sketch-ws-zoom-button,
+.sketch-ws-zoom-value {
+  height: 22px;
+  padding: 0 7px;
+
+  background: none;
+  border: 0;
+
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--datum-ink);
+  cursor: pointer;
+}
+
+.sketch-ws-zoom-button:hover,
+.sketch-ws-zoom-value:hover {
+  background: var(--datum-hover, rgba(0, 0, 0, 0.06));
+  color: var(--datum-green);
+}
+
+.sketch-ws-zoom-value {
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--datum-muted);
 }
 
 .sketch-ws-spacer {

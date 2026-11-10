@@ -389,12 +389,40 @@ export function openSketchEditor(graph, options = {}) {
    * sketch then reads against them however far into a corner the drawing goes.
    */
   function withOriginInView(bounds) {
-    return {
+    /*
+     * ONE SPAN, ONE AXIS: A FITTED RANGE MUST NOT COLLAPSE.
+     *
+     * Widening to (0, 0) is right when the ink is in one quadrant - the axes
+     * stay on the sheet. It is WRONG for a sketch that lies entirely on an
+     * axis, or that has one point: `Math.min(bounds.xMax, 0)` and
+     * `Math.max(bounds.xMin, 0)` both answer 0 for `xMin = xMax = 0`, so the
+     * span becomes zero and every coordinate divided by it comes out infinite.
+     *
+     * The upstream calculation already guarantees a non-degenerate range; this
+     * keeps it that way after the widening, by giving a collapsed axis a small
+     * symmetric span about zero. With a range that was not collapsed the result
+     * is unchanged.
+     */
+    const widened = {
       xMin: Math.min(bounds.xMin, 0),
       xMax: Math.max(bounds.xMax, 0),
       yMin: Math.min(bounds.yMin, 0),
       yMax: Math.max(bounds.yMax, 0),
     };
+
+    const smallestSpan = 1e-9;
+
+    if (widened.xMax - widened.xMin < smallestSpan) {
+      widened.xMin = -1;
+      widened.xMax = 1;
+    }
+
+    if (widened.yMax - widened.yMin < smallestSpan) {
+      widened.yMin = -1;
+      widened.yMax = 1;
+    }
+
+    return widened;
   }
 
   function refitBounds() {
