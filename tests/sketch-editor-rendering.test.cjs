@@ -274,16 +274,23 @@ graph.__datumSketch.refresh();
 check("it opens with a drawing surface", Boolean(graphSvg));
 
 /*
- * NO COORDINATE SYSTEM IS DRAWN: no axes, no grid, no ticks, no box, and
- * therefore no numbers or axis names either. The plane is a blank sheet, and
- * the numbers survive only as the mapping that decides where a stroke lands.
+ * TWO BARE AXES: x and y through zero, so a sketch can be oriented. No grid,
+ * no ticks, no numbers, no box - the rest of the coordinate system survives
+ * only as the mapping that decides where a stroke lands.
  */
 check(
-  "and no coordinate system is drawn before anything is sketched",
-  lines(graphSvg) === 0 &&
-    graphSvg.querySelectorAll("rect").length === 0 &&
+  "and two bare axes are drawn before anything is sketched",
+  graphSvg.querySelectorAll('[data-sketch-axis="x"]').length === 1 &&
+    graphSvg.querySelectorAll('[data-sketch-axis="y"]').length === 1 &&
+    lines(graphSvg) === 2,
+  `${lines(graphSvg)} lines`,
+);
+
+check(
+  "with no grid, box or numbers",
+  graphSvg.querySelectorAll("rect").length === 0 &&
     graphSvg.querySelectorAll("text").length === 0,
-  `${lines(graphSvg)} lines, ${graphSvg.querySelectorAll("rect").length} rects, ${graphSvg.querySelectorAll("text").length} texts`,
+  `${graphSvg.querySelectorAll("rect").length} rects, ${graphSvg.querySelectorAll("text").length} texts`,
 );
 
 check("with no strokes yet", paths(graphSvg) === 0, String(paths(graphSvg)));
@@ -434,9 +441,10 @@ check(
 );
 
 check(
-  "and no coordinate system is drawn around them",
-  lines(reopenedGraphSvg) === 0,
-  String(lines(reopenedGraphSvg)),
+  "and the two axes are drawn around them, with no grid or box",
+  lines(reopenedGraphSvg) === 2 &&
+    reopenedGraphSvg.querySelectorAll("rect").length === 0,
+  `${lines(reopenedGraphSvg)} lines`,
 );
 
 check(

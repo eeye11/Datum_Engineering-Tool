@@ -105,16 +105,7 @@ const MIN_RUN_PX = 5;
 /* The narrowest the editor allows its layout to be before folding controls. */
 const NARROW_QUERY = "(max-width: 900px)";
 
-/*
- * THE BOUNDS MODES.
- *
- * `auto` is the default and the one a student should never have to think about:
- * the range follows the geometry. `manual` is what typing a bound means - from
- * then on the four numbers are theirs and nothing recalculates them.
- */
-export const BOUNDS_MODES = Object.freeze(["auto", "manual"]);
 
-export const DEFAULT_BOUNDS_MODE = "auto";
 
 /* A graph coordinate, or null. */
 function finiteTarget(point) {
@@ -192,40 +183,6 @@ function workingCopy(graph) {
       yMin: limitOf(geometry.yMin, -5),
       yMax: limitOf(geometry.yMax, 5),
       yRangeExplicit: geometry.yRangeExplicit === true,
-      /*
-       * WHICH MODE THE GRAPH WAS LEFT IN. A reopened automatic graph follows its
-       * geometry again; a reopened manual one keeps the numbers it was saved
-       * with, because changing them is what the student chose not to have.
-       */
-      boundsMode: BOUNDS_MODES.includes(geometry.boundsMode)
-        ? geometry.boundsMode
-        : DEFAULT_BOUNDS_MODE,
-      manualBounds: enggMathGraphBounds.validBounds(geometry.manualBounds)
-        ? { ...geometry.manualBounds }
-        : enggMathGraphBounds.validBounds({
-              xMin: geometry.xMin,
-              xMax: geometry.xMax,
-              yMin: geometry.yMin,
-              yMax: geometry.yMax,
-            })
-          ? {
-              xMin: Number(geometry.xMin),
-              xMax: Number(geometry.xMax),
-              yMin: Number(geometry.yMin),
-              yMax: Number(geometry.yMax),
-            }
-          : null,
-      xTickSpacing: geometry.xTickSpacing ?? null,
-      yTickSpacing: geometry.yTickSpacing ?? null,
-      gridDivisions: Number(geometry.gridDivisions) || 2,
-      showXAxis: geometry.showXAxis !== false,
-      showYAxis: geometry.showYAxis !== false,
-      showGrid: geometry.showGrid !== false,
-      showMinorGrid: geometry.showMinorGrid === true,
-      showTickLabels: false,
-      xLabel: typeof geometry.xLabel === "string" ? geometry.xLabel : "x",
-      yLabel: typeof geometry.yLabel === "string" ? geometry.yLabel : "y",
-      equalUnits: geometry.equalUnits !== false,
       mode: "sketch",
       points: Array.isArray(geometry.points)
         ? geometry.points.filter(finiteTarget).map((entry) => ({
@@ -315,34 +272,27 @@ export function openSketchEditor(graph, options = {}) {
   let inspectorOpen = true;
 
   let drag = null;
-  let cursor = null;
   let correctedCache = null;
-  let snapEnabled = true;
 
   const history = { past: [], future: [] };
 
   /*
-   * THE BOUNDS - THE WHOLE COORDINATE SPACE, AS FOUR NUMBERS.
+   * THE RANGE BEHIND THE CANVAS, AS FOUR NUMBERS.
    *
-   * `mode` decides where they come from: calculated from the geometry, or typed.
-   * `bounds` is the manual range (null until the student states one) and
-   * `settled` is the last valid range in force - what a half-typed edit falls
-   * back to, so the graph never jumps to a guess.
+   * It is CALCULATED from the student's geometry and never typed: there is no
+   * bounds control in this editor. That calculation is the only source of these
+   * four numbers, started here and refitted after every change - a stored range
+   * is not honoured, because with no control to set it there is no way for a
+   * student to have chosen one.
    */
-  let boundsMode = BOUNDS_MODES.includes(working.geometry.boundsMode)
-    ? working.geometry.boundsMode
-    : DEFAULT_BOUNDS_MODE;
-
-  let manualBounds = enggMathGraphBounds.validBounds(working.geometry.manualBounds)
-    ? { ...working.geometry.manualBounds }
-    : null;
-
-  let settledBounds = {
-    xMin: working.geometry.xMin,
-    xMax: working.geometry.xMax,
-    yMin: working.geometry.yMin,
-    yMax: working.geometry.yMax,
-  };
+  let settledBounds = withOriginInView(
+    enggMathGraphBounds.automaticBounds({
+      points,
+      strokes: enggSketchCorrection
+        .correctSketch(strokes, { strength: "off", straighten: false })
+        .map((entry) => entry.points),
+    }),
+  );
 
   const dialog = document.createElement("div");
 
@@ -367,8 +317,9 @@ export function openSketchEditor(graph, options = {}) {
   const statusNode = dialog.querySelector("[data-sketch-status]");
   const hintNode = dialog.querySelector("[data-sketch-hint]");
   const instructionNode = dialog.querySelector("[data-sketch-instruction]");
-  const readoutNode = dialog.querySelector("[data-sketch-coordinates]");
   const summaryNode = dialog.querySelector("[data-sketch-correction-summary]");
+
+
 
   /*
    * THE CANVAS'S OWN BOX, READ FROM THE LAYOUT.
@@ -416,38 +367,43 @@ export function openSketchEditor(graph, options = {}) {
 
 
   /*
-   * THE BOUNDS IN FORCE, WITHOUT RECALCULATING THEM.
+   * THE RANGE THE CANVAS SPANS - CALCULATED, NEVER EDITED.
    *
-   * This is what the mapping reads, on every draw and every pointer event, so
-   * it must never call the correction: the correction's tolerance is a screen
-   * distance converted through THIS mapping, and going back the other way would
-   * be a cycle. The automatic range is recalculated in `refitBounds`, once per
-   * change - and `currentBounds` only ever reports it.
+   * There is no bounds control, no manual range and no zoom: the student draws
+   * on a blank sheet, and the range behind it is worked out from their own
+   * geometry so their ink always has room. It is recalculated once per change
+   * here, and only read everywhere else.
    */
   function currentBounds() {
-    if (boundsMode === "manual" && enggMathGraphBounds.validBounds(manualBounds)) {
-      return manualBounds;
-    }
-
     return settledBounds;
   }
 
   /*
-   * RE-CALCULATE THE BOUNDS AFTER A CHANGE TO THE GEOMETRY.
+   * THE ORIGIN IS ALWAYS IN VIEW.
    *
-   * Called on every add, move, delete and correction. In MANUAL mode it does
-   * nothing at all: the student's range is theirs, and geometry that leaves it
-   * is REPORTED rather than accommodated.
+   * The canvas draws the two axes through zero, and the calculated range is
+   * fitted tightly around the ink - so a stroke drawn entirely in the first
+   * quadrant would fit the range to that quadrant and take BOTH axes off the
+   * sheet, leaving a sketch with no axes at all. Widening the range to include
+   * (0, 0) keeps the axes on screen, which is what they are there for; the
+   * sketch then reads against them however far into a corner the drawing goes.
    */
-  function refitBounds() {
-    if (boundsMode !== "auto") {
-      return false;
-    }
+  function withOriginInView(bounds) {
+    return {
+      xMin: Math.min(bounds.xMin, 0),
+      xMax: Math.max(bounds.xMax, 0),
+      yMin: Math.min(bounds.yMin, 0),
+      yMax: Math.max(bounds.yMax, 0),
+    };
+  }
 
-    settledBounds = enggMathGraphBounds.automaticBounds({
-      points,
-      strokes: correctedStrokes(),
-    });
+  function refitBounds() {
+    settledBounds = withOriginInView(
+      enggMathGraphBounds.automaticBounds({
+        points,
+        strokes: correctedStrokes(),
+      }),
+    );
 
     return true;
   }
@@ -457,11 +413,10 @@ export function openSketchEditor(graph, options = {}) {
   /*
    * THE ONE PROJECTION: graph coordinate -> canvas pixel.
    *
-   * The whole canvas is the plane. There is no inset, no plotting rectangle
-   * inside it and no second scale: xMin is pixel 0, xMax is the right edge,
-   * yMax is pixel 0 and yMin is the bottom edge. Everything in this editor - the
-   * axes, the grid, the curves, the markers, the pointer and its readout, the
-   * snap and the hit test - goes through this pair and its exact inverse.
+   * The whole canvas is the plane. There is no inset and no second scale: xMin
+   * is pixel 0, xMax is the right edge, yMax is pixel 0 and yMin is the bottom
+   * edge. The curves, the markers, the pointer, the snap and the hit test all go
+   * through this pair and its exact inverse - no coordinate system is painted.
    */
   function toScreen(point) {
     const box = canvasBox();
@@ -529,15 +484,10 @@ export function openSketchEditor(graph, options = {}) {
 
     /*
      * THE SETTLED RANGE, not `currentBounds()`: this is called BY the
-     * correction, which `refitBounds` calls, so reading the manual range
-     * directly is what keeps the two from calling each other forever. In manual
-     * mode `settled` is the manual range already, and in automatic mode it is
-     * the last calculation - both are the range on screen.
+     * correction, which `refitBounds` calls, so reading the stored range
+     * directly keeps the two from calling each other forever.
      */
-    const bounds =
-      boundsMode === "manual" && enggMathGraphBounds.validBounds(manualBounds)
-        ? manualBounds
-        : settledBounds;
+    const bounds = settledBounds;
 
     const perPixelX = (bounds.xMax - bounds.xMin) / Math.max(box.width, 1e-9);
     const perPixelY = (bounds.yMax - bounds.yMin) / Math.max(box.height, 1e-9);
@@ -574,143 +524,22 @@ export function openSketchEditor(graph, options = {}) {
       equal: Math.abs(box.width / spanX - box.height / spanY) < 1e-6,
       limits: { ...bounds },
       origin: mappingOrigin(),
-      mode: boundsMode,
     };
   }
-
-
-
-  /*
-   * PAN BY A SCREEN DISTANCE.
-   *
-   * A pan is a translation of the range, so the drag moves the BOUNDS by the
-   * graph distance the cursor travelled. In automatic mode the range becomes the
-   * student's (the graph stops chasing the geometry) until Fit; in manual mode
-   * the typed numbers move with the view, which is what a pan looks like either
-   * way.
-   */
-  function panBy(deltaX, deltaY) {
-    const box = canvasBox();
-
-    if (!box) {
-      return;
-    }
-
-    const bounds = currentBounds();
-
-    const shiftX = (deltaX / Math.max(box.width, 1e-9)) * (bounds.xMax - bounds.xMin);
-    const shiftY = (deltaY / Math.max(box.height, 1e-9)) * (bounds.yMax - bounds.yMin);
-
-    settledBounds = {
-      xMin: bounds.xMin - shiftX,
-      xMax: bounds.xMax - shiftX,
-      yMin: bounds.yMin + shiftY,
-      yMax: bounds.yMax + shiftY,
-    };
-
-    if (boundsMode === "manual") {
-      manualBounds = { ...settledBounds };
-      renderBoundsMode();
-    } else {
-      /*
-       * A PAN IN AUTOMATIC MODE IS A TYPED RANGE: the student has chosen where
-       * they are looking, so the range stops following the geometry. Switching
-       * the mode is stated rather than implied - the controls change to Manual
-       * and the fields show what is now in force.
-       */
-      boundsMode = "manual";
-      manualBounds = { ...settledBounds };
-      renderBoundsMode();
-    }
-
-    draw();
-  }
-
-  /* Fit: return to the calculation, which is what Automatic Bounds IS. */
-  function fitBounds() {
-    boundsMode = DEFAULT_BOUNDS_MODE;
-    settledBounds = enggMathGraphBounds.automaticBounds({
-      points,
-      strokes: correctedStrokes(),
-    });
-
-    refresh();
-  }
-
-  /* What is drawn outside a manual range - reported, never accommodated. */
-  function outOfBounds() {
-    if (boundsMode !== "manual") {
-      return [];
-    }
-
-    return enggMathGraphBounds.outsideBounds(currentBounds(), {
-      points,
-      strokes: correctedStrokes(),
-    });
-  }
-
-
 
   /* ============================================================
    * THE POINTS
    * ============================================================ */
 
-  function snapPoint(point) {
-    const steps = gridSteps();
-
-    const snapOn = dialog.querySelector(
-      '[data-sketch-toggle-setting="snap"]',
-    )?.checked;
-
-    if (!snapOn) {
-      return { x: point.x, y: point.y };
-    }
-
-    /*
-     * SNAPPING USES THE CONFIGURED NUMBERS - the same step a graph's own grid
-     * uses - so a snapped point lands on a clean value rather than on a pixel.
-     * The plane draws no grid, so nothing is snapped to anything visible: this
-     * is rounding to exact numbers, which is what a student typing a value would
-     * do anyway.
-     */
-    return {
-      x: Math.round(point.x / steps.x) * steps.x,
-      y: Math.round(point.y / steps.y) * steps.y,
-    };
-  }
-
   /*
-   * THE SNAP STEP ON EACH AXIS, in graph units.
+   * NOTHING IS SNAPPED.
    *
-   * It is the CONFIGURED step - the number the student types as "x step", or the
-   * neat step the range deserves when they have typed none. The drawn grid is a
-   * SUBDIVISION of it (`gridDivisions` lines per step, so the lines are finer),
-   * and a snap deliberately rounds to the COARSER of the two: every snapped
-   * point lands on a line, and a drag of one cell moves exactly one step rather
-   * than a fifth of one.
-   *
-   * A stored spacing of null is no spacing, so it falls back to the neat step
-   * of the range rather than dividing by zero.
+   * A point lands exactly where it is clicked or typed. Snapping used to pull
+   * it onto an invisible grid step, which moved the click away from the pixel
+   * the student aimed at - one of the ways the coordinate system got in the way.
    */
-  function gridSteps() {
-    const bounds = currentBounds();
-
-    const stepOf = (spacing, min, max) => {
-      const typed = Number(spacing);
-
-      if (Number.isFinite(typed) && typed > 0) {
-        return typed;
-      }
-
-      const span = Math.max(Number(max) - Number(min), 1e-9);
-
-      return niceStepOf(span);
-    };
-
-    return {
-      x: stepOf(working.geometry.xTickSpacing, bounds.xMin, bounds.xMax),
-      y: stepOf(working.geometry.yTickSpacing, bounds.yMin, bounds.yMax),
-    };
+  function snapPoint(point) {
+    return { x: point.x, y: point.y };
   }
 
   function pointById(id) {
@@ -906,21 +735,67 @@ export function openSketchEditor(graph, options = {}) {
   }
 
   /*
-   * A LOOKUP THAT WORKS IN BOTH BUILDS.
+   * THE TWO AXES, AND NOTHING ELSE.
    *
-   * In the browser the model module is the one the page loaded, and a function
-   * added to it is there. A test bundle that loads the model twice (once for the
-   * harness's global, once through the editor's import) can see the OLDER build
-   * of a pure helper - so a reader falls back rather than throwing over a value
-   * it can compute itself.
+   * x and y through the graph's own zero, drawn UNDER the ink so they orient
+   * the plane without cluttering it: no grid, no ticks, no numbers and no box.
+   * An axis is drawn only when zero lies within the canvas - a range with no
+   * y = 0 in it has no x axis to draw, and pretending it sits on an edge would
+   * put the axis at a value that does not exist there.
+   *
+   * Both go through `toScreen`, the same projection the strokes use, so an axis
+   * is exactly where the coordinates it stands for are.
    */
-  function niceStepOf(span) {
-    return typeof enggMathModel.niceStep === "function"
-      ? enggMathModel.niceStep(span, 10)
-      : Math.max(span / 10, 1e-6);
+  function drawAxes() {
+    const layer = createSvgElement("g", { class: "sketch-layer-axes" });
+    const box = canvasBox();
+
+    if (!box) {
+      return;
+    }
+
+    const at = toScreen({ x: 0, y: 0 });
+
+    /* The tolerance keeps an axis visible on the very edge, not off it. */
+    const epsilon = 0.5;
+
+    const stroke = { stroke: "var(--datum-border-strong)", "stroke-width": 1.2 };
+
+    const horizontal =
+      at.y >= -epsilon && at.y <= box.height + epsilon;
+    const vertical =
+      at.x >= -epsilon && at.x <= box.width + epsilon;
+
+    if (horizontal) {
+      layer.appendChild(
+        createSvgElement("line", {
+          x1: 0,
+          y1: at.y,
+          x2: box.width,
+          y2: at.y,
+          class: "sketch-axis sketch-axis-x",
+          "data-sketch-axis": "x",
+          ...stroke,
+        }),
+      );
+    }
+
+    if (vertical) {
+      layer.appendChild(
+        createSvgElement("line", {
+          x1: at.x,
+          y1: 0,
+          x2: at.x,
+          y2: box.height,
+          class: "sketch-axis sketch-axis-y",
+          "data-sketch-axis": "y",
+          ...stroke,
+        }),
+      );
+    }
+
+    svg.appendChild(layer);
   }
-
-
 
   function drawStrokes() {
     const showRaw = view === "original" || view === "overlay";
@@ -998,10 +873,22 @@ export function openSketchEditor(graph, options = {}) {
     svg.appendChild(correctedLayer);
   }
 
+  /*
+   * ONLY THE SELECTED POINT IS MARKED.
+   *
+   * A marker for every point - a ring, a dot and its coordinates in text - put
+   * a coordinate system's worth of labels back onto the canvas the moment a
+   * student placed a few points. The plane stays clean: the SELECTED point shows
+   * its marker, so it can be seen and grabbed, and the rest live in the
+   * inspector's table where their numbers belong.
+   */
   function drawHandles() {
     const layer = createSvgElement("g", { class: "sketch-layer-handles" });
 
-    points.forEach((entry, index) => {
+    points
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.id === selectedPointId)
+      .forEach(({ entry, index }) => {
       const at = toScreen(entry);
       const selected = entry.id === selectedPointId;
 
@@ -1093,6 +980,7 @@ export function openSketchEditor(graph, options = {}) {
 
     svg.textContent = "";
 
+    drawAxes();
     drawStrokes();
     drawHandles();
   }
@@ -1215,51 +1103,18 @@ export function openSketchEditor(graph, options = {}) {
       inspectorButton.setAttribute("aria-pressed", String(inspectorOpen));
     }
 
-    dialog.querySelectorAll("[data-sketch-field]").forEach((input) => {
-      const key = input.dataset.sketchField;
-
-      if (document.activeElement === input) {
-        return;
-      }
-
-      /*
-       * THE FOUR BOUNDS SHOW THE RANGE IN FORCE - automatic or manual. A
-       * student pressing Automatic sees, in the fields, exactly what the
-       * calculation produced, so the two modes are never a mystery.
-       */
-      const value = BOUND_FIELDS.includes(key)
-        ? currentBounds()[key]
-        : working.geometry[key];
-
-      /*
-       * AN UNSET SETTING IS AN EMPTY BOX, NOT THE WORD null.
-       *
-       * `Number(null)` is 0, so a plain `Number.isFinite(Number(value))` test
-       * passes a null spacing straight through as the string "null" - which the
-       * browser refuses to put in a number input and logs a warning for on every
-       * render. An unset spacing is blank, which is what it means.
-       */
-      input.value =
-        value === null || value === undefined || !Number.isFinite(Number(value))
-          ? ""
-          : String(value);
-
-      input.readOnly = false;
-    });
-
-    renderBoundsMode();
+    /*
+     * NO BOUNDS AND NO GRID FIELDS: the only number inputs left are the point
+     * coordinates in the inspector, and those are rendered with the rows.
+     */
 
     dialog.querySelectorAll("[data-sketch-toggle-setting]").forEach((input) => {
       const key = input.dataset.sketchToggleSetting;
 
-      if (key === "snap") {
-        input.checked = snapEnabled;
-      } else if (key === "straighten") {
+      if (key === "straighten") {
         input.checked = straighten;
       } else if (key === "showTrace") {
         input.checked = showTrace;
-      } else {
-        input.checked = working.geometry[key] !== false;
       }
     });
 
@@ -1288,48 +1143,7 @@ export function openSketchEditor(graph, options = {}) {
     }
   }
 
-  /* The four fields that are the coordinate space. */
-  const BOUND_FIELDS = ["xMin", "xMax", "yMin", "yMax"];
 
-  /*
-   * HOW THE BOUNDS ARE SHOWN.
-   *
-   * The mode buttons say which mode is in force, the four fields always show the
-   * range actually drawn, and the note says what happens next: automatic follows
-   * the geometry, manual does not and reports what falls outside it.
-   */
-  function renderBoundsMode() {
-    dialog.querySelectorAll("[data-sketch-bounds-mode]").forEach((button) => {
-      const active = button.dataset.sketchBoundsMode === boundsMode;
-
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
-    });
-
-    const label = dialog.querySelector("[data-sketch-bounds-mode-label]");
-
-    if (label) {
-      label.textContent = boundsMode === "auto" ? "Automatic" : "Manual";
-    }
-
-    const note = dialog.querySelector("[data-sketch-bounds-note]");
-
-    if (note) {
-      const outside = outOfBounds();
-
-      if (boundsMode === "auto") {
-        note.textContent = "The whole canvas is the coordinate space, calculated from your geometry.";
-      } else if (outside.length) {
-        note.textContent = `${outside.length} ${outside.length === 1 ? "item is" : "items are"} outside these bounds - they keep their coordinates but are not shown.`;
-      } else {
-        note.textContent = "Your own range, kept as typed. Geometry outside it is not moved.";
-      }
-
-      note.classList.toggle("is-warning", boundsMode === "manual" && outside.length > 0);
-    }
-
-    app.classList.toggle("bounds-manual", boundsMode === "manual");
-  }
 
 
 
@@ -1365,20 +1179,16 @@ export function openSketchEditor(graph, options = {}) {
 
       summaryNode.textContent = parts.join(", ");
     }
-
-    if (readoutNode && !cursor) {
-      readoutNode.textContent = "x -, y -";
-    }
   }
 
   /*
    * THE ONE UPDATE.
    *
    * Every add, move, delete, correction change and undo comes through here, so
-   * this is where the AUTOMATIC bounds are recalculated - once per change,
-   * after the geometry has settled, and never in manual mode. Drawing, the
-   * point table, the controls and the status all read the same state, so the
-   * canvas, the inspector and the source cannot describe different ranges.
+   * this is where the range is recalculated - once per change, after the
+   * geometry has settled. Drawing, the point table, the controls and the status
+   * all read the same state, so the canvas, the inspector and the source cannot
+   * describe different ranges.
    */
   function refresh() {
     correctedCache = null;
@@ -1386,7 +1196,7 @@ export function openSketchEditor(graph, options = {}) {
     /*
      * THE RANGE DOES NOT MOVE UNDER A DRAG.
      *
-     * In automatic mode the bounds follow the geometry - but not WHILE a point
+     * The range follows the geometry - but not WHILE a point
      * is being dragged: rescaling the canvas mid-gesture moves the pixel the
      * student is dragging towards, and every frame would chase it. The range is
      * re-calculated once, when the drag ends.
@@ -1762,35 +1572,9 @@ export function openSketchEditor(graph, options = {}) {
   }
 
   /*
-   * THE MIDDLE BUTTON PANS.
-   *
-   * It is kept because every other canvas in DAETUM accepts it, and a
-   * middle-drag that silently started drawing would be worse than no pan at all.
-   * Panning is a CHANGE OF BOUNDS - it takes the range with it - and it is never
-   * a document change, so it is not in the undo history.
+   * THERE IS NO PAN. The canvas is a fixed sheet; only the primary button draws.
    */
-  function isPanPress(event) {
-    return event.button === 1;
-  }
-
   svg.addEventListener("pointerdown", (event) => {
-    if (isPanPress(event)) {
-      event.preventDefault();
-
-      svg.setPointerCapture?.(event.pointerId);
-
-      drag = {
-        kind: "pan",
-        pointerId: event.pointerId,
-        x: event.clientX,
-        y: event.clientY,
-      };
-
-      svg.classList.add("is-panning");
-
-      return;
-    }
-
     if (event.button !== undefined && event.button !== 0) {
       return;
     }
@@ -1860,26 +1644,7 @@ export function openSketchEditor(graph, options = {}) {
   svg.addEventListener("pointermove", (event) => {
     const at = pointerPosition(event);
 
-    if (at) {
-      cursor = at;
-
-      if (readoutNode) {
-        readoutNode.textContent = `x ${numberText(snapPoint(at).x)}, y ${numberText(snapPoint(at).y)}`;
-      }
-    }
-
     if (!drag) {
-      return;
-    }
-
-    if (drag.kind === "pan") {
-      panBy(event.clientX - drag.x, event.clientY - drag.y);
-
-      drag.x = event.clientX;
-      drag.y = event.clientY;
-
-      draw();
-
       return;
     }
 
@@ -1941,13 +1706,7 @@ export function openSketchEditor(graph, options = {}) {
 
     const kind = drag.kind;
 
-    if (kind === "pan") {
-      drag = null;
-      svg.classList.remove("is-panning");
-      draw();
 
-      return;
-    }
 
     if (kind === "stroke") {
       finishStroke(clientToGraph(event.clientX, event.clientY));
@@ -2001,69 +1760,13 @@ export function openSketchEditor(graph, options = {}) {
   });
 
   /*
-   * THE WHEEL ZOOMS THE COORDINATE SPACE.
+   * NO ZOOM AND NO COORDINATE READOUT.
    *
-   * Because the bounds ARE the canvas, a zoom is a shrinking or growing RANGE:
-   * the span is multiplied about the coordinate under the pointer, so that
-   * coordinate stays under it. Ctrl+wheel is what a trackpad sends for a zoom
-   * gesture and a plain wheel is what a mouse sends; both zoom here, because
-   * the canvas has no scrolling of its own.
+   * The canvas used to zoom its coordinate space on the wheel and print the
+   * pointer's position in a footer readout - two more pieces of a coordinate
+   * system the student did not ask for. The plane simply ends at the canvas.
    */
-  svg.addEventListener(
-    "wheel",
-    (event) => {
-      event.preventDefault();
 
-      const box = canvasBox();
-      const anchor = clientToGraph(event.clientX, event.clientY);
-
-      if (!box || !anchor) {
-        return;
-      }
-
-      const factor = Math.min(4, Math.max(0.25, Math.exp(event.deltaY * 0.0015)));
-
-      const bounds = currentBounds();
-
-      const span = {
-        x: (bounds.xMax - bounds.xMin) * factor,
-        y: (bounds.yMax - bounds.yMin) * factor,
-      };
-
-      const ratioX =
-        (anchor.x - bounds.xMin) / Math.max(bounds.xMax - bounds.xMin, 1e-12);
-      const ratioY =
-        (bounds.yMax - anchor.y) / Math.max(bounds.yMax - bounds.yMin, 1e-12);
-
-      const next = {
-        xMin: anchor.x - span.x * ratioX,
-        xMax: anchor.x + span.x * (1 - ratioX),
-        yMin: anchor.y - span.y * (1 - ratioY),
-        yMax: anchor.y + span.y * ratioY,
-      };
-
-      boundsMode = "manual";
-      manualBounds = { ...next };
-      settledBounds = enggMathGraphBounds.resolveBounds({
-        mode: "manual",
-        bounds: manualBounds,
-        fallback: settledBounds,
-      });
-
-      renderBoundsMode();
-      renderControls();
-      draw();
-    },
-    { passive: false },
-  );
-
-  svg.addEventListener("pointerleave", () => {
-    cursor = null;
-
-    if (readoutNode) {
-      readoutNode.textContent = "x -, y -";
-    }
-  });
 
   /* ============================================================
    * THE CONTROLS
@@ -2150,16 +1853,7 @@ export function openSketchEditor(graph, options = {}) {
       scheduleDraw();
     });
 
-  /*
-   * FIT: BACK TO AUTOMATIC BOUNDS.
-   *
-   * It is not a geometry edit. It returns the range to the calculation, which is
-   * what undoes a zoom, a pan or a manual range - and it is the way back from
-   * Manual without typing four numbers by hand.
-   */
-  dialog.querySelector("[data-sketch-fit]")?.addEventListener("click", () => {
-    fitBounds();
-  });
+
 
   pointsList.addEventListener("click", (event) => {
     const remove = event.target.closest?.("[data-sketch-point-delete]");
@@ -2267,114 +1961,10 @@ export function openSketchEditor(graph, options = {}) {
   /*
    * A SETTING IS A SETTING, NOT A GEOMETRY EDIT.
    *
-   * Changing the range, the grid or the smoothing changes how the sketch is
-   * drawn and corrected - never the numbers that were drawn. So none of them is
-   * recorded in the undo history, and none of them can lose a stroke.
+   * Changing the smoothing changes how the sketch is drawn and corrected -
+   * never the numbers that were drawn. So it is not recorded in the undo
+   * history, and it cannot lose a stroke.
    */
-  dialog.querySelectorAll("[data-sketch-field]").forEach((input) => {
-    const key = input.dataset.sketchField;
-
-    input.addEventListener("change", () => {
-      /* A FIELD LEFT HALF-TYPED REVERTS TO WHAT IS IN FORCE. */
-      if (BOUND_FIELDS.includes(key)) {
-        input.value = String(currentBounds()[key]);
-      }
-    });
-
-    input.addEventListener("input", () => {
-      const value = Number(input.value);
-
-      if (!Number.isFinite(value) || String(input.value).trim() === "") {
-        return;
-      }
-
-      /*
-       * A TYPED BOUND IS THE STUDENT'S RANGE.
-       *
-       * The first edit switches to MANUAL, so the next stroke they draw
-       * cannot silently rescale the graph they have just framed. The value is
-       * checked against the OTHER three in force, so a crossed range is refused
-       * at the keystroke and the last valid range stays on screen.
-       */
-      if (BOUND_FIELDS.includes(key)) {
-        const inForce = { ...currentBounds(), ...(manualBounds || {}) };
-
-        const next = { ...inForce, [key]: value };
-
-        const xSpan = next.xMax - next.xMin;
-        const ySpan = next.yMax - next.yMin;
-
-        /* A bound crossed past its partner is not a range; it is a typo. */
-        if (!(xSpan > 0) || !(ySpan > 0)) {
-          return;
-        }
-
-        if (value === 0 && (key === "xMin" || key === "yMin")) {
-          /* A range of -inf..0 is refused by the span test already. */
-          return;
-        }
-
-        boundsMode = "manual";
-        manualBounds = { ...next, [key]: value };
-        settledBounds = enggMathGraphBounds.resolveBounds({
-          mode: "manual",
-          bounds: manualBounds,
-          fallback: settledBounds,
-        });
-
-        renderBoundsMode();
-
-        dialog.querySelectorAll("[data-sketch-field]").forEach((other) => {
-          const otherKey = other.dataset.sketchField;
-
-          if (other !== input && BOUND_FIELDS.includes(otherKey)) {
-            other.value = String(settledBounds[otherKey]);
-          }
-        });
-
-        draw();
-        renderStatus();
-
-        return;
-      }
-
-      if (
-        (key === "xTickSpacing" || key === "yTickSpacing") &&
-        !(value > 0) &&
-        value !== 0
-      ) {
-        return;
-      }
-
-      working.geometry[key] = value;
-
-      refresh();
-    });
-  });
-
-  /* THE MODE BUTTONS: Automatic calculates, Manual keeps what is shown. */
-  dialog.querySelectorAll("[data-sketch-bounds-mode]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const next = button.dataset.sketchBoundsMode;
-
-      if (next === "auto") {
-        fitBounds();
-
-        return;
-      }
-
-      if (!BOUND_FIELDS.every((key) => Number.isFinite(currentBounds()[key]))) {
-        return;
-      }
-
-      boundsMode = "manual";
-      manualBounds = { ...currentBounds() };
-
-      renderBoundsMode();
-      renderControls();
-      draw();
-    });
-  });
 
   dialog
     .querySelector("[data-sketch-strength]")
@@ -2386,13 +1976,6 @@ export function openSketchEditor(graph, options = {}) {
   dialog.querySelectorAll("[data-sketch-toggle-setting]").forEach((input) => {
     input.addEventListener("change", () => {
       const key = input.dataset.sketchToggleSetting;
-
-      if (key === "snap") {
-        snapEnabled = input.checked;
-        renderControls();
-
-        return;
-      }
 
       if (key === "straighten") {
         straighten = input.checked;
@@ -2425,47 +2008,7 @@ export function openSketchEditor(graph, options = {}) {
       return;
     }
 
-    /* A keyboard zoom about the canvas centre: + and - zoom, 0 fits. */
-    if (!inField && !event.ctrlKey && !event.metaKey) {
-      if (event.key === "+" || event.key === "=" || event.key === "-") {
-        const box = canvasBox();
-        const bounds = currentBounds();
-        const factor = event.key === "-" ? 1.2 : 1 / 1.2;
 
-        if (box) {
-          const centreX = (bounds.xMin + bounds.xMax) / 2;
-          const centreY = (bounds.yMin + bounds.yMax) / 2;
-
-          const halfX = ((bounds.xMax - bounds.xMin) / 2) * factor;
-          const halfY = ((bounds.yMax - bounds.yMin) / 2) * factor;
-
-          boundsMode = "manual";
-          manualBounds = {
-            xMin: centreX - halfX,
-            xMax: centreX + halfX,
-            yMin: centreY - halfY,
-            yMax: centreY + halfY,
-          };
-
-          settledBounds = { ...manualBounds };
-
-          renderBoundsMode();
-          renderControls();
-          draw();
-        }
-
-        event.preventDefault();
-
-        return;
-      }
-
-      if (event.key === "0") {
-        fitBounds();
-        event.preventDefault();
-
-        return;
-      }
-    }
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
       event.preventDefault();
@@ -2615,19 +2158,12 @@ export function openSketchEditor(graph, options = {}) {
       strength,
       straighten,
       /*
-       * THE BOUNDS ARE THE COORDINATE SPACE - published as they are drawn, with
-       * the mode that produced them, so a test can hold the whole editor to one
-       * mapping: `limits`, `origin` and `mapping` all come from these numbers.
+       * THE RANGE BEHIND THE CANVAS, published as it is drawn, so a test can
+       * hold the whole editor to one mapping: `limits`, `origin` and `mapping`
+       * all come from these numbers.
        */
       limits: currentBounds(),
-      boundsMode,
-      manualBounds: manualBounds ? { ...manualBounds } : null,
-      outside: outOfBounds(),
       origin: mappingOrigin(),
-      /*
-       * THE FRAME'S OWN MAPPING, published so a test (and the inspector) can
-       * see the same rectangle the axes, grid and pointers are placed from.
-       */
       mapping: mappingSummary(),
       points: points.map((entry) => ({ ...entry })),
       strokes: strokes.map((entry) => entry.points.length),
@@ -2674,25 +2210,22 @@ export function openSketchEditor(graph, options = {}) {
         showTickLabels: false,
         points: points.map((entry) => ({ ...entry })),
         /*
-         * THE RANGE IN FORCE, AND THE MODE IT CAME FROM. A manual range is
-         * committed as it was typed; an automatic one is committed as it was
-         * calculated - and the mode travels with it so reopening the graph
-         * knows whether to follow its geometry or keep its numbers.
+         * THE RANGE IN FORCE, committed as calculated. No bounds mode, no
+         * manual range and no grid or axis settings travel with a sketch: there
+         * is no coordinate system in the editor to reproduce.
          */
         xMin: currentBounds().xMin,
         xMax: currentBounds().xMax,
         yMin: currentBounds().yMin,
         yMax: currentBounds().yMax,
         yRangeExplicit: true,
-        boundsMode,
-        manualBounds: boundsMode === "manual" ? { ...currentBounds() } : null,
-        xTickSpacing: working.geometry.xTickSpacing,
-        yTickSpacing: working.geometry.yTickSpacing,
-        showGrid: working.geometry.showGrid,
-        showXAxis: working.geometry.showXAxis,
-        showYAxis: working.geometry.showYAxis,
-        equalUnits: working.geometry.equalUnits,
-        gridDivisions: working.geometry.gridDivisions,
+        boundsMode: "auto",
+        manualBounds: null,
+        xTickSpacing: null,
+        yTickSpacing: null,
+        showGrid: false,
+        showXAxis: false,
+        showYAxis: false,
       },
       style: { ...working.style },
     };

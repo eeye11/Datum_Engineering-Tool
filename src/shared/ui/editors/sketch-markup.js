@@ -12,9 +12,13 @@
  *
  *     HEADER     one compact row: title, instruction, close
  *     TOOLBAR    one compact row of icon tools: Draw, Point, Erase, moves,
- *                Undo, Redo, Fit, view selector, Inspector toggle
+ *                Undo, Redo, view selector, Inspector toggle
  *     BODY       the canvas, dominant, and a collapsible inspector beside it
- *     FOOTER     status, coordinate readout, hint, Cancel, Apply
+ *     FOOTER     status and hint - Cancel and Apply are in the header
+ *
+ * NO COORDINATE LAYER. There is no bounds control, no grid or axis section and
+ * no coordinate readout: the canvas is a blank sheet, and the inspector is about
+ * the student's own points and the correction, not about a coordinate system.
  *
  * Why not the old arrangement: the old editor was a header, a toolbar of two
  * wide text buttons, a full-width canvas and a footer, with no settings and no
@@ -75,15 +79,7 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-/* A number input in the inspector. */
-function field(key, label, { step = "any", min = null, title = "" } = {}) {
-  return `<label class="sketch-field" title="${escapeHtml(title || label)}">
-        <span class="sketch-field-label">${escapeHtml(label)}</span>
-        <input type="number" inputmode="decimal" step="${step}"${
-          min === null ? "" : ` min="${min}"`
-        } data-sketch-field="${key}" aria-label="${escapeHtml(label)}">
-    </label>`;
-}
+
 
 function toggle(key, label, title = "") {
   return `<label class="sketch-toggle" title="${escapeHtml(title || label)}">
@@ -158,7 +154,6 @@ export function sketchEditorMarkup(options = {}) {
 
             <span class="sketch-tool-spacer"></span>
 
-            ${iconButton({ action: "fit", icon: "fit", label: "Fit", title: "Fit the graph to the canvas" })}
             ${iconButton({ action: "inspector", icon: "inspector", label: "Inspector", title: "Show or hide the inspector", pressed: true })}
         </div>
 
@@ -233,57 +228,11 @@ export function sketchEditorMarkup(options = {}) {
                         </div>
                     </section>
 
-                    <section class="sketch-section">
-                        <div class="sketch-section-head">
-                            <span class="sketch-section-title">Bounds</span>
-                            <span class="sketch-bounds-mode" data-sketch-bounds-mode-label>Automatic</span>
-                        </div>
-
-                        <div class="sketch-bounds" role="group" aria-label="Coordinate bounds mode">
-                            <button type="button" class="sketch-view-option active"
-                                data-sketch-bounds-mode="auto" aria-pressed="true"
-                                title="Calculate the range from your geometry">Automatic</button>
-                            <button type="button" class="sketch-view-option"
-                                data-sketch-bounds-mode="manual" aria-pressed="false"
-                                title="Use the four numbers below as the coordinate space">Manual</button>
-                        </div>
-
-                        <div class="sketch-grid-fields">
-                            ${field("xMin", "x min")}
-                            ${field("xMax", "x max")}
-                            ${field("yMin", "y min")}
-                            ${field("yMax", "y max")}
-                        </div>
-
-                        <p class="sketch-bounds-note" data-sketch-bounds-note>
-                            The whole canvas is the coordinate space.
-                        </p>
-                    </section>
-
-                    <section class="sketch-section">
-                        <div class="sketch-section-head">
-                            <span class="sketch-section-title">Grid and axes</span>
-                        </div>
-
-                        <div class="sketch-grid-fields">
-                            ${field("xTickSpacing", "x step", { step: "any", min: "0", title: "Grid and tick spacing on x" })}
-                            ${field("yTickSpacing", "y step", { step: "any", min: "0", title: "Grid and tick spacing on y" })}
-                        </div>
-
-                        <div class="sketch-toggles">
-                            ${toggle("showGrid", "Grid")}
-                            ${toggle("showXAxis", "X axis")}
-                            ${toggle("showYAxis", "Y axis")}
-                            ${toggle("equalUnits", "Equal units", "One unit is the same length on both axes")}
-                            ${toggle("snap", "Snap to grid", "Placed and dragged points land on the grid")}
-                        </div>
-                    </section>
                 </div>
             </aside>
         </div>
 
         <footer class="sketch-app-footer">
-            <span class="sketch-readout" data-sketch-coordinates>x -, y -</span>
             <span class="sketch-status" data-sketch-status></span>
             <span class="sketch-hint" data-sketch-hint></span>
         </footer>

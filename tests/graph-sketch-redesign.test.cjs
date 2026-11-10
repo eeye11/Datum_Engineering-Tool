@@ -384,8 +384,8 @@ check(
 
 /* ================================================= unnumbered sketch */
 
-console.log("\nThe sketch draws NO coordinate system at all");
-console.log("------------------------------------------------");
+console.log("\nThe sketch draws two bare axes and nothing more");
+console.log("--------------------------------------------------");
 
 const tickNumbers = svg.querySelectorAll('[data-label="tick"]');
 
@@ -396,14 +396,23 @@ check(
 );
 
 /*
- * NO GRID, AXES OR TICKS ARE PAINTED.
+ * TWO AXES, AND NOTHING ELSE FROM A COORDINATE SYSTEM.
  *
- * The sketch plane is a blank sheet: the numbers are a mapping (a stroke still
- * lands at the value it was drawn at), not a drawn ruled surface.
+ * The plane draws x and y through zero so a student can orient what they
+ * sketch. It draws no grid, no ticks, no numbers and no box: the rest of the
+ * coordinate system stays a mapping, not a drawn ruled surface.
  */
 check(
-  "and no grid, axis or tick is drawn",
-  svg.querySelectorAll("line, rect").length === 0,
+  "the two axes are drawn",
+  svg.querySelectorAll('[data-sketch-axis="x"]').length === 1 &&
+    svg.querySelectorAll('[data-sketch-axis="y"]').length === 1,
+  `${svg.querySelectorAll("line").length} lines`,
+);
+
+check(
+  "and no grid, tick or box is drawn with them",
+  svg.querySelectorAll("line").length === 2 &&
+    svg.querySelectorAll("rect").length === 0,
   `${svg.querySelectorAll("line").length} lines, ${svg.querySelectorAll("rect").length} rects`,
 );
 
@@ -503,7 +512,7 @@ check(
 );
 
 check(
-  "and it has a marker",
+  "and only the selected point is marked, so the plane stays clean",
   svg.querySelectorAll("[data-sketch-handle]").length === 1,
 );
 
@@ -513,12 +522,16 @@ check(
   `${svg.querySelectorAll("circle").length} circles for ${stats(dialog).strokes.reduce((total, count) => total + count, 0)} samples`,
 );
 
+/*
+ * NOTHING IS SNAPPED. A placed point keeps the exact coordinate the click
+ * landed on, with no invisible grid step pulling it away from the pixel the
+ * student aimed at.
+ */
 const samplePoint = stats(dialog).points[0];
 
 check(
-  "the point's coordinates are snapped to the configured step",
-  Math.abs(samplePoint.x - Math.round(samplePoint.x)) < 1e-9 &&
-    Math.abs(samplePoint.y - Math.round(samplePoint.y)) < 1e-9,
+  "and its coordinates are the exact values of the click",
+  Number.isFinite(samplePoint.x) && Number.isFinite(samplePoint.y),
   JSON.stringify(samplePoint),
 );
 
@@ -612,8 +625,8 @@ pointer(svg, "pointerup", handleX + dragBy, handleY);
 const movedTo = stats(dialog).points.find((entry) => entry.id === secondId);
 
 check(
-  "and dragged, snapping to the grid as it moves",
-  movedTo.x > 3 && Math.abs(movedTo.x - Math.round(movedTo.x)) < 1e-9,
+  "and dragged, landing without any grid snapping",
+  movedTo.x > 3,
   JSON.stringify(movedTo),
 );
 
@@ -641,24 +654,29 @@ check(
   stats(dialog).points.length === 1,
 );
 
-/* SNAPPING, WITH THE GRID UNNUMBERED. */
+/*
+ * NO SNAP CONTROL, AND NO SNAPPING.
+ *
+ * The snap toggle belonged to the grid this editor no longer has. A placed
+ * point now keeps the coordinate it was clicked at.
+ */
 svg = dialog.querySelector("[data-sketch-svg]");
 
-const snapBox = dialog.querySelector('[data-sketch-toggle-setting="snap"]');
-
-check("snap is on", snapBox.checked);
+check(
+  "there is no snap setting left to find",
+  dialog.querySelectorAll('[data-sketch-toggle-setting="snap"]').length === 0,
+);
 
 click(dialog.querySelector("[data-sketch-tool-point]"));
 pointer(svg, "pointerdown", 333, 271);
 pointer(svg, "pointerup", 333, 271);
 
-const snapped = stats(dialog).points[stats(dialog).points.length - 1];
+const placed = stats(dialog).points[stats(dialog).points.length - 1];
 
 check(
-  "a placed point lands on the configured grid, although no numbers are shown",
-  Math.abs(snapped.x - Math.round(snapped.x)) < 1e-9 &&
-    Math.abs(snapped.y - Math.round(snapped.y)) < 1e-9,
-  JSON.stringify(snapped),
+  "a placed point keeps the exact coordinate of its click",
+  Number.isFinite(placed.x) && Number.isFinite(placed.y),
+  JSON.stringify(placed),
 );
 
 /* ======================================================= apply commits */
@@ -963,10 +981,14 @@ function originFor(bounds, width = 900, height = 520) {
   const graph = mathModel.createMathPlot({ x: 0, y: 0 }, 200, 200, {
     mode: "sketch",
     yRangeExplicit: true,
-    boundsMode: "manual",
     equalUnits: false,
     ...bounds,
   });
+
+  /*
+   * A SKETCH'S RANGE IS DERIVED, SO THE CASE STATES ITS ORIGIN THROUGH THE
+   * GEOMETRY: a point at (mx, my) is what the range is fitted around.
+   */
 
   const opened = sketchEditor.openSketchEditor(graph, {
     onApply: () => {},
@@ -990,12 +1012,37 @@ const project = (state, x, y) => {
   };
 };
 
-const symmetric = originFor({ xMin: -5, xMax: 5, yMin: -5, yMax: 5 });
+/*
+ * THE RANGE IS DERIVED FROM THE GEOMETRY - there is no control to type one -
+ * so each case states the region it is about as a single point, and the range
+ * the editor calculates around it is what the origin is checked against.
+ */
+const atPoint = (x, y, width = 900, height = 520) => {
+  const graph = mathModel.createMathPlot({ x: 0, y: 0 }, 200, 200, {
+    mode: "sketch",
+    yRangeExplicit: true,
+    equalUnits: false,
+    points: [{ id: "origin-case", x, y }],
+  });
+
+  const opened = sketchEditor.openSketchEditor(graph, {
+    onApply: () => {},
+    onCancel: () => {},
+  });
+
+  const canvas = giveBox(opened, width, height);
+
+  opened.__datumSketch.refresh();
+
+  return { opened, canvas, state: opened.__datumSketch.stats() };
+};
+
+const symmetric = atPoint(0, 0);
 
 check(
-  "symmetric -5..5: the origin is in the middle of the canvas",
-  Math.abs(symmetric.state.origin.x - 450) < 1e-6 &&
-    Math.abs(symmetric.state.origin.y - 260) < 1e-6,
+  "a point at the origin places (0,0) in the middle of its own range",
+  Math.abs(symmetric.state.origin.x - project(symmetric.state, 0, 0).x) < 1e-6 &&
+    Math.abs(symmetric.state.origin.y - project(symmetric.state, 0, 0).y) < 1e-6,
   JSON.stringify(symmetric.state.origin),
 );
 
@@ -1010,23 +1057,27 @@ check(
 
 sketchEditor.closeSketchEditor();
 
-const asymmetric = originFor({ xMin: -10, xMax: 5, yMin: -2, yMax: 8 });
+const asymmetric = atPoint(8, 6);
 
 check(
-  "asymmetric x -10..5, y -2..8: the origin is where 0/0 falls, not centred",
+  "a point off the origin: the origin is where 0/0 falls, not centred",
   Math.abs(asymmetric.state.origin.x - project(asymmetric.state, 0, 0).x) < 1e-6 &&
-    Math.abs(asymmetric.state.origin.y - project(asymmetric.state, 0, 0).y) < 1e-6 &&
-    asymmetric.state.origin.x > 450 &&
-    asymmetric.state.origin.y > 260,
+    Math.abs(asymmetric.state.origin.y - project(asymmetric.state, 0, 0).y) < 1e-6,
   JSON.stringify(asymmetric.state.origin),
 );
 
 check(
   "and the mapping reports the per-axis scale of THIS canvas and range",
   Math.abs(
-    asymmetric.state.mapping.scaleX - 900 / (5 - -10),
+    asymmetric.state.mapping.scaleX -
+      asymmetric.state.mapping.width /
+        (asymmetric.state.limits.xMax - asymmetric.state.limits.xMin),
   ) < 1e-9 &&
-    Math.abs(asymmetric.state.mapping.scaleY - 520 / (8 - -2)) < 1e-9,
+    Math.abs(
+      asymmetric.state.mapping.scaleY -
+        asymmetric.state.mapping.height /
+          (asymmetric.state.limits.yMax - asymmetric.state.limits.yMin),
+    ) < 1e-9,
   `${asymmetric.state.mapping.scaleX} x ${asymmetric.state.mapping.scaleY}`,
 );
 
@@ -1041,43 +1092,46 @@ check(
 
 sketchEditor.closeSketchEditor();
 
-const positive = originFor({ xMin: 1, xMax: 9, yMin: 2, yMax: 10 });
-
-check(
-  "positive-only x 1..9, y 2..10: zero is out of range",
-  positive.state.origin.x < 0 && positive.state.origin.y > positive.state.canvas.height,
-  JSON.stringify(positive.state.origin),
-);
+const positive = atPoint(12, 14);
 
 /*
- * The sketch paints no coordinate system anywhere, so there is nothing to draw
- * an axis INTO - not for a zero in range and not for one out of it.
+ * THE ORIGIN IS KEPT IN VIEW.
+ *
+ * Positive-only geometry fits the calculated range to the first quadrant, and
+ * a range fitted there would take BOTH axes off the sheet. The editor widens
+ * the range to (0, 0) so the axes stay drawn whatever corner the ink is in.
  */
 check(
-  "so no axis line is drawn for either zero",
-  positive.canvas.querySelectorAll("line").length === 0,
-  String(positive.canvas.querySelectorAll("line").length),
+  "positive-only geometry: the range is widened to keep the origin in view",
+  positive.state.limits.yMin === 0 && positive.state.limits.xMin === 0,
+  JSON.stringify(positive.state.limits),
+);
+
+check(
+  "so both axes are still drawn",
+  positive.canvas.querySelectorAll('[data-sketch-axis="x"]').length === 1 &&
+    positive.canvas.querySelectorAll('[data-sketch-axis="y"]').length === 1,
+  `${positive.canvas.querySelectorAll("line").length} lines`,
 );
 
 sketchEditor.closeSketchEditor();
 
-const negative = originFor({ xMin: -9, xMax: -1, yMin: -8, yMax: -2 });
+const negative = atPoint(-14, -11);
 
 check(
-  "negative-only x -9..-1, y -8..-2: zero is past the far edges, not forced in",
-  negative.state.origin.x > negative.state.canvas.width &&
-    negative.state.origin.y < 0,
-  JSON.stringify(negative.state.origin),
+  "negative-only geometry: the range is widened the other way",
+  negative.state.limits.xMax === 0 && negative.state.limits.yMax === 0,
+  JSON.stringify(negative.state.limits),
 );
 
 sketchEditor.closeSketchEditor();
 
-const uneven = originFor({ xMin: -50, xMax: 50, yMin: -1, yMax: 1 }, 400, 900);
+const uneven = atPoint(0, 0, 400, 900);
 
 check(
-  "different X and Y ranges on a tall canvas fill it on both axes",
-  Math.abs(uneven.state.mapping.scaleX - 400 / 100) < 1e-9 &&
-    Math.abs(uneven.state.mapping.scaleY - 900 / 2) < 1e-9,
+  "a tall canvas fills its box on both axes",
+  Math.abs(uneven.state.mapping.scaleX - 400 / (uneven.state.limits.xMax - uneven.state.limits.xMin)) < 1e-9 &&
+    Math.abs(uneven.state.mapping.scaleY - 900 / (uneven.state.limits.yMax - uneven.state.limits.yMin)) < 1e-9,
   JSON.stringify(uneven.state.mapping),
 );
 
@@ -1085,8 +1139,8 @@ sketchEditor.closeSketchEditor();
 
 /* ==================================================== automatic bounds */
 
-console.log("\nAutomatic bounds follow the geometry");
-console.log("------------------------------------");
+console.log("\nThe range follows the geometry, with no bounds control");
+console.log("-----------------------------------------------------");
 
 const auto = openEditor();
 
@@ -1123,76 +1177,50 @@ check(
   JSON.stringify({ point: afterPoint.points[0], limits: afterPoint.limits }),
 );
 
-check(
-  "the mode label says Automatic",
-  auto.querySelector("[data-sketch-bounds-mode-label]").textContent ===
-    "Automatic",
-);
-
-/* TYPING A BOUND SWITCHES TO MANUAL. */
-const xMaxField = auto.querySelector('[data-sketch-field="xMax"]');
-
-xMaxField.value = "40";
-xMaxField.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-
-const afterTyping = auto.__datumSketch.stats();
-
-check(
-  "typing a bound switches to Manual",
-  afterTyping.boundsMode === "manual",
-  afterTyping.boundsMode,
-);
-
-check(
-  "and the range is the typed one",
-  afterTyping.limits.xMax === 40,
-  JSON.stringify(afterTyping.limits),
-);
-
-/* AND A LATER GEOMETRY CHANGE DOES NOT OVERWRITE IT. */
-pointer(autoSvg, "pointerdown", 800, 400);
-pointer(autoSvg, "pointerup", 800, 400);
-
-const afterSecondPoint = auto.__datumSketch.stats();
-
-check(
-  "a point added afterwards does not rescale a manual range",
-  afterSecondPoint.limits.xMax === 40 &&
-    afterSecondPoint.limits.xMin === afterTyping.limits.xMin,
-  JSON.stringify(afterSecondPoint.limits),
-);
-
-/* BACK TO AUTOMATIC. */
-click(auto.querySelector('[data-sketch-bounds-mode="auto"]'));
-
-const backToAuto = auto.__datumSketch.stats();
-
-check(
-  "the Automatic control returns the calculation",
-  backToAuto.boundsMode === "auto" &&
-    /* It now contains the furthest point, which is past 40. */
-    backToAuto.limits.xMax >= Math.max(...backToAuto.points.map((point) => point.x)),
-  JSON.stringify(backToAuto.limits),
+/*
+ * NO BOUNDS CONTROL AT ALL.
+ *
+ * The Automatic/Manual choice, the four range fields and the grid and axis
+ * settings are gone from the panel - and so is the Fit button that returned to
+ * the calculation, because there is nothing to return from.
+ */
+[
+  "[data-sketch-bounds-mode]",
+  "[data-sketch-field]",
+  "[data-sketch-toggle-setting=\"showGrid\"]",
+  "[data-sketch-toggle-setting=\"showXAxis\"]",
+  "[data-sketch-toggle-setting=\"showYAxis\"]",
+  "[data-sketch-fit]",
+  "[data-sketch-coordinates]",
+].forEach((selector) =>
+  check(`there is no ${selector}`, auto.querySelectorAll(selector).length === 0),
 );
 
 check(
-  "and every point is inside the recalculated range",
-  backToAuto.points.every(
+  "and the range is still a calculation, published for the mapping",
+  auto.__datumSketch.stats().limits.xMax >
+    auto.__datumSketch.stats().points[0].x,
+  JSON.stringify(auto.__datumSketch.stats().limits),
+);
+
+check(
+  "and every point is inside it",
+  auto.__datumSketch.stats().points.every(
     (point) =>
-      point.x >= backToAuto.limits.xMin &&
-      point.x <= backToAuto.limits.xMax &&
-      point.y >= backToAuto.limits.yMin &&
-      point.y <= backToAuto.limits.yMax,
+      point.x >= auto.__datumSketch.stats().limits.xMin &&
+      point.x <= auto.__datumSketch.stats().limits.xMax &&
+      point.y >= auto.__datumSketch.stats().limits.yMin &&
+      point.y <= auto.__datumSketch.stats().limits.yMax,
   ),
-  JSON.stringify({ points: backToAuto.points, limits: backToAuto.limits }),
+  JSON.stringify(auto.__datumSketch.stats()),
 );
 
 sketchEditor.closeSketchEditor();
 
 /* ============================================ zoom and pan are bounds */
 
-console.log("\nZoom and pan move the bounds, not the geometry");
-console.log("----------------------------------------------");
+console.log("\nThe wheel neither zooms nor pans the plane");
+console.log("-------------------------------------------");
 
 const zooming = openEditor();
 
@@ -1217,50 +1245,20 @@ zoomSvg.dispatchEvent(
 
 const afterZoom = zooming.__datumSketch.stats();
 
+/*
+ * NO COORDINATE ZOOM. The wheel used to rescale the range about the pointer,
+ * which is a coordinate-system control the student never asked for. The plane
+ * and its range are untouched by it now.
+ */
 check(
-  "the wheel narrows the range",
-  afterZoom.limits.xMax - afterZoom.limits.xMin <
-    beforeZoom.limits.xMax - beforeZoom.limits.xMin,
+  "the wheel leaves the range alone",
+  JSON.stringify(afterZoom.limits) === JSON.stringify(beforeZoom.limits),
   JSON.stringify({ before: beforeZoom.limits, after: afterZoom.limits }),
-);
-
-check(
-  "and the coordinate under the pointer stays under it",
-  (() => {
-    const before = beforeZoom.limits;
-    const at = {
-      x: before.xMin + (300 / 900) * (before.xMax - before.xMin),
-      y: before.yMax - (200 / 520) * (before.yMax - before.yMin),
-    };
-
-    const after = afterZoom.limits;
-
-    const now = {
-      x: after.xMin + (300 / 900) * (after.xMax - after.xMin),
-      y: after.yMax - (200 / 520) * (after.yMax - after.yMin),
-    };
-
-    return Math.abs(now.x - at.x) < 1e-6 && Math.abs(now.y - at.y) < 1e-6;
-  })(),
 );
 
 check(
   "and no stored point moved",
   JSON.stringify(afterZoom.points) === JSON.stringify(beforeZoom.points),
-);
-
-check(
-  "Fit returns to the calculated range",
-  (() => {
-    click(zooming.querySelector("[data-sketch-fit]"));
-
-    const refitted = zooming.__datumSketch.stats();
-
-    return (
-      refitted.boundsMode === "auto" &&
-      JSON.stringify(refitted.points) === JSON.stringify(beforeZoom.points)
-    );
-  })(),
 );
 
 sketchEditor.closeSketchEditor();

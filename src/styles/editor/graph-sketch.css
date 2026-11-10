@@ -37,7 +37,19 @@
 .drawing-graph-sketch .sketch-app {
   display: flex;
   flex-direction: column;
-  flex: 1;
+
+  /*
+   * THE APP FILLS THE OVERLAY.
+   *
+   * `flex: 1` is `1 1 0%`, and a zero BASIS measured against a CENTRED parent
+   * lets the item shrink to its content - which is how a full-height editor came
+   * out a few hundred pixels tall in the middle of the window. An explicit
+   * `auto` basis plus `align-self: stretch` means the app takes the overlay's
+   * whole height whatever its content happens to measure.
+   */
+  flex: 1 1 auto;
+  align-self: stretch;
+
   min-width: 0;
   min-height: 0;
 
@@ -586,66 +598,7 @@
   min-width: 10px;
 }
 
-/* ---- bounds */
 
-/*
- * THE BOUNDS CONTROL.
- *
- * It is a visible choice, not a checkbox buried under the numbers: the whole
- * canvas IS the coordinate space, and whether that space is calculated or typed
- * is the single most consequential setting on this panel.
- */
-.sketch-bounds {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-
-  margin-bottom: 9px;
-  padding: 2px;
-  border: 1px solid var(--datum-border);
-  border-radius: 5px;
-  background: var(--datum-surface);
-}
-
-.sketch-bounds .sketch-view-option {
-  height: 24px;
-  text-align: center;
-}
-
-.sketch-bounds-mode {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--datum-green);
-}
-
-.sketch-app.bounds-manual .sketch-bounds-mode {
-  color: var(--datum-muted);
-}
-
-.sketch-bounds-note {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--datum-muted);
-}
-
-.sketch-bounds-note.is-warning {
-  color: var(--datum-warning);
-  font-weight: 600;
-}
-
-.sketch-grid-fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.sketch-grid-fields .sketch-field-label {
-  min-width: 38px;
-}
 
 .sketch-toggles {
   display: grid;
@@ -684,11 +637,7 @@
   color: var(--datum-muted);
 }
 
-.sketch-readout {
-  font-variant-numeric: tabular-nums;
-  color: var(--datum-ink);
-  min-width: 120px;
-}
+
 
 .sketch-status {
   font-variant-numeric: tabular-nums;
@@ -789,9 +738,7 @@
     font-size: 11px;
   }
 
-  .sketch-readout {
-    min-width: 0;
-  }
+
 
   .sketch-app-footer {
     gap: 8px;
