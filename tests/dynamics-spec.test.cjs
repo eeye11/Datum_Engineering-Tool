@@ -289,10 +289,15 @@ test("only the analytical tools ask for a label as they are created", async () =
    * the on-drawing value field as it is created, so a second label field straight
    * afterwards opened two boxes for one placement.
    */
+  /*
+   * THE TWO KINEMATICS VECTORS ASK FOR THEIR MAGNITUDE, NOT THEIR NAME, first.
+   * They are asked through `dynamics-vector-value.js` - the same on-drawing
+   * magnitude field a Point Force and a Moment use - so omitting them from this
+   * list is what keeps the label question from opening a SECOND field beside
+   * the magnitude one.
+   */
   assert.deepEqual([...m.label.LABEL_CAPABLE_TOOLS].sort(), [
     "distributed-load",
-    "dynamics-angular-vector",
-    "dynamics-polar-vector",
     "moment",
     "varying-distributed-load",
   ]);

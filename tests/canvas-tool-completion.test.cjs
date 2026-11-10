@@ -57,7 +57,12 @@ test('partial rectangle-to-line dimensions use endpoints, never infer an angle, 
  assert.equal(state.interaction.dimensionStage,'placement');
  assert.equal(state.interaction.dimensionChoice,'horizontal');
  click({x:35,y:60});
- const input=document.querySelector('.drawing-creation-dimension input[type="text"]');assert.ok(input);
+ /*
+  * THE DIMENSION'S NUMBER IS TYPED ON THE DRAWING, not in a popup. The field
+  * opens over the number the placement just drew (`drawing-dimension-text-editor`),
+  * so the editor it asks for is the in-page one.
+  */
+ const input=document.querySelector('.drawing-dimension-text-field');assert.ok(input);
  input.value='65 mm';input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
  await Promise.resolve();
  /* The Dimension tool stays armed after committing one; Escape or empty canvas ends it. */

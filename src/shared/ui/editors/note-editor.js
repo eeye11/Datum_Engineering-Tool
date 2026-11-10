@@ -494,23 +494,46 @@ function openLabelFlow(options, anchor) {
   const input = openDialog.querySelector("#noteText");
 
   /*
-   * THE ANSWER IS APPLIED BEFORE THE FIELD GOES AWAY, AND A REFUSED ONE KEEPS
-   * IT OPEN - the same contract every other on-drawing editor has. Without
-   * this an answer the caller cannot use would close the field and leave the
-   * student with no sign of why it was not taken.
+   * THE FIELD GOES AWAY BEFORE ITS ANSWER IS APPLIED.
+   *
+   * The caller's `onApply` frequently OPENS THE NEXT FIELD - a vector's name
+   * follows its magnitude, a force's name follows its value - and `close()`
+   * removes whatever `openDialog` currently holds. Applying first meant that
+   * close took down the field the answer had just opened, not this one: the
+   * name prompt vanished the instant it appeared, and every chained prompt
+   * broke behind a commit that had already succeeded.
+   *
+   * `text` is read up front, so closing first cannot lose what was typed. A
+   * REFUSED answer still keeps the field open - nothing has been closed yet,
+   * and the reason is left on screen for the student to correct.
    */
   const apply = () => {
     const text = input ? input.value : "";
 
-    const result = options.onApply?.(text);
+    const refused = options.onApply?.(text);
 
-    if (result && result.ok === false) {
+    /*
+     * A REFUSED ANSWER KEEPS THE FIELD OPEN - the answer is not taken, so
+     * there is nothing to close and the reason stays on screen.
+     */
+    if (refused && refused.ok === false) {
       input?.focus?.();
 
       return false;
     }
 
+    /*
+     * CLOSE BEFORE APPLYING THE ANSWER. The caller's `onApply` frequently
+     * OPENS THE NEXT FIELD - a vector's name follows its magnitude - and
+     * `close()` removes whatever `openDialog` holds at the moment it runs.
+     * Applying first meant that close took down the field the answer had just
+     * opened, not this one, so every chained prompt died behind a commit that
+     * had already succeeded. The text was read up front, so closing first
+     * cannot lose what was typed.
+     */
     close();
+
+    options.onApply?.(text);
 
     return true;
   };

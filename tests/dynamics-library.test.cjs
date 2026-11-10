@@ -787,7 +787,12 @@ test("every Dynamics symbol has direct-manipulation handles", async () => {
   const objects = await builtObjects();
 
   const expected = {
-    "dynamics-particle": ["position", "dynamics-radius"],
+    /*
+     * A PARTICLE HAS NO SIZE GRIP. Its grips are its position alone - the same
+     * as a Statics particle, because it IS the same object. The radius handle
+     * that used to sit on its rim is deleted, not hidden.
+     */
+    "dynamics-particle": ["position"],
     "dynamics-rigid-body": ["rigid-corner"],
     "dynamics-polar-vector": ["start", "end"],
     "dynamics-angular-vector": ["center", "dynamics-radius"],
