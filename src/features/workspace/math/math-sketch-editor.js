@@ -2855,9 +2855,27 @@ export function openSketchEditor(graph, options = {}) {
     button.addEventListener("click", cancel);
   });
 
+  /*
+   * ESCAPE ENDS THE EDITOR WHEREVER FOCUS IS.
+   *
+   * The dialog's own keydown only fires when a key lands INSIDE it - arming a
+   * tool or clicking the page leaves focus on the body, and an Escape aimed at
+   * the modal was then swallowed by the canvas handlers behind it. The editor
+   * is modal (aria-modal), so its Escape is a document-level listener taken
+   * down with the dialog itself.
+   */
+  const globalEscape = (event) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancel();
+  };
+  globalThis.document.addEventListener("keydown", globalEscape, true);
+
   function teardown() {
     resizeObserver?.disconnect();
     globalThis.removeEventListener?.("resize", scheduleDraw);
+    globalThis.document.removeEventListener?.("keydown", globalEscape, true);
 
     if (mediaQuery?.removeEventListener) {
       mediaQuery.removeEventListener("change", applyNarrowLayout);

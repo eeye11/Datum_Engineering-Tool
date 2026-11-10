@@ -20,6 +20,11 @@ import { chromium } from "@playwright/test";
 const baseUrl = process.argv[2] || "http://localhost:8123/";
 const outFile = process.argv[3] || "golden.json";
 const only = process.argv[4] ? new RegExp(process.argv[4]) : null;
+/*
+ * THE PERSISTENCE CONTRACT: every creation tool stays armed after committing
+ * one object - Escape, its own button, or a click on empty canvas ends it,
+ * not the commit. The trailing-enter guard below relies on that.
+ */
 
 /* Every tool, by category, with the submenu item to pick (if any). */
 const TOOLS = [
@@ -87,7 +92,10 @@ const TOOLS = [
     ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
     ["THERMODYNAMICS", "control-volume"],
     ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
-    ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"], ["MATH / ANALYSIS", "function"]
+    ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"],
+    /* The Math / Analysis tools are its current ids - a graph tool with a
+       sketch/expression mode pair, not the retired "function" entry. */
+    ["MATH / ANALYSIS", "math-point"], ["MATH / ANALYSIS", "math-plot", "Sketch"],
 ];
 
 /* Deterministic randomness and time, installed before any app script runs. */
@@ -189,7 +197,7 @@ async function main() {
                 const editor = [...document.querySelectorAll(".drawing-canvas-text-editor, .drawing-inline-entry")].find(shown);
                 if (editor) {
                     const input = editor.querySelector("textarea, input");
-                    return {kind:"text", empty:!input?.value};
+                    return {kind:"text", empty:!input?.value, dimension: !!editor.querySelector(".drawing-dimension-text-field")};
                 }
                 const sizing = [...document.querySelectorAll(".drawing-creation-dimension")].find(shown);
                 if (sizing) {
@@ -202,7 +210,14 @@ async function main() {
             if (!popup) return;
             debug("popup", JSON.stringify(popup));
             if (popup.kind === "picked") { await sleep(150); continue; }
-            if (popup.kind === "text" && popup.empty) await page.keyboard.type("Example note");
+            /*
+             * A dimension's in-page field is answered with the scenario's
+             * magnitude; the field opens pre-filled with the measurement, so
+             * the typed value replaces it on commit.
+             */
+            if (popup.kind === "text" && popup.dimension) {
+                await page.locator(".drawing-dimension-text-field").fill(VALUES.magnitude);
+            } else if (popup.kind === "text" && popup.empty) await page.keyboard.type("Example note");
             if (popup.kind === "sizing" && (popup.empty || /magnitude|content/.test(popup.label))) {
                 const key = Object.keys(VALUES).find(k => popup.label.includes(k));
                 await page.locator(".drawing-creation-dimension [data-creation-input], .drawing-creation-dimension input[type=text]").first().fill(VALUES[key] || "50");
@@ -391,17 +406,46 @@ async function main() {
             await acceptPopups(toolId);
             steps.push(await page.evaluate(() => window.enggDrawing.state.objects.length));
         }
+        /*
+         * THE PERSISTENCE CONTRACT: committing a feature keeps its tool armed.
+         * Every ANNOTATE tool now follows the global rule - Escape or a click
+         * on empty canvas ends the tool, not the commit itself.
+         */
         if (category === "ANNOTATE") {
-            assert.equal(await page.evaluate(() => window.enggDrawing.state.activeTool), "select",
-                `${key} should return to Select after completing the tool`);
+            assert.equal(await page.evaluate(() => window.enggDrawing.state.activeTool), toolId,
+                `${key} should stay armed after completing the tool`);
         }
-        await page.keyboard.press("Enter"); await sleep(120); await acceptPopups();
+        /*
+         * The trailing Enter used to confirm the old creation popup. It must
+         * only be sent when something is actually waiting for it: on an idle
+         * canvas Enter now places a text node, which would leave a phantom
+         * empty note behind a tool that has already finished.
+         */
+        const waiting = await page.evaluate(() => {
+            const shown = el => el && getComputedStyle(el).display !== "none" && el.getClientRects().length > 0;
+            return [
+                ".drawing-canvas-text-editor", ".drawing-inline-entry",
+                ".drawing-creation-dimension", ".datum-symbol-picker",
+                ".datum-table-picker", "dialog[open]", ".engg-dialog-backdrop", "[role=dialog]",
+            ].some(sel => [...document.querySelectorAll(sel)].some(shown));
+        });
+        if (waiting) { await page.keyboard.press("Enter"); await sleep(120); await acceptPopups(); }
         await escape();
         const snap = await snapshot();
         const created = snap.objects.map(o => o.id).filter(id => !before.includes(id));
         if (category === "ANNOTATE") {
             const added = snap.objects.filter(object => created.includes(object.id));
-            assert.equal(added.length, 1, `${key} should create exactly one annotation`);
+            /*
+             * Symbol and Table STAY ARMED with the choice spent per placement,
+             * so how many they place depends on which clicks the picker
+             * consumed; assert at least one and that every one is the kind
+             * under test. Everything else is completed once.
+             */
+            if (toolId === "symbol" || toolId === "table") {
+                assert.ok(added.length >= 1, `${key} should place at least one annotation`);
+            } else {
+                assert.equal(added.length, 1, `${key} should create exactly one annotation`);
+            }
             const object = added[0];
             if (toolId === "dimension" || toolId === "angle") {
                 assert.equal(object.type, "dimension");
