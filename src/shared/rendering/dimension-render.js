@@ -28,16 +28,26 @@ import enggTheme from "../../components/layout/workspace/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
 import { frameCenter } from "../geometry/dimension-layout.js";
 import {
+  activeZoom,
   createSvgElement,
   paintColour,
   scaledStrokeWidth,
-  STROKE_SCALE,
-  zoomedFontHere,
 } from "./svg-primitives.js";
 import {
+  DIMENSION_DEFAULT_FONT_PT,
   dimensionArrowMm,
+  dimensionFontPt,
   dimensionPens,
 } from "../geometry/dimension-layout.js";
+import {
+  CANVAS_BASELINE,
+  CANVAS_FONT_STACK,
+  FONT_WEIGHTS,
+  LINE_SPACING,
+  SECONDARY_FONT_PX,
+  compensationFor,
+  fontSizeOf,
+} from "../typography/canvas-typography.js";
 
 /*
  * The three weights, as multipliers of the object's own pen. They are exported
@@ -68,7 +78,23 @@ export const SCREEN_LABEL_MIN_PX = 15;
  * and the printed `Latex` head are the same size relative to the drawing.
  */
 function arrowHeadSize(lineWidth) {
-  return Math.max(4, scaledStrokeWidth(dimensionArrowMm({ lineWidth })));
+  /*
+   * THE HEAD SCALES WITH THE DRAWING, LIKE THE DIMENSION IT ENDS.
+   *
+   * The head's length is a size in DRAWING units (the document's
+   * `dimensionArrowMm`, painted through `STROKE_SCALE`). Its tip has already
+   * been projected, so those units are overlay pixels - but every pixel of that
+   * overlay is painted `zoom` times larger. Returning the bare size therefore
+   * drew a fixed-pixel triangle on a line whose position scaled, which is why a
+   * head looked bulbous zoomed out and tiny zoomed in.
+   *
+   * `scaledStrokeWidth` divides the zoom out (a stroke's PAINTED width is the
+   * stored weight at every zoom), so it is multiplied back in here: this is
+   * geometry, not a pen.
+   */
+  const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
+
+  return Math.max(4, scaledStrokeWidth(dimensionArrowMm({ lineWidth }))) * zoom;
 }
 
 /*
@@ -157,34 +183,59 @@ function appendDimensionText(svg, text, frame, stroke, toScreen, object) {
   const lines = String(text).split("\n");
 
   /*
-   * THE LABEL'S SIZE, IN THE CANVAS'S OWN PIXELS.
+   * THE LABEL'S SIZE IS A CANVAS FONT SIZE - A SCREEN SIZE.
    *
-   * The label's TYPE HEIGHT in drawing units is the model's own `fontWorld`
-   * (`points / POINTS_PER_MM`) - a millimetre figure - and the canvas paints one
-   * drawing unit as `STROKE_SCALE` pixels, the same factor every other stroke
-   * uses. That is ONE multiplication of a document length; re-converting the
-   * stored POINTS (pt -> mm -> px) painted an 11 pt label at three times its
-   * document size, which is what made the number huge.
+   * `style.fontSize` is the dimension's size in the one unit the whole
+   * application now uses for canvas text: screen pixels. The model still states
+   * the printed point size (`label.fontPt`) for the source writer and the
+   * panel, but the CANVAS paints this number.
    *
-   * AND THE RESULT HAS A READABLE FLOOR. A label's printed size is a paper
-   * figure, and at 100% zoom 11 pt of paper is under ten screen pixels - legible
-   * on the page, not on a monitor. The floor is the size a screen glyph needs to
-   * be READ; it changes how the number is shown, never what the document stores
-   * or what the source prints, and it keeps the label's proportion to the
-   * drawing because the drawing's own strokes have the same kind of floor.
+   * THE CAMERA IS CANCELLED BELOW, on the text group, so the number measures
+   * the same on screen at every zoom while the frame's own position - which is
+   * a drawing position - goes on moving with the dimension. The old code
+   * painted a millimetre figure through `STROKE_SCALE` and then let the camera
+   * scale it, so the value grew as the student zoomed in and shrank as they
+   * zoomed out.
    */
-  const fontWorld = Number(frame?.fontWorld) || Number(frame?.label?.fontWorld) || 0;
+  /*
+   * The zoom this frame is drawn at, recorded once by `renderDrawing` - the
+   * same number every other painter of this frame reads, so a label and the
+   * line it belongs to can never be drawn against two different cameras.
+   */
+  const zoom = Math.max(Number(activeZoom) || 1, 0.0001);
 
-  const fontSize = zoomedFontHere(
-    fontWorld > 0
-      ? Math.max(SCREEN_LABEL_MIN_PX, fontWorld * STROKE_SCALE)
-      : SCREEN_LABEL_MIN_PX,
-  );
-  const lineHeight = fontSize * 1.15;
+  /*
+   * An 11 pt dimension number is SMALLER ON SCREEN than a 16 px note, so an
+   * absent size takes the secondary role (14 px) rather than being read as a
+   * point size and painted 11-pt-small. A stored size is the student's own and
+   * is honoured exactly - `fontPt` stays available for the print and the panel.
+   */
+  const storedPt = dimensionFontPt(object?.style);
+
+  const fallbackSize = storedPt === DIMENSION_DEFAULT_FONT_PT
+    ? SECONDARY_FONT_PX
+    : storedPt;
+
+  const fontSize = fontSizeOf(object?.style?.fontSize, fallbackSize);
+  const lineHeight = fontSize * LINE_SPACING;
+
+  /*
+   * ROTATION AND COMPENSATION COMPOSE ABOUT THE SAME ANCHOR.
+   *
+   * The group is moved to the label's projected centre, turned to the
+   * dimension's own angle, and THEN scaled by `1 / zoom`. Rotation turns the
+   * glyphs; the compensation divides the camera back out of them. Both happen
+   * about the centre, so the label neither grows with the zoom nor turns about
+   * any point but its own - which is what keeps a vertical dimension's number
+   * on its line, and an angled one's alongside it, at every magnification.
+   */
+  const compensation = compensationFor(zoom);
+  const rotation = `rotate(${-Number(frame.angle || 0)})`;
 
   const group = createSvgElement("g", {
-    transform: `translate(${origin.x} ${origin.y}) rotate(${-Number(frame.angle || 0)})`,
+    transform: `translate(${origin.x} ${origin.y}) ${rotation}${compensation ? ` ${compensation}` : ""}`,
     class: "drawing-dimension-text",
+    "data-unzoomed-text": "true",
     ...(object?.id ? { "data-dimension-id": object.id } : {}),
   });
 
@@ -195,6 +246,12 @@ function appendDimensionText(svg, text, frame, stroke, toScreen, object) {
     enggCanvasPalette.CANVAS_BACKGROUND[enggCanvasPalette.activeCanvasTheme()];
 
   lines.forEach((line, index) => {
+    /*
+     * THE HALO IS MEASURED IN THE GROUP'S OWN UNITS, which the
+     * inverse-zoom compensation has already divided by the camera - so it is a
+     * thin screen-coloured outline around the glyphs at every zoom rather than
+     * a slab that swells as the student zooms in.
+     */
     const span = createSvgElement("text", {
       x: 0,
       y: (index - (lines.length - 1) / 2) * lineHeight,
@@ -204,9 +261,8 @@ function appendDimensionText(svg, text, frame, stroke, toScreen, object) {
       "stroke-linejoin": "round",
       "paint-order": "stroke fill",
       class: "drawing-dimension-label",
-      "font-size": fontSize,
-      "font-family": "Arial, sans-serif",
-      "font-weight": object?.style?.bold === true ? "bold" : "normal",
+      "font-family": CANVAS_FONT_STACK,
+      "font-weight": object?.style?.bold === true ? FONT_WEIGHTS.bold : FONT_WEIGHTS.regular,
       "font-style": object?.style?.italic === true ? "italic" : "normal",
       "text-anchor":
         frame.alignment === "left"
@@ -214,8 +270,10 @@ function appendDimensionText(svg, text, frame, stroke, toScreen, object) {
           : frame.alignment === "right"
             ? "end"
             : "middle",
-      "dominant-baseline": "middle",
+      "dominant-baseline": CANVAS_BASELINE,
     });
+
+    span.setAttribute("font-size", String(fontSize));
 
     span.textContent = line;
     group.appendChild(span);
@@ -276,6 +334,23 @@ function appendDimensionEntity(svg, entity, state, toScreen, style) {
 
   const head = arrowHeadSize(style.lineWidth);
 
+  /*
+   * A DIMENSION'S PENS ARE THE DRAWING'S, SO THEY SCALE WITH THE DRAWING.
+   *
+   * The pens are document millimetres, and `scaledStrokeWidth` paints them at
+   * the canvas's own pixels-per-unit - with the camera divided back out, so the
+   * width that reaches the glass is the stored weight at every magnification.
+   * The geometry is projected, so the pen keeps its proportion to the beam it
+   * measures - which is what the compiled picture beside it states too.
+   *
+   * THIS USED TO PIN THE WIDTH WITH `vector-effect: non-scaling-stroke`. That
+   * held the dimension at a fixed screen weight while its witnesses spread
+   * further apart with the zoom, so at 400% a dimension looked like a hairline
+   * drawn across a canvas - and it disagreed with the source, whose stroke is
+   * stated in the drawing's own units.
+   *
+   * The dash pattern is part of the drawing for the same reason.
+   */
   const drawLine = (from, to, { dashed = false, width = lineWidth } = {}) => {
     const a = toScreen(from);
     const b = toScreen(to);

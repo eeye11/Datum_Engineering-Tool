@@ -146,7 +146,20 @@ const SCHEMATIC_CLICK_TOOLS = [
     "fluid-level",
     "flow-direction-diagram"
 ];
-import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import {
+    isHeatClickTool,
+    isHeatDragTool,
+    isHeatPolyTool,
+    commitHeatClickAt,
+    heatDragPreview,
+    commitHeatDrag,
+    heatPathSegmentPreview,
+    commitHeatPathSegment,
+    heatPathContinuationTarget,
+    HEAT_POLY_PHASE
+} from "./heat-transfer-tool.js";
+import { renderEngineeringTools, setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
+import { activeCategory } from "../../../components/layout/toolbar/tool-menus.js";
 import { resolvePointerEvent } from "./pointer.js";
 import { STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../statics/statics-tools.js";
 import { ANALYSIS_DIAGRAM_TOOLS } from "../statics/analysis-tools.js";
@@ -235,6 +248,8 @@ const DRAG_GEOMETRY_TOOLS = [
 const PROGRESSIVE_TOOLS = [
     "polyline",
     "truss",
+
+
 
     /*
      * THE FREEFORM POLYGON IS A FLOW TOOL TOO.
@@ -555,6 +570,33 @@ export function isDragCreationTool(
      * selection path and the tool creates nothing at all.
      */
     if (SCHEMATIC_DRAG_TOOLS[toolId] || SCHEMATIC_CLICK_TOOLS.includes(toolId)) {
+        return true;
+    }
+
+    /*
+     * THE HEAT TRANSFER TOOLS HAVE THE SAME THREE GESTURES.
+     *
+     * A drag tool - a wall, a composite wall, a fin, an arrow, a boundary, a
+     * region - takes its object from one press-drag-release; a click tool - a
+     * source, a node, an element, a marker - is placed on the press itself;
+     * and a poly tool - a path, an isotherm - collects its points click by
+     * click. All three are recognised here, or the press falls straight
+     * through to the selection path and the tool creates nothing at all.
+     */
+    /*
+     * A HEAT TRANSFER PATH IS DRAWN WITH THE LINE TOOL'S OWN GESTURE.
+     *
+     * One press-drag-release draws ONE segment, exactly as a Pipe / Duct run or
+     * a Line does; releasing commits it (or appends it to the path being
+     * continued). It is NOT a click-chain: the click-to-add-points system it
+     * used to have was a second drawing engine beside the one the application
+     * already had.
+     */
+    if (isHeatPolyTool(toolId)) {
+        return true;
+    }
+
+    if (isHeatDragTool(toolId) || isHeatClickTool(toolId)) {
         return true;
     }
 
@@ -904,6 +946,138 @@ export function beginCreationDrag(
         } else {
             commitInlineAt(tool, point);
         }
+
+        return true;
+    }
+
+    /*
+     * A HEAT TRANSFER CLICK TOOL PLACES ON THE PRESS.
+     *
+     * A source, a node, an element or a marker is placed by ONE point - where
+     * the student clicked - so the object is committed at the press and there
+     * is no drag to finish.
+     *
+     * THE SNAPPED POINT IS USED, NOT THE RAW ONE. A placed symbol is a POINT
+     * TOOL of the same family as a Particle or a Reference Point, and those
+     * snap to the grid, to an existing feature and to a horizontal/vertical
+     * guide. Committing the raw pointer here would place a node a fraction of
+     * a millimetre off the grid the rest of the sheet is built on, which is
+     * exactly what the student was aiming to avoid.
+     */
+    if (isHeatClickTool(drawingState.activeTool)) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        if (!point) {
+            return false;
+        }
+
+        /*
+         * A CLICK ON AN EXISTING OBJECT SELECTS IT, NOT A NEW SYMBOL ON TOP.
+         *
+         * The same rule the canvas applies while any creation tool is armed:
+         * clicking something that is already drawn means "select this", so a
+         * student inspecting a placed node does not stack another one on it.
+         * A click on empty canvas still places the symbol.
+         */
+        if (pressSelectsExistingObject(event)) {
+            return false;
+        }
+
+        commitHeatClickAt(drawingState.activeTool, point);
+
+        return true;
+    }
+
+
+
+    /*
+     * A HEAT TRANSFER PATH TAKES ONE SEGMENT FROM THE ONE GESTURE.
+     *
+     * The press is the segment's start; the release is its end. If the press
+     * landed on the path being continued, that path is extended on release;
+     * otherwise a new path is created. Nothing is written until the release.
+     */
+    if (isHeatPolyTool(drawingState.activeTool)) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint =
+            resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        /* The snapped start is the segment's alignment anchor for H/V inference. */
+        enggDrawingState.setInteraction(drawingState, {
+            heatTool: drawingState.activeTool,
+            phase: HEAT_POLY_PHASE,
+            heatStart: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
+            preview: null
+        });
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            heatPathTool: drawingState.activeTool,
+            start: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
+            style: { ...(drawingState.styleDefaults || {}) },
+            startScreen: { x: event.clientX, y: event.clientY },
+            moved: false
+        };
+
+        return true;
+    }
+
+    /*
+     * A HEAT TRANSFER DRAG TOOL TAKES ITS WHOLE OBJECT FROM THE ONE GESTURE.
+     *
+     * The press is the first corner (a region, a composite wall) or the first
+     * end (a wall, an arrow, a boundary, a fin); the release is the other.
+     * Nothing is written until the release, so Escape leaves no half-built
+     * object behind.
+     */
+    if (isHeatDragTool(drawingState.activeTool)) {
+        if (event.button !== 0) {
+            return false;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const pressPoint = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        /*
+         * THE SNAPPED START IS PUBLISHED ON THE INTERACTION.
+         *
+         * The pointer resolver reads `interaction.heatStart` as the alignment
+         * reference for the drag's SECOND point, so horizontal and vertical
+         * inference can pull the moving end square to where the press landed.
+         * Without it the resolver had no anchor and the run could not be
+         * squared - the same missing anchor a Beam had before it joined the
+         * shared inference.
+         */
+        enggDrawingState.setInteraction(drawingState, {
+            heatTool: drawingState.activeTool,
+            phase: "heat-drag-construct",
+            heatStart: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
+            preview: null
+        });
+
+        editorState.creationDrag = {
+            pointerId: event.pointerId,
+            heatDragTool: drawingState.activeTool,
+            start: pressPoint ? { x: pressPoint.x, y: pressPoint.y } : null,
+            style: { ...(drawingState.styleDefaults || {}) },
+            startScreen: {
+                x: event.clientX,
+                y: event.clientY
+            },
+            moved: false
+        };
 
         return true;
     }
@@ -1587,6 +1761,81 @@ export function moveCreationDrag(event) {
         return;
     }
 
+    /*
+     * A HEAT TRANSFER DRAG PREVIEWS THE OBJECT IT WILL CREATE.
+     *
+     * The preview is built by the SAME factory the commit uses - see
+     * `heatDragPreview` - so a wall's two faces, a composite wall's layers or
+     * a boundary's decorations do not change shape when the button is
+     * released. The preview is published on the interaction every frame, so
+     * the shared preview renderer draws it.
+     */
+    /*
+     * A HEAT TRANSFER PATH PREVIEWS ITS SEGMENT - AND THE PATH IT CONTINUES.
+     *
+     * The preview is built by the SAME factory the commit uses, in the path's
+     * own line type, so a Radiation Path previews as a wave and a Convection
+     * Flow as a smooth line from the first frame. When the drag continues a
+     * path, the preview carries that path's whole existing geometry too, so the
+     * path being extended stays visible while the new segment is dragged.
+     */
+    if (session.heatPathTool) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        session.currentPoint = point || null;
+
+        const continuation = heatPathContinuationTarget(session.start);
+
+        enggDrawingState.setInteraction(drawingState, {
+            heatTool: session.heatPathTool,
+            phase: HEAT_POLY_PHASE,
+            heatStart: session.start ? { x: session.start.x, y: session.start.y } : null,
+            preview: heatPathSegmentPreview(
+                session.heatPathTool,
+                session.start,
+                point,
+                continuation
+            ),
+            snapGeometry: session.start && point ? [{ start: session.start, end: point }] : []
+        });
+
+        return;
+    }
+
+    if (session.heatDragTool) {
+        if (!session.moved) {
+            const dx = event.clientX - session.startScreen.x;
+            const dy = event.clientY - session.startScreen.y;
+
+            session.moved = Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX;
+        }
+
+        const resolution = resolvePointerEvent(event);
+
+        const point = resolution.effectiveConstructionPoint || resolution.rawPointerPoint;
+
+        session.currentPoint = point || null;
+
+        enggDrawingState.setInteraction(drawingState, {
+            heatTool: session.heatDragTool,
+            phase: "heat-drag-construct",
+            heatStart: session.start ? { x: session.start.x, y: session.start.y } : null,
+            preview: heatDragPreview(session.heatDragTool, session.start, point),
+            snapGeometry: session.start && point ? [{ start: session.start, end: point }] : []
+        });
+
+        return;
+    }
+
     if (session.pipeDuct) {
         if (!session.moved) {
             const dx = event.clientX - session.startScreen.x;
@@ -2036,8 +2285,116 @@ export function finishCreationDrag(
         return true;
     }
 
+    /*
+     * A HEAT TRANSFER DRAG THAT NEVER MOVED LEAVES NOTHING BEHIND.
+     *
+     * A wall, a region or a boundary needs two points; a press with no travel
+     * has only one, so the preview is dropped and the tool stays armed for a
+     * real drag - exactly as a schematic drag does.
+     */
+    /*
+     * A HEAT TRANSFER PATH PRESS THAT NEVER TRAVELLED IS NOT A SEGMENT.
+     *
+     * It is dropped and left to the click pipeline, which selects whatever was
+     * under the press - so a click with a path tool armed behaves exactly as a
+     * click with the Line tool armed does.
+     */
+    if (session.heatPathTool && !session.moved) {
+        enggDrawingState.setInteraction(drawingState, {
+            preview: null,
+            phase: HEAT_POLY_PHASE
+        });
+
+        renderCurrentDrawing();
+
+        return true;
+    }
+
+    if (session.heatDragTool && !session.moved) {
+        /*
+         * A BARE CLICK WITH A HEAT TRANSFER DRAG TOOL IS NOT A SHAPE.
+         *
+         * A Wall / Slab, a Thermal Region, a Boundary, an Arrow, a Fin or a
+         * Contact needs two points; a press with no travel has only one. The
+         * preview is dropped, whatever was under the press is SELECTED (or the
+         * selection cleared on empty canvas), and the canvas goes back to
+         * Select - so clicking outside an object always returns the student to
+         * the ordinary selection tool rather than leaving a tool armed.
+         */
+        enggDrawingState.setInteraction(drawingState, {
+            heatTool: session.heatDragTool,
+            preview: null,
+            phase: "idle"
+        });
+
+        const press = resolvePointerEvent(event);
+
+        const hit = press.rawPointerPoint ? objectAtPoint(press.rawPointerPoint) : null;
+
+        /*
+         * BACK TO SELECT, WITHOUT REACHING BACK INTO THE TOOLBAR.
+         *
+         * The active tool is written directly here rather than through
+         * `activateTool`, which lives in the toolbar and reaches back into
+         * this module - importing it would close a cycle. Setting the tool and
+         * clearing the interaction is what that function does for Select, and
+         * the status line is set the same way.
+         */
+        enggDrawingState.setActiveTool(drawingState, "select");
+        enggDrawingState.clearInteraction(drawingState);
+
+        enggDrawingState.selectObject(drawingState, hit ? hit.id : null);
+
+        setToolMessage("Select geometry");
+
+        /* Redraw the toolbar so the Select button is the lit one. */
+        renderEngineeringTools(activeCategory());
+
+        renderProperties();
+        renderFeatures();
+        renderCurrentDrawing();
+
+        return true;
+    }
+
     if (!session.moved) {
         return false;
+    }
+
+    /*
+     * A HEAT TRANSFER DRAG COMMITS AT THE RELEASE.
+     *
+     * The release is the object's other corner (or its other end), resolved
+     * through the same snapping the preview used - so the wall the student
+     * saw is the wall they get.
+     */
+    /*
+     * A HEAT TRANSFER PATH COMMITS ONE SEGMENT AT THE RELEASE - extending the
+     * path the press landed on, or starting a new one. The commit is ONE undoable
+     * change, and the tool stays armed for the next segment.
+     */
+    if (session.heatPathTool) {
+        const resolution = resolvePointerEvent(event);
+
+        const end = resolution.effectiveConstructionPoint || resolution.rawPointerPoint || session.currentPoint;
+
+        commitHeatPathSegment(session.heatPathTool, session.start, end);
+
+        return true;
+    }
+
+    if (session.heatDragTool) {
+        const resolution = resolvePointerEvent(event);
+
+        const end = resolution.effectiveConstructionPoint || resolution.rawPointerPoint || session.currentPoint;
+
+        commitHeatDrag(session.heatDragTool, session.start, end);
+
+        enggDrawingState.setInteraction(drawingState, { preview: null, phase: "idle" });
+
+        renderCurrentDrawing();
+
+        return true;
     }
 
     /*

@@ -70,10 +70,15 @@ after(() => window.close());
  * inside `.drawing-canvas-text-editor`. Neither lives inside the canvas element
  * itself, so the canvas is not where a field is looked for.
  */
+/*
+ * THE FIELD IS A TEXTAREA, because the one inline editor is multiline so that
+ * Shift+Enter can add a line. Both of its presentations are listed - the
+ * on-drawing label field and the general inline prompt - because a caller may
+ * use either; there is no third editor any more.
+ */
 const FIELD_SELECTORS = [
+  ".drawing-inline-entry textarea",
   ".drawing-inline-entry input",
-  ".drawing-canvas-text-editor input",
-  ".drawing-canvas-text-editor textarea",
 ];
 
 /*
@@ -218,12 +223,16 @@ test("the Polar Vector asks for its name only after the magnitude", () => {
 
   const stored = state.objects.find((o) => o.id === object.id);
 
-  assert.equal(
-    stored.name,
-    "v_A",
-    "the typed text becomes the feature's label",
-  );
-  assert.equal(stored.label, "v_A", "and its drawn label");
+  /*
+   * THE TYPED TEXT BECOMES THE DRAWN LABEL, AND ONLY THAT.
+   *
+   * `name` is the object's identity in the Objects list and its tool-given name;
+   * `label` is the text on the sheet. They are two properties, so labelling a
+   * vector does not rename it - which is what lets a student keep "Polar
+   * Vector 2" in the inventory and print "v_A" beside the arrow.
+   */
+  assert.equal(stored.label, "v_A", "the typed text becomes the drawn label");
+  assert.notEqual(stored.name, "v_A", "and the object's name is its own");
 });
 
 test("an Angular Vector asks for its magnitude before its name too", () => {
@@ -263,8 +272,7 @@ test("an Angular Vector asks for its magnitude before its name too", () => {
 
   const stored = state.objects.find((o) => o.id === object.id);
 
-  assert.equal(stored.name, "ω_A");
-  assert.equal(stored.label, "ω_A");
+  assert.equal(stored.label, "ω_A", "the typed text is the drawn label");
   assert.equal(
     stored.magnitudeLabel,
     "ω",

@@ -50,7 +50,16 @@ const check = (name, ok, detail) => {
  * shared `updateFeatureProperty` setter is retired with that panel.)
  */
 const schema = require(locate("feature-schema.js"));
-const setLabel = (feature, value) => schema.fieldDefinition("name").write(feature, value);
+
+/*
+ * THE LABEL ROW, NOT THE NAME ROW.
+ *
+ * `name` and `label` are deliberately separate properties - the inventory calls
+ * a feature one thing and the sheet prints another - so the drawn text is
+ * written by the Label field. Using the Name field here would test the wrong
+ * row and assert the wrong promise.
+ */
+const setLabel = (feature, value) => schema.fieldDefinition("label").write(feature, value);
 const drawingState = require(locate("drawing-state.js")).default;
 
 const line = () =>
@@ -69,8 +78,8 @@ console.log("\n  the setter writes a LABEL, not a name\n");
     check("setting a label reports a change", changed === true);
     check("and stores it on the feature", feature.label === "AB", feature.label);
     check(
-        "the feature's NAME carries the same text - one field writes both",
-        feature.name === "AB",
+        "and the NAME is left alone - the two are different properties",
+        feature.name === nameBefore,
         `${nameBefore} -> ${feature.name}`,
     );
     check(
@@ -185,27 +194,31 @@ console.log("\n  the panel field is wired to the model\n");
     );
 
     /*
-     * THERE IS ONE NAMING FIELD. It is declared as `name`, kind `text`, and it
-     * writes the NAME and the drawn label together - so a name typed in the
-     * panel reaches the inventory, the source header and the picture, and no
-     * second Label control competes with it.
+     * NAME AND LABEL ARE TWO PROPERTIES, EDITED IN TWO ROWS.
+     *
+     * `name` is what the inventory and the source header call a feature;
+     * `label` is the text drawn beside it. A student may call a load "Boom 2"
+     * and label it "w = 5 kN/m", so renaming must not rewrite the drawing and
+     * labelling must not rename the object. Both rows are declared, and the
+     * Name row writes only `object.name`.
      */
     check(
-        "there is one Name field in the schema",
+        "there is a Name field in the schema",
         /name:\s*nameField/.test(schemaSource),
         "the pane has no Name field to render",
     );
 
     check(
-        "which writes the feature's name AND its drawn label",
-        /const nameField = \{[\s\S]{0,1600}?object\.name = name[\s\S]{0,600}?object\.label = name/.test(schemaSource),
-        "the field would not keep the name and the text in step",
+        "which writes the feature's name and NOT its drawn label",
+        /const nameField = \{[\s\S]{0,1600}?object\.name = String\(value \?\? ""\)\.trim\(\)/.test(schemaSource) &&
+            !/const nameField = \{[\s\S]{0,1600}?object\.label = name/.test(schemaSource),
+        "a rename would rewrite the drawing",
     );
 
     check(
-        "and there is no separate Label field left to compete",
-        !/^\s+label:\s*\{/m.test(schemaSource),
-        "two naming controls would disagree",
+        "and the Label row is its own field",
+        /const labelField = \{/.test(schemaSource) && /label:\s*labelField/.test(schemaSource),
+        "there is no separate Label control for the drawn text",
     );
 }
 

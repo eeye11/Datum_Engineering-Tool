@@ -1,36 +1,53 @@
-# DAETUM — Code Map
+# DAETUM Code Map
 
 A concise map of the current repository layout (post-restructure). Use this to
 find the *owner* of a behaviour before changing code.
 
 ## Entry points
 
-- `index.html` — the application shell and DOM mount points.
-- `src/app/entry/main.js` — the single JS entry; imports modules in startup order.
-- `server/server.js` — optional Node server (serves `dist/` + API routes).
-- `server/tikz.js` — TikZ -> SVG rendering service used by `/api/render-tikz`.
+- `index.html` - the application shell and DOM mount points.
+- `src/app/entry/main.js` - the single JS entry; imports modules in startup order.
+- `server/server.js` - optional Node server (serves `dist/` + API routes).
+- `server/tikz.js` - TikZ -> SVG rendering service used by `/api/render-tikz`.
 
 ## The big ideas
 
 - A **document** contains **sheets**; each sheet contains **objects/features**.
 - `drawingState` is the live model for the *active* sheet.
-- `editorState` is shared UI state (panel views, tool defaults, active drags, …).
+- `editorState` is shared UI state (panel views, tool defaults, active drags, ...).
 
 See `src/features/workspace/editor-state.js` for both.
 
 ## Folder map
 
-- `src/app/` — app-only concerns (automation hooks, error logging).
-- `src/components/` — layout and UI wiring that directly touches the DOM.
-- `src/features/workspace/` — workspace/editor behaviour by domain (annotate,
-  geometry, statics, thermodynamics, interaction, commands, model).
-- `src/shared/` — reusable model, rendering, persistence, solution integration,
-  snapping, selection, units, UI primitives.
-- `src/tool-library/` — tool metadata (manifests/templates) and the registry.
+- `src/app/` - app-only concerns (automation hooks, error logging).
+- `src/components/` - layout and UI wiring that directly touches the DOM.
+- `src/features/workspace/` - workspace/editor behaviour by domain (annotate,
+ controls, dynamics, geometry, interaction, math, statics, thermodynamics,
+ commands, and a model/ subfolder per feature family).
+- `src/tool-library/` - tool metadata (manifests/templates), one folder per
+ toolbar category, plus the registry loader in `registry/`.
+- `src/styles/` - CSS (`styles/editor/`).
+- `scratch/` - git-ignored: ad-hoc QA probes, one-off diagnostics and output
+ dumps that once littered the repository root.
 
-## Where do I look for…?
+## Tests
 
-| I want to change… | Go to |
+- `tests/*.test.cjs` - the `node:test` suites (`npm test` runs exactly this
+ glob; nothing else in `tests/` is picked up).
+- `tests/helpers/` - shared test utilities (`boot-app.cjs`, `source-path.cjs`).
+- `tests/support/` - larger non-suite support code (`harness-renderer.cjs`,
+ `statics-compile.mjs`), required as `./support/...` from suites.
+- `tests/fixtures/` - input files used by suites.
+- `tests/e2e/` - browser scenarios (`*.mjs`); run individually, not by `npm test`.
+- `tests/probes/` - targeted diagnostic probes.
+- `tests/scratch/` - git-ignored: throwaway probes that used to sit beside the
+ real suites.
+
+
+## Where do I look for?
+
+| I want to change... | Go to |
 |---|---|
 | App startup order | `src/app/entry/main.js` |
 | Workspace boot / controller wiring | `src/features/workspace/index.js` |
@@ -44,17 +61,12 @@ See `src/features/workspace/editor-state.js` for both.
 | Snapping and inference | `src/shared/snapping/object-snap.js` |
 | Rendering the current sheet | `src/shared/rendering/renderer.js` + `src/components/layout/workspace/canvas-render.js` |
 | Right-side inspector (Objects / Features / Source) | `src/components/layout/panels/drawing-panel.js` |
-| Feature editing UI (existing “legacy” feature panel) | `src/components/layout/panels/feature-panel.js` |
+| Feature editing UI (existing legacy feature panel) | `src/components/layout/panels/feature-panel.js` |
 | Tool-library registry loader | `src/tool-library/registry/tool-registry.js` |
 | Document envelope read/write + migrations (saved inside the `.tex`; `.enggdraw` is import-only) | `src/shared/file/document-file.js` + `src/shared/file/latex/latex-document.js` |
 | Writing-tab LaTeX editor and render | `src/shared/solution/writing-tab.js` |
 | Embedded drawing blocks in LaTeX | `src/shared/solution/embedded-drawings.js` |
 | Integration API (`window.datum`, postMessage bridge) | `src/shared/integration/datum-api.js` + `src/shared/integration/embed-bridge.js` |
-
-## Tests
-
-- `tests/*.test.cjs` are `node:test` suites.
-- `tests/e2e/` contains browser scenarios and diagnostics.
 
 Run the baseline check with `npm run check` (or `npm.cmd run check` on systems
 where PowerShell blocks `npm.ps1`).

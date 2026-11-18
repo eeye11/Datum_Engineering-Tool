@@ -30,6 +30,7 @@ import { translateObject } from "../geometry/transforms.js";
 import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
+import { heatHandlesFor } from "./heat-handles.js";
 
 import { isSum, plantNodePosition, plantValue } from "../../../shared/model/plant.js";
 
@@ -739,6 +740,21 @@ function manipulationHandles(
 ) {
     const g =
         object.geometry || {};
+
+    /*
+     * A HEAT TRANSFER OBJECT HAS ITS OWN GRIPS.
+     *
+     * Asked FIRST, and answered by one module, so the fifteen Heat Transfer
+     * types - a Wall / Slab's three handles, a Composite Wall's corners and
+     * dividers, a path's control points - are not threaded through this
+     * already-long dispatch. A null answer means "not a Heat Transfer
+     * object", and the shared shapes below handle it as before.
+     */
+    const heat = heatHandlesFor(object);
+
+    if (heat) {
+        return heat;
+    }
 
     if (object.type === "pipe-duct") {
         return [
@@ -1845,7 +1861,26 @@ function supportsRotationHandle(
          */
         "math-point",
         "math-plot",
-        "math-equation"
+        "math-equation",
+
+        /*
+         * THE HEAT TRANSFER TYPES THAT HAVE NO FREE TURN.
+         *
+         * A Wall / Slab, a path, an arrow, a boundary and a contact are
+         * oriented by their own two ends - the drag that drew them already
+         * decided the angle - so a rotation handle would describe a turn the
+         * object does not have. A Temperature Marker is a point. The others
+         * DO turn: a Thermal Region, a Composite Wall, a Fin, a Source / Sink,
+         * a Circuit Element and a Control Volume each carry a rotation, and a
+         * Composite Wall's dividers rotate with it.
+         */
+        "wall-slab",
+        "heat-path",
+        "thermal-arrow",
+        "thermal-boundary",
+        "thermal-contact",
+        "isotherm",
+        "temperature-marker"
     ].includes(object.type);
 }
 
@@ -2136,7 +2171,29 @@ const CONSTRUCTION_ACTIVE_PHASES = [
      * click on an existing feature is the next input rather than a selection.
      */
     "math-contact",
-    "math-slope-start"
+    "math-slope-start",
+
+    /*
+     * A HEAT TRANSFER PATH OR ISOTHERM MID-CHAIN.
+     *
+     * Listed here because it IS a running construction: the first click has
+     * fixed a point, so the pointer belongs to the path rather than to a
+     * direct drag on whatever happens to be under it, Enter finishes the
+     * chain and Escape abandons it. The string matches HEAT_POLY_PHASE in
+     * heat-transfer-tool.js.
+     */
+    "heat-poly-construct",
+
+    /*
+     * A HEAT TRANSFER SHAPE BEING DRAGGED.
+     *
+     * A Wall / Slab, a Region, a Composite Wall, a Fin, an Arrow, a Boundary, a
+     * Contact or a Control Volume is a running construction from the press to
+     * the release: the press has fixed the start, so the pointer belongs to the
+     * shape rather than to a direct drag on whatever is under it, and Escape
+     * drops it. The string matches HEAT_DRAG_PHASE in heat-transfer-tool.js.
+     */
+    "heat-drag-construct"
 ];
 
 export function isConstructionInProgress() {

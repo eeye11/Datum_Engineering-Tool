@@ -23,7 +23,7 @@ const { JSDOM } = require("jsdom");
 
 const projectRoot = path.join(__dirname, "..");
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 

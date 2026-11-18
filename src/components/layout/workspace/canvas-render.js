@@ -16,6 +16,14 @@ import { exportTransformFor } from "../../../shared/rendering/latex/source-synch
 import { IDENTITY_EXPORT } from "../../../shared/rendering/latex/export-transform.js";
 import { renderDrawingSource } from "../../../shared/rendering/latex/rendering-adapter.js";
 import { validateDrawingSource } from "../../../shared/rendering/latex/source-validation.js";
+import { AXIS_LABEL_FONT_PX } from "../../../shared/rendering/overlay-render.js";
+import {
+    AUXILIARY_FONT_PX,
+    CANVAS_BASELINE,
+    CANVAS_FONT_STACK,
+    FONT_WEIGHTS,
+    setTextTransform
+} from "../../../shared/typography/canvas-typography.js";
 
 /*
  * ============================================================
@@ -397,15 +405,27 @@ export function appendCoordinateSystemVisual(
             return;
         }
 
+        /*
+         * AN AXIS TITLE IS DRAWING TEXT LIKE ANY OTHER: a screen size, an
+         * inverse-zoom compensation, and the drawing's own position for the
+         * anchor - so it keeps its size at every zoom and its place beside the
+         * axis at every pan. `renderSelectionOutline` frames it with the same
+         * `AXIS_LABEL_FONT_PX`, so the box matches the glyphs.
+         */
+        const at = {
+            x: Number.isFinite(manual?.x) ? manual.x : automatic.x,
+            y: Number.isFinite(manual?.y) ? manual.y : automatic.y
+        };
+
         const label = createSvgElement(
             "text",
             {
-                x: Number.isFinite(manual?.x) ? manual.x : automatic.x,
-                y: Number.isFinite(manual?.y) ? manual.y : automatic.y,
+                x: at.x,
+                y: at.y,
                 fill: stroke,
-                "font-size": 13,
-                "font-family": "Arial, sans-serif",
-                "font-weight": "600",
+                "font-family": CANVAS_FONT_STACK,
+                "font-weight": FONT_WEIGHTS.medium,
+                "dominant-baseline": CANVAS_BASELINE,
 
                 /*
                  * Tagged so the SAME hit test that finds any other feature can
@@ -417,6 +437,10 @@ export function appendCoordinateSystemVisual(
             }
         );
 
+        const zoom = Math.max(Number(drawingState?.camera?.zoom) || 1, 0.0001);
+
+        label.setAttribute("font-size", String(Math.round(AXIS_LABEL_FONT_PX * zoom * 1000) / 1000));
+        setTextTransform(label, at, zoom);
         label.textContent = text;
 
         group.appendChild(label);
@@ -434,28 +458,34 @@ export function appendCoordinateSystemVisual(
         geometry.yLabelPosition
     );
 
-    const originLabel =
-        createSvgElement(
-            "text",
-            {
-                x:
-                    origin.x +
-                    7,
+    /*
+     * THE ORIGIN'S "0" IS AUXILIARY TEXT: 12 px, the compact end of the
+     * hierarchy, and painted at that size at every zoom like every other label.
+     */
+    const originAt = {
+        x: origin.x + 7,
+        y: origin.y + 16
+    };
 
-                y:
-                    origin.y +
-                    16,
+    const originZoom = Math.max(Number(drawingState?.camera?.zoom) || 1, 0.0001);
 
-                fill:
-                    stroke,
+    const originLabel = createSvgElement(
+        "text",
+        {
+            x: originAt.x,
+            y: originAt.y,
+            fill: stroke,
+            "font-family": CANVAS_FONT_STACK,
+            "dominant-baseline": CANVAS_BASELINE
+        }
+    );
 
-                "font-size":
-                    10,
+    originLabel.setAttribute(
+        "font-size",
+        String(Math.round(AUXILIARY_FONT_PX * originZoom * 1000) / 1000)
+    );
 
-                "font-family":
-                    "Arial, sans-serif"
-            }
-        );
+    setTextTransform(originLabel, originAt, originZoom);
 
     originLabel.textContent =
         "0";
@@ -609,6 +639,24 @@ function positionPictureLayer(layer, bounds, state, transform = IDENTITY_EXPORT)
     const viewWidth = Math.max(1, bounds.width / k);
     const viewHeight = Math.max(1, bounds.height / k);
 
+    /*
+     * ONE SCALE FOR BOTH AXES, AND IT IS THE CAMERA'S.
+     *
+     * The viewBox is a window onto the compiled picture in POINTS, and the
+     * layer is `bounds.width` x `bounds.height` pixels. Those two are the same
+     * aspect only while the picture's viewBox grows with the canvas exactly - 
+     * the width is `viewWidth * factor * POINTS_PER_UNIT`, so the ratio
+     * `pixels / points` is `1 / (factor * POINTS_PER_UNIT)` on BOTH axes with
+     * no dependence on `bounds` at all.
+     *
+     * `preserveAspectRatio="xMidYMid meet"` still RESOLVED that ratio as
+     * `min(widthScale, heightScale)`, and rounding the two independently (the
+     * viewBox is written to a string) made the axes differ in the last decimal -
+     * enough for the browser to pick one, re-centre the picture inside the layer,
+     * and slide the drawing off its grid by a fraction of a pixel that changed as
+     * the canvas was resized. `none` states the truth: there is one uniform
+     * scale, and the viewBox already expresses it.
+     */
     const left = (panX - viewWidth / 2 - originX) * factor * POINTS_PER_UNIT;
     const top = -(panY + viewHeight / 2 - originY) * factor * POINTS_PER_UNIT;
 
@@ -620,7 +668,7 @@ function positionPictureLayer(layer, bounds, state, transform = IDENTITY_EXPORT)
     layer.setAttribute("y", "0");
     layer.setAttribute("width", String(bounds.width));
     layer.setAttribute("height", String(bounds.height));
-    layer.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    layer.setAttribute("preserveAspectRatio", "none");
 }
 
 /*
@@ -814,8 +862,23 @@ function showStrokesAtScreenWidth(layer) {
             return;
         }
 
+        /*
+         * A STROKE IS THE DRAWING'S, SO IT SCALES WITH THE DRAWING.
+         *
+         * The picture's widths are PRINT widths, in points, and one point of
+         * the picture is one drawing unit. The layer paints those units through
+         * the camera, so the stored width is painted `zoom` times over - the
+         * same weight relative to the geometry at every magnification.
+         *
+         * THIS USED TO KEEP ONE SCREEN WIDTH. Every stroke was pinned with
+         * `vector-effect: non-scaling-stroke`, which held the width in pixels
+         * while the geometry grew: zoom in and the drawing's lines stayed
+         * hairline thin against shapes four times larger, and the sheet no
+         * longer matched the figure the source describes. The element is set to
+         * the width the source states and NOTHING pins it, so the picture keeps
+         * its proportions.
+         */
         element.setAttribute("stroke-width", String(Number(screenWidth.toFixed(3))));
-        element.setAttribute("vector-effect", "non-scaling-stroke");
     });
 }
 

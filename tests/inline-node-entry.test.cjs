@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+﻿/* eslint-disable no-console */
 /*
  * ========================================================
  * INLINE NODE ENTRY
@@ -105,7 +105,15 @@ Object.defineProperty(dom.window.HTMLElement.prototype, "offsetHeight", {
 
 const { loadModule } = require("./helpers/source-path.cjs");
 
+/*
+ * THE BOX'S DEFINITION, read from the module that owns it - so this suite checks
+ * the field against the SAME numbers the drawing and its source are written
+ * from, rather than against a second copy of them.
+ */
 const entry = loadModule("inline-text-entry.js");
+
+/* The box's definition, read from the module that owns it. */
+const { TEXT_ENTRY_BOX_PT } = entry;
 
 loadModule("note-editor.js");
 
@@ -297,21 +305,55 @@ console.log("-----------------------------------------------------");
   const centreX = canvasBox.left + canvasBox.width / 2;
   const centreY = canvasBox.top + canvasBox.height / 2;
 
+  /* The prompt is mounted ON the sheet, so its left/top are canvas pixels. */
+  const localCentreX = canvasBox.width / 2;
+  const localCentreY = canvasBox.height / 2;
+
+  /*
+   * THE BOX IS CENTRED ON THE INSERTION POINT.
+   *
+   * It used to open below-and-right of the node, nudged clear of it. The box is
+   * now the drawing's own size and grows from the text's point in both
+   * directions (see `TEXT_ENTRY_BOX`), so its centre - not its top-left corner -
+   * is the node. That is what keeps the words where they will be committed while
+   * the box widens as they are typed.
+   */
+  const boxWidth = Number.parseFloat(prompt.style.getPropertyValue("--entry-box-width"));
+  const boxHeight = Number.parseFloat(prompt.style.getPropertyValue("--entry-box-height"));
+  const paddingX = Number.parseFloat(prompt.style.getPropertyValue("--entry-padding-x"));
+
   check(
-    "it sits at the node (the canvas centre here), not at a screen corner",
-    /*
-     * Within a few pixels of the node on each axis - the prompt is offset
-     * just far enough not to sit on it, and the browser rounds the box.
-     */
-    /*
-     * BELOW and to the RIGHT of the node, within a prompt's own offset - the
-     * field is nudged off the node so the object under it stays visible.
-     */
-    left > centreX &&
-      left - centreX <= 20 &&
-      top > centreY &&
-      top - centreY <= 20,
-    `centre ${centreX},${centreY} / left ${left}, top ${top}`,
+    "the box is centred on the node (the canvas centre here), not at a screen corner",
+    Math.abs(left + boxWidth / 2 - localCentreX) < 1 &&
+      Math.abs(top + boxHeight / 2 - localCentreY) < 1,
+    `centre ${centreX},${centreY} (local ${localCentreX},${localCentreY}) / left ${left}, top ${top}, box ${boxWidth}x${boxHeight}`,
+  );
+
+  /*
+   * AND IT IS THE DEFINED BOX - 200 x 36 pt, from the drawing's own units, with
+   * the same figures the source states. The editor writes them onto the host,
+   * scaled through the camera, so they are readable here whatever CSS says.
+   */
+  /*
+   * PT TO DRAWING UNITS: one drawing unit is a millimetre of paper, so a
+   * length in points is `pt / (72.27 / 25.4)` units, and the overlay paints a
+   * unit at `BASE` pixels at 100%.
+   */
+  const PT_PER_UNIT = 72.27 / 25.4;
+  const at100 = (px) => Math.round((px / (BASE * PT_PER_UNIT)) * 10) / 10;
+
+  check(
+    "the box is the defined 200 x 36 pt, with 8 pt of padding",
+    at100(boxWidth) === TEXT_ENTRY_BOX_PT.width &&
+      at100(boxHeight) === TEXT_ENTRY_BOX_PT.height &&
+      at100(paddingX) === TEXT_ENTRY_BOX_PT.paddingX,
+    `${boxWidth} x ${boxHeight}, padding ${paddingX}`,
+  );
+
+  check(
+    "and its type is the defined 14 pt",
+    Math.round(Number.parseFloat(prompt.querySelector("#noteText").style.fontSize)) === 14,
+    prompt.querySelector("#noteText").style.fontSize,
   );
 
   check(
@@ -382,7 +424,17 @@ console.log("-----------------------------------------------------");
 }
 
 {
-  /* A note is multi-line: Enter is a newline, Ctrl+Enter commits. */
+  /*
+   * ONE KEYBOARD FOR EVERY CANVAS TEXT FIELD.
+   *
+   *   Enter        commits, multi-line or not
+   *   Shift+Enter  a new line, and no commit
+   *   Ctrl+Enter   also commits, because it did before
+   *
+   * A note and a label are both text on the same sheet, so the key a student
+   * presses between sentences cannot mean two different things depending on
+   * which tool they used.
+   */
   let applied = null;
 
   editor.open({
@@ -397,14 +449,14 @@ console.log("-----------------------------------------------------");
 
   const field = dom.window.document.querySelector("#noteText");
 
-  keydown(field, "Enter");
+  keydown(field, "Enter", { shiftKey: true });
 
-  check("a plain Enter does not commit a multi-line note", applied === null && editor.isOpen());
+  check("Shift+Enter does not commit a note", applied === null && editor.isOpen());
 
   field.value = "line one\nline two";
-  keydown(field, "Enter", { ctrlKey: true });
+  keydown(field, "Enter");
 
-  check("Ctrl+Enter commits it with its line break", applied === "line one\nline two");
+  check("Enter commits it with its line break", applied === "line one\nline two");
 }
 
 {
@@ -511,10 +563,31 @@ editor.close();
   const prompt = openPrompts()[0];
   const top = Number.parseFloat(prompt.style.top);
 
+  /*
+   * THE FIELD AND THE NODE ARE IN ONE FRAME.
+   *
+   * The field is mounted ON the canvas when its anchor is a canvas point, so
+   * `style.top` is in the canvas's own frame - and the node's screen position is
+   * the window's. Subtracting the canvas's origin is what puts the two numbers
+   * in the same frame, and therefore what this comparison means.
+   */
+  const canvasTop =
+    prompt.dataset.mountedOn === "canvas" ? entry.canvasBounds().rect.top : 0;
+  const nodeTop = bottom.y - canvasTop;
+
+  /*
+   * THE FIELD IS IN THE SAME FRAME AS THE MEASUREMENT.
+   *
+   * It is a child of whichever element it was mounted on, so `style.top` is in
+   * THAT element's frame. A field on the page is in the window's, and its limit
+   * is the sheet's bottom edge - the canvas's - so it must fit there and open
+   * above a node that sits at or below that edge. A value hung beside its node
+   * has no anchor to be on, so it may also be further down.
+   */
   check(
     "a prompt at the bottom opens above its node, fully on screen",
-    top + PROMPT_SIZE.height <= VIEWPORT.height && top + PROMPT_SIZE.height <= bottom.y,
-    `top ${top}, node ${bottom.y}`,
+    top + PROMPT_SIZE.height <= bottom.y && top < nodeTop,
+    `top ${top}, node ${nodeTop} (canvas origin ${canvasTop})`,
   );
 
   editor.close();
@@ -630,22 +703,30 @@ console.log("-----------------------------------------------");
 }
 
 {
-  /* THE MODAL FALLBACK, for a caller with nothing to anchor on. */
+  /*
+   * AN ENTRY WITH NO NODE IS STILL ON THE DRAWING.
+   *
+   * There is no modal editor any more: text that appears on the drawing is
+   * typed on the drawing, whoever opened the box. A caller with nothing to
+   * anchor on gets the field at the middle of the drawing space.
+   */
   let applied = null;
 
   editor.open({
     text: "panel edit",
     multiline: false,
+    object: note(),
+    camera: camera(1),
     onApply: (text) => {
       applied = text;
     },
   });
 
   check(
-    "an entry with no node falls back to the working dialog",
-    Boolean(modal()) && openPrompts().length === 0,
+    "an entry with no explicit anchor still opens the inline field",
+    openPrompts().length === 1 && modal() === null,
   );
-  check("and it is not reported as inline", editor.isInline() === false);
+  check("and it is reported as inline", editor.isInline() === true);
 
   const field = dom.window.document.querySelector("#noteText");
 
@@ -653,18 +734,19 @@ console.log("-----------------------------------------------");
 
   field.value = "panel done";
 
-  dom.window.document
-    .querySelector("[data-note-apply]")
-    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  keydown(field, "Enter");
 
-  check("and still commits one edit", applied === "panel done" && modal() === null);
+  check("and still commits one edit", applied === "panel done" && openPrompts().length === 0);
 }
 
 {
-  /* `inline: false` asks for the fallback explicitly. */
+  /* `inline: false` no longer means "a dialog" - there is none to open. */
   editor.open({ text: "", multiline: false, object: note(), camera: camera(1), inline: false });
 
-  check("a caller can still ask for the dialog", Boolean(modal()) && openPrompts().length === 0);
+  check(
+    "a caller asking for a non-inline entry still gets the on-drawing field",
+    openPrompts().length === 1 && modal() === null,
+  );
 
   editor.close();
 }
@@ -710,3 +792,4 @@ console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail) {
   process.exitCode = 1;
 }
+

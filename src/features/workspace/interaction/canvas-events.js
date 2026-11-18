@@ -22,6 +22,7 @@ import { cancelManipulationDrag } from "./handles.js";
 import { updateDrawingCoordinates } from "./pointer.js";
 import { beginAnnotationDrag, beginSelectionDrag, cancelInteraction, finishFreeformPolygonByDoubleClick, finishPolyline, finishSelectionDrag, updateSelectionDrag } from "./selection.js";
 import { canvasPointFromEvent } from "../../../components/layout/toolbar/tool-activation.js";
+import { isHeatPolyTool, heatPathIsOpen, finishHeatPath } from "./heat-transfer-tool.js";
 import { closeCoordinateSystemMenu } from "../../../components/layout/toolbar/tool-menus.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 import { finishTrussConstruction } from "../statics/truss-tool.js";
@@ -367,6 +368,21 @@ export function installCanvasEvents() {
                     finishPolyline();
                     return;
                 }
+
+                /*
+                 * A HEAT TRANSFER PATH IS FINISHED BY A DOUBLE-CLICK.
+                 *
+                 * The path was already committed segment by segment (each drag
+                 * that continued it appended to the same object), so finishing
+                 * only FORGETS the continuation: the next drag starts a wholly
+                 * new path, exactly as it does for a Pipe / Duct.
+                 */
+                if (isHeatPolyTool(drawingState.activeTool) && heatPathIsOpen()) {
+                    event.preventDefault();
+
+                    finishHeatPath(drawingState.activeTool);
+                    return;
+                }
                 if (isProcessPlotTool(drawingState.activeTool)) {
                     event.preventDefault();
                     finishProcessPath();
@@ -621,6 +637,8 @@ export function installCanvasEvents() {
 
                     return;
                 }
+
+
 
                 updateSelectionDrag(
                     event

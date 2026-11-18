@@ -42,7 +42,12 @@ test('dimension text size persists and controls layout, SVG, and TeX',()=>{
  assert.ok(Math.abs(large.textFrame.y-20)>Math.abs(small.textFrame.y-20),'the label clears a taller type');
 
  const source=require(locate('annotations.js')).annotationSourceWriter(d,{state});
- assert.ok(source.includes('fontsize{24}'),source);
+ /*
+  * THE SIZE IS STATED WITH ITS UNIT. `\fontsize{24}` is a unit-less TeX
+  * dimension inside a node's option list, which is not portable; `24pt` is the
+  * same physical size and compiles in every TikZ environment.
+  */
+ assert.ok(source.includes('fontsize{24pt}'),source);
  const saved=JSON.parse(model.serializeDrawing(state));
  assert.equal(saved.objects.find(o=>o.id===d.id).style.fontSize,24);
  assert.equal(schema.writeField(d,'dimensionTextSize',-5),false);

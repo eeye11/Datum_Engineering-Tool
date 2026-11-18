@@ -178,7 +178,20 @@ const SANCTIONED = new Set([
    * renderer afterwards.
    */
   "sketch-editor.js",
-  "sketch-shell.js"
+  "sketch-shell.js",
+  /*
+   * THE SKETCH CANVAS'S OWN PAINTER. The editor's drawing was split out of
+   * `sketch-editor.js` into this module, which is the same view-only surface by
+   * another name - it is on the same list for the same reason.
+   */
+  "sketch-render.js",
+  "sketch-workspace.js",
+  /*
+   * THE SHARED COORDINATE PAINTER. It draws axes, ticks, labels and grid - the
+   * same view-only surface the sketch canvas is, now shared by every surface
+   * that shows a coordinate system. It is on this list for the same reason.
+   */
+  "sketch-axes.js"
 ]);
 
 /* The drawing controller (src/features/workspace/) builds its own canvas overlay. */

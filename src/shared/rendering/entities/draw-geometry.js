@@ -7,7 +7,15 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import { appendCoordinateSystem } from "../symbol-render.js";
-import { applyStyle, arcPathData, createSvgElement, paintColour } from "../svg-primitives.js";
+import { activeZoom, applyStyle, arcPathData, createSvgElement, paintColour, textNode } from "../svg-primitives.js";
+import {
+    AUXILIARY_FONT_PX,
+    CANVAS_BASELINE,
+    CANVAS_FONT_STACK,
+    FONT_WEIGHTS,
+    PRIMARY_FONT_PX,
+    SECONDARY_FONT_PX
+} from "../../typography/canvas-typography.js";
 import enggDrawingState from "../../model/drawing-state.js";
 import { processPathPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
@@ -23,13 +31,20 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
             if (Number.isFinite(position.x) && Number.isFinite(position.y)) {
                 const screen = toScreen(position);
                 /*
-                 * Point Size is a screen-space marker size, so
-                 * it stays legible at any zoom.
+                 * Point Size is a WORLD size, so the marker keeps its
+                 * proportion to the drawing at every zoom.
+                 *
+                 * It used to be read as screen pixels, so a point stayed four
+                 * pixels across on a drawing magnified four times - while the
+                 * compiled picture drew it at its world radius, and the two
+                 * disagreed by exactly the zoom.
                  */
+                const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
+
                 const pointRadius =
-                    Number.isFinite(style.pointSize) && style.pointSize > 0
+                    (Number.isFinite(style.pointSize) && style.pointSize > 0
                         ? style.pointSize
-                        : 4;
+                        : 4) * zoom;
                 const marker = createSvgElement("circle", {
                     cx: screen.x,
                     cy: screen.y,
@@ -168,18 +183,16 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                 svg.appendChild(node);
 
                 const signPosition = toScreen(sumInputSignPosition(context.entity, index));
-                const sign = createSvgElement("text", {
-                    x: signPosition.x,
-                    y: signPosition.y,
+
+                /* A SIGN MARK IS AUXILIARY TYPE, at a canvas font size. */
+                textNode(svg, signPosition, sumInputSign(context.entity, index), {
+                    size: AUXILIARY_FONT_PX,
                     fill: colour,
-                    "font-size": 13,
-                    "font-family": "sans-serif",
-                    "font-weight": "bold",
-                    "text-anchor": "middle",
-                    "dominant-baseline": "central"
+                    fontFamily: CANVAS_FONT_STACK,
+                    fontWeight: FONT_WEIGHTS.bold,
+                    anchor: "middle",
+                    baseline: CANVAS_BASELINE
                 });
-                sign.textContent = sumInputSign(context.entity, index);
-                svg.appendChild(sign);
 
                 const selectedSignalNode = context.state?.interaction?.signalLineStart;
                 if (
@@ -263,9 +276,14 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                 }
                 for (const item of drawing.labels) {
                     const p = toScreen(item.point);
-                    const label = createSvgElement("text", { x: p.x, y: p.y, fill: item.colour, "font-size": 12, "text-anchor": "middle", "dominant-baseline": "middle" });
-                    label.textContent = item.text;
-                    svg.appendChild(label);
+
+                    textNode(svg, p, item.text, {
+                        size: AUXILIARY_FONT_PX,
+                        fill: item.colour,
+                        fontFamily: CANVAS_FONT_STACK,
+                        anchor: "middle",
+                        baseline: CANVAS_BASELINE
+                    });
                 }
             }
             if (entity.metadata?.stressElement) {
@@ -281,12 +299,14 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                     }
                     for (const item of [...mark.axes, { point: mark.labelPoint, text: mark.text }]) {
                     const at = toScreen(item.point);
-                    const label = createSvgElement("text", {
-                        x: at.x, y: at.y, "text-anchor": "middle", "dominant-baseline": "middle",
-                        "font-size": 12, fill: "#909090"
+
+                    textNode(svg, at, item.text, {
+                        size: AUXILIARY_FONT_PX,
+                        fill: "#909090",
+                        fontFamily: CANVAS_FONT_STACK,
+                        anchor: "middle",
+                        baseline: CANVAS_BASELINE
                     });
-                    label.textContent = item.text;
-                    svg.appendChild(label);
                     }
                 }
                 for (const { points, colour } of stressArrows(geometry)) {
@@ -407,17 +427,14 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
 
             const screenCentre = toScreen(centre);
             if (isPlant(context.entity)) {
-                const plantLabel = createSvgElement("text", {
-                    x: screenCentre.x,
-                    y: screenCentre.y,
+                /* The block's own name: primary type, centred on the block. */
+                textNode(svg, screenCentre, "Plant", {
+                    size: PRIMARY_FONT_PX,
                     fill: colour,
-                    "font-size": 15,
-                    "font-family": "sans-serif",
-                    "text-anchor": "middle",
-                    "dominant-baseline": "central"
+                    fontFamily: CANVAS_FONT_STACK,
+                    anchor: "middle",
+                    baseline: CANVAS_BASELINE
                 });
-                plantLabel.textContent = "Plant";
-                svg.appendChild(plantLabel);
             }
 
             const userLabel = plantValue(context.entity, "plantLabel");
@@ -427,17 +444,15 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                     x: centre.x,
                     y: centre.y - 6
                 });
-                const label = createSvgElement("text", {
-                    x: labelPosition.x,
-                    y: labelPosition.y,
+
+                /* The block's transfer function: secondary type under its name. */
+                textNode(svg, labelPosition, `[${userLabel}]`, {
+                    size: SECONDARY_FONT_PX,
                     fill: colour,
-                    "font-size": 11,
-                    "font-family": "sans-serif",
-                    "text-anchor": "middle",
-                    "dominant-baseline": "central"
+                    fontFamily: CANVAS_FONT_STACK,
+                    anchor: "middle",
+                    baseline: CANVAS_BASELINE
                 });
-                label.textContent = `[${userLabel}]`;
-                svg.appendChild(label);
             }
 
             const blockLabel = plantValue(context.entity, "blockLabel");
@@ -450,7 +465,8 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                     x: screenCentre.x,
                     y: screenCentre.y,
                     fill: colour,
-                    fontSize: 13
+                    fontSize: SECONDARY_FONT_PX,
+                    zoom: Math.max(Number(activeZoom) || 1, 0.0001)
                 });
                 svg.appendChild(label);
             }
@@ -462,17 +478,14 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                     x: centre.x,
                     y: centre.y - height / 2 - 5
                 });
-                const label = createSvgElement("text", {
-                    x: labelPosition.x,
-                    y: labelPosition.y,
+
+                textNode(svg, labelPosition, blockLowerLabel, {
+                    size: SECONDARY_FONT_PX,
                     fill: colour,
-                    "font-size": 11,
-                    "font-family": "sans-serif",
-                    "text-anchor": "middle",
-                    "dominant-baseline": "central"
+                    fontFamily: CANVAS_FONT_STACK,
+                    anchor: "middle",
+                    baseline: CANVAS_BASELINE
                 });
-                label.textContent = blockLowerLabel;
-                svg.appendChild(label);
             }
 
             for (const side of ["inputs", "outputs"]) {
@@ -530,17 +543,15 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                     if (plantValue(context.entity, "showNodeLabels")) {
                         const labelPosition = toScreen(rotate(x + outward * 7, terminalLocalY));
                         const screenOutward = outward * Math.cos(radians);
-                        const label = createSvgElement("text", {
-                            x: labelPosition.x,
-                            y: labelPosition.y + 8,
+
+                        /* A terminal's name: auxiliary type, hung off its port. */
+                        textNode(svg, { x: labelPosition.x, y: labelPosition.y + 8 }, plantNodeLabel(context.entity, side, index), {
+                            size: AUXILIARY_FONT_PX,
                             fill: colour,
-                            "font-size": 12,
-                            "font-family": "sans-serif",
-                            "text-anchor": screenOutward < 0 ? "end" : "start",
-                            "dominant-baseline": "central"
+                            fontFamily: CANVAS_FONT_STACK,
+                            anchor: screenOutward < 0 ? "end" : "start",
+                            baseline: CANVAS_BASELINE
                         });
-                        label.textContent = plantNodeLabel(context.entity, side, index);
-                        svg.appendChild(label);
                     }
                 }
             }
@@ -571,17 +582,15 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                 y: modelPoints.reduce((sum, point) => sum + point.y, 0) / modelPoints.length
             };
             const screenCentre = toScreen(centre);
-            const label = createSvgElement("text", {
-                x: screenCentre.x,
-                y: screenCentre.y,
+
+            /* A gain's value: secondary type, centred in its triangle. */
+            textNode(svg, screenCentre, plantValue(context.entity, "gainValue"), {
+                size: SECONDARY_FONT_PX,
                 fill: colour,
-                "font-size": 14,
-                "font-family": "sans-serif",
-                "text-anchor": "middle",
-                "dominant-baseline": "central"
+                fontFamily: CANVAS_FONT_STACK,
+                anchor: "middle",
+                baseline: CANVAS_BASELINE
             });
-            label.textContent = plantValue(context.entity, "gainValue");
-            svg.appendChild(label);
 
             for (const side of ["inputs", "outputs"]) {
                 const terminalPosition = plantNodePosition(context.entity, side, 0);
@@ -604,7 +613,7 @@ import { boundaryStressDrawing } from "../../geometry/boundary-stress.js";
                 const node = createSvgElement("circle", {
                     cx: terminal.x,
                     cy: terminal.y,
-                    r: 3,
+                    r: 3 * (Number(activeZoom) > 0 ? Number(activeZoom) : 1),
                     fill: colour
                 });
                 applyStyle(node, style);

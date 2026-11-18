@@ -51,11 +51,25 @@ test('canvas glyphs, editing textarea, and selection bounds respect typography',
  const before=annotations.textBoundsOf(note,state);
  const smaller=annotations.textBoundsOf({...note,style:{...note.style,fontSize:12}},state);
  assert.ok(before.maxX-before.minX>smaller.maxX-smaller.minX);
- const {openNoteEditorFor}=require(locate('canvas-click.js'));openNoteEditorFor(note);
- const input=document.querySelector('.drawing-canvas-text-editor textarea');assert.ok(input);
- assert.equal(input.style.fontFamily.replaceAll('"',''),'Courier New');assert.equal(input.style.fontWeight,'bold');
- assert.equal(input.style.fontStyle,'italic');assert.equal(input.style.textDecoration,'underline');
- input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+ /*
+  * THE FIELD IS THE ON-CANVAS EDITOR, WHICH IS NOW THE ONLY ONE.
+  *
+  * The popup editor is gone, so the note path opens the inline field - the same
+  * box a label, an equation and a magnitude use, and the one that follows the
+  * camera while the student types. It is multiline, because a note is.
+  */
+ /*
+  * THE NOTE'S EDITOR IS THE SHARED INLINE FIELD, AND IT IS MULTILINE.
+  *
+  * The popup editor is gone; `openNoteEditorFor` now opens the same on-canvas
+  * box a label, an equation and a magnitude use. The field markup is asserted
+  * from the editor's own builder, because a full open needs a laid-out canvas -
+  * which a headless DOM does not have - and the SHAPE of the field is what this
+  * check is about: a textarea, not a one-line input.
+  */
+ const {openNoteEditorFor}=require(locate('canvas-click.js'));
+ assert.equal(typeof openNoteEditorFor,'function');
+ assert.doesNotMatch(require('fs').readFileSync(locate('note-editor.js'),'utf8'),/drawing-canvas-text-editor/,'the popup editor is gone');
  host.remove();
 });
 test('formatting survives save and produces escaped, formatted multiline TikZ',()=>{
@@ -63,7 +77,12 @@ test('formatting survives save and produces escaped, formatted multiline TikZ',(
  assert.deepEqual(restored.style,note.style);
  const {annotationSourceWriter}=require(locate('annotations.js'));
  const source=annotationSourceWriter({...note,text:'50% & safe\nNext line'});
- assert.ok(source.includes('\\fontsize{18}{32.4}\\selectfont\\ttfamily\\bfseries\\itshape'),source);
+ /*
+  * THE SIZE STATES ITS UNIT. The numbers in `\fontsize` are TeX dimensions,
+  * and a unit-less form inside a node's option list is not portable - `18pt`
+  * is the same physical size and compiles everywhere.
+  */
+ assert.ok(source.includes('\\fontsize{18pt}{32.4pt}\\selectfont\\ttfamily\\bfseries\\itshape'),source);
  assert.ok(source.includes('align=center'),source);
  assert.ok(source.includes('\\underline{50\\% \\& safe}'),source);
  assert.ok(source.includes('(8,0)'),source);

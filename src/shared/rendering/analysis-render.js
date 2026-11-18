@@ -6,7 +6,12 @@
  */
 import enggDiagramEquations from "../../features/workspace/model/analysis/diagram-equations.js";
 import enggAnalysisFrame from "../../features/workspace/model/analysis/analysis-frame.js";
-import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
+import { activeZoom, createSvgElement } from "./svg-primitives.js";
+import {
+    AUXILIARY_FONT_PX,
+    CANVAS_FONT_STACK,
+    setTextTransform
+} from "../typography/canvas-typography.js";
 
 
     /*
@@ -587,17 +592,28 @@ import { createSvgElement, zoomedFontHere } from "./svg-primitives.js";
                 label => {
                     const at = toScreen(label.at);
 
+                    /*
+                     * A STUDY AID'S EQUATION IS AUXILIARY TYPE, AND A CANVAS
+                     * FONT SIZE. The node is scaled by the camera and the
+                     * transform divides it back out, so the formula reads at the
+                     * same size at every zoom rather than shrinking off the
+                     * sheet as the student zooms out.
+                     */
                     const text =
                         createSvgElement("text", {
                             x: at.x,
                             y: at.y - 6,
                             class: "drawing-analysis-equation",
                             "text-anchor": "middle",
-                            "font-family": "Arial, sans-serif",
-                            "font-size": zoomedFontHere(10),
-                            fill: tint,
-                            "stroke": "none"
+                            "font-family": CANVAS_FONT_STACK
                         });
+
+                    const zoom = Math.max(Number(activeZoom) || 1, 0.0001);
+
+                    text.setAttribute("font-size", String(Math.round(AUXILIARY_FONT_PX * zoom * 1000) / 1000));
+                    setTextTransform(text, { x: at.x, y: at.y - 6 }, zoom);
+                    text.setAttribute("fill", tint);
+                    text.setAttribute("stroke", "none");
 
                     text.textContent =
                         label.text;

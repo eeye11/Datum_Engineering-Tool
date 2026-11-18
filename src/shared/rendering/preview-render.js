@@ -18,6 +18,7 @@ import { heatTransferTool } from "../../features/workspace/model/thermodynamics/
 import { resistorGeometryFromDrag } from "../../features/workspace/model/thermodynamics/resistor.js";
 import enggPipeDuct from "../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
+import enggHeatModel from "../../features/workspace/model/heat-transfer/heat-model.js";
 
 
     /*
@@ -382,7 +383,26 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
                 state.interaction
                     .annotationPlacement;
 
-            if (placement) {
+            /*
+             * ONE PLACEMENT INDICATOR, NOT TWO.
+             *
+             * While the tool is only ARMED this preview is the insertion point:
+             * it follows the cursor and says where a click will put the words.
+             *
+             * THE MOMENT THE CLICK LANDS, THE EDITOR IS THE INSERTION POINT.
+             * The object exists at exactly this placement and its field is open
+             * on it - so drawing the preview as well put a second, translucent
+             * mark beside the caret the student was typing into. That is the
+             * double indicator, and the cure is for the preview to stand down
+             * rather than for the editor to move.
+             *
+             * `textEntryObjectId` is set by the same click that opened the
+             * field, and cleared the moment it closes - so the two states
+             * cannot overlap.
+             */
+            const editing = Boolean(state.textEntryObjectId);
+
+            if (placement && !editing) {
                 const sourceFeatureId =
                     state.interaction
                         .annotationTarget;
@@ -635,6 +655,37 @@ import enggFlowArrow from "../../features/workspace/model/fluids/flow-arrow.js";
             appendEntity(
                 group,
                 { ...preview, isPreview: true, style: { ...(preview.style || {}), stroke: style.stroke } },
+                state,
+                bounds
+            );
+
+            svg.appendChild(group);
+
+            return;
+        }
+
+        /*
+         * A HEAT TRANSFER OBJECT BEING DRAWN.
+         *
+         * A region, a wall, a composite wall, a fin, an arrow, a boundary, a
+         * contact, a path, an isotherm or a control volume is previewed as the
+         * OBJECT IT WILL BECOME, drawn through the same entity renderer the
+         * committed feature uses. The preview factory is the commit factory, so
+         * the shape under the cursor is the shape the release produces - the
+         * two parallel faces of a wall, the live layer divisions of a composite
+         * wall, the generated wave of a radiation path. The preview id on the
+         * object keeps it out of selection and hit testing, and the 0.72 opacity
+         * makes it read as "not placed yet".
+         */
+        if (enggHeatModel.isHeatType(preview.type)) {
+            const group = createSvgElement("g");
+
+            group.classList.add("drawing-heat-preview");
+            group.setAttribute("opacity", "0.72");
+
+            appendEntity(
+                group,
+                { ...preview, isPreview: true },
                 state,
                 bounds
             );

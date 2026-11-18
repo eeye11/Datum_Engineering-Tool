@@ -5,7 +5,7 @@ const { JSDOM } = require("jsdom");
 const projectRoot = path.join(__dirname, "..");
 const server = pathToFileURL(path.join(projectRoot, "server", "tikz.js")).href;
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 

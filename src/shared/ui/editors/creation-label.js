@@ -18,9 +18,14 @@
  * the undo entry and the source round-trip are the same as every other piece of
  * text in DAETUM. Nothing here is a second text-entry path.
  *
- * The commit writes the object's NAME and its drawn LABEL together - one
- * property with two readings - so the fields in Features, the picture and the
- * source cannot disagree about what the object is called.
+ * The commit writes the object's DRAWN LABEL - the property the canvas paints
+ * and the Features Label row reads. The object's NAME is its identity in the
+ * Objects list and the source header, and is deliberately NOT rewritten here:
+ * a student who labels a load "w = 5 kN/m" has not renamed the load, and an
+ * automatic "Load 3" must not be erased by labelling it.
+ *
+ * (For an object whose name IS its drawn text - a Heat notation - the caller
+ * passes its own `onApply` and writes both; see `openHeatLabelEditor`.)
  */
 
 import enggNoteEditor from "./note-editor.js";
@@ -34,6 +39,21 @@ export {
 /* Where a symbol's label is drawn: its own anchor, in drawing units. */
 function anchorOf(object) {
   const geometry = object?.geometry || {};
+
+  /*
+   * A LABEL IS FIELDED WHERE IT IS DRAWN.
+   *
+   * A Heat Transfer notation is its own text object at its own position, so the
+   * field opens ON the words rather than on the symbol they annotate - which is
+   * the whole point of editing the notation in place.
+   */
+  if (
+    Number.isFinite(Number(geometry.position?.x)) &&
+    Number.isFinite(Number(geometry.position?.y)) &&
+    (object?.annotateKind === "label" || object?.kind === "label")
+  ) {
+    return { x: Number(geometry.position.x), y: Number(geometry.position.y) };
+  }
 
   if (
     Number.isFinite(Number(geometry.start?.x)) &&
@@ -61,7 +81,7 @@ function anchorOf(object) {
  */
 export function creationLabelPrompt(
   object,
-  { state = null, cameraSignal = null, onDone = null } = {},
+  { state = null, cameraSignal = null, onDone = null, selectAllOnOpen = false, onApply = null } = {},
 ) {
   if (!object) {
     return false;
@@ -79,7 +99,8 @@ export function creationLabelPrompt(
     /* THE ON-DRAWING PRESENTATION - see note-editor.js. */
     labelField: true,
 
-    text: typeof object.name === "string" ? object.name : "",
+    /* The drawn label is what a label field edits - never the object's name. */
+    text: typeof object.label === "string" ? object.label : "",
     title: "Name",
     placeholder: "",
     object,
@@ -88,22 +109,40 @@ export function creationLabelPrompt(
     cameraSignal,
     zoom: Number(state?.camera?.zoom) || 1,
 
-    onApply: (text) => {
+    /*
+     * A GENERATED DEFAULT OPENS SELECTED, so typing replaces it. This is what
+     * makes a Heat Transfer notation editable the moment it appears without a
+     * second step - Enter keeps "T₁", any keystroke replaces it.
+     */
+    selectAllOnOpen,
+
+    /*
+     * A CALLER THAT OWNS THE COMMIT. A Heat Transfer label is its own child
+     * annotation with its own text field, so its answer is written by the tool
+     * layer rather than onto `object.name`. Without one, the label is written
+     * onto the object's name and label, as every other tool's is.
+     */
+    /*
+     * THE TEXT BECOMES THE LABEL - the ONE property the canvas draws.
+     *
+     * A tool that asks for text during creation is asking for the words that
+     * appear beside the object. That is the LABEL, and it is the only thing
+     * written here. It used to be written onto `name` as well, which gave one
+     * piece of displayed text two independent readings: renaming the object
+     * later changed the drawing, and editing the drawing changed the name.
+     */
+    onApply: typeof onApply === "function" ? onApply : (text) => {
       const next = String(text ?? "").trim();
       const live =
         (state?.objects || []).find(
           (candidate) => candidate?.id === object.id,
         ) || object;
-      const before = typeof live.name === "string" ? live.name : "";
+      const before = typeof live.label === "string" ? live.label : "";
 
-      /*
-       * ONE UNDOABLE EDIT, and only when the text really changed. The
-       * label is written with the name so the sheet and the panel agree.
-       */
+      /* ONE UNDOABLE EDIT, and only when the text really changed. */
       if (before !== next) {
         const previous = state ? enggDrawingState.snapshotDrawing(state) : null;
 
-        live.name = next;
         live.label = next;
 
         if (previous) {

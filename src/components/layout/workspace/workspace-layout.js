@@ -6,6 +6,12 @@ import { renderCurrentDrawing } from "./canvas-render.js";
 import { drawingFeaturesPanelToggle, drawingTopBarShow, drawingToolPanelToggle, drawingTopRail, drawingZoomIn, drawingZoomValue, headerHideButton } from "../../../features/workspace/dom.js";
 import { editorState } from "../../../features/workspace/editor-state.js";
 import { updateDrawingZoom } from "./viewport.js";
+import {
+    installColumnSync,
+    installPanelResize,
+    installPanelResizeRedraw,
+    workspaceColumns,
+} from "./panel-resize.js";
 
 /*
  * ========================================================
@@ -192,6 +198,18 @@ function setPanelCollapsed(
             : "true"
     );
 
+    /*
+     * THE RESIZE HANDLE GOES WITH THE PANEL.
+     *
+     * With no panel to size there is no edge to drag, and a handle left on a
+     * 22px arrow strip would fight the Hide button for the same few pixels.
+     */
+    const resizer = rail.querySelector(".drawing-panel-resizer");
+
+    if (resizer) {
+        resizer.hidden = collapsed;
+    }
+
     const panelId =
         toggle.getAttribute(
             "aria-controls"
@@ -271,6 +289,12 @@ function collapsedArrowTransform(
  *
  * One place decides the layout, called after every change, so the
  * template and the two rails cannot fall out of step.
+ *
+ * THE WIDTHS COME FROM THE RAILS THEMSELVES, NOT FROM THE STYLESHEET. A rail a
+ * student has dragged is not the 202px the stylesheet starts it at, so reading
+ * the live width is what lets the Hide buttons and a resize agree: collapsing
+ * one rail keeps the OTHER at whatever width it was dragged to, and showing it
+ * again restores that width rather than the default.
  */
 function syncWorkspaceColumns() {
     const workspace =
@@ -282,23 +306,52 @@ function syncWorkspaceColumns() {
         return;
     }
 
+    const toolsRail = document.querySelector(".drawing-panel-rail-left");
+    const featuresRail = document.querySelector(".drawing-panel-rail-right");
+
     const toolsCollapsed =
-        document
-            .querySelector(
-                ".drawing-panel-rail-left"
-            )
-            ?.classList.contains(
-                "drawing-panel-rail-collapsed"
-            ) ?? false;
+        toolsRail?.classList.contains(
+            "drawing-panel-rail-collapsed"
+        ) ?? false;
 
     const featuresCollapsed =
-        document
-            .querySelector(
-                ".drawing-panel-rail-right"
-            )
-            ?.classList.contains(
-                "drawing-panel-rail-collapsed"
-            ) ?? false;
+        featuresRail?.classList.contains(
+            "drawing-panel-rail-collapsed"
+        ) ?? false;
+
+    /*
+     * A COLLAPSED RAIL REMEMBERS ITS WIDTH BEFORE IT GOES. The rail's own box is
+     * 22px while collapsed, so asking it for a width would answer with the arrow
+     * strip - and showing the panel again would give back 22px of panel.
+     */
+    const widthOf = (rail, fallback) => {
+        const remembered = Number(rail?.dataset?.railWidth);
+
+        if (Number.isFinite(remembered) && remembered > 0) {
+            return remembered;
+        }
+
+        return fallback;
+    };
+
+    const columns = workspaceColumns({
+        left: widthOf(toolsRail, 202),
+        right: widthOf(featuresRail, 236),
+        leftCollapsed: toolsCollapsed,
+        rightCollapsed: featuresCollapsed,
+    });
+
+    /*
+     * ONLY WHILE THE RAILS ARE THE FIXED ONES. A narrow window switches the
+     * panels to a compact, icon-only layout through media queries that own their
+     * own track sizes - so above that width the inline template is the student's,
+     * and below it the responsive rules are left in charge of the drawing.
+     */
+    if (globalThis.matchMedia?.("(min-width: 901px)").matches ?? true) {
+        workspace.style.setProperty("grid-template-columns", columns);
+    } else {
+        workspace.style.removeProperty("grid-template-columns");
+    }
 
     workspace.classList.toggle(
         "drawing-workspace-tools-collapsed",
@@ -316,6 +369,25 @@ function syncWorkspaceColumns() {
  * by editor/index.js.
  */
 export function installWorkspaceLayout() {
+    /*
+     * THE SIDEBARS ARE RESIZABLE BY THEIR INNER EDGE.
+     *
+     * `installColumnSync` hands the resizer this module's one column writer, so
+     * a drag and a Hide press both end in the same template; the redraw is only
+     * a redraw - the canvas is wider or narrower, the zoom and the drawing are
+     * untouched.
+     */
+    installColumnSync(syncWorkspaceColumns);
+    installPanelResizeRedraw(renderCurrentDrawing);
+    installPanelResize();
+
+    /*
+     * AND THE LIVE WIDTHS ARE RE-DERIVED ONCE, NOW. The stylesheet starts the
+     * rails at their default widths; recording those on the rails means the very
+     * first Hide press already has a width to put back.
+     */
+    syncWorkspaceColumns();
+
     if (
         drawingZoomValue
     ) {

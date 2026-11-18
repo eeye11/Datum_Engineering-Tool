@@ -134,11 +134,12 @@ export function extentPoints({ points = [], strokes = [] } = {}) {
   });
 
   (Array.isArray(strokes) ? strokes : []).forEach((stroke) => {
-    const source = Array.isArray(stroke?.points) && stroke.points.length
-      ? stroke.points
-      : Array.isArray(stroke)
-        ? stroke
-        : [];
+    const source =
+      Array.isArray(stroke?.points) && stroke.points.length
+        ? stroke.points
+        : Array.isArray(stroke)
+          ? stroke
+          : [];
 
     if (!source.length) {
       return;
@@ -224,7 +225,12 @@ export function validBounds(bounds) {
  * student's hands. It falls back to the bounds ALREADY IN EFFECT, which is the
  * last thing that was valid.
  */
-export function resolveBounds({ mode = "auto", bounds = null, fallback = null, geometry = {} } = {}) {
+export function resolveBounds({
+  mode = "auto",
+  bounds = null,
+  fallback = null,
+  geometry = {},
+} = {}) {
   if (mode === "manual" && validBounds(bounds)) {
     const x = usableSpan(finiteOrNull(bounds.xMin), finiteOrNull(bounds.xMax));
     const y = usableSpan(finiteOrNull(bounds.yMin), finiteOrNull(bounds.yMax));
@@ -294,11 +300,18 @@ export function outsideBounds(bounds, { points = [], strokes = [] } = {}) {
  * the same rule as a live stroke.
  */
 export function geometryInput(geometry) {
-  const functions = Array.isArray(geometry?.functions) ? geometry.functions : [];
+  const functions = Array.isArray(geometry?.functions)
+    ? geometry.functions
+    : [];
 
   const strokes = functions
-    .filter((component) => component?.mode === "sketch" || Array.isArray(component?.points))
-    .map((component) => ({ points: Array.isArray(component.points) ? component.points : [] }));
+    .filter(
+      (component) =>
+        component?.mode === "sketch" || Array.isArray(component?.points),
+    )
+    .map((component) => ({
+      points: Array.isArray(component.points) ? component.points : [],
+    }));
 
   return {
     points: Array.isArray(geometry?.points) ? geometry.points : [],

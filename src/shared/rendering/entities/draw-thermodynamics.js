@@ -8,7 +8,16 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import enggTheme from "../../../components/layout/workspace/theme.js";
-import { applyStyle, createSvgElement, paintColour } from "../svg-primitives.js";
+import { activeZoom, applyStyle, createSvgElement, paintColour } from "../svg-primitives.js";
+import {
+    AUXILIARY_FONT_PX,
+    CANVAS_BASELINE,
+    CANVAS_FONT_STACK,
+    LINE_SPACING,
+    SECONDARY_FONT_PX,
+    fontSizeOf,
+    textTransform
+} from "../../typography/canvas-typography.js";
 import { processLabelPoint } from "../../../features/workspace/model/thermodynamics/process-labels.js";
 import { processSegmentPoints } from "../../../features/workspace/model/thermodynamics/process-curves.js";
 import { processDiagramPaths } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
@@ -31,13 +40,32 @@ export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
         }
         svg.appendChild(path);
     }
-    const origin = toScreen(cylinderPoint(geometry, 0, 0));
-    const top = toScreen(cylinderPoint(geometry, 0, 1));
-    const fontSize = Math.max(12, Math.hypot(top.x - origin.x, top.y - origin.y) * 0.036);
+    /*
+     * A PROCESS DIAGRAM'S STATES ARE AUXILIARY TYPE, AT A CANVAS SIZE.
+     *
+     * The size used to be a fraction of the DIAGRAM's on-screen width (so it grew
+     * with the drawing and with the zoom, and two diagrams of different sizes had
+     * different type). It is now the shared auxiliary role, 12 px, cancelling the
+     * camera on the glyphs; `label.fontScale` remains a deliberate per-label
+     * emphasis (a state number reads at the stated role, a title may be scaled).
+     */
     for (const label of diagram.labels) {
-        const labelFontSize = fontSize * (label.fontScale || 1);
+        const labelFontSize = fontSizeOf(
+            AUXILIARY_FONT_PX * (label.fontScale || 1),
+            AUXILIARY_FONT_PX
+        );
         const p = toScreen(label.point);
-        const text = createSvgElement("text", { x: p.x, y: p.y, "text-anchor": "middle", "dominant-baseline": "central", "font-size": labelFontSize, fill: "black" });
+        const zoom = Math.max(Number(activeZoom) || 1, 0.0001);
+        const text = createSvgElement("text", {
+            x: p.x,
+            y: p.y,
+            "text-anchor": "middle",
+            "dominant-baseline": CANVAS_BASELINE,
+            "font-size": Math.round(labelFontSize * zoom * 1000) / 1000,
+            transform: textTransform(p, zoom),
+            "font-family": CANVAS_FONT_STACK,
+            fill: paintColour("#000000")
+        });
         const quantitySubscript = !label.plainText && /^\$([QWqw])_(?:\{([^}]+)\}|([HL]))\$$/.exec(label.latex || "");
         if (!label.plainText && label.latex === "$P_4=P_5=P_{reheat}$") {
             for (const [index, value] of ["4", "5", "reheat"].entries()) {
@@ -57,7 +85,13 @@ export function drawRankineCycle({ svg, entity, geometry, style, toScreen }) {
             const lines = label.lines || [label.text];
             if (lines.length === 1) text.textContent = lines[0];
             else lines.forEach((line, index) => {
-                const span = createSvgElement("tspan", { x: p.x, dy: index === 0 ? -(lines.length - 1) * labelFontSize * 0.6 : labelFontSize * 1.2 });
+                const span = createSvgElement("tspan", {
+                    x: p.x,
+                    dy:
+                        (index === 0
+                            ? -(lines.length - 1) * labelFontSize * 0.6
+                            : labelFontSize * LINE_SPACING) * zoom
+                });
                 span.textContent = line;
                 text.appendChild(span);
             });
@@ -116,9 +150,18 @@ export function drawTank({ svg, geometry, style, toScreen }) {
                 processOverlay.appendChild(createSvgElement("circle", {
                     cx: labelPoint.x, cy: labelPoint.y, r: 9, fill: "white", stroke: "none", cursor: "move"
                 }));
+                /* A state's number: auxiliary type at a canvas size. */
+                const stateZoom = Math.max(Number(activeZoom) || 1, 0.0001);
                 const label = createSvgElement("text", {
-                    x: labelPoint.x, y: labelPoint.y, fill: colour, "font-size": 12, "font-family": "sans-serif", cursor: "move",
-                    "text-anchor": "middle", "dominant-baseline": "central"
+                    x: labelPoint.x,
+                    y: labelPoint.y,
+                    fill: colour,
+                    "font-size": Math.round(AUXILIARY_FONT_PX * stateZoom * 1000) / 1000,
+                    transform: textTransform(labelPoint, stateZoom),
+                    "font-family": CANVAS_FONT_STACK,
+                    cursor: "move",
+                    "text-anchor": "middle",
+                    "dominant-baseline": CANVAS_BASELINE
                 });
                 label.textContent = String(index + 1);
                 processOverlay.appendChild(label);
@@ -158,10 +201,17 @@ export function drawTank({ svg, geometry, style, toScreen }) {
         for (const [key, x, y] of [["yLabel", 0.04, 0.94], ["xLabel", 0.98, 0.02]]) {
             const label = geometry[key] || "insert axis label";
             const point = toScreen(cylinderPoint(geometry, x, y));
+            const axisZoom = Math.max(Number(activeZoom) || 1, 0.0001);
             const text = createSvgElement("text", {
-                x: point.x, y: point.y, fill: paintColour(style.stroke || enggTheme.defaultLineColour()),
-                "font-size": 12, "text-anchor": "end", "font-family": "sans-serif",
-                "data-saturation-axis": key, "data-axis-feature-id": entity.id,
+                x: point.x,
+                y: point.y,
+                fill: paintColour(style.stroke || enggTheme.defaultLineColour()),
+                "font-size": Math.round(SECONDARY_FONT_PX * axisZoom * 1000) / 1000,
+                transform: textTransform(point, axisZoom),
+                "text-anchor": "end",
+                "font-family": CANVAS_FONT_STACK,
+                "data-saturation-axis": key,
+                "data-axis-feature-id": entity.id,
                 cursor: "text"
             });
             text.textContent = label;

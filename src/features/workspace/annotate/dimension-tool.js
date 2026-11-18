@@ -16,6 +16,33 @@ import { renderProperties } from "../../../components/layout/panels/feature-pane
 import { distanceToSegment, objectAtPoint } from "../interaction/hit-testing.js";
 import { setToolMessage } from "../../../components/layout/toolbar/toolbar-render.js";
 
+/*
+ * THE QUICK-ACCESS DEFAULT IS APPLIED TO A NEW DIMENSION HERE.
+ *
+ * `styleDefaults.fontSize` is what the control sets with nothing selected, so a
+ * dimension made after the student chose 20 px is a 20 px dimension. A student
+ * who never set a default keeps the model's own secondary-role size.
+ */
+function applyDefaultFontSize(state, object) {
+    const wanted = Number(state?.styleDefaults?.fontSize);
+
+    if (!Number.isFinite(wanted) || wanted <= 0) {
+        return object;
+    }
+
+    object.style = {
+        ...(object.style || {}),
+        fontSize: Math.min(96, Math.max(8, wanted)),
+    };
+
+    /* The object's own statement of its size, kept equal to the style's. */
+    if (Number(object.fontSize) > 0) {
+        object.fontSize = object.style.fontSize;
+    }
+
+    return object;
+}
+
 /* Dimension uses reference picking, placement, and user-entered magnitude.
  * The legacy `dimension` id remains supported for existing callers. */
 /*
@@ -174,21 +201,29 @@ export function commitDimension(
      *
      * A dimension is written INTO the drawing, and its label is in-page text on
      * that drawing - so creating one must not stop at a modal question. It is
-     * committed with its measured (generated) value - or the label the student
-     * asked for - and the in-place text field then opens over the NUMBER, which
-     * is where the text lives. Escape on that field abandons only the edit; the
-     * dimension stays, showing its own measurement.
+     * committed with NO label, and the in-place text field then opens over the
+     * dimension line, which is where the text will live.
+     *
+     * NO MEASUREMENT IS EVER SHOWN IN THE MEANTIME. The dimension draws its
+     * witness lines, its dimension line and its arrowheads, and no text at all
+     * until the student types one - so the number they see is always the number
+     * they wrote, never a calculated distance they did not ask for.
+     *
+     * Escape on that field abandons only the edit; the dimension stays, with
+     * its lines and no label.
      *
      * This is the same field the double-click gesture opens
      * (`openDimensionValuePrompt`), so a dimension is created and edited through
      * ONE editor rather than two interfaces for the same text.
      */
+    const label = String(defaultLabel || "").trim();
+
     const object = commitDimensionNow({
         dimensionType,
         refs,
         placement,
-        dimensionKind: String(defaultLabel || "").trim() ? "variable" : "smart",
-        content: String(defaultLabel || "").trim()
+        dimensionKind: label ? "variable" : "smart",
+        content: label
     });
 
     if (object) {
@@ -220,6 +255,15 @@ function commitDimensionNow({
         content
     });
 
+    /*
+     * A NEW DIMENSION TAKES THE QUICK-ACCESS DEFAULT, unless the student has
+     * never set one - in which case the model's own secondary-role size (14 px)
+     * stands, which is the right size for a number beside a line.
+     */
+    if (object) {
+        applyDefaultFontSize(drawingState, object);
+    }
+
     enggDrawingState.addObject(
         drawingState,
         object
@@ -244,8 +288,15 @@ function commitDimensionNow({
         object.id
     );
 
+    /*
+     * THE STATUS LINE MAY NAME THE MEASUREMENT - the drawing may not.
+     *
+     * `describeMeasurement` is the calculated distance, offered as feedback in
+     * the toolbar. It is deliberately NOT the dimension's label: the label is
+     * the student's, and stays empty until they type one.
+     */
     const measured =
-        enggDimensionModel.formatMeasurement(
+        enggDimensionModel.describeMeasurement(
             object,
             drawingState
         );
@@ -271,13 +322,13 @@ function commitDimensionNow({
  * a second object. The dimension keeps its id, its references and its
  * measurement; only the text it displays is rewritten.
  *
- * WHAT IS EDITED IS THE DIMENSION'S OWN VALUE FIELD, not a new free-text
- * label: the dimension becomes a `variable` (driven) annotation stating what
- * the student typed, which is the same state the Features panel's Magnitude
- * field writes. That is what keeps the text, the panel and the source in step -
- * all three read the one field.
+ * WHAT IS EDITED IS THE DIMENSION'S LABEL, and nothing else. The dimension
+ * becomes a `variable` (driven) annotation stating what the student typed,
+ * which is the same field the Features panel's Label Text row writes - so the
+ * text, the panel and the source stay in step, all three reading one field.
  *
- * Escape abandons the edit and leaves the dimension exactly as it was.
+ * AN EMPTY LABEL IS ACCEPTED and leaves the dimension with its lines and no
+ * text. Escape abandons the edit and leaves the dimension exactly as it was.
  */
 export function openDimensionValuePrompt(object) {
     if (!object || object.type !== "dimension") return false;
@@ -302,28 +353,45 @@ export function openDimensionValuePrompt(object) {
 
     openDimensionTextEditor({
         object: anchor,
+        /*
+         * THE FIELD OPENS ON THE LABEL, WHICH IS EMPTY UNTIL TYPED. It never
+         * opens on a calculated distance: the measurement is not the label, and
+         * pre-filling the field with it is how a student's "5" became
+         * "118.71 mm".
+         */
         value: anchor.dimensionKind === "variable"
             ? anchor.content
-            : enggDimensionModel.formatMeasurement(anchor, drawingState),
+            : (typeof anchor.label === "string" ? anchor.label : ""),
         world: graphics.textFrame
             ? { x: graphics.textFrame.x, y: graphics.textFrame.y }
-            : anchor.placement,
+            : graphics.textAnchor || anchor.placement,
         state: drawingState,
         onApply: (value) => {
             const target = current();
             if (!target) return { ok: false, error: "This dimension was deleted." };
+
+            /*
+             * AN EMPTY LABEL IS A LEGAL ANSWER. The dimension keeps its lines
+             * and shows no text - which is exactly what "no label" means. It
+             * is not an error, and it does not fall back to the measurement.
+             */
             const text = String(value ?? "").trim();
-            if (!text) return { ok: false, error: "Enter a label for this dimension." };
             const previous = enggDrawingState.snapshotDrawing(drawingState);
-            target.dimensionKind = "variable";
+
+            /*
+             * ONLY THE LABEL CHANGES. The references, the placement and the
+             * measured geometry are untouched, so editing the text can never
+             * move the dimension or change what it measures.
+             */
+            target.dimensionKind = text ? "variable" : "smart";
             target.content = text;
             target.mode = "driven";
             target.drivingValue = null;
-            target.label = null;
+            target.label = text || null;
             delete target.dimensionError;
             enggDrawingState.commitDrawingChange(drawingState, previous);
             renderProperties(); renderCurrentDrawing();
-            setToolMessage("Dimension updated");
+            setToolMessage(text ? "Dimension label updated" : "Dimension label cleared");
             return { ok: true };
         }
     });

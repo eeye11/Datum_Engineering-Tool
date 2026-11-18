@@ -28,11 +28,16 @@
  */
 
 import { NOTE_FONTS, noteTextStyle } from "../../../shared/typography/note-text-style.js";
+import {
+    FONT_PX_MAX,
+    FONT_PX_MIN,
+    SECONDARY_FONT_PX,
+    fontSizeOf
+} from "../../../shared/typography/canvas-typography.js";
 import enggFeatureGeometry from "../../../shared/geometry/feature-geometry.js";
 import { STRESS_COLOURS } from "../../../shared/geometry/stress-element.js";
 import { BOUNDARY_EDGES, boundaryEquation } from "../../../shared/geometry/boundary-stress.js";
 import dimensions from "../../../features/workspace/model/dimensions/dimension-model.js";
-import { referenceSummary } from "../../../features/workspace/model/dimensions/dimension-driving.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { isProcessDiagram } from "../../../features/workspace/model/thermodynamics/saturation-curve.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
@@ -51,6 +56,7 @@ import enggFlowArrows from "../../../features/workspace/model/fluids/flow-arrows
 import enggPressureProfile from "../../../features/workspace/model/fluids/pressure-profile.js";
 import enggFlowProfile from "../../../features/workspace/model/fluids/flow-profile.js";
 import enggSectionPlane from "../../../features/workspace/model/fluids/section-plane.js";
+import enggHeatModel from "../../../features/workspace/model/heat-transfer/heat-model.js";
 import enggQuantities from "../../../shared/units/quantities.js";
 import enggMathModel from "../../../features/workspace/math/math-model.js";
 
@@ -218,7 +224,31 @@ const STROKE_TYPES = new Set([
     	"math-plot",
     	"math-equation",
     	"math-tangent",
-    	"math-slope-triangle"
+    	"math-slope-triangle",
+
+    	/*
+    	 * THE HEAT TRANSFER OBJECTS ARE DRAWN WITH A PEN TOO.
+    	 *
+    	 * Every one of them gets the SAME Line Style, Outline Colour and
+    	 * Thickness the rest of the drawing uses - the shared Appearance rows -
+    	 * rather than a second appearance implementation. Without them the
+    	 * Appearance section was EMPTY for every Heat Transfer object and the
+    	 * panel dropped it entirely.
+    	 */
+    	"thermal-region",
+    	"wall-slab",
+    	"composite-wall",
+    	"fin",
+    	"heat-path",
+    	"thermal-arrow",
+    	"thermal-boundary",
+    	"thermal-contact",
+    	"heat-source-sink",
+    	"thermal-circuit-node",
+    	"thermal-circuit-element",
+    	"temperature-marker",
+    	"isotherm",
+    	"control-volume"
     ]);
 
 /*
@@ -269,7 +299,7 @@ export const THICKNESS_OPTIONS = [
  * outline weight and no rotation, because the symbol has none of them.
  */
 const PARTICLE_GROUPS = [
-    { id: "object", heading: "Object", fields: ["name", "fixed"] },
+    { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
@@ -288,7 +318,7 @@ const PARTICLE_GROUPS = [
  * arrowhead. Its label is optional like every other Dynamics symbol's.
  */
 const ANGULAR_VECTOR_GROUPS = [
-    { id: "object", heading: "Object", fields: ["name", "fixed"] },
+    { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
@@ -311,7 +341,7 @@ const ANGULAR_VECTOR_GROUPS = [
  * the panel row and the handle are the same edit.
  */
 const RIGID_BODY_GROUPS = [
-    { id: "object", heading: "Object", fields: ["name", "fixed"] },
+    { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
@@ -339,7 +369,7 @@ const RIGID_BODY_GROUPS = [
  * arrowhead and where its label sits.
  */
 const POLAR_VECTOR_GROUPS = [
-    { id: "object", heading: "Object", fields: ["name", "fixed"] },
+    { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
     {
         id: "appearance",
         heading: "Appearance",
@@ -667,26 +697,82 @@ function noteStyleField(key, kind, label, extra = {}) {
     };
 }
 
-/* The universal Name field: one control, declared once. */
+/*
+ * THE UNIVERSAL NAME FIELD.
+ *
+ * NAME IS NOT LABEL. `name` identifies the object in the inventory, the tree and
+ * the source header; `label` is the text drawn on the sheet. This field used to
+ * write BOTH, which meant renaming "Line 3" to "Wall" printed "Wall" on the
+ * drawing - a change to how the student files an object silently changing what
+ * it says. The two are now separate rows, and this one touches only the name.
+ *
+ * A TOOL WHOSE NAME AND TEXT ARE DELIBERATELY THE SAME - an annotation, whose
+ * name IS its words - keeps that link where it belongs: in the annotate model,
+ * not in the shared field every object uses.
+ */
 const nameField = {
     kind: "text",
     label: "Name",
     applies: (object) => typeof object?.type === "string" && object.type !== "annotate",
     read: nameOf,
     write: (object, value) => {
-        const name = String(value ?? "").trim();
+        object.name = String(value ?? "").trim();
 
-        object.name = name;
+        return true;
+    }
+};
 
-        /*
-         * THE DRAWN TEXT GOES WITH IT - ALWAYS. The panel has one naming field
-         * and the object has two stored readings of it (`name` for the inventory
-         * and the source header, `label` for the text on the sheet). Writing only
-         * one of them leaves the other showing what the student just replaced,
-         * so both are written on every edit - including on a feature that had no
-         * label yet.
-         */
-        object.label = name;
+/*
+ * THE UNIVERSAL LABEL FIELD.
+ *
+ * The text drawn beside an object, and the ONE place it is edited. It is empty
+ * by default: an object with no label stays unlabelled on the sheet, which is
+ * what `label` already means everywhere - `appendFeatureLabel` draws nothing for
+ * an empty string.
+ *
+ * A Heat Transfer notation and a student's own note keep their own `label`
+ * reading, so this row shows exactly what the canvas shows.
+ */
+const labelField = {
+    kind: "text",
+    label: "Label",
+    applies: (object) =>
+        typeof object?.type === "string" && object.type !== "dimension",
+
+    /*
+     * THE TEXT FORMATTING DISCLOSURE HANGS OFF THIS ROW - see
+     * `features-editor.js`, which appends it after the Label row, collapsed, and
+     * only when the object has displayed text.
+     */
+
+    /*
+     * AN ANNOTATION'S TEXT IS ITS LABEL - ONE PROPERTY, TWO READINGS.
+     *
+     * A note, a label, a callout and a leader keep their words in `text`, which
+     * is what the canvas draws and what the inline field edits. This row shows
+     * and writes THAT, so the Features Label field, the canvas and the source
+     * are one value rather than a label field beside a separate text field that
+     * could disagree.
+     */
+    read: (object) => {
+        if (object?.type === "annotate") {
+            return typeof object.text === "string" ? object.text : "";
+        }
+
+        return typeof object?.label === "string" ? object.label : "";
+    },
+
+    write: (object, value) => {
+        const text = String(value ?? "");
+
+        if (object?.type === "annotate") {
+            object.text = text;
+            object.label = text;
+
+            return true;
+        }
+
+        object.label = text;
 
         return true;
     }
@@ -1295,6 +1381,477 @@ const MATH_FIELDS = {
     }
 };
 
+/*
+ * ============================================================
+ * THE HEAT TRANSFER FIELDS
+ * ============================================================
+ *
+ * Every one is a property of the object's own model, read and written through
+ * the shared `readField`/`writeField` seam - so a typed value and a dragged
+ * handle are the same edit. None of them is a width, a height, a thickness or
+ * a layer count: those are the handles' job, and the requirement forbids
+ * putting them in the panel.
+ *
+ * A field that does not apply to the selected object is dropped by
+ * `groupsFor`, so a Wall / Slab never shows a quantity type and a boundary
+ * never shows a region type.
+ */
+const HEAT_FIELDS = {
+    /* The region's material role. Insulation draws its hatch by default. */
+    heatRegionType: {
+        kind: "choice",
+        applies: (object) => object?.type === "thermal-region",
+        read: (object) => enggHeatModel.variantOf(object) || "solid",
+        write: (object, value) => {
+            if (!enggHeatModel.HEAT_VARIANTS.region.includes(value)) return false;
+            object.variant = value;
+            object.engineering = { ...(object.engineering || {}), variant: value };
+            return true;
+        },
+        label: "Region Type",
+        options: [
+            { value: "solid", label: "Solid" },
+            { value: "fluid", label: "Fluid" },
+            { value: "surroundings", label: "Surroundings" },
+            { value: "insulation", label: "Insulation" }
+        ]
+    },
+
+    /*
+     * SUPERSEDED BY THE EDITOR'S OWN ROTATE ROW.
+     *
+     * The Features editor draws ONE Rotate row for every transformable object,
+     * and it is the control that actually turns the drawing. This field declared
+     * a SECOND one, so a Heat Transfer object showed "Rotate" twice - two inputs
+     * over one number. It is kept declared and permanently inapplicable rather
+     * than deleted, because a schema key is referenced by name in several group
+     * tables and a dangling name is worse than an unused one.
+     */
+    heatRotation: {
+        kind: "number",
+        /* NEVER SHOWN: the editor's own Rotate row is the control. */
+        applies: () => false,
+        read: (object) => {
+            const radians = Number(object?.geometry?.rotation) || 0;
+
+            /* The rectangle family stores radians; the symbols store degrees. */
+            return ["thermal-region", "control-volume"].includes(object?.type)
+                ? Math.round((radians * 180) / Math.PI * 10) / 10
+                : Math.round(radians * 10) / 10;
+        },
+        write: (object, value) => {
+            const degrees = Number(value);
+
+            if (!Number.isFinite(degrees)) return false;
+
+            object.geometry = {
+                ...(object.geometry || {}),
+                rotation: ["thermal-region", "control-volume"].includes(object?.type)
+                    ? (degrees * Math.PI) / 180
+                    : degrees
+            };
+
+            return true;
+        },
+        step: 1,
+        label: "Rotate",
+        unit: "°"
+    },
+
+    /*
+     * THE DIRECTION A SURFACE FLUX POINTS THROUGH ITS BOUNDARY.
+     *
+     * A Heat Flux arrow on a surface is that surface's normal; this chooses
+     * which way along the normal - OUT of the body or IN to it - without
+     * redrawing anything. It applies only to an arrow that HAS a surface, so an
+     * ordinary free flux arrow never shows a control that cannot act.
+     */
+    heatSurfaceInward: {
+        kind: "segmented",
+        applies: (object) =>
+            enggHeatModel.isHeatType(object?.type) &&
+            Boolean(object?.geometry?.surfaceId),
+        read: (object) => (object?.geometry?.inward === true ? "in" : "out"),
+        write: (object, value) => {
+            const inward = value === "in";
+
+            if (!enggHeatModel.setSurfaceArrowInward) {
+                object.geometry = { ...(object.geometry || {}), inward };
+                return true;
+            }
+
+            /*
+             * THE PANEL CANNOT SEE THE SHEET, so the arrow's own two ends are
+             * re-derived from the boundary the same function the renderer uses -
+             * through the published reader - and the stored flag is flipped.
+             */
+            object.geometry = { ...(object.geometry || {}), inward };
+
+            return true;
+        },
+        label: "Direction",
+        options: [
+            { value: "out", label: "Out of Surface" },
+            { value: "in", label: "Into Surface" }
+        ]
+    },
+
+    /* PATH / ARROW DIRECTION: whether the head points back along the route. */
+    heatReversed: {
+        kind: "toggle",
+        /*
+         * A FREE arrow reverses along its own route. A SURFACE flux does not -
+         * its direction is which way through the boundary, offered as
+         * `heatSurfaceInward` - so the two controls are never both shown.
+         */
+        applies: (object) =>
+            (object?.type === "heat-path" || object?.type === "thermal-arrow") &&
+            !object?.geometry?.surfaceId,
+        read: (object) => Boolean(object?.geometry?.reversed),
+        write: (object, value) => {
+            object.geometry = { ...(object.geometry || {}), reversed: Boolean(value) };
+            return true;
+        },
+        label: "Reverse Direction"
+    },
+
+    /*
+     * THE QUANTITY TYPE. A Heat Transfer Rate and a Heat Flux are different
+     * quantities; switching the type also switches the default notation, and
+     * the two are never treated as interchangeable.
+     */
+    heatQuantityType: {
+        kind: "segmented",
+        applies: (object) => object?.type === "thermal-arrow",
+        read: (object) => enggHeatModel.variantOf(object) || "heat-rate",
+        write: (object, value) => {
+            if (!enggHeatModel.HEAT_VARIANTS.thermalArrow.includes(value)) return false;
+            object.variant = value;
+            object.engineering = { ...(object.engineering || {}), variant: value };
+            /* The default notation follows the quantity the student chose. */
+            const label = enggHeatModel.HEAT_DEFAULT_LABELS.thermalArrow[value];
+            if (label) { object.label = label; object.engineering.label = label; }
+            return true;
+        },
+        label: "Quantity Type",
+        options: [
+            { value: "heat-rate", label: "Heat Transfer Rate (Q̇)" },
+            { value: "heat-flux", label: "Heat Flux (q″)" }
+        ]
+    },
+
+    /* SYMBOL SIDE: which face a boundary's decorations are drawn on. */
+    heatSymbolSide: {
+        kind: "segmented",
+        applies: (object) => object?.type === "thermal-boundary",
+        read: (object) => (Number(object?.geometry?.side) === -1 ? "-1" : "1"),
+        write: (object, value) => {
+            object.geometry = { ...(object.geometry || {}), side: String(value) === "-1" ? -1 : 1 };
+            return true;
+        },
+        label: "Symbol Side",
+        options: [
+            { value: "1", label: "Left" },
+            { value: "-1", label: "Right" }
+        ]
+    },
+
+    /* SYMBOL SPACING: the drawing-coordinate distance between decorations. */
+    heatSymbolSpacing: {
+        kind: "number",
+        applies: (object) => object?.type === "thermal-boundary",
+        read: (object) => Number(object?.geometry?.spacing) || 12,
+        write: (object, value) => {
+            const spacing = Number(value);
+            if (!Number.isFinite(spacing) || spacing <= 0) return false;
+            object.geometry = { ...(object.geometry || {}), spacing };
+            return true;
+        },
+        min: 1,
+        step: 1,
+        label: "Symbol Spacing"
+    },
+
+    /* INTERFACE PATTERN: how a contact's resistance is represented. */
+    heatInterfacePattern: {
+        kind: "choice",
+        applies: (object) => object?.type === "thermal-contact",
+        read: (object) => object?.pattern || object?.engineering?.pattern || "plain",
+        write: (object, value) => {
+            if (!["plain", "contact", "gap"].includes(value)) return false;
+            object.pattern = value;
+            object.engineering = { ...(object.engineering || {}), pattern: value };
+            return true;
+        },
+        label: "Interface Pattern",
+        options: [
+            { value: "plain", label: "Plain" },
+            { value: "contact", label: "Contact Resistance" },
+            { value: "gap", label: "Air Gap" }
+        ]
+    },
+
+    /*
+     * LEGACY LABEL POSITION. Kept so a document written with the old
+     * `geometry.labelOffset` still reads correctly; new documents carry their
+     * offset on the LABEL object, which is where the Label section's offset
+     * rows read and write it.
+     */
+    heatLabelPosition: {
+        kind: "number",
+        applies: (object) => enggHeatModel.isHeatType(object?.type),
+        read: (object) => Number(object?.geometry?.labelOffset?.x) || 0,
+        write: (object, value) => {
+            const x = Number(value);
+            if (!Number.isFinite(x)) return false;
+            const current = object.geometry?.labelOffset || { x: 0, y: 0 };
+            object.geometry = { ...(object.geometry || {}), labelOffset: { ...current, x } };
+            return true;
+        },
+        step: 1,
+        label: "Label X Offset"
+    },
+
+    /* ============================================================
+     * THE LABEL SECTION'S FIELDS
+     * ============================================================
+     *
+     * These apply to an ATTACHED LABEL object - the child annotation a Heat
+     * Transfer object carries - so the section appears when the label is
+     * selected, and every value written here reaches the canvas immediately
+     * because the label IS the drawn text.
+     *
+     * `parentLabelOf` finds that label from the selection: either the label
+     * itself, or the one belonging to a selected heat parent. The panel always
+     * edits the label that is actually on the sheet.
+     */
+    heatLabelText: {
+        kind: "text",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => attachedLabelOf(object)?.text ?? "",
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            if (!label) return false;
+            const text = String(value ?? "");
+            label.text = text;
+            /* The student has taken it over, so it is no longer the notation. */
+            label.metadata = { ...(label.metadata || {}), heatGenerated: false };
+            return true;
+        },
+        label: "Text / Expression"
+    },
+
+    labelColour: {
+        kind: "colour",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => {
+            const label = attachedLabelOf(object);
+            const stored = label?.style?.labelColour || label?.style?.stroke;
+            return /^#[0-9a-f]{6}$/i.test(String(stored || "")) ? stored : "#193335";
+        },
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            if (!label || !/^#[0-9a-f]{6}$/i.test(String(value || ""))) return false;
+            label.style = { ...(label.style || {}), labelColour: value, stroke: value };
+            return true;
+        },
+        label: "Text Colour"
+    },
+
+    labelSize: {
+        kind: "number",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => {
+            const style = attachedLabelOf(object)?.style || {};
+            return Number(style.labelSize) > 0
+                ? Number(style.labelSize)
+                : Number(style.fontSize) > 0
+                    ? Number(style.fontSize)
+                    : SECONDARY_FONT_PX;
+        },
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            const size = Number(value);
+            if (!label || !Number.isFinite(size) || size <= 0) return false;
+
+            /*
+             * ONE SIZE, WRITTEN TO ONE PLACE. `labelSize` is this section's own
+             * name for the property; `fontSize` is the name the quick-access
+             * control uses, so both are written and the two views can never show
+             * different numbers for the same label. The shared range applies.
+             */
+            const clamped = fontSizeOf(size, SECONDARY_FONT_PX);
+            label.style = { ...(label.style || {}), labelSize: clamped, fontSize: clamped };
+            return true;
+        },
+        min: FONT_PX_MIN,
+        max: FONT_PX_MAX,
+        step: 1,
+        label: "Text Size (px)"
+    },
+
+    labelStyle: {
+        kind: "segmented",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => {
+            const style = attachedLabelOf(object)?.style || {};
+            if (style.labelBold === true && style.labelItalic === true) return "bold-italic";
+            if (style.labelBold === true) return "bold";
+            if (style.labelItalic === true) return "italic";
+            return "regular";
+        },
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            if (!label) return false;
+            const style = { ...(label.style || {}) };
+            style.labelBold = value === "bold" || value === "bold-italic";
+            style.labelItalic = value === "italic" || value === "bold-italic";
+            label.style = style;
+            return true;
+        },
+        label: "Text Style",
+        options: [
+            { value: "regular", label: "Regular" },
+            { value: "bold", label: "Bold" },
+            { value: "italic", label: "Italic" },
+            { value: "bold-italic", label: "Bold Italic" }
+        ]
+    },
+
+    heatLabelAnchor: {
+        kind: "segmented",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => {
+            const anchor = attachedLabelOf(object)?.style?.labelAnchor;
+            return ["start", "middle", "end"].includes(anchor) ? anchor : "start";
+        },
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            if (!label || !["start", "middle", "end"].includes(value)) return false;
+            label.style = { ...(label.style || {}), labelAnchor: value };
+            return true;
+        },
+        label: "Alignment",
+        options: [
+            { value: "start", label: "Left" },
+            { value: "middle", label: "Centre" },
+            { value: "end", label: "Right" }
+        ]
+    },
+
+    /*
+     * A HEAT LABEL'S NAME. Its name and its drawn text are the SAME thing, so
+     * this reads and writes the label's text - renaming the object renames what
+     * it says, which is what the student means by both.
+     */
+    heatLabelName: {
+        kind: "text",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => attachedLabelOf(object)?.text ?? "",
+        write: (object, value) => {
+            const label = attachedLabelOf(object);
+            if (!label) return false;
+            const text = String(value ?? "").trim();
+            if (!text) return false;
+            label.text = text;
+            label.name = text;
+            return true;
+        },
+        label: "Name"
+    },
+
+    heatLabelOffsetX: {
+        kind: "number",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => Number(attachedLabelOf(object)?.metadata?.heatLabelOffset?.x) || 0,
+        write: (object, value) => writeLabelOffset(attachedLabelOf(object), "x", value),
+        step: 1,
+        label: "Label X Offset"
+    },
+
+    heatLabelOffsetY: {
+        kind: "number",
+        applies: (object) => Boolean(attachedLabelOf(object)),
+        read: (object) => Number(attachedLabelOf(object)?.metadata?.heatLabelOffset?.y) || 0,
+        write: (object, value) => writeLabelOffset(attachedLabelOf(object), "y", value),
+        step: 1,
+        label: "Label Y Offset"
+    }
+};
+
+/*
+ * THE SHEET, PUBLISHED BY THE EDITOR.
+ *
+ * This module takes part in an import cycle with the editor, so it cannot
+ * import the live document. It asks through this lookup, set once by
+ * editor-state.js, and read at CALL time - so it always sees the sheet as it is
+ * now rather than as it was on import.
+ */
+let panelObjectReader = () => [];
+
+export function setPanelObjectLookup(reader) {
+    panelObjectReader = typeof reader === "function" ? reader : () => [];
+}
+
+/*
+ * THE ATTACHED LABEL FOR A SELECTION.
+ *
+ * A selected label is its own object; a selected heat parent owns one. Both
+ * resolve to the SAME label object, so the panel's Label section reads and
+ * writes the label that is genuinely on the sheet either way.
+ */
+function attachedLabelOf(object) {
+    if (!object) return null;
+
+    /* The label itself. */
+    if (object.type === "annotate" && object.metadata?.heatParentId) {
+        return object;
+    }
+
+    /* A heat parent: find its child label. */
+    if (enggHeatModel.isHeatType(object.type)) {
+        return (
+            panelObjectReader().find(
+                (candidate) =>
+                    candidate.type === "annotate" &&
+                    candidate.metadata?.heatParentId === object.id
+            ) || null
+        );
+    }
+
+    return null;
+}
+
+/* Write one component of the label's offset and reseat it. */
+function writeLabelOffset(label, axis, value) {
+    if (!label) return false;
+    const number = Number(value);
+    if (!Number.isFinite(number)) return false;
+
+    const offset = label.metadata?.heatLabelOffset || { x: 0, y: 0 };
+    const next = { ...offset, [axis]: number };
+
+    label.metadata = { ...(label.metadata || {}), heatLabelOffset: next };
+
+    /* The stored position follows the offset, so the canvas moves at once. */
+    const parent = panelObjectReader().find(
+        (candidate) => candidate.id === label.metadata?.heatParentId
+    );
+
+    if (parent) {
+        const anchor = enggHeatModel.heatParentAnchor(parent);
+
+        if (anchor) {
+            label.geometry = {
+                ...(label.geometry || {}),
+                position: { x: anchor.x + next.x, y: anchor.y + next.y }
+            };
+        }
+    }
+
+    return true;
+}
+
 const FIELDS = {
     ...Object.fromEntries([["dimensionWidth", "Width / x extent"], ["dimensionHeight", "Height / y extent"]].map(([key, label]) => [`boundary.${key}`, {
         kind: "text", label,
@@ -1388,13 +1945,33 @@ const FIELDS = {
             return true;
         }
     },
-    dimensionContent: {
-        kind: "text", label: "Magnitude",
-        applies: object => object.type === "dimension" && object.dimensionKind === "variable",
-        read: object => object.content || "",
+    /*
+     * A DIMENSION'S LABEL TEXT - THE STUDENT'S OWN WORDS.
+     *
+     * EMPTY BY DEFAULT, and empty is a legal value: a dimension with no label
+     * draws its lines and no text. It is never pre-filled with the measured
+     * distance, and what is typed is shown exactly as typed - no unit, no
+     * prefix, no rounding.
+     *
+     * A dimension is not a vector or a force, so there is no Magnitude here:
+     * the measured length is a fact about the geometry, computed internally,
+     * and it is not a property the student edits.
+     */
+    dimensionLabelText: {
+        kind: "text", label: "Label text",
+        applies: object => object.type === "dimension",
+        read: object => (object.dimensionKind === "variable"
+            ? String(object.content || "")
+            : String(object.label || "")),
         write: (object, value) => {
-            if (!String(value).trim()) { object.dimensionError = "Dimension content is required."; return true; }
-            object.content = String(value).trim(); delete object.dimensionError; return true;
+            const text = String(value ?? "").trim();
+            object.dimensionKind = text ? "variable" : "smart";
+            object.content = text;
+            object.label = text || null;
+            object.mode = "driven";
+            object.drivingValue = null;
+            delete object.dimensionError;
+            return true;
         }
     },
     /*
@@ -1407,12 +1984,17 @@ const FIELDS = {
      * perfectly reasonable 72 pt title out of existence.
      */
     dimensionTextSize: {
-        kind:"number",label:"Text size (pt)",min:4,max:200,step:1,
+        kind:"number",label:"Text size (px)",min:FONT_PX_MIN,max:FONT_PX_MAX,step:1,
         applies:object=>object.type === "dimension",
-        read:object=>Number(object.style?.fontSize) > 0 ? Number(object.style.fontSize) : 11,
+        read:object=>Number(object.style?.fontSize) > 0 ? Number(object.style.fontSize) : SECONDARY_FONT_PX,
         write:(object,value)=>{
-            const size=Number(value);if(!Number.isFinite(size)||size<4||size>200)return false;
-            object.style={...object.style,fontSize:size};return true;
+            const size=Number(value);
+            if(!Number.isFinite(size)||size<=0)return false;
+            const clamped=fontSizeOf(size, SECONDARY_FONT_PX);
+            object.style={...object.style,fontSize:clamped};
+            /* The object's own statement of its size, kept equal to the style. */
+            if(Number(object.fontSize) > 0) object.fontSize = clamped;
+            return true;
         }
     },
     calloutShape: {
@@ -1442,6 +2024,19 @@ const FIELDS = {
     ]}),
     noteIndent: noteStyleField("indent", "number", "Indent (mm)", {min:0,max:1000,step:1}),
     noteSpacing: noteStyleField("lineSpacing", "number", "Line spacing", {min:1,max:3,step:0.1}),
+
+    /*
+     * ROTATION, BACKGROUND AND PADDING - the rest of the shared text style.
+     *
+     * They live in the SAME style object as a note's font and colour, so this
+     * row, the inline toolbar and the canvas all read one value. A background is
+     * OFF by default, so no note grows a white box unless the student asks for
+     * one, and the padding row applies only once a background exists.
+     */
+    noteRotation: noteStyleField("rotation", "number", "Rotate (°)", {min:-360,max:360,step:1}),
+    noteBackground: noteStyleField("background", "toggle", "Background fill"),
+    noteBackgroundColour: noteStyleField("backgroundColour", "colour", "Background colour"),
+    notePadding: noteStyleField("padding", "number", "Padding (px)", {min:0,max:100,step:1}),
     /*
      * A DIMENSION IS DRAWN WITH A PEN, so it gets its own colour and thickness.
      *
@@ -1465,16 +2060,25 @@ const FIELDS = {
         write: (object, value) => FIELDS.lineWidth.write(object, value),
         options: THICKNESS_OPTIONS.map(({ value, label }) => ({ value, label }))
     },
-    dimensionMeasurement: {
-        kind:"readonly", label:"Measurement",
+    /*
+     * THE DIMENSION LINE'S OFFSET FROM THE MEASURED EDGE, in drawing units.
+     *
+     * This is the one geometric parameter the student chooses about WHERE the
+     * dimension is drawn. It moves the dimension line and its witness lines; it
+     * never moves the two reference points, so the measured length is unchanged
+     * by it.
+     */
+    dimensionOffset: {
+        kind: "number", label: "Dimension offset", step: 0.5,
         applies: object => object.type === "dimension",
-        read: object => dimensions.measurementFor(object,drawingState)
-            ? `${dimensions.measurementFor(object,drawingState).value.toFixed(2)} ${object.dimensionType === "angular" ? "°" : "mm"}` : "Unresolved — geometry reference missing"
-    },
-    dimensionReferences: {
-        kind:"readonly", label:"Geometry references",
-        applies: object => object.type === "dimension",
-        read: object => referenceSummary(object,drawingState)
+        read: object => {
+            const offset = dimensions.offsetFor(object, drawingState);
+            return Number.isFinite(offset) ? Number(offset.toFixed(3)) : 0;
+        },
+        write: (object, value) => {
+            if (String(value).trim() === "" || !Number.isFinite(Number(value))) return false;
+            return dimensions.setOffset(object, Number(value), drawingState);
+        }
     },
     dimensionStatus: {
         kind:"readonly", label:"Status",
@@ -2119,7 +2723,10 @@ const FIELDS = {
      * `groupsFor`, so a Point never shows a curve's domain and a graph never
      * shows a vector's components.
      */
-    ...MATH_FIELDS
+    ...MATH_FIELDS,
+
+    /* The Heat Transfer controls, declared once above. */
+    ...HEAT_FIELDS
 };
 
 function setGeometryFlag(object, key, value) {
@@ -2154,7 +2761,16 @@ const LOCKABLE_TYPES = new Set([
      * as it does to a spring.
      */
     "particle",
-    "rigid-body"
+    "rigid-body",
+
+    /*
+     * AN ANNOTATION IS LOCKABLE TOO.
+     *
+     * Name, Label and Fix are the three rows every object's Object section has,
+     * and a note is an object like any other - its words can be protected from
+     * being nudged once the drawing is finished, exactly as a line's can.
+     */
+    "annotate"
 ]);
 
 function isLockable(object) {
@@ -2202,7 +2818,60 @@ function normaliseArrow(value) {
  * so no empty heading ever appears.
  */
 export const GROUPS = [
-    { id: "dimension", heading: "Dimension", fields: ["dimensionContent", "dimensionStroke", "dimensionLineWidth", "dimensionTextSize", "dimensionMeasurement", "dimensionReferences", "dimensionStatus"] },
+    /*
+     * A DIMENSION IS A DRAWING OBJECT, SO IT IS EDITED LIKE ONE.
+     *
+     * Object, Appearance and Transform - the same three sections every other
+     * DAETUM drawing object has, in the same order. Its own controls are folded
+     * into those sections rather than given a "Dimension" section of their own:
+     * the pen and the label are how it LOOKS, and the offset is where it SITS.
+     *
+     * WHAT IS NOT HERE, AND WHY.
+     *
+     *   Magnitude            A dimension is not a vector or a force. The
+     *                        measured length is computed from the references and
+     *                        is not a property the student edits.
+     *   Measurement          The same number, shown as a read-only row. It is
+     *                        internal, and it is not the label.
+     *   Geometry references  Raw anchors and canvas coordinates are the model's
+     *                        own bookkeeping, not user-facing properties.
+     *   Visible              Visibility is the eye in the selected-object header,
+     *                        synchronised with the Objects panel.
+     */
+    { id: "dimension", heading: "Dimension", fields: ["dimensionStatus"] },
+
+    /*
+     * THE DIMENSION'S OWN THREE SECTIONS.
+     *
+     * Object holds the name and Fix - and NOT a Visible checkbox, because
+     * visibility is the eye in the selected-object header, synchronised with the
+     * Objects panel. Appearance holds the pen, the label and its type. Transform
+     * holds the offset, which is the one geometric parameter the student chooses
+     * about where the dimension line is drawn.
+     */
+    {
+        id: "dimension-object",
+        heading: "Object",
+        fields: ["name", "fixed"],
+        reserveTransform: true
+    },
+    {
+        id: "dimension-appearance",
+        heading: "Appearance",
+        fields: [
+            "lineType",
+            "dimensionStroke",
+            "dimensionLineWidth",
+            "dimensionLabelText",
+            "dimensionTextSize"
+        ]
+    },
+    {
+        id: "dimension-transform",
+        heading: "Transform",
+        fields: ["dimensionOffset"],
+        transform: true
+    },
     { id: "plant", heading: "Plant", fields: ["plantInputs", "plantOutputs", "plantShowNodeLabels", "plantLabel", "blockLabel", "blockLowerLabel", "plantNodeLabel"] },
     { id: "work-arrow", heading: "Work Arrow", fields: ["workDirection"] },
     { id: "gain", heading: "Gain", fields: ["gainValue"] },
@@ -2214,7 +2883,7 @@ export const GROUPS = [
     { id: "axes", heading: "Axes", fields: ["showXAxis", "showYAxis"] },
     { id: "labels", heading: "Labels", fields: ["showLabels", "xLabel", "yLabel", "originLabel"] },
     { id: "text", heading: "Text", plainHeading: true, fields: ["text", "arrowStart", "arrowEnd", "arrowhead", "calloutShape", "calloutReference"] },
-    { id: "note-format", heading: "Text formatting", fields: ["noteFont", "noteSize", "noteBold", "noteItalic", "noteUnderline", "noteAlign", "noteIndent", "noteSpacing"] },
+    { id: "note-format", heading: "Text formatting", fields: ["noteFont", "noteSize", "noteBold", "noteItalic", "noteUnderline", "noteAlign", "noteIndent", "noteSpacing", "noteRotation", "noteBackground", "noteBackgroundColour", "notePadding"] },
 
     /*
      * ========================================================
@@ -2290,7 +2959,7 @@ export const GROUPS = [
     },
 
 	{ id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
-	{ id: "object", heading: "Object", fields: ["name", "visibility", "fixed"], reserveTransform: true },
+	{ id: "object", heading: "Object", fields: ["name", "label",  "visibility", "fixed"], reserveTransform: true },
 	{ id: "transform", heading: "Transform", fields: ["bendRadius", "pipeWidth"], transform: true },
 
     { id: "stress-element", heading: "Stress Element", fields: ["stressElement.angle", "stressElement.showAngle", "stressElement.normalStressX", "stressElement.normalStressXColour", "stressElement.normalStressY", "stressElement.normalStressYColour", "stressElement.shearStress", "stressElement.shearStressColour"] },
@@ -2298,7 +2967,7 @@ export const GROUPS = [
     { id: "boundary-colours", heading: "Boundary Stress Colours", fields: ["boundary.normalColour", "boundary.shearColour"] },
     ...BOUNDARY_EDGES.map(edge => ({ id: `boundary-${edge}`, heading: `${edge[0].toUpperCase() + edge.slice(1)} Edge`, fields: ["normalEquation", "shearEquation", "profile", "normalStart", "normalEnd", "normalLabel", "shearStart", "shearEnd", "shearLabel"].map(key => `boundary.${edge}_${key}`) })),
     { id: "appearance", heading: "Appearance", fields: ["stroke", "lineWidth", "customWidth"] },
-    { id: "object", heading: "Object", fields: ["name", "visibility", "fixed"], reserveTransform: true },
+    { id: "object", heading: "Object", fields: ["name", "label",  "visibility", "fixed"], reserveTransform: true },
     { id: "transform", heading: "Transform", fields: [], transform: true }
 ];
 
@@ -2318,12 +2987,12 @@ export const GROUPS = [
 	 */
 	export const SCHEMATIC_GROUPS = Object.freeze({
             reducer: [
-                { id: "object", heading: "Object", fields: ["name", "reducerMode", "fixed"] },
+                { id: "object", heading: "Object", fields: ["name", "fixed", "reducerMode"] },
                 { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
                 { id: "transform", heading: "Transform", fields: [], transform: true }
             ],
     	    equipment: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "equipmentPlacement", "equipmentPipeA", "equipmentPipeB", "valveDepiction"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "equipmentPlacement", "equipmentPipeA", "equipmentPipeB", "valveDepiction"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
     	        /*
     	         * X, Y AND ROTATE, THEN THE SYMBOL'S OWN SIZE.
@@ -2337,7 +3006,7 @@ export const GROUPS = [
     	        { id: "transform", heading: "Transform", fields: ["equipmentX", "equipmentY", "equipmentRotation", "symbolSize", "equipmentPosition"] }
     	    ],
     	    vessel: [
-    	        { id: "object", heading: "Object", fields: ["name", "fixed", "vesselStyle"] },
+    	        { id: "object", heading: "Object", fields: ["name", "label",  "fixed", "vesselStyle"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
     	        /*
     	         * TRANSFORM: the box, its configuration and the fluid level.
@@ -2353,7 +3022,7 @@ export const GROUPS = [
     	         * OBJECT: which vessel it marks. The level's position is NOT here -
     	         * it is the Transform's one degree of freedom, on the row below.
     	         */
-    	        { id: "object", heading: "Object", fields: ["fixed", "levelVessel"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "levelVessel"] },
     	        /*
     	         * APPEARANCE: the SURFACE (line style, colour, thickness) and the
     	         * LIQUID (fill colour and opacity) - the same shared controls every
@@ -2375,13 +3044,13 @@ export const GROUPS = [
     	        { id: "transform", heading: "Transform", fields: ["levelPosition"] }
     	    ],
     	    flowDirection: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "directionPipe", "directionReversed"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "directionPipe", "directionReversed"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
     	        /* Position and spacing, never an X/Y that would detach the arrows. */
     	        { id: "transform", heading: "Transform", fields: ["directionPosition", "directionSpacing", "directionSize"] }
     	    ],
     	    freeArrow: [
-    	        { id: "object", heading: "Object", fields: ["fixed"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
     	        { id: "transform", heading: "Transform", fields: ["freeArrowLength"] }
     	    ],
@@ -2392,7 +3061,7 @@ export const GROUPS = [
     	     * exactly as the pressure profile's is.
     	     */
     	    flowProfile: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "flowProfileName"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "flowProfileName"] },
     	        {
     	            id: "profile-data",
     	            heading: "Data",
@@ -2411,13 +3080,13 @@ export const GROUPS = [
     	        { id: "transform", heading: "Transform", fields: ["flowX", "flowY", "flowWidth", "flowHeight"] }
     	    ],
     	    profile: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "graphName"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "graphName"] },
     	        { id: "profile-axes", heading: "Axes", fields: ["profileXTitle", "profileXUnit", "profileXMin", "profileXMax", "profileYTitle", "profileYUnit", "profileYMin", "profileYMax"] },
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "profileShowPoints", "profileShowGrid"] },
     	        { id: "transform", heading: "Transform", fields: ["profileX", "profileY", "profileWidth", "profileHeight"] }
     	    ],
     	    section: [
-    	        { id: "object", heading: "Object", fields: ["fixed", "sectionIdentifier", "sectionDirection"] },
+    	        { id: "object", heading: "Object", fields: [ "label", "fixed", "sectionIdentifier", "sectionDirection"] },
     	        /* The viewing arrows are a Depiction fact, but stay beside the direction. */
     	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "arrowhead"] },
     	        { id: "transform", heading: "Transform", fields: ["sectionX", "sectionY", "sectionRotation", "sectionLength"] }
@@ -2469,7 +3138,188 @@ export const GROUPS = [
     	        	    	    return null;
     	        	    	}
 
-    	        	    /*
+     	/*
+	     * ============================================================
+	     * THE HEAT TRANSFER OBJECTS' SECTIONS
+	     * ============================================================
+	     *
+	     * EXACTLY THREE SECTIONS, ALWAYS: Object, Appearance, Transform. The
+	     * requirement states this and every Heat Transfer tool follows it. A tool
+	     * whose geometry is controlled by handles - the Wall / Slab and the
+	     * Composite Wall - offers NO numerical width, height or thickness field:
+	     * those are the handles' job, and the transform row holds only the tool's
+	     * own factors.
+	     *
+	     * A group whose fields do not apply to the selection is dropped by
+	     * `groupsFor`, so no empty heading is ever drawn.
+	     */
+	    const HEAT_APPEARANCE = [
+	        "lineType",
+	        "stroke",
+	        "lineWidth",
+	        "customWidth",
+	        "fillMode",
+	        "fill"
+	    ];
+
+	    /*
+	     * THE LABEL SECTION.
+	     *
+	     * One section, between Appearance and Transform, for the objects that
+	     * carry an editable text node - a Heat Transfer notation (Q̇₁, T₂,
+	     * Rₜₕ₁) or a student's own annotation. Its fields are the STANDARD text
+	     * controls every DAETUM label uses: the expression, its colour, size,
+	     * style, alignment and position.
+	     *
+	     * It is DROPPED by `groupsFor` when the selected object has no label, so
+	     * a Wall / Slab or a Path never shows an empty heading and never grows a
+	     * permanent section it does not need.
+	     *
+	     * `heatLabelOffsetX/Y` move the TEXT within its parent; they are NOT the
+	     * object's own X/Y shift, which stays in Transform.
+	     */
+	    const HEAT_LABEL_GROUP = {
+	        id: "label",
+	        heading: "Label",
+	        fields: [
+	            "heatLabelText",
+	            "labelColour",
+	            "labelSize",
+	            "labelStyle",
+	            "heatLabelAnchor",
+	            "heatLabelOffsetX",
+	            "heatLabelOffsetY"
+	        ]
+	    };
+
+	    /*
+	     * THE LABEL'S OWN CONTROLS, WITHOUT A CONTAINING OBJECT'S.
+	     *
+	     * When the student selects the label ITSELF, the panel offers exactly the
+	     * text properties - the expression, its colour, size, style, alignment and
+	     * position - and none of the parent's geometry rows, which do not describe
+	     * a piece of text.
+	     */
+	    export const HEAT_GROUPS = Object.freeze({
+	        /*
+	         * A SELECTED LABEL: Object, Label, Transform - no Appearance, because
+	         * a text node has no line, fill or thickness of its own.
+	         */
+	        labelTextOnly: HEAT_LABEL_GROUP,
+	        region: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            { id: "transform", heading: "Transform", fields: ["heatRegionType", "heatRotation"], transform: true }
+	        ],
+	        wallSlab: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            /* Fill is not applicable: the object is two open parallel lines. */
+	            { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth"] },
+	            /* No width, height or thickness: the three handles control them. */
+	            { id: "transform", heading: "Transform", fields: ["heatRotation"], transform: true }
+	        ],
+	        compositeWall: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            /* No Layer Count field: the count is generated by the drawing gesture. */
+	            { id: "transform", heading: "Transform", fields: ["heatRotation"], transform: true }
+	        ],
+	        fin: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            { id: "transform", heading: "Transform", fields: ["heatRotation"], transform: true }
+	        ],
+	        /* A Path generates NO label, so it carries no Label section. */
+	        heatPath: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            { id: "transform", heading: "Transform", fields: ["heatReversed"], transform: true }
+	        ],
+	        thermalArrow: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed", "heatQuantityType"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            /* Direction covers a free arrow's reverse AND a surface flux's way in/out. */
+	            { id: "transform", heading: "Transform", fields: ["heatReversed", "heatSurfaceInward"], transform: true }
+	        ],
+	        thermalBoundary: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: ["heatSymbolSide", "heatSymbolSpacing"], transform: true }
+	        ],
+	        thermalContact: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: ["heatInterfacePattern"], transform: true }
+	        ],
+	        sourceSink: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: ["heatRotation", "heatReversed"], transform: true }
+	        ],
+	        circuitNode: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: [], transform: true }
+	        ],
+	        circuitElement: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: ["heatRotation"], transform: true }
+	        ],
+	        temperatureMarker: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: [], transform: true }
+	        ],
+	        isotherm: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: [], transform: true }
+	        ],
+	        controlVolume: [
+	            { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
+	            { id: "appearance", heading: "Appearance", fields: HEAT_APPEARANCE },
+	            HEAT_LABEL_GROUP,
+	            { id: "transform", heading: "Transform", fields: ["heatRotation"], transform: true }
+	        ]
+	    });
+
+	    /* Which set of sections a Heat Transfer object uses, from its own type. */
+	    export function heatGroupsFor(object) {
+	        if (!object || !enggHeatModel.isHeatType(object.type)) {
+	            return null;
+	        }
+
+	        const T = enggHeatModel.HEAT_TYPES;
+
+	        switch (object.type) {
+	            case T.region: return HEAT_GROUPS.region;
+	            case T.wallSlab: return HEAT_GROUPS.wallSlab;
+	            case T.compositeWall: return HEAT_GROUPS.compositeWall;
+	            case T.fin: return HEAT_GROUPS.fin;
+	            case T.heatPath: return HEAT_GROUPS.heatPath;
+	            case T.thermalArrow: return HEAT_GROUPS.thermalArrow;
+	            case T.thermalBoundary: return HEAT_GROUPS.thermalBoundary;
+	            case T.thermalContact: return HEAT_GROUPS.thermalContact;
+	            case T.sourceSink: return HEAT_GROUPS.sourceSink;
+	            case T.circuitNode: return HEAT_GROUPS.circuitNode;
+	            case T.circuitElement: return HEAT_GROUPS.circuitElement;
+	            case T.temperatureMarker: return HEAT_GROUPS.temperatureMarker;
+	            case T.isotherm: return HEAT_GROUPS.isotherm;
+	            case T.controlVolume: return HEAT_GROUPS.controlVolume;
+	            default: return null;
+	        }
+	    }
+
+     	/*
 
 /*
  * ============================================================
@@ -2545,10 +3395,33 @@ Object.assign(FIELDS, {
      * renaming cannot break a selection, a source block or a connection.
      *
      * IT IS TAG-ALIASED TO THE UNIVERSAL `name` FIELD below, so the panel has
-     * one naming control: the alias's own behaviour (write the name, and the
-     * drawn label with it) is what both keys resolve to.
+     * one naming control.
      */
     name: nameField,
+
+    /*
+     * AN ANNOTATION'S NAME.
+     *
+     * The shared Name field is deliberately skipped for an annotate, because a
+     * note's name and its text used to be one value. Now that they are two, the
+     * note needs its own name row - reading and writing `object.name`, the same
+     * property the Objects list and the source header show, and leaving `text`
+     * alone.
+     */
+    noteName: {
+        kind: "text",
+        label: "Name",
+        applies: (object) => object?.type === "annotate",
+        read: (object) => (typeof object?.name === "string" ? object.name : ""),
+        write: (object, value) => {
+            object.name = String(value ?? "").trim();
+
+            return true;
+        }
+    },
+
+    /* The drawn label - a separate row, and a separate property. */
+    label: labelField,
 
     /*
      * VISIBILITY IS THE SAME PROPERTY THE EYE ICON WRITES.
@@ -5360,7 +6233,7 @@ function processBendField(key) {
     };
 }
 
-function definitionOf(key) {
+export function definitionOf(key) {
     return FIELDS[key] || rankineDataField(key) || dynamicField(key) || processBendField(key);
 }
 
@@ -5485,8 +6358,13 @@ const FLOW_ARROW_SECTIONS = ["flow-arrow"];
  * Object, Axes, Appearance, Transform. Any schematic group id not named here
  * or in SECTION_ORDER is folded into Appearance, which is right for a marker
  * style or a polygon's sides and wrong for this.
+ *
+ * `label` IS NAMED HERE TOO. A Heat Transfer object's Label section is a
+ * SECTION IN ITS OWN RIGHT - Object, Appearance, Label, Transform - not more
+ * Appearance rows. Without this it was folded silently into Appearance and the
+ * section never appeared at all.
  */
-const SCHEMATIC_NAMED_SECTIONS = ["profile-axes"];
+const SCHEMATIC_NAMED_SECTIONS = ["profile-axes", "label"];
 
 function orderSections(groups) {
     const byId = new Map();
@@ -5589,7 +6467,53 @@ function orderSections(groups) {
          * in its named position.
          */
         if (id === "object") {
-            return [group, ...SCHEMATIC_NAMED_SECTIONS.map((named) => byId.get(named)).filter(Boolean)];
+            /*
+             * NAME, LABEL, FIX - IN THAT ORDER, EVERY TOOL.
+             *
+             * The Object group is re-ordered HERE rather than as it was
+             * declared, so the order is decided in ONE place for every tool. A
+             * group that listed `visibility` between Label and Fix produced
+             * Name, Label, Visibility, Fix, which breaks the order the
+             * specification requires. The three it names are put in sequence and
+             * every other row follows them, keeping its own relative order.
+             */
+            const priority = ["name", "noteName", "label", "fixed"];
+
+            const rank = (key) => {
+                const at = priority.indexOf(key);
+
+                return at < 0 ? priority.length : at;
+            };
+
+            const ordered = group
+                ? group.fields
+                      .map((field, index) => ({ field, index }))
+                      .sort(
+                          (a, b) =>
+                              rank(a.field.key) - rank(b.field.key) || a.index - b.index
+                      )
+                      .map((entry) => entry.field)
+                : [];
+
+            return [
+                group ? { ...group, fields: ordered } : group,
+                /* The profile's Axes follows Object: what it is, then its data. */
+                ...SCHEMATIC_NAMED_SECTIONS
+                    .filter((named) => named !== "label")
+                    .map((named) => byId.get(named))
+                    .filter(Boolean)
+            ].filter(Boolean);
+        }
+
+        /*
+         * THE LABEL SECTION FOLLOWS APPEARANCE.
+         *
+         * Object, Appearance, Label, Transform - the standard order the
+         * requirement states. How the object is DRAWN comes before what is
+         * WRITTEN on it, and both come before where it sits.
+         */
+        if (id === "appearance") {
+            return [group, byId.get("label")].filter(Boolean);
         }
 
         return group ? [group] : [];
@@ -5635,7 +6559,7 @@ function orderSections(groups) {
  */
 const MATH_GROUPS = Object.freeze({
     point: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5657,7 +6581,7 @@ const MATH_GROUPS = Object.freeze({
     ],
 
     vector: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5688,7 +6612,7 @@ const MATH_GROUPS = Object.freeze({
      * is; everything else is an ordinary row.
      */
     plot: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5718,7 +6642,7 @@ const MATH_GROUPS = Object.freeze({
     ],
 
     equation: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5739,7 +6663,7 @@ const MATH_GROUPS = Object.freeze({
     ],
 
     tangent: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5754,7 +6678,7 @@ const MATH_GROUPS = Object.freeze({
     ],
 
     slopeTriangle: [
-        { id: "object", heading: "Object", fields: ["name", "fixed"] },
+        { id: "object", heading: "Object", fields: ["name", "label",  "fixed"] },
         {
             id: "appearance",
             heading: "Appearance",
@@ -5851,6 +6775,63 @@ export function groupsFor(object) {
     }
 
     /*
+     * THE HEAT TRANSFER OBJECTS: OBJECT, APPEARANCE, TRANSFORM - ALWAYS.
+     *
+     * The three sections the requirement mandates, and no others. The
+     * tool-specific factors - a region's type, a boundary's symbol side, a
+     * symbol's rotation - live INSIDE Transform, so there is never a Geometry
+     * or Visibility section. A group with nothing applicable to the selection
+     * is dropped by the same rule that filters the schematic groups above.
+     */
+    /*
+     * A SELECTED HEAT LABEL IS EDITED AS TEXT, NOT AS GEOMETRY.
+     *
+     * It is an `annotate` at heart, but its Features tab must offer the LABEL
+     * controls - its expression, colour, size, style and alignment - and no
+     * geometry rows it does not have (no line thickness, no fill, no arrow
+     * direction). The section order is still Object, Appearance, Label,
+     * Transform; only what is INSIDE them changes for a text object.
+     */
+    if (object?.type === "annotate" && object.metadata?.heatParentId) {
+        return orderSections(
+            [
+                /*
+                 * THE LABEL'S OWN NAME AND LOCK. `fixed` applies to every
+                 * object; `name` needs the label's own reading, because the
+                 * shared Name field is deliberately skipped for `annotate` (its
+                 * text IS its name) and a Heat label is the one annotation whose
+                 * name and text are the same thing.
+                 */
+                { id: "object", heading: "Object", fields: [ "label", "heatLabelName", "fixed"] },
+                HEAT_GROUPS.labelTextOnly,
+                { id: "transform", heading: "Transform", fields: [], transform: true }
+            ]
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.fields.length || group.transform)
+        );
+    }
+
+    const heat = heatGroupsFor(object);
+
+    if (heat) {
+        return orderSections(
+            heat
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.fields.length || group.transform)
+        );
+    }
+
+    /*
      * A DYNAMICS SYMBOL'S OWN CONTROLS GO FIRST - straight after the heading,
      * and ahead of Appearance, Object and Transform.
      *
@@ -5874,6 +6855,29 @@ export function groupsFor(object) {
         ? DYNAMICS_GROUPS
         : [];
 
+    /*
+     * A DIMENSION HAS EXACTLY THREE SECTIONS: Object, Appearance, Transform.
+     *
+     * Its own controls are folded into those three rather than given a section
+     * of their own, so the panel reads the same as it does for a line or a
+     * circle. The `dimension` group survives only for a status message - an
+     * unresolved reference - and is dropped when there is nothing to say.
+     */
+    if (object.type === "dimension") {
+        return orderSections(
+            ["dimension-object", "dimension-appearance", "dimension-transform", "dimension"]
+                .map((id) => GROUPS.find((group) => group.id === id))
+                .filter(Boolean)
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.transform || group.fields.length)
+        );
+    }
+
     const isPipe = object.type === "pipe-duct";
     const isElbow = object.type === "elbow";
     const isJunction = object.type === "junction";
@@ -5885,6 +6889,71 @@ export function groupsFor(object) {
             ["object", "appearance", "transform"]
                 .map((id) => GROUPS.find((group) => group.id === id))
                 .filter(Boolean)
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.transform || group.fields.length)
+        );
+    }
+
+    /*
+     * AN ANNOTATION HAS THE STANDARD OBJECT SECTION TOO.
+     *
+     * Name, Label and Fix are the same three rows every other object offers,
+     * and a note is an object like any other. Without this the panel began at
+     * Appearance, so a note's words could only be changed in the Text
+     * formatting group - a second, differently-shaped door to the same value.
+     */
+    if (object.type === "annotate") {
+        /*
+         * THE FORMATTING ROWS LIVE IN THE DROPDOWN, AND NOWHERE ELSE.
+         *
+         * `themedAppearance` carries only what is NOT typography. The formatting
+         * keys are then REMOVED from the schema list outright rather than left to
+         * `orderSections` - which folds any group it does not recognise into the
+         * section BEFORE it, and that put Font, Size, Bold and the rest inside
+         * Object, between Label and Fix. The list below is therefore the whole
+         * story: Name, Label, Fix, the pen, the indent, and the transform.
+         */
+        const noteFormat = GROUPS.find((group) => group.id === "note-format");
+        const formattingKeys = new Set(noteFormat ? noteFormat.fields : []);
+
+        /*
+         * EVERY appearance group, merged with the formatting keys removed.
+         *
+         * `GROUPS` declares `appearance` more than once - the shared one and a
+         * narrower one declared later - and `find` returned only the first, so
+         * the rows actually drawn came from the other and the filter had nothing
+         * to remove. Folding them all together is also correct: "Appearance" is
+         * ONE section in the panel however many groups contributed to it.
+         */
+        const penOnly = {
+            id: "appearance",
+            heading: "Appearance",
+            fields: [
+                ...new Set(
+                    GROUPS.filter((group) => group.id === "appearance").flatMap(
+                        (group) => group.fields
+                    )
+                )
+            ].filter((key) => !formattingKeys.has(key)),
+        };
+
+        return orderSections(
+            [
+                { id: "object", heading: "Object", fields: ["noteName", "label", "fixed"] },
+                penOnly,
+                GROUPS.find((group) => group.id === "text"),
+                {
+                    id: "transform",
+                    heading: "Transform",
+                    fields: [],
+                    transform: true
+                }
+            ]
                 .map((group) => ({
                     ...group,
                     fields: group.fields

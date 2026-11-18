@@ -13,7 +13,7 @@
  * It draws GEOMETRY: paths, circles, ellipses, rectangles, arcs and fills, with
  * the model-space appearance that is stored on each element.
  *
- * It does NOT draw editing aids. Anchor markers, guide markers, control
+ * It does NOT draw editing aids. Anchor markers, snap indicators, control
  * handles, selection outlines and the correction preview are the EDITOR's, they
  * live in a layer of their own above the geometry, and nothing here is allowed
  * to reach into them. That separation is what lets "editor aids must not appear

@@ -404,14 +404,20 @@ test("the Signal Line tool connects an output node to an input node and marks th
 /*
  * A COMPILED STROKE IS SHOWN AT THE WIDTH IT STATES.
  *
- * `showStrokesAtScreenWidth` adopts the picture's own print width for the screen
- * (pinned against zoom), and the generator writes that width as
- * `nominalWidth x the drawing's export factor`. So the number on the sheet is the
- * number in the source - which is what makes the picture look the same here and
- * in any external renderer.
+ * `showStrokesAtScreenWidth` adopts the picture's own print width, and the
+ * generator writes that width as `nominalWidth x the drawing's export factor`.
+ * So the number on the sheet is the number in the source - which is what makes
+ * the picture look the same here and in any external renderer.
+ *
+ * THE WIDTH IS THE DRAWING'S, AND IT SCALES WITH THE DRAWING. The picture's
+ * strokes used to be pinned with `non-scaling-stroke`, which held every line at
+ * a fixed pixel weight while its geometry grew with the zoom - so a magnified
+ * drawing had hairline strokes and its shapes no longer kept their proportions
+ * to the lines around them. The width is stated and left to scale, exactly as
+ * the source states it.
  *
  * The stub above states `stroke-width=".28"`, which is under the half-pixel
- * floor the canvas keeps so a hairline stays visible - so the sheet shows 0.5 px.
+ * floor the canvas keeps so a hairline stays visible - so the sheet shows 0.5.
  * What matters is the INVARIANT: the shown width equals the stated width, never
  * the `x 4.3` inflation an older conversion applied to recover a "screen" width.
  */
@@ -422,7 +428,16 @@ test("the picture's print line widths are shown at the width they state", () => 
 
   /* 0.28pt is below the readable floor, so it is shown there - not inflated. */
   assert.equal(Number(stroke.getAttribute("stroke-width")), 0.5);
-  assert.equal(stroke.getAttribute("vector-effect"), "non-scaling-stroke");
+
+  /*
+   * AND THE WIDTH IS NOT PINNED AGAINST THE CAMERA. A pinned stroke kept its
+   * pixel width while the drawing grew, which is the defect this checks for.
+   */
+  assert.equal(
+    stroke.getAttribute("vector-effect"),
+    null,
+    "a compiled stroke scales with the drawing, so it keeps its weight relative to it",
+  );
 });
 
 test("and every declared width is a nominal preset at the drawing's one factor", () => {

@@ -1,4 +1,4 @@
-/*
+ /*
  * ============================================================
  * MIGRATING A SAVED SKETCH
  * ============================================================
@@ -16,11 +16,17 @@
  * without requiring it. The stroke was always the real guide, so the honest
  * migration is to DROP the soft points and keep every hard one - an anchor is
  * a promise, a guide was a hint, and a hint that no longer exists cannot break
- * a drawing.
+ * a drawing. An element that listed a guide loses the reference; its geometry
+ * is untouched.
  *
  * Dropping a point must never leave another point dangling: a point defined
  * RELATIVE to a guide is restated as absolute at the position it had, so it
  * does not move and does not reference something that is no longer there.
+ *
+ * `influence` WAS A GUIDE'S STRENGTH and is dropped with it - there is no soft
+ * constraint left for it to shape. A POINT'S ROLE ("path" or "centre") is
+ * added by default, because a saved point that predates the role is a point on
+ * a path.
  *
  * BOUNDS MODES. A document with no `boundsMode` is automatic - that was the
  * default before the field existed.
@@ -114,8 +120,20 @@ export function migrateSketch(input = {}) {
   const resolved = resolvePoints(points);
 
   const repaired = keptPoints.map((point) => {
+    /*
+     * EVERY POINT THIS BUILD OPENS CARRIES THE CURRENT FIELDS: a role (a saved
+     * point was a point on a path) and no guide influence, which no longer
+     * exists. Nothing else about the point changes.
+     */
+    const base = {
+      ...point,
+      role: point.role === "centre" ? "centre" : "path",
+    };
+
+    delete base.influence;
+
     if (!point.referenceId || !removedIds.has(point.referenceId)) {
-      return point;
+      return base;
     }
 
     const at = resolved.find((entry) => entry.id === point.id)?.absolute;
@@ -123,7 +141,7 @@ export function migrateSketch(input = {}) {
     changes.push(`restated ${point.name || point.id} as absolute`);
 
     return {
-      ...point,
+      ...base,
       coordinateMode: "absolute",
       referenceId: null,
       delta: null,
@@ -146,7 +164,7 @@ export function migrateSketch(input = {}) {
         changes.push(`${element.name || element.id}: ${element.kind} -> curve`);
       }
 
-      return {
+      const migrated = {
         ...element,
         kind,
         points: (element.points || []).map((point) => ({
@@ -155,11 +173,26 @@ export function migrateSketch(input = {}) {
         })),
         segments: Array.isArray(element.segments) ? element.segments : [],
         appearance: normaliseAppearance(element.appearance),
-        /* A guide a geometry listed is a reference to a point that is gone. */
-        guides: [],
-        anchors: (element.anchors || []).filter((id) => !removedIds.has(id)),
+        /*
+         * A GUIDE A GEOMETRY LISTED IS A REFERENCE TO A POINT THAT IS GONE, so
+         * the field is not carried forward at all. The element's own anchors are
+         * kept, minus any that were guides.
+         */
+        anchors: (element.anchors || []).filter(
+          (id) => !removedIds.has(id) && typeof id === "string",
+        ),
+        /* A circle or arc centred on a point keeps that point's id, if it lives. */
+        centrePointId:
+          element.centrePointId && !removedIds.has(element.centrePointId)
+            ? element.centrePointId
+            : null,
         visible: element.visible !== false,
       };
+
+      /* A guide's soft pull has no meaning any more, so the field is gone. */
+      delete migrated.guides;
+
+      return migrated;
     });
 
   /* ---- 3. the view settings ---- */

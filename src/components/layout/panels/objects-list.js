@@ -103,6 +103,22 @@ export function visibilityButtonMarkup(object) {
 }
 
 /*
+ * A LABEL CARRIED BY ANOTHER OBJECT.
+ *
+ * Marked by the `heatParentId` metadata the Heat Transfer label builder writes,
+ * so the question is asked of the OBJECT rather than of a type name - a student's
+ * own Note has no such record and is never hidden.
+ */
+function isAttachedHeatLabel(object) {
+    return Boolean(
+        object &&
+            object.type === "annotate" &&
+            object.metadata &&
+            object.metadata.heatParentId
+    );
+}
+
+/*
  * The row list's markup. Exported so a test can assert the rows without a DOM
  * event, and so the render below stays a one-liner.
  */
@@ -110,7 +126,24 @@ export function objectsListMarkup(
     objects = Array.isArray(drawingState.objects) ? drawingState.objects : [],
     selectedIds = drawingState.selection?.selectedObjectIds || []
 ) {
-    if (!objects.length) {
+    /*
+     * ============================================================
+     * AN AUTOMATIC LABEL IS NOT AN OBJECT IN THIS LIST
+     * ============================================================
+     *
+     * A Heat Transfer object's notation (Q̇₁, T₂, Rₜₕ₁) is a PROPERTY of its
+     * parent - it is edited through the parent's Features tab and click states,
+     * and it is never something the student created from the Objects list. So it
+     * is filtered out here, as a TOP-LEVEL row AND as a child row: the list shows
+     * "Heat Transfer Rate 1" and nothing under it.
+     *
+     * THIS IS NOT THE RULE FOR A STUDENT'S OWN TEXT. A Note, a Label or a Math
+     * object made with the ordinary tools is a real drawing object and keeps its
+     * row; only a label CARRIED BY another object is hidden.
+     */
+    const listed = objects.filter((object) => !isAttachedHeatLabel(object));
+
+    if (!listed.length) {
         return `<p class="drawing-inspector-message drawing-objects-empty">No objects on this sheet yet.</p>`;
     }
 
@@ -131,11 +164,11 @@ export function objectsListMarkup(
      * parent row is still just a row, so selecting it selects the assembly, and
      * selecting a child selects only that component.
      */
-    const ids = new Set(objects.map((object) => object.id));
+    const ids = new Set(listed.map((object) => object.id));
 
     const childrenOf = new Map();
 
-    objects.forEach((object) => {
+    listed.forEach((object) => {
         if (!object.parentId || !ids.has(object.parentId) || object.parentId === object.id) {
             return;
         }
@@ -177,7 +210,7 @@ export function objectsListMarkup(
         );
     };
 
-    const rows = objects
+    const rows = listed
         .filter((object) => !isChild(object))
         .map((object) => rowMarkup(object, 0))
         .join("");

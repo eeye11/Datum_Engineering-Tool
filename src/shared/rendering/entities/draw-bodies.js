@@ -6,7 +6,7 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import { appendRigidBody } from "../symbol-render.js";
-import { createSvgElement, paintColour } from "../svg-primitives.js";
+import { createSvgElement, paintColour, worldLength } from "../svg-primitives.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 
 
@@ -30,11 +30,22 @@ import enggTheme from "../../../components/layout/workspace/theme.js";
             const node = toScreen(position);
             const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
 
+            /*
+             * THE NODE'S SIZE IS THE DRAWING'S.
+             *
+             * A particle is a body drawn at a world radius, so its marker has to
+             * grow with the member it sits on - a bare four was four overlay
+             * pixels at every magnification, a speck on a body zoomed to 400%
+             * and a blot on one zoomed out, while the compiled picture beside it
+             * kept the authored radius.
+             */
             svg.appendChild(
                 createSvgElement("circle", {
                     cx: node.x,
                     cy: node.y,
-                    r: 4,
+                    r: worldLength(Number.isFinite(Number(geometry.markerRadius)) && Number(geometry.markerRadius) > 0
+                        ? Number(geometry.markerRadius)
+                        : 1.7),
                     fill: stroke,
                     stroke: "none"
                 })

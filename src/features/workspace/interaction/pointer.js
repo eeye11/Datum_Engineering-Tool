@@ -23,6 +23,7 @@ import { setToolMessage } from "../../../components/layout/toolbar/toolbar-rende
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
+import { isHeatTool as isHeatTransferTool } from "../model/heat-transfer/heat-tools.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
 import { selectionBounds, selectionMembers } from "../../../shared/selection/selection-transform.js";
 
@@ -157,7 +158,24 @@ function resolvePointerPoint(
         );
     }
 
+    /*
+     * A HEAT TRANSFER TOOL RESOLVES THROUGH THE SHARED SNAPPING PIPELINE.
+     *
+     * Its points come from the click and drag gestures, so they must be
+     * resolved against the grid, the drawing's own objects and the
+     * horizontal / vertical guides - the same pipeline every construction tool
+     * uses. This is asked HERE rather than by making the tool a construction
+     * tool, because the `isConstructionTool` answer also routes clicks into the
+     * generic geometry pipeline, which a Heat Transfer tool must not enter: its
+     * objects are its own.
+     */
+    const isHeatTransfer =
+        isHeatTransferTool(
+            drawingState.activeTool
+        );
+
     if (
+        !isHeatTransfer &&
         !isConstructionTool(
             drawingState.activeTool
         )
@@ -411,6 +429,30 @@ function resolvePointerPoint(
             interaction.points.length
                 ? interaction.points[0]
                 : interaction.startPoint;
+    } else if (
+        isHeatTransferTool(
+            drawingState.activeTool
+        )
+    ) {
+        /*
+         * A HEAT TRANSFER SPAN ANCHORS ON ITS FIRST POINT, AND A PATH ON ITS
+         * LAST ONE.
+         *
+         * A Wall / Slab, an Arrow, a Boundary, a Contact, a Region, a Composite
+         * Wall, a Fin or a Control Volume is placed from the press, so the
+         * press's point is the alignment reference - the same role a Line's
+         * start point plays. A Path or an Isotherm collects its points click by
+         * click, so the LAST point clicked is the reference, which is what lets
+         * the next segment be pulled square to the one before it.
+         *
+         * The anchor is read from the interaction exactly where the preview and
+         * the release read it, so the geometry the student sees and the geometry
+         * committed are inferred from the identical reference.
+         */
+        lineStart =
+            interaction.heatStart ||
+            interaction.startPoint ||
+            null;
     }
 
     /*

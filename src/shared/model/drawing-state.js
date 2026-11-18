@@ -688,7 +688,30 @@ function createGeometryObject(type, geometry, options = {}) {
         "math-plot": "Graph",
         "math-equation": "Equation",
         "math-tangent": "Tangent",
-        "math-slope-triangle": "Slope Triangle"
+        "math-slope-triangle": "Slope Triangle",
+
+        /*
+         * THE HEAT TRANSFER OBJECTS.
+         *
+         * Each is its own feature type, so a Thermal Region, a Wall / Slab and
+         * a Heat Transfer Path are told apart in the Objects list, the Feature
+         * Tree and the source - and each is numbered within its own kind by the
+         * same naming pass every other feature uses.
+         */
+        "thermal-region": "Thermal Region",
+        "wall-slab": "Wall / Slab",
+        "composite-wall": "Composite Wall",
+        fin: "Fin",
+        "heat-path": "Heat Transfer Path",
+        "thermal-arrow": "Thermal Transfer Arrow",
+        "thermal-boundary": "Thermal Boundary",
+        "thermal-contact": "Thermal Contact",
+        "heat-source-sink": "Heat Source / Sink",
+        "thermal-circuit-node": "Thermal Circuit Node",
+        "thermal-circuit-element": "Thermal Circuit Element",
+        "temperature-marker": "Temperature Marker",
+        isotherm: "Isotherm",
+        "control-volume": "Control Volume Boundary"
     }[type] || type;
 
     /*
@@ -774,6 +797,26 @@ function drawnArrowLength(options) {
 
     return Number.isFinite(value) && value > 1e-9 ? { arrowLength: value } : {};
 }
+
+/*
+ * ============================================================
+ * THE DEFAULT'S SIZE REACHES A NEW PIECE OF TEXT
+ * ============================================================
+ *
+ * `styleDefaults.fontSize` is what the quick-access control sets when nothing
+ * is selected - "the default for the next text". It has to be what the next text
+ * is actually drawn at, or the control silently does nothing.
+ *
+ * The TOOL decides whether the object is text-bearing (it is asking for an
+ * Annotate feature or a dimension), and the MODEL decides whether this object
+ * carries the default: only one that would otherwise carry NO size takes it, so
+ * a tool's own stated size - a table's auxiliary role, an explicit call-site
+ * choice - is never overwritten.
+ */
+
+
+/* The feature types that carry canvas text, and so take the default size. */
+const TEXT_DEFAULT_TYPES = Object.freeze(["annotate", "dimension"]);
 
 const geometryFactories = {
     line: (start, end, options) =>
@@ -1703,6 +1746,18 @@ const geometryFactories = {
             {
                 id: created.id,
                 ...(options.name ? {name:options.name} : {}),
+
+                /*
+                 * THE DIMENSION'S OWN TEXT STYLE TRAVELS WITH IT.
+                 *
+                 * The model decides what a NEW dimension's type is (the
+                 * secondary canvas role, 14 px, with the student's own overrides
+                 * applied), and `createGeometryObject` would otherwise give the
+                 * feature the generic `createStyle` - so the model's decision
+                 * never reached the sheet and every dimension silently took the
+                 * brush defaults instead.
+                 */
+                style: created.style,
                 content: {
                     dimensionType:
                         created.dimensionType,
@@ -1788,10 +1843,18 @@ const geometryFactories = {
      * serialises without any special case in the save or load path.
      */
     annotate: (options = {}) => {
-        const created =
-            enggAnnotate.createAnnotate(options);
+        /*
+         * THE QUICK-ACCESS DEFAULT IS APPLIED TO THE CREATED OBJECT, before it
+         * becomes a feature - so a note drawn after the student set a 20 px
+         * default is a 20 px note. A tool that stated a size of its own (a
+         * table's auxiliary role, an explicit call-site choice) keeps it.
+         */
+        const requested = applyStyleDefaultFontSize(options.document, options);
 
-        return createGeometryObject(
+        const created =
+            enggAnnotate.createAnnotate(requested);
+
+        const feature = createGeometryObject(
             "annotate",
             created.geometry,
             {
@@ -1815,8 +1878,84 @@ const geometryFactories = {
                 }
             }
         );
+
+        return feature;
     }
 };
+
+/*
+ * ============================================================
+ * A NEW TEXT OBJECT TAKES THE QUICK-ACCESS DEFAULT
+ * ============================================================
+ *
+ * `styleDefaults.fontSize` is what the quick-access control sets when nothing
+ * is selected - "the default for the next text". This is where it reaches the
+ * object being created.
+ *
+ * `document` IS RECOGNISED BY WHAT IT HOLDS. `geometryFactories.annotate` is
+ * called in two shapes: the editor passes the drawing state itself, and a
+ * lower-level caller passes only the annotate options. A document has an
+ * `objects` list and an annotate options object does not, so the factory keeps
+ * its public signature and neither caller has to change.
+ *
+ * ONLY AN OBJECT WITH NO SIZE OF ITS OWN TAKES IT, so a tool's intentional
+ * secondary role (a table's cells, a dimension's starting size) is never
+ * overwritten by a note's default - and a size the tool states explicitly wins.
+ *
+ * The object is returned UNCHANGED when it is not a text object or when no
+ * default has been set, so a caller can apply this unconditionally.
+ */
+function applyStyleDefaultFontSize(document, object) {
+    if (!document || !object) {
+        return object;
+    }
+
+    /*
+     * THE DOCUMENT IS RECOGNISED BY WHAT IT HOLDS - an `objects` list - so a
+     * lower-level caller with no document simply gets its options back.
+     */
+    if (!Array.isArray(document.objects)) {
+        return object;
+    }
+
+    /* An annotate FACTORY is creating one - every kind of it carries text. */
+    const textBearing =
+        object.kind !== undefined ||
+        TEXT_DEFAULT_TYPES.includes(object.type);
+
+    if (!textBearing) {
+        return object;
+    }
+
+    const style = object.style || {};
+
+    if (Number(style.fontSize) > 0 || Number(style.labelSize) > 0) {
+        return object;
+    }
+
+    /*
+     * A TABLE'S CELLS ARE THE ONE INTENTIONAL SECONDARY ROLE. Its own size is
+     * the system's auxiliary value, so the DEFAULT - which is what a note is
+     * drawn at - must not turn a grid of numbers into 20 px headings.
+     */
+    if (object.kind === "table") {
+        return object;
+    }
+
+    const wanted = Number(document.styleDefaults?.fontSize);
+
+    if (!Number.isFinite(wanted) || wanted <= 0) {
+        return object;
+    }
+
+    return {
+        ...object,
+        style: {
+            ...style,
+            fontSize: Math.min(96, Math.max(8, wanted)),
+        },
+    };
+}
 
 /*
  * A fresh identity for a pasted copy.
@@ -2545,8 +2684,86 @@ function commitDrawingChange(state, previousObjects) {
     }
 }
 
+/*
+ * ============================================================
+ * A SAVED TEXT OBJECT'S SIZE IS NORMALISED ON THE WAY IN
+ * ============================================================
+ *
+ * A file written before the shared typography system may carry a size that is
+ * missing, empty, zero, negative or a string - a field three different tools
+ * answered differently. Those are made VALID, not made UNIFORM: a real number
+ * is left exactly alone, because it is the student's own choice and the brief
+ * says to preserve it, while anything unusable becomes the system's default for
+ * that kind of object.
+ *
+ * IT DOES NOT TOUCH GEOMETRY, a measurement or a placement; it writes one field
+ * on one style and only when that field cannot mean anything.
+ */
+function normaliseRestoredFontSizes(state) {
+    const fallback = Number(state?.styleDefaults?.fontSize) > 0
+        ? Math.min(96, Math.max(8, Number(state.styleDefaults.fontSize)))
+        : 16;
+
+    state.objects.forEach((object) => {
+        if (!object || !TEXT_DEFAULT_TYPES.includes(object.type)) {
+            return;
+        }
+
+        const style = object.style || {};
+
+        const fields = ["fontSize"];
+
+        if (style.labelSize !== undefined) {
+            fields.push("labelSize");
+        }
+
+        let changed = false;
+        const next = { ...style };
+
+        fields.forEach((field) => {
+            const value = style[field];
+
+            if (value === undefined || value === null) {
+                return;
+            }
+
+            const number = Number(value);
+
+            if (Number.isFinite(number) && number > 0) {
+                return;
+            }
+
+            /*
+             * AN UNUSABLE VALUE IS REPLACED, AND A MISSING ONE IS FILLED - but
+             * only on an object that IS type. A table's own size is the
+             * auxiliary role, not the default.
+             */
+            next[field] = object.annotateKind === "table" ? Math.min(number > 0 ? number : 12, 96) : fallback;
+            changed = true;
+        });
+
+        /*
+         * A TEXT OBJECT WITH NO SIZE AT ALL takes the default. `created.size`
+         * beside the style is kept in step where it exists, because the
+         * dimension model states its size in both places.
+         */
+        if (next.fontSize === undefined && !(Number(style.labelSize) > 0)) {
+            next.fontSize = object.annotateKind === "table" ? 12 : fallback;
+            changed = true;
+        }
+
+        if (changed) {
+            object.style = next;
+        }
+    });
+
+    return state;
+}
+
 function restoreObjects(state, objects) {
     state.objects = cloneObjects(objects);
+
+    normaliseRestoredFontSizes(state);
 
     const existingIds = new Set(
         state.objects.map(object => object.id)

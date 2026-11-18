@@ -99,25 +99,32 @@ test('notes focus on canvas immediately, update while typing, and finish on Ente
  model.setActiveTool(state,'note');
  const created=commitAnnotate({kind:'note',position:{x:0,y:0}});
  await new Promise(resolve=>setTimeout(resolve,20));
- let input=document.querySelector('.drawing-canvas-text-editor textarea');assert.ok(input);
+ /*
+  * THE NOTE'S BOX IS THE ONE INLINE FIELD.
+  *
+  * It is the shared label field, on the drawing - not a second editor. That is
+  * what makes a note, a callout, an equation and a Heat notation all behave the
+  * same way, with the same caret, the same keys and the same commit.
+  */
+ const field=()=>document.querySelector('.drawing-label-entry')||document.querySelector('.drawing-inline-entry');
+ let input=field().querySelector('#noteText');assert.ok(input);
  assert.equal(document.activeElement,input);
  /* The Note tool stays armed while its text is edited; Escape or empty canvas ends it. */
  assert.equal(state.activeTool,'note');
- assert.equal(document.querySelector('.drawing-inline-entry'),null);
  input.value='Live text';input.dispatchEvent(new window.Event('input',{bubbles:true}));
  assert.equal(state.objects.find(o=>o.id===created.id).text,'Live text');
- /* A note is multi-line, so Enter writes a line and Ctrl+Enter finishes it. */
- input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}));
- assert.equal(document.querySelector('.drawing-canvas-text-editor'),null);
+ /* Enter commits, whatever the tool - one keyboard for every canvas text field. */
+ input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+ assert.equal(field(),null);
  assert.equal(state.activeTool,'note');
  model.undo(state);assert.equal(state.objects.find(o=>o.id===created.id).text,'','typing is one undoable edit');
  const current=state.objects.find(o=>o.id===created.id);
  const {openNoteEditorFor}=require(locate('canvas-click.js'));
- openNoteEditorFor(current);input=document.querySelector('.drawing-canvas-text-editor textarea');
+ openNoteEditorFor(current);input=field().querySelector('#noteText');
  input.value='Click away';input.dispatchEvent(new window.Event('input',{bubbles:true}));
  document.body.dispatchEvent(new window.Event('pointerdown',{bubbles:true}));
  assert.equal(state.objects.find(o=>o.id===created.id).text,'Click away');
- openNoteEditorFor(state.objects.find(o=>o.id===created.id));input=document.querySelector('.drawing-canvas-text-editor textarea');
+ openNoteEditorFor(state.objects.find(o=>o.id===created.id));input=field().querySelector('#noteText');
  input.value='Discard';input.dispatchEvent(new window.Event('input',{bubbles:true}));
  input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
  assert.equal(state.objects.find(o=>o.id===created.id).text,'Click away');

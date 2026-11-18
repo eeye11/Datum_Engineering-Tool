@@ -22,7 +22,7 @@
  *      asked for them to be part of the drawing
  *   3. the geometry, element by element, in document order
  *
- * EDITING AIDS ARE NEVER EMITTED. Anchor markers, guide markers, control
+ * EDITING AIDS ARE NEVER EMITTED. Anchor markers, snap indicators, control
  * handles, selection outlines and the correction preview are things the editor
  * draws; they are not the student's geometry. Points, labels and axes are
  * emitted only when explicitly included, which is what
@@ -262,17 +262,28 @@ export function elementSource(element, options = {}) {
     const adapter = path.adapter;
 
     /*
-     * THE ARC'S OWN END POINTS, NOT ONES DERIVED FROM ITS ANGLES.
+     * THE ARC'S OWN END POINT, NOT ONE DERIVED FROM ITS ANGLES.
      *
      * The angles are written rounded to three decimals, so recomputing the end
      * from them lands a thousandth away from the point the geometry actually
      * has - and a round trip then produces different source. The stored points
-     * are the truth, so they are what is written.
+     * are the truth, so the last one is what is written.
      */
-    const start = element.points?.[0] || adapter.pointAt(0);
     const end = element.points?.[element.points.length - 1] || adapter.pointAt(1);
 
-    return `\\draw${style} ${coord(start)} arc[start angle=${num((adapter.startAngle * 180) / Math.PI)}, end angle=${num((adapter.endAngle * 180) / Math.PI)}, radius=${num(adapter.radius)}]${coord(end)}${nodeSuffix(options, element)};`;
+    /*
+     * AN ARC IS WRITTEN ABOUT ITS CENTRE.
+     *
+     * TikZ draws `arc` from the CURRENT POINT, so the path must start at
+     * `(centre) + (radius, 0)` before the options and end at the arc's own
+     * final point. Writing the arc's start point in front of the options makes
+     * TikZ draw a curve of the right radius from the WRONG place, which is why
+     * the arc landed beside its own centre in a foreign editor and nowhere on
+     * it in this one.
+     */
+    const origin = { x: adapter.centre.x + adapter.radius, y: adapter.centre.y };
+
+    return `\\draw${style} ${coord(origin)} arc[start angle=${num((adapter.startAngle * 180) / Math.PI)}, end angle=${num((adapter.endAngle * 180) / Math.PI)}, radius=${num(adapter.radius)}]${coord(end)}${nodeSuffix(options, element)};`;
   }
 
   if (path.shape === "bezier") {

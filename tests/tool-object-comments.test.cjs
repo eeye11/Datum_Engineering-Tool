@@ -42,7 +42,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 
@@ -62,7 +62,15 @@ const writers = {
   annotations: loadModule("annotations.js"),
   thermodynamics: loadModule("thermodynamics.js"),
   fluids: loadModule("fluids.js"),
-  math: loadModule("math.js"),
+
+  /*
+   * THE WRITER, NOT THE READER. `math.js` exists in both `source-writers/` and
+   * `source-readers/`, and the bare name resolves to whichever the walk reaches
+   * first - which is the reader, and a reader has no `MATH_SOURCE_TYPES`. The
+   * path suffix says which one this inventory means.
+   */
+  math: loadModule("source-writers/math.js"),
+  "heat-transfer": loadModule("source-writers/heat-transfer.js"),
 };
 
 /* ============================================================ the inventory */
@@ -74,7 +82,7 @@ const registered = writerIndex.registeredWriterIds();
 
 check(
   "every category writer is installed by the pipeline",
-  ["statics", "geometry", "annotations", "thermodynamics", "fluids", "dynamics"].every(
+  ["statics", "geometry", "annotations", "thermodynamics", "fluids", "dynamics", "heat-transfer"].every(
     (id) => registered.includes(id),
   ),
   registered.join(", "),
@@ -231,6 +239,8 @@ function declaredTypes(id) {
       return [...writers.annotations.ANNOTATION_SOURCE_TYPES];
     case "math":
       return [...writers.math.MATH_SOURCE_TYPES];
+    case "heat-transfer":
+      return [...writers["heat-transfer"].HEAT_SOURCE_TYPES];
     default:
       return [];
   }
@@ -309,6 +319,36 @@ function objectFor(id, type) {
     };
   }
 
+  if (id === "heat-transfer") {
+    /*
+     * EACH HEAT TRANSFER TYPE NEEDS THE GEOMETRY ITS OWN WRITER READS. One
+     * fixture carries every field the fourteen types use - the two ends, the
+     * centre, the corner-and-size, the points, the layers - so each writer is
+     * asked for what its tool would give it, not for a refusal.
+     */
+    return {
+      ...base,
+      variant: type === "heat-path" ? "conduction" : undefined,
+      geometry: {
+        start: point(0, 0),
+        end: point(60, 0),
+        base: point(0, 0),
+        center: point(30, 0),
+        position: point(10, 10),
+        width: 40,
+        height: 20,
+        rotation: 0,
+        thickness: 4,
+        radius: 2,
+        size: 8,
+        side: 1,
+        spacing: 10,
+        layers: [20, 20],
+        points: [point(0, 0), point(30, 10), point(60, 0)],
+      },
+    };
+  }
+
   if (id === "math") {
     /*
      * EACH MATH TYPE NEEDS THE GEOMETRY ITS OWN WRITER READS. A point needs a
@@ -368,6 +408,7 @@ function write(id, object) {
     thermodynamics: (o) => writers.thermodynamics.thermodynamicsSourceWriter(o),
     fluids: (o) => writers.fluids.fluidsSourceWriter(o),
     math: (o) => writers.math.mathSourceWriter(o),
+    "heat-transfer": (o) => writers["heat-transfer"].heatTransferSourceWriter(o),
   };
 
   return table[id](object);

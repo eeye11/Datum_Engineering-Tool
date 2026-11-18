@@ -1745,11 +1745,39 @@
 
 .dfp-readonly { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 
+/*
+ * THE NOTE FIELD IS A WIDE, MULTI-LINE BOX.
+ *
+ * Width comes first: it fills the whole row (the label cell above it, not the
+ * narrow control column), because prose is read left to right and a 6ch wide
+ * column turns one sentence into a wall of scrolling. Height opens at three
+ * comfortable lines; past that the field scrolls rather than pushing the rest
+ * of the Features tab off the panel, and the corner grip grows it on demand.
+ */
+.dfp-row-note {
+    align-items: stretch;
+    column-gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 4px;
+    padding: 2px 2px 4px;
+}
+
+.dfp-row-note .dfp-row-label {
+    padding-left: 2px;
+}
+
 .dfp-note-text {
     box-sizing: border-box;
+    display: block;
     width: 100%;
-    min-height: 58px;
-    max-height: 160px;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 4.5em;
+    height: auto;
+    max-height: none;
+    padding: 5px 8px;
     resize: vertical;
     font: inherit;
+    line-height: 1.5;
+    overflow-y: auto;
 }

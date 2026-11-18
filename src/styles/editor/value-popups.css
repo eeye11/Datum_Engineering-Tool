@@ -522,6 +522,23 @@
 
 /*
  * ============================================================
+ * THE BOX'S DIMENSIONS ARE THE DRAWING'S
+ * ============================================================
+ *
+ * The on-drawing text field is 200 x 36 pt at 14 pt, with 8 x 4 pt of padding -
+ * stated ONCE, in `TEXT_ENTRY_BOX` (`shared/typography/canvas-typography.js`),
+ * and mirrored by the TikZ writer so the compiled picture states the same
+ * figures. The editor writes them onto the host, already converted through the
+ * camera - these properties are where they are USED, and nothing below invents
+ * a size of its own.
+ *
+ * `--entry-box-*` are therefore always set by the editor before the box is
+ * shown. The fallbacks are the definitions rendered at 100%, so a field opened
+ * with no drawing to measure (a test, a blank page) is still the right box.
+ */
+
+/*
+ * ============================================================
  * A LABEL, TYPED ONTO THE DRAWING
  * ============================================================
  *
@@ -542,6 +559,131 @@
     width: auto;
     min-width: 40px;
     white-space: nowrap;
+}
+
+/*
+ * THE SAME FIELD, MOUNTED ON THE SHEET.
+ *
+ * A label field whose anchor is a CANVAS point is a child of the canvas element,
+ * so its offsets are the drawing's own - `absolute`, not `fixed` - and it is
+ * clipped by the sheet it belongs to rather than floating over the panels.
+ * Nothing else about it changes: one field, one look, one keyboard.
+ */
+.drawing-inline-entry.drawing-label-entry-on-canvas {
+    position: absolute;
+    z-index: 5;
+    white-space: pre;
+
+    /*
+     * THE DEFINED BOX, ON THE SHEET.
+     *
+     * 200 x 36 pt with 8 x 4 pt of padding, from the drawing's own definition;
+     * the editor writes the scaled values onto `--entry-*`. `box-sizing:
+     * border-box` makes the stated width the box the student sees, padding
+     * included, and the field fills it so the text has the whole of its inside
+     * to be read in - nothing is clipped, however much is typed.
+     */
+    box-sizing: border-box;
+    width: var(--entry-box-width, 200px);
+    min-width: var(--entry-box-min-width, 120px);
+    height: var(--entry-box-height, 36px);
+    padding: var(--entry-padding-y, 4px) var(--entry-padding-x, 8px);
+}
+
+/*
+ * THE FIELD FILLS THE BOX AND IS CENTRED IN IT.
+ *
+ * A single line is vertically centred on the box, which is centred on the text's
+ * own insertion point - so the caret appears where the committed glyphs will be
+ * drawn, and the words do not move when the field closes. `field-sizing:
+ * content` is deliberately NOT used here: the box is a defined size, and letting
+ * the browser size the field from its contents would override that definition
+ * and clip the text against it.
+ */
+.drawing-inline-entry.drawing-label-entry-on-canvas textarea.drawing-label-entry-input {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    field-sizing: fixed;
+    vertical-align: middle;
+}
+
+/*
+ * A MULTILINE LABEL FIELD GROWS DOWNWARD AND WRAPS.
+ *
+ * The field used to be a one-line input sized in `ch`; now it is a textarea (so
+ * Shift+Enter can add a line), which needs a sensible box: as wide as the line
+ * being typed, and as tall as the text in it. `field-sizing` does the wrapping;
+ * the editor's own autosize handles the height in browsers without it.
+ */
+/*
+ * THE FIELD IS THE WORDS' OWN BOX - NO PADDING, NO SEPARATE FRAME.
+ *
+ * It carried `padding: 0 2px` and a dotted bottom border, so the box the
+ * student saw was four pixels wider than the words and ended in a rule the
+ * committed text does not have. That is the second "rectangle": not another
+ * element, but chrome on this one that the drawing does not reproduce.
+ *
+ * With the padding gone the caret sits exactly where the first glyph goes, and
+ * the box's width is the width of the text. The one visible marker while
+ * editing is a faint outline, which is removed the moment the field closes.
+ */
+.drawing-inline-entry.drawing-label-entry textarea.drawing-label-entry-input {
+    display: block;
+    box-sizing: content-box;
+    /*
+     * THE BOX IS WIDER THAN IT IS TALL.
+     *
+     * The width comes from the editor, which MEASURES the text, so the box is as
+     * wide as the words in it. A minimum keeps a short one from looking like a
+     * caret with a border - a label is a line of type, not a square.
+     *
+     * THE HEIGHT IS ONE LINE AND NO MORE. A textarea's default box is two rows
+     * tall with its own leading, which made a single line of type sit in a box
+     * much deeper than the glyphs. The line box below is set to the type's own
+     * height, so the field hugs the words: `line-height: 1` and a matching
+     * `min-height` mean one line is one line tall. Multi-line text still grows,
+     * because the editor's autosize sets an explicit height in pixels.
+     */
+    width: auto;
+    min-width: 6ch;
+    max-width: 48ch;
+    min-height: 1em;
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    outline: none;
+    background: transparent;
+    color: inherit;
+    caret-color: currentColor;
+    font-family: inherit;
+    font-weight: inherit;
+    /*
+     * ONE LINE, TIGHT. The editor also sets this inline, from the same idea;
+     * stating it here means the field is right on the first frame, before any
+     * script has measured anything, and a single line never carries a
+     * textarea's default leading.
+     */
+    line-height: 0.95;
+    letter-spacing: 0;
+    resize: none;
+    overflow: hidden;
+    field-sizing: content;
+    white-space: pre;
+}
+
+.drawing-inline-entry.drawing-label-entry textarea.drawing-label-entry-input::placeholder {
+    color: color-mix(in srgb, currentColor 45%, transparent);
 }
 
 .drawing-inline-entry.drawing-label-entry .drawing-inline-entry-label,
@@ -578,34 +720,11 @@
  * While it is empty it gets a faint outline at the width of its typing area; the
  * outline goes on the first keystroke, and with it the field.
  */
-.drawing-inline-entry.drawing-label-entry[data-empty="true"] input.drawing-label-entry-input {
+.drawing-inline-entry.drawing-label-entry[data-empty="true"] input.drawing-label-entry-input,
+.drawing-inline-entry.drawing-label-entry[data-empty="true"] textarea.drawing-label-entry-input {
     border-bottom-color: transparent;
     outline: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
     outline-offset: 2px;
     border-radius: 1px;
 }
 
-/*
- * A VALUE'S FIELD HANGS OFF ITS POINT, NOT ON IT.
- *
- * A force's magnitude is written beside its arrowhead, so the field that asks
- * for it is placed beside that point - level with it, on whichever side has
- * room. It has no drawn text to sit on, so the dotted underline is replaced by
- * the same faint outline an empty label carries: the box is visible, it is
- * clearly not part of the drawing, and it disappears with the field.
- */
-.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside {
-    padding: 1px 3px;
-    background: color-mix(in srgb, var(--datum-surface) 72%, transparent);
-    border-radius: 2px;
-}
-
-.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside input.drawing-label-entry-input {
-    border-bottom: 0;
-    outline: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
-    outline-offset: 2px;
-}
-
-.drawing-inline-entry.drawing-label-entry.drawing-label-entry-beside input.drawing-label-entry-input::placeholder {
-    color: transparent;
-}

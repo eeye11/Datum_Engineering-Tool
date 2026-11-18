@@ -35,6 +35,8 @@ import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
 import { isLegacyResetTool, legacyPlaceholderMessage } from "./phase-reset.js";
 import { isMathTool, mathInstruction } from "../../../features/workspace/math/math-tools.js";
+import { isHeatTool, heatGesture, isPlannedHeatTool } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
+import { beginHeatToolSession, heatToolInstruction } from "../../../features/workspace/interaction/heat-transfer-tool.js";
 
 export function activate2DCoordinateSystemTool() {
     /*
@@ -102,9 +104,26 @@ export function activateTool(
         return;
     }
 
+    /*
+     * A HEAT TRANSFER TOOL ARMS ITS OWN SESSION.
+     *
+     * A Heat Transfer tool is its OWN tool id - no shared primitive - because
+     * each is its own object with its own gesture. A PLANNED one has no
+     * behaviour to arm, so it is refused with an honest message; every other
+     * arms its session below, once the interaction has been cleared, so the
+     * button the student pressed and the tool that runs cannot disagree.
+     */
+    if (isPlannedHeatTool(toolId)) {
+        setToolMessage(heatToolInstruction(toolId));
+        return;
+    }
+
     const requestedTool = isFluidsTool(toolId)
         ? fluidsArmedTool(toolId)
         : toolId;
+
+    const isHeat = isHeatTool(toolId);
+    const heatPlacementGesture = isHeat ? heatGesture(toolId) : null;
 
     /*
      * Choosing Select always abandons whatever the
@@ -283,7 +302,14 @@ export function activateTool(
         requestedTool === "flow-direction-diagram" ||
         requestedTool === "pressure-profile" ||
         requestedTool === "flow-profile" ||
-        requestedTool === "section-plane";
+        requestedTool === "section-plane" ||
+
+        /*
+         * AND EVERY HEAT TRANSFER TOOL: each places its object per gesture,
+         * so re-clicking one keeps it armed rather than cancelling it - the
+         * same rule a schematic Fluids tool keeps.
+         */
+        isHeat;
 
     const nextTool =
         drawingState.activeTool ===
@@ -451,6 +477,58 @@ export function activateTool(
             activeCategory()
         );
 
+        renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * ========================================================
+     * A HEAT TRANSFER TOOL ARMS ITS OWN SESSION
+     * ========================================================
+     *
+     * Each Heat Transfer tool is its OWN tool id - no shared primitive -
+     * because each is its own object with its own gesture. The gesture is
+     * recorded on the interaction first, so the session knows which of the
+     * three placements the tool takes; the session then arms the tool, prints
+     * its own instruction and waits for the press.
+     *
+     * THE TEMPERATURE PROFILE IS THE EXISTING GRAPH TOOL. It is deliberately
+     * NOT a Heat Transfer session: it arms the graph / plot tool that already
+     * exists, with a Heat Transfer preset, and is handled with it.
+     */
+    if (isHeat) {
+        if (toolId === "temperature-profile") {
+            /*
+             * The existing Graph / Plot tool, with a Heat Transfer preset. It
+             * is NOT a second plotting engine: the vertical axis is set to
+             * temperature and the gesture is the graph tool's own.
+             */
+            enggDrawingState.clearInteraction(drawingState);
+            enggDrawingState.setActiveTool(drawingState, "math-plot");
+
+            enggDrawingState.setInteraction(drawingState, {
+                heatTool: toolId,
+                mathMode: "plot",
+                heatPreset: "temperature-profile"
+            });
+
+            setToolMessage(heatToolInstruction(toolId));
+
+            renderEngineeringTools(activeCategory());
+            renderCurrentDrawing();
+
+            return;
+        }
+
+        /* The tool's gesture, recorded before the session is begun. */
+        enggDrawingState.setInteraction(drawingState, {
+            heatGesture: heatPlacementGesture
+        });
+
+        beginHeatToolSession(toolId);
+
+        renderEngineeringTools(activeCategory());
         renderCurrentDrawing();
 
         return;

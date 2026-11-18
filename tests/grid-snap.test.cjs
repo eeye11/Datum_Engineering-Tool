@@ -1,5 +1,5 @@
 const { JSDOM } = require("jsdom");
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 const { modulePath, loadModule } = require("./helpers/source-path.cjs");
 
 const projectRoot = require("path").join(__dirname, "..");

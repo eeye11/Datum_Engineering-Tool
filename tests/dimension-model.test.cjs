@@ -130,13 +130,13 @@ check(
 check("its placement is its own", span.placement, { x: 50, y: 30 });
 
 console.log("\nIt measures the geometry as it is now");
-check("a 100 long beam reads 100", model.formatMeasurement(span, state(beam)), "100.00 mm");
+check("a 100 long beam reads 100", model.describeMeasurement(span, state(beam)), "100.00 mm");
 
 console.log("\nMoving the geometry moves the measurement");
 beam.geometry.end.x = 250;
 check(
   "the same dimension now reads 250",
-  model.formatMeasurement(span, state(beam)),
+  model.describeMeasurement(span, state(beam)),
   "250.00 mm"
 );
 
@@ -169,7 +169,7 @@ check(
 );
 check(
   "and says so rather than showing a stale number",
-  model.formatMeasurement(orphaned, state()),
+  model.describeMeasurement(orphaned, state()),
   null
 );
 check(
@@ -198,14 +198,14 @@ const diameter = model.createDimension({
 });
 check(
   "a circle's diameter is its real diameter",
-  model.formatMeasurement(diameter, state(circle)),
+  model.describeMeasurement(diameter, state(circle)),
   "Ø50.00 mm"
 );
 check(
   "and follows the circle when the circle changes",
   (() => {
     circle.geometry.radius = 40;
-    return model.formatMeasurement(diameter, state(circle));
+    return model.describeMeasurement(diameter, state(circle));
   })(),
   "Ø80.00 mm"
 );
@@ -217,7 +217,7 @@ const radius = model.createDimension({
 });
 check(
   "and its radius is half of that",
-  model.formatMeasurement(radius, state(circle)),
+  model.describeMeasurement(radius, state(circle)),
   "R40.00 mm"
 );
 
@@ -263,7 +263,7 @@ const shaftDiameter = model.createDimension({
 });
 check(
   "a 40 diameter shaft measures 40, not its 200 span",
-  model.formatMeasurement(shaftDiameter, state(shaft)),
+  model.describeMeasurement(shaftDiameter, state(shaft)),
   "Ø40.00 mm"
 );
 check(
@@ -283,7 +283,7 @@ const angle = model.createDimension({
   ],
   placement: { x: 40, y: 40 }
 });
-const angleText = model.formatMeasurement(
+const angleText = model.describeMeasurement(
   angle,
   state(legA, legB)
 );
@@ -361,34 +361,34 @@ const spanDimension = model.createDimension({
 });
 check(
   "a dimension reads the geometry in drawing units",
-  model.formatMeasurement(spanDimension, plain),
+  model.describeMeasurement(spanDimension, plain),
   "1500.00 mm"
 );
 check(
   "an old file's metre unit does not convert it",
-  model.formatMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1, unit: "m" } }),
+  model.describeMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1, unit: "m" } }),
   "1500.00 mm"
 );
 check(
   "an old file's calibration does not rescale it",
-  model.formatMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1.25, unit: "mm" } }),
+  model.describeMeasurement(spanDimension, { ...plain, scale: { mmPerUnit: 1.25, unit: "mm" } }),
   "1500.00 mm"
 );
 check(
   "and it states the value plainly, with no approximation mark",
-  String(model.formatMeasurement(spanDimension, plain)).includes("~"),
+  String(model.describeMeasurement(spanDimension, plain)).includes("~"),
   false
 );
 
 console.log("\nZoom never changes a measurement");
 check(
   "the same drawing at 200% reads the same",
-  model.formatMeasurement(spanDimension, { ...plain, camera: { zoom: 2, panX: 0, panY: 0 } }),
+  model.describeMeasurement(spanDimension, { ...plain, camera: { zoom: 2, panX: 0, panY: 0 } }),
   "1500.00 mm"
 );
 check(
   "and at 400%",
-  model.formatMeasurement(spanDimension, { ...plain, camera: { zoom: 4 } }),
+  model.describeMeasurement(spanDimension, { ...plain, camera: { zoom: 4 } }),
   "1500.00 mm"
 );
 
@@ -477,10 +477,23 @@ const graphics = model.graphicsFor(
 );
 check("a linear dimension draws a dimension line", Array.isArray(graphics.line), true);
 check("with extension lines to the measured points", graphics.extensions.length, 2);
-check("and its text", graphics.text, "100.00 mm");
+/*
+ * NO AUTOMATIC LABEL. An unlabelled dimension draws its construction and NO
+ * text - the measured distance is not the label, and printing it here is what
+ * showed "100.00 mm" before the student had typed anything.
+ */
+check("and no text until a label is typed", graphics.text, null);
+check("and no label frame either", graphics.textFrame, null);
+
+/* A LABELLED dimension draws exactly what was typed, and reads upright. */
+const labelledGraphics = model.graphicsFor(
+  { ...graphicsDimension, dimensionKind: "variable", content: "100" },
+  state(graphicsBeam)
+);
+check("a typed label is shown verbatim", labelledGraphics.text, "100");
 check(
   "set so it reads upright",
-  Math.abs(graphics.textFrame.angle) < 90,
+  Math.abs(labelledGraphics.textFrame.angle) < 90,
   true
 );
 check(
@@ -561,7 +574,7 @@ check(
 );
 check(
   "and it reads as a plain length in the document's units",
-  model.formatMeasurement(pointLine, state(pointFeature, baseLine)),
+  model.describeMeasurement(pointLine, state(pointFeature, baseLine)),
   "40.00 mm"
 );
 /*
@@ -590,7 +603,7 @@ check(
 );
 check(
   "and no approximation mark appears anywhere on it",
-  String(model.formatMeasurement(pointLine, state(pointFeature, baseLine))).includes("~"),
+  String(model.describeMeasurement(pointLine, state(pointFeature, baseLine))).includes("~"),
   false
 );
 
@@ -619,17 +632,17 @@ const symbolRadius = model.createDimension({
 });
 check(
   "a diameter reads Ø50.00 mm",
-  model.formatMeasurement(symbolDiameter, state(symbolCircle)),
+  model.describeMeasurement(symbolDiameter, state(symbolCircle)),
   "Ø50.00 mm"
 );
 check(
   "a radius reads R25.00 mm",
-  model.formatMeasurement(symbolRadius, state(symbolCircle)),
+  model.describeMeasurement(symbolRadius, state(symbolCircle)),
   "R25.00 mm"
 );
 check(
   "with no space between symbol and number",
-  model.formatMeasurement(symbolDiameter, state(symbolCircle)).startsWith("Ø5"),
+  model.describeMeasurement(symbolDiameter, state(symbolCircle)).startsWith("Ø5"),
   true
 );
 

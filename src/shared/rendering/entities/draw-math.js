@@ -19,13 +19,39 @@
 
 import enggDrawingState from "../../model/drawing-state.js";
 import enggMathModel from "../../../features/workspace/math/math-model.js";
+
+/*
+ * THE SHARED COORDINATE SYSTEM.
+ *
+ * A placed graph draws its axes, ticks and grid with the SAME painter the
+ * editors use, from the SAME converted settings - so a graph on the sheet and
+ * the same graph in the Plot Editor cannot show different grid paper.
+ */
+import { drawAxesAndGrid } from "../../sketch/sketch-axes.js";
+import {
+  graphViewport,
+  outputLayersFor,
+} from "../../sketch/sketch-axes-adapter.js";
+import { gridFromGeometry } from "../../sketch/sketch-grid-legacy.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import {
+  activeZoom,
   createSvgElement,
+  dashArrayFor,
   paintColour,
   scaledStrokeWidth,
-  zoomedFontHere,
+  worldLength,
 } from "../svg-primitives.js";
+import {
+  AUXILIARY_FONT_PX,
+  CANVAS_FONT_STACK,
+  MATH_FONT_STACK,
+  SECONDARY_FONT_PX,
+  PRIMARY_FONT_PX,
+  fontScaleForZoom,
+  fontSizeOf,
+  textTransform,
+} from "../../typography/canvas-typography.js";
 
 /* ============================================================
  * SHARED HELPERS
@@ -57,29 +83,25 @@ function gridDisplayOf(entity) {
   };
 }
 
-/* The values a graph's grid is drawn at, whichever build of the model is loaded. */
-function gridValuesOf(min, max, spacing, divisions) {
-  if (typeof enggMathModel.gridValues === "function") {
-    return enggMathModel.gridValues(min, max, spacing, divisions);
-  }
-
-  return enggMathModel.tickValues(min, max, spacing);
-}
-
 function widthOf(style) {
   return scaledStrokeWidth(Number(style?.lineWidth) || 0.5);
 }
 
 function dashFor(style) {
-  if (style?.lineType === "dashed") {
-    return "6 4";
-  }
+  const pattern =
+    style?.lineType === "dashed"
+      ? "6 4"
+      : style?.lineType === "dotted"
+        ? "1 4"
+        : null;
 
-  if (style?.lineType === "dotted") {
-    return "1 4";
-  }
-
-  return null;
+  /*
+   * A DASH IS A LENGTH OF THE DRAWING, so it goes through the one conversion
+   * every other world length uses. Written raw it was six overlay pixels - the
+   * same six at 25% and at 400%, where the geometry around it had quartered or
+   * quadrupled.
+   */
+  return pattern ? dashArrayFor(pattern) : null;
 }
 
 function line(
@@ -135,13 +157,21 @@ function path(
   return element;
 }
 
+/*
+ * A LABEL OF A MATH OBJECT, drawn at a canvas font size.
+ *
+ * The camera is cancelled on the glyphs (see `textTransform`) while `at` - the
+ * projected drawing position - is what anchors them, so a graph's tick number, an
+ * axis title, a point's coordinates and a vector's magnitude keep their size on
+ * screen at every zoom and their place on the sheet at every pan.
+ */
 function text(
   svg,
   at,
   content,
   {
     fill,
-    size = 12,
+    size = AUXILIARY_FONT_PX,
     anchor = "middle",
     baseline = "middle",
     extra = {},
@@ -160,15 +190,18 @@ function text(
     return null;
   }
 
+  const zoom = Math.max(Number(activeZoom) || 1, 0.0001);
+
   const node = createSvgElement("text", {
     x: at.x,
     y: at.y,
     fill,
-    "font-size": zoomedFontHere(size),
-    "font-family": "Arial, sans-serif",
+    "font-size": Math.round(fontSizeOf(size, AUXILIARY_FONT_PX) * zoom * 1000) / 1000,
+    "font-family": CANVAS_FONT_STACK,
     "text-anchor": anchor,
     "dominant-baseline": baseline,
     "pointer-events": "none",
+    transform: textTransform(at, zoom),
     ...(role ? { "data-label": role } : {}),
     ...extra,
   });
@@ -181,7 +214,10 @@ function text(
 }
 
 /* A filled arrowhead, built from the two projected ends. */
-function arrowHead(svg, tip, tail, stroke, size = 9) {
+function arrowHead(svg, tip, tail, stroke, worldSize = 9) {
+  /* The head is a size of the drawing, stated in world units by its caller. */
+  const size = worldLength(worldSize);
+
   const dx = tip.x - tail.x;
   const dy = tip.y - tail.y;
   const length = Math.hypot(dx, dy);
@@ -534,8 +570,6 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
   }
 
   const stroke = strokeOf(style);
-  const width = widthOf(style);
-  const muted = paintColour(enggTheme.defaultLineColour());
   const geometry = entity.geometry || {};
 
   /*
@@ -560,211 +594,87 @@ export function drawMathGraph({ svg, parentSvg, entity, style, toScreen }) {
    * painter.
    */
 
-  const xTicks = enggMathModel.tickValues(
-    mapping.limits.xMin,
-    mapping.limits.xMax,
-    geometry.xTickSpacing,
-  );
-  const yTicks = enggMathModel.tickValues(
-    mapping.limits.yMin,
-    mapping.limits.yMax,
-    geometry.yTickSpacing,
-  );
-
   /*
-   * THE GRID, BEHIND THE AXES, at its own resolution.
+   * ========================================================
+   * THE COORDINATE SYSTEM, FROM THE ONE SHARED PAINTER
+   * ========================================================
    *
-   * A sketch draws a finer grid than its labelled ticks - a 1-unit grid over
-   * -5..5 is thin on a large canvas - while those ticks, and snapping, keep the
-   * configured value. The finer lines are multiples of the same step, so a point
-   * snapped to the grid always lands on a visible line.
+   * The grid, the axes, the ticks and the numbers are drawn by
+   * `drawAxesAndGrid` - the same painter the Sketch Editor and the Plot Editor
+   * use. That is what makes a placed graph and its preview agree: there is one
+   * implementation of "what a major grid is", not three that drifted.
+   *
+   * THE GRAPH IS PRESENTED AS A VIEWPORT. `graphViewport` adapts its frame and
+   * limits to the shape the painter asks for; the mapping itself is still
+   * `graphMapping`'s, and every point still goes through `graphToDrawing`. So
+   * the curve, the grid and the axes land through the same transform they
+   * always did.
+   *
+   * THE LAYERS COME FROM THE GRAPH'S OWN SETTINGS, converted once by
+   * `gridFromGeometry`. A sketch saved with no grid still draws no grid; a plot
+   * saved with numbers still prints them. Nothing here re-derives a default.
    */
-  const xGrid = display.showGrid
-    ? gridValuesOf(
-        mapping.limits.xMin,
-        mapping.limits.xMax,
-        geometry.xTickSpacing,
-        geometry.gridDivisions,
-      )
-    : [];
+  const graphGrid = gridFromGeometry(geometry);
 
-  const yGrid = display.showGrid
-    ? gridValuesOf(
-        mapping.limits.yMin,
-        mapping.limits.yMax,
-        geometry.yTickSpacing,
-        geometry.gridDivisions,
-      )
-    : [];
+  const axesViewport = graphViewport(entity, enggMathModel);
 
-  if (display.showGrid) {
-    const gridWidth = Math.max(0.4, width * 0.5);
+  if (axesViewport) {
+    /*
+     * THE PAINTER'S MODEL -> PIXEL IS THE COMPLETE CHAIN: a graph coordinate
+     * through `graphToDrawing`, then through the sheet's own `toScreen`.
+     *
+     * The adapter's viewport `toScreen` does only the FIRST half, because it
+     * has no access to the camera. Supplying the second half here is what puts
+     * the grid on the sheet: without it the painter was handed drawing
+     * coordinates by its viewport and then drew them unchanged into a canvas
+     * measured in screen pixels, so every line landed near the origin.
+     */
+    drawAxesAndGrid(svg, graphGrid, axesViewport, {
+      className: "graph",
+      include: outputLayersFor(graphGrid),
+      toScreen: (point) => toScreen(axesViewport.toScreen(point)),
 
-    xGrid.forEach((value) => {
-      const at = enggMathModel.graphToDrawing(entity, {
-        x: value,
-        y: mapping.limits.yMin,
-      });
-
-      if (at) {
-        line(svg, toScreen(at), toScreen({ x: at.x, y: mapping.top }), {
-          stroke: muted,
-          width: gridWidth,
-          dash: "3 4",
-          opacity: 0.45,
-        });
-      }
-    });
-
-    yGrid.forEach((value) => {
-      const at = enggMathModel.graphToDrawing(entity, {
-        x: mapping.limits.xMin,
-        y: value,
-      });
-
-      if (at) {
-        line(svg, toScreen(at), toScreen({ x: mapping.right, y: at.y }), {
-          stroke: muted,
-          width: gridWidth,
-          dash: "3 4",
-          opacity: 0.45,
-        });
-      }
+      /*
+       * THE PAINTER DRAWS CANVAS TEXT, so it is told the camera: every tick
+       * number and axis name it emits is placed at the projected point and its
+       * glyphs are divided back out of the zoom. Without this the numbers grew
+       * and shrank with the sheet.
+       */
+      zoom: activeZoom,
+      fontFamily: CANVAS_FONT_STACK,
     });
   }
-
-  /*
-   * THE AXES: WHERE ZERO ACTUALLY IS, OR NOWHERE.
-   *
-   * `origin` is the position of (0, 0) in the SAME frame the grid and the
-   * curves are drawn in, so it is NOT forced to the middle of the plot area and
-   * NOT forced to an edge. If zero is outside the configured limits - a graph of
-   * 2..8 has no y = 0 in it - the corresponding axis is not inside the plotting
-   * area and is therefore not drawn, rather than being pushed onto an edge and
-   * pretending the value exists there.
-   */
-  const origin = mapping.origin;
-
-  const xAxisVisible =
-    geometry.showXAxis !== false &&
-    origin.y >= mapping.bottom - 1e-9 &&
-    origin.y <= mapping.top + 1e-9;
-
-  const yAxisVisible =
-    geometry.showYAxis !== false &&
-    origin.x >= mapping.left - 1e-9 &&
-    origin.x <= mapping.right + 1e-9;
-
-  if (xAxisVisible) {
-    line(
-      svg,
-      toScreen({ x: mapping.left, y: origin.y }),
-      toScreen({ x: mapping.right, y: origin.y }),
-      {
-        stroke,
-        width,
-        extra: { "data-graph-part": "axis" },
-      },
-    );
-  }
-
-  if (yAxisVisible) {
-    line(
-      svg,
-      toScreen({ x: origin.x, y: mapping.bottom }),
-      toScreen({ x: origin.x, y: mapping.top }),
-      {
-        stroke,
-        width,
-        extra: { "data-graph-part": "axis" },
-      },
-    );
-  }
-
-  /*
-   * THE TICKS ARE MARKS ON THE AXES, so a tick is drawn only where its axis
-   * exists. A hidden X axis (because y = 0 is out of range) does not leave a
-   * row of floating marks at the bottom of the plot area.
-   */
-  const tickLength = 4;
-
-  xTicks.forEach((value) => {
-    const at = xAxisVisible
-      ? enggMathModel.graphToDrawing(entity, { x: value, y: 0 })
-      : null;
-
-    if (!at) {
-      return;
-    }
-
-    const screen = toScreen(at);
-
-    line(
-      svg,
-      { x: screen.x, y: screen.y - tickLength },
-      { x: screen.x, y: screen.y + tickLength },
-      {
-        stroke,
-        width: Math.max(0.5, width * 0.7),
-      },
-    );
-
-    if (display.showTickLabels && Math.abs(value) > 1e-9) {
-      text(svg, { x: screen.x, y: screen.y + 14 }, numberText(value), {
-        fill: stroke,
-        size: 10,
-        role: "tick",
-      });
-    }
-  });
-
-  yTicks.forEach((value) => {
-    const at = yAxisVisible
-      ? enggMathModel.graphToDrawing(entity, { x: 0, y: value })
-      : null;
-
-    if (!at) {
-      return;
-    }
-
-    const screen = toScreen(at);
-
-    line(
-      svg,
-      { x: screen.x - tickLength, y: screen.y },
-      { x: screen.x + tickLength, y: screen.y },
-      {
-        stroke,
-        width: Math.max(0.5, width * 0.7),
-      },
-    );
-
-    if (display.showTickLabels && Math.abs(value) > 1e-9) {
-      text(svg, { x: screen.x - 8, y: screen.y }, numberText(value), {
-        fill: stroke,
-        size: 10,
-        anchor: "end",
-        role: "tick",
-      });
-    }
-  });
 
   /* The axis names, at the ends of the axes that are actually drawn. */
-  if (xAxisVisible && String(geometry.xLabel ?? "").trim()) {
-    text(svg, { x: mapping.right + 10, y: origin.y }, geometry.xLabel, {
-      fill: stroke,
-      size: 12,
-      anchor: "start",
-      role: "axis-name",
-    });
-  }
+  if (display.showAxisNames !== false) {
+    const origin = mapping.origin;
 
-  if (yAxisVisible && String(geometry.yLabel ?? "").trim()) {
-    text(svg, { x: origin.x, y: mapping.top - 10 }, geometry.yLabel, {
-      fill: stroke,
-      size: 12,
-      role: "axis-name",
-    });
+    const xAxisVisible =
+      graphGrid.showXAxis &&
+      origin.y >= mapping.bottom - 1e-9 &&
+      origin.y <= mapping.top + 1e-9;
+
+    const yAxisVisible =
+      graphGrid.showYAxis &&
+      origin.x >= mapping.left - 1e-9 &&
+      origin.x <= mapping.right + 1e-9;
+
+    if (xAxisVisible && String(graphGrid.xAxisLabel ?? "").trim()) {
+      text(svg, { x: mapping.right + 10, y: origin.y }, graphGrid.xAxisLabel, {
+        fill: stroke,
+        size: SECONDARY_FONT_PX,
+        anchor: "start",
+        role: "axis-name",
+      });
+    }
+
+    if (yAxisVisible && String(graphGrid.yAxisLabel ?? "").trim()) {
+      text(svg, { x: origin.x, y: mapping.top - 10 }, graphGrid.yAxisLabel, {
+        fill: stroke,
+        size: SECONDARY_FONT_PX,
+        role: "axis-name",
+      });
+    }
   }
 
   /*
@@ -905,7 +815,12 @@ export function drawMathEquation({ svg, parentSvg, entity, style, toScreen }) {
 
   const at = toScreen(geometry.position);
   const stroke = strokeOf(style);
-  const size = Number(engineering.fontSize) || 16;
+
+  /*
+   * AN EQUATION'S SIZE IS A CHOICE, STORED AS A CANVAS FONT SIZE - so it reads
+   * at the same size on screen at every zoom.
+   */
+  const size = fontSizeOf(Number(engineering.fontSize), PRIMARY_FONT_PX);
 
   const anchor =
     engineering.align === "left"
@@ -923,19 +838,31 @@ export function drawMathEquation({ svg, parentSvg, entity, style, toScreen }) {
 
   const lines = content.split("\n");
 
+  const zoom = Math.max(Number(activeZoom) || 1, 0.0001);
+
+  /*
+   * AN EQUATION ROTATES AND KEEPS ITS SCREEN SIZE AT ONCE.
+   *
+   * `textTransform` composes the two about the equation's own point: the
+   * rotation turns it, the compensation divides the camera back out of the
+   * glyphs. Writing a bare `rotate(... about at)` here instead would leave the
+   * type scaled by the zoom.
+   */
   const node = createSvgElement("text", {
     x: at.x,
     y: at.y,
     fill: stroke,
-    "font-size": zoomedFontHere(size),
-    "font-family": "Cambria Math, Times New Roman, serif",
+    "font-size": fontScaleForZoom(size, zoom),
+    "font-family": MATH_FONT_STACK,
     "font-style": "italic",
     "text-anchor": anchor,
     "dominant-baseline": baseline,
     "pointer-events": "none",
-    ...(Number(geometry.rotation)
-      ? { transform: `rotate(${-Number(geometry.rotation)} ${at.x} ${at.y})` }
-      : {}),
+    transform: textTransform(
+      at,
+      zoom,
+      Number(geometry.rotation) ? `rotate(${-Number(geometry.rotation)})` : "",
+    ),
   });
 
   lines.forEach((lineText, index) => {
@@ -946,7 +873,8 @@ export function drawMathEquation({ svg, parentSvg, entity, style, toScreen }) {
 
     const tspan = createSvgElement("tspan", {
       x: at.x,
-      dy: size * 1.25,
+      /* The line advance in the node's own camera-scaled units. */
+      dy: Math.round(size * zoom * 1.25 * 1000) / 1000,
     });
 
     tspan.textContent = lineText;

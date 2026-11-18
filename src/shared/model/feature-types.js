@@ -163,7 +163,42 @@ export const FEATURE_TYPES = Object.freeze({
      * A JUNCTION IS AN `area`: a closed fitting with a contour of its own, so a
      * selection box catches it when the box reaches the shape.
      */
-    junction: { area: true }
+    junction: { area: true },
+
+    /*
+     * ====================================================
+     * THE HEAT TRANSFER OBJECTS
+     * ====================================================
+     *
+     * Each is its own feature type, so a Thermal Region, a Wall / Slab and a
+     * Heat Transfer Path are told apart in the Objects list, the Feature Tree
+     * and the source. The trait says how the shared systems SEE the shape:
+     *
+     *   area         a closed outline - a region, a composite wall, a fin, a
+     *                control volume - selected as a shape rather than a span
+     *   spanShaped   a run between two ends - a wall's centreline, an arrow,
+     *                a boundary, a contact, a path - box-selected along its ink
+     *   pointLike    a placed symbol or node - a source, a circuit element,
+     *                a marker
+     *
+     * THE LESSON FROM `polyline` APPLIES: a type missing from this registry
+     * gets the weak fallback, which is a feature that can be clicked but not
+     * swept up. So every one is declared here.
+     */
+    "thermal-region": { area: true },
+    "wall-slab": { spanShaped: true },
+    "composite-wall": { area: true },
+    fin: { area: true },
+    "heat-path": { spanShaped: true },
+    "thermal-arrow": { spanShaped: true },
+    "thermal-boundary": { spanShaped: true },
+    "thermal-contact": { spanShaped: true },
+    "heat-source-sink": { pointLike: true },
+    "thermal-circuit-node": { pointLike: true },
+    "thermal-circuit-element": { pointLike: true },
+    "temperature-marker": { annotation: true, pointLike: true },
+    isotherm: { spanShaped: true },
+    "control-volume": { annotation: true, area: true }
 });
 
 const traitOf = (type, trait) => Boolean(FEATURE_TYPES[type]?.[trait]);

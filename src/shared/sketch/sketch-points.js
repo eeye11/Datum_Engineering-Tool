@@ -34,6 +34,21 @@
  * guides as well made the student describe their drawing twice. The stroke is
  * the fitting reference; an anchor is the only thing that overrides it.
  *
+ * AN ANCHOR IS NOT A GLOBAL BOUNDARY.
+ * -----------------------------------
+ * A point constrains ONLY the geometry it is explicitly or unambiguously
+ * associated with - through `geometryId`, through the geometry's own `anchors`
+ * list, or through being chosen as that geometry's centre. It is never an
+ * implicit endpoint, never a clipping box, and never a reason to refuse a
+ * stroke drawn outside it. See `associatePoint` below.
+ *
+ * AN ANCHOR MAY BE A CENTRE.
+ * --------------------------
+ * The same point type can stand at the centre of a circle or an arc (its
+ * `role` is "centre"). It is still an anchor - there is no second permanent
+ * point type - but a corrector reads its role so that it constrains the centre
+ * rather than the circumference, which would otherwise put the curve straight
+ * through the middle of the circle.
  * Keeping the remaining kinds in one model, with one `type` field and one set of
  * semantics, is what lets the canvas, the inspector, the corrector and every
  * geometry adapter ask the same question and get the same answer.
@@ -128,6 +143,15 @@ export function makePoint({
   visible = true,
   geometryId = null,
   parameter = null,
+  /* "path" (a point the geometry passes through) or "centre" (a circle or arc). */
+  role = "path",
+  /*
+   * HOW THE POINT CAME TO BELONG TO ITS GEOMETRY: "placed" when the student
+   * clicked ON it (the element owns that location), or null when it was
+   * associated afterwards. The document reads this when the element is deleted:
+   * a placed point goes with its curve, an associated one does not.
+   */
+  association = null,
 } = {}) {
   if (!SKETCH_POINT_TYPES.includes(type)) {
     throw new Error(`Unknown sketch point type: ${type}`);
@@ -163,6 +187,13 @@ export function makePoint({
     geometryId,
     /* Where on that geometry, in the geometry's own parameterisation. */
     parameter: parameter === null ? null : finite(parameter),
+    /*
+     * HOW THE POINT CONSTRAINS THE GEOMETRY IT BELONGS TO. A "path" point is a
+     * location the geometry must pass through; a "centre" point is the centre
+     * of a circle or arc. The distinction is data, not a second point type.
+     */
+    role: role === "centre" ? "centre" : "path",
+    association: association === "placed" ? "placed" : null,
   };
 }
 
@@ -416,6 +447,91 @@ export function anchorPoints(points = []) {
   return resolvePoints(points).filter((point) => point.type === "anchor");
 }
 
+/*
+ * THE ANCHORS THAT BELONG TO ONE PIECE OF GEOMETRY.
+ *
+ * This is the ONE place the "does this point constrain that shape?" question
+ * is answered, so the corrector, the inspector and the canvas cannot disagree.
+ *
+ * A point belongs to a geometry when the student said so, in any of three
+ * explicitly recorded ways:
+ *
+ *   1. it was placed ON the geometry (its `geometryId` is that geometry's id);
+ *   2. the geometry lists it in its own `anchors`;
+ *   3. it was chosen as that geometry's CENTRE (`role: "centre"`).
+ *
+ * A point that matches none of them is unrelated, and an unrelated point never
+ * constrains the shape - that is what keeps a defined point from becoming a
+ * global boundary on every stroke in the sketch.
+ *
+ * `association` may be given as an extra, explicit list of ids for a stroke
+ * that is being reconstructed right now (a student who drags a stroke, or a
+ * tool that associates the points it was drawn between). It is honoured in
+ * addition to the stored relationships, never instead of them.
+ */
+export function anchorsForGeometry(
+  points = [],
+  { geometryId = null, anchors = [], association = [] } = {},
+) {
+  const listed = new Set([
+    ...(Array.isArray(anchors) ? anchors : []),
+    ...(Array.isArray(association) ? association : []),
+  ]);
+
+  return resolvePoints(points).filter(
+    (point) =>
+      point.type === "anchor" &&
+      (listed.has(point.id) || (geometryId && point.geometryId === geometryId)),
+  );
+}
+
+/* The centre an element was explicitly given, if it has one. */
+export function centrePointFor(points = [], { geometryId = null } = {}) {
+  return (
+    resolvePoints(points).find(
+      (point) =>
+        point.type === "anchor" &&
+        point.role === "centre" &&
+        geometryId &&
+        point.geometryId === geometryId,
+    ) || null
+  );
+}
+
+/*
+ * RECORD AN ASSOCIATION.
+ *
+ * The student's explicit act - "this curve passes through P2" - becomes data on
+ * both sides: the point names the geometry and the geometry names the point.
+ * Recording it on both is deliberate: an inspector can list a curve's points
+ * without scanning every point, and a point can say what it constrains.
+ */
+export function associatePoint(point, geometryId, role = "path") {
+  if (!point || !geometryId) {
+    return point;
+  }
+
+  return {
+    ...point,
+    geometryId,
+    role: role === "centre" ? "centre" : "path",
+  };
+}
+
+/* Remove the association, leaving the point's exact coordinates untouched. */
+export function disassociatePoint(point) {
+  if (!point) {
+    return point;
+  }
+
+  return {
+    ...point,
+    geometryId: null,
+    parameter: null,
+    role: "path",
+  };
+}
+
 
 
 /*
@@ -483,6 +599,8 @@ export function insertPointOnGeometry({
     y: projected.y,
     geometryId: geometry.id || null,
     parameter: Number.isFinite(projected.t) ? projected.t : null,
+    /* Clicked ON the element: the element owns this place on its path. */
+    association: "placed",
   });
 }
 
@@ -590,6 +708,10 @@ export default {
   withCoordinateMode,
   withAbsolutePosition,
   anchorPoints,
+  anchorsForGeometry,
+  centrePointFor,
+  associatePoint,
+  disassociatePoint,
   isConstraint,
   isMovable,
   insertPointOnGeometry,

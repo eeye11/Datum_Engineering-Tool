@@ -11,7 +11,13 @@
  * (entity-render.js) builds, and returns true only to stop the feature being
  * drawn at all.
  */
-import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
+import { createSvgElement, dashPatternFor, paintColour, scaledStrokeWidth, textNode } from "../svg-primitives.js";
+import {
+    AUXILIARY_FONT_PX,
+    CANVAS_BASELINE,
+    CANVAS_FONT_STACK,
+    SECONDARY_FONT_PX
+} from "../../typography/canvas-typography.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggJunction from "../../../features/workspace/model/fluids/junction.js";
 import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
@@ -1203,25 +1209,28 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
      * tab edits, so a retitled axis or a changed limit moves the visible text with
      * it - the picture never states a scale the panel does not hold.
      */
-    const label = (x, y, text, { anchor = "middle", size = 11, baseline = "middle" } = {}) => {
+    /*
+     * THE AXES' OWN TEXT, at canvas font sizes.
+     *
+     * A tick number is AUXILIARY (12 px) and a title or a graph name is
+     * SECONDARY (14 px) - the shared hierarchy, stated once here for the whole
+     * graph rather than per call. `textNode` cancels the camera, so the numbers
+     * read at the same size at every zoom.
+     */
+    const label = (x, y, text, { anchor = "middle", size = AUXILIARY_FONT_PX, baseline = CANVAS_BASELINE } = {}) => {
         if (!String(text ?? "").trim()) {
             return;
         }
 
         const at = toScreen({ x, y });
 
-        const node = createSvgElement("text", {
-            x: at.x,
-            y: at.y,
+        textNode(svg, at, String(text), {
+            size,
             fill: stroke,
-            "font-size": size,
-            "text-anchor": anchor,
-            "dominant-baseline": baseline
+            anchor,
+            baseline,
+            fontFamily: CANVAS_FONT_STACK
         });
-
-        node.textContent = String(text);
-
-        svg.appendChild(node);
     };
 
     const round = (value) => {
@@ -1234,7 +1243,7 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
         const at = enggPressureProfile.dataToDrawing(entity, { position: value, pressure: axes.yMin });
 
         if (at) {
-            label(at.x, at.y - frame.height * 0.045, round(value), { size: 9 });
+            label(at.x, at.y - frame.height * 0.045, round(value), { size: AUXILIARY_FONT_PX });
         }
     });
 
@@ -1242,7 +1251,7 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
         const at = enggPressureProfile.dataToDrawing(entity, { position: axes.xMin, pressure: value });
 
         if (at) {
-            label(at.x - frame.width * 0.02, at.y, round(value), { anchor: "end", size: 9 });
+            label(at.x - frame.width * 0.02, at.y, round(value), { anchor: "end", size: AUXILIARY_FONT_PX });
         }
     });
 
@@ -1252,14 +1261,14 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
         (area.left + area.right) / 2,
         frame.position.y + frame.height * 0.035,
         `${axes.xTitle}${unitSuffix(axes.xUnit)}`,
-        { size: 11 }
+        { size: SECONDARY_FONT_PX }
     );
 
     label(
         frame.position.x + frame.width * 0.02,
         (area.bottom + area.top) / 2,
         `${axes.yTitle}${unitSuffix(axes.yUnit)}`,
-        { size: 11, anchor: "start" }
+        { size: SECONDARY_FONT_PX, anchor: "start" }
     );
 
     if (enggPressureProfile.graphNameOf(entity).trim()) {
@@ -1267,7 +1276,7 @@ export function drawPressureProfile({ svg, parentSvg, entity, style, toScreen })
             frame.position.x + frame.width / 2,
             frame.position.y + frame.height - frame.height * 0.025,
             enggPressureProfile.graphNameOf(entity),
-            { size: 12 }
+            { size: SECONDARY_FONT_PX }
         );
     }
 
@@ -1392,25 +1401,20 @@ export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
     }
 
     /* The axes' own text, derived from the same fields the Features tab edits. */
-    const label = (x, y, text, { anchor = "middle", size = 11, baseline = "middle" } = {}) => {
+    const label = (x, y, text, { anchor = "middle", size = AUXILIARY_FONT_PX, baseline = CANVAS_BASELINE } = {}) => {
         if (!String(text ?? "").trim()) {
             return;
         }
 
         const at = toScreen({ x, y });
 
-        const node = createSvgElement("text", {
-            x: at.x,
-            y: at.y,
+        textNode(svg, at, String(text), {
+            size,
             fill: stroke,
-            "font-size": size,
-            "text-anchor": anchor,
-            "dominant-baseline": baseline
+            anchor,
+            baseline,
+            fontFamily: CANVAS_FONT_STACK
         });
-
-        node.textContent = String(text);
-
-        svg.appendChild(node);
     };
 
     const round = (value) => {
@@ -1423,7 +1427,7 @@ export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
         const at = enggFlowProfile.dataToDrawing(entity, { position: value, value: axes.yMin });
 
         if (at) {
-            label(at.x, at.y - frame.height * 0.045, round(value), { size: 9 });
+            label(at.x, at.y - frame.height * 0.045, round(value), { size: AUXILIARY_FONT_PX });
         }
     });
 
@@ -1431,7 +1435,7 @@ export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
         const at = enggFlowProfile.dataToDrawing(entity, { position: axes.xMin, value });
 
         if (at) {
-            label(at.x - frame.width * 0.02, at.y, round(value), { anchor: "end", size: 9 });
+            label(at.x - frame.width * 0.02, at.y, round(value), { anchor: "end", size: AUXILIARY_FONT_PX });
         }
     });
 
@@ -1441,14 +1445,14 @@ export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
         (area.left + area.right) / 2,
         frame.position.y + frame.height * 0.035,
         `${axes.xTitle}${unitSuffix(axes.xUnit)}`,
-        { size: 11 }
+        { size: SECONDARY_FONT_PX }
     );
 
     label(
         frame.position.x + frame.width * 0.02,
         (area.bottom + area.top) / 2,
         `${axes.yTitle}${unitSuffix(axes.yUnit)}`,
-        { size: 11, anchor: "start" }
+        { size: SECONDARY_FONT_PX, anchor: "start" }
     );
 
     if (enggFlowProfile.graphNameOf(entity).trim()) {
@@ -1456,7 +1460,7 @@ export function drawFlowProfile({ svg, parentSvg, entity, style, toScreen }) {
             frame.position.x + frame.width / 2,
             frame.position.y + frame.height - frame.height * 0.025,
             enggFlowProfile.graphNameOf(entity),
-            { size: 12 }
+            { size: SECONDARY_FONT_PX }
         );
     }
 
@@ -1541,18 +1545,17 @@ export function drawSectionPlane({ svg, parentSvg, entity, toScreen }) {
     if (identifier.trim()) {
         const at = toScreen(enggSectionPlane.sectionLabelPoint(entity));
 
-        const text = createSvgElement("text", {
-            x: at.x,
-            y: at.y,
+        /*
+         * THE SECTION'S OWN IDENTIFIER IS SECONDARY TYPE, 14 px, and it is
+         * drawn at that size at every zoom like every other canvas label.
+         */
+        textNode(svg, at, identifier, {
+            size: SECONDARY_FONT_PX,
             fill: stroke,
-            "font-size": 12,
-            "text-anchor": "middle",
-            "dominant-baseline": "middle"
+            anchor: "middle",
+            baseline: CANVAS_BASELINE,
+            fontFamily: CANVAS_FONT_STACK
         });
-
-        text.textContent = identifier;
-
-        svg.appendChild(text);
     }
 
     parentSvg.appendChild(svg);

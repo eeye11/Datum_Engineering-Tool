@@ -127,9 +127,17 @@ check("with a tessellated arc", graphics.arc.length > 2, true);
 check("and the two legs as extensions", graphics.extensions.length, 2);
 
 console.log("\nThe arc agrees with the number beside it");
-const stated = Number(String(graphics.text).replace(/[^\d.]/g, ""));
 
-check("the label states the included angle", stated > 0, true);
+/*
+ * NO AUTOMATIC LABEL. An angle dimension created with no label draws its arc
+ * and heads and NO text - the measurement is not the label. What must still
+ * agree is the MEASUREMENT and the drawn sweep.
+ */
+check("an unlabelled angle draws no text", graphics.text, null);
+
+const stated = graphics.measurement.value;
+
+check("the measurement is the included angle", stated > 0, true);
 check(
   "and the arc is drawn through that same angle",
   Math.round(sweptAngle(graphics) * 100) / 100,

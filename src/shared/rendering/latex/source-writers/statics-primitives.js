@@ -403,6 +403,40 @@ export function texText(text) {
 }
 
 /*
+ * ============================================================
+ * A LATEX FONT DECLARATION, WRITTEN PORTABLY
+ * ============================================================
+ *
+ * THE `font` NODE OPTION IS A KEY-VALUE LIST, and a UNIT-LESS `\fontsize{11}{13.2}`
+ * is only valid because the values are TeX DIMENSIONS - so the numbers must say
+ * what unit they are in. Without one they are `\fontsize` arguments TeX reads
+ * as an implicit dimension, which some TikZ parsers accept at top level and
+ * reject inside an option list:
+ *
+ *     font=\sffamily\fontsize{11}{13.2}\selectfont
+ *
+ * That is exactly how a dimension's label came out present in the source and
+ * missing from the picture. `11pt` is the same physical size, is unambiguous
+ * whatever size the document's own type is, and compiles in every TikZ
+ * environment - so it is what is written here, once, for every writer.
+ *
+ * The size itself is never substituted: the caller's number IS the size, and a
+ * missing or nonsensical one falls back to `\normalsize` rather than to an
+ * invented point size.
+ */
+export function fontSizeOption(size, { lineSpacing = 1.2 } = {}) {
+    const points = Number(size);
+
+    if (!Number.isFinite(points) || points <= 0) {
+        return "\\normalsize";
+    }
+
+    const leading = points * (Number(lineSpacing) > 0 ? Number(lineSpacing) : 1.2);
+
+    return `\\fontsize{${num(points, 2)}pt}{${num(leading, 2)}pt}\\selectfont`;
+}
+
+/*
  * A text node. `text` is written as given: a caller that has plain words
  * escapes them with `texText` first, and a caller that has mathematics passes
  * it already wrapped in `$...$`.
@@ -419,7 +453,7 @@ export function textNode({ at, text, anchor = null, colour = null, font = null }
     }
 
     if (Number.isFinite(font)) {
-        options.push(`font=\\fontsize{${num(font, 2)}}{${num(font * 1.2, 2)}}\\selectfont`);
+        options.push(`font=${fontSizeOption(font)}`);
     }
 
     return `\\node${options.length ? `[${options.join(", ")}]` : ""} at ${point(at.x, at.y)} {${text}};`;
@@ -933,7 +967,7 @@ function labelNode({ at, text, colour, font, anchor }) {
     const transform = exportTransformInEffect;
     const size = transform ? transform.font(font) : font;
 
-    return `\\node[anchor=${anchor || "south"}, text=${colour}, font=\\fontsize{${num(size, 2)}}{${num(size * 1.2, 2)}}\\selectfont] at ${point(at.x, at.y)} {${text}};`;
+    return `\\node[anchor=${anchor || "south"}, text=${colour}, font=${fontSizeOption(size)}] at ${point(at.x, at.y)} {${text}};`;
 }
 
 /* A force's own label and its magnitude, kept apart. */

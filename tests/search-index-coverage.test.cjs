@@ -75,6 +75,7 @@ const tools = require(modulePath("tools.js"));
 const fluids = require(modulePath("fluids-tools.js"));
 const dynamics = require(modulePath("dynamics-tools.js"));
 const statics = require(modulePath("statics-tools.js"));
+const heat = require(modulePath("heat-tools.js"));
 const menus = require(modulePath("menu-commands.js"));
 
 const entries = index.searchIndex();
@@ -112,7 +113,8 @@ const addGroups = (groups) => {
       const children =
         dynamics.DYNAMICS_TOOL_MENUS[tool.id] ||
         fluids.FLUIDS_TOOL_MENUS[tool.id] ||
-        statics.STATICS_TOOL_MENUS[tool.id];
+        statics.STATICS_TOOL_MENUS[tool.id] ||
+        heat.HEAT_TOOL_MENUS[tool.id];
 
       if (children) {
         /* The parent is a place, and it is still a row the toolbar draws. */

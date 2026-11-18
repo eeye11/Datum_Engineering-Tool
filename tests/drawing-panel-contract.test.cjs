@@ -45,7 +45,7 @@ const check = (name, ok, detail) => {
 const markup = fs.readFileSync(path.join(projectRoot, "index.html"), "utf8");
 const page = new JSDOM(markup, { url: "http://localhost/" }).window.document;
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 

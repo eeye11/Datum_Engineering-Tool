@@ -38,7 +38,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 
@@ -153,13 +153,20 @@ console.log("\n  a Label's anchor and its text are separate\n");
   const near = annotate.labelLeaderGap(label, { worldPerFontUnit: 1 });
   check("no leader is drawn when the text is at the anchor", near.show === false);
 
-  /* Move the text far away; a leader must appear. */
-  label.geometry.position = { x: 100 + 40, y: 100 };
+  /*
+   * MOVE THE TEXT FAR AWAY; a leader must appear.
+   *
+   * 80 units, not 40: the threshold is 2.5 TEXT HEIGHTS of the label's own canvas
+   * font size (16 px under the shared typography system), so a "well clear"
+   * distance is 40 px of type, not forty drawing units. The rule has always been
+   * in text heights - the font size merely used to default to a hard-coded 12.
+   */
+  label.geometry.position = { x: 100 + 80, y: 100 };
   const far = annotate.labelLeaderGap(label, { worldPerFontUnit: 1 });
   check("a leader appears once the text is well clear of the anchor", far.show === true);
   check(
     "and it runs from the anchor to the text",
-    far.from.x === 100 && far.to.x === 140,
+    far.from.x === 100 && far.to.x === 180,
     JSON.stringify(far),
   );
 }

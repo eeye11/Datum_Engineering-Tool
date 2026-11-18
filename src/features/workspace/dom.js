@@ -80,13 +80,18 @@ export const drawingColor = dom?.getElementById("drawingColor");
 export const drawingLineType = dom?.getElementById("drawingLineType");
 
 /*
- * THE QUICK-ACCESS TEXT SIZE, in points.
+ * THE QUICK-ACCESS TEXT SIZE, in screen pixels.
  *
- * One property (`style.fontSize`) reaches it from here: the Features panel's
- * field writes the same property, and `syncStyleControls` keeps both controls
- * showing the model's value.
+ * One property (`style.fontSize`) reaches the three parts of this control from
+ * here: the number field, the dropdown of common sizes, and the box they sit in.
+ * The Features panel's fields write the same property, and `syncStyleControls`
+ * keeps every view showing the model's value.
  */
+export const drawingFontControl = dom?.getElementById("drawingFontControl");
+
 export const drawingFontSize = dom?.getElementById("drawingFontSize");
+
+export const drawingFontSizeMenu = dom?.getElementById("drawingFontSizeMenu");
 
 /*
  * SPECIAL SYMBOLS, in the quick-access style strip beside Line Type. It opens

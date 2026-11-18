@@ -34,6 +34,18 @@
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import enggDiagramEquations from "../model/analysis/diagram-equations.js";
 
+/*
+ * THE SHARED COORDINATE SYSTEM.
+ *
+ * A graph's axes, ticks and grid are the SAME settings the Sketch Editor and
+ * the Plot Editor edit, so they are read and written through the shared
+ * adapter rather than through a parallel set of fields this module owns.
+ */
+import {
+  applyGridToGeometry,
+  gridFromGeometry,
+} from "../../../shared/sketch/sketch-grid-legacy.js";
+
 /* ============================================================
  * THE TYPES
  * ============================================================ */
@@ -341,6 +353,42 @@ export function gridDisplay(graph) {
 
 /* How far, as a share of the box, the ticks and labels extend past the plot area. */
 export const GRAPH_TICK_INSET = 0.035;
+
+/*
+ * ============================================================
+ * THE COORDINATE SYSTEM THIS GRAPH IS DRAWN WITH
+ * ============================================================
+ *
+ * ONE accessor, answering the shared grid model - the same shape every surface
+ * now paints from. It is a CONVERSION, not a second store: a graph that has
+ * never been migrated is read from its legacy fields by
+ * `gridFromGeometry`, and a graph that has one gets its own settings back.
+ *
+ * Nothing in the model keeps a private copy of these. A caller that wants to
+ * know whether the grid is on asks here, so there is exactly one answer.
+ */
+export function graphGrid(graph) {
+  return gridFromGeometry(graph?.geometry || {});
+}
+
+/*
+ * WRITE THE COORDINATE SETTINGS BACK, in both forms.
+ *
+ * The nested `grid` is the authority from here on; the flat legacy fields are
+ * kept in step so a drawing opened by an older build, or read by a consumer
+ * that has not been migrated, still finds what it expects. See
+ * `sketch-grid-legacy.js` for why the mirror is deliberate rather than
+ * leftover.
+ */
+export function setGraphGrid(graph, grid) {
+  if (!graph?.geometry) {
+    return false;
+  }
+
+  applyGridToGeometry(graph.geometry, grid);
+
+  return true;
+}
 
 /*
  * THE INSET A GRAPH IS MAPPED WITH.
@@ -1571,7 +1619,7 @@ export function createMathPlot(position, width, height, options = {}) {
     return null;
   }
 
-  return createMathObject(
+  const plot = createMathObject(
     MATH_PLOT_TYPE,
     {
       position: copyPoint(position),
@@ -1664,6 +1712,21 @@ export function createMathPlot(position, width, height, options = {}) {
       },
     },
   );
+
+  /*
+   * THE COORDINATE SYSTEM, IN THE SHARED FORM.
+   *
+   * The object above is built from the legacy fields, which is kept - a caller
+   * still passes `showGrid`, `xTickSpacing` and the rest, and an older reader
+   * still finds them. `applyGridToGeometry` then stores the SAME settings in
+   * the one nested shape every surface paints from, so a new graph has both
+   * representations from the moment it exists and neither can drift.
+   */
+  if (plot?.geometry) {
+    applyGridToGeometry(plot.geometry, options.grid || gridFromGeometry(plot.geometry));
+  }
+
+  return plot;
 }
 
 export function createMathEquation(position, options = {}) {

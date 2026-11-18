@@ -85,7 +85,15 @@ const settle = async (ms = 500) => {
   await whenReady();
 
   const { locate } = require("./helpers/source-path.cjs");
-  const src = (file) => require(locate(path.basename(file)));
+  /*
+ * THE PATH IS PASSED THROUGH, NOT REDUCED TO ITS BASENAME.
+ *
+ * `index.js` exists in three folders, and `path.basename` threw away the one
+ * thing that said WHICH - so `source-writers/index.js` resolved to the sketch
+ * module and `registeredWriterIds` was undefined. `locate` understands a path
+ * suffix; this helper must not strip it before asking.
+ */
+const src = (file) => require(locate(file));
 
 /* The source map, for reading one object's region out of the document. */
 const drawingSourceModule = src("drawing-source.js");

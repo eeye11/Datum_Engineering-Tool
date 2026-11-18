@@ -133,6 +133,39 @@ export function worldToClient(point, options = {}) {
 }
 
 /*
+ * THE SAME PROJECTION, IN THE CANVAS'S OWN PIXEL FRAME.
+ *
+ * `worldToClient` answers in WINDOW pixels, which is what a `position: fixed`
+ * prompt needs. An editing field that is a CHILD of the canvas needs the point
+ * in the canvas's own space instead - the canvas's top-left as (0,0).
+ *
+ * THE TWO FRAMES ARE NOT INTERCHANGEABLE, and treating one as the other is what
+ * put every text field at the canvas's own offset from the word it was editing:
+ * the box was positioned with window coordinates inside a canvas-local frame, so
+ * it sat exactly `rect.left` and `rect.top` away from the caret. One projection,
+ * asked for the frame it is needed in.
+ */
+export function worldToCanvas(point, options = {}) {
+  const bounds = options.bounds || canvasBounds(canvasElement());
+
+  if (!bounds) {
+    return { x: 0, y: 0, scale: 1 };
+  }
+
+  const state = options.state || null;
+  const camera = options.camera || state?.camera || {};
+  const projection = createProjection(
+    camera,
+    bounds,
+    options.basePixelsPerUnit,
+  );
+
+  const local = projection.toPixels(point || centreOf(bounds));
+
+  return { x: local.x, y: local.y, scale: projection.scale };
+}
+
+/*
  * Watch a camera change.
  *
  * The teacher's rule is that the prompt must stay ON the node - so when the
@@ -311,7 +344,19 @@ export function clientPointForObject(object, options = {}) {
  * own text - the live preview - visible above the field rather than under it,
  * without moving the node itself: only the PROMPT is offset, never the model.
  */
-export function anchorRectAt(point, offset = { x: 10, y: 6 }) {
+/*
+ * A ZERO-SIZE RECT AT THE TEXT'S OWN POINT - NO NUDGE.
+ *
+ * This used to default to `{ x: 10, y: 6 }`, a ten-pixel right and six-pixel
+ * down nudge applied to EVERY label anchor. The editor then added its own four
+ * pixels and a whole font size of lift on top, so the field sat well away from
+ * the point the history text would occupy - and the words jumped when they were
+ * committed.
+ *
+ * The rect is now the anchor exactly. A caller that genuinely needs an offset
+ * passes one; the default belongs to the text, not beside it.
+ */
+export function anchorRectAt(point, offset = { x: 0, y: 0 }) {
   const x = Number(point?.x) || 0;
   const y = Number(point?.y) || 0;
 
@@ -340,10 +385,26 @@ export function resolveTextEntryAnchor(object, options = {}) {
     return null;
   }
 
-  const raw =
-    options.point && finitePoint(options.point)
-      ? worldToClient(options.point, options)
-      : clientPointForObject(object, options);
+  /*
+   * THE ANCHOR IS PROJECTED INTO THE CANVAS'S OWN FRAME.
+   *
+   * The rect below says `frame: "canvas"`, and the editor relies on that: it
+   * mounts the field INSIDE the canvas and places it with no offset arithmetic.
+   * That is only true if the point is really canvas-local - and it was not.
+   * `clientPointForObject` answers in WINDOW pixels, so a field placed from it
+   * with no subtraction landed `rect.left` and `rect.top` away from its own
+   * caret - the exact displacement every text tool showed.
+   *
+   * `worldToCanvas` is the same projection asked for the canvas frame, so the
+   * frame the rect claims and the frame the point is in now agree.
+   */
+  const world = modelPointForTextEntry(object);
+
+  const raw = world
+    ? worldToCanvas(world, options)
+    : options.point && finitePoint(options.point)
+      ? worldToCanvas(options.point, options)
+      : null;
 
   if (!raw) {
     return null;
@@ -351,9 +412,29 @@ export function resolveTextEntryAnchor(object, options = {}) {
 
   return {
     point: raw,
-    rect: anchorRectAt(raw, options.offset),
+
+    /*
+     * THE RECT IS IN THE CANVAS'S OWN FRAME, and says so.
+     *
+     * `raw` is projected through the canvas's box, so it is already a point on
+     * the drawing surface - `frame: "canvas"` is what tells the editor to mount
+     * its field INSIDE the canvas rather than as a window overlay. The editor
+     * then needs no offset arithmetic and the box cannot land off the sheet.
+     */
+    rect: { ...anchorRectAt(raw, options.offset), frame: "canvas" },
   };
 }
+
+/*
+ * THE BOX'S DEFINITION, REACHABLE FROM A TEST.
+ *
+ * The field's dimensions are stated once, in `TEXT_ENTRY_BOX`, and this module
+ * is what turns them into a window point for the editor. Re-exporting the
+ * definition beside that conversion means a test can check the field against
+ * the SAME numbers the drawing and its source are written from, rather than
+ * against a second copy of them.
+ */
+export { TEXT_ENTRY_BOX, TEXT_ENTRY_BOX_PT } from "../../typography/canvas-typography.js";
 
 export default {
   canvasElement,

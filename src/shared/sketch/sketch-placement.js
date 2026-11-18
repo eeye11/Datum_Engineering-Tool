@@ -25,13 +25,15 @@
  * -------------------
  * The geometry, its appearance, the point constraints that travel with it, and
  * the transform. NOT the editing aids: markers, handles, selection outlines and
- * the correction preview are things the editor draws. Axes and grid transfer
+ * the correction preview are things the editor draws. The working grid is a view
+ * setting, not geometry, and is included only when the student asks for it. Axes and grid transfer
  * only when the student has asked for them, because a working grid is not
  * usually part of an engineering drawing.
  */
 
 import { resolvePoints } from "./sketch-points.js";
 import { normaliseGrid } from "./sketch-grid.js";
+import { elementExtent } from "./sketch-curve-analysis.js";
 
 /* The transform a placement starts from: no offset, no rotation, unit scale. */
 export const IDENTITY_TRANSFORM = Object.freeze({
@@ -143,7 +145,55 @@ export function placeElement(element, transform) {
     original: element.original
       ? element.original.map((point) => transformPoint(point, transform))
       : null,
+    /*
+     * THE TREND TRAVELS WITH THE SHAPE, so a placed curve still reports its
+     * increasing/decreasing behaviour - and the turning and inflection points
+     * it has are moved with it rather than recomputed from a placement.
+     */
+    correction: element.correction
+      ? {
+          ...element.correction,
+          trend: transformTrend(element.correction.trend, transform),
+        }
+      : null,
   };
+}
+
+/* A stored trend, with its turning and inflection points placed. */
+function transformTrend(trend, transform) {
+  if (!trend) {
+    return null;
+  }
+
+  return {
+    ...trend,
+    turnings: (trend.turnings || []).map((point) => ({
+      ...point,
+      ...transformPoint(point, transform),
+    })),
+    inflections: (trend.inflections || []).map((point) => ({
+      ...point,
+      ...transformPoint(point, transform),
+    })),
+  };
+}
+
+/*
+ * THE TRUE EXTENT OF PLACED GEOMETRY.
+ *
+ * A circle's leftmost point is `centre.x - radius`, not its nearest sample; a
+ * curve's extremes are where its cubic's derivative is zero, not its control
+ * points. The answer is used to place the sketch's box and to fit the view, so
+ * it must be the geometry's real bounding points.
+ */
+export function placedExtent(geometry = []) {
+  return (Array.isArray(geometry) ? geometry : []).flatMap((element) => {
+    if (!element || element.visible === false) {
+      return [];
+    }
+
+    return elementExtent(element);
+  });
 }
 
 /*
@@ -264,6 +314,7 @@ export default {
   transformPoint,
   alignTransform,
   placeElement,
+  placedExtent,
   placementPackage,
   buildCoordinateGeometry,
   previewAt,

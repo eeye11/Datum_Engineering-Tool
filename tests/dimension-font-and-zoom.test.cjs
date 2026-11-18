@@ -1,16 +1,22 @@
 /*
  * ============================================================
- * A DIMENSION'S SIZE IS A DOCUMENT PROPERTY
+ * A DIMENSION'S LABEL: ONE SIZE, ONE UNIT, ONE PROPERTY
  * ============================================================
  *
  * Three claims the brief makes, held to the geometry and the source:
  *
- *   ZOOM IS A VIEWPORT. The drawing and its labels scale together on screen, and
- *   nothing a zoom does reaches a stored size, a reserved box or a TikZ value.
+ *   ONE UNIT. A dimension's `style.fontSize` is a CANVAS font size - a screen
+ *   pixel size - like every other text object's. The PRINTED size (11 pt) is a
+ *   separate figure: it is what the source states and the panel quotes, and it
+ *   is derived from the style, never stored as a second size.
  *
- *   ONE SIZE, THREE VIEWS. The Features panel field, the quick-access control and
- *   the exported `\fontsize` state the same number, and changing it through any
- *   of them changes the same property.
+ *   ZOOM IS A VIEWPORT. The number keeps its screen size at every zoom; what a
+ *   zoom changes is the box it reserves ON THE SHEET, which is the screen box
+ *   converted into drawing units - and nothing a zoom does reaches a stored
+ *   size, the measurement, the dimension line or a TikZ value.
+ *
+ *   ONE PROPERTY, THREE VIEWS. The Features panel field, the quick-access control
+ *   and the exported `\fontsize` all follow that one property.
  *
  *   NO HANDLE ON THE LABEL. The control a dimension offers is its placement, and
  *   it is clear of the number at every zoom - the text is not a handle.
@@ -78,32 +84,42 @@ function rectangleWithWidth(overrides = {}) {
 
 /* ======================================================= document size */
 
-test("a dimension's default label is 11 pt", () => {
+test("a new dimension label is 14 px on screen and prints at 11 pt", () => {
   const { dimension } = rectangleWithWidth();
 
   const graphics = dimensions.graphicsFor(dimension, state);
 
-  assert.equal(graphics.label.fontPt, 11, "11 pt, not 8.25 or 13");
+  assert.equal(graphics.label.fontSize, 14, "the secondary canvas role");
+  assert.equal(graphics.label.fontPt, 11, "the printed size, not 8.25 or 13");
 
   /* And the source states that same 11. */
   const source = writer(dimension, { state, allObjects: state.objects });
 
-  assert.match(source, /\\fontsize\{11(\.0+)?\}\{/, source);
+  /* With its unit: a unit-less \fontsize inside a node's options is not portable. */
+  assert.match(source, /\\fontsize\{11(\.0+)?pt\}\{/, source);
 });
 
-test("the label's size is a style property, not a screen measurement", () => {
+test("the label's size is one style property, read by the canvas and the source", () => {
   const { dimension } = rectangleWithWidth();
 
   /* Set the size on the style, as the panel and the quick control do. */
-  dimension.style = { ...(dimension.style || {}), fontSize: 16 };
+  dimension.style = { ...(dimension.style || {}), fontSize: 20 };
 
   const graphics = dimensions.graphicsFor(dimension, state);
 
-  assert.equal(graphics.label.fontPt, 16);
+  assert.equal(graphics.label.fontSize, 20, "the pixels the canvas paints");
+  assert.equal(graphics.label.fontPt, 20, "and the figure the source prints");
+
+  const source = writer(dimension, { state, allObjects: state.objects });
+
+  assert.match(source, /\\fontsize\{20(\.0+)?pt\}\{/, source);
+
+  /* The construction's own type height is in drawing units, at 20 pt of paper. */
   assert.ok(
-    near(graphics.label.fontWorld, 16 / layout.POINTS_PER_MM, 1e-9),
-    "16 pt is 16/2.835 mm of type in a drawing whose unit is 1 mm",
+    near(graphics.label.fontWorld, 20 / layout.POINTS_PER_MM, 1e-9),
+    "20 pt is 20/2.835 mm of type in a drawing whose unit is 1 mm",
   );
+  void model;
 });
 
 /* ============================================================== zoom */
@@ -124,6 +140,23 @@ test("zooming changes no size, no box and no source", () => {
       at.label.fontPt,
       at1.label.fontPt,
       `the printed size at zoom ${zoom}`,
+    );
+
+    /*
+     * AND THE SCREEN SIZE IS THE SAME AT EVERY ZOOM. This is the property the
+     * brief asks for: a number that measures 14 px at 100% measures 14 px at
+     * 25%, at 400% and everywhere between.
+     */
+    assert.equal(
+      at.label.fontSize,
+      at1.label.fontSize,
+      `the canvas size at zoom ${zoom}`,
+    );
+
+    assert.equal(
+      at.label.screenWidth,
+      at1.label.screenWidth,
+      `the screen width of the number at zoom ${zoom}`,
     );
 
     assert.ok(
@@ -167,7 +200,8 @@ test("the quick-access size writes the same property the panel reads", () => {
 
   const textControl = require(locate("font-size-control.js"));
 
-  assert.equal(textControl.DEFAULT_FONT_SIZE_PT, 11);
+  /* The general default for new canvas text, in screen pixels. */
+  assert.equal(textControl.DEFAULT_FONT_SIZE_PT, 16);
 
   /* Select the dimension, then set a size through the shared control. */
   state.selection.selectedObjectIds = [dimension.id];
@@ -180,12 +214,17 @@ test("the quick-access size writes the same property the panel reads", () => {
 
   assert.equal(stored.style.fontSize, 17, "the object carries the new size");
 
-  /* The panel reads the SAME field, and the source prints the same number. */
+  /*
+   * THE PANEL READS THE SAME FIELD, and the source prints the same number:
+   * a canvas size is the one property, and the figure a TikZ node states is
+   * that same number in points - not an independently maintained second size.
+   */
   const graphics = dimensions.graphicsFor(stored, state);
   const source = writer(stored, { state, allObjects: state.objects });
 
-  assert.equal(graphics.label.fontPt, 17);
-  assert.match(source, /\\fontsize\{17(\.0+)?\}\{/);
+  assert.equal(graphics.label.fontSize, 17, "the size the canvas paints");
+  assert.equal(graphics.label.fontPt, 17, "the size the source prints");
+  assert.match(source, /\\fontsize\{17(\.0+)?pt\}\{/);
 });
 
 test("changing the size leaves the measurement and the geometry alone", () => {
@@ -231,6 +270,8 @@ test("a size change is one undoable step", () => {
 
 test("with nothing text-sized selected the size becomes the default", () => {
   const { rectangle } = rectangleWithWidth();
+
+  state.styleDefaults = { ...state.styleDefaults, fontSize: 16 };
 
   const textControl = require(locate("font-size-control.js"));
 

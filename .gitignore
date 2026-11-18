@@ -52,3 +52,14 @@ coverage/
 
 # Golden-master recordings (tests/e2e/golden-scenario.mjs)
 *.golden.json
+
+# Organized scratch space: one-off probes, QA captures and dumps moved out of
+# the repo root and tests/ so only real sources and tests are tracked.
+scratch/
+tests/scratch/
+# Golden-master recordings made by hand, not by tests/e2e/golden-scenario.mjs
+golden-now.json
+golden-v2.json
+gs-*.json
+support
+

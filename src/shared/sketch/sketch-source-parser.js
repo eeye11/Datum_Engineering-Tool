@@ -32,6 +32,49 @@ import {
 } from "./sketch-appearance.js";
 import { makeGeometry } from "./sketch-document.js";
 
+/* The sampled outline of a circle, in model coordinates. */
+function circleOutline(centre, radius, count = 64) {
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+
+    return {
+      x: centre.x + radius * Math.cos(angle),
+      y: centre.y + radius * Math.sin(angle),
+    };
+  });
+}
+
+/* The sampled outline of an axis-aligned ellipse. */
+function ellipseOutline(centre, radiusX, radiusY, count = 64) {
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const angle = (index / count) * Math.PI * 2;
+
+    return {
+      x: centre.x + radiusX * Math.cos(angle),
+      y: centre.y + radiusY * Math.sin(angle),
+    };
+  });
+}
+
+/* The sampled points of an arc, in its own direction. */
+function arcOutline(centre, radius, startAngle, endAngle, count = 32) {
+  let from = startAngle;
+  let to = endAngle;
+
+  if (to < from) {
+    while (to < from) to += Math.PI * 2;
+  }
+
+  return Array.from({ length: count + 1 }, (_, index) => {
+    const angle = from + ((to - from) * index) / count;
+
+    return {
+      x: centre.x + radius * Math.cos(angle),
+      y: centre.y + radius * Math.sin(angle),
+    };
+  });
+}
+
 /* A number, or null. */
 function number(text) {
   const value = Number(text);
@@ -193,12 +236,17 @@ function parseDraw(command, colours, index) {
   );
 
   if (circle) {
+    const centre = { x: Number(circle[1]), y: Number(circle[2]) };
+    const radius = Number(circle[3]);
+
     return {
       element: makeGeometry({
         kind: "circle",
         name: `C${index}`,
-        centre: { x: Number(circle[1]), y: Number(circle[2]) },
-        radius: Number(circle[3]),
+        centre,
+        radius,
+        /* The circumference, so the model's own points agree with the maths. */
+        points: circleOutline(centre, radius),
         appearance,
       }),
     };
@@ -209,14 +257,19 @@ function parseDraw(command, colours, index) {
   );
 
   if (ellipse) {
+    const centre = { x: Number(ellipse[1]), y: Number(ellipse[2]) };
+    const radiusX = Number(ellipse[3]);
+    const radiusY = Number(ellipse[4]);
+
     return {
       element: makeGeometry({
         kind: "ellipse",
         name: `E${index}`,
-        centre: { x: Number(ellipse[1]), y: Number(ellipse[2]) },
-        radiusX: Number(ellipse[3]),
-        radiusY: Number(ellipse[4]),
+        centre,
+        radiusX,
+        radiusY,
         rotation: ellipse[5] ? (Number(ellipse[5]) * Math.PI) / 180 : 0,
+        points: ellipseOutline(centre, radiusX, radiusY),
         appearance,
       }),
     };
@@ -232,13 +285,29 @@ function parseDraw(command, colours, index) {
     const x2 = Number(rectangle[3]);
     const y2 = Number(rectangle[4]);
 
+    const corner = { x: Math.min(x1, x2), y: Math.min(y1, y2) };
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+
     return {
       element: makeGeometry({
         kind: "rectangle",
         name: `R${index}`,
-        corner: { x: Math.min(x1, x2), y: Math.min(y1, y2) },
-        width: Math.abs(x2 - x1),
-        height: Math.abs(y2 - y1),
+        corner,
+        width,
+        height,
+        /*
+         * THE RECTANGLE'S OWN CORNERS ARE PART OF THE MODEL - a point can be
+         * placed on an edge and a bounds calculation must see all four - so the
+         * path is stored beside the parameters rather than derived by each
+         * reader.
+         */
+        points: [
+          corner,
+          { x: corner.x + width, y: corner.y },
+          { x: corner.x + width, y: corner.y + height },
+          { x: corner.x, y: corner.y + height },
+        ],
         closed: true,
         appearance,
       }),
@@ -261,21 +330,17 @@ function parseDraw(command, colours, index) {
     };
 
     /*
-     * THE END POINT IS READ, NOT RECOMPUTED.
-     *
-     * TikZ writes the arc's end coordinate after the options, and it is the
-     * value the generator wrote. Recomputing it from the angles and the radius
-     * gives a number that differs in the last decimal - which is enough to make
-     * a round trip produce different source. The written coordinate is the
-     * truth, so it is used when it is there.
+     * THE WRITTEN END POINT IS THE ONE THE GENERATOR WROTE, so it is the one
+     * the model keeps. Recomputing it from the rounded angles lands a thousandth
+     * away and makes a round trip produce different source; the sampled outline
+     * therefore uses the angles, which are the arc's mathematics, and the end
+     * coordinate only when the source gave one.
      */
-    const end =
-      arc[6] !== undefined && arc[7] !== undefined
-        ? { x: Number(arc[6]), y: Number(arc[7]) }
-        : {
-            x: centre.x + radius * Math.cos(endAngle),
-            y: centre.y + radius * Math.sin(endAngle),
-          };
+    const outline = arcOutline(centre, radius, startAngle, endAngle);
+
+    if (arc[6] !== undefined && arc[7] !== undefined) {
+      outline[outline.length - 1] = { x: Number(arc[6]), y: Number(arc[7]) };
+    }
 
     return {
       element: makeGeometry({
@@ -283,9 +348,17 @@ function parseDraw(command, colours, index) {
         name: `A${index}`,
         centre,
         radius,
-        rotation: startAngle,
+        /*
+         * THE ANGLES ARE THE ARC'S MATHEMATICS; `rotation` used to carry the
+         * start angle, which made the shape's rotation and its extent the same
+         * field and lost the end angle entirely. Both angles are now stored as
+         * what they are, and the points are sampled from them.
+         */
+        startAngle,
+        endAngle,
+        clockwise: endAngle < startAngle,
         appearance,
-        points: [{ x: Number(arc[1]), y: Number(arc[2]) }, end],
+        points: outline,
         closed: false,
       }),
     };

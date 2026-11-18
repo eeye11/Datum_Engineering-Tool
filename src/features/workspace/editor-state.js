@@ -8,6 +8,7 @@ import enggSheets from "../../components/layout/workspace/sheets.js";
 import enggPipeDuct from "./model/fluids/pipe-duct.js";
 import enggPipeAssembly from "./model/fluids/pipe-assembly.js";
 import enggFlowArrow from "./model/fluids/flow-arrow.js";
+import enggHeatModel from "./model/heat-transfer/heat-model.js";
 
 export const drawingState = enggDrawingState.createDrawingState();
 
@@ -301,5 +302,18 @@ enggFlowArrow.setHostLookup(lookupEditorObject);
  * for the same reason, and it too reads the live document at call time.
  */
 enggPipeAssembly.setObjectListLookup(() => drawingState.objects || []);
+
+/*
+ * AND THE HEAT TRANSFER NAMING PASS.
+ *
+ * A Heat Transfer object is named after the TOOL that made it, and the number
+ * is the next free one for that name across the WHOLE sheet. The model cannot
+ * import the live document (cycle), so the sheet is published here - read at
+ * call time, so a name is correct after an Undo, a sheet switch or a reopened
+ * file with no re-wiring.
+ */
+enggHeatModel.setHeatObjectListLookup(() => drawingState.objects || []);
+
+
 
 export const objectOnSheet = lookupEditorObject;

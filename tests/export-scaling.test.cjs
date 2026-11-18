@@ -39,7 +39,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 createHarness(projectRoot, JSDOM, require);
 
@@ -415,7 +415,7 @@ const labelled = statics.serializeStaticsObject(
 
 check(
   "a label is printed at the scaled size, above the readable floor",
-  labelled.includes("\\fontsize{6}") && !labelled.includes("\\fontsize{3.1}"),
+  labelled.includes("\\fontsize{6pt}") && !labelled.includes("\\fontsize{3.1}"),
   labelled,
 );
 

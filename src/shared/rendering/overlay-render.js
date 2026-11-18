@@ -13,6 +13,25 @@ import { createSvgElement, paintColour } from "./svg-primitives.js";
 import { SVG_NAMESPACE } from "../../features/workspace/constants.js";
 import { selectionBounds, selectionCorners } from "../selection/selection-transform.js";
 import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
+import {
+    LINE_SPACING,
+    SECONDARY_FONT_PX,
+    fontSizeOf
+} from "../typography/canvas-typography.js";
+
+    /*
+     * THE SIZE A COORDINATE SYSTEM'S AXIS LABELS ARE DRAWN AT.
+     *
+     * Stated once and read by BOTH the painter (`canvas-render.js`) and this
+     * overlay's frame, because a box drawn at a different size from the glyphs
+     * inside it is the defect this constant exists to prevent. It is a secondary
+     * role of the shared typography system, not a number chosen here.
+     */
+    const AXIS_LABEL_FONT_PX = SECONDARY_FONT_PX;
+
+    function axisLabelFontSize() {
+        return fontSizeOf(AXIS_LABEL_FONT_PX, SECONDARY_FONT_PX);
+    }
 
 
     /*
@@ -564,6 +583,15 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
     }
 
     function renderEngineeringGrid(svg, state, bounds) {
+        /*
+         * THE GRID IS THE PAPER, SO IT IS PAINTED FIRST.
+         *
+         * It is a grid of faint lines across the whole sheet, and the overlay
+         * is a single flat SVG - so drawing it LAST put it on top of every
+         * other aid in that layer, and the first version of it (appended after
+         * the geometry) covered the live features too. Prepending puts it at the
+         * bottom, which is what a sheet's ruling is.
+         */
         const spacing = Number(state.grid?.spacing);
         if (!state.grid?.visible || !Number.isFinite(spacing) || spacing <= 0) return;
         const scale = enggDrawingState.BASE_PIXELS_PER_UNIT * state.camera.zoom;
@@ -613,6 +641,21 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
             fill: "none",
             "stroke-width": 0.65
         }));
+
+        /*
+         * AND IT GOES UNDERNEATH EVERYTHING ALREADY IN THE LAYER.
+         *
+         * The renderer calls this before it draws the features, but the layer
+         * the picture is compiled into may be filled first on a repaint that
+         * reuses an overlay - so the grid is moved to the front of the layer's
+         * children unconditionally, and it cannot end up over the ink whichever
+         * order the calls happen to run in.
+         */
+        const grid = svg.lastElementChild;
+
+        if (grid && svg.firstElementChild !== grid) {
+            svg.insertBefore(grid, svg.firstElementChild);
+        }
     }
 
     /*
@@ -634,6 +677,22 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
     }
 
     function renderSelectionHandles(svg, state, bounds) {
+        /*
+         * NOTHING IS GRIPPED BY A SELECTION WHILE ITS TEXT IS BEING TYPED.
+         *
+         * A note, a label or an equation is SELECTED when its field opens, so
+         * the selection frame and the handles were drawn around the words being
+         * typed - a dashed blue rectangle and a green outline AROUND the editor.
+         * That is what read as "two boxes": not a second text box, but the
+         * selection chrome for the box the student was already inside.
+         *
+         * The editor is the whole interaction while it is open, so the
+         * selection is not shown. It returns the moment the field closes.
+         */
+        if (state.textEntryObjectId) {
+            return;
+        }
+
         const selected = new Set(state.selection?.selectedObjectIds || []);
         if (!selected.size) return;
         const toScreen = point => enggDrawingState.engineeringToScreen(point, bounds, state);
@@ -749,10 +808,16 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
 
                     const lines = text.split("\n");
 
+                    /*
+                     * THE SIZE THE LABEL IS DRAWN AT, read from the same
+                     * typography rules `textNode` paints with - so the frame is
+                     * a SCREEN box around glyphs of exactly this size. It does
+                     * not grow with the zoom, because neither do the glyphs.
+                     */
                     const fontSize =
-                        Number(annotation.style?.fontSize) || 12;
+                        fontSizeOf(Number(annotation.style?.fontSize), SECONDARY_FONT_PX);
 
-                    const lineHeight = fontSize * 1.2;
+                    const lineHeight = fontSize * LINE_SPACING;
 
                     const longest = lines.reduce(
                         (max, line) => Math.max(max, line.length),
@@ -827,7 +892,7 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
                     return;
                 }
 
-                const fontSize = 13;
+                const fontSize = axisLabelFontSize();
 
                 const width =
                     label.text.length * fontSize * 0.62 +
@@ -976,6 +1041,8 @@ import { cylinderPoint, isPistonCylinder, pistonFraction, stopperFraction } from
     }
 
 export {
+    AXIS_LABEL_FONT_PX,
+    axisLabelFontSize,
     renderSnapMarker,
     renderInferenceLine,
     renderSnapIndicator,
@@ -1050,7 +1117,22 @@ export {
         }
 
         state.objects
-            .filter(object => selected.has(object?.id))
+            /*
+             * NO OUTLINE AROUND THE OBJECT BEING TYPED INTO.
+             *
+             * This draws a dashed green rectangle around every selected
+             * object. Opening a text field selects its object, so that outline
+             * was painted around the editor - the SECOND box beside the field
+             * itself, which is why an empty note showed one rectangle and a note
+             * being typed showed two.
+             *
+             * The editor is the visible object while the field is open, so the
+             * outline stands down and comes back with the commit.
+             */
+            .filter(
+                object =>
+                    selected.has(object?.id) && state.textEntryObjectId !== object.id
+            )
             .forEach(object => {
                 let frame;
 

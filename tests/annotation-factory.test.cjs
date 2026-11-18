@@ -115,26 +115,31 @@ check(
   100
 );
 /*
- * THE UNIT IS PART OF THE VALUE.
+ * THE MEASUREMENT IS REPORTED WITH ITS UNIT - AND IT IS NOT THE LABEL.
  *
- * This expected a bare "100.00", on the reasoning that the figure and its
- * unit were separate concerns. But a dimension with no unit is ambiguous with
- * every other quantity of the same magnitude on the sheet, and the unit is
- * not a decoration over the number - it is what makes the number mean one
- * particular thing. "100 mm" and "100 N" are different claims, and printing
- * only the figure asks the reader to guess which one is on the sheet.
+ * A dimension created with no label draws no text at all; the number the
+ * geometry states is `describeMeasurement`'s answer, which carries the unit
+ * because a bare figure is ambiguous with every other quantity of the same
+ * magnitude. `formatMeasurement` answers only what the DRAWING shows, which
+ * here is nothing.
  */
 check(
   "and reads out with its unit, always",
-  dimensionModel.formatMeasurement(built, scene),
+  dimensionModel.describeMeasurement(built, scene),
   "100.00 mm"
 );
 
 check(
   "and never as a bare figure",
-  String(dimensionModel.formatMeasurement(built, scene))
+  String(dimensionModel.describeMeasurement(built, scene))
     .trim()
     .match(/^[\d.]+$/),
+  null,
+);
+
+check(
+  "while an unlabelled dimension prints no text",
+  dimensionModel.formatMeasurement(built, scene),
   null,
 );
 
@@ -214,6 +219,9 @@ console.log("\nZoom is a view, not a measurement");
  * against is a measurement changing with the view. Geometry stays in world
  * units; label clearance may adjust to keep zoom-scaled glyphs off the line.
  */
+/* THE DIMENSION IS LABELLED, so there is a frame to compare across zooms. */
+const labelledBuilt = { ...built, dimensionKind: "variable", content: "L" };
+
 const atZoom = (zoom) => {
   const zoomed = {
     ...scene,
@@ -221,9 +229,9 @@ const atZoom = (zoom) => {
   };
 
   return {
-    value: dimensionModel.measurementFor(built, zoomed).value,
-    text: dimensionModel.formatMeasurement(built, zoomed),
-    graphics: dimensionModel.graphicsFor(built, zoomed)
+    value: dimensionModel.measurementFor(labelledBuilt, zoomed).value,
+    text: dimensionModel.formatMeasurement(labelledBuilt, zoomed),
+    graphics: dimensionModel.graphicsFor(labelledBuilt, zoomed)
   };
 };
 

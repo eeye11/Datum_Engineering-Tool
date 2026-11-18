@@ -2,8 +2,11 @@ import {
   dimensionArrowMm,
   dimensionLabelSize,
   dimensionPenMm,
-  DIMENSION_DEFAULT_FONT_PT,
 } from "../../../../shared/geometry/dimension-layout.js";
+import {
+  SECONDARY_FONT_PX,
+  DEFAULT_CANVAS_FONT_PX,
+} from "../../../../shared/typography/canvas-typography.js";
 /*
  * The Dimension object.
  *
@@ -159,15 +162,25 @@ function createDimension({
   }
   const normalisedRefs = normaliseReferences(refs);
 
+  /*
+   * A NEW DIMENSION STARTS AT THE SYSTEM'S SECONDARY SIZE ON SCREEN.
+   *
+   * `style.fontSize` is a canvas font size - screen pixels - like every other
+   * text object's. The PRINTED size (11 pt) is a separate figure the source
+   * writer states and the panel quotes, and it is derived in
+   * `dimensionLabelSize`; the two are not the same number and never were meant
+   * to be. Starting at 14 px, not 16, is the intentional secondary role: a
+   * dimension number is supporting information beside the geometry.
+   */
   const textStyle = {
-    fontSize: DIMENSION_DEFAULT_FONT_PT,
+    fontSize: SECONDARY_FONT_PX,
     textAlign: "center",
     bold: false,
     italic: false,
     ...style,
   };
 
-  const fontSize = Number(textStyle.fontSize) > 0 ? Number(textStyle.fontSize) : DIMENSION_DEFAULT_FONT_PT;
+  const fontSize = Number(textStyle.fontSize) > 0 ? Number(textStyle.fontSize) : DEFAULT_CANVAS_FONT_PX;
 
   return {
     id: newDimensionId(),
@@ -227,16 +240,24 @@ function createDimension({
       /*
        * THE LABEL'S TYPE IS A DOCUMENT PROPERTY, STATED HERE.
        *
-       * `fontSize` is in POINTS - the number the Features panel, the
-       * quick-access control and the exported `\fontsize` all quote - and it
-       * defaults to the readable 11 pt rather than being left absent for three
-       * consumers to answer differently. `textAlign`, `bold`, `italic` and the
-       * differential `offsetX`/`offsetY` (in drawing units) belong to the label
-       * as well; they never touch the measurement, the defining points or the
-       * dimension line's placement.
+       * `fontSize` is a CANVAS font size - screen pixels - the number the
+       * Features panel, the quick-access control and the canvas all use. The
+       * PRINTED size is a separate figure the source statement quotes (11 pt by
+       * default), derived when the label is drawn; the two are not the same
+       * number and are deliberately not stored as two competing sizes.
+       * `textAlign`, `bold`, `italic` and the differential `offsetX`/`offsetY`
+       * (in drawing units) belong to the label as well; they never touch the
+       * measurement, the defining points or the dimension line's placement.
        */
       ...textStyle,
       fontSize,
+      /*
+       * WHAT THE CANVAS DRAWS, kept beside the canvas style so a consumer with
+       * the object but not its style can still state a size. Expressed in the
+       * SAME unit as `style.fontSize` (the canvas size), deriving the printed
+       * point size only where the source needs it.
+       */
+      printSizePt: fontSize,
     },
 
     /*
@@ -1222,9 +1243,55 @@ function formatMeasurement(
   dimension,
   state
 ) {
+  void state;
+
+  /*
+   * THE LABEL IS THE STUDENT'S, AND ONLY THE STUDENT'S.
+   *
+   * A dimension's measured length is a fact about the geometry; the text
+   * printed on the drawing is whatever the student chose to write there. They
+   * are two different things, and this function answers only the second. It
+   * used to fall back to the formatted measurement, which is why a dimension
+   * showed "189.18 mm" before the student had typed anything - and why a typed
+   * "5" could come back as "5 mm".
+   *
+   * So: a typed label is returned exactly as typed, and NO label means NO
+   * text. The measurement is still computed (see `measurementFor`) and still
+   * decides the geometry, but it is never turned into display text on its own.
+   */
+  if (dimension?.dimensionKind === "variable") {
+    const content = String(dimension.content ?? "").trim();
+
+    return content || null;
+  }
+
+  const override =
+    typeof dimension?.label === "string"
+      ? dimension.label.trim()
+      : "";
+
+  if (override) {
+    return override;
+  }
+
+  return null;
+}
+
+/*
+ * The measurement, formatted for a status line or a tooltip.
+ *
+ * NOT the dimension's label. This is the number the geometry states, offered
+ * to a caller that wants to TELL the student what was measured - never to a
+ * caller that is drawing the dimension.
+ */
+function describeMeasurement(
+  dimension,
+  state
+) {
   if (dimension?.dimensionKind === "variable") {
     return isResolved(dimension, state) ? String(dimension.content || "") : null;
   }
+
   const override =
     typeof dimension?.label === "string"
       ? dimension.label.trim()
@@ -1587,9 +1654,17 @@ function graphicsFor(
     state
   );
 
+  /*
+   * THE TEXT IS OPTIONAL; THE CONSTRUCTION IS NOT.
+   *
+   * A dimension with no label still draws its witness lines, its dimension
+   * line and its arrowheads - that is the measurement, and it is what the
+   * student placed. Only the text is absent. Requiring text here is what made
+   * an unlabelled dimension vanish entirely.
+   */
   const text = formatMeasurement(dimension, state);
 
-  if (!measurement || !text) {
+  if (!measurement) {
     return null;
   }
 
@@ -1815,10 +1890,16 @@ function dimensionNormal(dimension, direction) {
  * can be read at a glance and one the reader has to tilt their head
  * for. It is done here, once, rather than by each consumer.
  */
+/*
+ * `fontSize` here is the CANVAS size - the screen pixel size the number is drawn
+ * at - not the printed point size. The print size stays on the label as
+ * `label.fontPt`, which is what the source states and the panel quotes; the
+ * frame describes what is on the sheet.
+ */
 function textFrame(
   position,
   direction,
-  fontSize = DIMENSION_DEFAULT_FONT_PT,
+  fontSize = SECONDARY_FONT_PX,  /* the canvas size; DIMENSION_DEFAULT_FONT_PT is the print size */
   label = null,
   alignment = "center"
 ) {
@@ -1851,7 +1932,16 @@ function textFrame(
     center: { x: position.x, y: position.y },
     width: label ? label.halfWidth * 2 : 0,
     height: label ? label.halfHeight * 2 : 0,
+    /*
+     * THE SIZE ON SCREEN, in pixels. `width` and `height` are the box the number
+     * occupies ON THE SHEET, in drawing units; `fontSize` is how large those
+     * glyphs measure on the monitor, which is what an in-page editor draws its
+     * own field with - so the field and the number under it are the same size.
+     */
     fontSize,
+    fontPt: label ? label.fontPt : null,
+    screenWidth: label ? label.screenWidth : 0,
+    screenHeight: label ? label.screenHeight : 0,
     /*
      * THE TYPE HEIGHT IN DRAWING UNITS (mm), which is what a renderer paints - a
      * stored size in points is a print figure, and re-converting it to pixels is
@@ -1984,7 +2074,14 @@ function linearGraphics(
   const lineStart = projectPlane(first, anchor, plane);
   const lineEnd = projectPlane(second, anchor, plane);
 
-  const label = dimensionLabelSize(text, state, dimension.style);
+  /*
+   * THE LABEL'S BOX IS MEASURED FROM THE TEXT THAT WILL BE DRAWN - and an
+   * unlabelled dimension has no box. Measuring the empty string would still
+   * reserve a line's height, which would push the (absent) text's clearance
+   * into the geometry and make the construction depend on a label that is not
+   * there.
+   */
+  const label = dimensionLabelSize(text || "", state, dimension.style);
 
   /*
    * ========================================================
@@ -2209,15 +2306,98 @@ function linearGraphics(
      */
     textSide: side,
 
-    textFrame: textFrame(
-      textAnchor,
-      textDirection,
-      label.fontPt,
-      label,
-      alignment
-    ),
+    /*
+     * NO TEXT, NO FRAME. A frame with no text would still be a box the hit test
+     * and the source writer could act on, and an unlabelled dimension must have
+     * neither a label to click nor a node to emit.
+     */
+    textFrame: text
+      ? textFrame(
+          textAnchor,
+          textDirection,
+          label.fontSize,
+          label,
+          alignment
+        )
+      : null,
     textAnchor,
   };
+}
+
+/*
+ * ========================================================
+ * THE DIMENSION LINE'S OFFSET, AS A NUMBER THE STUDENT EDITS
+ * ========================================================
+ *
+ * The offset is the signed distance from the measured edge to the dimension
+ * line, along the dimension's own normal. It is DERIVED from the placement
+ * point - the placement is where the student put the line, and the offset is
+ * how far that is from the geometry - so there is one piece of state, not two.
+ *
+ * `offsetFor` answers it for the Features panel; `setOffset` writes it back by
+ * moving the placement along the normal. NEITHER TOUCHES THE REFERENCES: the
+ * two measured points are what the dimension measures, and changing where the
+ * line is drawn must not change what it measures.
+ */
+function offsetFor(dimension, state) {
+  const points = measurePoints(dimension, state);
+
+  if (!points || points.length < 2) {
+    return null;
+  }
+
+  const direction = dimensionDirection(dimension, points);
+  const axis = normalise(direction);
+  const anchor = dimensionNormal(dimension, axis);
+
+  const midpoint = {
+    x: (points[0].x + points[1].x) / 2,
+    y: (points[0].y + points[1].y) / 2,
+  };
+
+  return (
+    (Number(dimension.placement?.x) - midpoint.x) * anchor.x +
+    (Number(dimension.placement?.y) - midpoint.y) * anchor.y
+  );
+}
+
+/*
+ * Move the dimension line to a new offset, keeping the measured points.
+ *
+ * The placement is re-derived from the measured midpoint plus the requested
+ * offset along the normal, so the line lands exactly where the number says and
+ * the references are untouched. Returns false when the dimension cannot be
+ * measured, so the panel can refuse rather than write a placement that means
+ * nothing.
+ */
+function setOffset(dimension, offset, state) {
+  const value = Number(offset);
+
+  if (!Number.isFinite(value)) {
+    return false;
+  }
+
+  const points = measurePoints(dimension, state);
+
+  if (!points || points.length < 2) {
+    return false;
+  }
+
+  const direction = dimensionDirection(dimension, points);
+  const axis = normalise(direction);
+  const anchor = dimensionNormal(dimension, axis);
+
+  const midpoint = {
+    x: (points[0].x + points[1].x) / 2,
+    y: (points[0].y + points[1].y) / 2,
+  };
+
+  dimension.placement = {
+    x: midpoint.x + anchor.x * value,
+    y: midpoint.y + anchor.y * value,
+  };
+
+  return true;
 }
 
 /*
@@ -2453,7 +2633,7 @@ function arcLengthGraphics(
    * uses, measured from the label's own size.
    */
   const radial = normalise({ x: midpoint.x - centre.x, y: midpoint.y - centre.y });
-  const label = dimensionLabelSize(text, state, dimension.style);
+  const label = dimensionLabelSize(text || "", state, dimension.style);
   const textAnchor = {
     x: midpoint.x + radial.x * (label.halfHeight + label.gap),
     y: midpoint.y + radial.y * (label.halfHeight + label.gap),
@@ -2485,13 +2665,15 @@ function arcLengthGraphics(
     ],
     text,
     label,
-    textFrame: textFrame(
-      textAnchor,
-      { x: 1, y: 0 },
-      label.fontPt,
-      label,
-      dimensionTextAlignment(dimension.style)
-    ),
+    textFrame: text
+      ? textFrame(
+          textAnchor,
+          { x: 1, y: 0 },
+          label.fontSize,
+          label,
+          dimensionTextAlignment(dimension.style)
+        )
+      : null,
     textAnchor,
   };
 }
@@ -2692,7 +2874,7 @@ function radialGraphics(
    * and the arc it touches never move, because they are derived from the
    * feature's own centre and radius.
    */
-  const label = dimensionLabelSize(text, state, dimension.style);
+  const label = dimensionLabelSize(text || "", state, dimension.style);
 
   /*
    * THE LEADER'S SHOULDER, AT THE PLACEMENT'S OWN RADIUS.
@@ -2763,7 +2945,9 @@ function radialGraphics(
      */
     leader: diameter ? null : { from: outwardPoint, to: shoulder },
     text,
-    textFrame: textFrame(textAnchor, { x: 1, y: 0 }, label.fontPt, label, dimensionTextAlignment(dimension.style)),
+    textFrame: text
+      ? textFrame(textAnchor, { x: 1, y: 0 }, label.fontSize, label, dimensionTextAlignment(dimension.style))
+      : null,
     textAnchor,
   };
 }
@@ -2848,7 +3032,7 @@ function angularGraphics(
   ] : arcFrom(vertex, a, b, radius);
 
   const bisector = normalise({x:a.x+b.x,y:a.y+b.y});
-  const label=dimensionLabelSize(text,state,dimension.style);
+  const label=dimensionLabelSize(text || "",state,dimension.style);
   const labelRadius=radius+Math.abs(bisector.x)*label.halfWidth+Math.abs(bisector.y)*label.halfHeight+label.gap/2;
 
   /*
@@ -2922,13 +3106,15 @@ function angularGraphics(
     arrowheads: rightAngle ? [] : arcEnds,
     label,
     text,
-    textFrame: textFrame(
-      textAnchor,
-      { x: 1, y: 0 },
-      label.fontPt,
-      label,
-      dimensionTextAlignment(dimension.style)
-    ),
+    textFrame: text
+      ? textFrame(
+          textAnchor,
+          { x: 1, y: 0 },
+          label.fontSize,
+          label,
+          dimensionTextAlignment(dimension.style)
+        )
+      : null,
     textAnchor,
   };
 }
@@ -3238,6 +3424,7 @@ const enggDimensionModel = {
 
   alreadyStated,
   createDimension,
+  describeMeasurement,
   describesSameAs,
   dimensionDirection,
   featureRadius,
@@ -3250,6 +3437,8 @@ const enggDimensionModel = {
   measurePoints,
   measurementFor,
   newDimensionId,
+  offsetFor,
+  setOffset,
   normaliseReferences,
   resolvePrecision,
   round,

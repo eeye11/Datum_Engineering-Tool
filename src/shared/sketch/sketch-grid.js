@@ -355,6 +355,8 @@ export function snapPoint(
     viewport = null,
     pointTolerance = 10,
     geometryHit = null,
+    /* The interval the view is drawing, so the snap and the ink agree. */
+    interval = null,
   } = {},
 ) {
   const settings = normaliseGrid(grid);
@@ -381,7 +383,7 @@ export function snapPoint(
 
       if (away <= limit) {
         candidates.push({
-          kind: point.type === "guide" ? "guide" : "anchor",
+          kind: point.role === "centre" ? "centre" : "anchor",
           x: at.x,
           y: at.y,
           away,
@@ -408,27 +410,39 @@ export function snapPoint(
    * interval is therefore adapted to the visible range, which keeps a candidate
    * within reach at any zoom.
    */
-  const interval = gridIntervalFor(
-    settings,
-    viewport?.visible || viewport?.bounds || null,
-  );
+  const step =
+    interval && interval.x > 0 && interval.y > 0
+      ? interval
+      : gridIntervalFor(settings, viewport?.visible || viewport?.bounds || null);
 
   const minor = {
-    x: interval.x / settings.minorDivisions,
-    y: interval.y / settings.minorDivisions,
+    x: step.x / settings.minorDivisions,
+    y: step.y / settings.minorDivisions,
   };
 
   const snappedX = settings.snapToMinor
     ? minor.x
     : settings.snapToMajor
-      ? interval.x
+      ? step.x
       : null;
 
   const snappedY = settings.snapToMinor
     ? minor.y
     : settings.snapToMajor
-      ? interval.y
+      ? step.y
       : null;
+
+  /*
+   * A STORED SNAP IS A CLEAN NUMBER. `0.2 * 3` is 0.6000000000000001 in
+   * floating point, and a coordinate with dust in it is one the student cannot
+   * type, read or reason about. Ten decimal places removes the dust and leaves
+   * the value.
+   */
+  const clean = (value) => {
+    const rounded = Number(Number(value).toFixed(10));
+
+    return Object.is(rounded, -0) ? 0 : rounded;
+  };
 
   /*
    * MIDPOINTS REQUIRE THE GRID, BUT NOT THE OTHER WAY ROUND.
@@ -440,8 +454,8 @@ export function snapPoint(
   const gridOn = settings.snapToGrid;
 
   if (gridOn && (snappedX || snappedY)) {
-    const gx = snappedX ? Math.round(model.x / snappedX) * snappedX : model.x;
-    const gy = snappedY ? Math.round(model.y / snappedY) * snappedY : model.y;
+    const gx = snappedX ? clean(Math.round(model.x / snappedX) * snappedX) : model.x;
+    const gy = snappedY ? clean(Math.round(model.y / snappedY) * snappedY) : model.y;
 
     const away = Math.hypot(gx - model.x, gy - model.y);
 
@@ -470,6 +484,15 @@ export function snapPoint(
 
     const midpoints = [];
 
+    /*
+     * A GRID-INTERSECTION SNAP REACHES THE INTERSECTION, NOT THE NEXT MIDPOINT.
+     *
+     * Each candidate is only offered inside the SNAP AREA OF THE CURSOR: within
+     * half a cell of it. Without that bound the "nearest" midpoint is sometimes
+     * the one a whole cell away, and a click just off a corner was dragged onto
+     * a midpoint on the other side of the line. Half a cell is exactly the ring
+     * in which a midpoint is genuinely nearer than anything else.
+     */
     if (halfX && halfY) {
       /* The cell centre: both coordinates halfway between lines. */
       midpoints.push({
@@ -494,7 +517,9 @@ export function snapPoint(
       });
     }
 
-    midpoints.forEach((candidate) => {
+    midpoints.forEach((raw) => {
+      const candidate = { x: clean(raw.x), y: clean(raw.y) };
+
       const away = Math.hypot(candidate.x - model.x, candidate.y - model.y);
 
       if (away <= toleranceModel) {
@@ -517,22 +542,61 @@ export function snapPoint(
    * breaks a tie.
    */
   const rank = (kind) =>
-    ({ anchor: 0, geometry: 1, grid: 2, midpoint: 3 })[kind] ?? 4;
+    ({ anchor: 0, centre: 1, geometry: 2, grid: 3, midpoint: 4 })[kind] ?? 9;
 
-  candidates.sort((a, b) => {
-    const gap = a.away - b.away;
+  /*
+   * A TIE IS A QUARTER OF A PIXEL, NOT A FLOATING-POINT COINCIDENCE.
+   *
+   * Below that the two places are the same to the hand - a click in the middle
+   * of a cell is equidistant from the corner and the centre - and the rank
+   * decides: a point the student placed, then a grid intersection, then a
+   * midpoint. Without a real pixel tolerance the tie was measured in model
+   * units, so at a zoomed-in scale the corner almost never won.
+   */
+  const tiePx = 0.25;
 
-    /* A tie is a tenth of a pixel - below that, the rank decides. */
+  const scale = viewport && viewport.scale > 0 ? viewport.scale : 1;
+
+  /*
+   * A LATTICE PLACE BEATS A MIDPOINT IT TIES WITH - BY A HAIR.
+   *
+   * The tie rule alone is not enough, because a midpoint a hair NEARER than the
+   * corner (by a thousandth of a pixel) would still win on distance. A corner is
+   * the more definite place to have meant, so a lattice place inside the tie
+   * band is moved ahead of a midpoint - and only ahead of a midpoint; an anchor
+   * or a piece of geometry keeps its own distance-based claim.
+   */
+  const tieAdjusted = candidates.map((candidate) => {
+    const lattice = candidate.kind === "grid";
+
+    const midpointNearby = candidates.some(
+      (other) =>
+        other.kind === "midpoint" && Math.abs(other.away - candidate.away) * scale <= tiePx,
+    );
+
+    return lattice && midpointNearby ? { ...candidate, away: candidate.away - tiePx / scale } : candidate;
+  });
+
+  tieAdjusted.sort((a, b) => {
+    const gap = (a.away - b.away) * scale;
+
     if (Math.abs(gap) > 1e-6) {
-      return gap;
+      return a.away - b.away;
     }
 
     return rank(a.kind) - rank(b.kind);
   });
 
-  const best = candidates[0];
+  const bestCandidate = tieAdjusted[0];
 
-  return { x: best.x, y: best.y, snapped: true, kind: best.kind };
+
+
+  return {
+    x: bestCandidate.x,
+    y: bestCandidate.y,
+    snapped: true,
+    kind: bestCandidate.kind,
+  };
 }
 
 /*

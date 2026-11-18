@@ -408,19 +408,28 @@ test("one Name field, empty until typed, and never pre-filled", async () => {
   assert.doesNotMatch(markup, /Spring 1/, "no default label may be shown");
 
   /*
-   * THE ONE FIELD WRITES THE NAME AND THE DRAWN LABEL TOGETHER, so the panel,
-   * the Objects inventory and the sheet cannot disagree.
+   * NAME AND LABEL ARE TWO PROPERTIES, EDITED IN TWO ROWS.
+   *
+   * `name` is what the Objects inventory and the source header call the symbol;
+   * `label` is what the sheet prints beside it. So naming a spring "Spring A"
+   * does not print that beside it unless the student labels it too - and
+   * labelling it does not rename it.
    */
-  m.schema.writeField(spring, "name", "k");
+  m.schema.writeField(spring, "name", "Spring A");
 
-  assert.equal(spring.name, "k");
-  assert.equal(spring.label, "k");
-  assert.equal(m.schema.readField(spring, "name"), "k");
+  assert.equal(spring.name, "Spring A");
+  assert.equal(m.schema.readField(spring, "name"), "Spring A");
 
+  m.schema.writeField(spring, "label", "k");
+
+  assert.equal(spring.label, "k", "the Label row writes the drawn text");
+  assert.equal(spring.name, "Spring A", "and leaves the name alone");
+
+  /* Clearing the NAME removes the identity, not the drawing. */
   m.schema.writeField(spring, "name", "");
 
   assert.equal(spring.name, "");
-  assert.equal(spring.label, "", "clearing the name removes the drawn text");
+  assert.equal(spring.label, "k", "the drawn label is untouched by a rename");
 });
 
 test("a vector exposes origin, magnitude and angle as one synchronised transform", async () => {
@@ -643,7 +652,7 @@ test("the in-place text editor is the note itself, and Escape keeps the old text
   let cancelled = false;
 
   editor.open({
-    canvasText: true,
+    labelField: true,
     object,
     text: object.text,
     state: m.editor.drawingState,
@@ -656,7 +665,14 @@ test("the in-place text editor is the note itself, and Escape keeps the old text
     }
   });
 
-  const host = document.querySelector(".drawing-canvas-text-editor");
+  /*
+   * THE ONE EDITOR, ON THE DRAWING. It is the shared inline field - not a
+   * second, note-specific box - and it is mounted inside the canvas when its
+   * anchor is a canvas point.
+   */
+  const host =
+    document.querySelector(".drawing-label-entry") ||
+    document.querySelector(".drawing-inline-entry");
 
   assert.ok(host, "the editor is placed over the drawing");
 
@@ -671,6 +687,11 @@ test("the in-place text editor is the note itself, and Escape keeps the old text
 
   assert.equal(applied, null, "Escape applies nothing");
   assert.equal(cancelled, true, "Escape cancels");
-  assert.equal(document.querySelector(".drawing-canvas-text-editor"), null, "the editor closes");
+  assert.equal(
+    document.querySelector(".drawing-label-entry") ||
+      document.querySelector(".drawing-inline-entry"),
+    null,
+    "the editor closes",
+  );
   assert.equal(object.text, "keep me", "the note's stored text is untouched");
 });

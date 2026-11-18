@@ -34,6 +34,7 @@ import {
   arrowHeadTip,
   colourDefinition,
   colourOf,
+  fontSizeOption,
   normaliseHex,
   num,
   point,
@@ -145,7 +146,7 @@ function label(text, at, style, anchor = "south west") {
     return "";
   }
 
-  return `\\node[anchor=${anchor}, text=${colourName(style)}, font=\\fontsize{4.2}{5.0}\\selectfont] at ${point(at.x + 1.2, at.y + 1.2)} {${texText(value)}};`;
+  return `\\node[anchor=${anchor}, text=${colourName(style)}, font=${fontSizeOption(4.2)}] at ${point(at.x + 1.2, at.y + 1.2)} {${texText(value)}};`;
 }
 
 /* A point on the span, `fraction` of the way from `a` to `b`. */

@@ -7,6 +7,13 @@
  */
 import enggTheme from "../../components/layout/workspace/theme.js";
 import enggCanvasPalette from "./canvas-palette.js";
+import enggMathExpression from "../typography/math-expression.js";
+import {
+    DEFAULT_CANVAS_FONT_PX,
+    SCRIPT_SCALE,
+    normaliseFontSize,
+    setTextTransform
+} from "../typography/canvas-typography.js";
 
 
     const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -94,30 +101,25 @@ import enggCanvasPalette from "./canvas-palette.js";
     }
 
     /*
-     * TEXT IS PAINTED AT ITS STORED SIZE - THE ZOOM IS THE CAMERA'S JOB.
+     * A CANVAS FONT SIZE IS A SCREEN SIZE, AND IT IS VALIDATED HERE.
      *
-     * This used to multiply a stored font size by `sqrt(zoom)` (clamped to
-     * 0.55..1.6) so text "responded" to zoom. It was wrong twice over: the
-     * whole sheet is already scaled by the camera, so a label grew by
-     * `zoom * sqrt(zoom)` while the geometry around it grew by `zoom` - the
-     * annotation drifted out of proportion with the drawing as the student
-     * zoomed - and the export, which states a fixed physical size, disagreed
-     * with the screen by that same factor.
+     * The size a label states is what it measures on the monitor - see
+     * `shared/typography/canvas-typography.js`. It is never multiplied by the
+     * zoom, because `textNode` cancels the camera on the glyphs instead. This
+     * function is the one place a size is made safe: an object written before
+     * the typography system may carry no size at all, a zero, a string, or a
+     * negative, and every one of those resolves to the shared 16 px default
+     * rather than to an attribute the browser refuses.
      *
-     * A document's text has ONE size, stated in its style, and the viewport
-     * scales it with everything else. That is what makes the screen, the export
-     * and a reopened file agree, and it is the rule the brief states: element
-     * sizes are document properties, never functions of the viewport.
+     * (It used to multiply by `sqrt(zoom)` so text "responded" to the viewport.
+     * That made a label grow by `zoom * sqrt(zoom)` while the drawing grew by
+     * `zoom`, so the annotation drifted out of proportion as the student
+     * zoomed - and the exported figure, which states a fixed physical size,
+     * disagreed with the screen. The camera - or, now, its compensation - is
+     * the only thing a zoom changes.)
      */
     function zoomedFont(base) {
-        const size = Number(base);
-
-        if (!Number.isFinite(size) || size <= 0) {
-            return base;
-        }
-
-        /* A paint floor only: a 2 px word on a screen is invisible, not small. */
-        return Math.max(4, size);
+        return normaliseFontSize(base, DEFAULT_CANVAS_FONT_PX).size;
     }
 
     /*
@@ -130,6 +132,199 @@ import enggCanvasPalette from "./canvas-palette.js";
      */
     function zoomedFontHere(base) {
         return zoomedFont(base);
+    }
+
+    /*
+     * ========================================================
+     * THE ONE WAY CANVAS TEXT IS DRAWN
+     * ========================================================
+     *
+     * THE NODE IS SCALED BY THE CAMERA AND THEN DIVIDED BACK OUT.
+     *
+     * A `<text>` inside the overlay inherits the camera, so a plain
+     * `font-size="16"` is sixteen DRAWING units and grows with the zoom. This
+     * emits `font-size = 16 * zoom` together with `transform = scale(1 / zoom)`
+     * anchored on the text's own point, so what reaches the screen is exactly
+     * sixteen pixels - at 25%, at 100% and at 400% - while the POSITION is
+     * still the projected drawing position. See `textTransform` in
+     * `canvas-typography.js` for why the transform is anchored rather than
+     * applied about the SVG origin.
+     *
+     * WHY A FUNCTION AND NOT TWELVE MORE `setAttribute` CALLS. Every painter
+     * that puts words on the sheet goes through here, so "canvas text does not
+     * scale with the zoom" is ONE rule that holds for notes, dimensions, tick
+     * numbers, equations, symbols and feature labels alike - instead of a
+     * property each painter has to remember. It also keeps the attribute
+     * writer honest: a computed attribute name would have to be spelled
+     * `["font-size"]`, and a quoted key in some builds is WHATWG-mapped onto a
+     * DOM property instead of being written as an attribute.
+     *
+     * The caller still owns the CONTENT, the colour, the alignment and any
+     * rotation: this only decides the TYPE.
+     */
+    function textNode(svg, at, content, options = {}) {
+        const zoom =
+            options.zoom !== undefined && options.zoom !== null
+                ? Number(options.zoom) || 1
+                : Number(activeZoom) || 1;
+
+        const size = zoomedFont(
+            options.size ?? DEFAULT_CANVAS_FONT_PX
+        );
+
+        const node = createSvgElement("text", {
+            x: at?.x,
+            y: at?.y
+        });
+
+        if (options.fill !== undefined && options.fill !== null) {
+            node.setAttribute("fill", options.fill);
+        }
+
+        if (options.className) {
+            node.setAttribute("class", options.className);
+        }
+
+        const view = zoom > 0 ? zoom : 1;
+
+        const attributes = {
+            "font-size": Math.round(size * view * 1000) / 1000,
+            "font-family": options.fontFamily || undefined,
+            "font-weight": options.fontWeight || undefined,
+            "font-style": options.fontStyle || undefined,
+            "text-anchor": options.anchor || undefined,
+            "dominant-baseline": options.baseline || undefined,
+            "text-decoration": options.textDecoration || undefined
+        };
+
+        Object.entries(attributes).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                node.setAttribute(key, String(value));
+            }
+        });
+
+        /*
+         * THE TRANSFORM IS SET OR CLEARED, NEVER WRITTEN AS "null".
+         *
+         * At 1:1 there is no compensation to apply, so there is no transform -
+         * and a node built by an earlier frame may still be carrying one. The
+         * helper removes the attribute in that case rather than storing the
+         * word "null", which the browser refuses as a transform and logs as an
+         * error on the sheet.
+         */
+        setTextTransform(node, at, view, options.transform || "");
+
+        Object.entries(options.extra || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                node.setAttribute(key, String(value));
+            }
+        });
+
+        node.textContent = String(content ?? "");
+
+        if (svg) {
+            svg.appendChild(node);
+        }
+
+        return node;
+    }
+
+    /*
+     * A MULTI-LINE BLOCK, as `<tspan>` lines off the first.
+     *
+     * The advance is the SCREEN line height converted into the node's own
+     * camera-scaled space, so leading stays constant on screen at every zoom.
+     * `parseMath` sends each line through the shared expression typesetter, so
+     * `T_1` renders as a real subscript wherever it appears.
+     */
+    function appendTextLines(node, lines, at, options = {}) {
+        const list = Array.isArray(lines)
+            ? lines
+            : String(lines ?? "").split("\n");
+
+        if (!list.length || !node) {
+            return node;
+        }
+
+        const zoom =
+            options.zoom !== undefined && options.zoom !== null
+                ? Number(options.zoom) || 1
+                : Number(activeZoom) || 1;
+
+        const size = zoomedFont(options.size ?? DEFAULT_CANVAS_FONT_PX);
+        const spacing = Number(options.lineSpacing) > 0 ? Number(options.lineSpacing) : 1.2;
+        const advance = Math.round(size * (zoom > 0 ? zoom : 1) * spacing * 1000) / 1000;
+
+        list.forEach((line, index) => {
+            if (index === 0) {
+                if (options.parseMath === true) {
+                    appendMathRuns(node, line, size);
+                } else {
+                    node.textContent = String(line ?? "");
+                }
+
+                return;
+            }
+
+            const span = createSvgElement("tspan", {
+                x: at?.x,
+                dy: advance
+            });
+
+            if (options.parseMath === true) {
+                appendMathRuns(span, line, size);
+            } else {
+                span.textContent = String(line ?? "");
+            }
+
+            node.appendChild(span);
+        });
+
+        return node;
+    }
+
+    /*
+     * AN EXPRESSION AS RUNS - the one typesetter the canvas has.
+     *
+     * `T_1`, `q''_{in}` and `\dot{Q}` are mathematics wherever they appear, so
+     * a note, a label and a Heat notation all come through here. A script keeps
+     * `SCRIPT_SCALE` of its base as a PERCENTAGE, which is a fraction of a
+     * camera-scaled size and therefore stays camera-scaled itself - the
+     * compensation reaches the small glyphs too.
+     */
+    function appendMathRuns(node, expression, size) {
+        void size;
+
+        const runs = enggMathExpression.parseMathExpression(expression);
+
+        if (!runs.length || !node) {
+            return node;
+        }
+
+        const scriptSize = `${Math.round(SCRIPT_SCALE * 100)}%`;
+
+        runs.forEach((run) => {
+            if (run.type === "text") {
+                node.appendChild(globalThis.document.createTextNode(run.value));
+                return;
+            }
+
+            if (run.type === "accent") {
+                node.appendChild(globalThis.document.createTextNode(run.value + run.accent));
+                return;
+            }
+
+            const script = createSvgElement("tspan", {
+                "baseline-shift": run.type === "sub" ? "sub" : "super",
+                "font-size": scriptSize,
+                dy: run.type === "sub" ? "0.15em" : "-0.35em"
+            });
+
+            script.textContent = run.value;
+            node.appendChild(script);
+        });
+
+        return node;
     }
 
     function createSvgElement(type, attributes = {}) {
@@ -348,20 +543,122 @@ import enggCanvasPalette from "./canvas-palette.js";
     const STROKE_MIN = 0.5;
 
     /*
-     * The on-screen stroke width for a configured line weight.
+     * ========================================================
+     * ONE CONVERSION FROM THE DRAWING TO THE SHEET
+     * ========================================================
+     *
+     * Every painter draws into the overlay in SCREEN pixels: its geometry has
+     * already been projected by `engineeringToScreen`, so a point ten drawing
+     * units away from another is ten times the camera scale away on the sheet.
+     * A size that is a property of the OBJECT - a radius, a symbol's reach, an
+     * arrow's head, a dash length, a pen - is therefore wrong if it is written
+     * in the same units, because it would stay the same size while the geometry
+     * around it grew.
+     *
+     * THE OBJECT'S OWN SIZE MUST BE MULTIPLIED BY THE SAME SCALE THE GEOMETRY
+     * WENT THROUGH. That is what `worldLength` is: the ONE place a length that
+     * belongs to the drawing becomes the pixels the overlay needs. It is the
+     * same number for every painter, at every zoom, so a support, an arrowhead
+     * and a circle drawn to the same millimetres are the same size on the sheet.
+     *
+     * THE MISTAKE THIS REPLACES was to write such a size as a bare number and
+     * then correct it, in some painters and not others, by a private `* zoom`
+     * (or by dividing a stroke back through the zoom, which is the opposite
+     * direction). Six renderers each carried their own version of that
+     * correction, so a symbol could be right in one tool and half-size in the
+     * next - and the ones that had no correction at all were right at 100% and
+     * wrong everywhere else, which is exactly the inconsistency this replaces.
+     */ 
+
+    /*
+     * A STROKE WIDTH IS THE DRAWING'S, NOT THE VIEWPORT'S.
      *
      * Read by the styled line, by applyStyle, and by the force arrow,
      * so a force shaft and a Line of the same weight are the same
-     * number of pixels - which is what "the force is as thick as the
-     * line" has to mean if it is to be true on screen and not only
-     * in the settings.
+     * width - which is what "the force is as thick as the line" has to
+     * mean if it is to be true on screen and not only in the settings.
+     *
+     * WHY THE ZOOM IS DIVIDED BACK OUT.
+     *
+     * The caller projects the geometry through the camera, so `stroke-width`
+     * is read in PIXELS of the overlay's own viewBox - and every point of that
+     * pixels is drawn `zoom` times larger on screen. A width emitted here is
+     * therefore painted `zoom` times wider (or thinner, when zoomed out) than
+     * it states, which is a stroke that changes weight with the camera.
+     *
+     * Dividing by the zoom in force makes the PAINTED width the stored weight
+     * on both sides of the drawing: the canvas at every magnification, and the
+     * compiled picture, whose own strokes are written at that same nominal
+     * weight (`tikz-style.js`, which owns the calibration). A Line does not
+     * become four times thicker because the student zoomed in to place it.
+     *
+     * THE FLOOR IS A WORLD-SPACE FLOOR TOO. `STROKE_MIN` is the smallest
+     * painted width, so at 25% it is four times the stored width - keeping a
+     * hairline visible as the drawing shrinks, exactly as the note above says,
+     * without it becoming a frame around a zoomed-out sheet.
      */
     function scaledStrokeWidth(lineWidth) {
         const width = Number.isFinite(lineWidth)
             ? lineWidth
             : 0.5;
 
-        return Math.max(STROKE_MIN, width * STROKE_SCALE);
+        const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
+
+        return Math.max(STROKE_MIN, width * STROKE_SCALE) / zoom;
+    }
+
+    /*
+     * A length that belongs to the drawing, in the pixels the overlay
+     * needs for it at the zoom being drawn.
+     *
+     * `activeZoom` is set once per pass from the camera that pass was given, so
+     * this cannot describe a zoom other than the one on screen - and because
+     * every painter asks HERE, no painter can apply the conversion twice or
+     * forget it.
+     */
+    function worldLength(units) {
+        const length = Number(units);
+
+        if (!Number.isFinite(length)) {
+            return 0;
+        }
+
+        return length * (Number(activeZoom) > 0 ? Number(activeZoom) : 1);
+    }
+
+    /*
+     * A LENGTH THAT IS PART OF A PATH rather than of the camera: the dash
+     * pattern a styled line is painted with.
+     *
+     * A dash is a mark in the drawing - the same number of millimetres between
+     * strokes on a beam however far the student has zoomed - so it goes through
+     * the same conversion as every other world length. It used to be emitted as
+     * a bare `"8 5"`, which is eight OVERLAY pixels: on a drawing zoomed to 25%
+     * the dashes closed up into a solid line, and at 400% a dashed line became
+     * a handful of long strokes, while the compiled picture kept the authored
+     * gap because TikZ states it in the drawing's own unit.
+     */
+    function dashArrayFor(pattern) {
+        if (!pattern) {
+            return null;
+        }
+
+        const lengths = String(pattern)
+            .trim()
+            .split(/[\s,]+/)
+            .filter(Boolean)
+            .map((value) => Number(value))
+            .filter((value) => Number.isFinite(value) && value >= 0);
+
+        if (!lengths.length) {
+            return null;
+        }
+
+        return lengths.map((value) => round3(worldLength(value))).join(" ");
+    }
+
+    function round3(value) {
+        return Math.round(Number(value) * 1000) / 1000;
     }
 
     function applyStyle(
@@ -424,39 +721,26 @@ import enggCanvasPalette from "./canvas-palette.js";
             );
         }
 
+        /*
+         * A DASH PATTERN IS THE DRAWING'S TOO, so it is converted by the same
+         * one function as every other world length. Written as bare numbers it
+         * was a handful of OVERLAY pixels: eight at 100%, eight at 400%, and at
+         * 25% so short that a dashed line read as solid.
+         */
+        const dash = dashArrayFor(dashPatternFor(style.lineType));
+
+        if (dash) {
+            element.setAttribute("stroke-dasharray", dash);
+        }
+
         if (style.lineType === "dotted") {
-            element.setAttribute("stroke-dasharray", "1 4");
             element.setAttribute("stroke-linecap", "round");
-        }
-
-        if (
-            style.lineType ===
-            "dashed"
-        ) {
-            element.setAttribute(
-                "stroke-dasharray",
-                "8 5"
-            );
-        }
-
-        if (
-            style.lineType ===
-            "center"
-        ) {
-            element.setAttribute(
-                "stroke-dasharray",
-                "12 4 2 4"
-            );
         }
 
         if (
             style.lineType ===
             "construction"
         ) {
-            element.setAttribute(
-                "stroke-dasharray",
-                "4 4"
-            );
 
             element.setAttribute(
                 "opacity",
@@ -498,6 +782,9 @@ export {
     paintColour,
     zoomedFont,
     zoomedFontHere,
+    textNode,
+    appendTextLines,
+    appendMathRuns,
     createSvgElement,
     arcPathData,
     ensureSvg,
@@ -506,6 +793,8 @@ export {
     STROKE_SCALE,
     STROKE_MIN,
     scaledStrokeWidth,
+    worldLength,
+    dashArrayFor,
     applyStyle,
     setActiveZoom,
     setActiveTheme

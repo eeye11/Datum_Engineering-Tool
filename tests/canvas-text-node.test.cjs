@@ -88,7 +88,17 @@ function click(event) {
   );
 }
 
-const editorBox = () => document.querySelector(".drawing-canvas-text-editor");
+/*
+ * THE ONE INLINE EDITOR.
+ *
+ * The note's field is the shared on-canvas label field - the same box a label, a
+ * callout, an equation and a Heat notation use - so that is what this suite
+ * looks for. The old `.drawing-canvas-text-editor` was a second editor beside
+ * it; it is gone.
+ */
+const editorBox = () =>
+  document.querySelector(".drawing-label-entry") ||
+  document.querySelector(".drawing-inline-entry");
 
 const textNodes = () =>
   state.objects.filter(
@@ -159,30 +169,38 @@ test("typing shows on the drawing as it is typed", () => {
   assert.equal(lastNote().text, "Line one\nLine two");
 });
 
-test("Enter makes a line and does not commit; Ctrl+Enter commits", () => {
+test("Shift+Enter makes a line and does not commit; Enter commits", () => {
   const input = editorBox().querySelector("textarea");
 
+  assert.equal(input.tagName, "TEXTAREA", "the field supports more than one line");
+
+  /*
+   * SHIFT+ENTER IS A NEW LINE, AND ONLY A NEW LINE. The field itself inserts
+   * it; the editor's key handling must return before it reaches the commit, so
+   * the box is still open and the tool is untouched.
+   */
   input.dispatchEvent(
     new window.KeyboardEvent("keydown", {
       key: "Enter",
+      shiftKey: true,
       bubbles: true,
       cancelable: true,
     }),
   );
 
-  assert.ok(editorBox(), "Enter did not close the box");
+  assert.ok(editorBox(), "Shift+Enter did not close the box");
   assert.equal(state.activeTool, "note", "and did not change the tool");
 
+  /* ENTER COMMITS - the one keyboard every canvas text field shares. */
   input.dispatchEvent(
     new window.KeyboardEvent("keydown", {
       key: "Enter",
-      ctrlKey: true,
       bubbles: true,
       cancelable: true,
     }),
   );
 
-  assert.equal(editorBox(), null, "Ctrl+Enter closes the box");
+  assert.equal(editorBox(), null, "Enter closes the box");
   assert.equal(lastNote().text, "Line one\nLine two", "with the text kept");
 });
 

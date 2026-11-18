@@ -10,11 +10,29 @@ import enggDrawingState from "../model/drawing-state.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
 import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
+import {
+    CANVAS_BASELINE,
+    CANVAS_FONT_STACK,
+    AUXILIARY_FONT_PX,
+    LINE_SPACING,
+    PRIMARY_FONT_PX,
+    SECONDARY_FONT_PX,
+    fontSizeOf,
+    setTextTransform,
+    textWidthEstimate
+} from "../typography/canvas-typography.js";
 import { resistorPoints } from "../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../features/workspace/model/thermodynamics/fan.js";
 import { workArrowPoints } from "../../features/workspace/model/thermodynamics/work-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
-import { LABEL_OFFSET_PX, createSvgElement, paintColour, zoomedFontHere } from "./svg-primitives.js";
+import {
+    LABEL_OFFSET_PX,
+    activeZoom,
+    appendMathRuns as appendMathRunsShared,
+    appendTextLines,
+    createSvgElement,
+    paintColour
+} from "./svg-primitives.js";
 
 
     /*
@@ -176,8 +194,16 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         const origin = toScreen(placement);
         const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
-        const fontSize = Number(style.fontSize) || 12;
-        const lineHeight = fontSize * 1.2;
+
+        /*
+         * A MAGNITUDE IS SECONDARY TYPE, IN SCREEN PIXELS.
+         *
+         * It is one of the four roles of the shared typography system, not a
+         * number chosen here - and `textNode` paints it at that many pixels
+         * however far the sheet is zoomed, while its anchor stays the projected
+         * drawing position.
+         */
+        const fontSize = fontSizeOf(Number(style.fontSize), SECONDARY_FONT_PX);
         const lines = String(text).split("\n");
         const unresolved = entity.unresolved === true;
 
@@ -210,27 +236,30 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
 
         const textNode = createSvgElement("text", {
             x: origin.x,
-            y: origin.y - ((lines.length - 1) * lineHeight) / 2 + fontSize * 0.35,
+            y: origin.y,
             fill: unresolved ? "#999999" : stroke,
-            "font-size": zoomedFontHere(fontSize),
-            "font-family": "Arial, sans-serif",
-            "text-anchor": "middle",
-            ...(unresolved ? { "text-decoration": "underline dotted" } : {})
+            "font-family": CANVAS_FONT_STACK,
+            "text-anchor": "middle"
         });
 
-        lines.forEach((line, index) => {
-            if (index === 0) {
-                textNode.textContent = line;
-                return;
-            }
+        /*
+         * THE CAMERA IS CANCELLED ON THE GLYPHS, NOT ON THE ANCHOR.
+         *
+         * `textTransform` divides the viewport out about the label's own point,
+         * so the number stays the same size on screen at every zoom and stays
+         * exactly where the drawing puts it. The line advance is the SCREEN line
+         * height carried into the node's camera-scaled space, so multi-line
+         * labels keep their leading too.
+         */
+        const zoom = Number(state?.camera?.zoom) || 1;
 
-            const tspan = createSvgElement("tspan", {
-                x: origin.x,
-                dy: lineHeight
-            });
+        textNode.setAttribute("font-size", String(Math.round(fontSize * zoom * 1000) / 1000));
+        setTextTransform(textNode, origin, zoom);
 
-            tspan.textContent = line;
-            textNode.appendChild(tspan);
+        appendTextLines(textNode, lines, origin, {
+            size: fontSize,
+            lineSpacing: LINE_SPACING,
+            zoom
         });
 
         svg.appendChild(textNode);
@@ -283,8 +312,18 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         }
 
         const stroke = paintColour(style.stroke || enggTheme.defaultLineColour());
-        const fontSize = Number(style.fontSize) || 12;
-        const lineHeight = fontSize * 1.2;
+
+        /*
+         * A NOTE IS PRIMARY TYPE - 16 px, or the student's own size.
+         *
+         * The one exception is a TABLE, whose cells are compact auxiliaries inside
+         * a grid rather than a note's own words: it states its size below.
+         */
+        const fontSize = fontSizeOf(
+            Number(style.fontSize),
+            entity.annotateKind === "table" ? AUXILIARY_FONT_PX : PRIMARY_FONT_PX
+        );
+        const lineHeight = fontSize * LINE_SPACING;
 
         const start =
             geometry.start && toScreen(geometry.start);
@@ -356,20 +395,49 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          * SCREEN space here because the text is sized in screen pixels - which
          * is what makes the rule hold at every zoom rather than only at 1:1.
          */
-        if (kind === "label" && model.labelLeaderGap) {
+        /*
+         * A PARENTED LABEL HAS NO ANCHOR DOT AND NO LEADER.
+         *
+         * A Heat Transfer notation belongs to a circuit node, a symbol or a
+         * boundary that ALREADY draws itself, so a dot here is a second marker
+         * for one object - and a leader back to it is furniture the student did
+         * not draw. This is the same rule the source writer applies, so the
+         * picture and the export agree.
+         */
+        const ownsItsAnchor = !entity.metadata?.heatParentId;
+
+        if (kind === "label" && model.labelLeaderGap && ownsItsAnchor) {
             const labelAnchor =
                 geometry.start && toScreen(geometry.start);
 
             const labelText =
                 geometry.position && toScreen(geometry.position);
 
-            if (labelAnchor && labelText) {
-                const gap = Math.hypot(
+            /*
+             * A LABEL SITTING ON ITS OWN ANCHOR marks nothing: the dot is
+             * hidden under the words, so it is not drawn.
+             */
+            const sameSpot =
+                labelAnchor &&
+                labelText &&
+                Math.hypot(labelText.x - labelAnchor.x, labelText.y - labelAnchor.y) < 0.5;
+
+            if (labelAnchor && labelText && !sameSpot) {
+                /*
+                 * THE GAP IN SCREEN PIXELS, then in TEXT HEIGHTS.
+                 *
+                 * Both projected points are on screen, and the type is a screen
+                 * size, so the comparison is a true "how many text heights
+                 * apart is this" at every zoom - the leader appears and
+                 * disappears at the same visual distance however far the sheet
+                 * is magnified.
+                 */
+                const gapPx = Math.hypot(
                     labelText.x - labelAnchor.x,
                     labelText.y - labelAnchor.y
                 );
 
-                if (gap > 2.5 * fontSize) {
+                if (gapPx > 2.5 * fontSize) {
                     svg.appendChild(
                         createSvgElement("line", {
                             x1: labelAnchor.x,
@@ -512,34 +580,104 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     fontSize
                 );
             } else if (!(kind === "callout" && state.textEntryObjectId === entity.id)) {
+                /*
+                 * THE NOTE'S OWN FRAME AND TURN.
+                 *
+                 * A background is drawn ONLY when the student enabled one - the
+                 * default is transparent, so no white rectangle appears behind
+                 * text nobody asked to box. The padding is part of the same
+                 * style, in the same screen pixels as the type, so the box grows
+                 * with the words rather than with the zoom.
+                 *
+                 * ROTATION wraps the text AND its frame in one group, turned
+                 * about the text's own anchor - so a turned note keeps its
+                 * anchor exactly where it was, and the box does not swing away
+                 * from the words it surrounds.
+                 */
+                const target = note && typography.rotation ? createSvgElement("g") : svg;
+
+                if (note && typography.background) {
+                    const pad = Math.max(0, typography.padding);
+                    const boxWidth = widestLineWidth(lines, fontSize) + pad * 2;
+                    const boxHeight = lines.length * fontSize * typography.lineSpacing + pad * 2;
+
+                    /* Left-aligned text starts at the anchor; centred and right
+                     * aligned text is positioned by the anchor's own alignment. */
+                    const left =
+                        typography.align === "center"
+                            ? textAt.x - boxWidth / 2
+                            : typography.align === "right"
+                              ? textAt.x - boxWidth
+                              : textAt.x;
+
+                    target.appendChild(
+                        createSvgElement("rect", {
+                            x: left - pad * 0.25,
+                            y: textAt.y - fontSize + pad * 0.25,
+                            width: boxWidth,
+                            height: boxHeight,
+                            fill: typography.backgroundColour,
+                            stroke: "none",
+                            "pointer-events": "none"
+                        })
+                    );
+                }
+
                 appendAnnotateText(
-                    svg,
+                    target,
                     lines,
                     textAt,
                     textStroke,
                     fontSize,
-                    note ? zoomedFontHere(fontSize) * typography.lineSpacing : lineHeight,
+                    note ? fontSize * typography.lineSpacing : lineHeight,
                     kind === "callout" ? "center" : entity.style?.align,
                     note ? typography : {},
                     entity.metadata?.mathSubscript,
                     entity.metadata?.mathSymbol,
                     entity.metadata?.mathSuffix
                 );
+
+                if (target !== svg) {
+                    target.setAttribute(
+                        "transform",
+                        `rotate(${Number(typography.rotation) || 0} ${textAt.x} ${textAt.y})`
+                    );
+                    svg.appendChild(target);
+                }
             }
         }
     }
 
+    /*
+     * THE WIDEST LINE, IN SCREEN PIXELS.
+     *
+     * The estimate is the shared one, so a box drawn around words is the same
+     * shape and the same size as the words themselves - and because the type is
+     * a screen size, so is the box. Nothing here multiplies by the zoom: an
+     * on-screen width is an on-screen width at every magnification.
+     */
     function widestLineWidth(lines, fontSize) {
-        const widest = Math.max(
-            1,
-            ...lines.map((line) => String(line).length)
+        return textWidthEstimate(
+            lines.reduce(
+                (widest, line) => (
+                    String(line).length > widest.length ? String(line) : widest
+                ),
+                ""
+            ),
+            fontSize,
+            { characterWidth: 0.58 }
         );
-
-        return widest * fontSize * 0.58;
     }
 
     /*
      * The words, centred on the point they belong to.
+     *
+     * THE BLOCK IS CENTRED ON ITS ANCHOR AND THE CAMERA IS CANCELLED ON THE
+     * GLYPHS. The node is translated to its anchor and scaled by `1 / zoom`, so
+     * the type keeps its screen size and the block keeps its anchor - a label
+     * neither shrinks as the student zooms out nor drifts off the point.
+     * `dominant-baseline: middle` centres each line on its own advance, which is
+     * what replaces the per-call-site `fontSize * 0.35` nudge.
      */
     function appendAnnotateText(
         svg,
@@ -561,22 +699,28 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                   ? "end"
                   : "start";
 
-        const firstY =
-            at.y -
-            ((lines.length - 1) * lineHeight) / 2 +
-            fontSize * 0.35;
+        const zoom = Math.max(Number(activeZoomForText()), 0.0001);
+
+        /*
+         * THE FIRST LINE'S OWN OFFSET, so a block of n lines is centred on the
+         * anchor: line i sits at (i - (n - 1) / 2) advances from the centre.
+         */
+        const firstY = at.y - ((lines.length - 1) * lineHeight) / 2;
 
         const textNode = createSvgElement("text", {
             x: at.x,
             y: firstY,
             fill: stroke,
-            "font-size": zoomedFontHere(fontSize),
-            "font-family": typography.fontFamily || "Arial, sans-serif",
+            "font-family": typography.fontFamily || CANVAS_FONT_STACK,
             "font-weight": typography.bold ? "bold" : "normal",
             "font-style": typography.italic ? "italic" : "normal",
             "text-decoration": typography.underline ? "underline" : "none",
-            "text-anchor": anchorName
+            "text-anchor": anchorName,
+            "dominant-baseline": CANVAS_BASELINE
         });
+
+        textNode.setAttribute("font-size", String(Math.round(fontSize * zoom * 1000) / 1000));
+        setTextTransform(textNode, at, zoom);
 
         lines.forEach((line, index) => {
             if (index === 0) {
@@ -593,13 +737,21 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                     }
                     return;
                 }
-                textNode.textContent = line;
+                /*
+                 * A SINGLE LINE OF MATHEMATICS IS TYPESET.
+                 *
+                 * `T_1`, `q''_{in}`, `\dot{Q}` - the notation a Heat Transfer
+                 * label holds - is rendered as runs rather than pasted with its
+                 * markup, through the SAME parser the other label pass uses, so
+                 * a configuration label and a Heat notation cannot disagree.
+                 */
+                appendMathRunsShared(textNode, line, fontSize);
                 return;
             }
 
             const tspan = createSvgElement("tspan", {
                 x: at.x,
-                dy: lineHeight
+                dy: Math.round(lineHeight * zoom * 1000) / 1000
             });
 
             tspan.textContent = line;
@@ -607,6 +759,17 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         });
 
         svg.appendChild(textNode);
+    }
+
+    /*
+     * THE ZOOM THIS FRAME IS DRAWN AT.
+     *
+     * The renderer records it once per pass (see `setActiveZoom`), because this
+     * module draws into a group that has no `state` of its own when it is called
+     * from a preview. One number, set by the pass, read here.
+     */
+    function activeZoomForText() {
+        return Math.max(0.0001, Number(activeZoom) || 1);
     }
 
     /*
@@ -821,21 +984,33 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
                         (width * (column + 0.5)) / columns,
                     y:
                         topLeft.y +
-                        (height * (row + 0.5)) / rows +
-                        fontSize * 0.35
+                        (height * (row + 0.5)) / rows
                 };
 
-                const textNode = createSvgElement("text", {
+                /*
+                 * A CELL IS THE TABLE'S TYPE, centred on its own cell.
+                 *
+                 * No `* 0.85` multiplier: a table's cells took 85% of the
+                 * table's size, which is how a table ended up with a size no
+                 * role in the hierarchy could name. The table states its size
+                 * (auxiliary, 12 px) and every cell is drawn at it.
+                 */
+                const cell = createSvgElement("text", {
                     x: cellCentre.x,
                     y: cellCentre.y,
                     fill: stroke,
-                    "font-size": zoomedFontHere(fontSize * 0.85),
-                    "font-family": "Arial, sans-serif",
-                    "text-anchor": "middle"
+                    "font-family": CANVAS_FONT_STACK,
+                    "text-anchor": "middle",
+                    "dominant-baseline": CANVAS_BASELINE
                 });
 
-                textNode.textContent = value;
-                svg.appendChild(textNode);
+                const zoom = activeZoomForText();
+
+                cell.setAttribute("font-size", String(Math.round(fontSize * zoom * 1000) / 1000));
+                setTextTransform(cell, cellCentre, zoom);
+
+                cell.textContent = value;
+                svg.appendChild(cell);
             }
         }
     }
@@ -924,6 +1099,18 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         }
 
         /*
+         * A HEAT TRANSFER LABEL IS ITS OWN OBJECT, SO IT IS NOT DRAWN HERE.
+         *
+         * Its notation is a child `annotate` feature which the ordinary
+         * entity pass draws - and which the student can select and move on its
+         * own. Drawing the parent's `label` string as well would print every
+         * notation twice, once selectable and once not.
+         */
+        if (entity?.metadata?.heatTransfer === true) {
+            return;
+        }
+
+        /*
          * The SAME projection every other mark uses, so a label lands exactly
          * where the drawing says it should at any zoom, pan or window size.
          */
@@ -937,26 +1124,76 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         }
 
         /*
-         * THE LABEL TAKES THE FEATURE'S OWN COLOUR, so it reads as part of the
-         * drawing rather than as interface furniture, and a student who
-         * colour-coded a line gets a label to match.
+         * THE LABEL'S OWN STYLE, WHEN IT HAS ONE.
+         *
+         * A Heat Transfer label carries its own text colour, size and
+         * alignment (`style.label*`), set from the Features Label section, so a
+         * label can be coloured independently of the geometry it annotates.
+         * Without one it keeps taking the feature's own colour, so it still
+         * reads as part of the drawing rather than as interface furniture.
          */
+        const labelStyle = entity.style || {};
+
         const colour =
-            entity.style && typeof entity.style.stroke === "string"
-                ? entity.style.stroke
-                : "#000000";
+            /^#[0-9a-f]{6}$/i.test(String(labelStyle.labelColour || ""))
+                ? labelStyle.labelColour
+                : typeof labelStyle.stroke === "string"
+                  ? labelStyle.stroke
+                  : "#000000";
 
         const scale =
             enggDrawingState.BASE_PIXELS_PER_UNIT * (state.camera?.zoom || 1);
         const offset = labelOffsetFor(entity, scale);
 
+        /*
+         * THE LABEL'S SIZE IS THE SYSTEM'S SIZE.
+         *
+         * It used to fall back to a hard-coded 11 when the feature carried no
+         * `labelSize` - a size no role in the hierarchy names, and half the size
+         * of an ordinary note. Now an absent size is the SECONDARY role (14 px),
+         * and the student's own `labelSize` - or a `style.fontSize` written by
+         * the quick-access control - is honoured as a screen size.
+         */
+        const labelSize = fontSizeOf(
+            Number(labelStyle.labelSize) > 0
+                ? Number(labelStyle.labelSize)
+                : Number(labelStyle.fontSize),
+            SECONDARY_FONT_PX
+        );
+
+        const anchorMode =
+            ["start", "middle", "end"].includes(labelStyle.labelAnchor)
+                ? labelStyle.labelAnchor
+                : "start";
+
+        /*
+         * THE OFFSET IS A SCREEN DISTANCE, so it is divided by the camera before
+         * it is added to a projected point: `labelOffsetFor` answers in drawing
+         * units at the current scale, and this node is positioned in screen
+         * pixels. An explicit `geometry.labelOffset` stays in drawing units and
+         * therefore still moves with the geometry.
+         */
+        const zoom = Math.max(Number(state?.camera?.zoom) || 1, 0.0001);
+        const explicit = entity?.geometry?.labelOffset;
+        const hasExplicit = explicit && Number.isFinite(Number(explicit.x)) && Number.isFinite(Number(explicit.y));
+
+        const at = {
+            x: anchor.x + (hasExplicit ? offset.x : (LABEL_OFFSET_PX)),
+            y: anchor.y + (hasExplicit ? offset.y : (-LABEL_OFFSET_PX))
+        };
+
+        const weight = labelStyle.labelBold === true ? "bold" : "normal";
+        const slant = labelStyle.labelItalic === true ? "italic" : "normal";
+
         const label = createSvgElement("text", {
-            x: anchor.x + offset.x,
-            y: anchor.y + offset.y,
+            x: at.x,
+            y: at.y,
             fill: colour,
-            "font-size": zoomedFontHere(11),
-            "font-family": "Arial, sans-serif",
-            "text-anchor": "start",
+            "font-family": CANVAS_FONT_STACK,
+            "font-weight": weight,
+            "font-style": slant,
+            "text-anchor": anchorMode,
+            "dominant-baseline": CANVAS_BASELINE,
 
             /*
              * A LABEL MUST NOT SWALLOW THE POINTER. It is drawing, not a
@@ -968,10 +1205,36 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             "pointer-events": "none"
         });
 
-        label.textContent = text;
+        /*
+         * THE CAMERA IS CANCELLED ON THE GLYPHS. The label's position is the
+         * projected anchor plus a screen offset; its type is a screen size, so
+         * it is the same size at every zoom while the label still travels with
+         * the feature it names.
+         */
+        label.setAttribute("font-size", String(Math.round(labelSize * zoom * 1000) / 1000));
+        setTextTransform(label, at, zoom);
+
+        /*
+         * THE TEXT IS TYPESET, NOT PASTED.
+         *
+         * `T_1`, `q''_{in}` and `\dot{Q}` are MATHEMATICS, so the runs the
+         * expression parser returns are written as `<tspan>`s: a script shifts
+         * its baseline and shrinks, an accent is drawn above its value. Raw
+         * underscores and braces never reach the sheet.
+         */
+        appendMathRunsShared(label, text, labelSize);
 
         svg.appendChild(label);
     }
+
+    /*
+     * WRITE A TYPESET EXPRESSION INTO A <text>, as runs.
+     *
+     * THE ONE TYPESETTER LIVES IN `svg-primitives.js` and is re-exported here,
+     * so a caller that already imported it from this module keeps working and
+     * there is still exactly one way an expression becomes glyphs.
+     */
+
 
 export {
     appendDerivedMagnitude,

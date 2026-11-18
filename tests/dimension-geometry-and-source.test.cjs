@@ -294,9 +294,15 @@ test("the TikZ source carries witness lines, the dimension line, heads and the t
 
   assert.ok(node, "the label's node is written");
 
+  /*
+   * THE SIZE CARRIES ITS UNIT, so the number written is `11pt` and not a
+   * unit-less `11`. The magnitude is what is compared with the model's size.
+   */
   const written = Number(
-    (node.match(/\\fontsize\{([\d.]+)\}/) || [])[1],
+    (node.match(/\\fontsize\{([\d.]+)(?:pt)?\}/) || [])[1],
   );
+
+  assert.match(node, /\\fontsize\{[\d.]+pt\}/, "the size states its unit");
 
   assert.ok(
     Math.abs(written - size) < 0.01,
@@ -511,13 +517,34 @@ test("a vertical dimension is built the other way round", () => {
     assert.ok(near(from.y, to.y, 1e-6), "witness lines run horizontally");
   });
 
-  /* The number reads bottom-to-top on a vertical dimension. */
-  assert.ok(Math.abs(graphics.textFrame.angle) > 45);
+  /*
+   * AN UNLABELLED DIMENSION HAS NO FRAME.
+   *
+   * This dimension was created with no label, so it draws its lines and heads
+   * and NO text - there is no measurement to fall back to, and therefore no
+   * frame and no node. A labelled one reads bottom-to-top; that case has its
+   * own test below.
+   */
+  assert.equal(graphics.text, null, "no automatic distance label");
+  assert.equal(graphics.textFrame, null, "and no label frame");
+
+  vertical.dimensionKind = "variable";
+  vertical.content = "80";
+
+  assert.ok(
+    Math.abs(dimensions.graphicsFor(vertical, state).textFrame.angle) > 45,
+    "a labelled vertical dimension reads bottom-to-top",
+  );
 });
 
 test("the selection control stands clear of the number and off the dimension line", () => {
   const { dimension } = rectangleWithWidth();
   const handles = require(locate("handles.js"));
+
+  /* This test is about the CONTROL's placement, so the dimension is labelled. */
+  dimension.dimensionKind = "variable";
+  dimension.content = "132.7724 mm";
+
   const geometry = dimensions.graphicsFor(dimension, state);
 
   const [handle] = handles.editableHandlesFor(dimension);
@@ -556,6 +583,9 @@ test("the selection control stands clear of the number and off the dimension lin
 test("a selected dimension's frame is its drawn extent, not its placement point", () => {
   const { dimension } = rectangleWithWidth();
   const selection = require(locate("selection-transform.js"));
+
+  dimension.dimensionKind = "variable";
+  dimension.content = "132.7724 mm";
 
   const box = selection.selectionBounds([dimension], [dimension.id], state);
   const geometry = dimensions.graphicsFor(dimension, state);

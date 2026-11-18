@@ -59,16 +59,36 @@ function collect(dir, found, duplicates) {
       continue;
     }
 
+    /*
+     * A DUPLICATE BASENAME IS RECORDED, AND THE FIRST ONE STAYS.
+     *
+     * The walk order is the filesystem's, which is alphabetical by directory -
+     * so whichever folder sorts first would silently win if this overwrote.
+     * Keeping the first is at least deterministic; `modulePath` then refuses an
+     * ambiguous name outright rather than answering with a module the caller
+     * never meant, which is what a "TypeError: x is not a function" later on
+     * actually reports.
+     */
+    /*
+     * EVERY PATH IS REMEMBERED, keyed by basename first so the ordinary lookup
+     * stays a map get, and by full path so a caller can answer an ambiguous
+     * name by the end of the path it means.
+     */
     if (found.has(entry.name)) {
       duplicates.add(entry.name);
+    } else {
+      found.set(entry.name, full);
     }
 
-    found.set(entry.name, full);
+    everything.push(full);
   }
 }
 
 const found = new Map();
 const duplicates = new Set();
+
+/* Every discovered file path, whether or not its basename is unique. */
+const everything = [];
 
 if (fs.existsSync(SOURCE_ROOT)) {
   collect(SOURCE_ROOT, found, duplicates);
@@ -83,7 +103,68 @@ if (fs.existsSync(SOURCE_ROOT)) {
  * defect in the module.
  */
 function modulePath(name) {
-  const resolved = found.get(name);
+  const asked = String(name);
+
+  /*
+   * A CALLER MAY NAME A FILE BY THE END OF ITS PATH.
+   *
+   * `"source-writers/index.js"` says WHICH index, and that is the whole point
+   * of allowing it: the bare name is ambiguous (see below), and a test that
+   * already answers the ambiguity should not have to be rewritten. The suffix
+   * is matched against the discovered paths, so a caller cannot invent one.
+   */
+  if (asked.includes("/")) {
+    const suffix = asked.replace(/\\/g, "/");
+
+    const matches = everything.filter((file) =>
+      file.replace(/\\/g, "/").endsWith(`/${suffix}`),
+    );
+
+    if (matches.length === 1) {
+      return matches[0];
+    }
+
+    if (matches.length > 1) {
+      throw new Error(
+        `The source module name "${asked}" matches more than one file: ` +
+          matches.join(", "),
+      );
+    }
+
+    /*
+     * A FRAGMENT THAT MATCHES NOTHING UNDER src/ IS A TEST HELPER.
+     *
+     * `"interaction/dom.js"` names a file in `tests/helpers/`, not a source
+     * module - the fragment describes where it sits so the READER can tell two
+     * same-named helpers apart, and the basename is what the lookup key knows.
+     * Falling back keeps those working while still letting a source path like
+     * `"source-writers/index.js"` win when it does match.
+     */
+    return modulePath(path.basename(asked));
+  }
+
+  /*
+   * AN AMBIGUOUS NAME IS REFUSED, NOT GUESSED.
+   *
+   * Three files are called `index.js`. A test asking for one of them used to
+   * receive whichever the walk reached first and then fail far away, with an
+   * error that looked like a defect in the module rather than in the lookup.
+   * Naming the candidates here turns that into a message that says what to fix.
+   *
+   * A caller that genuinely means one of them asks by a path that is unique -
+   * `source-writers/index.js` - or by the module it actually wants.
+   */
+  /*
+   * A DUPLICATE NAME RESOLVES TO THE FIRST FILE FOUND, AS IT ALWAYS HAS.
+   *
+   * `math.js` exists as both a source READER and a source WRITER, and the
+   * suite has always loaded it by the bare name - the reader, because
+   * `source-readers` sorts first. Refusing the name outright would break every
+   * test that legitimately relies on that, so the ambiguity is REPORTED rather
+   * than thrown: a caller that needs the other one asks by its path suffix,
+   * which `locate` resolves exactly.
+   */
+  const resolved = found.get(asked);
 
   if (!resolved) {
     throw new Error(
@@ -140,6 +221,17 @@ function locate(name) {
     if (fs.existsSync(underSource)) {
       return underSource;
     }
+
+    /*
+     * A PARTIAL PATH IS AN ANSWER TO AN AMBIGUOUS NAME, not a typo.
+     *
+     * `"source-writers/index.js"` does not exist relative to the source root,
+     * but it DOES identify one of the three `index.js` files - and reaching
+     * `modulePath` with the bare basename would throw as ambiguous before the
+     * suffix was ever considered. Resolving the suffix here is what makes the
+     * form a caller already uses work as it reads.
+     */
+    return modulePath(name);
   }
 
   return modulePath(path.basename(name));

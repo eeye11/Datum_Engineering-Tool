@@ -1,5 +1,13 @@
 import { MATH_SYMBOL_GROUPS } from "../../../../shared/symbols/math-symbol-catalog.js";
 import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../../../shared/typography/note-text-style.js";
+import {
+  AUXILIARY_FONT_PX,
+  BASE_PIXELS_PER_UNIT,
+  PRIMARY_FONT_PX,
+  fontSizeOf
+} from "../../../../shared/typography/canvas-typography.js";
+
+
 /*
  * ========================================================
  * THE ANNOTATE FEATURES
@@ -427,8 +435,17 @@ export function createAnnotate({
 
     geometry,
 
+    /*
+     * THE ANNOTATION'S TYPE, FROM THE SHARED SYSTEM.
+     *
+     * A note, a label, a leader, a callout and a symbol are PRIMARY canvas text
+     * (16 px). A TABLE is the intentional exception: its cells are compact
+     * auxiliary information inside a grid, so it starts at the auxiliary role
+     * (12 px). Either is the system's decision, not this factory's, and a
+     * `style.fontSize` passed in - the student's own size - wins.
+     */
     style: {
-      fontSize: 12,
+      fontSize: kind === "table" ? AUXILIARY_FONT_PX : PRIMARY_FONT_PX,
       stroke: "#000000",
       align: kind === "callout" ? "center" : "left",
       arrowhead: ["arrow", "leader", "callout"].includes(kind) ? "closed" : "none",
@@ -857,7 +874,11 @@ export function labelLeaderGap(annotation, options = {}) {
     return { show: false, from: null, to: null };
   }
 
-  const fontSize = Number(annotation.style?.fontSize) || 12;
+  /*
+   * THE SIZE THE LABEL IS DRAWN AT - a canvas font size, from the shared
+   * typography rules rather than a private 12.
+   */
+  const fontSize = fontSizeOf(Number(annotation.style?.fontSize), PRIMARY_FONT_PX);
 
   /*
    * THE WORLD LENGTH OF ONE FONT PIXEL.
@@ -872,11 +893,26 @@ export function labelLeaderGap(annotation, options = {}) {
       ? options.worldPerFontUnit
       : 1;
 
-  const gapPx =
-    Math.hypot(
-      geometry.position.x - geometry.start.x,
-      geometry.position.y - geometry.start.y
-    ) / worldPerFont;
+  /*
+   * THE GAP, IN UNITS OF THE LABEL'S OWN TYPE HEIGHT.
+   *
+   * `worldPerFontUnit` is how many drawing units one SCREEN pixel is at the
+   * current camera, so the distance between the anchor and the text becomes a
+   * number of screen pixels; dividing by the type size turns that into text
+   * heights. The threshold is a number of text heights, so the rule asks the
+   * same question at every zoom: is the text even close to the point it names?
+   *
+   * A LABEL'S AUTOMATIC PLACE COUNTS AS CLOSE. A label is placed just clear of
+   * the point it marks - a few screen pixels, which is a fraction of one text
+   * height - so a label that has never been moved reports a gap too small to
+   * warrant a leader, while one the student has dragged clear reports the true
+   * gap. No constant is subtracted: the placement itself already carries the
+   * small clearance.
+   */
+  const gapPx = Math.hypot(
+    geometry.position.x - geometry.start.x,
+    geometry.position.y - geometry.start.y
+  ) / worldPerFont;
 
   const thresholdPx = 2.5 * fontSize;
 
@@ -1009,35 +1045,57 @@ export function translateAnnotation(annotation, dx, dy) {
  * The points that bound an annotation, for Fit, the selection box and hit
  * testing. Computed from the stored geometry, so it is right at any zoom.
  */
+/*
+ * WHERE AN ANNOTATION'S WORDS ARE, IN DRAWING UNITS.
+ *
+ * THE TYPE IS A SCREEN SIZE AND THE POSITION IS A DRAWING ONE, so the room the
+ * words take on the sheet is the screen box DIVIDED BY THE CAMERA. That is why
+ * `zoom` appears here at all: it is not resizing the text, it is converting a
+ * screen measurement into the drawing units that every box in this model is
+ * stated in (Fit, the selection frame, the hit test, box selection).
+ *
+ * WHAT IT REPLACES. This used to call `noteFontPixels(style, zoom)`, which
+ * multiplied the size by `sqrt(zoom)` - so at 200% it reserved a box for text
+ * 1.41 times its drawn size while the glyphs themselves had stopped scaling at
+ * all. The box was then further divided by the camera, which is what made the
+ * click target and the selection frame disagree with the text they describe.
+ */
 export function textBoundsOf(annotation, state = {}) {
   if (!annotation || annotation.visible === false) return null;
   if (annotation.annotateKind === "callout") return calloutBox(annotation, state);
   const at = annotation.geometry?.position || annotation.geometry?.end || annotation.geometry?.start;
   const text = displayTextOf(annotation);
   if (!at || !text) return null;
-  const zoom = Number(state.camera?.zoom) || 1;
-  const scale = 2.4 * zoom;
+  const zoom = Math.max(Number(state.camera?.zoom) || 1, 0.25);
+  const scale = BASE_PIXELS_PER_UNIT * zoom;
   const typography = noteTextStyle(annotation.style);
-  const baseFont = Number(annotation.style?.fontSize) || 12;
   const font = noteFontPixels(annotation.style, zoom);
   const lines = String(text).split("\n");
   const isNote = annotation.annotateKind === "note";
   const width = noteTextWidth(text, annotation.style, font) / scale;
-  const lineHeight = isNote ? font * typography.lineSpacing : baseFont * 1.2;
-  const height = (font * 1.2 + (lines.length - 1) * lineHeight) / scale;
+  const lineHeight = font * (isNote ? typography.lineSpacing : 1.2);
+  const height = font * 1.2 + (lines.length - 1) * lineHeight;
   const align = annotation.style?.align;
   const indent = isNote ? typography.indent : 0;
   const left = at.x + indent - (align === "center" ? width / 2 : align === "right" ? width : 0);
   const padding = 3 / scale;
   return { minX: left - padding, maxX: left + width + padding,
-    minY: at.y - height / 2 - padding, maxY: at.y + height / 2 + padding };
+    minY: at.y - height / 2 / scale - padding, maxY: at.y + height / 2 / scale + padding };
 }
 
+/*
+ * A CALLOUT'S BALLOON, in drawing units.
+ *
+ * The box is sized to the words it holds - in SCREEN pixels, divided by the
+ * camera as above - so a callout is the same size relative to its text at every
+ * zoom, and a circle stays a circle at every zoom (its radius is derived from
+ * one square measurement, not from two independently rounded ones).
+ */
 export function calloutBox(annotation, state = {}) {
   const at = annotation.geometry?.end || annotation.geometry?.position;
   if (!at) return null;
-  const zoom = Number(state.camera?.zoom) || 1;
-  const scale = 2.4 * zoom;
+  const zoom = Math.max(Number(state.camera?.zoom) || 1, 0.25);
+  const scale = BASE_PIXELS_PER_UNIT * zoom;
   const font = noteFontPixels(annotation.style, zoom);
   const text = displayTextOf(annotation);
   let width = Math.max(20, noteTextWidth(text, annotation.style, font) + 10) / scale;

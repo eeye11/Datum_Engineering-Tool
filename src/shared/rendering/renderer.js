@@ -7,6 +7,8 @@ import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, ANALYSIS_FRAME, analysis
 import { appendEntity } from "./entity-render.js";
 import { renderCrosshair, renderEngineeringGrid, renderInferenceLine, renderSelectionBox, renderSelectionHandles, renderSelectionOutline, renderSnapIndicator } from "./overlay-render.js";
 import { renderPreview } from "./preview-render.js";
+import { reconcileHeatLabels } from "../../features/workspace/model/heat-transfer/heat-labels.js";
+import { reconcileSurfaceArrows } from "../../features/workspace/model/heat-transfer/heat-model.js";
 
 
     /*
@@ -148,6 +150,35 @@ import { renderPreview } from "./preview-render.js";
          * deleted.
          */
         const renderFailures = [];
+
+        /*
+         * EVERY HEAT TRANSFER LABEL IS PUT BACK ON ITS PARENT FIRST.
+         *
+         * A label stores its place as an OFFSET from its parent, so the frame
+         * that shows a moved parent must also show the label at its new place.
+         * Reconciling here - once, before anything is drawn or measured - is
+         * what makes the label follow EVERY kind of parent movement with one
+         * rule, rather than a delta applied in each transform path.
+         */
+        try {
+            reconcileHeatLabels(state.objects || []);
+        } catch {
+            /* A reconcile problem must never stop the drawing being rendered. */
+        }
+
+        /*
+         * AND EVERY SURFACE ARROW IS RE-SQUARED TO ITS BOUNDARY.
+         *
+         * A Heat Flux arrow on a surface IS that surface's normal, so moving or
+         * turning the boundary has to move the arrow with it. Done here, once per
+         * frame, so it covers a drag, a handle, a typed shift, a rotation and an
+         * Undo without any of those paths knowing an arrow exists.
+         */
+        try {
+            reconcileSurfaceArrows(state.objects || []);
+        } catch {
+            /* As above: a reconcile problem never stops the render. */
+        }
 
         /*
          * THE COMMITTED DRAWING IS THE COMPILED SOURCE'S, so an overlay pass

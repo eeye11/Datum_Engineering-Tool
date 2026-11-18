@@ -18,19 +18,151 @@
    see what it did.
    ========================================================================== */
 
+/*
+ * ==========================================================================
+ * THE PLOT EDITOR - THE SKETCH EDITOR'S SHELL
+ * ==========================================================================
+ *
+ * The Plot Editor is now the SAME workspace as the Sketch Editor: a compact
+ * header, one toolbar, a canvas that takes every pixel the chrome does not, a
+ * properties column that scrolls on its own, and a footer. The shell's own
+ * rules live in `graph-sketch.css` and are shared by both editors, so the two
+ * cannot drift apart in proportions.
+ *
+ * WHAT THIS FILE STILL OWNS is the plot's own content: the function cards, the
+ * field rows and the toggles inside the properties column. The old two-pane
+ * container rules below are gone - they sized a 1180x720 box with a fixed
+ * preview, which is what left the graph floating in a large empty frame.
+ */
+
 .drawing-plot-editor {
     position: fixed;
     inset: 0;
-    z-index: 1000;
+
+    /*
+     * ABOVE THE APPLICATION'S OWN CHROME. The tab bar and the toolbars sit in
+     * the same stacking context, and a lower value left the editor's header
+     * underneath them - the popup appeared to start part-way down the window.
+     */
+    z-index: 4000;
 
     display: flex;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: stretch;
 
-    background: rgba(255, 255, 255, 0.9);
+    padding: clamp(6px, 1.6vmin, 20px);
+
+    /*
+     * THE OVERLAY IS OPAQUE, NOT A TINT.
+     *
+     * `--datum-overlay` is a translucent wash meant to dim a dialog's
+     * surroundings. Behind a full-window editor it let the application's tab
+     * bar and toolbars show THROUGH the popup, which read as the editor
+     * starting part-way down the window. A workspace that covers the screen
+     * must cover it.
+     */
+    background: var(--datum-surface);
     font-family: Arial, sans-serif;
     font-size: 13px;
     color: var(--datum-ink);
+}
+
+/*
+ * THE APP FILLS THE OVERLAY, exactly as the sketch editor's does.
+ *
+ * `flex: 1 1 auto` with `align-self: stretch` is what makes the editor take the
+ * whole window rather than shrinking to its content - the failure that left a
+ * full-height editor a few hundred pixels tall in the middle of the screen.
+ */
+.drawing-plot-editor .sketch-app {
+    flex: 1 1 auto;
+    align-self: stretch;
+
+    min-width: 0;
+    min-height: 0;
+}
+
+/*
+ * THE CANVAS IS THE DOMINANT ELEMENT - AND IT IS THE SHARED ONE.
+ *
+ * The stage, the canvas and the SVG are laid out by `graph-sketch.css`, which
+ * already makes the stage take every pixel the properties column does not and
+ * the SVG fill its cell. Nothing is restated here: an earlier attempt to
+ * position the canvas absolutely escaped the stage and covered the whole
+ * editor, hiding the header, toolbar and properties panel behind it.
+ */
+
+/*
+ * THE PROPERTIES COLUMN SCROLLS, AND ITS ROWS FIT IT.
+ *
+ * The inspector is a fixed-width column, so a row that assumes a wide form
+ * layout overflows it - the toggles were clipped by the row beneath. These
+ * rules make every row a single line that wraps its own label rather than
+ * spilling out of the column.
+ */
+.drawing-plot-editor .sketch-inspector-scroll {
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.drawing-plot-editor .plot-editor-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    min-width: 0;
+    padding: 3px 0;
+
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.drawing-plot-editor .plot-editor-toggle span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.drawing-plot-editor .plot-editor-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+
+    min-width: 0;
+}
+
+.drawing-plot-editor .plot-editor-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    min-width: 0;
+    font-size: 11px;
+}
+
+.drawing-plot-editor .plot-editor-field input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/*
+ * THE TOOLBAR'S BUTTONS KEEP THEIR OWN WIDTH.
+ *
+ * The shared toolbar is a flex row; without `flex: 0 0 auto` a button stretches
+ * to fill the row and the labels wrap onto two lines. These are controls, not
+ * columns.
+ */
+.drawing-plot-editor .sketch-app-toolbar .sketch-mini {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+/* A maximised preview gives the whole body to the canvas. */
+.drawing-plot-editor .sketch-app-body.is-preview-only .sketch-inspector,
+.drawing-plot-editor .sketch-app-body.is-preview-only .sketch-divider {
+    display: none;
 }
 
 .plot-editor {

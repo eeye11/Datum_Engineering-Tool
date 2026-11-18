@@ -17,6 +17,7 @@ import drawDynamicsSymbol from "./entities/draw-dynamics.js";
 import { drawRankineCycle, drawNozzleDiffuser, drawTurbineCompressor, drawTank, drawPistonCylinder, drawProcessOverlay, drawSaturationCurve } from "./entities/draw-thermodynamics.js";
 import { drawElbow, drawJunction, drawPipeDuct, drawFlowArrow, drawReducer, drawEquipment, drawVessel, drawFluidLevel, drawFreeFlowArrow, drawFlowDirection, drawPressureProfile, drawFlowProfile, drawSectionPlane } from "./entities/draw-fluids.js";
 import { MATH_RENDERERS } from "./entities/draw-math.js";
+import { HEAT_RENDERERS } from "./entities/draw-heat-transfer.js";
 import { isProcessDiagram } from "../../features/workspace/model/thermodynamics/saturation-curve.js";
 import { isPistonCylinder } from "../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { isControlBlock, isGain, isSum } from "../model/plant.js";
@@ -123,7 +124,18 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
          * no earlier test can match one - and being last keeps the existing
          * dispatch order untouched.
          */
-        ...MATH_RENDERERS
+        ...MATH_RENDERERS,
+
+        /*
+         * THE HEAT TRANSFER OBJECTS.
+         *
+         * Each is its own type with its own painter, and the table is built
+         * from the Heat Transfer module's own list so a type added there is
+         * drawn here without a second edit. They are LAST because their types
+         * are unique - no earlier test can match one - and being last keeps the
+         * existing dispatch order untouched.
+         */
+        ...HEAT_RENDERERS
     ];
 
     /*
@@ -156,10 +168,22 @@ import { carnotCycleFeatures } from "../../features/workspace/model/thermodynami
         const parentSvg = svg;
         svg = createSvgElement("g");
         svg.classList.add("drawing-feature");
-        if (state.selection?.selectedObjectIds?.includes(entity.id)) {
+
+        /*
+         * THE OBJECT BEING TYPED INTO IS NOT DRAWN AS "SELECTED".
+         *
+         * Opening a text field selects its object, and the selection style
+         * recolours the feature and adds a glow - a second, bright box around
+         * the words the student is already inside. While the field is open the
+         * editor IS the visible object, so the highlight stands down and comes
+         * back when the field closes.
+         */
+        const beingEdited = state.textEntryObjectId === entity.id;
+
+        if (!beingEdited && state.selection?.selectedObjectIds?.includes(entity.id)) {
             svg.classList.add("drawing-entity-selected");
         }
-        if (state.selection?.hoveredObjectId === entity.id) {
+        if (!beingEdited && state.selection?.hoveredObjectId === entity.id) {
             svg.classList.add("drawing-entity-hovered");
         }
         svg.dataset.featureId = entity.id;

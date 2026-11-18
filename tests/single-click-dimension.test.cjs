@@ -228,7 +228,7 @@ for (const [label, object] of LENGTH_BEARING) {
     placement: { x: 50, y: 20 },
   });
 
-  const text = dimModel.formatMeasurement(dimension, state);
+  const text = dimModel.describeMeasurement(dimension, state);
 
   check(
     `${label}: and the dimension states its measured length with a unit`,
@@ -258,8 +258,8 @@ console.log("\n  A CIRCLE AND AN ARC ARE WHOLE REFERENCES TOO\n");
   check(
     "a circle yields a diameter, and a diameter of 50 mm",
     circleDescriptor.dimensionType === "diameter" &&
-      /50(\.0+)?\s*mm/.test(String(dimModel.formatMeasurement(dim, state))),
-    `${circleDescriptor.dimensionType} :: ${dimModel.formatMeasurement(dim, state)}`,
+      /50(\.0+)?\s*mm/.test(String(dimModel.describeMeasurement(dim, state))),
+    `${circleDescriptor.dimensionType} :: ${dimModel.describeMeasurement(dim, state)}`,
   );
 
   const arcRef = refForFeature(byId("arc-1"), { x: 10, y: 0 });
@@ -429,8 +429,8 @@ console.log("\n  TWO SIDES OF ONE PART: PARALLEL IS A DISTANCE, ELSE AN ANGLE\n"
 
     check(
       "and that distance is the 40 mm between them",
-      /40(\.0+)?\s*mm/.test(String(dimModel.formatMeasurement(dim, state))),
-      String(dimModel.formatMeasurement(dim, state)),
+      /40(\.0+)?\s*mm/.test(String(dimModel.describeMeasurement(dim, state))),
+      String(dimModel.describeMeasurement(dim, state)),
     );
   }
 
@@ -480,7 +480,7 @@ console.log("\n  AN ANGLE DOES NOT DEPEND ON WHICH WAY A LINE WAS DRAWN\n");
       placement: { x: 30, y: 30 },
     });
 
-    return String(dimModel.formatMeasurement(dim, state));
+    return String(dimModel.describeMeasurement(dim, state));
   };
 
   const baseline = angleOf(axis, tilted);
@@ -512,3 +512,4 @@ console.log("\n  AN ANGLE DOES NOT DEPEND ON WHICH WAY A LINE WAS DRAWN\n");
 
 console.log(`\n${pass} passed, ${fail} failed\n`);
 if (fail) process.exitCode = 1;
+

@@ -240,6 +240,14 @@ export function commitAnnotate(options) {
 
   const object =
     enggDrawingState.geometryFactories.annotate({
+      /*
+       * THE DOCUMENT, so the new object takes the quick-access DEFAULT SIZE -
+       * the same size the control shows with nothing selected. It is a separate
+       * key the factory reads (recognised by its `objects` list), not a spread of
+       * the document, so it cannot overwrite any annotate option the tool stated.
+       */
+      document: drawingState,
+
       kind,
       text: options.text,
       position: options.position,
@@ -270,6 +278,7 @@ export function commitAnnotate(options) {
        * replace the 3x3 that `defaultsFor` supplies - a `rows: undefined` from a
        * caller that did not choose leaves the default in place.
        */
+
       ...(Number.isFinite(Number(options.rows)) &&
       Number.isFinite(Number(options.columns))
         ? { rows: options.rows, columns: options.columns }

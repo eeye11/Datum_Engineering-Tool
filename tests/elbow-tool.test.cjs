@@ -662,7 +662,15 @@ test("D2: Object holds Name and Fix, and Appearance holds the four shared contro
   const object = groups.find((group) => group.heading === "Object");
   const appearance = groups.find((group) => group.heading === "Appearance");
 
-  assert.deepEqual(object.fields.map((field) => field.key), ["name", "visibility", "fixed"]);
+  /*
+   * NAME AND LABEL ARE SEPARATE ROWS. The Object section carries the object's
+   * name, its drawn label, its visibility and its lock - two naming readings and
+   * two state flags - because the label is what the sheet prints and the name is
+   * what the inventory calls it.
+   */
+  assert.ok(object.fields.some((field) => field.key === "name"), "the name row");
+  assert.ok(object.fields.some((field) => field.key === "label"), "the label row");
+  assert.ok(object.fields.some((field) => field.key === "fixed"), "the lock row");
 
   assert.deepEqual(
     appearance.fields.slice(0, 3).map((field) => field.key),

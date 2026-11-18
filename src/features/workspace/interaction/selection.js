@@ -30,6 +30,7 @@ import { renderEngineeringTools, setToolMessage } from "../../../components/layo
 import { finishTrussConstruction } from "../statics/truss-tool.js";
 import { clearGlobalToolHighlight } from "../../../components/layout/workspace/workspace-controls.js";
 import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruction } from "./pipe-duct-tool.js";
+import { isHeatPolyTool, heatPathIsOpen, finishHeatPath } from "./heat-transfer-tool.js";
 
 /*
  * ========================================================
@@ -1049,6 +1050,19 @@ export function finishActiveConstruction() {
     if (isProcessPlotTool(drawingState.activeTool)) return finishProcessPath();
     const interaction =
         drawingState.interaction;
+
+    /*
+     * ENTER FINISHES A HEAT TRANSFER PATH.
+     *
+     * Each segment was committed as it was released, so the path is already a
+     * permanent object; Enter only forgets the continuation so the next drag
+     * begins a new, independent path - the same "double-click / Enter to
+     * finish" a Pipe / Duct path uses.
+     */
+    if (isHeatPolyTool(drawingState.activeTool) && heatPathIsOpen()) {
+        finishHeatPath(drawingState.activeTool);
+        return true;
+    }
 
     /*
      * DIMENSION REFERENCE SELECTION. Enter is the commit point:

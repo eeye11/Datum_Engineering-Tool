@@ -39,6 +39,7 @@
 import { drawingState, editorState } from "../../../features/workspace/editor-state.js";
 import enggDrawingState from "../../../shared/model/drawing-state.js";
 import {
+    definitionOf,
     displayNameOf,
     fieldLabel,
     groupsFor,
@@ -53,6 +54,7 @@ import {
     typeLabelOf,
     writeField
 } from "./feature-schema.js";
+import { setAnnotationObjectLookup } from "../../../shared/rendering/latex/source-writers/annotations.js";
 import { reconcileFluidConnections } from "../../../features/workspace/interaction/pipe-duct-tool.js";
 import { applyElbowRadius } from "../../../features/workspace/interaction/elbow-radius.js";
 import { visibilityButtonMarkup } from "./objects-list.js";
@@ -76,9 +78,20 @@ setElbowRunLookup(
  * arrow - so the row asks the live document rather than carrying a copy of the
  * name it was placed with.
  */
-setFeatureObjectLookup(
-    (id) => (drawingState.objects || []).find((object) => object.id === id) || null
-);
+const liveObjectById = (id) =>
+    (drawingState.objects || []).find((object) => object.id === id) || null;
+
+setFeatureObjectLookup(liveObjectById);
+
+/*
+ * AND THE SAME LOOKUP FOR THE SOURCE WRITER.
+ *
+ * A Heat Transfer label is written at its PARENT'S anchor plus its own offset,
+ * so the writer needs to resolve the parent. It may not import the document -
+ * it is imported BY the document's layers - so the lookup is published here, by
+ * the module that already holds one, and read at call time.
+ */
+setAnnotationObjectLookup(liveObjectById);
 
 /*
  * AND THE ONE OPERATION THAT APPLIES AN ABSOLUTE BEND RADIUS.
@@ -199,9 +212,9 @@ function fieldState(objects, key) {
  * ROW MARKUP
  * ============================================================ */
 
-function rowMarkup(label, control, { mixed = false } = {}) {
+function rowMarkup(label, control, { mixed = false, className = "" } = {}) {
     return (
-        `<div class="dfp-row">` +
+        `<div class="dfp-row${className ? ` ${className}` : ""}">` +
         `<span class="dfp-row-label">${escapeHtml(label)}</span>` +
         `<span class="dfp-row-control${mixed ? " is-mixed" : ""}">${control}</span>` +
         `</div>`
@@ -500,21 +513,159 @@ function fieldMarkup(key, definition, objects) {
     }
 
     if (definition.kind === "text") {
+        const multiline =
+            key === "text" && objects.every(object => object.annotateKind === "note");
+
         return rowMarkup(
             label,
-            textMarkup(
-                key,
-                label,
-                state,
-                definition,
-                key === "text" &&
-                    objects.every(object => object.annotateKind === "note")
-            ),
-            options
+            textMarkup(key, label, state, definition, multiline),
+            { mixed: state.mixed, className: multiline ? "dfp-row-note" : "" }
         );
     }
 
     return "";
+}
+
+/* ============================================================
+ * TEXT FORMATTING - A DROPDOWN UNDER THE LABEL ROW
+ * ============================================================
+ *
+ * The ONE place canvas text is formatted. It is a collapsible section inside
+ * the Object section, immediately after the Label row, and it appears ONLY when
+ * the selected object actually has displayed text - an empty label has nothing
+ * to format, and a formatting panel over nothing is a box of dead controls.
+ *
+ * IT IS ALWAYS CLOSED WHEN THE PANEL IS BUILT. The student opens it. Typing a
+ * label must never pop it open, and selecting another object must not either -
+ * formatting is a deliberate act, not a side effect of writing a word.
+ *
+ * The rows are the SHARED text-control rows every note already uses
+ * (`noteFont`, `noteSize`, ...), read through the same `fieldState`/`writeField`
+ * path, so the panel, the canvas and the generated source cannot disagree.
+ */
+const TEXT_FORMATTING_FIELDS = [
+    "noteFont",
+    "noteSize",
+    "noteBold",
+    "noteItalic",
+    "noteUnderline",
+    "noteAlign",
+    "noteIndent",
+    "noteSpacing"
+];
+
+/*
+ * DOES THIS SELECTION HAVE TEXT TO FORMAT?
+ *
+ * Asked of the OBJECT rather than of a tool name, so a Heat Transfer notation, a
+ * note, a dimension label and a symbol's annotation all answer the same way.
+ */
+/*
+ * DOES THIS OBJECT SHOW ANY TEXT AT ALL?
+ *
+ * The formatting disclosure appears only when there is something to format, so
+ * this answers every reading an object may keep its words in:
+ *
+ *   `text`   an annotate family member's own words
+ *   `label`  the text drawn beside a Geometry feature or a symbol
+ *   `name`   where the object's name IS its drawn text (a Heat notation, a
+ *            Plant's label), which the canvas prints from the name
+ *
+ */
+function hasDisplayedText(object) {
+    if (!object || object.type === "dimension") {
+        return false;
+    }
+
+    const trimmed = (value) => (typeof value === "string" ? value.trim() : "");
+
+    return Boolean(
+        trimmed(object.text) ||
+            trimmed(object.label) ||
+            trimmed(object.name)
+    );
+}
+
+/*
+ * RESOLVE FIELD KEYS TO THEIR DEFINITIONS, from the schema the panel uses.
+ *
+ * `groupsFor` builds the full set for this selection, including the collapsible
+ * tool groups, so a key asked for here is resolved by the SAME table the rows
+ * above it are - one schema, no second copy.
+ */
+function definitionsOf(keys, objects) {
+    const found = new Map();
+
+    if (!objects.length) {
+        return found;
+    }
+
+    /*
+     * ASKED OF THE SCHEMA ITSELF.
+     *
+     * A note's formatting rows live in a tool group that the annotation's Object
+     * section deliberately does not repeat - the Text Formatting dropdown is
+     * where they appear - so resolving them only from `groupsFor` found nothing
+     * and the dropdown came up empty. `definitionOf` is the authority for what a
+     * key MEANS, and each definition's own `applies` still decides whether it
+     * suits the selected object.
+     */
+    keys.forEach((key) => {
+        const definition = definitionOf(key);
+
+        if (definition && objects.every((object) => definition.applies(object))) {
+            found.set(key, definition);
+        }
+    });
+
+    return found;
+}
+function textFormattingMarkup(objects) {
+    if (!objects.length || !objects.every(hasDisplayedText)) {
+        return "";
+    }
+
+    const id = "dfp-text-formatting";
+    const open = expandedFeatureSections.has(id);
+
+    /*
+     * THE ROWS COME FROM THE SAME SCHEMA THE NOTE USES.
+     *
+     * `groupsFor` already resolves a field key to its definition - including a
+     * note's font, size, weight, alignment and line spacing - so the dropdown
+     * borrows that resolution rather than reaching for a private table. A field
+     * that does not apply to the object is skipped, exactly as the shared
+     * sections skip it.
+     */
+    const definitions = definitionsOf(TEXT_FORMATTING_FIELDS, objects);
+
+    const rows = TEXT_FORMATTING_FIELDS.map((key) =>
+        definitions.get(key)
+            ? fieldMarkup(key, definitions.get(key), objects)
+            : ""
+    )
+        .filter(Boolean)
+        .join("");
+
+    if (!rows) {
+        return "";
+    }
+
+    return (
+        `<div class="dfp-section dfp-section-collapsible dfp-text-formatting${open ? " is-open" : ""}" data-feature-group="text-formatting">` +
+            `<button type="button" class="dfp-section-heading dfp-section-toggle" ` +
+            `data-feature-section-toggle="${id}" ` +
+            `aria-expanded="${open}" aria-controls="${id}">` +
+            `<span class="dfp-section-toggle-label">Text Formatting</span>` +
+            `<span class="dfp-section-caret" aria-hidden="true">` +
+            `<svg viewBox="0 0 12 12" focusable="false"><path d="M2.5 4.25L6 7.75l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` +
+            `</span>` +
+            `</button>` +
+            `<div class="dfp-section-body dfp-text-formatting-body" id="${id}"${open ? "" : " hidden"}>` +
+            rows +
+            `</div>` +
+            `</div>`
+    );
 }
 
 /* ============================================================
@@ -833,8 +984,22 @@ export function featuresMarkupForSelection(objects = selectedObjects()) {
 
     order.forEach((id) => {
         const { group, fields } = sections.get(id);
+        /*
+         * NAME, LABEL, TEXT FORMATTING, FIX.
+         *
+         * The shared Object section is built from the schema, which never
+         * carries a formatting group - so the dropdown is INJECTED here, after
+         * the `label` row and before `fixed`, rather than declared per tool.
+         * That is what makes the order the SAME everywhere: a tool cannot put
+         * its label somewhere else, because no tool declares the label row's
+         * neighbours at all.
+         */
         const rows = [...fields.entries()]
-            .map(([key, definition]) => fieldMarkup(key, definition, objects))
+            .map(([key, definition]) => {
+                const row = fieldMarkup(key, definition, objects);
+
+                return key === "label" ? row + textFormattingMarkup(objects) : row;
+            })
             .join("");
 
         if (!rows) {

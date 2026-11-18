@@ -32,7 +32,7 @@ const check = (name, ok, detail) => {
   }
 };
 
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 const { dom } = createHarness(projectRoot, JSDOM, require);
 

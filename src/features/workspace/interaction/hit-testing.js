@@ -40,6 +40,7 @@ import enggPressureProfile from "../model/fluids/pressure-profile.js";
 import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { polygonContainsPoint } from "../model/fluids/fluids-shared.js";
+import { heatContainsPoint, heatObjectPoints } from "../model/heat-transfer/heat-hit.js";
 
 /*
  * THE POINT PRIMITIVES ARE RE-EXPORTED, NOT RE-DEFINED.
@@ -876,6 +877,22 @@ export function objectAtPoint(
                                 ) <= tolerance
                         )
                     );
+                }
+
+                /*
+                 * A HEAT TRANSFER OBJECT IS PICKED BY ITS OWN DRAWN FORM.
+                 *
+                 * The fifteen Heat Transfer types answer through one module
+                 * (heat-hit.js) which reads each object's model - a Wall / Slab
+                 * on either line, a Composite Wall inside it or on a divider, a
+                 * boundary along its span or on a decoration - so what a student
+                 * can click is exactly what is painted. A null answer means the
+                 * object is not a Heat Transfer one.
+                 */
+                const heat = heatContainsPoint(object, point, tolerance);
+
+                if (heat !== null) {
+                    return heat;
                 }
 
                 /*
@@ -2657,6 +2674,21 @@ export function objectPoints(
 ) {
     const geometry =
         object.geometry;
+
+    /*
+     * A HEAT TRANSFER OBJECT CONTRIBUTES THE POINTS THAT FRAME IT.
+     *
+     * A Wall / Slab offers both faces' ends, a Composite Wall its corners and
+     * dividers, a path its control points - so a Fit frames the whole object
+     * rather than clipping it to a centreline, and a box selection catches the
+     * ink that is actually drawn. A null answer means it is not a Heat
+     * Transfer object.
+     */
+    const heat = heatObjectPoints(object);
+
+    if (heat) {
+        return heat;
+    }
 
     if (
         object.type ===

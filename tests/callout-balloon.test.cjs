@@ -42,10 +42,19 @@ test('Leader is removed; a two-click Callout creates an editable numbered balloo
  assert.equal(marker.targetFeatureId,body.id);assert.equal(marker.anchorRef.featureId,body.id);
  /* The Callout tool stays armed after placing one; Escape or empty canvas ends it. */
  assert.equal(state.activeTool,'callout');
- const input=document.querySelector('.drawing-canvas-text-editor textarea');assert.ok(input);assert.equal(document.activeElement,input);
+ /*
+  * THE BALLOON'S TEXT IS TYPED ON THE DRAWING, IN THE SHARED INLINE FIELD.
+  *
+  * There is no popup and no second editor: the callout opens the same label
+  * field a note, a Heat notation and a block's name use, mounted INSIDE the
+  * canvas at the balloon's own point.
+  */
+ const field=()=>document.querySelector('.drawing-label-entry')||document.querySelector('.drawing-inline-entry');
+ const input=field().querySelector('#noteText');assert.ok(input);assert.equal(document.activeElement,input);
+ assert.equal(field().dataset.mountedOn,'canvas','the field is mounted on the drawing');
  input.value='A';input.dispatchEvent(new window.Event('input',{bubbles:true}));assert.equal(live().text,'A');
  input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
- assert.equal(document.querySelector('.drawing-canvas-text-editor'),null);
+ assert.equal(field(),null);
 });
 test('the arrow follows a moved and resized reference, while the balloon stays put',()=>{
  const previous=model.snapshotDrawing(state);

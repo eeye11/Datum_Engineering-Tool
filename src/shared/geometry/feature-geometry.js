@@ -19,6 +19,7 @@ import { isControlBlock, isSum } from "../model/plant.js";
 import { isSignalLine } from "../model/signal-line.js";
 import { DYNAMICS_OWN_TYPES } from "../../features/workspace/dynamics/dynamics-hierarchy.js";
 import { coordinateSystemArms } from "./feature-handles.js";
+import enggHeatModel from "../../features/workspace/model/heat-transfer/heat-model.js";
 
 /*
  * The centre of a feature, in world coordinates.
@@ -445,6 +446,41 @@ function definingPoints(
     }
 
     /*
+     * A HEAT TRANSFER OBJECT IS DEFINED BY ITS OWN MODEL.
+     *
+     * A Wall / Slab is its centreline, a path its points, a boundary and an
+     * arrow their ends, a symbol its centre, a Composite Wall its centre - and
+     * a Thermal Region and a Control Volume their corners. Resolving them here
+     * means Move, Rotate and the bounds all carry the whole object without a
+     * second description of which points it is made of.
+     */
+    if (enggHeatModel.isHeatType(type)) {
+        if (type === "thermal-region" || type === "control-volume") {
+            const corners = type === "thermal-region"
+                ? enggHeatModel.regionCorners({ geometry: g, type })
+                : enggHeatModel.controlVolumeCorners({ geometry: g, type });
+
+            return valid(corners || []);
+        }
+
+        if (type === "composite-wall") {
+            const geometry = enggHeatModel.compositeWallGeometry({ geometry: g, type });
+
+            return valid(geometry?.corners || []);
+        }
+
+        if (type === "fin") {
+            const geometry = enggHeatModel.finGeometry({ geometry: g, type });
+
+            return valid(geometry?.corners || []);
+        }
+
+        return valid([g.start, g.end, g.base, g.center, g.position]).concat(
+            Array.isArray(g.points) ? valid(g.points) : []
+        );
+    }
+
+    /*
      * Anything else that stores an explicit point list
      * (a Triangle or a Polyline) moves each of its
      * points, which is what keeps a triangle's vertices
@@ -741,6 +777,48 @@ function rotateObjectAbout(
      * the symbol's drawing rotating WITH the shape rather than staying
      * pinned to the sheet while its outline spins.
      */
+    /*
+     * THE HEAT TRANSFER OBJECTS TURN BY WHAT DEFINES THEM.
+     *
+     * A region, a composite wall and the border of a control volume are
+     * centre-and-angle shapes: turn the centre and advance the angle. A symbol
+     * is the same. Everything else - a path, an arrow, a boundary, a wall, a
+     * fin - is a set of points, and the shared fall-through below turns them
+     * all. The requirement forbids nothing here: a rotated Composite Wall keeps
+     * its layer arrangement because the layer widths are unchanged.
+     */
+    if (enggHeatModel.isHeatType(type)) {
+        const degrees = (radians * 180) / Math.PI;
+
+        if (type === "thermal-region" || type === "control-volume") {
+            const centre = {
+                x: g.position.x + g.width / 2,
+                y: g.position.y - g.height / 2
+            };
+
+            turn(centre);
+
+            g.position = { x: centre.x - g.width / 2, y: centre.y + g.height / 2 };
+            g.rotation = (Number(g.rotation) || 0) + (radians);
+
+            return;
+        }
+
+        if (
+            type === "composite-wall" ||
+            type === "heat-source-sink" ||
+            type === "thermal-circuit-element"
+        ) {
+            if (g.center) turn(g.center);
+
+            g.rotation = ((Number(g.rotation) || 0) + degrees) % 360;
+
+            return;
+        }
+
+        /* Every other Heat Transfer type turns through its own points. */
+    }
+
     if (DYNAMICS_OWN_TYPES.has(type)) {
         const degrees = (radians * 180) / Math.PI;
 

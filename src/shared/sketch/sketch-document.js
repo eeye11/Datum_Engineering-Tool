@@ -106,7 +106,12 @@ export function makeGeometry({
   original = null,
   correction = null,
   anchors = [],
-  guides = [],
+  /* The anchor a circle or arc was centred on, when the student chose one. */
+  centrePointId = null,
+  /* An arc's angular extent - its own mathematics, not a rotation. */
+  startAngle = null,
+  endAngle = null,
+  clockwise = false,
 } = {}) {
   return {
     id: id || nextGeometryId(kind),
@@ -129,9 +134,23 @@ export function makeGeometry({
     /* The stroke as drawn, so restoring it is a property of the geometry. */
     original: Array.isArray(original) ? original.map(copyPoint) : null,
     correction: correction || null,
-    /* Which student points belong to this element. */
+    /*
+     * WHICH STUDENT POINTS BELONG TO THIS ELEMENT.
+     *
+     * This list IS the constraint, and it is the only one: a point not here
+     * (and not placed on the element, and not chosen as its centre) does not
+     * constrain it. An anchor is never a global boundary.
+     */
     anchors: anchors.slice ? [...anchors] : [],
-    guides: guides.slice ? [...guides] : [],
+    centrePointId: centrePointId || null,
+    /*
+     * AN ARC REMEMBERS ITS ANGLES. They are what makes it an arc rather than a
+     * circle with a hidden missing piece, and the source, the renderer and the
+     * extent calculation all read them.
+     */
+    startAngle: startAngle === null ? null : finite(startAngle),
+    endAngle: endAngle === null ? null : finite(endAngle),
+    clockwise: Boolean(clockwise),
   };
 }
 
@@ -145,10 +164,7 @@ export function createSketchDocument(options = {}) {
   ).map((entry) => makeGeometry(entry));
 
   /* Every point carried inside the geometry is also a document point. */
-  const inline = geometry.flatMap((entry) => [
-    ...entry.anchors,
-    ...entry.guides,
-  ]);
+  const inline = geometry.flatMap((entry) => [...entry.anchors]);
 
   return {
     geometry,
@@ -179,9 +195,29 @@ export function withRevision(document) {
 export function addGeometry(document, geometry) {
   const element = makeGeometry(geometry);
 
+  /*
+   * A NEW ELEMENT TAKES ITS POINTS WITH IT.
+   *
+   * The anchors a caller names are recorded on BOTH sides - the element lists
+   * them, and each point names the element and its role. That is what makes an
+   * association explicit in the data model rather than a guess at correction
+   * time, and it is why a point can be shown as "belonging to Curve 2" in the
+   * inspector.
+   */
+  const points = document.points.map((point) =>
+    element.anchors.includes(point.id)
+      ? {
+          ...point,
+          geometryId: element.id,
+          role: element.centrePointId === point.id ? "centre" : point.role || "path",
+        }
+      : point,
+  );
+
   return withRevision({
     ...document,
     geometry: [...document.geometry, element],
+    points,
   });
 }
 
@@ -215,12 +251,29 @@ export function removeGeometry(document, id) {
   }
 
   /*
-   * THE POINTS THAT LIVED ON IT GO WITH IT. An anchor placed on a curve belongs
-   * to that curve; leaving it behind would leave a constraint pointing at
-   * nothing, and the next fit would try to honour a location the student can no
-   * longer see.
+   * THE POINTS THAT LIVED ON IT GO WITH IT, AND THE ONES IT ONLY REFERENCED
+   * ARE KEPT.
+   *
+   * An anchor placed ON a curve belongs to that curve, and deleting the curve
+   * must not leave a constraint pointing at nothing. An anchor the curve merely
+   * PASSED THROUGH was placed independently - it may be associated with another
+   * shape, or be the point of the whole drawing - so it stays, and only its
+   * association is cleared.
    */
-  const points = document.points.filter((point) => point.geometryId !== id);
+  /*
+   * A POINT IS TAKEN WITH THE ELEMENT ONLY IF THE ELEMENT OWNED ITS PLACE ON
+   * THE PATH. Such a point records a location on a curve that no longer exists,
+   * so leaving it behind would be a constraint on nothing. Every other point
+   * that merely names the element - a centre, or an anchor the stroke passed
+   * through - keeps its exact coordinates and simply loses the association.
+   */
+  const points = document.points
+    .filter((point) => !(point.geometryId === id && point.association === "placed"))
+    .map((point) =>
+      point.geometryId === id
+        ? { ...point, geometryId: null, parameter: null, role: "path" }
+        : point,
+    );
 
   return withRevision({ ...document, geometry, points });
 }
@@ -309,20 +362,20 @@ export function addPoint(
     coordinateMode = "absolute",
     referenceId = null,
     locked = false,
-    influence = 1,
+    role = "path",
   } = {},
 ) {
   const point = makePoint({
     type,
     x,
     y,
-    name: name || nextPointName(document.points, type === "guide" ? "G" : "P"),
+    name: name || nextPointName(document.points, "P"),
     geometryId,
     parameter,
     coordinateMode,
     referenceId,
     locked,
-    influence,
+    role,
   });
 
   return {
@@ -332,6 +385,146 @@ export function addPoint(
     }),
     point,
   };
+}
+
+/*
+ * ASSOCIATE A POINT WITH A GEOMETRY - the student's explicit act.
+ *
+ * Recorded on both sides. `role` is "path" for a point the geometry must pass
+ * through and "centre" for the centre of a circle or an arc. A centre is
+ * stored on the element as `centrePointId` as well, so a corrector can find it
+ * without scanning every point, and the element's `centre` is set to the
+ * point's EXACT coordinates rather than re-fitted.
+ */
+export function associatePointWithGeometry(document, pointId, geometryId, role = "path") {
+  const point = document.points.find((entry) => entry.id === pointId);
+  const element = document.geometry.find((entry) => entry.id === geometryId);
+
+  if (!point || !element) {
+    return document;
+  }
+
+  const absolute = resolvePoints(document.points).find((entry) => entry.id === pointId)
+    ?.absolute || { x: point.x, y: point.y };
+
+  const points = document.points.map((entry) =>
+    entry.id === pointId
+      ? { ...entry, geometryId, role: role === "centre" ? "centre" : "path" }
+      : entry,
+  );
+
+  const geometry = document.geometry.map((entry) => {
+    if (entry.id !== geometryId) {
+      return entry;
+    }
+
+    if (role === "centre") {
+      return {
+        ...entry,
+        centre: { x: absolute.x, y: absolute.y },
+        centrePointId: pointId,
+        anchors: entry.anchors.includes(pointId) ? entry.anchors : [...entry.anchors, pointId],
+        points: withCentrePoints(entry, { x: absolute.x, y: absolute.y }),
+        segments: [],
+      };
+    }
+
+    return {
+      ...entry,
+      anchors: entry.anchors.includes(pointId) ? entry.anchors : [...entry.anchors, pointId],
+    };
+  });
+
+  return withRevision({ ...document, points, geometry });
+}
+
+/* The element's sampled points, rebuilt around a new centre. */
+function withCentrePoints(element, centre) {
+  const kind = element.kind;
+
+  const radius = Number(element.radius) || 0;
+  const radiusX = Number(element.radiusX) || radius;
+  const radiusY = Number(element.radiusY) || radius;
+
+  if (kind === "circle") {
+    return Array.from({ length: 65 }, (_, index) => {
+      const angle = (index / 64) * Math.PI * 2;
+
+      return {
+        x: centre.x + radius * Math.cos(angle),
+        y: centre.y + radius * Math.sin(angle),
+      };
+    });
+  }
+
+  if (kind === "ellipse") {
+    return Array.from({ length: 65 }, (_, index) => {
+      const angle = (index / 64) * Math.PI * 2;
+
+      return {
+        x: centre.x + radiusX * Math.cos(angle),
+        y: centre.y + radiusY * Math.sin(angle),
+      };
+    });
+  }
+
+  if (kind === "arc") {
+    const start = Number(element.startAngle) || 0;
+    let end = Number(element.endAngle) || 0;
+
+    if (element.clockwise) {
+      while (end > start) end -= Math.PI * 2;
+    } else {
+      while (end < start) end += Math.PI * 2;
+    }
+
+    return Array.from({ length: 33 }, (_, index) => {
+      const angle = start + ((end - start) * index) / 32;
+
+      return {
+        x: centre.x + radius * Math.cos(angle),
+        y: centre.y + radius * Math.sin(angle),
+      };
+    });
+  }
+
+  return element.points || [];
+}
+
+/* Remove an association, leaving the point's exact coordinates untouched. */
+export function disassociatePoint(document, pointId) {
+  const point = document.points.find((entry) => entry.id === pointId);
+
+  if (!point || !point.geometryId) {
+    return document;
+  }
+
+  const geometryId = point.geometryId;
+
+  const points = document.points.map((entry) =>
+    entry.id === pointId ? { ...entry, geometryId: null, parameter: null, role: "path" } : entry,
+  );
+
+  const geometry = document.geometry.map((entry) => {
+    if (entry.id !== geometryId) {
+      return entry;
+    }
+
+    const next = { ...entry, anchors: entry.anchors.filter((id) => id !== pointId) };
+
+    /*
+     * A CIRCLE'S CENTRE POINT IS NOT OPTIONAL ONCE IT WAS THE CENTRE: removing
+     * it leaves the circle where it is and simply records that the centre is
+     * no longer a student point.
+     */
+    if (next.centrePointId === pointId) {
+      next.centrePointId = null;
+    }
+
+    return next;
+  });
+
+  return withRevision({ ...document, points, geometry });
 }
 
 export function updatePoint(document, id, change) {
@@ -480,11 +673,11 @@ export function setPointLocked(document, id, locked) {
 }
 
 /*
- * THERE IS ONLY ONE USER POINT TYPE, SO THERE IS NOTHING TO CONVERT TO.
+ * THERE IS ONE USER POINT TYPE, SO THERE IS NOTHING TO CONVERT TO.
  *
- * This used to switch an anchor into a shape guide. Guides are gone - the
- * stroke is the guide - so the function is kept as a no-op rather than deleted:
- * an older caller that still asks for a conversion gets the document back
+ * A "shape guide" was a second kind of user point. Guides are gone - the stroke
+ * is the guide - so the function is kept as a no-op rather than deleted: an
+ * older caller that still asks for a conversion gets the document back
  * unchanged instead of a crash, and the point keeps its exact position.
  */
 export function convertPointType(document, id, type) {
@@ -554,6 +747,8 @@ export default {
   addPoint,
   updatePoint,
   removePoint,
+  associatePointWithGeometry,
+  disassociatePoint,
   setPointCoordinateMode,
   movePoint,
   setPointLocked,

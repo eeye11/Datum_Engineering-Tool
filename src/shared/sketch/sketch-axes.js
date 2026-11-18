@@ -38,6 +38,13 @@ import {
   minorSpacing,
   normaliseGrid,
 } from "./sketch-grid.js";
+import {
+  AUXILIARY_FONT_PX,
+  CANVAS_BASELINE,
+  CANVAS_FONT_STACK,
+  MATH_FONT_STACK,
+  SECONDARY_FONT_PX,
+} from "../typography/canvas-typography.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -124,7 +131,7 @@ export function drawAxesAndGrid(
   layer,
   grid,
   viewport,
-  { className = "sketch", include = null, skip = null, toScreen = null } = {},
+  { className = "sketch", include = null, skip = null, toScreen = null, zoom = 1, fontFamily = null } = {},
 ) {
   if (!layer) {
     return { drawn: [], suppressed: [] };
@@ -135,6 +142,20 @@ export function drawAxesAndGrid(
   const renderable = gridRenderable(settings, viewport);
 
   const mapPoint = toScreen || defaultToScreen(viewport);
+
+  /*
+   * THE CAMERA, AS TEXT SEES IT.
+   *
+   * Every label this painter emits is CANVAS TEXT: a screen size, placed at a
+   * projected point, with the camera's scale divided back out of the glyphs (see
+   * `textTransform`). `zoom` defaults to 1 - a graph handed no camera (the
+   * sketch editor draws a fixed one) draws at 1:1, which is exactly what it did
+   * before and is still the right answer.
+   */
+  const view = Number(zoom) > 0 ? Number(zoom) : 1;
+  const transform = view === 1 ? null : `scale(${Math.round((1 / view) * 1e6) / 1e6})`;
+  const axisTransform = (at) =>
+    `translate(${at.x} ${at.y}) scale(${Math.round((1 / view) * 1e6) / 1e6})`;
 
   const drawn = [];
   const suppressed = [];
@@ -158,6 +179,27 @@ export function drawAxesAndGrid(
   };
 
   /* One line across the visible rectangle, in model coordinates. */
+  /*
+   * A LINE CARRIES ITS OWN STROKE, NOT ONLY A CLASS.
+   *
+   * The editor's canvas styles `sketch-grid-major` from CSS, and the sheet's
+   * canvas does not - it paints strokes as ATTRIBUTES and styles only what the
+   * renderer emits. Emitting both means one painter serves both surfaces: the
+   * attribute is what the sheet shows, and the class is what a theme may still
+   * override.
+   *
+   * Without the attribute a placed graph's grid was stroke="none" - eighty
+   * elements in the DOM and nothing on the sheet.
+   */
+  const strokeFor = (kind) =>
+    kind.startsWith("grid-minor")
+      ? "var(--datum-grid-minor, rgba(0, 0, 0, 0.05))"
+      : kind.startsWith("grid-major")
+        ? "var(--datum-grid-major, rgba(0, 0, 0, 0.09))"
+        : "var(--datum-axis, rgba(0, 0, 0, 0.45))";
+
+  const widthFor = (kind) => (kind.startsWith("axis") ? 1.2 : 1);
+
   const line = (from, to, kind, { dash = null, opacity = null } = {}) => {
     const a = mapPoint(from);
     const b = mapPoint(to);
@@ -169,6 +211,8 @@ export function drawAxesAndGrid(
         x2: b.x,
         y2: b.y,
         class: `${className}-${kind}`,
+        stroke: strokeFor(kind),
+        "stroke-width": widthFor(kind),
         "stroke-dasharray": dash,
         "stroke-opacity": opacity === null ? null : opacity,
         "vector-effect": "non-scaling-stroke",
@@ -279,6 +323,8 @@ export function drawAxesAndGrid(
       cy: at.y,
       r: 2.5,
       class: `${className}-origin`,
+      fill: strokeFor("axis"),
+      stroke: "none",
       "vector-effect": "non-scaling-stroke",
     });
 
@@ -326,6 +372,8 @@ export function drawAxesAndGrid(
               x2: at.x,
               y2: at.y + high,
               class: `${className}-tick`,
+              stroke: strokeFor("tick"),
+              "stroke-width": widthFor("tick"),
               "vector-effect": "non-scaling-stroke",
             }),
           );
@@ -349,6 +397,8 @@ export function drawAxesAndGrid(
               x2: at.x - low,
               y2: at.y,
               class: `${className}-tick`,
+              stroke: strokeFor("tick"),
+              "stroke-width": widthFor("tick"),
               "vector-effect": "non-scaling-stroke",
             }),
           );
@@ -365,11 +415,24 @@ export function drawAxesAndGrid(
    */
   if (settings.showTickLabels && wanted("tickLabels")) {
     const label = (x, y, text, anchor) => {
+      /*
+       * A TICK NUMBER IS AUXILIARY CANVAS TEXT - a shared role, at a screen
+       * size - not a number chosen here. The node is placed at the projected
+       * point and its type divided back out of the camera, so the number reads
+       * at 12 px whatever the zoom; its OFFSET (the +14 / -8 handed in by the
+       * caller) is deliberately a screen distance for the same reason.
+       */
       const element = createSvgElement("text", {
         x,
         y,
         class: `${className}-tick-label`,
         "text-anchor": anchor,
+        /* A fill attribute, for the same reason the lines have a stroke. */
+        fill: "var(--datum-muted, rgba(0, 0, 0, 0.55))",
+        "font-size": Math.round(AUXILIARY_FONT_PX * view * 1000) / 1000,
+        "font-family": fontFamily || CANVAS_FONT_STACK,
+        "dominant-baseline": CANVAS_BASELINE,
+        ...(transform ? { transform } : {}),
       });
 
       if (element) {
@@ -414,12 +477,19 @@ export function drawAxesAndGrid(
   if (settings.showAxisLabels && wanted("axisLabels")) {
     if (xAxisInView) {
       const at = mapPoint({ x: visible.xMax, y: 0 });
+      const anchorAt = { x: at.x - 4, y: at.y - 6 };
 
       const element = createSvgElement("text", {
-        x: at.x - 4,
-        y: at.y - 6,
+        x: anchorAt.x,
+        y: anchorAt.y,
         class: `${className}-axis-label`,
         "text-anchor": "end",
+        fill: strokeFor("axis"),
+        "font-size": Math.round(SECONDARY_FONT_PX * view * 1000) / 1000,
+        "font-style": "italic",
+        "font-family": MATH_FONT_STACK,
+        "dominant-baseline": CANVAS_BASELINE,
+        ...(axisTransform ? { transform: axisTransform(anchorAt) } : {}),
       });
 
       if (element) {
@@ -431,12 +501,19 @@ export function drawAxesAndGrid(
 
     if (yAxisInView) {
       const at = mapPoint({ x: 0, y: visible.yMax });
+      const anchorAt = { x: at.x + 8, y: at.y + 4 };
 
       const element = createSvgElement("text", {
-        x: at.x + 8,
-        y: at.y + 4,
+        x: anchorAt.x,
+        y: anchorAt.y,
         class: `${className}-axis-label`,
         "text-anchor": "start",
+        fill: strokeFor("axis"),
+        "font-size": Math.round(SECONDARY_FONT_PX * view * 1000) / 1000,
+        "font-style": "italic",
+        "font-family": MATH_FONT_STACK,
+        "dominant-baseline": CANVAS_BASELINE,
+        ...(axisTransform ? { transform: axisTransform(anchorAt) } : {}),
       });
 
       if (element) {

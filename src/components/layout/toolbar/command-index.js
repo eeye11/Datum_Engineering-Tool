@@ -71,6 +71,7 @@ import {
   isPlannedFluidsTool,
 } from "../../../features/workspace/model/fluids/fluids-tools.js";
 import { STATICS_TOOL_MENUS } from "../../../features/workspace/statics/statics-tools.js";
+import { HEAT_TOOL_MENUS } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
 import {
   ANALYSIS_DIAGRAM_MODES,
   ANALYSIS_DIAGRAM_MODE_LABELS,
@@ -88,6 +89,20 @@ import { isLegacyResetTool } from "./phase-reset.js";
 import * as registry from "../../../tool-library/registry/tool-registry.js";
 import * as featureSchema from "../panels/feature-schema.js";
 import { drawingState } from "../../../features/workspace/editor-state.js";
+
+/*
+ * THE FEATURES PANEL'S SHEET LOOKUP, PUBLISHED HERE.
+ *
+ * The panel's Label section finds the child annotation a Heat Transfer object
+ * carries, and the panel is part of the same import cycle the live document is
+ * on. Asking `editor-state` to import the panel closes that cycle around
+ * `drawingState`, which breaks module initialisation - so the panel is given a
+ * reader HERE instead, in a module that already imports both, and it reads the
+ * sheet at call time.
+ */
+if (typeof featureSchema.setPanelObjectLookup === "function") {
+  featureSchema.setPanelObjectLookup(() => drawingState.objects || []);
+}
 
 /* ----------------------------------------------------------- lazy handlers */
 
@@ -231,7 +246,7 @@ const DISCIPLINES = [
   {
     key: "HEAT TRANSFER",
     title: "Heat Transfer",
-    groups: null,
+    groups: disciplineToolGroups["HEAT TRANSFER"],
     terms: [
       "thermal",
       "conduction",
@@ -241,6 +256,10 @@ const DISCIPLINES = [
       "flux",
       "wall",
       "heat",
+      "isotherm",
+      "resistance",
+      "capacitance",
+      "fin",
     ],
   },
   {
@@ -277,9 +296,7 @@ const DISCIPLINES = [
       "control systems",
       "block diagram",
       "feedback",
-      "controller",
       "plant",
-      "sensor",
       "signal",
     ],
   },
@@ -315,6 +332,7 @@ function toolbarChildrenOf(toolId) {
     DYNAMICS_TOOL_MENUS[toolId] ||
     FLUIDS_TOOL_MENUS[toolId] ||
     STATICS_TOOL_MENUS[toolId] ||
+    HEAT_TOOL_MENUS[toolId] ||
     EXTRA_GROUP_CHILDREN[toolId] ||
     null
   );
@@ -1546,10 +1564,6 @@ const ALIASES = {
     "section-view": ["section view", "cutaway"],
     plant: ["plant", "process"],
     block: ["block"],
-    input: ["input"],
-    output: ["output"],
-    sensor: ["sensor"],
-    controller: ["controller"],
     "signal-line": ["signal line", "signal"],
     "signal-arrow": ["signal arrow"],
     function: ["function"],

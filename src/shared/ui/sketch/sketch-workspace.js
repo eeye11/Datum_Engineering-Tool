@@ -1,4 +1,4 @@
-/*
+﻿/*
  * ========================================================
  * THE SKETCH WORKSPACE - BEHAVIOUR
  * ========================================================
@@ -10,7 +10,9 @@
  *     sketch-points.js       what a point is, and how it resolves
  *     sketch-viewport.js     model <-> screen, equal scale
  *     sketch-grid.js         axes, ticks, grid, snapping
+ *     sketch-snap.js         the snap candidates and their ranking
  *     sketch-correction.js   recognition and reconstruction
+ *     sketch-curve-analysis.js trend, concavity, curve fitting, extremes
  *     sketch-document.js     the one geometry model
  *     sketch-history.js      undo and redo
  *     sketch-render.js       the one painter
@@ -34,10 +36,12 @@
  * THE SIDEBAR IS CONTEXTUAL
  * -------------------------
  * It shows what the selection needs and nothing else. With nothing selected it
- * is a short instruction and the geometry list; with a point selected it is that
- * point's coordinates; with a circle selected it is its centre and radius. The
- * view settings are always there, folded away, because they are not about the
- * selection.
+ * is a short instruction, the geometry list and ONE Drawing Settings control;
+ * with a point selected it is that point's coordinates, its association and its
+ * lock; with a curve selected it is its geometry, its correction and its
+ * appearance. The global view settings - bounds, axes, grid, snapping, output -
+ * live inside Drawing Settings, in compact expandable groups, because they are
+ * not about the selection.
  */
 
 import {
@@ -54,6 +58,9 @@ import {
   nextPointName,
   numberText,
   withAbsolutePosition,
+  relativeOffset,
+  polarFrom,
+  anchorsForGeometry,
 } from "../../sketch/sketch-points.js";
 import {
   createViewport,
@@ -76,6 +83,10 @@ import {
   restoreOriginal,
 } from "../../sketch/sketch-correction.js";
 import {
+  analyseElementTrend,
+  elementExtent,
+} from "../../sketch/sketch-curve-analysis.js";
+import {
   createSketchDocument,
   addGeometry,
   updateGeometry,
@@ -86,6 +97,8 @@ import {
   renameGeometry,
   addPoint,
   updatePoint,
+  removePoint,
+  associatePointWithGeometry,
   setPointCoordinateMode,
   movePoint,
   setPointLocked,
@@ -117,8 +130,18 @@ const GRAB_PX = 10;
 
 /* The sidebar's width limits, in pixels. */
 const SIDEBAR_MIN = 260;
-const SIDEBAR_MAX = 420;
-const SIDEBAR_DEFAULT = 330;
+const SIDEBAR_MAX = 460;
+const SIDEBAR_DEFAULT = 320;
+
+/*
+ * THE TOOLS.
+ *
+ * "draw" is the freehand one; "line" and "polyline" are the exact-construction
+ * tools behind the Draw caret. They all write into the SAME document through
+ * the SAME model functions, so a straight segment and a recognised line are the
+ * same kind of object afterwards.
+ */
+const TOOLS = ["select", "draw", "line", "polyline", "point", "erase"];
 
 let openWorkspace = null;
 
@@ -195,6 +218,14 @@ export function openSketchWorkspace(options = {}) {
   let selectedGeometryIds = [];
   let drag = null;
   let stroke = null;
+
+  /*
+   * THE EXACT-CONSTRUCTION STATE: the vertices of a line or a polyline being
+   * placed, and the last snapped model position for the rubber band.
+   */
+  let construction = null;
+  let hoverModel = null;
+
   let sidebarWidth = SIDEBAR_DEFAULT;
   let sidebarCollapsed = false;
   let maximised = false;
@@ -204,7 +235,6 @@ export function openSketchWorkspace(options = {}) {
     preserveCorners: true,
     showOriginal: true,
   };
-  let lastCorrection = null;
   let snapIndicator = null;
   let closed = false;
 
@@ -298,9 +328,7 @@ export function openSketchWorkspace(options = {}) {
 
     renderCanvas();
     renderGeometryList();
-    renderSelectionProperties();
-    renderCorrection();
-    renderAppearance();
+    renderSelection();
     renderViewSettings();
     renderStatus();
     renderControls();
@@ -332,7 +360,8 @@ export function openSketchWorkspace(options = {}) {
   }
 
   function themeInk() {
-    const value = getComputedStyle(dialog).getPropertyValue("--datum-ink").trim();
+    const styles = typeof getComputedStyle === "function" ? getComputedStyle(dialog) : null;
+    const value = styles ? styles.getPropertyValue("--datum-ink").trim() : "";
 
     return value || "#000000";
   }
@@ -599,11 +628,30 @@ export function openSketchWorkspace(options = {}) {
       const at = viewportToScreen(point.absolute, viewport);
       const selected = point.id === selectedPointId;
 
+      const isCentre = point.role === "centre";
+
       const group = createSvg("g", {
-        class: `sketch-aid-point${selected ? " is-selected" : ""}${point.locked ? " is-locked" : ""}`,
+        class: `sketch-aid-point${selected ? " is-selected" : ""}${point.locked ? " is-locked" : ""}${
+          isCentre ? " is-centre" : ""
+        }`,
         "data-sketch-aid-point": point.id,
         transform: `translate(${at.x} ${at.y})`,
       });
+
+      /*
+       * A CENTRE POINT IS DRAWN AS A CROSSHAIR, not as a filled dot: it looks
+       * like the middle of a circle, which is what it is, and it can never be
+       * mistaken for a point on a circumference.
+       */
+      if (isCentre) {
+        group.appendChild(
+          createSvg("path", {
+            d: "M -7 0 H 7 M 0 -7 V 7",
+            class: "sketch-aid-point-cross",
+            "vector-effect": "non-scaling-stroke",
+          }),
+        );
+      }
 
       group.appendChild(
         createSvg("circle", {
@@ -680,6 +728,51 @@ export function openSketchWorkspace(options = {}) {
       );
     }
 
+    /*
+     * THE RUBBER BAND for an exact construction: the vertices already placed,
+     * and a line to where the next click would land. It is a PREVIEW and is
+     * never committed - the geometry it becomes is written when the
+     * construction finishes.
+     */
+    if (construction && construction.points.length) {
+      const placed = construction.points
+        .map((point, index) => {
+          const at = viewportToScreen(point, viewport);
+
+          return `${index ? "L" : "M"} ${at.x.toFixed(2)} ${at.y.toFixed(2)}`;
+        })
+        .join(" ");
+
+      const rubber = hoverModel
+        ? (() => {
+            const at = viewportToScreen(hoverModel, viewport);
+
+            return ` L ${at.x.toFixed(2)} ${at.y.toFixed(2)}`;
+          })()
+        : "";
+
+      layer.appendChild(
+        createSvg("path", {
+          d: `${placed}${rubber}`,
+          class: "sketch-aid-construction",
+          "vector-effect": "non-scaling-stroke",
+        }),
+      );
+
+      construction.points.forEach((point) => {
+        const at = viewportToScreen(point, viewport);
+
+        layer.appendChild(
+          createSvg("circle", {
+            cx: at.x,
+            cy: at.y,
+            r: 3.5,
+            class: "sketch-aid-construction-vertex",
+            "vector-effect": "non-scaling-stroke",
+          }),
+        );
+      });
+    }
   }
 
   /* ========================================================
@@ -727,7 +820,7 @@ export function openSketchWorkspace(options = {}) {
           (point) => `
           <button type="button" class="sketch-point-row${point.id === selectedPointId ? " is-selected" : ""}"
               data-sketch-point-row="${point.id}" role="listitem">
-            <span class="sketch-point-swatch" aria-hidden="true"></span>
+            <span class="sketch-point-swatch${point.role === "centre" ? " is-centre" : ""}" aria-hidden="true"></span>
             <span class="sketch-point-name">${escapeHtml(point.name || point.id)}</span>
             <span class="sketch-point-coords">${numberText(point.absolute.x)}, ${numberText(point.absolute.y)}</span>
             ${point.locked ? '<span class="sketch-point-lock" title="Locked">&#128274;</span>' : ""}
@@ -744,28 +837,47 @@ export function openSketchWorkspace(options = {}) {
   /*
    * WHAT THE SELECTION NEEDS, AND NOTHING ELSE.
    *
-   * A point shows its coordinates; a circle shows its centre and radius; a line
-   * shows its endpoints; a curve shows its representation and control points.
-   * Showing every control for every selection is what made the old sidebar a
-   * form to read rather than a panel to use.
+   * The idle state and the selection state are two separate views, and exactly
+   * one of them is on screen. A student editing a curve never sees the bounds
+   * fields, and a student with nothing selected sees the drawing list and one
+   * Drawing Settings control.
    */
-  function renderSelectionProperties() {
+  function renderSelection() {
+    const idle = $("[data-sketch-idle]");
     const host = $("[data-sketch-selection-properties]");
+    const title = $("[data-sketch-sidebar-title]");
 
     if (!host) {
       return;
     }
 
     const point = document_.points.find((entry) => entry.id === selectedPointId);
+    const selected = document_.geometry.filter((element) =>
+      selectedGeometryIds.includes(element.id),
+    );
+
+    const hasSelection = Boolean(point) || selected.length > 0;
+
+    if (idle) {
+      idle.hidden = hasSelection;
+    }
+
+    host.hidden = !hasSelection;
+
+    if (title) {
+      title.textContent = point
+        ? `Point ${point.name || point.id}`
+        : selected.length > 1
+          ? `${selected.length} elements`
+          : selected.length === 1
+            ? selected[0].name || selected[0].id
+            : "Sketch";
+    }
 
     if (point) {
       host.innerHTML = pointProperties(point);
       return;
     }
-
-    const selected = document_.geometry.filter((element) =>
-      selectedGeometryIds.includes(element.id),
-    );
 
     if (!selected.length) {
       host.innerHTML = "";
@@ -776,7 +888,8 @@ export function openSketchWorkspace(options = {}) {
       host.innerHTML = section({
         key: "multi",
         title: `${selected.length} elements selected`,
-        body: `<p class="sketch-note">Appearance applies to all of them.</p>`,
+        open: true,
+        body: `<p class="sketch-note">These properties apply to every selected element.</p>${appearanceBody(selected)}`,
       });
 
       return;
@@ -785,6 +898,14 @@ export function openSketchWorkspace(options = {}) {
     host.innerHTML = geometryProperties(selected[0]);
   }
 
+  /*
+   * A POINT'S PROPERTIES.
+   *
+   * Name, coordinates (absolute, relative or polar), the relationship it has
+   * with geometry, its lock, and Delete. When it is the centre of a circle or an
+   * arc, that is said in words rather than left to be inferred from a crosshair
+   * on the canvas.
+   */
   function pointProperties(point) {
     const resolved = resolvePoint(point, document_.points);
 
@@ -799,31 +920,61 @@ export function openSketchWorkspace(options = {}) {
 
     const mode = point.coordinateMode;
 
+    const offsets = point.delta || relativeOffset(point, document_.points);
+    const polar = polarFrom(point, document_.points);
+
     const fields =
       mode === "absolute"
-        ? `${numberField("x", "X", { value: numberText(point.x) })}
-           ${numberField("y", "Y", { value: numberText(point.y) })}`
+        ? `<div class="sketch-field-grid">
+             ${numberField("x", "X", { value: numberText(point.x) })}
+             ${numberField("y", "Y", { value: numberText(point.y) })}
+           </div>`
         : mode === "relative"
           ? `<label class="sketch-field">
-               <span class="sketch-field-label">From</span>
+               <span class="sketch-field-label">Reference point</span>
                <select data-sketch-point-reference aria-label="Reference point">
                  <option value="">-</option>${referenceOptions}
                </select>
              </label>
-             ${numberField("dx", "Δx", { value: numberText(point.delta?.dx ?? 0) })}
-             ${numberField("dy", "Δy", { value: numberText(point.delta?.dy ?? 0) })}`
+             <div class="sketch-field-grid">
+               ${numberField("dx", "Î”x", { value: numberText(offsets.dx) })}
+               ${numberField("dy", "Î”y", { value: numberText(offsets.dy) })}
+             </div>`
           : `<label class="sketch-field">
-               <span class="sketch-field-label">From</span>
+               <span class="sketch-field-label">Reference point</span>
                <select data-sketch-point-reference aria-label="Reference point">
                  <option value="">-</option>${referenceOptions}
                </select>
              </label>
-             ${numberField("distance", "Distance", { value: numberText(point.distance ?? 0) })}
-             ${numberField("angleDeg", "Angle°", { value: numberText(point.angleDeg ?? 0) })}`;
+             <div class="sketch-field-grid">
+               ${numberField("distance", "Distance", { value: numberText(point.distance ?? polar.r) })}
+               ${numberField("angleDeg", "AngleÂ°", { value: numberText(point.angleDeg ?? polar.angleDeg) })}
+             </div>`;
+
+    /*
+     * THE POINT'S RELATIONSHIP.
+     *
+     * A point placed on a curve, associated through the canvas, or chosen as a
+     * centre is SHOWN for what it is, and it can be released from that geometry
+     * without being deleted - the coordinates stay exactly where they were.
+     */
+    const linked = point.geometryId
+      ? document_.geometry.find((element) => element.id === point.geometryId)
+      : null;
+
+    const relationship = linked
+      ? `<div class="sketch-relationship">
+           <span>${point.role === "centre" ? "Centre of" : "On"} <strong>${escapeHtml(linked.name || linked.id)}</strong></span>
+           <button type="button" class="sketch-mini" data-sketch-point-release="${point.id}">
+             Release
+           </button>
+         </div>`
+      : "";
 
     return section({
       key: "point",
-      title: `Point ${escapeHtml(point.name || point.id)}`,
+      title: "Point",
+      open: true,
       body: `
         <label class="sketch-field">
           <span class="sketch-field-label">Name</span>
@@ -833,7 +984,7 @@ export function openSketchWorkspace(options = {}) {
 
         ${selectField(
           "coordinateMode",
-          "Coordinates",
+          "Coordinate definition",
           [
             { value: "absolute", label: "Absolute" },
             { value: "relative", label: "Relative" },
@@ -844,44 +995,67 @@ export function openSketchWorkspace(options = {}) {
 
         ${fields}
 
-        <p class="sketch-note">Position: ${numberText(resolved.x)}, ${numberText(resolved.y)}</p>
+        <p class="sketch-note">Position: ${numberText(resolved.x)}, ${numberText(resolved.y)}${
+          point.locked ? " Â· locked" : ""
+        }</p>
+
+        ${relationship}
 
         <div class="sketch-inline-actions">
           <label class="sketch-check">
             <input type="checkbox" data-sketch-point-locked${point.locked ? " checked" : ""}>
             <span>Lock position</span>
           </label>
-          <button type="button" class="sketch-mini" data-sketch-point-delete>Delete point</button>
+          <button type="button" class="sketch-mini is-danger" data-sketch-point-delete>Delete point</button>
         </div>
       `,
     });
   }
 
+  /*
+   * A GEOMETRY'S PROPERTIES.
+   *
+   * What it actually IS, then the numbers that define it, then its correction
+   * and appearance. A circle shows centre and radius; an arc shows centre,
+   * radius and angles; a curve shows its representation, its TREND and its
+   * segment intervals; a line shows its two ends.
+   */
   function geometryProperties(element) {
     const kind = element.kind;
 
     const rows = [];
 
-    if (kind === "circle" && element.centre) {
+    if ((kind === "circle" || kind === "arc") && element.centre) {
       rows.push(
         numberField("centreX", "Centre X", { scope: "geometry", value: numberText(element.centre.x) }),
         numberField("centreY", "Centre Y", { scope: "geometry", value: numberText(element.centre.y) }),
         numberField("radius", "Radius", { scope: "geometry", value: numberText(element.radius) }),
       );
-    } else if (kind === "ellipse" && element.centre) {
+    }
+
+    if (kind === "arc") {
+      rows.push(
+        numberField("startAngle", "Start angleÂ°", {
+          scope: "geometry",
+          value: numberText(((element.startAngle || 0) * 180) / Math.PI),
+        }),
+        numberField("endAngle", "End angleÂ°", {
+          scope: "geometry",
+          value: numberText(((element.endAngle || 0) * 180) / Math.PI),
+        }),
+      );
+    }
+
+    if (kind === "ellipse" && element.centre) {
       rows.push(
         numberField("centreX", "Centre X", { scope: "geometry", value: numberText(element.centre.x) }),
         numberField("centreY", "Centre Y", { scope: "geometry", value: numberText(element.centre.y) }),
         numberField("radiusX", "Radius X", { scope: "geometry", value: numberText(element.radiusX) }),
         numberField("radiusY", "Radius Y", { scope: "geometry", value: numberText(element.radiusY) }),
       );
-    } else if (kind === "arc" && element.centre) {
-      rows.push(
-        numberField("centreX", "Centre X", { scope: "geometry", value: numberText(element.centre.x) }),
-        numberField("centreY", "Centre Y", { scope: "geometry", value: numberText(element.centre.y) }),
-        numberField("radius", "Radius", { scope: "geometry", value: numberText(element.radius) }),
-      );
-    } else if (element.points?.length) {
+    }
+
+    if (kind === "line" && element.points?.length) {
       const first = element.points[0];
       const last = element.points[element.points.length - 1];
 
@@ -893,97 +1067,165 @@ export function openSketchWorkspace(options = {}) {
       );
     }
 
-    const representation =
-      kind === "curve"
-        ? `${element.points?.length || 0} control points, ${element.segments?.length || 0} Bézier segments`
-        : kind === "polygon"
-          ? `${element.points?.length || 0} sides`
-          : kind === "composite"
-            ? `segments: ${(element.correction?.parts || []).join(", ")}`
-            : kind;
+    const trend =
+      element.correction?.trend ||
+      (kind === "curve" || kind === "composite" ? analyseElementTrend(element) : null);
 
-    return section({
-      key: "element",
-      title: escapeHtml(element.name || element.id),
-      body: `
-        <label class="sketch-field">
-          <span class="sketch-field-label">Name</span>
-          <input type="text" data-sketch-geometry-name="${element.id}"
-              value="${escapeHtml(element.name || "")}" aria-label="Geometry name">
-        </label>
+    const representation = describeGeometry(element);
 
-        <p class="sketch-note">${escapeHtml(representation)}</p>
-
-        ${rows.join("")}
-
-        <div class="sketch-inline-actions">
-          <button type="button" class="sketch-mini" data-sketch-geometry-delete="${element.id}">
-            Delete
-          </button>
-        </div>
-      `,
-    });
-  }
-
-  /* ========================================================
-   * THE CORRECTION SECTION
-   * ======================================================== */
-
-  function renderCorrection() {
-    const context = $("[data-sketch-correction-context]");
-    const report = $("[data-sketch-constraint-report]");
-
-    if (context) {
-      const selected = document_.geometry.find((element) =>
-        selectedGeometryIds.includes(element.id),
-      );
-
-      const correction = selected?.correction || lastCorrection?.correction;
-
-      context.innerHTML = correction
-        ? `<p class="sketch-note">
-             Detected: <strong>${escapeHtml(correction.kind)}</strong>${
-               correction.parts?.length > 1
-                 ? ` (${correction.parts.map(escapeHtml).join(" + ")})`
-                 : ""
-             }${correction.confidence ? ` · ${Math.round(correction.confidence * 100)}% fit` : ""}
-           </p>`
-        : `<p class="sketch-note">Draw a stroke to see what DAETUM recognises.</p>`;
-    }
-
-    if (report) {
-      const conflict = lastCorrection?.conflict;
-
-      report.innerHTML = conflict
-        ? `<p class="sketch-conflict is-${conflict.severity}">${escapeHtml(conflict.message)}</p>`
-        : "";
-    }
-  }
-
-  /* ========================================================
-   * THE APPEARANCE SECTION
-   * ======================================================== */
-
-  function renderAppearance() {
-    const host = $("[data-sketch-appearance]");
-
-    if (!host) {
-      return;
-    }
-
-    const selected = document_.geometry.filter((element) =>
-      selectedGeometryIds.includes(element.id),
+    /* The anchors this element was told to pass through. */
+    const anchors = anchorsForGeometry(document_.points, { geometryId: element.id }).filter(
+      (point) => point.role !== "centre",
     );
 
-    if (!selected.length) {
-      host.innerHTML = '<p class="sketch-note">Select geometry to change its appearance.</p>';
-      return;
+    const centrePoint = element.centrePointId
+      ? document_.points.find((point) => point.id === element.centrePointId)
+      : null;
+
+    return `
+      ${section({
+        key: "element",
+        title: "Geometry",
+        open: true,
+        body: `
+          <label class="sketch-field">
+            <span class="sketch-field-label">Name</span>
+            <input type="text" data-sketch-geometry-name="${element.id}"
+                value="${escapeHtml(element.name || "")}" aria-label="Geometry name">
+          </label>
+
+          <p class="sketch-note">${escapeHtml(representation)}</p>
+
+          ${trend ? trendBlock(trend) : ""}
+
+          ${rows.length ? `<div class="sketch-field-grid">${rows.join("")}</div>` : ""}
+
+          ${
+            centrePoint
+              ? `<p class="sketch-note">Centred on <strong>${escapeHtml(centrePoint.name || centrePoint.id)}</strong>.</p>`
+              : ""
+          }
+
+          ${
+            anchors.length
+              ? `<p class="sketch-note">Passes through ${anchors
+                  .map((point) => escapeHtml(point.name || point.id))
+                  .join(", ")}.</p>`
+              : ""
+          }
+
+          <div class="sketch-inline-actions">
+            <button type="button" class="sketch-mini" data-sketch-restore-original>
+              Restore original stroke
+            </button>
+            <button type="button" class="sketch-mini is-danger" data-sketch-geometry-delete="${element.id}">
+              Delete
+            </button>
+          </div>
+        `,
+      })}
+
+      ${section({
+        key: "appearance",
+        title: "Appearance",
+        open: true,
+        body: appearanceBody([element]),
+      })}
+    `;
+  }
+
+  /* A concise, honest description of what the geometry is. */
+  function describeGeometry(element) {
+    const kind = element.kind;
+
+    if (kind === "circle") {
+      return "A true circle - centre and radius.";
     }
 
+    if (kind === "ellipse") {
+      return "An axis-aligned ellipse - centre and two radii.";
+    }
+
+    if (kind === "arc") {
+      return "A circular arc - centre, radius and angular extent.";
+    }
+
+    if (kind === "line") {
+      const points = element.points || [];
+
+      const span = points.length
+        ? Math.hypot(
+            points[points.length - 1].x - points[0].x,
+            points[points.length - 1].y - points[0].y,
+          )
+        : 0;
+
+      return `A straight segment, ${numberText(span)} long.`;
+    }
+
+    if (kind === "curve") {
+      const segments = element.segments?.length || 0;
+      const vertices = element.points?.length || 0;
+
+      return segments
+        ? `A smooth curve - ${vertices} vertices, ${segments} cubic segment${segments === 1 ? "" : "s"}.`
+        : `A curve through ${vertices} points.`;
+    }
+
+    if (kind === "polygon") {
+      return `A closed polygon with ${element.points?.length || 0} sides.`;
+    }
+
+    if (kind === "polyline") {
+      return `A polyline through ${element.points?.length || 0} vertices.`;
+    }
+
+    if (kind === "rectangle") {
+      return "A rectangle.";
+    }
+
+    if (kind === "composite") {
+      return `A curve of several parts: ${(element.correction?.parts || []).join(", ") || "mixed"}.`;
+    }
+
+    return kind;
+  }
+
+  /* THE TREND, AS THE BRIEF ASKS FOR IT - one concise line, and the intervals. */
+  function trendBlock(trend) {
+    if (!trend || !trend.applicable) {
+      return `<p class="sketch-note sketch-trend">${escapeHtml(
+        trend?.summary || "Trend not applicable.",
+      )}</p>`;
+    }
+
+    const intervals = (trend.intervals || [])
+      .map(
+        (interval) =>
+          `<li><span>${numberText(interval.from)} â€“ ${numberText(interval.to)}</span> ${escapeHtml(
+            interval.label,
+          )}</li>`,
+      )
+      .join("");
+
+    return `
+      <div class="sketch-trend">
+        <p class="sketch-trend-summary">${escapeHtml(trend.summary)}</p>
+        ${
+          intervals
+            ? `<details class="sketch-group"><summary>Intervals and points</summary><ul class="sketch-trend-list">${intervals}</ul></details>`
+            : ""
+        }
+      </div>
+    `;
+  }
+
+  /* THE APPEARANCE CONTROLS, shared by one element and by a multiple selection. */
+  function appearanceBody(selected) {
     const appearance = normaliseAppearance(selected[0].appearance);
     const fillable = selected.some((element) => supportsFill(element));
 
-    host.innerHTML = `
+    return `
       <div class="sketch-field-grid">
         ${selectField(
           "lineStyle",
@@ -1078,7 +1320,9 @@ export function openSketchWorkspace(options = {}) {
     set("showTickLabels", grid.showTickLabels);
     set("showTicks", grid.showTicks);
     set("snapToGrid", grid.snapToGrid);
+    set("snapToGridMidpoints", grid.snapToGridMidpoints);
     set("snapToPoints", grid.snapToPoints);
+    set("snapToGeometry", grid.snapToGeometry);
     set("autoBounds", document_.boundsMode !== "manual");
     set("equalScale", grid.equalScale !== false);
 
@@ -1097,6 +1341,17 @@ export function openSketchWorkspace(options = {}) {
       ["yMin", bounds.yMin],
       ["yMax", bounds.yMax],
     ].forEach(([key, value]) => setValue(key, numberText(value)));
+
+    /*
+     * FIXED BOUNDS ARE THE STUDENT'S NUMBERS. The four fields are disabled
+     * while the view is automatic, so a fit cannot look like it overwrote
+     * something the student typed; typing in them switches to Fixed Bounds.
+     */
+    const fixed = document_.boundsMode === "manual";
+
+    $$("[data-sketch-bounds-fields] input").forEach((input) => {
+      input.disabled = !fixed;
+    });
   }
 
   /* ========================================================
@@ -1111,13 +1366,17 @@ export function openSketchWorkspace(options = {}) {
     const anchors = document_.points.length;
 
     if (status) {
+      const kinds = [...new Set(document_.geometry.map((element) => element.kind))];
+
       status.textContent = document_.geometry.length
-        ? `${document_.geometry.length} element${document_.geometry.length === 1 ? "" : "s"}`
+        ? `${document_.geometry.length} element${document_.geometry.length === 1 ? "" : "s"}${
+            kinds.length ? ` (${kinds.join(", ")})` : ""
+          }`
         : "Ready";
     }
 
     if (counts) {
-      counts.textContent = `${anchors} point${anchors === 1 ? "" : "s"}`;
+      counts.textContent = `${anchors} defined point${anchors === 1 ? "" : "s"}`;
     }
 
     if (zoom) {
@@ -1150,20 +1409,18 @@ export function openSketchWorkspace(options = {}) {
       redoButton.disabled = !canRedo(history);
     }
 
-    $$("[data-sketch-tool-select], [data-sketch-tool-draw], [data-sketch-tool-point], [data-sketch-tool-erase]").forEach(
-      (button) => {
-        const id = toolIdOf(button);
+    $$(TOOL_BUTTONS).forEach((button) => {
+      const id = toolIdOf(button);
 
-        if (!id) {
-          return;
-        }
+      if (!id) {
+        return;
+      }
 
-        const active = id === tool;
+      const active = id === tool;
 
-        button.classList.toggle("is-active", active);
-        button.setAttribute("aria-pressed", String(active));
-      },
-    );
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
 
     const auto = $("[data-sketch-auto-correct]");
 
@@ -1171,6 +1428,11 @@ export function openSketchWorkspace(options = {}) {
       auto.checked = autoCorrect;
     }
   }
+
+  const TOOL_BUTTONS =
+    "[data-sketch-tool-select], [data-sketch-tool-draw], [data-sketch-tool-point], " +
+    "[data-sketch-tool-erase], [data-sketch-tool-freeshape], [data-sketch-tool-line], " +
+    "[data-sketch-tool-polyline]";
 
   function toolIdOf(button) {
     for (const attribute of button.attributes) {
@@ -1235,15 +1497,27 @@ export function openSketchWorkspace(options = {}) {
 
   function snapped(model) {
     const grid = normaliseGrid(document_.grid);
+    const viewport = currentViewport();
 
     const hit = nearestGeometry(model);
 
+    /*
+     * THE SNAP USES THE INTERVAL THE VIEW IS DRAWING, so a place the student
+     * can see is a place they can click - and a hidden grid still snaps,
+     * because the interval is derived from the range rather than from the ink.
+     */
     return snapToGrid(model, {
       grid,
       points: resolvePoints(document_.points),
-      viewport: currentViewport(),
-      geometryHit: hit && hit.distance * currentViewport().scale <= GRAB_PX ? hit : null,
+      viewport,
+      interval: gridIntervalFor(grid, viewport.visible),
+      geometryHit: hit && hit.distance * viewport.scale <= GRAB_PX ? hit : null,
     });
+  }
+
+  /* Whether a click should snap: the placing tools do, the tracing one does not. */
+  function snappingTool() {
+    return tool === "point" || tool === "line" || tool === "polyline";
   }
 
   svg.addEventListener("pointerdown", (event) => {
@@ -1337,6 +1611,17 @@ export function openSketchWorkspace(options = {}) {
     }
 
     if (tool === "erase") {
+      /* A POINT is erased before the curve beneath it, because the point is the
+         smaller, more deliberate thing to have clicked. */
+      const point = nearestPoint(model);
+
+      if (point) {
+        apply(removePoint(document_, point.id));
+        selectedPointId = null;
+        render();
+        return;
+      }
+
       const hit = nearestGeometry(model);
 
       if (hit && hit.distance * currentViewport().scale <= GRAB_PX) {
@@ -1345,6 +1630,37 @@ export function openSketchWorkspace(options = {}) {
         render();
       }
 
+      return;
+    }
+
+    if (tool === "line" || tool === "polyline") {
+      /*
+       * AN EXACT CONSTRUCTION.
+       *
+       * A straight segment is two clicks; a polyline is any number of clicks
+       * ended by a double-click, Enter or Escape. Every vertex lands on a
+       * SNAPPED coordinate, because this tool places something rather than
+       * tracing it - and the result is written through the same document
+       * functions a recognised line uses.
+       */
+      const at = snapped(model);
+
+      const vertex = { x: at.x, y: at.y };
+
+      if (!construction) {
+        construction = { kind: tool, points: [vertex] };
+        renderCanvas();
+        return;
+      }
+
+      construction.points.push(vertex);
+
+      if (construction.kind === "line" && construction.points.length >= 2) {
+        finishConstruction();
+        return;
+      }
+
+      renderCanvas();
       return;
     }
 
@@ -1394,10 +1710,13 @@ export function openSketchWorkspace(options = {}) {
      * disappears when the pointer is too far from any candidate, rather than
      * pretending a snap is available.
      */
-    if (tool === "point" && !drag) {
+    if (snappingTool() && !drag) {
       const at = snapped(model);
 
       snapIndicator = at.snapped ? { x: at.x, y: at.y, kind: at.kind } : null;
+
+      hoverModel = at.snapped ? { x: at.x, y: at.y } : model;
+
       renderCanvas();
     } else if (snapIndicator) {
       snapIndicator = null;
@@ -1468,6 +1787,15 @@ export function openSketchWorkspace(options = {}) {
   svg.addEventListener("pointerup", endPointer);
   svg.addEventListener("pointercancel", endPointer);
 
+  /* A double-click finishes a polyline, exactly where the second click landed. */
+  svg.addEventListener("dblclick", (event) => {
+    if (construction && construction.kind === "polyline") {
+      event.preventDefault();
+
+      finishConstruction();
+    }
+  });
+
   /*
    * FINISH A STROKE: reconstruct, then commit.
    *
@@ -1485,26 +1813,45 @@ export function openSketchWorkspace(options = {}) {
       return;
     }
 
+    /*
+     * THE POINT THE STROKE STARTED ON IS ITS CONSTRAINT - as an anchor the
+     * geometry must pass through, or as a centre it must be centred on. Every
+     * other point in the sketch is NOT a constraint on this stroke, which is
+     * what keeps an anchor local to the geometry it belongs to.
+     */
+    const startPoint = nearestPoint(points[0]);
+
+    const association = [];
+    let centre = null;
+
+    if (startPoint) {
+      if (startPoint.role === "centre") {
+        centre = { x: startPoint.absolute.x, y: startPoint.absolute.y, id: startPoint.id };
+      } else {
+        association.push(startPoint.id);
+      }
+    }
+
     const corrected = autoCorrect
       ? correctStroke(points, {
           points: document_.points,
+          association,
+          centre,
           ...correctionOptions,
         })
       : {
           points,
           segments: [],
           original: points,
-          correction: { kind: "curve", confidence: 1, disabled: true },
+          correction: { kind: "none", confidence: 1, disabled: true },
           conflict: null,
         };
 
-    lastCorrection = corrected;
-
-    const kind = corrected.correction.kind;
+    const recognised = corrected.correction.kind === "none" ? "curve" : corrected.correction.kind;
 
     const element = makeGeometry({
-      kind,
-      name: `${kind.charAt(0).toUpperCase()}${kind.slice(1)} ${document_.geometry.length + 1}`,
+      kind: recognised,
+      name: `${capitalise(recognised)} ${document_.geometry.length + 1}`,
       points: corrected.points,
       segments: corrected.segments,
       centre: corrected.correction.centre || null,
@@ -1512,16 +1859,83 @@ export function openSketchWorkspace(options = {}) {
       radiusX: corrected.correction.radiusX ?? null,
       radiusY: corrected.correction.radiusY ?? null,
       rotation: corrected.correction.rotation || 0,
+      startAngle: corrected.correction.startAngle ?? null,
+      endAngle: corrected.correction.endAngle ?? null,
+      clockwise: Boolean(corrected.correction.clockwise),
       closed: Boolean(corrected.correction.closed),
       original: corrected.original,
       correction: corrected.correction,
       appearance: document_.appearance,
+      anchors: association,
+      centrePointId: corrected.correction.centrePointId || null,
+    });
+
+    selectedGeometryIds = [element.id];
+    selectedPointId = centre?.id || null;
+
+    apply(addGeometry(document_, element));
+
+    if (corrected.conflict) {
+      setStatus(corrected.conflict.message);
+    }
+  }
+
+  /*
+   * FINISH AN EXACT CONSTRUCTION.
+   *
+   * The vertices were snapped as they were clicked. A line becomes a two-point
+   * segment; a polyline becomes its vertices - so both are the SAME kind of
+   * geometry a recognised shape is, and both render, serialise and place
+   * identically.
+   */
+  function finishConstruction() {
+    if (!construction) {
+      return;
+    }
+
+    const current = construction;
+    construction = null;
+
+    /* A polyline finished by a double-click has its last vertex twice. */
+    const points = current.points.filter(
+      (point, index, all) =>
+        index === 0 || Math.hypot(point.x - all[index - 1].x, point.y - all[index - 1].y) > 1e-9,
+    );
+
+    if (points.length < 2) {
+      renderCanvas();
+      return;
+    }
+
+    const isLine = current.kind === "line";
+
+    const element = makeGeometry({
+      kind: isLine ? "line" : "polyline",
+      name: `${isLine ? "Segment" : "Polyline"} ${document_.geometry.length + 1}`,
+      points,
+      closed: false,
+      appearance: document_.appearance,
+      correction: {
+        kind: isLine ? "line" : "polyline",
+        confidence: 1,
+        constructed: true,
+      },
     });
 
     selectedGeometryIds = [element.id];
     selectedPointId = null;
 
     apply(addGeometry(document_, element));
+  }
+
+  function cancelConstruction() {
+    if (construction) {
+      construction = null;
+      renderCanvas();
+      return true;
+    }
+
+    return false;
   }
 
   /* ========================================================
@@ -1571,6 +1985,14 @@ export function openSketchWorkspace(options = {}) {
      */
     const transform = alignTransform(anchor, target || anchor);
 
+    /*
+     * WHAT THE PLACED SKETCH INCLUDES.
+     *
+     * The working grid, the axes, the numbers and the point markers are all
+     * EDITOR things unless the student asks for them. They are independent of
+     * what the preview shows, so hiding the grid to see a curve cannot
+     * silently drop it from the drawing.
+     */
     const include = {
       axes: Boolean($('[data-sketch-toggle="outAxes"]')?.checked),
       majorGrid: Boolean($('[data-sketch-toggle="outMajorGrid"]')?.checked),
@@ -1695,12 +2117,57 @@ export function openSketchWorkspace(options = {}) {
   }
 
   function setTool(next) {
-    if (!["select", "draw", "point", "erase"].includes(next)) {
+    if (!TOOLS.includes(next)) {
       return;
     }
 
+    /*
+     * A TOOL CHANGE ENDS AN UNFINISHED CONSTRUCTION rather than leaving it
+     * half-built behind a different tool, where the next click would extend it
+     * from somewhere the student has forgotten.
+     */
+    if (construction && next !== construction.kind) {
+      construction = null;
+    }
+
     tool = next;
+
+    if (!snappingTool()) {
+      snapIndicator = null;
+    }
+
+    closeDrawMenu();
     renderControls();
+    renderCanvas();
+  }
+
+  /* The Draw caret: Straight Segment and Polyline behind the button. */
+  function closeDrawMenu() {
+    const menu = $("[data-sketch-draw-menu]");
+    const toggle = $("[data-sketch-draw-toggle]");
+
+    if (menu) {
+      menu.hidden = true;
+    }
+
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function toggleDrawMenu() {
+    const menu = $("[data-sketch-draw-menu]");
+    const toggle = $("[data-sketch-draw-toggle]");
+
+    if (!menu) {
+      return;
+    }
+
+    menu.hidden = !menu.hidden;
+
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", menu.hidden ? "false" : "true");
+    }
   }
 
   /*
@@ -1710,30 +2177,53 @@ export function openSketchWorkspace(options = {}) {
    * is the next sibling. The state is read from `aria-expanded` rather than
    * from a class, so the markup's own attribute is the single source of truth.
    */
-  $$("[data-sketch-section-toggle]").forEach((header) => {
-    header.addEventListener("click", () => {
-      const body = header.nextElementSibling;
-      const open = header.getAttribute("aria-expanded") === "true";
+  /*
+   * THE SECTION HEADERS COLLAPSE THEIR OWN SECTION.
+   *
+   * Each header is a real button with `aria-expanded`, and the body it controls
+   * is the next sibling. The state is read from `aria-expanded` rather than from
+   * a class, so the markup's own attribute is the single source of truth - and
+   * it is registered once on the dialog, so a section inside the contextual
+   * sidebar keeps working after the sidebar is re-rendered.
+   */
+  dialog.addEventListener("click", (event) => {
+    const header = event.target.closest?.("[data-sketch-section-toggle]");
 
-      header.setAttribute("aria-expanded", String(!open));
+    if (!header) {
+      return;
+    }
 
-      if (body) {
-        body.hidden = open;
-      }
-    });
+    const body = header.nextElementSibling;
+    const open = header.getAttribute("aria-expanded") === "true";
+
+    header.setAttribute("aria-expanded", String(!open));
+
+    if (body) {
+      body.hidden = open;
+    }
   });
 
-  $$("[data-sketch-tool-select], [data-sketch-tool-draw], [data-sketch-tool-point], [data-sketch-tool-erase]").forEach(
-    (button) => {
-      const id = toolIdOf(button);
+  $$(TOOL_BUTTONS).forEach((button) => {
+    const id = toolIdOf(button);
 
-      if (!id) {
-        return;
-      }
+    if (!id) {
+      return;
+    }
 
-      button.addEventListener("click", () => setTool(id));
-    },
-  );
+    button.addEventListener("click", () => setTool(id));
+  });
+
+  $("[data-sketch-draw-toggle]")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleDrawMenu();
+  });
+
+  /* A click anywhere else closes the menu. */
+  dialog.addEventListener("click", (event) => {
+    if (!event.target.closest?.("[data-sketch-draw-menu], [data-sketch-draw-toggle]")) {
+      closeDrawMenu();
+    }
+  });
 
   $("[data-sketch-undo]")?.addEventListener("click", undoStep);
   $("[data-sketch-redo]")?.addEventListener("click", redoStep);
@@ -1749,9 +2239,19 @@ export function openSketchWorkspace(options = {}) {
     });
   });
 
+  /*
+   * AUTOMATIC CORRECTION IS ON BY DEFAULT, and its switch is the one control in
+   * the toolbar. Turning it off is a deliberate choice to keep freehand ink, and
+   * it takes effect on the NEXT stroke - nothing already drawn is rewritten.
+   */
   $("[data-sketch-auto-correct]")?.addEventListener("change", (event) => {
     autoCorrect = event.target.checked;
-    renderCorrection();
+
+    setStatus(
+      autoCorrect
+        ? "Automatic correction on - new strokes are reconstructed as clean geometry."
+        : "Automatic correction off - new strokes keep their freehand geometry.",
+    );
   });
 
   /* ---- geometry list ---- */
@@ -2040,14 +2540,11 @@ export function openSketchWorkspace(options = {}) {
     );
   });
 
-  $$("[data-sketch-toggle]").forEach((input) => {
-    input.addEventListener("change", () => {
-      const key = input.dataset.sketchToggle;
+  dialog.addEventListener("change", (event) => {
+    const toggle = event.target.closest?.("[data-sketch-toggle]");
 
-      if (key in correctionOptions) {
-        correctionOptions = { ...correctionOptions, [key]: input.checked };
-        return;
-      }
+    if (toggle && toggle.closest("[data-sketch-drawing-settings]")) {
+      const key = toggle.dataset.sketchToggle;
 
       if (key === "autoBounds") {
         /*
@@ -2058,15 +2555,14 @@ export function openSketchWorkspace(options = {}) {
          * becomes the fixed one. Neither direction is a geometry change, so
          * neither refits on top of itself.
          */
-        apply(
-          setBounds(document_, document_.bounds, input.checked ? "auto" : "manual"),
-          { refit: input.checked },
-        );
+        apply(setBounds(document_, document_.bounds, toggle.checked ? "auto" : "manual"), {
+          refit: toggle.checked,
+        });
         return;
       }
 
       if (key === "equalScale") {
-        apply(setGrid(document_, { equalScale: input.checked }));
+        apply(setGrid(document_, { equalScale: toggle.checked }));
         return;
       }
 
@@ -2075,14 +2571,15 @@ export function openSketchWorkspace(options = {}) {
         return;
       }
 
-      apply(setGrid(document_, { [key]: input.checked }));
-    });
-  });
+      apply(setGrid(document_, { [key]: toggle.checked }));
+      return;
+    }
 
-  $$("[data-sketch-select]").forEach((input) => {
-    input.addEventListener("change", () => {
-      apply(setGrid(document_, { [input.dataset.sketchSelect]: input.value }));
-    });
+    const select = event.target.closest?.("[data-sketch-select]");
+
+    if (select && select.closest("[data-sketch-drawing-settings]")) {
+      apply(setGrid(document_, { [select.dataset.sketchSelect]: select.value }));
+    }
   });
 
   /*
@@ -2099,6 +2596,11 @@ export function openSketchWorkspace(options = {}) {
    */
   $$("[data-sketch-field]").forEach((input) => {
     input.addEventListener("change", () => {
+      /* The SELECTION's fields are committed by their own handler. */
+      if (input.closest("[data-sketch-selection-properties]")) {
+        return;
+      }
+
       const key = input.dataset.sketchField;
       const text = String(input.value).trim();
 
@@ -2136,7 +2638,7 @@ export function openSketchWorkspace(options = {}) {
 
       apply(
         setGrid(document_, {
-          [axis === "x" ? "xAxisLabel" : "yAxisLabel"]: input.value,
+          [axis === "axisX" ? "xAxisLabel" : "yAxisLabel"]: input.value,
         }),
       );
     });
@@ -2160,10 +2662,13 @@ export function openSketchWorkspace(options = {}) {
     if (event.key === "Escape") {
       event.preventDefault();
 
-
-
       if (inField) {
         event.target.blur();
+        return;
+      }
+
+      /* Escape ends a construction before it closes the editor. */
+      if (cancelConstruction()) {
         return;
       }
 
@@ -2173,6 +2678,12 @@ export function openSketchWorkspace(options = {}) {
     }
 
     if (inField) {
+      return;
+    }
+
+    if (event.key === "Enter" && construction) {
+      event.preventDefault();
+      finishConstruction();
       return;
     }
 
@@ -2222,34 +2733,12 @@ export function openSketchWorkspace(options = {}) {
    * fraction short of the shape it is showing.
    */
   function geometryExtent() {
-    const points = [
+    return [
       ...resolvePoints(document_.points).map((point) => point.absolute),
-      ...document_.geometry.flatMap((element) => {
-        const list = (element.points || []).map((point) => ({ x: point.x, y: point.y }));
-
-        if (element.centre && element.radius) {
-          list.push(
-            { x: element.centre.x - element.radius, y: element.centre.y },
-            { x: element.centre.x + element.radius, y: element.centre.y },
-            { x: element.centre.x, y: element.centre.y - element.radius },
-            { x: element.centre.x, y: element.centre.y + element.radius },
-          );
-        }
-
-        if (element.centre && element.radiusX && element.radiusY) {
-          list.push(
-            { x: element.centre.x - element.radiusX, y: element.centre.y },
-            { x: element.centre.x + element.radiusX, y: element.centre.y },
-            { x: element.centre.x, y: element.centre.y - element.radiusY },
-            { x: element.centre.x, y: element.centre.y + element.radiusY },
-          );
-        }
-
-        return list;
-      }),
+      ...document_.geometry.flatMap((element) =>
+        element.visible === false ? [] : elementExtent(element),
+      ),
     ];
-
-    return points;
   }
 
   /*
@@ -2382,6 +2871,12 @@ export function openSketchWorkspace(options = {}) {
     /* What the migration changed on open - empty for a new document. */
     migration: { changes: migrated.changes, migrated: migrated.migrated },
     getDocument: () => document_,
+    getGeometry: () => document_.geometry,
+    getPoints: () => resolvePoints(document_.points),
+    getSelection: () => ({
+      pointId: selectedPointId,
+      geometryIds: [...selectedGeometryIds],
+    }),
     getSource: (include) => generateSource(document_, { include }),
     applySource: (text) => {
       const parsed = parseSource(text);
@@ -2407,6 +2902,22 @@ export function openSketchWorkspace(options = {}) {
       const fitted = fitScale();
 
       return fitted > 0 ? Math.round((currentViewport().scale / fitted) * 100) : 100;
+    },
+    /*
+     * A POINT CAN BE ASSOCIATED WITH A GEOMETRY, OR NAMED ITS CENTRE, through
+     * the same explicit operation the interface uses - so a caller driving the
+     * editor for a test gets the identical semantics.
+     */
+    associatePoint: (pointId, geometryId, role = "path") =>
+      apply(associatePointWithGeometry(document_, pointId, geometryId, role), { refit: false }),
+    addPoint: (options) => {
+      const result = addPoint(document_, options);
+
+      selectedPointId = result.point.id;
+      selectedGeometryIds = [];
+      apply(result.document);
+
+      return result.point;
     },
   };
 
@@ -2446,7 +2957,20 @@ function resizeElement(element, key, value) {
 
   if (key === "radius") {
     next.radius = Math.max(0.001, value);
-    next.points = circlePoints(next.centre, next.radius);
+
+    if (next.kind === "arc") {
+      next.points = arcPoints(next.centre, next.radius, next.startAngle || 0, next.endAngle || 0);
+    } else {
+      next.points = circlePoints(next.centre, next.radius);
+    }
+
+    next.segments = [];
+    return next;
+  }
+
+  if (key === "startAngle" || key === "endAngle") {
+    next[key] = (value * Math.PI) / 180;
+    next.points = arcPoints(next.centre, next.radius, next.startAngle || 0, next.endAngle || 0);
     next.segments = [];
     return next;
   }
@@ -2471,7 +2995,7 @@ function resizeElement(element, key, value) {
     } else if (next.kind === "ellipse") {
       next.points = ellipsePoints(centre, next.radiusX, next.radiusY);
     } else if (next.kind === "arc") {
-      next.points = arcPoints(centre, next.radius, next.rotation || 0);
+      next.points = arcPoints(centre, next.radius, next.startAngle || 0, next.endAngle || 0);
     }
 
     next.segments = [];
@@ -2520,15 +3044,28 @@ function ellipsePoints(centre, radiusX, radiusY, count = 64) {
   });
 }
 
-function arcPoints(centre, radius, startAngle, count = 32) {
+/* The points along an arc, between its own start and end angles. */
+function arcPoints(centre, radius, startAngle, endAngle, count = 32) {
+  let from = startAngle;
+  let to = endAngle;
+
+  if (to < from) {
+    while (to < from) to += Math.PI * 2;
+  }
+
   return Array.from({ length: count + 1 }, (_, index) => {
-    const angle = startAngle + (Math.PI * index) / count;
+    const angle = from + ((to - from) * index) / count;
 
     return {
       x: centre.x + radius * Math.cos(angle),
       y: centre.y + radius * Math.sin(angle),
     };
   });
+}
+
+/* "line" -> "Line", for a default element name. */
+function capitalise(text) {
+  return `${String(text).charAt(0).toUpperCase()}${String(text).slice(1)}`;
 }
 
 export function closeWorkspace() {

@@ -1,5 +1,13 @@
 import { fluidsToolGroups } from "../../../features/workspace/model/fluids/fluids-tools.js";
 /*
+ * THE HEAT TRANSFER TOOLSET, FROM ITS OWN MODULE.
+ *
+ * The same arrangement FLUIDS uses: the groups are declared in
+ * features/workspace/model/heat-transfer/heat-tools.js, beside the tools and
+ * the model that read them, so a Heat Transfer tool is registered once.
+ */
+import { heatToolGroups, HEAT_TOOL_MENUS } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
+/*
  * THE MATH SIDEBAR TABLE, FROM ITS LEAF MODULE.
  *
  * `math-tool-groups.js` imports nothing, so folding its definitions in here
@@ -418,6 +426,48 @@ export const toolIcons = {
 	Layer: drawingIcon(`<path ${iconStroke} d="M4 6h12M4 10h12M4 14h12"/>`),
 	"Heat Flux": drawingIcon(`<path ${iconStroke} d="M4 10h12M12 6l4 4-4 4M7 6l-3 4 3 4"/>`),
 	Temperature: drawingIcon(`<path ${iconStroke} d="M8 5a2 2 0 0 1 4 0v6a4 4 0 1 1-4 0zM10 4v8"/>`),
+
+	/*
+	 * ========================================================
+	 * THE HEAT TRANSFER ICONS
+	 * ========================================================
+	 *
+	 * One family, built from the same parts as every other icon: a 20x20
+	 * viewBox, the shared iconStroke, round caps and joins, no fills. Each says
+	 * what the tool MAKES rather than how it works, so a student scanning the
+	 * sidebar reads the drawing they are about to produce. The symbols are
+	 * distinguished by their GEOMETRY - a wall's two faces, a composite wall's
+	 * dividers, a resistor's zig-zag - so they read in monochrome, never by
+	 * colour alone.
+	 */
+	"Thermal Region": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6"/>`),
+	"Wall / Slab": drawingIcon(`<path ${iconStroke} d="M3 8h14M3 12h14"/>`),
+	"Composite Wall": drawingIcon(`<rect ${iconStroke} x="3" y="6" width="14" height="8"/><path ${iconStroke} d="M7.5 6v8M12 6v8M16.5 6v8"/>`),
+	Fin: drawingIcon(`<path ${iconStroke} d="M3 17h14M6 17V8h3v9M11 17V8h3v9"/>`),
+	"Heat Transfer Path": drawingIcon(`<path ${iconStroke} d="M3 15l5-5 4 4 5-6"/><path ${iconStroke} d="M13.5 6.5H17v3.5"/>`),
+	"Conduction Path": drawingIcon(`<path ${iconStroke} d="M3 16L17 5M12.5 5H17v4.5"/>`),
+	"Convection Flow": drawingIcon(`<path ${iconStroke} d="M3 15c3-8 6 3 9-3s4-5 5-5"/><path ${iconStroke} d="M13.5 5.5H17v3.5"/>`),
+	"Radiation Path": drawingIcon(`<path ${iconStroke} d="M2 12c1.5-3 3 3 4.5 0s3 3 4.5 0 3 3 4.5 0"/><path ${iconStroke} d="M14 10l3 2-3 2"/>`),
+	"Thermal Transfer Arrow": drawingIcon(`<path ${iconStroke} d="M3 13h11m-4-4 4 4-4 4"/>`),
+	"Heat Transfer Rate": drawingIcon(`<path ${iconStroke} d="M3 13h11m-4-4 4 4-4 4M15 5h4"/>`),
+	"Thermal Boundary": drawingIcon(`<path ${iconStroke} d="M5 4v12M5 10h9"/><path ${iconStroke} d="M10 7l3 3-3 3"/>`),
+	"Fixed Temperature": drawingIcon(`<path ${iconStroke} d="M5 4v12M5 8h4M5 12h4"/>`),
+	"Convection Boundary": drawingIcon(`<path ${iconStroke} d="M5 4v12M5 6h4m-2-2 2 2-2 2M5 12h4m-2-2 2 2-2 2"/>`),
+	"Radiation Boundary": drawingIcon(`<path ${iconStroke} d="M5 4v12M5 7c1-2 2 2 3 0M5 13c1-2 2 2 3 0"/>`),
+	"Adiabatic / Insulated Boundary": drawingIcon(`<path ${iconStroke} d="M5 4v12M5 6l3-2M5 10l3-2M5 14l3-2"/>`),
+
+	"Thermal Contact / Interface": drawingIcon(`<path ${iconStroke} d="M10 4v12M6 8l4 2-4 2 4 2-4 2"/>`),
+	"Heat Source / Sink": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 6v8m0 0-2-2m2 2 2-2"/>`),
+	"Heat Source": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 15V7m0 0-2 2m2-2 2 2"/>`),
+	"Heat Sink": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M10 5v8m0 0-2-2m2 2 2-2"/>`),
+	"Thermal Circuit Node": drawingIcon(`<circle fill="currentColor" cx="7" cy="10" r="2"/><path ${iconStroke} d="M9 10h8"/>`),
+	"Thermal Circuit Element": drawingIcon(`<path ${iconStroke} d="M2 10h3l1.5-3 2 6 2-6 2 6 1.5-3h3"/>`),
+	"Thermal Resistance": drawingIcon(`<path ${iconStroke} d="M2 10h3l1.5-3 2 6 2-6 2 6 1.5-3h3"/>`),
+	"Thermal Capacitance": drawingIcon(`<path ${iconStroke} d="M2 10h6M12 10h6M8 6v8M12 6v8"/>`),
+	"Temperature Marker": drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="3"/><path ${iconStroke} d="M10 3v4M10 13v4M3 10h4M13 10h4"/>`),
+	Isotherm: drawingIcon(`<path ${iconStroke} d="M3 14c2-6 4 2 6-3s4-5 8-4"/><path ${iconStroke} stroke-dasharray="2 2" d="M3 17c2-6 4 2 6-3s4-5 8-4"/>`),
+	"Control Volume Boundary": drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10" stroke-dasharray="2 2"/>`),
+	"Temperature Profile": drawingIcon(`<path ${iconStroke} d="M4 3v13h13"/><path ${iconStroke} d="M6 14C7.5 9 8 5.5 10.5 5.5S14 11 16.5 13.5"/>`),
 	Convection: drawingIcon(`<path ${iconStroke} d="M4 6c2-2 3 2 5 0s3 2 5 0 2 1 2 1M4 11c2-2 3 2 5 0s3 2 5 0 2 1 2 1"/>`),
 	Radiation: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="3"/><path ${iconStroke} d="M10 3v2M10 15v2M3 10h2M15 10h2M5 5l1 1M14 14l1 1M15 5l-1 1M6 14l-1 1"/>`),
 	Shaft: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="5"/><path ${iconStroke} d="M3 10h14M10 3v14"/>`),
@@ -432,8 +482,6 @@ export const toolIcons = {
 	Block: drawingIcon(`<rect ${iconStroke} x="5" y="5" width="10" height="10"/><path ${iconStroke} d="M2 10h3M15 10h3"/>`),
 	Gain: drawingIcon(`<path ${iconStroke} d="M4 3v14l12-7z"/><path ${iconStroke} d="M8 10h4"/>`),
 	Sum: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="7"/><path ${iconStroke} d="M8 7h4M10 5v4M8 13h4"/>`),
-	Sensor: drawingIcon(`<path ${iconStroke} d="M6 14a6 6 0 0 1 0-8M10 16a8 8 0 0 1 0-12M14 10h3"/>`),
-	Controller: drawingIcon(`<rect ${iconStroke} x="4" y="5" width="12" height="10"/><path ${iconStroke} d="M7 10h6M10 7v6"/>`),
 	"Signal Arrow": drawingIcon(`<path ${iconStroke} d="M3 10h12M11 6l4 4-4 4"/><path ${iconStroke} d="M5 6v8"/>`),
 	"Signal Line": drawingIcon(`<path ${iconStroke} d="M4 10h12"/><circle ${iconStroke} cx="3" cy="10" r="1"/><circle ${iconStroke} cx="17" cy="10" r="1"/>`),
 	Point: drawingIcon(`<circle ${iconStroke} cx="10" cy="10" r="2"/>`),
@@ -541,7 +589,33 @@ export const featureIcons = {
 	     * A JUNCTION USES THE SAME ART AS ITS TOOL BUTTON, so a generated and a
 	     * hand-placed junction file under one glyph.
 	     */
-	    junction: toolIcons.Junction
+	    junction: toolIcons.Junction,
+
+	    /*
+	     * ========================================================
+	     * THE HEAT TRANSFER FEATURE ICONS
+	     * ========================================================
+	     *
+	     * Each Heat Transfer feature wears its own tool's artwork, so a Thermal
+	     * Region in the Objects list is the Thermal Region button and a Thermal
+	     * Resistance is the resistor button - the same picture wherever the
+	     * object appears, and a feature cannot be filed under a different glyph
+	     * from the tool that drew it.
+	     */
+	    "thermal-region": toolIcons["Thermal Region"],
+	    "wall-slab": toolIcons["Wall / Slab"],
+	    "composite-wall": toolIcons["Composite Wall"],
+	    fin: toolIcons.Fin,
+	    "heat-path": toolIcons["Heat Transfer Path"],
+	    "thermal-arrow": toolIcons["Thermal Transfer Arrow"],
+	    "thermal-boundary": toolIcons["Thermal Boundary"],
+	    "thermal-contact": toolIcons["Thermal Contact / Interface"],
+	    "heat-source-sink": toolIcons["Heat Source / Sink"],
+	    "thermal-circuit-node": toolIcons["Thermal Circuit Node"],
+	    "thermal-circuit-element": toolIcons["Thermal Circuit Element"],
+	    "temperature-marker": toolIcons["Temperature Marker"],
+	    isotherm: toolIcons.Isotherm,
+	    "control-volume": toolIcons["Control Volume Boundary"]
 	};
 
 export const drawingToolGroups = [
@@ -774,6 +848,24 @@ export const disciplineToolGroups = {
 	 */
 	FLUIDS: fluidsToolGroups,
 
+	/*
+	 * ========================================================
+	 * HEAT TRANSFER: THE TOOLSET, IMPORTED FROM ITS OWN MODULE
+	 * ========================================================
+	 *
+	 * Heat Transfer is organised the way Statics and Fluids are - the same four
+	 * sections, with their commands listed directly underneath, and its groups
+	 * live in features/workspace/model/heat-transfer/heat-tools.js rather than
+	 * in this file.
+	 *
+	 * The reason is MODULARITY, and it is the requirement's own: a Heat Transfer
+	 * tool is registered ONCE, beside the capability it travels, so adding,
+	 * moving or building out a heat-transfer tool is an edit in one place.
+	 * Listing the nineteen entries here as well would be a second copy of the
+	 * section, free to fall out of step with the first.
+	 */
+	"HEAT TRANSFER": heatToolGroups,
+
 	THERMODYNAMICS: [
 		{
 			id: "thermodynamics-selection",
@@ -948,9 +1040,26 @@ const globalToolDefinitions = globalToolGroups.flatMap(group => group.tools);
  */
 const mathToolDefinitions = MATH_TOOL_GROUPS.flatMap(group => group.tools);
 
+/*
+ * THE HEAT TRANSFER TOOLS ARE SIDEBAR TOOLS TOO.
+ *
+ * They are declared in the Heat Transfer section's own table, so they are
+ * folded in here - which is what makes a label resolve to its id for the
+ * command index, the search and every caller that asks `drawToolLabelById`.
+ * Without them a Heat Transfer label had no id, and a search result for
+ * "Thermal Contact / Interface" armed nothing (or, worse, a slug that is not
+ * the tool's real id).
+ */
+const heatToolDefinitions = heatToolGroups.flatMap(group =>
+	(group.tools || []).flatMap(tool =>
+		HEAT_TOOL_MENUS[tool.id] ? HEAT_TOOL_MENUS[tool.id] : [tool]
+	)
+);
+
 export const drawToolDefinitions = [
 	...sidebarToolDefinitions,
 	...mathToolDefinitions,
+	...heatToolDefinitions,
 	...globalToolDefinitions
 ];
 export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool => [tool.id, tool.label]));
@@ -992,10 +1101,37 @@ export const engineeringTools = {
 		"Section Plane"
 	],
 	THERMODYNAMICS: ["Tank", "Control Volume", "Piston Cylinder", "Process Diagrams", "Heat Transfer", "Work"],
-	"HEAT TRANSFER": ["Wall", "Layer", "Heat Flux", "Temperature", "Convection", "Radiation"],
+	/*
+	 * HEAT TRANSFER is a GROUPED toolset now - see
+	 * `disciplineToolGroups["HEAT TRANSFER"]`, imported from
+	 * features/workspace/model/heat-transfer/heat-tools.js - so this flat list is
+	 * the validity gate and the inventory QA's own list, not what the toolbar
+	 * renders. It names the dropdown PARENTS (not their children) because that is
+	 * what the section lists.
+	 */
+	"HEAT TRANSFER": [
+		"Thermal Region",
+		"Wall / Slab",
+		"Composite Wall",
+		"Fin",
+		"Heat Transfer Path",
+		"Thermal Transfer Arrow",
+		"Thermal Boundary",
+		"Thermal Contact / Interface",
+		"Heat Source / Sink",
+		"Thermal Circuit Node",
+		"Thermal Circuit Element",
+		"Temperature Marker",
+		"Isotherm",
+		"Control Volume Boundary",
+		"Temperature Profile",
+		"Coordinate System",
+		"Reference Point",
+		"Reference Line"
+	],
 	"SOLID MECHANICS": ["Stress Element", "Boundary Stress", "Beam", "Supports", "Load", "Coordinate System"],
 	"MECHANICAL DESIGN": ["Part", "Hole", "Gear", "Fastener", "Section View"],
-	CONTROLS: ["Plant", "Block", "Input", "Output", "Sensor", "Controller", "Signal Line"],
+	CONTROLS: ["Plant", "Block", "Gain", "Sum", "Signal Line"],
 	/*
 	 * MATH / ANALYSIS IS ORGANISED INTO SECTIONS, like Geometry and Statics, so
 	 * its tools are listed in `MATH_TOOL_GROUPS` (features/workspace/math/

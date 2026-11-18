@@ -27,6 +27,7 @@
 import {
   point,
   num,
+  fontSizeOption,
   styleOptions,
   splitPrelude,
   texText,
@@ -192,7 +193,7 @@ function node(
   text,
   { anchor = "center", colour = "black", size = 9 } = {},
 ) {
-  return `\\node[anchor=${anchor}, text=${colour}, font=\\fontsize{${num(size, 2)}}{${num(size * 1.2, 2)}}\\selectfont] at ${point(at.x, at.y)} {${text}};`;
+  return `\\node[anchor=${anchor}, text=${colour}, font=${fontSizeOption(size)}] at ${point(at.x, at.y)} {${text}};`;
 }
 
 function meta(field, value) {
@@ -782,7 +783,7 @@ function serializeEquation(object) {
       ? lines.map((lineText) => `$${lineText}$`).join(" \\\\ ")
       : `$${content}$`;
 
-  const command = `\\node[anchor=${anchor}, text=${colour}, align=${engineering.align || "center"}, font=\\fontsize{${num(size, 2)}}{${num(size * 1.25, 2)}}\\selectfont] at ${point(
+  const command = `\\node[anchor=${anchor}, text=${colour}, align=${engineering.align || "center"}, font=${fontSizeOption(size, { lineSpacing: 1.25 })}] at ${point(
     geometry.position.x,
     geometry.position.y,
   )} {${body}};`;

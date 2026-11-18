@@ -114,15 +114,33 @@ test("the label typed on the page becomes the dimension's content and reopens in
     "no popup editor is opened",
   );
 
+  /*
+   * A BLANK LABEL IS A LEGAL ANSWER. The dimension keeps its lines and shows no
+   * text; it does not fall back to the measured distance, and the field closes
+   * because the student has committed the (empty) label.
+   */
   const editor = field.querySelector("input");
   editor.value = "";
   press(editor, "Enter");
-  assert.ok(field.isConnected, "a blank label keeps the field open");
-  assert.equal(variable.content, "L/2");
+  assert.equal(field.isConnected, false, "a blank label commits and closes the field");
+  assert.equal(
+    state.objects.find((o) => o.id === variable.id).content,
+    "",
+    "the label is empty, not the measurement",
+  );
 
-  editor.value = "θ + b";
-  press(editor, "Enter");
-  assert.equal(field.isConnected, false, "committing closes the field");
+  /* A new label is typed by reopening the field, as it would be in the app. */
+  tool.openDimensionValuePrompt(variable);
+
+  const reopened = inPageField();
+  assert.ok(reopened);
+  assert.equal(reopened.querySelector("input").value, "", "the cleared label reopens blank");
+
+  const second = reopened.querySelector("input");
+  second.value = "θ + b";
+  press(second, "Enter");
+  assert.equal(reopened.isConnected, false, "committing closes the field");
+
   const current = state.objects.find((o) => o.id === variable.id);
   assert.equal(current.content, "θ + b");
   assert.equal(

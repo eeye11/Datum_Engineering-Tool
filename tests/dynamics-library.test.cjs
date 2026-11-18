@@ -640,10 +640,15 @@ test("Polar Vector drag placement keeps the tool armed and exposes its editable 
     groups.map(({ heading }) => heading),
     ["Object", "Appearance", "Transform"],
   );
+  /*
+   * NAME AND LABEL ARE TWO ROWS. `name` identifies the vector in the Objects
+   * list; `label` is the text drawn beside it. Both are editable, both are
+   * separate, and neither is derived from the endpoints.
+   */
   assert.deepEqual(
     groups.map(({ fields }) => fields.map(({ key }) => key)),
     [
-      ["name", "fixed"],
+      ["name", "label", "fixed"],
       ["lineType", "stroke", "lineWidth", "dynamics.arrowheadSize", "dynamics.polarArrow"],
       [],
     ],

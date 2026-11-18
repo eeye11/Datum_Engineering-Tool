@@ -6,7 +6,26 @@
  */
 import enggFeatureGeometry from "../geometry/feature-geometry.js";
 import enggDrawingState from "../model/drawing-state.js";
-import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.js";
+import { applyStyle, createSvgElement, scaledStrokeWidth, worldLength, zoomedFontHere } from "./svg-primitives.js";
+
+/*
+ * A SYMBOL'S PEN.
+ *
+ * A symbol's pens are written here as drawn weights - fractions of the
+ * feature's own `lineWidth` (0.5, 0.6, 0.75...) - and every one of them used to
+ * be written `N / zoom`, which held the pen at a constant number of screen
+ * pixels while the symbol it outlines grew with the camera. At 400% a support's
+ * outline was a quarter of the weight it should have been against a member four
+ * times as heavy; at 25% it was four times too heavy.
+ *
+ * A PEN IS THE DRAWING'S, so it is converted EXACTLY as the symbol's geometry
+ * is: `scaledStrokeWidth` states the weight and `worldLength` carries it through
+ * the camera the overlay is drawn with. Reading them as one expression here is
+ * what makes the symbol's outline and its shape agree at every zoom.
+ */
+function penWidth(lineWidth) {
+    return worldLength(scaledStrokeWidth(lineWidth));
+}
 
 
     /*
@@ -43,8 +62,23 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         orientation,
         stroke
     ) {
-        const size = 9;
-        const ground = 26;
+        /*
+         * A SUPPORT'S SYMBOL IS THE DRAWING'S, SO IT SCALES WITH THE CAMERA.
+         *
+         * `size` and `ground` are the triangle's half-extent and the length of
+         * its ground line in WORLD units - the same sizes the source writer
+         * draws the symbol with (`latex/symbol-sizes.js`).
+         *
+         * THEY WERE SCREEN PIXELS. The symbol is laid out around a point that
+         * has already been projected, so a bare `9` was nine pixels at every
+         * magnification: a support stayed the same size while the beam it
+         * carries grew, and at 400% it was a speck on a member four times its
+         * length. Multiplying by the zoom converts the world size into the
+         * pixels the overlay needs, so the support keeps its proportion to its
+         * member at every zoom - and matches the compiled picture beside it.
+         */
+        const size = worldLength(9);
+        const ground = worldLength(26);
 
         /*
          * The symbol's own axes, from the angle the caller derived
@@ -87,7 +121,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                     x2: to.x,
                     y2: to.y,
                     stroke,
-                    "stroke-width": width,
+                    "stroke-width": penWidth(width),
                     ...(opacity
                         ? { "stroke-opacity": opacity }
                         : {})
@@ -128,19 +162,19 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
              * the wall from the body, which is exactly where the strokes
              * belong.
              */
-            const wall = 16;
+            const wall = worldLength(16);
 
             /* The wall line, ACROSS the member, at the attachment point. */
             line(
                 at(0, -wall),
                 at(0, wall),
-                2.5
+                1
             );
 
             for (
                 let offset = -wall;
-                offset <= wall;
-                offset += 5
+                offset <= wall + 1e-9;
+                offset += worldLength(5)
             ) {
                 /*
                  * FROM THE WALL BACKWARD, never across it: every stroke
@@ -149,8 +183,8 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                  */
                 line(
                     at(0, offset),
-                    at(9, offset + 5),
-                    1
+                    at(worldLength(9), offset + worldLength(5)),
+                    0.4
                 );
             }
 
@@ -162,16 +196,16 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
              * A rounded contact with its normal reaction, which
              * is what distinguishes a smooth support.
              */
-            const centre = at(4);
+            const centre = at(worldLength(4));
 
             const contact =
                 createSvgElement("circle", {
                     cx: centre.x,
                     cy: centre.y,
-                    r: 4,
+                    r: worldLength(4),
                     fill: "none",
                     stroke,
-                    "stroke-width": 1.4
+                    "stroke-width": penWidth(0.6)
                 });
 
             contact.setAttribute(
@@ -181,8 +215,8 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
 
             svg.appendChild(contact);
 
-            line(at(0), at(16), 1.4);
-            line(at(-2, -ground / 2), at(-2, ground / 2), 1.4);
+            line(at(0), at(worldLength(16)), 0.6);
+            line(at(-worldLength(2), -ground / 2), at(-worldLength(2), ground / 2), 0.6);
 
             return;
         }
@@ -205,7 +239,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 ].join(" "),
                 fill: "none",
                 stroke,
-                "stroke-width": 1.6
+                "stroke-width": penWidth(0.7)
             });
 
         triangle.setAttribute(
@@ -217,16 +251,16 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
 
         if (rollers) {
             [-5, 5].forEach(offset => {
-                const centre = at(size + 3, offset);
+                const centre = at(size + worldLength(3), worldLength(offset));
 
                 const roller =
                     createSvgElement("circle", {
                         cx: centre.x,
                         cy: centre.y,
-                        r: 3,
+                        r: worldLength(3),
                         fill: "none",
                         stroke,
-                        "stroke-width": 1.2
+                        "stroke-width": penWidth(0.5)
                     });
 
                 roller.setAttribute(
@@ -238,15 +272,15 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
             });
 
             line(
-                at(size + 7, -ground / 2),
-                at(size + 7, ground / 2),
-                1.4
+                at(size + worldLength(7), -ground / 2),
+                at(size + worldLength(7), ground / 2),
+                0.6
             );
         } else {
             line(
                 at(size, -ground / 2),
                 at(size, ground / 2),
-                1.4
+                0.6
             );
         }
     }
@@ -254,6 +288,12 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
     /*
      * Connection symbols: pin shows a joint circle, fixed
      * shows a rigid block, slider shows a guided slider.
+     *
+     * THE MARKS ARE THE DRAWING'S SIZE, NOT THE WINDOW'S. Every offset below
+     * was a fixed number of PIXELS around an already-projected anchor, so a
+     * joint stayed four pixels across while its members grew - and the compiled
+     * picture beside it drew the same symbol at a world size. Scaling each
+     * WORLD size by the zoom is what makes the two agree at every magnification.
      */
     function appendConnectionSymbol(
         svg,
@@ -262,15 +302,17 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         stroke
     ) {
         if (type === "fixed-connection") {
+            const block = worldLength(8);
+
             svg.appendChild(
                 createSvgElement("rect", {
-                    x: anchor.x - 8,
-                    y: anchor.y - 8,
-                    width: 16,
-                    height: 16,
+                    x: anchor.x - block,
+                    y: anchor.y - block,
+                    width: block * 2,
+                    height: block * 2,
                     fill: "none",
                     stroke,
-                    "stroke-width": 1.8
+                    "stroke-width": penWidth(0.75)
                 })
             );
 
@@ -280,24 +322,24 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
         if (type === "slider-connection") {
             svg.appendChild(
                 createSvgElement("line", {
-                    x1: anchor.x - 14,
-                    y1: anchor.y - 7,
-                    x2: anchor.x + 14,
-                    y2: anchor.y - 7,
+                    x1: anchor.x - worldLength(14),
+                    y1: anchor.y - worldLength(7),
+                    x2: anchor.x + worldLength(14),
+                    y2: anchor.y - worldLength(7),
                     stroke,
-                    "stroke-width": 1.4
+                    "stroke-width": penWidth(0.6)
                 })
             );
 
             svg.appendChild(
                 createSvgElement("rect", {
-                    x: anchor.x - 7,
-                    y: anchor.y - 5,
-                    width: 14,
-                    height: 10,
+                    x: anchor.x - worldLength(7),
+                    y: anchor.y - worldLength(5),
+                    width: worldLength(14),
+                    height: worldLength(10),
                     fill: "none",
                     stroke,
-                    "stroke-width": 1.6
+                    "stroke-width": penWidth(0.7)
                 })
             );
 
@@ -308,10 +350,10 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
             createSvgElement("circle", {
                 cx: anchor.x,
                 cy: anchor.y,
-                r: 4,
+                r: worldLength(4),
                 fill: "none",
                 stroke,
-                "stroke-width": 1.6
+                "stroke-width": penWidth(0.7)
             })
         );
     }
@@ -395,25 +437,19 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
             "#000000";
 
         /*
-         * Axis stroke width is a SCREEN-space value.
+         * THE AXIS IS DRAWN AT THE FEATURE'S OWN PEN WEIGHT.
          *
-         * The previous implementation multiplied the line
-         * width by the engineering scale. At normal zoom
-         * this made the axes dramatically thicker than the
-         * rest of the drawing.
+         * It used to be a constant 1 to 1.5 overlay pixels, which is a SCREEN
+         * width: the axes stayed the same thickness while the drawing they
+         * measure grew, so at 400% they were hairlines against members four
+         * times as heavy, and the compiled picture - which states the same pen
+         * in the drawing's unit - disagreed with them at every zoom but 100%.
+         * `scaledStrokeWidth` is the one conversion a feature's `lineWidth`
+         * goes through, so an axis is as heavy as the geometry beside it.
          */
-        const axisWidth =
-            Math.max(
-                1,
-                Math.min(
-                    1.5,
-                    (
-                        Number(
-                            style.lineWidth
-                        ) || 0.5
-                    ) * 1.4
-                )
-            );
+        const axisWidth = scaledStrokeWidth(
+            Number(style.lineWidth) || 0.5
+        );
 
         const opacity =
             isPreview
@@ -468,15 +504,23 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
 
         /*
          * X arrowhead
+         *
+         * THE HEAD IS THE DRAWING'S SIZE. It was a fixed seven by three
+         * overlay pixels, so it kept its size while the arm it caps grew with
+         * the camera - a head that was right on a short axis and a speck on a
+         * long one. `worldLength` converts it exactly as the arm was converted.
          */
+        const headLength = worldLength(7);
+        const headHalfWidth = worldLength(3);
+
         const xArrow =
             createSvgElement(
                 "path",
                 {
                     d:
                         `M ${origin.x + xAxisLength} ${origin.y}
-                         L ${origin.x + xAxisLength - 7} ${origin.y - 3}
-                         L ${origin.x + xAxisLength - 7} ${origin.y + 3}
+                         L ${origin.x + xAxisLength - headLength} ${origin.y - headHalfWidth}
+                         L ${origin.x + xAxisLength - headLength} ${origin.y + headHalfWidth}
                          Z`,
                     fill:
                         axisColor
@@ -492,8 +536,8 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 {
                     d:
                         `M ${origin.x} ${origin.y - yAxisLength}
-                         L ${origin.x - 3} ${origin.y - yAxisLength + 7}
-                         L ${origin.x + 3} ${origin.y - yAxisLength + 7}
+                         L ${origin.x - headHalfWidth} ${origin.y - yAxisLength + headLength}
+                         L ${origin.x + headHalfWidth} ${origin.y - yAxisLength + headLength}
                          Z`,
                     fill:
                         axisColor
@@ -506,13 +550,13 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 {
                     cx: origin.x,
                     cy: origin.y,
-                    r: 1.5,
+                    r: worldLength(1.5),
                     fill:
                         "#ffffff",
                     stroke:
                         axisColor,
                     "stroke-width":
-                        1
+                        axisWidth
                 }
             );
 
@@ -531,7 +575,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                         origin.x +
                         xAxisLength,
                     y:
-                        origin.y + 7 * scale,
+                        origin.y + worldLength(7),
                     "text-anchor": "middle",
                     "dominant-baseline": "middle",
                     fill:
@@ -556,7 +600,7 @@ import { applyStyle, createSvgElement, zoomedFontHere } from "./svg-primitives.j
                 "text",
                 {
                     x:
-                        origin.x - 7 * scale,
+                        origin.x - worldLength(7),
                     y:
                         origin.y -
                         yAxisLength,

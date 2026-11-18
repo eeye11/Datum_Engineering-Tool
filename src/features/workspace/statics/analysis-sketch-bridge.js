@@ -27,7 +27,10 @@
 import { openSketchWorkspace } from "../../../shared/ui/sketch/sketch-workspace.js";
 import { createSketchDocument } from "../../../shared/sketch/sketch-document.js";
 import { makePoint } from "../../../shared/sketch/sketch-points.js";
-import { normaliseAppearance, resolveColour } from "../../../shared/sketch/sketch-appearance.js";
+import {
+  normaliseAppearance,
+  resolveColour,
+} from "../../../shared/sketch/sketch-appearance.js";
 
 /*
  * THE DOCUMENT AN EXISTING DIAGRAM OPENS IN.
@@ -39,15 +42,26 @@ import { normaliseAppearance, resolveColour } from "../../../shared/sketch/sketc
  */
 export function documentFromStrokes(strokes = []) {
   const geometry = (Array.isArray(strokes) ? strokes : [])
-    .filter((stroke) => Array.isArray(stroke?.points) && stroke.points.length > 1)
+    .filter(
+      (stroke) => Array.isArray(stroke?.points) && stroke.points.length > 1,
+    )
     .map((stroke, index) => ({
       kind: stroke.type === "line" ? "line" : "curve",
       name: stroke.name || `Stroke ${index + 1}`,
-      points: stroke.points.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 })),
+      points: stroke.points.map((point) => ({
+        x: Number(point.x) || 0,
+        y: Number(point.y) || 0,
+      })),
       segments: Array.isArray(stroke.segments) ? stroke.segments : [],
       closed: false,
-      original: stroke.points.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 })),
-      correction: { kind: stroke.type === "line" ? "line" : "curve", confidence: 1 },
+      original: stroke.points.map((point) => ({
+        x: Number(point.x) || 0,
+        y: Number(point.y) || 0,
+      })),
+      correction: {
+        kind: stroke.type === "line" ? "line" : "curve",
+        confidence: 1,
+      },
       appearance: normaliseAppearance(stroke.appearance),
     }));
 
@@ -64,7 +78,10 @@ export function documentFromStrokes(strokes = []) {
  */
 export function elementsFromPlaced(placed) {
   return (placed?.geometry || [])
-    .filter((element) => element.visible !== false && (element.points || []).length > 1)
+    .filter(
+      (element) =>
+        element.visible !== false && (element.points || []).length > 1,
+    )
     .map((element) => ({
       kind: element.kind === "line" ? "straight" : "curved",
       points: element.points.map((point) => ({ x: point.x, y: point.y })),
@@ -84,14 +101,18 @@ export function elementsFromPlaced(placed) {
  * student never picked one, so a default-coloured stroke follows the theme.
  */
 export function styleFromPlaced(placed, baseStyle = {}, themeInk = "#000000") {
-  const first = (placed?.geometry || []).find((element) => element.visible !== false);
+  const first = (placed?.geometry || []).find(
+    (element) => element.visible !== false,
+  );
 
   const appearance = normaliseAppearance(first?.appearance);
 
   return {
     ...baseStyle,
     stroke: resolveColour(appearance, baseStyle.stroke || themeInk),
-    width: { thin: 0.6, normal: 1.2, bold: 2, heavy: 3 }[appearance.thickness] || 1.2,
+    width:
+      { thin: 0.6, normal: 1.2, bold: 2, heavy: 3 }[appearance.thickness] ||
+      1.2,
     lineStyle: appearance.lineStyle,
   };
 }
@@ -117,7 +138,12 @@ export function pointsFromPlaced(placed) {
  * the two callbacks the placement workflow uses. The workspace itself knows
  * nothing about Statics, which is what lets the same editor serve a graph."
  */
-export function openDiagramSketch({ title, strokes = [], onPlace, onCancel } = {}) {
+export function openDiagramSketch({
+  title,
+  strokes = [],
+  onPlace,
+  onCancel,
+} = {}) {
   return openSketchWorkspace({
     title: title || "Sketch",
     document: documentFromStrokes(strokes),

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * ============================================================
  * THE GRAPH PLOT EDITOR
  * ============================================================
@@ -45,12 +45,35 @@
 import enggMathModel from "./math-model.js";
 import { drawMathGraph } from "../../../shared/rendering/entities/draw-math.js";
 
+/*
+ * THE SHARED COORDINATE MODEL.
+ *
+ * The editor's axes, tick and grid controls are the SAME settings the Sketch
+ * Editor edits and the sheet paints from. Reading and writing them through the
+ * adapter is what keeps the panel, the preview and the placed graph one thing.
+ */
+import {
+  applyGridToGeometry,
+  gridFromGeometry,
+} from "../../../shared/sketch/sketch-grid-legacy.js";
+
 let openDialog = null;
 let closeCurrent = null;
 
-/* The preview's drawing area, in viewBox units. */
-const PREVIEW_WIDTH = 720;
-const PREVIEW_HEIGHT = 480;
+/*
+ * THE SIDEBAR'S WIDTH, in pixels: a comfortable column that never takes the
+ * canvas's room. The brief's 320-360px, with a floor and ceiling so a drag can
+ * neither hide the panel nor swallow the graph.
+ */
+const PLOT_SIDEBAR_MIN = 260;
+const PLOT_SIDEBAR_DEFAULT = 340;
+const PLOT_SIDEBAR_MAX = 420;
+
+/* The preview's box when the canvas has not been laid out yet.
+ * A measurement is used whenever one is available; this is only the answer for
+ * a container that reports no size at all. */
+const PREVIEW_FALLBACK_WIDTH = 720;
+const PREVIEW_FALLBACK_HEIGHT = 480;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -119,20 +142,61 @@ function workingCopy(graph) {
  * preview-sized box for the duration of the draw and restored afterwards, so
  * the student's real dimensions are never changed by looking at it.
  */
-function drawPreview(svg, graph) {
+function drawPreview(svg, graph, box = null) {
   while (svg.firstChild) {
     svg.removeChild(svg.firstChild);
   }
 
+  /*
+   * THE PREVIEW IS THE CANVAS'S OWN SIZE.
+   *
+   * The viewBox is set from the measured box, so one drawing unit is one pixel
+   * and the graph fills the stage at any window size. Only when nothing has
+   * been laid out yet - an editor constructed before its container is on screen
+   * - does the fallback apply, and the observer redraws as soon as there is a
+   * real size.
+   */
+  const width = box?.width > 0 ? box.width : PREVIEW_FALLBACK_WIDTH;
+  const height = box?.height > 0 ? box.height : PREVIEW_FALLBACK_HEIGHT;
+
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.setAttribute("width", String(width));
+  svg.setAttribute("height", String(height));
+
   const saved = { ...graph.geometry };
 
   graph.geometry.position = { x: 0, y: 0 };
-  graph.geometry.width = PREVIEW_WIDTH;
-  graph.geometry.height = PREVIEW_HEIGHT;
+  graph.geometry.width = width;
+  graph.geometry.height = height;
 
+  /*
+   * THE EDITOR HAS NO OUTSIDE, SO IT RESERVES NO MARGIN.
+   *
+   * A PLACED graph leaves an inset inside its box for the tick numbers that sit
+   * outside the plot area. The editor's box IS the canvas - its numbers are
+   * drawn inside it - so the inset is zero. Inheriting the placed graph's inset
+   * shrank the plot area and pushed it off-centre, leaving a wide empty band on
+   * one side of the preview.
+   *
+   * This is the graph's own property, not a rule about where it is drawn, which
+   * is why it is set on the working copy and restored with the rest.
+   */
+  graph.geometry.graphInset = { left: 0, right: 0, top: 0, bottom: 0 };
+
+  /*
+   * DRAWING SPACE GROWS UPWARD; SVG GROWS DOWNWARD.
+   *
+   * `graphToDrawing` answers in the sheet's own coordinates, where y increases
+   * upward - the same convention every other feature on the drawing uses. An
+   * SVG's y increases downward, so the two must be flipped here, at the one
+   * boundary where a drawing coordinate becomes a pixel.
+   *
+   * Without the flip the preview was drawn upside-down: -5 at the top of the
+   * y axis and +5 at the bottom, so every curve opened the wrong way.
+   */
   const toScreen = (point) => ({
     x: Number(point.x),
-    y: Number(point.y),
+    y: height - Number(point.y),
   });
 
   /*
@@ -155,7 +219,52 @@ function drawPreview(svg, graph) {
     graph.geometry.position = saved.position;
     graph.geometry.width = saved.width;
     graph.geometry.height = saved.height;
+
+    if (saved.graphInset === undefined) {
+      delete graph.geometry.graphInset;
+    } else {
+      graph.geometry.graphInset = saved.graphInset;
+    }
   }
+}
+
+/*
+ * ============================================================
+ * THE PROPERTIES ROWS
+ * ============================================================
+ *
+ * One builder per kind of row, so the markup below reads as the sections it
+ * describes rather than as repeated input tags. Each row carries the SAME
+ * `data-graph-*` hook the old editor used, so every handler and every test
+ * that drives a field by name keeps working unchanged.
+ */
+function numberField(key, label, step = 1) {
+  return (
+    `<label class="plot-editor-field">` +
+    `<span>${escapeHtml(label)}</span>` +
+    `<input type="number" step="${step}" data-graph-field="${escapeHtml(key)}" ` +
+    `aria-label="${escapeHtml(label)}">` +
+    `</label>`
+  );
+}
+
+function textField(key, label) {
+  return (
+    `<label class="plot-editor-field">` +
+    `<span>${escapeHtml(label)}</span>` +
+    `<input type="text" data-graph-field="${escapeHtml(key)}" ` +
+    `aria-label="${escapeHtml(label)}">` +
+    `</label>`
+  );
+}
+
+function toggleField(key, label) {
+  return (
+    `<label class="plot-editor-toggle">` +
+    `<input type="checkbox" data-graph-toggle="${escapeHtml(key)}">` +
+    `<span>${escapeHtml(label)}</span>` +
+    `</label>`
+  );
 }
 
 /* ============================================================
@@ -173,161 +282,147 @@ export function openPlotEditor(graph, options = {}) {
 
   const dialog = document.createElement("div");
 
-  dialog.className = "drawing-plot-editor";
+  dialog.className = "drawing-plot-editor drawing-graph-plot";
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
   dialog.setAttribute("aria-label", "Plot Editor");
 
+  /*
+   * THE SAME SHELL AS THE SKETCH EDITOR.
+   *
+   * A compact header, one icon toolbar, the canvas taking every pixel the
+   * chrome does not, a properties column that scrolls on its own, and a
+   * footer. The class names are the sketch editor's, so the two popups share
+   * one stylesheet and cannot drift apart in proportions.
+   *
+   * THE CANVAS IS SIZED BY ITS CELL. There is no fixed viewBox here: the SVG's
+   * viewBox is set from its real box on every draw, which is what makes the
+   * preview fill the stage instead of floating in it. The old fixed 720x480
+   * preview was laid into a container that measured zero, so every element it
+   * created - grid, axes, ticks - was present in the DOM and invisible.
+   */
   dialog.innerHTML = `
-        <div class="plot-editor">
-            <div class="plot-editor-header">
-                <div class="plot-editor-heading">
-                    <div class="plot-editor-title">Graph - Plot</div>
-                    <div class="plot-editor-description">
-                        Build a mathematical graph - set the axes, then add the functions drawn on them
+        <div class="sketch-app" data-plot-app>
+            <header class="sketch-app-header">
+                <div class="sketch-app-heading">
+                    <span class="sketch-app-title">Graph - Plot</span>
+                    <span class="sketch-app-instruction">Set the axes, then add the functions drawn on them</span>
+                </div>
+
+                <div class="sketch-app-actions">
+                    <button type="button" class="sketch-ghost" data-graph-cancel>Cancel</button>
+                    <button type="button" class="sketch-primary" data-graph-apply>Apply</button>
+                    <button type="button" class="sketch-close" data-graph-cancel
+                        aria-label="Close the plot editor" title="Close">&times;</button>
+                </div>
+            </header>
+
+            <div class="sketch-app-toolbar" role="toolbar" aria-label="Plot tools">
+                <div class="sketch-tool-group" role="group" aria-label="Function tools">
+                    <button type="button" class="sketch-mini" data-graph-add
+                        aria-label="Add a function" title="Add a function">+ Add function</button>
+                </div>
+
+                <span class="sketch-tool-divider" aria-hidden="true"></span>
+
+                <div class="sketch-tool-group" role="group" aria-label="View">
+                    <button type="button" class="sketch-mini" data-graph-fit
+                        aria-label="Fit to content" title="Fit the graph to the canvas">Fit</button>
+                </div>
+
+                <span class="sketch-tool-spacer"></span>
+
+                <button type="button" class="sketch-mini" data-graph-maximise
+                    aria-label="Maximise the preview" title="Maximise the preview"
+                    aria-pressed="false">Maximise</button>
+                <button type="button" class="sketch-mini" data-graph-collapse
+                    aria-label="Collapse the properties panel"
+                    title="Show or hide properties" aria-pressed="true">Properties</button>
+            </div>
+
+            <div class="sketch-app-body" data-graph-body>
+                <div class="sketch-stage" data-plot-stage>
+                    <div class="sketch-canvas" data-plot-canvas>
+                        <svg class="sketch-canvas-svg" data-graph-preview
+                            preserveAspectRatio="xMidYMid meet"
+                            role="img" aria-label="Graph preview"></svg>
                     </div>
                 </div>
 
-                <button type="button" class="plot-editor-close"
-                    data-graph-cancel aria-label="Close the plot editor">&times;</button>
-            </div>
+                <div class="sketch-divider" data-graph-divider role="separator"
+                    aria-orientation="vertical" aria-label="Resize the properties panel"
+                    tabindex="0"></div>
 
-            <div class="plot-editor-body">
-                <div class="plot-editor-stage">
-                    <svg class="plot-editor-graph" data-graph-preview
-                        viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}"
-                        preserveAspectRatio="xMidYMid meet"
-                        role="img" aria-label="Graph preview"></svg>
-                </div>
+                <aside class="sketch-inspector" data-graph-inspector aria-label="Plot properties">
+                    <div class="sketch-inspector-scroll">
 
-                <div class="plot-editor-side">
-                    <section class="plot-editor-panel" data-graph-functions>
-                        <div class="plot-editor-panel-heading">
-                            <span>Functions</span>
-                            <button type="button" class="plot-editor-add" data-graph-add>
-                                + Add Function
-                            </button>
-                        </div>
+                        <section class="sketch-section">
+                            <div class="sketch-section-head">
+                                <span class="sketch-section-title">Definition</span>
+                                <button type="button" class="sketch-mini" data-graph-add>+ Add</button>
+                            </div>
 
-                        <div class="plot-editor-list" data-graph-list></div>
-                    </section>
+                            <div class="plot-editor-list" data-graph-list></div>
+                        </section>
 
-                    <section class="plot-editor-panel" data-graph-settings>
-                        <div class="plot-editor-panel-heading">
-                            <span>Graph Settings</span>
-                        </div>
-
-                        <div class="plot-editor-group">
-                            <div class="plot-editor-group-title">Range</div>
+                        <section class="sketch-section">
+                            <div class="sketch-section-head">
+                                <span class="sketch-section-title">Coordinates</span>
+                            </div>
 
                             <div class="plot-editor-grid">
-                                <label class="plot-editor-field">
-                                    <span>X Minimum</span>
-                                    <input type="number" step="1" data-graph-field="xMin"
-                                        aria-label="X minimum">
-                                </label>
-
-                                <label class="plot-editor-field">
-                                    <span>X Maximum</span>
-                                    <input type="number" step="1" data-graph-field="xMax"
-                                        aria-label="X maximum">
-                                </label>
-
-                                <label class="plot-editor-field">
-                                    <span>Y Minimum</span>
-                                    <input type="number" step="1" data-graph-field="yMin"
-                                        aria-label="Y minimum">
-                                </label>
-
-                                <label class="plot-editor-field">
-                                    <span>Y Maximum</span>
-                                    <input type="number" step="1" data-graph-field="yMax"
-                                        aria-label="Y maximum">
-                                </label>
+                                ${numberField("xMin", "X Minimum")}
+                                ${numberField("xMax", "X Maximum")}
+                                ${numberField("yMin", "Y Minimum")}
+                                ${numberField("yMax", "Y Maximum")}
                             </div>
-                        </div>
 
-                        <div class="plot-editor-group">
-                            <div class="plot-editor-group-title">Ticks</div>
+                            ${toggleField("equalUnits", "Equal X / Y scale")}
+
+                            <button type="button" class="sketch-mini" data-graph-fit>Fit to content</button>
+                        </section>
+
+                        <section class="sketch-section">
+                            <div class="sketch-section-head">
+                                <span class="sketch-section-title">Axes &amp; Grid</span>
+                            </div>
+
+                            ${toggleField("showXAxis", "Show X axis")}
+                            ${toggleField("showYAxis", "Show Y axis")}
+                            ${toggleField("showTicks", "Show tick marks")}
+                            ${toggleField("showTickLabels", "Show tick numbers")}
+                            ${toggleField("showMajorGrid", "Major grid")}
+                            ${toggleField("showMinorGrid", "Minor grid")}
+                            ${toggleField("linkXYIntervals", "Link X / Y intervals")}
 
                             <div class="plot-editor-grid">
-                                <label class="plot-editor-field">
-                                    <span>X Tick Spacing</span>
-                                    <input type="number" step="0.5" min="0"
-                                        data-graph-field="xTickSpacing"
-                                        aria-label="X tick spacing">
-                                </label>
-
-                                <label class="plot-editor-field">
-                                    <span>Y Tick Spacing</span>
-                                    <input type="number" step="0.5" min="0"
-                                        data-graph-field="yTickSpacing"
-                                        aria-label="Y tick spacing">
-                                </label>
+                                ${numberField("majorX", "X interval")}
+                                ${numberField("majorY", "Y interval")}
+                                ${numberField("minorDivisions", "Minor divisions")}
                             </div>
-                        </div>
-
-                        <div class="plot-editor-group">
-                            <div class="plot-editor-group-title">Display</div>
-
-                            <div class="plot-editor-toggles">
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="equalUnits">
-                                    <span>Equal Unit Scaling</span>
-                                </label>
-
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="showXAxis">
-                                    <span>Show X Axis</span>
-                                </label>
-
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="showYAxis">
-                                    <span>Show Y Axis</span>
-                                </label>
-
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="showGrid">
-                                    <span>Show Grid</span>
-                                </label>
-
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="showMinorGrid">
-                                    <span>Minor Grid</span>
-                                </label>
-
-                                <label class="plot-editor-toggle">
-                                    <input type="checkbox" data-graph-toggle="showTickLabels">
-                                    <span>Show Tick Labels</span>
-                                </label>
-                            </div>
-                        </div>
-
-                        <div class="plot-editor-group">
-                            <div class="plot-editor-group-title">Labels</div>
 
                             <div class="plot-editor-grid">
-                                <label class="plot-editor-field">
-                                    <span>X-axis Label</span>
-                                    <input type="text" data-graph-field="xLabel"
-                                        aria-label="X axis label">
-                                </label>
-
-                                <label class="plot-editor-field">
-                                    <span>Y-axis Label</span>
-                                    <input type="text" data-graph-field="yLabel"
-                                        aria-label="Y axis label">
-                                </label>
+                                ${textField("xLabel", "X-axis label")}
+                                ${textField("yLabel", "Y-axis label")}
                             </div>
-                        </div>
-                    </section>
-                </div>
+                        </section>
+
+                        <section class="sketch-section">
+                            <div class="sketch-section-head">
+                                <span class="sketch-section-title">Appearance</span>
+                            </div>
+
+                            <div class="plot-editor-list" data-graph-appearance></div>
+                        </section>
+
+                    </div>
+                </aside>
             </div>
 
-            <div class="plot-editor-actions">
-                <button type="button" data-graph-cancel>Cancel</button>
-                <button type="button" class="primary" data-graph-apply>Apply</button>
-            </div>
+            <footer class="sketch-app-footer">
+                <span class="sketch-status" data-graph-status></span>
+                <span class="sketch-hint" data-graph-hint></span>
+            </footer>
         </div>
     `;
 
@@ -335,6 +430,164 @@ export function openPlotEditor(graph, options = {}) {
 
   const list = dialog.querySelector("[data-graph-list]");
   const preview = dialog.querySelector("[data-graph-preview]");
+  const body = dialog.querySelector("[data-graph-body]");
+  const sidebar = dialog.querySelector("[data-graph-inspector]");
+  const divider = dialog.querySelector("[data-graph-divider]");
+  const stage = dialog.querySelector("[data-plot-stage]");
+
+  let sidebarWidth = PLOT_SIDEBAR_DEFAULT;
+  let sidebarCollapsed = false;
+  let maximised = false;
+
+  /* The graph as it is drawn: the live preview box, or the working copy. */
+  function renderPreview() {
+    drawPreview(preview, working, canvasBox());
+  }
+
+  /* ============================================================
+   * THE LAYOUT
+   * ============================================================
+   *
+   * THE CANVAS IS MEASURED, NOT ASSUMED.
+   *
+   * The preview's viewBox is taken from its own box on every draw, so the
+   * graph fills the stage at any window size. A fixed viewBox - which is what
+   * this editor used to have - is only correct at one size, and when the
+   * container measured zero the whole picture was laid out into nothing.
+   */
+
+  function canvasBox() {
+    const rect = preview.getBoundingClientRect?.();
+
+    const width = rect && rect.width > 0 ? rect.width : 0;
+    const height = rect && rect.height > 0 ? rect.height : 0;
+
+    if (!(width > 0) || !(height > 0)) {
+      return null;
+    }
+
+    return { width, height };
+  }
+
+  function setSidebarWidth(width) {
+    sidebarWidth = Math.max(
+      PLOT_SIDEBAR_MIN,
+      Math.min(PLOT_SIDEBAR_MAX, Math.round(width)),
+    );
+
+    sidebar.style.width = `${sidebarWidth}px`;
+  }
+
+  function toggleCollapsed() {
+    sidebarCollapsed = !sidebarCollapsed;
+
+    sidebar.classList.toggle("is-collapsed", sidebarCollapsed);
+
+    if (divider) {
+      divider.hidden = sidebarCollapsed;
+    }
+  }
+
+  function toggleMaximised() {
+    maximised = !maximised;
+
+    dialog.classList.toggle("is-maximised", maximised);
+    body.classList.toggle("is-preview-only", maximised);
+    stage.classList.toggle("is-maximised", maximised);
+
+    const button = dialog.querySelector("[data-graph-maximise]");
+
+    button?.setAttribute("aria-pressed", String(maximised));
+    button?.setAttribute(
+      "aria-label",
+      maximised ? "Restore the properties panel" : "Maximise the preview",
+    );
+
+    renderPreview();
+  }
+
+  /*
+   * FIT TO CONTENT.
+   *
+   * The model already knows how to do this: `graphLimits` fits the Y range to
+   * the functions when the student has not chosen one. So fitting is expressed
+   * as "use the fitted limits", NOT as new arithmetic here - the editor must
+   * not grow a second opinion about where a curve lies.
+   *
+   * It changes the VIEW and nothing else: expressions, domains and the
+   * functions' own samples are untouched, which is the brief's requirement that
+   * Fit must not modify the mathematical definitions.
+   */
+  function fitToContent() {
+    const fitted = enggMathModel.graphLimits(working);
+
+    working.geometry.xMin = fitted.xMin;
+    working.geometry.xMax = fitted.xMax;
+    working.geometry.yMin = fitted.yMin;
+    working.geometry.yMax = fitted.yMax;
+
+    /*
+     * THE FITTED RANGE BECOMES THE STUDENT'S VIEW.
+     * `yRangeExplicit` records that a Y range was chosen, so the model stops
+     * re-fitting it on every draw - otherwise the next redraw would undo the
+     * fit the student just asked for.
+     */
+    working.geometry.yRangeExplicit = true;
+
+    fillFields();
+    renderPreview();
+  }
+
+  /* The divider: drag to resize, arrow keys for the keyboard. */
+  divider?.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    divider.setPointerCapture?.(event.pointerId);
+
+    const startX = event.clientX;
+    const startWidth = sidebar.getBoundingClientRect().width;
+
+    const move = (moveEvent) => {
+      setSidebarWidth(startWidth - (moveEvent.clientX - startX));
+      renderPreview();
+    };
+
+    const up = () => {
+      divider.removeEventListener("pointermove", move);
+      divider.removeEventListener("pointerup", up);
+    };
+
+    divider.addEventListener("pointermove", move);
+    divider.addEventListener("pointerup", up);
+  });
+
+  divider?.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowLeft") {
+      setSidebarWidth(sidebarWidth + 16);
+      renderPreview();
+    }
+
+    if (event.key === "ArrowRight") {
+      setSidebarWidth(sidebarWidth - 16);
+      renderPreview();
+    }
+  });
+
+  /*
+   * A RESIZE REDRAWS AT THE NEW SIZE.
+   *
+   * `ResizeObserver` is what makes a dragged window, a dragged divider and a
+   * maximised preview all land the graph in the box it ACTUALLY has - without
+   * it the preview kept the viewBox it was drawn with and letterboxed inside
+   * its new cell.
+   */
+  if (typeof ResizeObserver === "function") {
+    const sizeObserver = new ResizeObserver(() => renderPreview());
+
+    sizeObserver.observe(preview);
+
+    /* Released by `close`, which owns the dialog's lifetime. */
+    dialog.__plotObserver = sizeObserver;
+  }
 
   /* ============================================================
    * THE FUNCTION CARDS
@@ -447,23 +700,55 @@ export function openPlotEditor(graph, options = {}) {
   function refresh() {
     renderList();
     renderProblems();
-    drawPreview(preview, working);
+    renderPreview();
   }
 
   /* ============================================================
    * THE COORDINATE FIELDS
    * ============================================================ */
+  /*
+   * THE PANEL READS THROUGH THE SHARED GRID MODEL.
+   *
+   * Every axes, tick and grid control is answered by `gridFromGeometry`, the
+   * same conversion the preview and the placed graph paint from - so a toggle
+   * can never show a state the drawing does not have. The legacy flat fields
+   * stay on the geometry and are kept in step by `applyGridToGeometry`, which
+   * is what keeps an older drawing readable.
+   */
+  function currentGrid() {
+    return gridFromGeometry(working.geometry);
+  }
+
   function fillFields() {
+    const grid = currentGrid();
+
     dialog.querySelectorAll("[data-graph-field]").forEach((input) => {
       const key = input.dataset.graphField;
-      const value = working.geometry[key];
+
+      const value = key in grid ? grid[key] : working.geometry[key];
 
       input.value = value === null || value === undefined ? "" : String(value);
     });
 
     dialog.querySelectorAll("[data-graph-toggle]").forEach((input) => {
-      input.checked = working.geometry[input.dataset.graphToggle] !== false;
+      const key = input.dataset.graphToggle;
+      const value = key in grid ? grid[key] : working.geometry[key];
+
+      input.checked = value !== false;
     });
+  }
+
+  /*
+   * ONE EDIT, WRITTEN THROUGH THE ADAPTER.
+   *
+   * A field or toggle changes the SHARED grid, and the adapter writes it back
+   * in both forms. Doing it this way is what stops the panel, the preview and
+   * the placed graph from drifting: there is one write, to one model.
+   */
+  function writeGridKey(key, value) {
+    const grid = { ...currentGrid(), [key]: value };
+
+    applyGridToGeometry(working.geometry, grid);
   }
 
   dialog.addEventListener("input", (event) => {
@@ -473,15 +758,41 @@ export function openPlotEditor(graph, options = {}) {
       const key = field.dataset.graphField;
       const raw = field.value;
 
+      /* The two axis labels are TEXT, and live on the shared model as such. */
       if (key === "xLabel" || key === "yLabel") {
-        working.geometry[key] = raw;
-        drawPreview(preview, working);
+        writeGridKey(
+          key === "xLabel" ? "xAxisLabel" : "yAxisLabel",
+          raw,
+        );
+        renderPreview();
         return;
       }
 
       const value = Number(raw);
 
       if (!Number.isFinite(value)) {
+        return;
+      }
+
+      /*
+       * ONE KEY NAMESPACE FOR BOUNDS, ONE FOR THE COORDINATE SYSTEM.
+       *
+       * The four limits are the graph's own - they define the mapping - so
+       * they stay on the geometry. Every axes, tick and grid setting belongs to
+       * the shared model and is written through the adapter.
+       */
+      const gridKeys = [
+        "majorX",
+        "majorY",
+        "minorDivisions",
+        "majorOpacity",
+        "minorOpacity",
+        "tickLengthPx",
+      ];
+
+      if (gridKeys.includes(key)) {
+        writeGridKey(key, value);
+        renderPreview();
         return;
       }
 
@@ -496,7 +807,7 @@ export function openPlotEditor(graph, options = {}) {
         working.geometry.yRangeExplicit = true;
       }
 
-      drawPreview(preview, working);
+      renderPreview();
       return;
     }
 
@@ -513,7 +824,7 @@ export function openPlotEditor(graph, options = {}) {
       );
 
       renderProblems();
-      drawPreview(preview, working);
+      renderPreview();
       return;
     }
 
@@ -543,7 +854,7 @@ export function openPlotEditor(graph, options = {}) {
         },
       );
 
-      drawPreview(preview, working);
+      renderPreview();
     }
   });
 
@@ -551,12 +862,33 @@ export function openPlotEditor(graph, options = {}) {
     const toggle = event.target.closest?.("[data-graph-toggle]");
 
     if (toggle) {
-      working.geometry[toggle.dataset.graphToggle] = toggle.checked;
-      drawPreview(preview, working);
+      /*
+       * A TOGGLE WRITES THE SHARED MODEL, not a flat legacy field - so hiding
+       * the grid in the editor and hiding it on the sheet are the same edit.
+       */
+      writeGridKey(toggle.dataset.graphToggle, toggle.checked);
+      renderPreview();
     }
   });
 
   dialog.addEventListener("click", (event) => {
+    /* ---- the toolbar's own controls, which change no data ---- */
+    if (event.target.closest?.("[data-graph-maximise]")) {
+      toggleMaximised();
+      return;
+    }
+
+    if (event.target.closest?.("[data-graph-collapse]")) {
+      toggleCollapsed();
+      renderPreview();
+      return;
+    }
+
+    if (event.target.closest?.("[data-graph-fit]")) {
+      fitToContent();
+      return;
+    }
+
     const add = event.target.closest?.("[data-graph-add]");
 
     if (add) {
@@ -651,6 +983,7 @@ export function openPlotEditor(graph, options = {}) {
 
 function close() {
   if (openDialog) {
+    openDialog.__plotObserver?.disconnect?.();
     openDialog.remove();
     openDialog = null;
   }
@@ -679,3 +1012,4 @@ const enggMathPlotEditor = {
 };
 
 export default enggMathPlotEditor;
+

@@ -58,7 +58,7 @@ const check = (name, ok, detail) => {
  * The harness keeps one list of what the renderer reaches for, so a module
  * added there is added here.
  */
-const { createHarness } = require("./harness-renderer.cjs");
+const { createHarness } = require("./support/harness-renderer.cjs");
 
 const { dom, canvas } = createHarness(
   projectRoot,

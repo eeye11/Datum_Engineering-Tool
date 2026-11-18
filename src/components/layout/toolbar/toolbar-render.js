@@ -12,6 +12,7 @@ import { STATICS_TOOL_MENUS, openAnalysisModeMenu, openStaticsMenu } from "../..
 import { DYNAMICS_TOOL_MENUS } from "../../../features/workspace/dynamics/dynamics-tools.js";
 import { activateTool } from "./tool-activation.js";
 import { FLUIDS_TOOL_MENUS } from "../../../features/workspace/model/fluids/fluids-tools.js";
+import { HEAT_TOOL_MENUS } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
 import { ARC_CREATION_MODES, POLYGON_CREATION_MODES, activateArcMode, activatePolygonMode, activeCategory, openArcMenu, openMathModeSubmenu, openPolygonMenu, renderToolButton, toolDefinitionForLabel } from "./tool-menus.js";
 import { MATH_REFERENCE_TOOLS as MATH_REFERENCE_TOOL_IDS, MATH_TOOL_GROUPS, MATH_MODE_LABELS, MATH_MODES, activeMathMode, armMathTool, mathToolHasModes } from "../../../features/workspace/math/math-tools.js";
 
@@ -53,7 +54,19 @@ const expandedToolbarSections = {
     "fluids-flow-paths": false,
     "fluids-flow-indicators": false,
     "steady-state-devices": false,
-    "thermodynamic-cycles": false
+    "thermodynamic-cycles": false,
+
+    /*
+     * THE HEAT TRANSFER DROPDOWNS expand IN PLACE, exactly as the Statics and
+     * Fluids groups do - the variants open under the heading, inside the
+     * sidebar, with no popup. They are listed here in the same table as every
+     * other inline section because that table IS the inline mechanism.
+     */
+    "heat-transfer-path": false,
+    "thermal-transfer-arrow": false,
+    "thermal-boundary": false,
+    "heat-source-sink": false,
+    "thermal-circuit-element": false
 };
 
 function renderToolGroup(group) {
@@ -176,7 +189,7 @@ function renderToolbarTool(tool) {
         ...tool,
         submenu: true,
         inlineSection: { id: sectionId, expanded },
-        childToolIds: DYNAMICS_TOOL_MENUS[tool.id]?.map(({ id }) => id)
+        childToolIds: (DYNAMICS_TOOL_MENUS[tool.id] || HEAT_TOOL_MENUS[tool.id])?.map(({ id }) => id)
     }).replace(' aria-haspopup="menu"', '');
 
     const children = DYNAMICS_TOOL_MENUS[tool.id]
@@ -185,6 +198,8 @@ function renderToolbarTool(tool) {
               label: item.label,
               state: item.state
           })).join("")
+        : HEAT_TOOL_MENUS[tool.id]
+        ? HEAT_TOOL_MENUS[tool.id].map(renderToolButton).join("")
         : FLUIDS_TOOL_MENUS[tool.id]
         ? FLUIDS_TOOL_MENUS[tool.id].map(renderToolButton).join("")
         : tool.id === "coordinate-system"
@@ -246,7 +261,7 @@ function renderToolbarTool(tool) {
             const active = drawingState.activeTool === "reference-arc" && drawingState.interaction.arcMode === mode.id;
             return `<button type="button" class="drawing-tool${active ? " active" : ""}" data-reference-arc-mode="${mode.id}">${mode.label}</button>`;
         }).join("")
-        : (STATICS_TOOL_MENUS[tool.id] || FLUIDS_TOOL_MENUS[tool.id] || []).map(renderToolButton).join("");
+        : (STATICS_TOOL_MENUS[tool.id] || FLUIDS_TOOL_MENUS[tool.id] || HEAT_TOOL_MENUS[tool.id] || []).map(renderToolButton).join("");
 
     return `${button}
         <div id="${sectionId}" class="drawing-inline-tools"${expanded ? "" : " hidden"}>

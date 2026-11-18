@@ -41,30 +41,26 @@ function placeControlBlock(point, kind) {
     };
     if (isPlant) {
         object.metadata.plantLabel = "";
+    } else {
+        object.metadata.blockLabel = "";
+        object.metadata.blockLowerLabel = "";
     }
 
     object = enggDrawingState.addObject(drawingState, object);
     enggDrawingState.selectObject(drawingState, object.id);
 
+    /*
+     * THE NODE COUNTS ARE NUMBERS, SO THEY KEEP A NUMERIC INTERFACE - inside the
+     * drawing, not over it. The block's own NAME is canvas text, so it is typed
+     * onto the block with the shared inline editor (see `nameBlockOnCanvas`).
+     */
     const dialog = document.createElement("dialog");
     dialog.className = "engg-dialog plant-options-dialog";
     dialog.setAttribute("aria-labelledby", "controlBlockOptionsTitle");
     dialog.innerHTML = `
         <form>
             <h2 class="engg-dialog-title" id="controlBlockOptionsTitle">${isPlant ? "Plant" : "Block"} nodes</h2>
-            <p class="engg-dialog-description">Choose the number of inputs and outputs. Inputs appear on the left; outputs appear on the right.</p>
-            ${isPlant ? `<label class="engg-dialog-field">
-                <span class="engg-dialog-field-label">Plant label</span>
-                <input class="engg-dialog-input" name="plantLabel" type="text" autocomplete="off">
-            </label>` : `
-            <label class="engg-dialog-field">
-                <span class="engg-dialog-field-label">Block label (/ for fraction, ^ for exponent)</span>
-                <input class="engg-dialog-input" name="blockLabel" type="text" autocomplete="off">
-            </label>
-            <label class="engg-dialog-field">
-                <span class="engg-dialog-field-label">Lower label</span>
-                <input class="engg-dialog-input" name="blockLowerLabel" type="text" autocomplete="off">
-            </label>`}
+            <p class="engg-dialog-description">Choose the number of inputs and outputs. Inputs appear on the left; outputs appear on the right. Type the block's name on the drawing when you place it.</p>
             <label class="engg-dialog-field">
                 <span class="engg-dialog-field-label">Input nodes</span>
                 <input class="engg-dialog-input" name="inputs" type="number" min="0" step="1" value="1" required>
@@ -87,9 +83,6 @@ function placeControlBlock(point, kind) {
     const inputs = form.elements.namedItem("inputs");
     const outputs = form.elements.namedItem("outputs");
     const showNodeLabels = form.elements.namedItem("showNodeLabels");
-    const plantLabel = isPlant ? form.elements.namedItem("plantLabel") : null;
-    const blockLabel = isPlant ? null : form.elements.namedItem("blockLabel");
-    const blockLowerLabel = isPlant ? null : form.elements.namedItem("blockLowerLabel");
     let committed = false;
 
     const finish = () => {
@@ -102,6 +95,17 @@ function placeControlBlock(point, kind) {
         dialog.remove();
         renderProperties();
         renderCurrentDrawing();
+
+        /*
+         * AND THEN ITS NAME, TYPED ON THE BLOCK ITSELF.
+         *
+         * The name a Plant or a Block shows is canvas text - `[transfer
+         * function]` on a plant, a fraction inside a block - so it is entered
+         * where it is drawn, through the application's one inline editor. No
+         * dialog ever asks for it.
+         */
+        nameBlockOnCanvas(object, isPlant);
+
         /*
          * THE TOOL STAYS ARMED. A Plant or a Block is placed one at a time and a
          * diagram is made of several; returning to Select after each one made
@@ -136,19 +140,15 @@ function placeControlBlock(point, kind) {
             return;
         }
 
-        object.metadata = {
-            ...object.metadata,
+        const live = drawingState.objects.find((candidate) => candidate.id === object.id) || object;
+
+        live.metadata = {
+            ...live.metadata,
             inputs: inputCount,
             outputs: outputCount,
             showNodeLabels: showNodeLabels.checked
         };
-        if (plantLabel) {
-            object.metadata.plantLabel = plantLabel.value;
-        }
-        if (blockLabel && blockLowerLabel) {
-            object.metadata.blockLabel = blockLabel.value;
-            object.metadata.blockLowerLabel = blockLowerLabel.value;
-        }
+
         dialog.close();
     });
 
@@ -163,6 +163,72 @@ function placeControlBlock(point, kind) {
     setToolMessage(`Configure the ${isPlant ? "plant" : "block"}'s input and output nodes`);
 
     return object;
+}
+
+/*
+ * THE BLOCK'S NAME, TYPED WHERE IT IS DRAWN.
+ *
+ * The field opens on the block's own centre - the same point the name is
+ * rendered at - and writes the metadata the painter reads (`plantLabel`, or
+ * `blockLabel`/`blockLowerLabel`). It is the SAME inline editor a note uses, so
+ * the keys, the commit, the undo entry and the caret are every other canvas
+ * text's.
+ */
+function nameBlockOnCanvas(object, isPlant) {
+    const live = drawingState.objects.find((candidate) => candidate.id === object.id);
+
+    if (!live) {
+        return;
+    }
+
+    const geometry = live.geometry || {};
+
+    const centre = geometry.position
+        ? {
+            x: Number(geometry.position.x) + (Number(geometry.width) || 0) / 2,
+            y: Number(geometry.position.y) - (Number(geometry.height) || 0) / 2,
+        }
+        : null;
+
+    const openingValue = isPlant
+        ? String(live.metadata?.plantLabel ?? "")
+        : String(live.metadata?.blockLabel ?? "");
+
+    void import("../../../shared/ui/editors/note-editor.js").then(({ default: editor }) => {
+        editor.open({
+            labelField: true,
+            text: openingValue,
+            title: isPlant ? "Plant name" : "Block name",
+            placeholder: isPlant ? "transfer function" : "/ for fraction, ^ for exponent",
+            object: live,
+            point: centre,
+            state: drawingState,
+
+            onApply: (text) => {
+                const target = drawingState.objects.find((candidate) => candidate.id === object.id);
+
+                if (!target) {
+                    return;
+                }
+
+                const next = String(text ?? "").trim();
+                const key = isPlant ? "plantLabel" : "blockLabel";
+
+                if (String(target.metadata?.[key] ?? "") === next) {
+                    return;
+                }
+
+                const previous = enggDrawingState.snapshotDrawing(drawingState);
+
+                target.metadata = { ...(target.metadata || {}), [key]: next };
+
+                enggDrawingState.commitDrawingChange(drawingState, previous);
+
+                renderProperties();
+                renderCurrentDrawing();
+            },
+        });
+    });
 }
 
 export function placePlant(point) {

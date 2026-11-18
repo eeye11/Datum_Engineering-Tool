@@ -81,6 +81,14 @@ same(
      */
     "elbow",
     "fixed-connection",
+    /*
+     * THE HEAT TRANSFER RUNS BETWEEN TWO ENDS are span-shaped for the same
+     * reason a pipe is: a Wall / Slab's centreline, a path, a transfer arrow, a
+     * boundary and a contact each run from a start to an end, so box selection
+     * and the measurement layer treat them as runs rather than as points.
+     */
+    "heat-path",
+    "isotherm",
     "line",
     "pin-connection",
     "pipe-duct",
@@ -92,7 +100,11 @@ same(
     "polyline",
     "shaft",
     "slider-connection",
+    "thermal-arrow",
+    "thermal-boundary",
+    "thermal-contact",
     "truss",
+    "wall-slab",
   ],
 );
 

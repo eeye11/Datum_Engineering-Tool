@@ -71,12 +71,22 @@ console.log("\n  the editor opens, edits and returns the text\n");
     field ? JSON.stringify(field.value) : "no field",
   );
 
-  /* The student types, then confirms. */
+  /*
+   * THE STUDENT TYPES, THEN CONFIRMS WITH ENTER.
+   *
+   * There are no Apply/Cancel buttons any more: the field IS the editor, and
+   * Enter is the commit key. That is the one keyboard every canvas text field
+   * shares.
+   */
   field.value = "First line\nSecond line";
 
-  document
-    .querySelector("[data-note-apply]")
-    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  field.dispatchEvent(
+    new dom.window.KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
 
   check(
     "confirming hands the typed text back verbatim, line breaks included",
@@ -87,7 +97,7 @@ console.log("\n  the editor opens, edits and returns the text\n");
   check("and the editor closes", editor.isOpen() === false);
 }
 
-console.log("\n  Ctrl+Enter confirms, Enter inserts a newline\n");
+console.log("\n  Shift+Enter inserts a line; Enter confirms\n");
 
 {
   let applied = null;
@@ -101,17 +111,18 @@ console.log("\n  Ctrl+Enter confirms, Enter inserts a newline\n");
 
   const field = document.querySelector("#noteText");
 
-  /* A plain Enter must NOT close the box - a note is multi-line. */
+  /* Shift+Enter must NOT close the box - it inserts a line. */
   field.dispatchEvent(
     new dom.window.KeyboardEvent("keydown", {
       key: "Enter",
+      shiftKey: true,
       bubbles: true,
       cancelable: true,
     }),
   );
 
   check(
-    "a plain Enter does not confirm, so a note can have line breaks",
+    "Shift+Enter does not confirm, so a note can have line breaks",
     editor.isOpen() === true && applied === null,
   );
 
@@ -127,7 +138,7 @@ console.log("\n  Ctrl+Enter confirms, Enter inserts a newline\n");
   );
 
   check(
-    "Ctrl+Enter confirms the note",
+    "Enter confirms the note",
     applied === "Done" && editor.isOpen() === false,
     JSON.stringify(applied),
   );
@@ -149,9 +160,13 @@ console.log("\n  Escape cancels without applying\n");
     },
   });
 
-  document
-    .querySelector("[data-note-cancel]")
-    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  document.querySelector("#noteText").dispatchEvent(
+    new dom.window.KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
 
   check(
     "cancelling applies nothing",
@@ -174,11 +189,17 @@ console.log("\n  an empty note is a legitimate edit\n");
     },
   });
 
-  document.querySelector("#noteText").value = "";
+  const empty = document.querySelector("#noteText");
 
-  document
-    .querySelector("[data-note-apply]")
-    .dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+  empty.value = "";
+
+  empty.dispatchEvent(
+    new dom.window.KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
 
   check(
     "clearing a note confirms an empty string rather than being refused",

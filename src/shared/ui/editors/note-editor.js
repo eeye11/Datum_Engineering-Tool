@@ -1,5 +1,39 @@
-import { attachTextSymbols, symbolPickerContains, isSymbolPickerOpen } from "./text-symbol-insert.js";
-import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../typography/note-text-style.js";
+﻿import { attachTextSymbols, symbolPickerContains } from "./text-symbol-insert.js";
+
+import {
+  AUXILIARY_FONT_PX,
+  PRIMARY_FONT_PX,
+  SECONDARY_FONT_PX,
+  TEXT_ENTRY_BOX_PT,
+  textEntryMetricsAt,
+} from "../../typography/canvas-typography.js";
+import enggDrawingState from "../../model/drawing-state.js";
+
+/*
+ * WHERE THE CANVAS PUTS A LINE OF TEXT ABOUT ITS ANCHOR.
+ *
+ * A canvas `<text>` is drawn with `dominant-baseline: middle` - the shared
+ * `CANVAS_BASELINE` - so the anchor point is the VERTICAL MIDDLE of the line,
+ * not its baseline. Half an em above it is therefore the top of the text.
+ *
+ * This is the one figure the editing box needs: an HTML field's `top` is the top
+ * of its line box, so seating the words where they will be committed means
+ * raising the box by half a font size. It is read from the same constant the
+ * renderer uses, so the two cannot drift apart again - which is exactly how the
+ * box came to sit a WHOLE font size above its own text.
+ */
+const HALF_LINE = 0.5;
+
+/*
+ * HOW TALL ONE LINE OF THE EDITING FIELD IS, relative to the font size.
+ *
+ * One line of type needs its ascenders and descenders to fit; it does not need
+ * the generous leading a paragraph uses. 0.95 seats a single line snugly in its
+ * box - the field reads as one line of words rather than as a panel with text
+ * floating in it - while still leaving room for a "g" and a "T" on the same
+ * line. Multi-line spacing is the text's own business and is unaffected.
+ */
+const TIGHT_LINE = 0.95;
 /*
  * The Note editor.
  *
@@ -18,18 +52,28 @@ import { noteTextStyle, noteFontPixels, noteTextWidth } from "../../typography/n
  * covered the thing they were labelling - a beam asked for its label disappeared
  * behind the dialog asking for it.
  *
- * So the editor is a SMALL FIELD beside the node instead:
+ * So the editor is a FIELD ON THE DRAWING instead:
  *
  *   - anchored to the node, at the canvas point the text will occupy;
  *   - with the drawing fully visible behind it, nothing dimmed, nothing hidden;
  *   - typing shown at the node as a live preview, in the feature's own colour,
  *     before anything is committed;
- *   - Enter (single line) or Ctrl+Enter (multi-line) commits, Escape cancels.
+ *   - Enter commits, Shift+Enter adds a line, Escape cancels.
  *
- * THE MODAL SHAPE IS STILL HERE, for a caller with no node to hang on - a
- * feature edited from a panel rather than from the canvas. That is a fallback,
- * not the normal route: `open()` prefers the inline prompt whenever an anchor
- * is supplied or can be resolved from the object (see inline-text-entry.js).
+ * ============================================================
+ * THERE IS NO DIALOG. THERE IS NO POPUP.
+ * ============================================================
+ *
+ * This file used to keep a modal editor as a fallback for a caller with no node
+ * to hang on - the box a label or a leader fell through to. That is exactly the
+ * inconsistent interface the correction removes: text that appears on the
+ * drawing is entered ON the drawing, whoever opened the box. A caller with no
+ * position now gets the field at the middle of the canvas, which is where the
+ * student is working.
+ *
+ * EVERY text editor in DAETUM is this one: notes, labels, leaders, callouts,
+ * equations, Heat notations, a block's name, an axis name, a dimension's
+ * number. One field, one caret, one keyboard, one commit path.
  *
  * A GENERATED annotation is refused one, because its text is a reading of
  * its feature and a next redraw would overwrite anything typed - the
@@ -83,7 +127,7 @@ function isOpen() {
   return openDialog !== null;
 }
 
-/* Whether the open prompt is the inline one, as against the modal fallback. */
+/* Whether the open prompt is the on-canvas one - which it always is now. */
 function isInline() {
   return Boolean(openDialog && openDialog.dataset.inline === "true");
 }
@@ -134,13 +178,21 @@ function fieldMarkup(multiline, placeholder, value, extraClass = "") {
 }
 
 /*
- * ENTER COMMITS A SINGLE LINE; CTRL+ENTER COMMITS A MULTI-LINE ONE.
+ * ============================================================
+ * ONE KEYBOARD FOR EVERY CANVAS TEXT FIELD
+ * ============================================================
  *
- * A note is multi-line, so plain Enter has to keep meaning "new line" - an
- * editor that closes on the key a student presses between sentences cannot
- * write sentences. A single-line field has no new line to make, so Enter is
- * free to commit, which is the behaviour the student already expects from
- * every other single-line input in the application.
+ *   Enter         commit the text and finish editing
+ *   Shift+Enter   insert a line and stay editing
+ *   Escape        cancel, per the field's own cancellation rule
+ *
+ * THE SAME THREE KEYS EVERYWHERE, multiline or not. A note is prose and a label
+ * is usually one word, but both are text on the same sheet and both are edited
+ * in the same box - so the key a student presses between sentences must not mean
+ * two different things depending on which tool they used.
+ *
+ * Ctrl+Enter (Cmd+Enter on a Mac) also commits, because it did before and a
+ * habit is not worth breaking.
  *
  * THE PROMPT OWNS THE KEYBOARD WHILE IT IS OPEN. The canvas's global shortcut
  * handler already treats a keystroke that starts in a text field as typing, so
@@ -148,23 +200,30 @@ function fieldMarkup(multiline, placeholder, value, extraClass = "") {
  * direction - an ancestor or a tool listener must not act on a key the field
  * is using. A pointer press in the field likewise never reaches the canvas.
  */
-function attachKeyHandling(host, { multiline, apply, cancel }) {
+function attachKeyHandling(host, { apply, cancel }) {
   host.addEventListener("keydown", (event) => {
     event.stopPropagation?.();
-
-    if (
-      event.key === "Enter" &&
-      (multiline ? event.ctrlKey || event.metaKey : !event.shiftKey)
-    ) {
-      event.preventDefault();
-      apply();
-      return;
-    }
 
     if (event.key === "Escape") {
       event.preventDefault();
       cancel();
+      return;
     }
+
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    /*
+     * SHIFT+ENTER IS A NEW LINE, AND ONLY A NEW LINE. The field inserts it
+     * itself; returning here is what stops it from also being read as a commit.
+     */
+    if (event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+    apply();
   });
 
   host.addEventListener("pointerdown", (event) => {
@@ -227,6 +286,25 @@ function canPlace(element) {
   );
 }
 
+/*
+ * THE BOTTOM OF THE SHEET, in window pixels.
+ *
+ * A prompt must stay on the drawing, so the canvas's own lower edge is the
+ * boundary when there is one - and the window's otherwise.
+ */
+function canvasBottom() {
+  const canvas = enggInlineEntry.canvasElement();
+  const rect = canvas && typeof canvas.getBoundingClientRect === "function"
+    ? canvas.getBoundingClientRect()
+    : null;
+
+  const bottom = Number(rect?.bottom);
+
+  return Number.isFinite(bottom) && bottom > 0
+    ? bottom
+    : Number(globalThis.window?.innerHeight) || 0;
+}
+
 function visibleRight() {
   /*
    * THE INSPECTOR IS PART OF THE WINDOW as far as the prompt is concerned - a
@@ -261,18 +339,32 @@ function placePrompt(host, rect) {
   const height = Number(globalThis.window?.innerHeight) || size.height + margin * 2;
 
   const right = Math.min(visibleRight(), width) - margin;
-  const bottom = height - margin;
+  const bottom = Math.min(height, canvasBottom()) - margin;
 
   const nodeX = Number(rect.left) || 0;
   const nodeY = Number(rect.top) || 0;
 
   /*
    * BELOW-RIGHT WHEN IT FITS; OTHERWISE ABOVE, THEN PULLED INTO THE WINDOW.
+   *
+   * "FITS" IS MEASURED AGAINST THE CANVAS'S BOTTOM TOO. A prompt hung below a
+   * node near the sheet's edge is off the drawing - it looks like the click did
+   * nothing - even though the window continues. So the field goes above the node
+   * as soon as the space below it is not on the sheet.
    */
+  /*
+   * THE HEIGHT THE FIELD WILL OCCUPY, not the one it currently reports. A
+   * field that has just been created measures zero in some environments (an
+   * unlaid-out page, a headless document), which made every prompt believe it
+   * fitted below its node - so a node at the bottom of the sheet got a field
+   * under it. One line of type is the honest floor.
+   */
+  const heightNeeded = Math.max(size.height, 44);
+
   let top =
-    nodeY + PROMPT_GAP + size.height <= bottom
+    nodeY + PROMPT_GAP + heightNeeded <= bottom
       ? nodeY + PROMPT_GAP
-      : nodeY - PROMPT_GAP - size.height;
+      : nodeY - PROMPT_GAP - heightNeeded;
 
   let left = nodeX + PROMPT_GAP;
 
@@ -362,14 +454,107 @@ function openLabelField(options, anchor) {
     host.classList.add("drawing-label-entry-beside");
   }
 
+  /*
+   * A LABEL FIELD IS MULTILINE, like the words it stands for.
+   *
+   * A note, a label and an equation can all be more than one line, and the
+   * drawing honours the line breaks. The field is therefore a TEXTAREA in every
+   * case: Shift+Enter adds a line and Enter commits (see the key handling
+   * below), so the one text-entry box in DAETUM has one keyboard everywhere.
+   */
   host.innerHTML = fieldMarkup(
-    false,
+    true,
     "",
     options.text ?? "",
     "drawing-label-entry-input",
   );
 
-  document.body.appendChild(host);
+  /*
+   * THE FIELD IS A CHILD OF THE DRAWING SPACE WHEN IT SITS ON THE SHEET.
+   *
+   * The anchor a caller passes may be a WINDOW point (the editor places the box
+   * with `position: fixed`) or a point inside the canvas (the viewport has
+   * already projected the drawing position). The second is the on-the-drawing
+   * case, and there the field belongs INSIDE the canvas element: it is part of
+   * the sheet, it is clipped by it rather than floating over the panels, and its
+   * coordinates are the canvas's own.
+   *
+   * A CENTRE ANCHOR IS A CANVAS ANCHOR TOO. A caller with no position at all - 
+   * a note opened from the Objects list, a tool that has only just placed its
+   * object - is given the canvas's middle (`canvasCentreAnchor`), and that point
+   * is already in the canvas's own frame. Mounting it on the body put the field
+   * at `canvas.top` down the WINDOW instead of on the sheet, because the frame
+   * it was measured in and the frame it was placed in were not the same one.
+   * `centre` says which anchor that is, so the two agree by construction.
+   */
+  /*
+   * THE DRAWING THE BOX IS SIZED AGAINST.
+   *
+   * The camera the caller opened the field with, when it passes one - the same
+   * `camera` its anchor was projected through - and otherwise the live sheet's.
+   * Sizing from the camera the anchor was placed with is what keeps the box and
+   * the words in one frame: a field opened for a saved viewport, or by a test,
+   * is still the defined size at that viewport's zoom.
+   */
+  const drawingState = globalThis.enggDrawingState || null;
+
+  const activeCamera = () =>
+    options.camera && Number.isFinite(Number(options.camera.zoom))
+      ? options.camera
+      : drawingState?.camera || {};
+
+  const pixelsPerUnit = () =>
+    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4) *
+    (Number(activeCamera().zoom) || 1);
+
+  void drawingState;
+
+  /*
+   * THE BOX IS SIZED FROM THE DRAWING, BEFORE IT IS PLACED.
+   *
+   * A field that has just been created is empty, so it opens at the full 200 pt;
+   * one reopened on a written label opens at that label's width. Both are
+   * measured in the drawing's own units (see `TEXT_ENTRY_BOX`), so the box is
+   * the size of the note it is writing rather than a panel of its own.
+   *
+   * The values are written ONCE, here, and `place` only reads them back - so
+   * what the box is and where its edges go can never be two different answers.
+   */
+  const writeBoxMetrics = (text) => {
+    const metrics = textEntryMetricsAt(pixelsPerUnit(), text ?? "");
+
+    host.style.setProperty("--entry-box-width", `${metrics.widthPx}px`);
+    host.style.setProperty("--entry-box-height", `${metrics.heightPx}px`);
+    host.style.setProperty("--entry-box-min-width", `${metrics.minWidthPx}px`);
+    host.style.setProperty("--entry-padding-x", `${metrics.paddingXPx}px`);
+    host.style.setProperty("--entry-padding-y", `${metrics.paddingYPx}px`);
+
+    return metrics;
+  };
+
+  /*
+   * THE BOX IS PART OF THE SHEET, SO IT IS MOUNTED ON THE SHEET.
+   *
+   * Its dimensions come from the drawing and are scaled by the camera, so the
+   * canvas's own frame is the frame it belongs in: its `left`/`top` are drawing
+   * pixels, it is clipped by the sheet rather than floating over the panels, and
+   * a resized sidebar or a panned view needs no second set of rules for it.
+   *
+   * A page-level mount is only the answer when there is no canvas at all - a
+   * blank page, a test harness without the application's markup.
+   */
+  const canvasHost = enggInlineEntry.canvasElement();
+  const onCanvas = Boolean(canvasHost);
+
+  if (onCanvas) {
+    host.classList.add("drawing-label-entry-on-canvas");
+    canvasHost.appendChild(host);
+  } else {
+    document.body.appendChild(host);
+  }
+
+  /* Reported once, so a wrong mount is visible rather than a mystery. */
+  host.dataset.mountedOn = onCanvas ? "canvas" : "body";
 
   openDialog = host;
 
@@ -409,6 +594,18 @@ function openLabelField(options, anchor) {
     mark();
   }
 
+  /*
+   * THE BOX IS THE DRAWING'S OWN, EVERY TIME IT IS PLACED.
+   *
+   * Written before anything is measured or positioned, so a camera change
+   * re-sizes it along with re-placing it - the zoom moves the box and the words
+   * through the same scale, which is what keeps it the size of the note it is
+   * writing at every magnification.
+   */
+  const writeBox = () => writeBoxMetrics(input?.value ?? "");
+
+  writeBox();
+
   const place = () => {
     const rect =
       typeof options.anchor === "function" ? options.anchor() : anchor;
@@ -417,17 +614,27 @@ function openLabelField(options, anchor) {
       return;
     }
 
+    void host.dataset.mountedOn;
+
     /*
      * AT THE ANCHOR, NOT BESIDE IT. The prompt sits exactly where the drawn
      * label will sit, so the words do not jump when it is committed; it is
      * nudged only enough to keep a caret's width clear of the point it names.
      */
-    const zoom = Number(options.zoom) > 0 ? Number(options.zoom) : 1;
-    const size = Math.max(10, Math.round(14 * Math.min(1.6, Math.max(0.7, zoom))));
+    /*
+     * THE FIELD'S OWN DIMENSIONS, FROM THE DRAWING.
+     *
+     * See `TEXT_ENTRY_BOX` in `canvas-typography.js`: 200x36 pt at 14 pt type
+     * with 8/4 pt padding, boxed and scaled through the camera. Nothing here
+     * states a pixel size of its own - the box is the drawing's, so it is the
+     * size of the note it is writing at every zoom, and the source states the
+     * identical figures.
+     */
+    const metrics = writeBoxMetrics(input?.value ?? "");
 
-    host.style.fontSize = `${size}px`;
-    input.style.fontSize = `${size}px`;
-    input.style.lineHeight = `${Math.round(size * 1.2)}px`;
+    host.style.fontSize = `${metrics.fontSizePx}px`;
+    input.style.fontSize = `${metrics.fontSizePx}px`;
+    input.style.lineHeight = `${metrics.lineHeightPx}px`;
 
     /*
      * BESIDE THE ANCHOR, WHEN THE CALLER ASKS FOR IT.
@@ -439,17 +646,30 @@ function openLabelField(options, anchor) {
      * the side with room - never over the drawing it belongs to.
      */
     if (options.placeBeside === true) {
-      const nodeX = Number(rect.left) || 0;
-      const nodeY = Number(rect.top) || 0;
+      /*
+       * THE ANCHOR AND THE WINDOW, IN THE FRAME THE FIELD IS IN.
+       *
+       * A field mounted on the canvas is positioned in the CANVAS's own box, so
+       * both the anchor and the edges it must stay inside are the canvas's. A
+       * field on the page is positioned in the window's, so they are the
+       * window's. Reading one frame and writing the other is how a prompt ended
+       * up off the bottom of the sheet.
+       */
+      const frame = rect.frame === "canvas" ? canvasSize() : windowSize();
+
+      /* The field is a child of the canvas, so its frame is the canvas's. */
+      const origin = canvasOrigin();
+
+      const nodeX = (Number(rect.left) || 0) - origin.left;
+      const nodeY = (Number(rect.top) || 0) - origin.top;
 
       const width = host.offsetWidth || 120;
-      const height = host.offsetHeight || size * 2;
-      const gap = Math.max(8, Math.round(size * 0.9));
+      const height = host.offsetHeight || metrics.heightPx;
+      const gap = Math.max(8, Math.round(metrics.fontSizePx * 0.9));
 
       const margin = 6;
-      const windowWidth = Number(globalThis.window?.innerWidth) || width + margin * 2;
-      const windowHeight =
-        Number(globalThis.window?.innerHeight) || height + margin * 2;
+      const windowWidth = frame.width;
+      const windowHeight = frame.height;
       const right = Math.min(visibleRight(), windowWidth) - margin;
       const bottom = windowHeight - margin;
 
@@ -472,11 +692,241 @@ function openLabelField(options, anchor) {
       return;
     }
 
-    host.style.left = `${Math.round(rect.left + 4)}px`;
-    host.style.top = `${Math.round(rect.top - size)}px`;
+    /*
+     * THE TYPE IS THE BOX'S OWN, FROM THE DEFINITION.
+     *
+     * `TEXT_ENTRY_BOX` states 14 pt of type in a 36 pt box, and `writeBoxMetrics`
+     * above has already put that on the field. The old code took a size from the
+     * CALLER (or from the object's role) and wrote it over the definition, which
+     * is how two text tools ended up with differently sized fields on one sheet.
+     * One definition, so every text tool's field is the same field.
+     *
+     * The line is stated as the box's own advance, so a single line is exactly
+     * one line tall and sits centred in the 36 pt.
+     */
+    input.style.lineHeight = `${metrics.lineHeightPx}px`;
+    input.style.fontFamily = options.object?.style?.fontFamily || "inherit";
+    input.style.textAlign =
+      options.object?.style?.align === "center"
+        ? "center"
+        : options.object?.style?.align === "right"
+          ? "right"
+          : "left";
+
+
+
+    /*
+     * THE FIELD SITS EXACTLY WHERE THE WORDS WILL BE DRAWN.
+     *
+     * The anchor is a point in the drawing; the committed label is drawn with
+     * `dominant-baseline: middle`, so that point is the vertical MIDDLE of its
+     * first line. This box used to be nudged four pixels right and lifted a
+     * WHOLE font size - so the words visibly jumped left and down the instant
+     * they were committed.
+     *
+     * There is no nudge now. The box's left edge is the anchor's x, and its top
+     * is the anchor raised by half a line, which is where the top of the text
+     * really is.
+     */
+    /*
+     * THE BOX GROWS BOTH WAYS FROM THE INSERTION POINT.
+     *
+     * It is centred on the anchor's x - the point the caret occupies - so a
+     * wider box opens out to the left and to the right rather than dragging the
+     * words away from where they will be committed. Vertically it is centred on
+     * the anchor's y, which is the MIDDLE of the drawn line (`dominant-baseline:
+     * middle`), so the text sits on the box's own centre line.
+     *
+     * The box never moves the drawing: only where the FIELD is drawn changes.
+     */
+    const boxWidth = Number.parseFloat(host.style.getPropertyValue("--entry-box-width")) || 0;
+    const boxHeight = Number.parseFloat(host.style.getPropertyValue("--entry-box-height")) || 0;
+
+    /*
+     * THE ANCHOR, AND WHICH FRAME IT IS IN.
+     *
+     * `resolveTextEntryAnchor` projects the point through the canvas's own box
+     * and marks the rect `frame: "canvas"`, which is why the field is mounted ON
+     * the canvas. Subtracting the canvas's window origin from a point that is
+     * already canvas-local - which is what this used to do unconditionally -
+     * moved the box by a whole canvas away from its own caret.
+     */
+    const worldLeft = Number(rect.left) || 0;
+    const worldTop = Number(rect.top) || 0;
+
+    /*
+     * A RECT THAT HAS BEEN PROJECTED FOR THE SHEET IS ALREADY LOCAL.
+     *
+     * The field is a child of the canvas in every case, so a window-side point
+     * would be a different frame - and the two must never be confused, which is
+     * what put a box a whole canvas away from its own caret. So the RECT is
+     * taken as the canvas-local point it should be: the editor projects the
+     * caller's anchor itself, through the canvas's box, for exactly this.
+     */
+    const local = localAnchorFor(rect, options);
+
+    const left = local.x;
+    const top = local.y;
+
+    host.style.left = `${Math.round(left - boxWidth / 2)}px`;
+    host.style.top = `${Math.round(top - boxHeight / 2)}px`;
   };
 
   options.place = place;
+
+  /*
+   * THE BOX IS ONE LINE TALL, AND GROWS ONLY WHEN THE TEXT NEEDS IT.
+   *
+   * A single line is the DEFINED 36 pt: the field is exactly that tall, centred
+   * on the text's own line, and typing into it does not change its height. A
+   * line break - Shift+Enter, or a label that already holds several lines - adds
+   * one line box per extra line, and nothing else; the width is unaffected by
+   * how many lines there are.
+   *
+   * This used to measure `scrollHeight` on every keystroke, which made a
+   * single-line box a pixel or two taller than the next one depending on the
+   * glyphs in it. The height is now the DEFINITION rather than the field's own
+   * contents.
+   */
+  const autosize = () => {
+    const lines = Math.max(1, String(input?.value ?? "").split("\n").length);
+
+    const metrics = textEntryMetricsAt(pixelsPerUnit(), input?.value ?? "");
+    const height = lines === 1
+      ? metrics.heightPx
+      : metrics.paddingYPx * 2 + lines * metrics.lineHeightPx;
+
+    host.style.setProperty("--entry-box-height", `${height}px`);
+
+    if (typeof place === "function") {
+      place();
+    }
+  };
+
+  /*
+   * THE BOX IS AS WIDE AS THE LINE IN IT - MEASURED, NOT COUNTED.
+   *
+   * A canvas element, with the field's own font applied, measures the exact
+   * advance width of the string, so the box is the width of the words rather
+   * than an estimate of them. Without a measurable canvas (a test, a DOM with no
+   * canvas) the shared estimate gives the box a size, and the field still opens.
+   */
+  const measurement = globalThis.document?.createElement?.("canvas") || null;
+
+  const textWidthOf = (text, style) => {
+    if (!measurement) {
+      return 0;
+    }
+
+    /*
+     * A DOCUMENT WITH NO 2D CONTEXT STILL HAS TO OPEN A FIELD.
+     *
+     * `getContext` does not merely RETURN null where canvas is not
+     * implemented - jsdom, and any DOM without the canvas package, THROW
+     * "Not implemented" - and that exception used to escape from here into
+     * `openInline`, so the whole text field never opened: the note tool placed
+     * its object and the student had nothing to type into.
+     *
+     * A measurement that cannot be taken is the same news as a context that is
+     * null: no advance width is known, and the caller's caret-room floor gives
+     * the box a size. The field opening is worth more than an exact width.
+     */
+    let context = null;
+
+    try {
+      context = measurement.getContext?.("2d") || null;
+    } catch {
+      return 0;
+    }
+
+    if (!context) {
+      return 0;
+    }
+
+    context.font = `${style.fontWeight} ${style.fontStyle} ${style.fontSize} ${style.fontFamily}`;
+
+    return context.measureText(text).width;
+  };
+
+  /*
+   * THE WIDTH, RE-MEASURED FROM THE TEXT AS IT IS TYPED.
+   *
+   * The measured advance replaces the estimate the shared metric uses, so the
+   * box is the width of the words to the pixel - between the 120 pt floor and
+   * the 200 pt standard box. It is the LINE's width, not the longest line's: a
+   * box that widened to fit a long line and never narrowed again would leave a
+   * paragraph's field permanently as wide as its opening sentence.
+   */
+  const sizeToContent = () => {
+    const value = input?.value ?? "";
+
+    /*
+     * THE DEFINED BOX IS PUT IN PLACE FIRST. Everything below refines it from
+     * the text; the definition is what a field with nothing to measure keeps.
+     */
+    const metrics = writeBoxMetrics(value);
+
+    /*
+     * AN EMPTY FIELD KEEPS THE FULL 200 pt. Nothing has been typed, so there is
+     * no line to fit, and the standard box is what it opens at.
+     */
+    if (!value.length) {
+      return;
+    }
+
+    const computed = globalThis.getComputedStyle?.(input) || null;
+
+    const firstLine = value.split("\n")[0];
+
+    const measured = textWidthOf(firstLine, computed || {
+      fontSize: "14px",
+      fontFamily: "Arial, sans-serif",
+      fontWeight: "400",
+      fontStyle: "normal",
+    });
+
+    /*
+     * THE LINE'S OWN WIDTH, PLUS THE BOX'S PADDING ON BOTH SIDES AND ONE
+     * CARET'S ROOM - never below the 120 pt floor, and never beyond the 200 pt
+     * standard box. Where no width can be measured (a DOM with no canvas) the
+     * shared estimate already on `metrics` is used, so the field still fits the
+     * text it holds.
+     */
+    const caret = metrics.fontSizePx * 0.62;
+
+    const content = measured > 0
+      ? measured + metrics.paddingXPx * 2 + caret
+      : metrics.widthPx;
+
+    /*
+     * THE BOX GROWS ACROSS THE LINE, WITHIN ITS OWN LIMITS. The floor is the
+     * 120 pt minimum; there is no ceiling but the standard 200 pt box, which is
+     * the widest the definition allows a single line of text to make it.
+     */
+    const width = Math.max(metrics.minWidthPx, Math.min(content, metrics.widthPx));
+
+    host.style.setProperty("--entry-box-width", `${Math.ceil(width)}px`);
+  };
+
+  input.addEventListener("input", () => {
+    sizeToContent();
+    autosize();
+  });
+
+  sizeToContent();
+  autosize();
+
+  /*
+   * THE FIELD'S OWN PLACE, PUT BACK ONTO THE CALLER'S OPTIONS.
+   *
+   * Every other inline presentation publishes its `place` so a camera change can
+   * move it; this one did not, so `openLabelFlow` followed the camera with
+   * nothing - and a field that cannot be re-placed also cannot autosize. It is
+   * the same contract as `openInline`, kept identical so there is one way a
+   * prompt follows its node.
+   */
+  options.place = place;
+  options.autosize = autosize;
 
   return place;
 }
@@ -492,6 +942,18 @@ function openLabelField(options, anchor) {
 function openLabelFlow(options, anchor) {
   const place = openLabelField(options, anchor);
   const input = openDialog.querySelector("#noteText");
+
+  /*
+   * WHAT IS TYPED IS SHOWN WHILE IT IS TYPED.
+   *
+   * The field IS the words, so there is no separate preview element - but a
+   * caller that redraws the sheet from the input (a note's text is the object's
+   * own `text`) needs to be told. This is the one place that callback is wired,
+   * so every label-shaped field reports its typing the same way.
+   */
+  if (typeof options.onInput === "function" && input) {
+    input.addEventListener("input", () => options.onInput(input.value));
+  }
 
   /*
    * THE FIELD GOES AWAY BEFORE ITS ANSWER IS APPLIED.
@@ -539,12 +1001,28 @@ function openLabelFlow(options, anchor) {
   };
 
   const cancel = () => {
+    const text = input ? input.value : "";
+
     close();
 
-    options.onCancel?.();
+    /*
+     * A CANCELLED, NEVER-WRITTEN TEXT OBJECT IS REMOVED.
+     *
+     * A tool creates its annotation EMPTY and commits it before the box opens,
+     * so Escape on an untouched field would leave an invisible object on the
+     * sheet. The caller says whether this entry was the object's first (by
+     * passing `startedEmpty`); if so the cancel still runs, and the tool's own
+     * handler takes the object away - which is the behaviour a student expects
+     * from "not here after all". An entry that already HELD text never removes
+     * anything: Escape restores what was there.
+     */
+    options.onCancel?.({
+      startedEmpty: options.startedEmpty === true && !String(text).trim(),
+      text,
+    });
   };
 
-  attachKeyHandling(openDialog, { multiline: false, apply, cancel });
+  attachKeyHandling(openDialog, { apply, cancel });
 
   let finished = false;
 
@@ -554,6 +1032,25 @@ function openLabelFlow(options, anchor) {
       openDialog?.contains(event.target) ||
       symbolPickerContains(event.target)
     ) {
+      return;
+    }
+
+    /*
+     * A PRESS ELSEWHERE COMMITS - UNLESS THE FIELD IS EMPTY AND WAS EMPTY WHEN
+     * IT OPENED.
+     *
+     * An empty entry is not text anyone wrote: a note placed and abandoned, or a
+     * label opened and left. Cancelling it leaves the sheet as it was. The caller
+     * says which case this is (`cancelOnEmptyOutsidePress`), because it is the
+     * caller that knows whether the object existed before this entry.
+     */
+    if (
+      options.cancelOnEmptyOutsidePress === true &&
+      !String(input?.value ?? "").trim()
+    ) {
+      finished = true;
+      cancel();
+
       return;
     }
 
@@ -577,7 +1074,46 @@ function openLabelFlow(options, anchor) {
   }
 
   place();
-  focusFieldForInput(input, !String(input?.value ?? "").length);
+
+  /*
+   * FOCUS AND SELECTION ARE APPLIED AFTER THE CURRENT GESTURE ENDS.
+   *
+   * This field is opened from INSIDE a pointerup/click handler, and the browser
+   * finishes that gesture by giving focus back to the element the press landed
+   * on - the canvas. Focusing here, synchronously, was therefore undone a
+   * moment later: the field looked right but the keystrokes went to the canvas,
+   * so typing a new notation created a NOTE instead of replacing the label.
+   *
+   * Deferring to the next task lets the gesture finish first, then takes focus
+   * and makes the selection - which is the behaviour the student sees.
+   */
+  const focusAndSelect = () => {
+    focusFieldForInput(input, !String(input?.value ?? "").length);
+
+    /*
+     * A FIELD THAT OPENS HOLDING A GENERATED DEFAULT SELECTS ALL OF IT.
+     *
+     * A Heat Transfer label opens already carrying its notation ("Tâ‚"), and
+     * the whole point of opening it is that the student may type to REPLACE
+     * that notation. With the caret merely at the end, the first keystroke
+     * would APPEND - "Tâ‚2" - instead of replacing. Selecting the whole value
+     * makes typing replace it, while Enter leaves it exactly as generated.
+     */
+    if (options.selectAllOnOpen === true && input) {
+      input.setSelectionRange?.(0, input.value.length);
+    }
+  };
+
+  focusAndSelect();
+
+  /*
+   * AND AGAIN ON THE NEXT TASK, when the environment has one. The synchronous
+   * call keeps the field usable in a runtime without timers (the tests), and
+   * the deferred one wins over the browser handing focus back to the canvas.
+   */
+  if (typeof globalThis.setTimeout === "function") {
+    globalThis.setTimeout(focusAndSelect, 0);
+  }
 
   return openDialog;
 }
@@ -625,6 +1161,23 @@ function openInline(options, anchor) {
   const input = host.querySelector("#noteText");
   attachTextSymbols(host);
 
+  /*
+   * THE DRAWING THE BOX IS SIZED AGAINST - the camera this entry was opened
+   * with, or the live sheet's. Defined before the box is written, below.
+   */
+  const drawingState = globalThis.enggDrawingState || null;
+
+  const activeCamera = () =>
+    options.camera && Number.isFinite(Number(options.camera.zoom))
+      ? options.camera
+      : drawingState?.camera || {};
+
+  const pixelsPerUnit = () =>
+    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4) *
+    (Number(activeCamera().zoom) || 1);
+
+  void drawingState;
+
   const preview = options.object ? createPreview(options.object) : null;
 
   if (preview && options.preview !== false) {
@@ -644,6 +1197,31 @@ function openInline(options, anchor) {
     preview?.place(rect);
   };
 
+  /*
+   * THE SAME DEFINED BOX AS EVERY OTHER TEXT FIELD.
+   *
+   * A note is entered in the same drawing-sized box as a label: 200 x 36 pt at
+   * 14 pt with 8/4 pt of padding (see `TEXT_ENTRY_BOX`). It is stated once here
+   * for this prompt too, so the note tool and the label tool cannot open two
+   * differently sized boxes for the same kind of text.
+   */
+  const metrics = textEntryMetricsAt(pixelsPerUnit(), options.text ?? "");
+
+  host.classList.add("drawing-inline-entry-boxed");
+  host.style.setProperty("--entry-box-width", `${metrics.widthPx}px`);
+  host.style.setProperty("--entry-box-height", `${metrics.heightPx}px`);
+  host.style.setProperty("--entry-box-min-width", `${metrics.minWidthPx}px`);
+  host.style.setProperty("--entry-padding-x", `${metrics.paddingXPx}px`);
+  host.style.setProperty("--entry-padding-y", `${metrics.paddingYPx}px`);
+  host.style.fontSize = `${metrics.fontSizePx}px`;
+
+  if (input) {
+    input.style.fontSize = `${metrics.fontSizePx}px`;
+    input.style.lineHeight = `${metrics.lineHeightPx}px`;
+  }
+
+  place();
+
   const updatePreview = () => {
     preview?.setText(input ? input.value : "");
     place();
@@ -651,6 +1229,18 @@ function openInline(options, anchor) {
 
   input?.addEventListener("input", updatePreview);
 
+  /*
+   * NO FORMATTING UI OVER THE CANVAS, EVER.
+   *
+   * A floating strip beside the caret looks helpful and is actively in the
+   * way: it sits on the words being typed, it reacts to the same keys, and it
+   * appears before there is any text to format. Formatting lives in the
+   * object's Features tab, where it can be opened deliberately and never
+   * covers the drawing.
+   *
+   * So nothing is opened here. The field, its caret and its own box are the
+   * whole editing interface.
+   */
   const apply = () => {
     const text = input ? input.value : "";
 
@@ -665,7 +1255,7 @@ function openInline(options, anchor) {
     options.onCancel?.();
   };
 
-  attachKeyHandling(host, { multiline, apply, cancel });
+  attachKeyHandling(host, { apply, cancel });
 
   /*
    * CLICKING ELSEWHERE FINISHES THE ENTRY, THE WAY ANY FIELD ON A CANVAS DOES.
@@ -691,7 +1281,19 @@ function openInline(options, anchor) {
   let finished = false;
 
   const outside = (event) => {
-    if (finished || host.contains(event.target) || symbolPickerContains(event.target)) {
+    /*
+     * A PRESS ON THE FORMATTING STRIP IS NOT "CLICKING ELSEWHERE".
+     *
+     * The strip is part of the editing surface, so touching it must not commit
+     * and close the field - the student is formatting the words they are still
+     * writing. Its own controls stop propagation as well, and this is the
+     * second guard for a press that lands on its background.
+     */
+    if (
+      finished ||
+      host.contains(event.target) ||
+      symbolPickerContains(event.target)
+    ) {
       return;
     }
 
@@ -753,308 +1355,156 @@ function openInline(options, anchor) {
  * workflow, the double-click on the canvas, the Features panel - gets the
  * inline prompt without having to compute anything.
  *
- * `inline: false` asks for the modal explicitly, and an object with no
- * resolvable position (or a page with no canvas) falls back to it, because a
- * prompt anchored to a guessed point is worse than a centred one.
+ * `inline: false` no longer asks for a dialog - there is none - it asks for the
+ * middle of the canvas, and an object with no resolvable position gets the same
+ * place. Text on the drawing is typed on the drawing.
  */
-/*
- * ============================================================
- * THE IN-PLACE TEXT EDITOR
- * ============================================================
- *
- * A note is edited WHERE IT IS WRITTEN - the field sits over the drawing at the
- * note's own anchor, in the note's own type, and looks like the text rather
- * than like a form:
- *
- *   - TRANSPARENT background, so the sheet shows through it;
- *   - the rendered note's font family, size, weight, italic, underline, line
- *     spacing and alignment, and its colour (the stylesheet uses `currentColor`);
- *   - only a subtle boundary and the caret while editing - the boundary is the
- *     editor's own box and disappears with it when the text is committed, so no
- *     textbox outline is left in the drawing;
- *   - the box GROWS with what is typed, in width and in lines, so a paragraph
- *     is never written through a one-line window.
- *
- * WHILE IT IS OPEN THE CANVAS MUST NOT STEAL ITS KEYS. Every key that starts in
- * the field is stopped from reaching the drawing's shortcut handler, and every
- * press inside it is stopped from reaching the canvas - so typing is typing, and
- * panning or arming a tool waits until the entry is finished.
- */
-function openCanvasText(options) {
-  /*
-   * A VISIBLE BOX ON THE DRAWING SPACE, NOT A POPUP.
-   *
-   * The box is a child of the canvas element, positioned in the canvas's own
-   * pixel frame - the frame the viewport projects drawing coordinates into - so
-   * it sits AT the note's anchor and moves with the drawing when the student
-   * zooms, pans or resizes the window. A `position: fixed` prompt anchored to the
-   * window looked placed until anything moved; a box inside the canvas is part
-   * of the sheet.
-   */
-  const canvas = enggInlineEntry.canvasElement();
-  const host = document.createElement("div");
-  host.className = "drawing-canvas-text-editor";
-  host.dataset.inline = "true";
-  host.setAttribute("role", "group");
-  host.setAttribute("aria-label", options.object?.annotateKind === "callout" ? "Edit callout marker" : "Edit note on canvas");
-  const input = document.createElement("textarea");
-  input.id = "noteText";
-  input.setAttribute("aria-label", options.object?.annotateKind === "callout" ? "Callout text" : "Note text");
-  input.placeholder = "";
-  input.value = options.text || "";
-  input.rows = 1;
-  input.spellcheck = false;
-  input.autocomplete = "off";
-  input.wrap = "off";
-  host.append(input);
-
-  /*
-   * THE SYMBOL BUTTON IS NOT REPEATED HERE. Special Symbols lives in the Tools
-   * menu now, and it inserts at THIS field's caret because the field is what
-   * has focus.
-   */
-  (canvas || document.body).append(host);
-  openDialog = host;
-  let finished = false;
-
-  /*
-   * THE BOX IS WRITTEN IN THE NOTE'S OWN TYPE, AND THAT IS NOT CONDITIONAL.
-   *
-   * The styling used to happen only after the field had been PLACED - so on a
-   * page where the canvas has no measurable box (or ``projection`` has no
-   * camera to use) the field came up in the browser's default type, looking
-   * like a form rather than like the words it is editing. The type is a fact
-   * about the OBJECT, so it is applied first and the placement then only
-   * decides WHERE the box sits.
-   */
-  const typography = noteTextStyle(options.object?.style);
-
-  const applyTypography = (zoom) => {
-    const zoomed = Number(zoom) || 1;
-    const font = noteFontPixels(options.object?.style, zoomed);
-    const align = typography.align;
-
-    input.style.fontSize = `${font}px`;
-    input.style.lineHeight = `${font * typography.lineSpacing}px`;
-    input.style.fontFamily = typography.fontFamily;
-    input.style.fontWeight = typography.bold ? "bold" : "normal";
-    input.style.fontStyle = typography.italic ? "italic" : "normal";
-    input.style.textDecoration = typography.underline ? "underline" : "none";
-    input.style.textAlign = align === "center" ? "center" : align === "right" ? "right" : "left";
-    input.style.color = /^#[0-9a-f]{6}$/i.test(String(options.object?.style?.stroke || ""))
-      ? options.object.style.stroke
-      : "var(--datum-ink)";
-
-    return font;
-  };
-
-  applyTypography(1);
-
-  const place = () => {
-    const box = enggInlineEntry.canvasBounds(
-      canvas || enggInlineEntry.canvasElement(),
-    );
-    const world = enggInlineEntry.modelPointForTextEntry(options.object);
-
-    if (!box || !world) return;
-
-    const projection = enggInlineEntry.createProjection(
-      options.state?.camera,
-      box,
-    );
-    const at = projection.toPixels(world);
-    const zoom = projection.scale / 2.4;
-    const font = applyTypography(zoom);
-    const lines = String(input.value || " ").split("\n");
-
-    /*
-     * THE BOX FOLLOWS THE TEXT. One empty line still gets a caret's worth of
-     * room, and the width tracks the longest line so a wide word is not clipped
-     * while it is being typed.
-     */
-    const width = Math.max(120, noteTextWidth(input.value || " ", typography, font) + 14);
-    const height = Math.max(font * typography.lineSpacing, lines.length * font * typography.lineSpacing) + 8;
-    const align = typography.align;
-    at.x += typography.indent * 2.4 * zoom;
-    host.style.left = `${at.x - (align === "center" ? width/2 : align === "right" ? width : 0) - 3}px`;
-
-    /* The anchor is the text's BASELINE, so the field is lifted by one line. */
-    host.style.top = `${at.y - height + font * 0.2}px`;
-    host.style.width = `${width}px`;
-    host.style.height = `${height}px`;
-  };
-  /*
-   * A NEW NODE CANCELLED WHILE STILL EMPTY LEAVES NOTHING BEHIND.
-   *
-   * Escape on a note that was just placed and never written is the student
-   * saying "not here after all", so the node is removed rather than left as an
-   * invisible, unselectable object. A node that already had text keeps it.
-   */
-  const startedEmpty = !String(options.text || "").length;
-  const finish = (cancel = false) => {
-    if (finished) return;
-    finished = true;
-    const text = input.value;
-    close();
-    if (cancel) options.onCancel?.({ startedEmpty });
-    else options.onApply?.(text);
-  };
-  closeCurrent = () => finish(true);
-  input.addEventListener("input", () => { options.onInput?.(input.value); place(); });
-  input.addEventListener("keydown", event => {
-    event.stopPropagation();
-
-    /*
-     * ENTER COMMITS A CALLOUT'S SHORT TEXT; A NOTE MAY BE SEVERAL LINES.
-     *
-     * A balloon holds a name or a number, so Enter finishes it - that is the
-     * key a student reaches for. A note is prose, and there Enter has to keep
-     * meaning "new line": Ctrl+Enter (or Cmd+Enter) commits it. Escape is the
-     * way out of either, and it never deletes the object being edited.
-     */
-    if (event.key === "Escape") { event.preventDefault(); finish(true); }
-    else if (
-      event.key === "Enter" &&
-      (options.object?.annotateKind === "callout" ? !event.shiftKey : event.ctrlKey || event.metaKey)
-    ) { event.preventDefault(); finish(); }
-  });
-  host.addEventListener("keydown", event => event.stopPropagation());
-  host.addEventListener("keyup", event => event.stopPropagation());
-  host.addEventListener("pointerdown", event => event.stopPropagation());
-  const outside = event => { if (!host.contains(event.target) && !symbolPickerContains(event.target)) finish(); };
-  document.addEventListener("pointerdown", outside, true);
-  stopOutsidePress = () => document.removeEventListener("pointerdown", outside, true);
-  input.addEventListener("blur", () => { if (!isSymbolPickerOpen()) finish(); });
-  if (typeof options.cameraSignal === "function") stopFollowing = enggInlineEntry.followCamera(options.cameraSignal, place);
-  place();
-  /*
-   * THE CARET GOES AFTER THE EXISTING TEXT, not in front of it: reopening a
-   * written annotation to add to it should not begin by typing over its first
-   * word. A balloon still selects all of its number, which is one short token.
-   */
-  focusField(input);
-
-  if (options.object?.annotateKind === "callout") input.select();
-  else input.setSelectionRange(input.value.length, input.value.length);
-  return host;
-}
-
 function open(options = {}) {
   if (openDialog) closeCurrent?.();
   close();
-  if (options.canvasText && options.object) return openCanvasText(options);
+
+  /*
+   * `canvasText` IS ACCEPTED AND IGNORED. It used to select a second, separate
+   * on-canvas editor; there is now ONE inline field, so a caller asking for
+   * "canvas text" gets the same box as every other caller - which is the point
+   * of having one editor.
+   */
 
   const explicitAnchor =
     options.anchor && typeof options.anchor !== "function"
       ? options.anchor
       : null;
 
+  /*
+   * WHERE THE FIELD GOES.
+   *
+   * The object's own text position first, then an explicit anchor or point the
+   * caller supplied. `inline: false` no longer means "draw a dialog" - there is
+   * no dialog any more - it means "use the centre of the canvas", which is what
+   * a caller with no position at all is saying: put it where the student is
+   * working.
+   */
   const resolved =
-    options.inline === false
-      ? null
-      : explicitAnchor ||
-        (options.object
-          ? enggInlineEntry.resolveTextEntryAnchor(options.object, {
-              state: options.state,
-              camera: options.camera,
-              point: options.point,
-            })
-          : null);
+    (options.object
+      ? enggInlineEntry.resolveTextEntryAnchor(options.object, {
+          state: options.state,
+          camera: options.camera,
+          point: options.point,
+        })
+      : null) ||
+    explicitAnchor ||
+    canvasCentreAnchor();
 
-  if (!resolved) {
-    return openModal(options);
-  }
-
-  return openInline(options, resolved.rect || explicitAnchor);
+  return openInline(options, resolved?.rect || resolved || null);
 }
 
 /*
- * THE MODAL FALLBACK.
+ * THE MIDDLE OF THE DRAWING SPACE, as an anchor.
  *
- * Kept for a caller that has no node to point at. It is the old editor,
- * unchanged in behaviour - one undoable edit, Enter or Ctrl+Enter to confirm,
- * Escape to cancel - so a feature's text edited from elsewhere behaves as it
- * always has.
+ * A field with no position to sit on goes where the student is looking rather
+ * than into a separate window - so the text is still being written on the
+ * drawing, which is the one rule this editor has.
  */
-function openModal(options) {
+/* The canvas's own box, or the window's when the canvas has not been laid out. */
+function canvasSize() {
+  const canvas = enggInlineEntry.canvasElement();
+  const box = canvas ? enggInlineEntry.canvasBounds(canvas) : null;
+
+  return {
+    width: Number(box?.width) || Number(globalThis.window?.innerWidth) || 900,
+    height: Number(box?.height) || Number(globalThis.window?.innerHeight) || 600,
+  };
+}
+
+function windowSize() {
+  return {
+    width: Number(globalThis.window?.innerWidth) || 900,
+    height: Number(globalThis.window?.innerHeight) || 600,
+  };
+}
+
+/* The canvas's position in the window, or zero when it has none yet. */
+function canvasOrigin() {
+  const canvas = enggInlineEntry.canvasElement();
+  const rect = canvas && typeof canvas.getBoundingClientRect === "function"
+    ? canvas.getBoundingClientRect()
+    : null;
+
+  return {
+    left: Number(rect?.left) || 0,
+    top: Number(rect?.top) || 0,
+  };
+}
+
+function canvasCentreAnchor() {
+  const canvas = enggInlineEntry.canvasElement();
+
+  if (!canvas) {
+    return null;
+  }
+
+  const box = enggInlineEntry.canvasBounds(canvas);
+
+  if (!box) {
+    return null;
+  }
+
   /*
-   * ONE EDITOR, TWO SHAPES.
-   *
-   * A NOTE IS MULTI-LINE and a LABEL, CALLOUT or single-line text is not. Both
-   * are the same editor - place content, Enter confirms or Esc cancels, and the
-   * current content is shown when the box is reopened on an existing feature -
-   * so a student who has learned one has learned the other. Only the field and
-   * the key that commits differ:
-   *
-   *   multiline   Enter = new line, Ctrl+Enter = commit
-   *   single line  Enter = commit
-   *
-   * THE PLACEHOLDER IS SHOWN, NEVER STORED. It is passed to the field's own
-   * `placeholder` attribute when the content is empty, so the box says what to
-   * write ("Enter note", "Enter label") without that word ever reaching the
-   * feature's text.
+   * IN THE CANVAS'S OWN FRAME, AND SAYING SO. The field is mounted inside the
+   * canvas, so its coordinates are the canvas's - the same contract
+   * `resolveTextEntryAnchor` keeps with `frame: "canvas"`. Without the marker
+   * this point was treated as a window point and the box opened off the sheet.
    */
-  const multiline = options.multiline !== false;
-
-  const placeholder =
-    options.placeholder || (multiline ? "Enter note" : "Enter text");
-
-  const title = options.title || (multiline ? "Edit Note" : "Edit Text");
-
-  const dialog = document.createElement("div");
-
-  dialog.className = "drawing-dimension-dialog drawing-note-dialog";
-
-  dialog.setAttribute("role", "dialog");
-  dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-label", title);
-
-  dialog.innerHTML = `
-        <div class="drawing-dimension-dialog-title">
-            ${escapeHtml(title)}
-        </div>
-
-        <label class="drawing-dimension-dialog-label" for="noteText">
-            ${escapeHtml(multiline ? "Note" : "Text")}
-        </label>
-        ${fieldMarkup(multiline, placeholder, options.text)}
-
-        <div class="drawing-scale-dialog-actions">
-            <button type="button"
-                data-note-cancel>Cancel</button>
-            <button type="button"
-                class="primary"
-                data-note-apply>Apply</button>
-        </div>
-    `;
-
-  document.body.appendChild(dialog);
-
-  openDialog = dialog;
-  attachTextSymbols(dialog);
-
-  const closeIt = () => {
-    close();
-    options.onCancel?.();
+  return {
+    left: box.width / 2,
+    top: box.height / 2,
+    frame: "canvas",
+    centre: true,
   };
+}
 
-  const apply = () => {
-    const text = dialog.querySelector("#noteText").value;
+/*
+ * THE ANCHOR IN THE SHEET'S OWN FRAME.
+ *
+ * The field is mounted ON the canvas, so every position it is given has to be a
+ * canvas-local point. Three shapes of anchor are accepted, and each is
+ * converted exactly once:
+ *
+ *   `frame: "canvas"`   already projected for the sheet - used as it is
+ *   an OBJECT's anchor  re-projected from the object's own model point, through
+ *                       the caller's camera, which is the authoritative route
+ *   a plain point       projected through the canvas's box from the window
+ *
+ * `rect.left`/`rect.top` are WINDOW coordinates whatever the rect claims, so a
+ * window anchor has the canvas's origin taken off. Doing that to a point that
+ * was already local is the defect this function exists to make impossible.
+ */
+function localAnchorFor(rect, options = {}) {
+  const view = { camera: options.camera };
 
-    close();
+  if (rect.frame === "canvas" || rect.centre === true) {
+    return { x: Number(rect.left) || 0, y: Number(rect.top) || 0 };
+  }
 
-    options.onApply?.(text);
+  if (options.object) {
+    const projected = enggInlineEntry.clientPointForObject(options.object, view);
+
+    if (projected) {
+      const bounds = enggInlineEntry.canvasBounds();
+
+      return {
+        x: projected.x - (Number(bounds?.rect?.left) || 0),
+        y: projected.y - (Number(bounds?.rect?.top) || 0),
+      };
+    }
+  }
+
+  const origin = canvasOrigin();
+
+  return {
+    x: (Number(rect.left ?? rect.x) || 0) - origin.left,
+    y: (Number(rect.top ?? rect.y) || 0) - origin.top,
   };
-
-  dialog.querySelector("[data-note-apply]")?.addEventListener("click", apply);
-
-  dialog.querySelector("[data-note-cancel]")?.addEventListener("click", closeIt);
-
-  attachKeyHandling(dialog, { multiline, apply, cancel: closeIt });
-
-  focusField(dialog.querySelector("#noteText"));
-
-  return dialog;
 }
 
 function escapeHtml(value) {
@@ -1080,3 +1530,4 @@ const enggNoteEditor = {
 };
 
 export default enggNoteEditor;
+

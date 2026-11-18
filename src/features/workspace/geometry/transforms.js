@@ -408,6 +408,92 @@ export function mirrorObjectAcrossLine(
         return;
     }
 
+    /*
+     * ========================================================
+     * THE HEAT TRANSFER OBJECTS
+     * ========================================================
+     *
+     * Reflected through their OWN model, exactly as the shapes above are, so a
+     * mirrored Wall / Slab has two parallel faces still, a mirrored Composite
+     * Wall keeps its layer count, and a rotated symbol reflects its angle - not
+     * just its centre. The axis angle is the line the student mirrored across.
+     */
+    if (
+        object.type === "thermal-region" ||
+        object.type === "control-volume"
+    ) {
+        /* A corner-and-size rectangle: reflect two opposite corners. */
+        const a = { x: g.position.x, y: g.position.y };
+        const b = { x: g.position.x + g.width, y: g.position.y - g.height };
+
+        reflect(a);
+        reflect(b);
+
+        g.position = { x: Math.min(a.x, b.x), y: Math.max(a.y, b.y) };
+        g.width = Math.abs(b.x - a.x);
+        g.height = Math.abs(b.y - a.y);
+        g.rotation = 0;
+
+        return;
+    }
+
+    if (object.type === "composite-wall") {
+        const axisAngle = Math.atan2(end.y - start.y, end.x - start.x);
+
+        reflect(g.center);
+
+        /* The wall's own angle is measured in degrees. */
+        const radians = ((Number(g.rotation) || 0) * Math.PI) / 180;
+        g.rotation = ((2 * axisAngle - radians) * 180) / Math.PI;
+
+        return;
+    }
+
+    if (object.type === "heat-source-sink" || object.type === "thermal-circuit-element") {
+        const axisAngle = Math.atan2(end.y - start.y, end.x - start.x);
+
+        reflect(g.center);
+
+        /* The symbol's own angle is measured in degrees. */
+        const radians = ((Number(g.rotation) || 0) * Math.PI) / 180;
+        g.rotation = ((2 * axisAngle - radians) * 180) / Math.PI;
+
+        return;
+    }
+
+    if (object.type === "wall-slab" || object.type === "fin") {
+        if (g.start) reflect(g.start);
+        if (g.end) reflect(g.end);
+        if (g.base) reflect(g.base);
+
+        return;
+    }
+
+    if (
+        object.type === "thermal-arrow" ||
+        object.type === "thermal-boundary" ||
+        object.type === "thermal-contact"
+    ) {
+        reflect(g.start);
+        reflect(g.end);
+
+        /*
+         * A BOUNDARY'S DECORATIONS SIT ON THE SIDE the student chose. A mirror
+         * reverses which side that is, so the side flips with the geometry - or
+         * the symbols would end up buried inside whatever the boundary faced.
+         */
+        if (object.type === "thermal-boundary") {
+            g.side = (Number(g.side) === -1 ? 1 : -1);
+        }
+
+        return;
+    }
+
+    if (object.type === "thermal-circuit-node" || object.type === "temperature-marker") {
+        reflect(g.center);
+        return;
+    }
+
     if (Array.isArray(g.points)) {
         /*
          * The remaining multi-point shapes are triangle,

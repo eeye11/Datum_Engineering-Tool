@@ -43,6 +43,49 @@ import {
     DYNAMICS_ANGLE_TOOLS,
     DYNAMICS_BOX_TOOLS
 } from "../../../features/workspace/dynamics/dynamics-tools.js";
+import { HEAT_TOOL_MENUS, HEAT_TOOLS } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
+
+/*
+ * THE HEAT TRANSFER TOOLS, AS QUESTIONS THIS MODULE CAN ASK.
+ *
+ * HEAT_TOOLS is a LEAF table (the model imports it, never the reverse), so it
+ * can be read here without closing a cycle. The gesture each tool takes is
+ * recorded on its registry entry, so a Heat Transfer tool added later is
+ * classified correctly without this file learning its id.
+ */
+const HEAT_CLICK_GESTURES = new Set(["click"]);
+const HEAT_POLY_GESTURES = new Set(["poly"]);
+
+function heatTool(toolId) {
+    return HEAT_TOOLS[toolId] || null;
+}
+
+/* A Heat Transfer tool placed by ONE click - a source, a node, an element, a marker. */
+export function isHeatClickToolId(toolId) {
+    const tool = heatTool(toolId);
+
+    return Boolean(tool) && HEAT_CLICK_GESTURES.has(tool.gesture);
+}
+
+/* A Heat Transfer tool that collects a chain of points - a path, an isotherm. */
+export function isHeatPolyToolId(toolId) {
+    const tool = heatTool(toolId);
+
+    return Boolean(tool) && HEAT_POLY_GESTURES.has(tool.gesture);
+}
+
+/* A Heat Transfer tool drawn by press-drag-release with no step after it. */
+export function isHeatDragToolId(toolId) {
+    const tool = heatTool(toolId);
+
+    return Boolean(tool) && tool.gesture === "drag";
+}
+
+/* The Temperature Profile arms the existing graph tool, which is a drag tool. */
+export const HEAT_DRAG_IDS = Object.values(HEAT_TOOL_MENUS)
+    .flat()
+    .filter((tool) => tool.gesture === "drag")
+    .map((tool) => tool.id);
 
 /*
  * The tools whose interaction is a SINGLE POINT.
@@ -190,7 +233,13 @@ export function clickKeepsTool(toolId) {
         toolId === null ||
         toolId === undefined ||
         isPointTool(toolId) ||
-        hasRequiredInput(toolId)
+        hasRequiredInput(toolId) ||
+        /*
+         * A HEAT TRANSFER CLICK TOOL PLACES ITS OBJECT FROM THE CLICK, so the
+         * click that makes a source, a node or a marker must never be read as
+         * "I am finished with this tool".
+         */
+        isHeatClickToolId(toolId)
     );
 }
 
@@ -416,9 +465,7 @@ export const CLICK_CLICK_TOOLS = [
 ];
 
 export function isClickClickTool(toolId) {
-    return CLICK_CLICK_TOOLS.includes(
-        toolId ?? null
-    );
+    return CLICK_CLICK_TOOLS.includes(toolId ?? null);
 }
 
 /*
@@ -463,6 +510,8 @@ export function shouldExitToSelectOnClick(toolId) {
     if (isClickClickTool(toolId) || isMultiStepTool(toolId)) {
         return false;
     }
+
+
 
     /*
      * EVERYTHING ELSE LEAVES ON A BARE CLICK.

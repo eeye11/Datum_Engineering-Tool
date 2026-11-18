@@ -32,6 +32,7 @@ import { thermodynamicsSourceWriter } from "./thermodynamics.js";
 import { fluidsSourceWriter } from "./fluids.js";
 import { dynamicsSourceWriter } from "./dynamics.js";
 import { mathSourceWriter } from "./math.js";
+import { heatTransferSourceWriter } from "./heat-transfer.js";
 
 /*
  * The writers, in installation order. The synchronization layer asks the most
@@ -72,7 +73,18 @@ export const SOURCE_WRITERS = Object.freeze([
    * is consulted before the older ones, and a Math object is written by the
    * Math writer whatever else is installed.
    */
-  { id: "math", writer: mathSourceWriter }
+  { id: "math", writer: mathSourceWriter },
+
+  /*
+   * HEAT TRANSFER LAST, SO IT IS ASKED FIRST.
+   *
+   * Its types are unique - no other writer can match a `thermal-*`, a
+   * `heat-path` or a `wall-slab` - so the position is about clarity rather
+   * than precedence: the newest category is consulted before the older ones, and
+   * a Heat Transfer object is written by the Heat Transfer writer whatever else
+   * is installed.
+   */
+  { id: "heat-transfer", writer: heatTransferSourceWriter }
 ]);
 
 /*

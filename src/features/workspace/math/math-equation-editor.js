@@ -112,7 +112,7 @@ export function openEquationEditor(point, options = {}) {
             placeholder="y = x^2"></textarea>
         <div class="drawing-equation-preview" aria-live="polite"></div>
         <div class="drawing-equation-problem" role="status"></div>
-        <span class="drawing-inline-entry-hint" aria-hidden="true">Ctrl+Enter &middot; Esc</span>
+        <span class="drawing-inline-entry-hint" aria-hidden="true">Enter &middot; Shift+Enter &middot; Esc</span>
     `;
 
   document.body.appendChild(host);
@@ -218,7 +218,14 @@ export function openEquationEditor(point, options = {}) {
       return;
     }
 
-    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    /*
+     * THE SAME KEYBOARD AS EVERY CANVAS TEXT FIELD.
+     *
+     * Enter commits the equation and finishes; Shift+Enter inserts a line
+     * (handled by the textarea itself, and deliberately NOT a commit); Escape
+     * cancels. Ctrl+Enter still commits, because it did before.
+     */
+    if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       commit();
     }

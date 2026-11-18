@@ -22,7 +22,8 @@
  * reads as part of the same drawing at every zoom and in both themes.
  */
 
-import { createSvgElement, paintColour, scaledStrokeWidth } from "../svg-primitives.js";
+import { createSvgElement, paintColour, scaledStrokeWidth, textNode } from "../svg-primitives.js";
+import { AUXILIARY_FONT_PX, CANVAS_FONT_STACK } from "../../typography/canvas-typography.js";
 import enggFeatureGeometry from "../../geometry/feature-geometry.js";
 import { drawRigidBody as drawRigidBodyGeometry } from "./draw-bodies.js";
 
@@ -77,8 +78,10 @@ function dashArrayOf(style, scale) {
     const type = String(style?.lineType || "solid").toLowerCase();
 
     /*
-     * The dash lengths are SCREEN pixels - they describe the pen, not the
-     * drawing - so they follow the zoom directly.
+     * A DASH IS PART OF THE DRAWING, so its lengths are world units and the
+     * zoom converts them into overlay pixels. They used to be scaled by the
+     * camera AGAIN - on top of geometry the camera had already scaled - so a
+     * dash pattern grew by the square of the zoom.
      */
     const unit = Number(scale) > 0 ? Number(scale) : 1;
 
@@ -181,9 +184,17 @@ function strokeCircle(parent, centre, radius, style, scale, extra = {}) {
  */
 const ARROW_ANGLE = 0.36;
 const ARROW_HALF_WIDTH_RATIO = 0.36;
-function arrowHead(parent, tip, degrees, style, scale, filled = true) {
+function arrowHead(parent, tip, degrees, style, zoom = 1, filled = true) {
     const radians = (num(degrees) * Math.PI) / 180;
-    const length = Math.max(4, num(style?.arrowheadSize, 9) * scale);
+
+    /*
+     * `style.arrowheadSize` is a WORLD size - how big the head is on the
+     * drawing - so the camera's zoom converts it into the pixels this overlay
+     * is drawn in. The floor was 4 SCREEN pixels, which made a tiny head at
+     * 25% and a stubby one at 400%; it is now a world floor like the size.
+     */
+    const view = Number(zoom) > 0 ? Number(zoom) : 1;
+    const length = Math.max(4, num(style?.arrowheadSize, 9)) * view;
     const halfWidth = length * ARROW_HALF_WIDTH_RATIO;
 
     const direction = { x: Math.cos(radians), y: -Math.sin(radians) };
@@ -223,7 +234,7 @@ function arrowHead(parent, tip, degrees, style, scale, filled = true) {
                     `L ${right.x} ${right.y} Z`,
                 fill: colour,
                 stroke: colour,
-                "stroke-width": Math.max(0.5, lineWidthOf(style, scale) * 0.4),
+                "stroke-width": Math.max(0.5, lineWidthOf(style, view) * 0.4),
                 "stroke-linejoin": "miter",
                 "stroke-linecap": "round"
             })
@@ -236,7 +247,7 @@ function arrowHead(parent, tip, degrees, style, scale, filled = true) {
         parent,
         `M ${left.x} ${left.y} L ${tip.x} ${tip.y} L ${right.x} ${right.y}`,
         style,
-        scale
+        view
     );
 }
 
@@ -427,17 +438,25 @@ function drawPolarVector(context) {
      * result - and it sits under the tail.
      */
     if (geometry.showAngle === true) {
-        const label = createSvgElement("text", {
-            x: a.x + 8 * scale,
-            y: a.y + 12 * scale,
-            fill: paintColour(style?.stroke || "#193335"),
-            "font-size": 10 * scale,
-            "font-family": "Arial, sans-serif",
-            "pointer-events": "none"
-        });
-
-        label.textContent = `${Math.round(geometry.angleValue ?? degrees)}°`;
-        svg.appendChild(label);
+        /*
+         * AN AUXILIARY VALUE, drawn at a CANVAS font size.
+         *
+         * It used to be `10 * scale` - a size multiplied by the camera, so the
+         * angle grew with the zoom. `textNode` states the screen size and cancels
+         * the camera on the glyphs, so it reads at 12 px at every magnification
+         * while still sitting beside its vector's tail.
+         */
+        textNode(
+            svg,
+            { x: a.x + 8, y: a.y + 12 },
+            `${Math.round(geometry.angleValue ?? degrees)}°`,
+            {
+                size: AUXILIARY_FONT_PX,
+                fill: paintColour(style?.stroke || "#193335"),
+                fontFamily: CANVAS_FONT_STACK,
+                extra: { "pointer-events": "none" }
+            }
+        );
     }
 
     parentSvg.appendChild(svg);
@@ -511,17 +530,18 @@ function drawAngularVector(context) {
 
     const symbol = geometry.rotationalType === "acceleration" ? "α" : "ω";
     const unit = String(geometry.unit || (symbol === "α" ? "rad/s²" : "rad/s"));
-    const label = createSvgElement("text", {
-        x: centre.x + radius + 5 * scale,
-        y: centre.y - radius,
-        fill: paintColour(style?.stroke || "#193335"),
-        "font-size": 10 * scale,
-        "font-family": "Arial, sans-serif",
-        "pointer-events": "none"
-    });
 
-    label.textContent = `${symbol} = ${num(geometry.magnitude)} ${unit}`;
-    svg.appendChild(label);
+    textNode(
+        svg,
+        { x: centre.x + radius + 5, y: centre.y - radius },
+        `${symbol} = ${num(geometry.magnitude)} ${unit}`,
+        {
+            size: AUXILIARY_FONT_PX,
+            fill: paintColour(style?.stroke || "#193335"),
+            fontFamily: CANVAS_FONT_STACK,
+            extra: { "pointer-events": "none" }
+        }
+    );
 
     parentSvg.appendChild(svg);
 

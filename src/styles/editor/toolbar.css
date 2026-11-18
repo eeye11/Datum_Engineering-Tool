@@ -490,9 +490,24 @@
  * clicking anywhere in the box puts the caret in the number.
  * ==========================================================================
  */
+/*
+ * THE QUICK-ACCESS TEXT-SIZE CONTROL IS RETIRED FROM THE STRIP.
+ *
+ * It was a second, competing font-size control: one number that had to agree
+ * with every selected object's own style, which it could not do for a mixed
+ * selection and often did not do for a single one. Text formatting now lives in
+ * exactly one place - the Text Formatting dropdown in the object's Features tab,
+ * which reads and writes the object's real style.
+ *
+ * The markup and its wiring are left in place rather than deleted: a hidden
+ * control is harmless, whereas removing the element its listeners are bound to
+ * risks a null-reference on load. `display: none` is the whole change.
+ */
 .drawing-strip-font-control {
+    display: none;
     flex: 0 0 auto;
     height: 26px;
+    position: relative;
 }
 
 .drawing-strip-font {
@@ -506,13 +521,70 @@
     display: inline-flex;
     gap: 2px;
     height: 26px;
-    padding: 0 6px 0 5px;
+    padding: 0 4px 0 5px;
+    position: relative;
     transition: background-color 120ms ease, border-color 120ms ease;
 }
 
 .drawing-strip-font:hover {
     background: var(--datum-input-hover);
     border-color: var(--datum-green);
+}
+
+/*
+ * THE MIXED STATE.
+ *
+ * When the selection holds several sizes the field is EMPTY and the box says so
+ * with a dashed border and a muted "Mixed" placeholder - a number there would
+ * claim one of them is the answer. The state is not colour alone: the dashes and
+ * the placeholder text carry it in a monochrome view too.
+ */
+.drawing-strip-font.is-mixed {
+    border-style: dashed;
+    border-color: var(--datum-green);
+}
+
+.drawing-strip-font.is-mixed .drawing-strip-font-input::placeholder {
+    color: var(--datum-muted);
+    font-size: 10px;
+    font-style: italic;
+}
+
+/*
+ * THE SIZE MENU, LAID OVER THE CONTROL'S RIGHT-HAND END.
+ *
+ * It is a native `<select>` made transparent, exactly like the line-type and
+ * thickness controls beside it, so it opens the platform menu and gains the same
+ * keyboard behaviour. The caret beside it is the affordance; the select is what
+ * takes the click, so the control reads as one box with one menu.
+ */
+.drawing-strip-font-menu {
+    appearance: none;
+    background: transparent;
+    border: 0;
+    bottom: 0;
+    cursor: pointer;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    padding: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 22px;
+}
+
+.drawing-strip-font-caret {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    margin-right: -1px;
+    pointer-events: none;
+}
+
+.drawing-strip-font:has(.drawing-strip-font-menu:focus-visible) {
+    border-color: var(--datum-green);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
 }
 
 .drawing-strip-font:has(:focus-visible) {
@@ -546,7 +618,14 @@
     outline: none;
     padding: 0;
     text-align: center;
-    width: 26px;
+    width: 30px;
+}
+
+.drawing-strip-font-input::placeholder {
+    color: var(--datum-muted);
+    font-size: 10px;
+    font-style: italic;
+    letter-spacing: -0.2px;
 }
 
 .drawing-strip-font-input::-webkit-outer-spin-button,

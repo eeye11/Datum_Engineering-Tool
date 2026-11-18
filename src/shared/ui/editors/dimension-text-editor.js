@@ -31,20 +31,18 @@ import {
   noteTextStyle,
   noteTextWidth,
 } from "../../typography/note-text-style.js";
-import {
-  dimensionFontPt,
-  POINTS_PER_MM,
-} from "../../geometry/dimension-layout.js";
 /*
- * THE SAME TWO NUMBERS THE CANVAS PAINTS THE NUMBER WITH.
+ * THE FIELD'S TYPE COMES FROM THE SAME SYSTEM THE CANVAS PAINTS WITH.
  *
- * `src/shared/ui/editors/` to `src/shared/rendering/` is up one and down one,
- * not straight across: a path that stopped at `../rendering` resolved to
- * `src/shared/ui/rendering/`, which does not exist - and a module that cannot
+ * `src/shared/ui/editors/` to `src/shared/typography/` is up one and down one,
+ * not straight across: a path that stopped at `../typography` would resolve to
+ * `src/shared/ui/typography/`, which does not exist - and a module that cannot
  * resolve makes the WHOLE editor fail to load, not just this field.
  */
-import { STROKE_SCALE } from "../../rendering/svg-primitives.js";
-import { SCREEN_LABEL_MIN_PX } from "../../rendering/dimension-render.js";
+import {
+  SECONDARY_FONT_PX,
+  fontSizeOf,
+} from "../../typography/canvas-typography.js";
 
 let closeCurrent = null;
 
@@ -148,41 +146,31 @@ export function openDimensionTextEditor({
     }
 
     /*
-     * THE EDITOR'S TYPE IS THE LABEL'S OWN DOCUMENT SIZE, PAINTED AT THE VIEWPORT.
+     * THE EDITOR'S TYPE IS THE LABEL'S OWN CANVAS SIZE.
      *
-     * The label's type height is a DOCUMENT length in millimetres
-     * (`dimensionFontPt / POINTS_PER_MM`), and the canvas paints one drawing unit
-     * as 2.4 px. The field is a DOM box sitting over an SVG the camera has
-     * already scaled, so the camera's zoom is multiplied in HERE and here only -
-     * that is a viewport transform to match what is underneath, not a change to
-     * any stored size.
-     *
-     * CONVERTING THE POINTS AGAIN (pt -> mm -> px) is what made the field about
-     * three times the label's own height, which is the oversized box this
-     * replaces. `noteTextStyle` is still used for the LINE SPACING it answers,
-     * but its `fontSize` is a note's pixel size and is not consulted.
+     * `noteTextStyle` answers the line spacing and alignment the label is laid
+     * out with, and the field takes its own `font` from the same shared size
+     * rules the canvas paints by - so the box a student types into is the box the
+     * words will occupy, at every zoom.
      */
     const typography = noteTextStyle({
-      fontSize: 11,
       ...(object?.style || {}),
     });
-
-    const zoom = Number(state?.camera?.zoom) || 1;
-    const fontPt = dimensionFontPt(object?.style);
-    const fontWorld = fontPt / POINTS_PER_MM;
 
     /*
      * THE FIELD IS EXACTLY AS LARGE AS THE LABEL UNDER IT.
      *
-     * The canvas paints the label at its document size with a readable floor
-     * (`SCREEN_LABEL_MIN_PX`), and the field uses the SAME two rules: `shape` is
-     * that painted size, and `font` is the same figure on the camera-scaled
-     * canvas. The zoom is a viewport transform applied to the painted size - it
-     * never reaches a stored point size - so typed text appears at the size of
-     * the text it replaces instead of in a box three times too large.
+     * The canvas draws the number at a SCREEN font size - `style.fontSize`, from
+     * the shared typography system - and cancels the camera on the glyphs, so
+     * the number measures the same at every zoom. The field is a DOM box over
+     * that canvas, so it takes that same screen size directly: no zoom is
+     * multiplied in, and typed text appears at the size of the text it replaces
+     * at 25% and at 400% alike.
      */
-    const shape = Math.max(SCREEN_LABEL_MIN_PX, fontWorld * STROKE_SCALE);
-    const font = shape * zoom; 
+    const font = fontSizeOf(
+      Number(object?.style?.fontSize),
+      SECONDARY_FONT_PX,
+    ); 
 
     const origin = enggInlineEntry.worldToClient(anchor, {
       state,

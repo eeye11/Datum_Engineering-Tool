@@ -43,6 +43,9 @@ import enggFlowProfile from "../model/fluids/flow-profile.js";
 import enggSectionPlane from "../model/fluids/section-plane.js";
 import { createJunctionForInteriorConnection } from "./junction-tool.js";
 import { controlNodeAlignmentOffset, isControlSymbol, isSum, setSumNodeAngle, sumNodeAngle } from "../../../shared/model/plant.js";
+import { applyHeatHandle } from "./heat-handles.js";
+import enggHeatModel from "../model/heat-transfer/heat-model.js";
+import enggHeatLabels from "../model/heat-transfer/heat-labels.js";
 
 /* How near the pivot (screen px) a rotation drag stops reading an angle. */
 const ROTATION_DEAD_ZONE_PX = 8;
@@ -145,6 +148,38 @@ export function beginManipulationDrag(
      */
     const pointed =
         boundarySelectionAtPoint(point) || objectAtPoint(point);
+
+    /*
+     * A PRESS ON A HEAT LABEL MOVES THE LABEL, NOT ITS PARENT.
+     *
+     * The label has no Objects row and its parent is what the panel shows, but
+     * the TEXT is what the student grabbed - so the drag is the label's. It is
+     * armed here, ahead of the body drag, because the body branch would
+     * otherwise move the parent geometry under a press that landed on words.
+     *
+     * The label keeps its own offset, so the parent stays exactly where it is
+     * and the label records its new place relative to it.
+     */
+    if (
+        pointed &&
+        pointed.type === "annotate" &&
+        pointed.metadata &&
+        pointed.metadata.heatParentId
+    ) {
+        editorState.manipulationDrag = {
+            pointerId: event.pointerId,
+            object: pointed,
+            kind: "body",
+            start: { ...point },
+            anchor: { ...point },
+            moved: false,
+            originals: { [pointed.id]: structuredClone(pointed) }
+        };
+
+        drawingCanvas.setPointerCapture(event.pointerId);
+
+        return true;
+    }
     const resolved = pointed?.sourceFeatureId && selectedIds.includes(pointed.sourceFeatureId)
         ? drawingState.objects.find(item => item.id === pointed.sourceFeatureId)
         : pointed;
@@ -719,6 +754,32 @@ export function finishManipulationDrag(
         return;
     }
 
+    /*
+     * A MOVED HEAT LABEL REMEMBERS ITS NEW OFFSET FROM ITS PARENT.
+     *
+     * The label was dragged on its own, so its parent did not move - and the
+     * offset is what keeps it where the student put it the next time the parent
+     * DOES move. Written here, after the drag has settled, so the offset matches
+     * the position that was actually committed.
+     */
+    if (
+        drag.object?.type === "annotate" &&
+        drag.object?.metadata?.heatParentId
+    ) {
+        const liveLabel = drawingState.objects.find(
+            (object) => object.id === drag.object.id
+        );
+        const parent = liveLabel
+            ? drawingState.objects.find(
+                  (object) => object.id === liveLabel.metadata?.heatParentId
+              )
+            : null;
+
+        if (liveLabel && parent) {
+            enggHeatLabels.rememberHeatLabelOffset(liveLabel, parent);
+        }
+    }
+
     if (drag.kind.startsWith("sum-node-") && !drag.changed) {
         editorState.selectionClickSuppressed = true;
         if (drawingState.activeTool === "select") {
@@ -876,6 +937,30 @@ function applyManipulation(
     const object = drawingState.objects.find(item => item.id === drag.object.id);
     if (!object) return;
     drag.object = object;
+
+    /*
+     * A HEAT TRANSFER HANDLE IS ITS OWN EDIT, ASKED FIRST.
+     *
+     * Every Heat Transfer grip - a wall's thickness, a composite wall's
+     * divider, a region's corner, a path's control point, a symbol's centre -
+     * writes through the model in `applyHeatHandle`, so it never falls into
+     * the generic "start/end" or "body" paths below where a derived shape
+     * would be translated as if it were a free span. A null answer means the
+     * kind is not one, and the shared handling runs as before.
+     */
+    if (
+        typeof drag.kind === "string" &&
+        drag.kind.startsWith("heat-") &&
+        enggHeatModel.isHeatType(object.type)
+    ) {
+        const changed = applyHeatHandle(object, drag.kind, point, drag);
+
+        if (changed) {
+            drag.changed = true;
+        }
+
+        return;
+    }
 
     if (enggReducer.isReducerType(object.type) && drag.kind !== "rotate") {
         if (!drag.reducerOriginals) {

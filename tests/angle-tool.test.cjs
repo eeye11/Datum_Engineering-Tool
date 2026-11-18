@@ -28,7 +28,14 @@ test('Angle picks two lines, previews a true right angle, asks for a label and k
  assert.equal(popup,null,'placing an angle opens no popup');
  const creation=document.querySelector('.drawing-dimension-text-editor');
  assert.ok(creation,'the angle label is edited on the page');
- const input=creation.querySelector('input');assert.ok(input.value.includes('90'),'default label is the actual angle');
+ const input=creation.querySelector('input');
+/*
+ * NO AUTOMATIC LABEL. The field opens EMPTY and stays empty until the student
+ * types - the measured angle is a fact about the geometry, not the text the
+ * dimension prints, and pre-filling it is what printed a distance nobody asked
+ * for.
+ */
+ assert.equal(input.value,'','the field opens with no automatic label');
  input.value='θ';input.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
  await Promise.resolve();
  /*

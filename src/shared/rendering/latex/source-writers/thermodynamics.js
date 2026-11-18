@@ -20,7 +20,7 @@
  * and it declines an ordinary rectangle, which the Geometry writer owns.
  */
 
-import { num, point, texText, colourName, colourDefinitions } from "./statics-primitives.js";
+import { num, point, texText, colourName, colourDefinitions, fontSizeOption } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import * as pistonCylinder from "../../../../features/workspace/model/thermodynamics/piston-cylinder.js";
 import { tankPaths } from "../../../../features/workspace/model/thermodynamics/tank.js";
@@ -432,7 +432,7 @@ export function thermodynamicsSourceWriter(object, options = {}) {
           ...(path.fill ? [`fill=${path.fill}`] : []),
           ...(path.bold ? ["line width=1.4pt", "line cap=round", "line join=round"] : [])
         ])),
-        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt, align=center, font=\\fontsize{${num(14.4 * (label.fontScale || 1))}}{${num(17.28 * (label.fontScale || 1))}}\\selectfont] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : (label.lines || [label.text]).map(texText).join("\\\\")}};`)
+        ...diagram.labels.map(label => `\\node[anchor=center, text=black, inner sep=0pt, align=center, font=${fontSizeOption(14.4 * (label.fontScale || 1))}] at ${point(label.point.x, label.point.y)} {${!label.plainText && label.latex.startsWith("$") ? label.latex : (label.lines || [label.text]).map(texText).join("\\\\")}};`)
       ].join("\n");
     })()
     : kind === "turbine-compressor" ? withPrelude(object, polyline(turbineCompressorPoints(object.geometry), colourOf(object)))

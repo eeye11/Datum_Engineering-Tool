@@ -1,4 +1,4 @@
-import enggAnnotate from "../../../../features/workspace/model/annotations/annotate-model.js";
+﻿import enggAnnotate from "../../../../features/workspace/model/annotations/annotate-model.js";
 /*
  * ============================================================
  * ANNOTATION SOURCE WRITER
@@ -24,7 +24,7 @@ import enggAnnotate from "../../../../features/workspace/model/annotations/annot
  * resolution and the anchor rules in eight places.
  *
  * TEXT IS LATEX, NOT A PICTURE OF TEXT. Every string goes through the shared
- * escaping (`texText`), so a student's "Ø25" or "50%" compiles. A value that is
+ * escaping (`texText`), so a student's "Ã˜25" or "50%" compiles. A value that is
  * already mathematics (a dimension's "500 mm") is passed through unescaped by
  * its own writer.
  *
@@ -34,12 +34,88 @@ import enggAnnotate from "../../../../features/workspace/model/annotations/annot
  */
 
 import { noteTextStyle } from "../../../typography/note-text-style.js";
-import { num, point, texText } from "./statics-primitives.js";
+import { SECONDARY_FONT_PX } from "../../../typography/canvas-typography.js";
+import {
+  MATH_SYMBOLS,
+  hasMathMarkup,
+} from "../../../typography/math-expression.js";
+
+/*
+ * A MATHEMATICAL TEXT AS TEX.
+ *
+ * The canvas typesets `T_{s,1}` into a base and a script; the SOURCE must say
+ * the same thing in TeX, or the compiled sheet and the editor disagree about
+ * what the label is. This is a pass-through of the notation a student already
+ * writes - `_`, `^`, `{}`, `\\command` - wrapped in `$...$`, which is exactly
+ * what LaTeX expects for inline maths.
+ *
+ * Any character TeX would choke on OUTSIDE math mode (a stray % or &) is
+ * escaped; the notation's own control characters are left alone.
+ */
+/* The combining mark each accent command draws. */
+const ACCENT_MARKS = Object.freeze({
+  dot: "\u0307",
+  ddot: "\u0308",
+  bar: "\u0304",
+  hat: "\u0302",
+  tilde: "\u0303",
+  vec: "\u20D7",
+});
+
+function texMath(text) {
+  /*
+   * THE BACKSLASH IS THE NOTATION, NOT A CHARACTER TO ESCAPE.
+   *
+   * `\varepsilon`, `\dot{Q}` and `\infty` ARE the TeX command the student
+   * wrote, so turning the backslash into `\textbackslash{}` destroyed every
+   * Greek and accented symbol - the compiled sheet showed the command's NAME
+   * instead of the symbol. Only the characters that TeX treats specially
+   * OUTSIDE a command are escaped here.
+   *
+   * ACCENTS ARE RESOLVED TO COMBINING CHARACTERS, THOUGH.
+   *
+   * The compile environment used for the picture does not accept `\dot{Q}`,
+   * `\bar{T}` or `\hat{T}` inside a node: it emits the accent command, its
+   * argument and the script as THREE DISCONNECTED texts at nonsense
+   * coordinates, so a label meant to read QÌ‡ ends up as stray `_`, `Q` and `1`
+   * fragments around the drawing.
+   *
+   * A COMBINING MARK is ordinary text to the compiler and renders exactly where
+   * it should, so `\dot{Q}` is written as `Q\u0307` - the same glyph the canvas
+   * typesets, in a form the picture can compile.
+   */
+  const source = String(text ?? "")
+    /*
+     * THE ACCENT'S ARGUMENT IS A BRACE GROUP OR ONE ATOM.
+     *
+     * `dot{Q}_1` must become `QÌ‡_1`: the mark goes over the Q and the
+     * script stays after it. An earlier version allowed `_` and `}` inside
+     * the argument, so it swallowed `Q}_1` whole - leaving the accent
+     * COMMAND in the source, which the picture's compiler then split into
+     * disconnected texts.
+     */
+    .replace(/\\(ddot|dot|bar|hat|tilde|vec)\s*\{([^{}]*)\}/g, (_w, name, inner) =>
+      inner + ACCENT_MARKS[name],
+    )
+    .replace(
+      /\\(ddot|dot|bar|hat|tilde|vec)\s*(\\[a-zA-Z]+|[^{}\s_^])/g,
+      (_w, name, arg) => arg + ACCENT_MARKS[name],
+    )
+    /* Then the Greek and symbol commands, as their characters. */
+    .replace(/\\([a-zA-Z]+)/g, (whole, name) => MATH_SYMBOLS[name] ?? whole)
+    .replace(/(?<!\\)%/g, "\\%")
+    .replace(/(?<!\\)&/g, "\\&")
+    .replace(/(?<!\\)#/g, "\\#");
+
+  return `$${source}$`;
+}
+import { fontSizeOption, num, point, texText, withExportTransform } from "./statics-primitives.js";
 import { applyObjectComments, ensureObjectId } from "../object-comments.js";
 import { resistorPoints } from "../../../../features/workspace/model/thermodynamics/resistor.js";
 import { fanPaths } from "../../../../features/workspace/model/thermodynamics/fan.js";
 import { workArrowPoints } from "../../../../features/workspace/model/thermodynamics/work-arrow.js";
 import { annotationSubscript } from "../../../../features/workspace/model/annotations/math-label.js";
+import { heatParentAnchor } from "../../../../features/workspace/model/heat-transfer/heat-labels.js";
 import enggTheme from "../../../../components/layout/workspace/theme.js";
 import enggDimensionModel from "../../../../features/workspace/model/dimensions/dimension-model.js";
 import {
@@ -127,9 +203,13 @@ function join(definitions, command) {
 
 /*
  * A segment or polyline through the given points, in the feature's own stroke.
- * `arrow` is a TikZ head token or null.
+ *
+ * `options` is a LIST of TikZ tokens; `arrow` is a head token or null. The
+ * default used to be an OBJECT (`{}`), so a caller that omitted the argument - a
+ * label's leader does - spread it and threw `options is not iterable`. It is an
+ * empty ARRAY now, and an object is still accepted so no caller has to change.
  */
-function pathThrough(points, colour, options = {}, arrow = null) {
+function pathThrough(points, colour, options = [], arrow = null) {
   const usable = (points || []).filter(valid);
 
   if (usable.length < 2) {
@@ -140,7 +220,7 @@ function pathThrough(points, colour, options = {}, arrow = null) {
     .map((at, index) => `${index === 0 ? "" : "-- "}${point(finite(at.x), finite(at.y))}`)
     .join(" ");
 
-  const list = [colour, ...options];
+  const list = [colour, ...(Array.isArray(options) ? options : [])];
 
   if (arrow) {
     list.push(arrow);
@@ -174,7 +254,21 @@ function multiLineNode(at, text, colour, options = [], typography = {}, mathSubs
   const math = lines.length === 1 && annotationSubscript(text, { mathSubscript, mathSymbol, mathSuffix });
   const content = math
     ? `$${math.base}_{${math.subscript}}$${texText(math.suffix)}`
-    : lines.map((line) => typography.underline ? `\\underline{${texText(line)}}` : texText(line)).join(" \\\\ ");
+    : lines
+        .map((line) => {
+          /*
+           * MATHEMATICS GOES IN AS MATHEMATICS.
+           *
+           * A line carrying `_`, `^` or a `\command` is notation, so it is
+           * written between dollar signs rather than escaped into literal text -
+           * otherwise the compiled picture would print the markup the canvas
+           * typesets.
+           */
+          const body = hasMathMarkup(line) ? texMath(line) : texText(line);
+
+          return typography.underline ? `\\underline{${body}}` : body;
+        })
+        .join(" \\\\ ");
 
   return `\\node[${[`text=${colour}`, ...options].join(", ")}] at ${point(at.x, at.y)} {${content}};`;
 }
@@ -222,14 +316,113 @@ function textAtPosition(object) {
   const family = typography.fontFamily === "Courier New" ? "\\ttfamily"
     : typography.fontFamily === "Times New Roman" ? "\\rmfamily" : "\\sffamily";
   const emphasis = `${typography.bold ? "\\bfseries" : ""}${typography.italic ? "\\itshape" : ""}`;
+  /*
+   * THE NOTE'S OWN TURN, FRAME AND PADDING.
+   *
+   * A rotated note states `rotate=` on its node, so the compiled picture turns
+   * about the same anchor the canvas turns it about.
+   *
+   * A background is written ONLY when the student enabled one, and in the same
+   * form the canvas draws: `fill=<colour>` with `inner sep=<padding>`. The
+   * default stays transparent - a white box behind every note would be a change
+   * to the drawing nobody asked for.
+   */
+  const noteOptions = [
+    `anchor=${textAnchor(object.style?.align)}`,
+    `align=${typography.align}`,
+    `font=${fontSizeOption(fontSize, { lineSpacing: note ? typography.lineSpacing : 1.2 })}${note ? family + emphasis : ""}`,
+  ];
+
+  if (note && typography.rotation) {
+    noteOptions.push(`rotate=${num(typography.rotation)}`);
+  }
+
+  if (note && typography.background) {
+    noteOptions.push(`fill=${texColour(typography.backgroundColour)}`);
+    noteOptions.push(`inner sep=${num(typography.padding)}pt`);
+  }
+
   return join(
     colourPrelude([object.style?.stroke]),
-    multiLineNode({ x: finite(at.x) + (note ? typography.indent : 0), y: finite(at.y) }, text, colour, [
-      `anchor=${textAnchor(object.style?.align)}`,
-      `align=${typography.align}`,
-      `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * (note ? typography.lineSpacing : 1.2), 2)}}\\selectfont${note ? family + emphasis : ""}`
-    ], note ? typography : {}, object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
+    multiLineNode({ x: finite(at.x) + (note ? typography.indent : 0), y: finite(at.y) }, text, colour, noteOptions, note ? typography : {}, object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
   );
+}
+
+/*
+ * WHERE A PARENTED LABEL IS WRITTEN.
+ *
+ * The parent's anchor in the document, plus the label's own offset - the SAME
+ * two numbers the canvas uses, read through the Heat Transfer model so the
+ * exported node and the drawn text cannot disagree.
+ *
+ * A label whose parent cannot be found falls back to its stored position: a
+ * missing parent is not a reason to move the words somewhere invented.
+ */
+function heatLabelExportPoint(label) {
+  const stored = {
+    x: finite(label.geometry?.position?.x),
+    y: finite(label.geometry?.position?.y),
+  };
+
+  const parentId = label.metadata?.heatParentId;
+  const offset = label.metadata?.heatLabelOffset;
+
+  if (!parentId || !offset) {
+    return stored;
+  }
+
+  const parent = heatObjectLookup(parentId);
+
+  if (!parent) {
+    return stored;
+  }
+
+  const anchor = heatParentAnchor(parent);
+
+  if (!anchor) {
+    return stored;
+  }
+
+  return {
+    x: anchor.x + finite(offset.x),
+    y: anchor.y + finite(offset.y),
+  };
+}
+
+/*
+ * THE DOCUMENT IS INJECTED THROUGH A LOOKUP - this module may not import it.
+ *
+ * A Heat label stores its place as an OFFSET from its parent's anchor, so the
+ * exported point has to be computed from the parent's CURRENT geometry. The
+ * parent is found through this reader (`setAnnotationObjectLookup`) rather than
+ * by importing the live document, because the source pipeline must not close an
+ * import cycle around the editor state.
+ */
+let heatObjectReader = () => null;
+
+function heatObjectLookup(id) {
+  try {
+    return heatObjectReader(id) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAnnotationObjectLookup(reader) {
+  heatObjectReader = typeof reader === "function" ? reader : () => null;
+}
+
+/* An `#rrggbb` as the `{rgb,255:...}` form TikZ can fill with. */
+function texColour(hex) {
+  const value = /^#([0-9a-f]{6})$/i.exec(String(hex || ""));
+
+  if (!value) {
+    return "white";
+  }
+
+  const [r, g, b] = [0, 2, 4].map((at) => parseInt(value[1].slice(at, at + 2), 16));
+
+  return `{rgb,255:red,${r};green,${g};blue,${b}}`;
 }
 
 /*
@@ -248,19 +441,67 @@ function serializeLabel(object) {
   const definitions = colourPrelude([object.style?.stroke]);
 
 
-  if (valid(geometry.start)) {
+  /*
+   * THE ANCHOR DOT IS DRAWN ONLY WHEN IT MARKS SOMETHING.
+   *
+   * A label's `start` is its anchor - what the text belongs to. For a label
+   * placed on blank canvas that IS a point worth marking. But a label whose
+   * `start` sits exactly under its own text marks nothing at all: the dot is
+   * hidden by the words, and on an object that already draws itself - a Heat
+   * Transfer circuit node, a symbol - it is a SECOND marker for one object. So
+   * a dot is emitted only when the anchor is a real, separate place.
+   *
+   * `metadata.heatParentId` is the decisive case: the label belongs to a parent
+   * that draws its own geometry, so no marker is added for it.
+   */
+  const anchorIsOwnText =
+    valid(geometry.start) &&
+    valid(geometry.position) &&
+    Math.hypot(
+      finite(geometry.position.x) - finite(geometry.start.x),
+      finite(geometry.position.y) - finite(geometry.start.y)
+    ) < 1e-6;
+
+  const belongsToParent = Boolean(object.metadata?.heatParentId);
+
+  if (valid(geometry.start) && !anchorIsOwnText && !belongsToParent) {
     commands.push(
       `\\fill[${colour}] ${point(finite(geometry.start.x), finite(geometry.start.y))} circle[radius=0.35];`
     );
   }
 
-  if (valid(geometry.position)) {
-    if (valid(geometry.start)) {
-      const dx = finite(geometry.position.x) - finite(geometry.start.x);
-      const dy = finite(geometry.position.y) - finite(geometry.start.y);
+  /*
+   * THE TEXT IS WRITTEN WHENEVER THERE IS TEXT.
+   *
+   * This used to be guarded by `geometry.position` - a CACHE of where the label
+   * currently sits - so a label whose cache was one frame stale, or one whose
+   * place is derived from its parent instead, wrote NOTHING at all. The words
+   * are the feature; the coordinate is where they go, and `heatLabelExportPoint`
+   * always knows that. So the guard is on the TEXT.
+   */
+  {
+    /*
+     * NO LEADER FOR A PARENTED LABEL.
+     *
+     * A freely-placed label grows a leader when it is dragged clear of its
+     * anchor, so the reader can see what it names. A Heat Transfer notation is
+     * ALWAYS parented: its offset is a deliberate placement beside its object,
+     * and a line back to it would be furniture the student did not draw - the
+     * requirement says so explicitly.
+     */
+    const leaderAnchor = valid(geometry.position)
+      ? heatLabelExportPoint(object)
+      : null;
+
+    if (valid(geometry.start) && !belongsToParent && leaderAnchor) {
+      const dx = finite(leaderAnchor.x) - finite(geometry.start.x);
+      const dy = finite(leaderAnchor.y) - finite(geometry.start.y);
       const fontSize = fontFor(object.style);
 
-      if (Math.hypot(dx, dy) > 2.5 * fontSize * 0.25) {
+      if (
+        !anchorIsOwnText &&
+        Math.hypot(dx, dy) > 2.5 * fontSize * 0.25
+      ) {
         commands.push(
           pathThrough([geometry.start, geometry.position], colour)
         );
@@ -270,12 +511,44 @@ function serializeLabel(object) {
     const text = String(object.text ?? "");
 
     if (text.trim()) {
+      /*
+       * A PARENTED LABEL IS WRITTEN FROM ITS PARENT'S ANCHOR PLUS ITS OFFSET.
+       *
+       * `geometry.position` is a CACHE - the canvas reconciler keeps it in step
+       * with the parent - and a saved file may predate that. Deriving the point
+       * here, from the parent's CURRENT position and the label's own stored
+       * offset, is what makes the exported node sit beside the object it names
+       * even when the parent has just been moved and the cache is one frame
+       * behind.
+       *
+       * A label with no parent, or with no offset, writes its stored position -
+       * which is then the student's own placement and the only truth there is.
+       */
+      const anchored = heatLabelExportPoint(object);
+
+      /*
+       * THE SIZE IS STATED, FROM THE SHARED TOKENS.
+       *
+       * A label that names its font nothing inherits whatever the document
+       * happens to default to, which differs between TikZ setups - so the same
+       * drawing could come out at two sizes. The node therefore states its size
+       * from the SAME typography the canvas draws it with, as the SECONDARY
+       * role unless the student chose otherwise.
+       */
+      const noteStyle = noteTextStyle(object.style);
+      const labelSize =
+        Number(noteStyle.fontSize) > 0 ? Number(noteStyle.fontSize) : SECONDARY_FONT_PX;
+
       commands.push(
         multiLineNode(
-          { x: finite(geometry.position.x), y: finite(geometry.position.y) },
+          { x: anchored.x, y: anchored.y },
           text,
           colour,
-          [`anchor=${textAnchor(object.style?.align)}`]
+          [
+            `anchor=${textAnchor(object.style?.align)}`,
+            `align=${noteStyle.align}`,
+            `font=${fontSizeOption(labelSize, { lineSpacing: noteStyle.lineSpacing })}`,
+          ]
         )
       );
     }
@@ -367,7 +640,7 @@ function serializePen(object) {
       commands.push(
         multiLineNode({ x: finite(textAt.x), y: finite(textAt.y) }, text, colour, [
           "anchor=center",
-          `font=\\fontsize{${num(fontSize, 2)}}{${num(fontSize * 1.2, 2)}}\\selectfont`
+          `font=${fontSizeOption(fontSize)}`
         ], object.metadata?.mathSubscript, object.metadata?.mathSymbol, object.metadata?.mathSuffix)
       );
     }
@@ -846,6 +1119,14 @@ function dimensionToTikz(object, graphics, colour) {
    * family and weight are the label's own, and the alignment is carried by the
    * anchor, exactly as the canvas draws it.
    */
+  /*
+   * NO LABEL, NO NODE.
+   *
+   * A dimension with no user-provided text emits its witness lines, its
+   * dimension line and its heads - and nothing else. There is no fallback to
+   * the measured distance: the measurement decides the geometry, and the label
+   * is whatever the student typed, or nothing at all.
+   */
   const frame = graphics.textFrame;
 
   const textAt = frame ? { x: frame.x ?? frame.center?.x, y: frame.y ?? frame.center?.y } : null;
@@ -865,11 +1146,17 @@ function dimensionToTikz(object, graphics, colour) {
 
     const family = labelFamily(object?.style);
 
+    /*
+     * THE DECLARATION IS THE SHARED, UNIT-BEARING ONE.
+     *
+     * `fontSizeOption` writes `fontsize{11pt}{13.2pt}\selectfont`, which is the
+     * same physical size and compiles everywhere. The unit-less form this used
+     * to write is what left the label in the source and out of the picture.
+     */
     push(
-      `\\node[anchor=${anchor}, fill=white, inner sep=1.5pt, font=${family}\\fontsize{${num(sizePt, 2)}}{${num(
-        sizePt * 1.2,
-        2,
-      )}}\\selectfont${weight}, text=${colour}${rotation}] at ${point(
+      `\\node[anchor=${anchor}, fill=white, inner sep=1.5pt, font=${family}${fontSizeOption(
+        sizePt,
+      )}${weight}, text=${colour}${rotation}] at ${point(
         finite(textAt.x),
         finite(textAt.y),
       )} {${texText(graphics.text)}};`,
@@ -918,7 +1205,22 @@ function serializeDimension(object, options) {
 
   const colour = strokeOf(object);
 
-  return dimensionToTikz(object, graphics, colour);
+  /*
+   * THE DIMENSION IS WRITTEN INSIDE THE DRAWING'S EXPORT TRANSFORM.
+   *
+   * `point()` maps a MODEL coordinate through the transform in effect, and the
+   * dimension's graphics are model coordinates - the same ones the outline
+   * beside it is written from. Without the transform in effect here, a
+   * dimension's coordinates were written RAW while the rectangle it measures
+   * was written SCALED, which is why the dimension lines landed nowhere near
+   * the edge they measured.
+   *
+   * The transform is the drawing's own, computed once from every object, so a
+   * dimension and the geometry it measures share one coordinate system.
+   */
+  return withExportTransform(options.transform || null, () =>
+    dimensionToTikz(object, graphics, colour),
+  );
 }
 
 /*

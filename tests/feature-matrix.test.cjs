@@ -151,9 +151,18 @@ const measureEverything = (object) => {
       problems.push(`${where}: did not stay a dimension`);
     }
 
+    /*
+     * WHAT IS CHECKED IS THE MEASUREMENT, NOT THE LABEL.
+     *
+     * A newly created dimension has NO label - the text it prints is the
+     * student's, and is empty until they type one. The number this matrix is
+     * about is the measurement the geometry states, which is
+     * `describeMeasurement`. Checking the label would report every dimension
+     * as unmeasurable simply because nobody had written on it yet.
+     */
     let text;
     try {
-      text = dimensionModel.formatMeasurement(dimension, scene(object));
+      text = dimensionModel.describeMeasurement(dimension, scene(object));
     } catch (error) {
       problems.push(`${where}: formatting threw - ${error.message}`);
       continue;
