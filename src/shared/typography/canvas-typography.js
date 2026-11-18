@@ -386,7 +386,16 @@ export function setTextTransform(node, at, zoom = 1, transform = "") {
   const value = textTransform(at, zoom, transform);
 
   if (!value) {
-    node.removeAttribute("transform");
+    /*
+     * A NODE WITHOUT `removeAttribute` IS A STUB, NOT A BROKEN TEXT FIELD. The
+     * canvas painters are exercised with plain objects in a few tests; asking
+     * one for an attribute it does not implement would turn "no transform" into
+     * a thrown render.
+     */
+    if (typeof node?.removeAttribute === "function") {
+      node.removeAttribute("transform");
+    }
+
     return null;
   }
 

@@ -962,9 +962,19 @@ function openLabelFlow(options, anchor) {
    * caller that redraws the sheet from the input (a note's text is the object's
    * own `text`) needs to be told. This is the one place that callback is wired,
    * so every label-shaped field reports its typing the same way.
+   *
+   * AND ONLY WHEN IT HAS CHANGED. The field opens holding the object's committed
+   * text, and a no-op `input` event still fires - reporting it would mark a
+   * never-written object as written and leave an abandoned one on the sheet.
    */
   if (typeof options.onInput === "function" && input) {
-    input.addEventListener("input", () => options.onInput(input.value));
+    const original = String(options.text ?? "");
+
+    input.addEventListener("input", () => {
+      if (String(input.value) !== original) {
+        options.onInput(input.value);
+      }
+    });
   }
 
   /*
@@ -1018,7 +1028,7 @@ function openLabelFlow(options, anchor) {
     close();
 
     /*
-     * A CANCELLED, NEVER-WRITTEN TEXT OBJECT IS REMOVED.
+     * A CANCELLED TEXT OBJECT WITH NOTHING IN IT IS REMOVED.
      *
      * A tool creates its annotation EMPTY and commits it before the box opens,
      * so Escape on an untouched field would leave an invisible object on the
@@ -1027,6 +1037,11 @@ function openLabelFlow(options, anchor) {
      * handler takes the object away - which is the behaviour a student expects
      * from "not here after all". An entry that already HELD text never removes
      * anything: Escape restores what was there.
+     *
+     * EDITING THAT ENDS UP BACK AT NOTHING COUNTS AS NOTHING. A student who typed
+     * a word into a new note and then deleted it has still written no note, and
+     * the live text is the model's own - so emptiness is the test, not whether a
+     * keystroke ever happened.
      */
     options.onCancel?.({
       startedEmpty: options.startedEmpty === true && !String(text).trim(),
@@ -1273,6 +1288,31 @@ function openInline(options, anchor) {
   input?.addEventListener("input", updatePreview);
 
   /*
+   * AND THE CALLER IS TOLD AS THE TEXT CHANGES.
+   *
+   * A note's text IS the object's own `text`, so a caller that redraws the sheet
+   * from the field (and writes the source from the model) has to hear about every
+   * keystroke - not only about the commit. Without this the words appeared in
+   * the box and nowhere else until Enter, which is the "typing does not reach the
+   * drawing" failure.
+   *
+   * A VALUE THAT MATCHES WHAT WAS ALREADY THERE IS NOT A CHANGE. The field is
+   * opened with the object's committed text in it, so reporting on every `input`
+   * included the first event after a no-op edit - which marked a never-written
+   * object as written and stopped Escape from removing it as an abandoned
+   * orphan.
+   */
+  if (typeof options.onInput === "function" && input) {
+    const original = String(options.text ?? "");
+
+    input.addEventListener("input", () => {
+      if (String(input.value) !== original) {
+        options.onInput(input.value);
+      }
+    });
+  }
+
+  /*
    * NO FORMATTING UI OVER THE CANVAS, EVER.
    *
    * A floating strip beside the caret looks helpful and is actively in the
@@ -1293,9 +1333,23 @@ function openInline(options, anchor) {
   };
 
   const cancel = () => {
+    const text = input ? input.value : "";
+
     close();
 
-    options.onCancel?.();
+    /*
+     * A CANCEL REPORTS WHAT WAS IN THE FIELD, the same way the label field does.
+     *
+     * The caller has to know whether anything was actually written: a note that
+     * was placed and abandoned has to go, and the only evidence is the text the
+     * student leaves behind. Calling back with no argument lost that - the note
+     * tool's own handler then saw `startedEmpty` undefined and left an empty
+     * note on the sheet, invisible and unselectable.
+     */
+    options.onCancel?.({
+      startedEmpty: options.startedEmpty === true && !String(text).trim(),
+      text,
+    });
   };
 
   attachKeyHandling(host, { apply, cancel });

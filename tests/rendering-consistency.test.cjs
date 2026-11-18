@@ -119,16 +119,32 @@ test("a support symbol is the drawing's size, not the window's", () => {
 
   assert.ok(body, "the support symbol must exist");
 
+  /*
+   * A SUPPORT'S SIZES GO THROUGH THE ONE CONVERSION, `worldLength`, so they are
+   * the drawing's size rather than a fixed number of screen pixels. The test used
+   * to look for a literal `* zoom`, which is the same idea written per painter -
+   * and six painters writing it six ways is exactly what was fixed.
+   */
   assert.match(
     body,
-    /const size = [^;]*\*\s*zoom/,
+    /const size = worldLength\(9\)/,
     "a support sized in bare pixels stays the same size while its beam grows",
   );
 
   assert.match(
     body,
-    /const ground = [^;]*\*\s*zoom/,
+    /const ground = worldLength\(26\)/,
     "the ground line is the drawing's too",
+  );
+
+  /*
+   * AND NOTHING IN THE SYMBOL RE-DIVIDES BY THE ZOOM. A `/ zoom` here is the
+   * old per-painter correction, which held the pen at a screen width.
+   */
+  assert.doesNotMatch(
+    body.replace(/\/\*[\s\S]*?\*\//g, ""),
+    /\/\s*zoom/,
+    "a symbol's pen is stated, not divided back through the camera",
   );
 });
 
@@ -139,8 +155,8 @@ test("a connection symbol scales with the drawing", () => {
 
   assert.ok(body);
 
-  assert.match(body, /8 \* zoom/, "the joint's block is a world size");
-  assert.match(body, /4 \* zoom/, "the joint's circle is a world size");
+  assert.match(body, /worldLength\(8\)/, "the joint's block is a world size");
+  assert.match(body, /worldLength\(4\)/, "the joint's circle is a world size");
 });
 
 test("a marker, a node and an arrowhead are world sizes", () => {

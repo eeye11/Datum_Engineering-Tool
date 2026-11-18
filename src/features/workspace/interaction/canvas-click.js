@@ -961,6 +961,19 @@ export function openNoteEditorFor(object, atPoint = null) {
         enggNoteEditor?.open({
             canvasText,
             onInput: canvasText ? text => {
+                /*
+                 * THE LIVE TEXT REACHES THE MODEL ONLY WHEN IT HAS CHANGED.
+                 *
+                 * The field is opened holding the object's committed text, and a
+                 * no-op `input` event is still an event - so writing it through
+                 * unconditionally marked a never-written note as written. Escape
+                 * on an abandoned one then had nothing to tell it apart from a
+                 * restored edit, and the orphan stayed on the sheet.
+                 */
+                if (String(text) === String(originalText)) {
+                    return;
+                }
+
                 const current = currentObject();
                 if (current) current.text = text;
                 renderCurrentDrawing();
@@ -987,6 +1000,17 @@ export function openNoteEditorFor(object, atPoint = null) {
             cameraSignal,
 
             /*
+             * WHETHER THIS ENTRY STARTED WITH NO TEXT.
+             *
+             * A note is placed EMPTY and its box opens at once, so cancelling
+             * means "not here after all" and the node goes. A note that already
+             * held words was opened to EDIT it, and cancelling restores them.
+             * The editor cannot tell the two apart - only this caller knows -
+             * so the fact is passed in.
+             */
+            startedEmpty: originalText.length === 0,
+
+            /*
              * WRITING THE TEXT DOES NOT END THE TOOL.
              *
              * A note, a label or a callout is a creation tool: placing one and
@@ -1009,24 +1033,38 @@ export function openNoteEditorFor(object, atPoint = null) {
                 renderCurrentDrawing();
             },
 
-            onCancel: ({ startedEmpty } = {}) => {
+            onCancel: ({ startedEmpty, text } = {}) => {
                 const current = currentObject();
 
                 /*
-                 * A NEW, NEVER-WRITTEN NOTE IS REMOVED ON CANCEL. It was
-                 * created empty with its box open, so cancelling means "not
-                 * here after all" - leaving an empty node behind would be an
-                 * invisible object the student has to hunt for.
+                 * THE MODEL GOES BACK TO WHAT WAS THERE BEFORE THE EDIT FIRST.
+                 *
+                 * The words are mirrored into `text` as they are typed, so at
+                 * this moment the object holds a value the cancel is about to
+                 * discard. Restoring it before anything is decided is what makes
+                 * "is there anything written?" a question about the committed
+                 * text rather than about a keystroke in flight.
                  */
-                if (current && startedEmpty && !String(current.text || "").length) {
+                if (current) {
+                    current.text = originalText;
+                }
+
+                /*
+                 * A NEW, NEVER-WRITTEN NOTE IS REMOVED ON CANCEL.
+                 *
+                 * It was created empty with its box open, so cancelling means
+                 * "not here after all" - leaving an empty node behind would be
+                 * an invisible object the student has to hunt for. `startedEmpty`
+                 * says the node began with no text; the rest says the student
+                 * typed none before giving up.
+                 */
+                if (current && startedEmpty && !String(text ?? "").trim()) {
                     const previous = enggDrawingState.snapshotDrawing(drawingState);
                     drawingState.objects = drawingState.objects.filter(
                         (candidate) => candidate.id !== current.id,
                     );
                     enggDrawingState.commitDrawingChange(drawingState, previous);
                     enggDrawingState.clearSelection?.(drawingState);
-                } else if (current && canvasText) {
-                    current.text = originalText;
                 }
 
                 endTextEntry();

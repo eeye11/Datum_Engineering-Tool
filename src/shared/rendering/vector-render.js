@@ -7,7 +7,7 @@
 import enggLoadProfile from "../../features/workspace/model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../../features/workspace/model/analysis/rotational-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
-import { createSvgElement, paintColour, scaledStrokeWidth, worldLength } from "./svg-primitives.js";
+import { activeZoom, createSvgElement, paintColour, scaledStrokeWidth, worldLength } from "./svg-primitives.js";
 import { arrowHeadSize } from "./dimension-render.js";
 
 
