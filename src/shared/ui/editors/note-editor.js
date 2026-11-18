@@ -328,56 +328,68 @@ function visibleRight() {
   return viewport;
 }
 
-function placePrompt(host, rect) {
+function placePrompt(host, rect, box = null) {
+  /*
+   * THE SIZE THE BOX WILL BE, NOT THE SIZE IT CURRENTLY REPORTS.
+   *
+   * A field that has just been created measures zero in some environments (an
+   * unlaid-out page, a headless document), so the size comes from the box the
+   * editor has just defined. That definition is also what the field is drawn at,
+   * which is why the placement and the drawn box cannot disagree.
+   */
   const size = {
-    width: host.offsetWidth || 240,
-    height: host.offsetHeight || 44,
+    width: box?.width || host.offsetWidth || 240,
+    height: box?.height || host.offsetHeight || 44,
   };
 
-  const margin = 6;
-  const width = Number(globalThis.window?.innerWidth) || size.width + margin * 2;
-  const height = Number(globalThis.window?.innerHeight) || size.height + margin * 2;
+  /*
+   * THE LIMITS, IN THE FRAME THE FIELD IS IN.
+   *
+   * A field mounted ON the canvas is positioned in the canvas's own box, so both
+   * its anchor and the edges it must stay inside are the canvas's. A field on the
+   * page is positioned in the window's, and there the inspector's edge is also a
+   * limit - a prompt sliding underneath the panel is off screen in every way that
+   * matters. Reading one frame and writing the other is how a prompt ended up off
+   * the sheet, so the frame is decided once here.
+   */
+  const onSheet = host.dataset.mountedOn === "canvas";
 
-  const right = Math.min(visibleRight(), width) - margin;
-  const bottom = Math.min(height, canvasBottom()) - margin;
+  const frame = onSheet
+    ? canvasSize()
+    : { width: Number(globalThis.window?.innerWidth) || 0, height: Number(globalThis.window?.innerHeight) || 0 };
+
+  const margin = 6;
+  const width = frame.width || size.width + margin * 2;
+  const height = frame.height || size.height + margin * 2;
+
+  const right = (onSheet ? width : Math.min(visibleRight(), width)) - margin;
+  const bottom = (onSheet ? height : Math.min(height, canvasBottom())) - margin;
 
   const nodeX = Number(rect.left) || 0;
   const nodeY = Number(rect.top) || 0;
 
   /*
-   * BELOW-RIGHT WHEN IT FITS; OTHERWISE ABOVE, THEN PULLED INTO THE WINDOW.
+   * THE BOX IS CENTRED ON THE INSERTION POINT.
    *
-   * "FITS" IS MEASURED AGAINST THE CANVAS'S BOTTOM TOO. A prompt hung below a
-   * node near the sheet's edge is off the drawing - it looks like the click did
-   * nothing - even though the window continues. So the field goes above the node
-   * as soon as the space below it is not on the sheet.
+   * The field's dimensions come from the drawing (`TEXT_ENTRY_BOX`), and it grows
+   * from the text's own point in both directions - so the point is the box's
+   * CENTRE, not a corner it hangs off. That is what keeps the words where they
+   * will be committed while the box widens as they are typed: the box opens
+   * outwards, the caret does not move.
+   *
+   * A box that would leave the sheet is then pulled back onto it, which is the
+   * only movement allowed - and it is measured against the sheet's own bottom
+   * edge, so the field is always over the drawing it belongs to.
    */
-  /*
-   * THE HEIGHT THE FIELD WILL OCCUPY, not the one it currently reports. A
-   * field that has just been created measures zero in some environments (an
-   * unlaid-out page, a headless document), which made every prompt believe it
-   * fitted below its node - so a node at the bottom of the sheet got a field
-   * under it. One line of type is the honest floor.
-   */
-  const heightNeeded = Math.max(size.height, 44);
-
-  let top =
-    nodeY + PROMPT_GAP + heightNeeded <= bottom
-      ? nodeY + PROMPT_GAP
-      : nodeY - PROMPT_GAP - heightNeeded;
-
-  let left = nodeX + PROMPT_GAP;
-
-  if (left + size.width > right) {
-    left = Math.min(nodeX - PROMPT_GAP - size.width, right - size.width);
-  }
+  let top = nodeY - size.height / 2;
+  let left = nodeX - size.width / 2;
 
   left = Math.max(margin, Math.min(left, right - size.width));
   top = Math.max(margin, Math.min(top, bottom - size.height));
 
   host.style.left = `${Math.round(left)}px`;
   host.style.top = `${Math.round(top)}px`;
-  host.dataset.side = top < nodeY ? "above" : "below";
+  host.dataset.side = top + size.height / 2 < nodeY ? "above" : "below";
 }
 
 /*
@@ -1154,7 +1166,24 @@ function openInline(options, anchor) {
             aria-hidden="true">${multiline ? "Ctrl+Enter" : "Enter"} &middot; Esc</span>
     `;
 
-  document.body.appendChild(host);
+  /*
+   * THE SAME MOUNT AS EVERY OTHER TEXT FIELD.
+   *
+   * A note is entered ON the sheet, exactly as a label is: its box is sized from
+   * the drawing, so it belongs in the drawing's frame. Mounting it on the page
+   * instead would put it a canvas's offset away from its own anchor - the defect
+   * this shared field exists to prevent.
+   */
+  const canvasHost = enggInlineEntry.canvasElement();
+
+  if (canvasHost) {
+    host.classList.add("drawing-inline-entry-on-canvas");
+    host.dataset.mountedOn = "canvas";
+    canvasHost.appendChild(host);
+  } else {
+    host.dataset.mountedOn = "body";
+    document.body.appendChild(host);
+  }
 
   openDialog = host;
 
@@ -1178,6 +1207,8 @@ function openInline(options, anchor) {
 
   void drawingState;
 
+  const metrics = textEntryMetricsAt(pixelsPerUnit(), options.text ?? "");
+
   const preview = options.object ? createPreview(options.object) : null;
 
   if (preview && options.preview !== false) {
@@ -1192,7 +1223,21 @@ function openInline(options, anchor) {
       return;
     }
 
-    placePrompt(host, rect);
+    /*
+     * THE ANCHOR IS CONVERTED INTO THE FIELD'S OWN FRAME FIRST.
+     *
+     * `placePrompt` positions the box in whichever frame it was mounted in, so
+     * it must be given the point in THAT frame. A window anchor has the sheet's
+     * origin taken off it; one that is already local is used as it stands. This
+     * is the same conversion the label field makes, so both prompts are placed
+     * by one rule.
+     */
+    const local = localAnchorFor(rect, options);
+
+    placePrompt(host, { ...rect, left: local.x, top: local.y }, {
+      width: metrics.widthPx,
+      height: metrics.heightPx,
+    });
 
     preview?.place(rect);
   };
@@ -1205,8 +1250,6 @@ function openInline(options, anchor) {
    * for this prompt too, so the note tool and the label tool cannot open two
    * differently sized boxes for the same kind of text.
    */
-  const metrics = textEntryMetricsAt(pixelsPerUnit(), options.text ?? "");
-
   host.classList.add("drawing-inline-entry-boxed");
   host.style.setProperty("--entry-box-width", `${metrics.widthPx}px`);
   host.style.setProperty("--entry-box-height", `${metrics.heightPx}px`);
@@ -1423,16 +1466,29 @@ function windowSize() {
   };
 }
 
-/* The canvas's position in the window, or zero when it has none yet. */
+/*
+ * The canvas's position in the window, or zero when it has none yet.
+ *
+ * `getBoundingClientRect()` is the BORDER box, but the field is positioned
+ * against the canvas's PADDING box (`position: relative` puts absolutely
+ * positioned children inside the border). The canvas carries a one-pixel rule,
+ * so the two differ by that much - and a box placed from the border box would
+ * sit a border's width off its own caret. The client offsets are the padding
+ * box's, which is the frame the field is really in.
+ */
 function canvasOrigin() {
   const canvas = enggInlineEntry.canvasElement();
   const rect = canvas && typeof canvas.getBoundingClientRect === "function"
     ? canvas.getBoundingClientRect()
     : null;
 
+  if (!rect) {
+    return { left: 0, top: 0 };
+  }
+
   return {
-    left: Number(rect?.left) || 0,
-    top: Number(rect?.top) || 0,
+    left: (Number(rect.left) || 0) + (Number(canvas.clientLeft) || 0),
+    top: (Number(rect.top) || 0) + (Number(canvas.clientTop) || 0),
   };
 }
 
@@ -1482,29 +1538,66 @@ function canvasCentreAnchor() {
 function localAnchorFor(rect, options = {}) {
   const view = { camera: options.camera };
 
+  /*
+   * A MARKED RECT IS ALREADY IN THE SHEET'S FRAME - the projection that made it
+   * said so - and is used exactly as it is.
+   */
   if (rect.frame === "canvas" || rect.centre === true) {
     return { x: Number(rect.left) || 0, y: Number(rect.top) || 0 };
   }
 
-  if (options.object) {
-    const projected = enggInlineEntry.clientPointForObject(options.object, view);
+  /*
+   * AN OBJECT'S OWN ANCHOR IS RE-PROJECTED, from the object's model point
+   * through the caller's camera - but ONLY when the caller did not already say
+   * where. A caller that passed a point (a value hung beside an arrowhead, a
+   * magnitude where the student clicked) is describing the place it wants, and
+   * overruling it with the object's centre would move the prompt away from what
+   * it is naming.
+   */
+  if (options.object && options.anchorPoint !== true) {
+    /*
+     * `left`/`x` both name the anchor's horizontal position, and which one a
+     * caller fills in depends on how the rect was built - an anchor from
+     * `anchorRectAt` carries `left`, a pointer's carries `x`. Either is a stated
+     * place; only a rect with NEITHER is a caller asking the editor to work the
+     * position out from the object.
+     */
+    const given =
+      (rect.left !== undefined && rect.left !== null && Number.isFinite(Number(rect.left))) ||
+      (rect.x !== undefined && rect.x !== null && Number.isFinite(Number(rect.x)));
 
-    if (projected) {
-      const bounds = enggInlineEntry.canvasBounds();
+    if (!given) {
+      const projected = enggInlineEntry.clientPointForObject(options.object, view);
 
-      return {
-        x: projected.x - (Number(bounds?.rect?.left) || 0),
-        y: projected.y - (Number(bounds?.rect?.top) || 0),
-      };
+      if (projected) {
+        const bounds = enggInlineEntry.canvasBounds();
+
+        return {
+          x: projected.x - (Number(bounds?.rect?.left) || 0),
+          y: projected.y - (Number(bounds?.rect?.top) || 0),
+        };
+      }
     }
   }
 
-  const origin = canvasOrigin();
+  /*
+   * ANYTHING ELSE IS A WINDOW POINT, and the canvas's origin is taken off it to
+   * make it local. This is the one case that is not already in the sheet's
+   * frame - and treating it as though it were is what moved the box by the
+   * canvas's own offset.
+   */
+  const bounds = enggInlineEntry.canvasBounds();
 
-  return {
-    x: (Number(rect.left ?? rect.x) || 0) - origin.left,
-    y: (Number(rect.top ?? rect.y) || 0) - origin.top,
+  const localFromWindow = {
+    x:
+      (Number(rect.left ?? rect.x) || 0) -
+      (Number(bounds?.rect?.left) || 0),
+    y:
+      (Number(rect.top ?? rect.y) || 0) -
+      (Number(bounds?.rect?.top) || 0),
   };
+
+  return localFromWindow;
 }
 
 function escapeHtml(value) {

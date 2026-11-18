@@ -24,7 +24,7 @@ import { applyStyle, createSvgElement, scaledStrokeWidth, worldLength, zoomedFon
  * what makes the symbol's outline and its shape agree at every zoom.
  */
 function penWidth(lineWidth) {
-    return worldLength(scaledStrokeWidth(lineWidth));
+    return scaledStrokeWidth(lineWidth);
 }
 
 

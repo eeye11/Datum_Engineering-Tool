@@ -14,6 +14,7 @@ import {
     normaliseFontSize,
     setTextTransform
 } from "../typography/canvas-typography.js";
+import { BASE_PIXELS_PER_UNIT } from "../typography/canvas-typography.js";
 
 
     const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
@@ -597,6 +598,24 @@ import {
      * hairline visible as the drawing shrinks, exactly as the note above says,
      * without it becoming a frame around a zoomed-out sheet.
      */
+    /*
+     * A PEN KEEPS ITS STATED WEIGHT ON THE SHEET, AT EVERY MAGNIFICATION.
+     *
+     * `STROKE_SCALE` converts the model's line weight into the drawing's own
+     * pixels - 0.5 mm becomes 1.2 of them - and that number is the weight the
+     * source states and the compiled picture draws. A stroke is read in the
+     * OVERLAY's pixels, which the camera then paints `zoom` times over, so the
+     * zoom is DIVIDED out: the painted width is then the stated weight at 25%,
+     * at 100% and at 400%, exactly as the Features panel says.
+     *
+     * WITHOUT THE DIVISION a line thickened with the camera - six times its
+     * weight at 400% - so a drawing's pens no longer matched the figure it
+     * compiles to, and the same beam looked like a different line at every zoom.
+     *
+     * THE FLOOR IS A WORLD FLOOR. `STROKE_MIN` is the smallest painted width, so
+     * a hairline stays visible when the drawing is zoomed far out, without the
+     * floor itself becoming a frame around a zoomed-out sheet.
+     */
     function scaledStrokeWidth(lineWidth) {
         const width = Number.isFinite(lineWidth)
             ? lineWidth
@@ -615,6 +634,10 @@ import {
      * this cannot describe a zoom other than the one on screen - and because
      * every painter asks HERE, no painter can apply the conversion twice or
      * forget it.
+     *
+     * WHAT IT IS FOR, EXACTLY: a WORLD length - a symbol's reach, a radius, a
+     * dash - becoming overlay pixels. NOT for a stroke, which
+     * `scaledStrokeWidth` already states in the drawing's own pixels.
      */
     function worldLength(units) {
         const length = Number(units);
@@ -624,6 +647,24 @@ import {
         }
 
         return length * (Number(activeZoom) > 0 ? Number(activeZoom) : 1);
+    }
+
+    /*
+     * THE CAMERA'S SCALE, IN OVERLAY PIXELS PER DRAWING UNIT.
+     *
+     * One drawing unit is ONE OF THESE at the current zoom, which is what
+     * `engineeringToScreen` multiplies by - so a world size converts with THIS
+     * number, not with the bare zoom. Using the zoom alone made every converted
+     * length 2.4 times out at 100% and, worse, made a symbol's size disagree with
+     * the scale its own geometry had been projected through.
+     *
+     * `activeZoom` is the camera the pass was drawn with, so this cannot describe
+     * a view other than the one on screen.
+     */
+    function cameraScale() {
+        const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
+
+        return BASE_PIXELS_PER_UNIT * zoom;
     }
 
     /*
@@ -794,6 +835,7 @@ export {
     STROKE_MIN,
     scaledStrokeWidth,
     worldLength,
+    cameraScale,
     dashArrayFor,
     applyStyle,
     setActiveZoom,

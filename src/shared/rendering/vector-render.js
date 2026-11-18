@@ -7,7 +7,7 @@
 import enggLoadProfile from "../../features/workspace/model/analysis/load-profile.js";
 import enggDrawingRotationalArrow from "../../features/workspace/model/analysis/rotational-arrow.js";
 import enggTheme from "../../components/layout/workspace/theme.js";
-import { createSvgElement, paintColour, scaledStrokeWidth } from "./svg-primitives.js";
+import { createSvgElement, paintColour, scaledStrokeWidth, worldLength } from "./svg-primitives.js";
 import { arrowHeadSize } from "./dimension-render.js";
 
 
@@ -186,19 +186,29 @@ import { arrowHeadSize } from "./dimension-render.js";
         }
 
         /*
-         * The head is sized from the line weight like every other
-         * arrowhead on the sheet, so a thicker analysis line gets a
-         * thicker head rather than the same small triangle that reads
-         * as a mistake.
+         * The head is sized from the arrow's own stated size, falling back to the
+         * line weight, so a thicker analysis line gets a thicker head rather than
+         * the same small triangle that reads as a mistake.
+         *
+         * `style.arrowheadSize` IS THE FEATURE'S OWN, and it used to be ignored
+         * here: every force and every vector was drawn with the DIMENSION head
+         * size, derived from the pen, so the size a student set in Features had
+         * no effect on the arrow at all. It is a WORLD size - how big the head is
+         * on the drawing - and `arrowHeadSize` converts a pen weight, so the
+         * two are asked in the order a caller would expect.
          */
+        const stated = Number(style?.arrowheadSize);
+
+        const headLength = Number.isFinite(stated) && stated > 0
+            ? worldLength(stated)
+            : arrowHeadSize(Number(style.lineWidth) || 0.5);
+
         appendArrowHead(
             svg,
             head,
             Math.atan2(dy, dx),
             stroke,
-            arrowHeadSize(
-                Number(style.lineWidth) || 0.5
-            )
+            headLength
         );
     }
 
@@ -731,11 +741,33 @@ import { arrowHeadSize } from "./dimension-render.js";
         const stroke =
             paintColour(style.stroke || enggTheme.defaultLineColour());
 
+        /*
+         * THE RADIUS IS A SCREEN SIZE, CONVERTED BACK INTO THE WORLD.
+         *
+         * `arcRadius` is stored in SCREEN pixels - it is the size the student
+         * chose for the symbol, and `arcFor` reads it as pixels around a centre
+         * that has already been projected. Drawn raw, the ring was therefore the
+         * same number of pixels at every magnification: correct at 100%, a
+         * hairline ring inside a huge member at 400%, and a ring swallowing a
+         * small one at 25%.
+         *
+         * Converting it into the drawing's own units and then back through the
+         * camera is what makes the symbol keep its size RELATIVE to everything
+         * else on the sheet - the same rule a support's triangle and an
+         * arrowhead follow, so the whole drawing stays in proportion.
+         */
+        const screenRadius =
+            Number(arcRadius) > 0 ? Number(arcRadius) : rotational.DEFAULT_ARC_RADIUS_PX;
+
+        const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
+
+        const radius = worldLength(screenRadius / zoom);
+
         const arc =
             rotational.arcFor(
                 center,
                 clockwise,
-                arcRadius
+                radius
             );
 
         /*
@@ -765,6 +797,10 @@ import { arrowHeadSize } from "./dimension-render.js";
          * TANGENT - so it lies along the curve instead of pointing
          * inward at the centre, which is the difference between a
          * moment and a force arrow.
+         *
+         * `arrowHeadSize` answers in OVERLAY pixels already - it has the
+         * camera's scale in it - so the factor below is the moment's own
+         * proportion and not a second conversion.
          */
         const lineWidth =
             Number(style.lineWidth) || 0.5;

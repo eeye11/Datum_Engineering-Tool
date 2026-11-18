@@ -310,18 +310,25 @@ console.log("-----------------------------------------------------");
   const localCentreY = canvasBox.height / 2;
 
   /*
-   * THE BOX IS CENTRED ON THE INSERTION POINT.
+   * THE BOX IS CENTRED ON THE INSERTION POINT, WITHIN THE SHEET.
    *
    * It used to open below-and-right of the node, nudged clear of it. The box is
    * now the drawing's own size and grows from the text's point in both
    * directions (see `TEXT_ENTRY_BOX`), so its centre - not its top-left corner -
-   * is the node. That is what keeps the words where they will be committed while
-   * the box widens as they are typed.
+   * is the node. The one exception is a box that would leave the sheet: it is
+   * pulled back onto it, which moves its centre and is what keeps it over the
+   * drawing rather than hanging off the edge.
    */
   const boxWidth = Number.parseFloat(prompt.style.getPropertyValue("--entry-box-width"));
   const boxHeight = Number.parseFloat(prompt.style.getPropertyValue("--entry-box-height"));
   const paddingX = Number.parseFloat(prompt.style.getPropertyValue("--entry-padding-x"));
 
+  /*
+   * THE BOX IS CENTRED ON THE NODE, AND THE NODE IS THE CANVAS CENTRE HERE.
+   *
+   * A note at the drawing's origin projects to the canvas's centre, and the box
+   * grows from that point in both directions - so its own centre is that point.
+   */
   check(
     "the box is centred on the node (the canvas centre here), not at a screen corner",
     Math.abs(left + boxWidth / 2 - localCentreX) < 1 &&
@@ -335,12 +342,14 @@ console.log("-----------------------------------------------------");
    * scaled through the camera, so they are readable here whatever CSS says.
    */
   /*
-   * PT TO DRAWING UNITS: one drawing unit is a millimetre of paper, so a
-   * length in points is `pt / (72.27 / 25.4)` units, and the overlay paints a
-   * unit at `BASE` pixels at 100%.
+   * PT TO DRAWING UNITS: one drawing unit is a millimetre of paper, which is
+   * `72.27 / 25.4` points, so a length in points is `pt / POINTS_PER_MM` units -
+   * and the overlay paints a unit at `BASE` pixels at 100%. Dividing by the whole
+   * of that (not multiplying back through it) is what reads a drawn size in
+   * points.
    */
-  const PT_PER_UNIT = 72.27 / 25.4;
-  const at100 = (px) => Math.round((px / (BASE * PT_PER_UNIT)) * 10) / 10;
+  const POINTS_PER_MM = 72.27 / 25.4;
+  const at100 = (px) => Math.round((px / BASE) * POINTS_PER_MM * 100) / 100;
 
   check(
     "the box is the defined 200 x 36 pt, with 8 pt of padding",

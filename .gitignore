@@ -61,5 +61,5 @@ tests/scratch/
 golden-now.json
 golden-v2.json
 gs-*.json
-support
+/support
 

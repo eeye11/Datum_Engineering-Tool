@@ -378,7 +378,7 @@ console.log("\n  and the RENDERER draws the hatch behind the wall\n");
 
   check(
     "and every hatch stroke runs AWAY from the body, not across it",
-    /at\(0, offset\)[\s\S]{0,120}at\(9, offset \+ 5\)/.test(source),
+    /at\(0, offset\)[\s\S]{0,120}at\(worldLength\(9\), offset \+ worldLength\(5\)\)/.test(source),
     "a stroke starting off the wall would cross the wall instead of standing behind it",
   );
 
