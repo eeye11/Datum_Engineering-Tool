@@ -487,15 +487,19 @@ function pathSegments(context, matrix, d) {
     return parts;
 }
 
-/* The text of a <text>, one entry per <tspan> line (or the whole text). */
+/* Positioned spans start lines; other spans are inline parts of the text. */
 function textLines(element) {
-    const spans = [...element.children].filter(c => c.tagName.toLowerCase() === "tspan");
+    const lines = [""];
 
-    if (!spans.length) {
-        return [element.textContent];
+    for (const child of element.childNodes) {
+        if (child.nodeType === 1 && child.tagName.toLowerCase() === "tspan" && child.hasAttribute("x") && lines[lines.length - 1]) {
+            lines.push("");
+        }
+
+        lines[lines.length - 1] += child.textContent;
     }
 
-    return spans.map(span => span.textContent);
+    return lines;
 }
 
 const ANCHORS = {
