@@ -243,7 +243,7 @@ test("the Features tab has exactly Object, Appearance and Transform, in that ord
   );
 });
 
-test("the Object section holds Name, Visibility and Fix", () => {
+test("the Object section holds Name, Label, Fix and Visibility", () => {
   ready();
 
   const editor = require(locate("features-editor.js"));
@@ -254,7 +254,7 @@ test("the Object section holds Name, Visibility and Fix", () => {
 
   assert.deepEqual(
     objectGroup.fields.map((field) => field.key),
-    ["name", "visibility", "fixed"]
+    ["name", "label", "fixed", "visibility"]
   );
 
   const html = editor.featuresMarkupForSelection([run]);

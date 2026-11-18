@@ -85,48 +85,48 @@ check("the editor opens", Boolean(dialog));
 
 check(
   "with a title",
-  dialog.querySelector(".plot-editor-title")?.textContent.trim() ===
+  dialog.querySelector(".sketch-app-title")?.textContent.trim() ===
     "Graph - Plot",
-  dialog.querySelector(".plot-editor-title")?.textContent,
+  dialog.querySelector(".sketch-app-title")?.textContent,
 );
 
 check(
   "and a description of the task",
-  Boolean(dialog.querySelector(".plot-editor-description")),
+  Boolean(dialog.querySelector(".sketch-app-instruction")),
 );
 
 check(
   "and a close control",
-  Boolean(dialog.querySelector(".plot-editor-close")),
+  Boolean(dialog.querySelector(".sketch-close")),
 );
 
 check(
   "the preview is the stage, not a side pane",
-  Boolean(dialog.querySelector(".plot-editor-stage")),
+  Boolean(dialog.querySelector("[data-plot-stage]")),
 );
 
 check(
   "the functions are their own panel",
-  Boolean(dialog.querySelector("[data-graph-functions]")),
+  Boolean(dialog.querySelector("[data-graph-list]")),
 );
 
 check(
   "and the settings are their own panel",
-  Boolean(dialog.querySelector("[data-graph-settings]")),
+  Boolean(dialog.querySelector("[data-graph-inspector]")),
 );
 
 check(
   "the settings are grouped, not a flat list",
-  dialog.querySelectorAll(".plot-editor-group").length === 4,
-  String(dialog.querySelectorAll(".plot-editor-group").length),
+  dialog.querySelectorAll(".sketch-section").length === 4,
+  String(dialog.querySelectorAll(".sketch-section").length),
 );
 
 check(
-  "with Range, Ticks, Display and Labels",
-  [...dialog.querySelectorAll(".plot-editor-group-title")]
+  "with Definition, Coordinates, Axes & Grid and Appearance",
+  [...dialog.querySelectorAll(".sketch-section-title")]
     .map((node) => node.textContent.trim())
-    .join(",") === "Range,Ticks,Display,Labels",
-  [...dialog.querySelectorAll(".plot-editor-group-title")]
+    .join(",") === "Definition,Coordinates,Axes & Grid,Appearance",
+  [...dialog.querySelectorAll(".sketch-section-title")]
     .map((node) => node.textContent.trim())
     .join(","),
 );
@@ -138,8 +138,9 @@ check(
     "xMax",
     "yMin",
     "yMax",
-    "xTickSpacing",
-    "yTickSpacing",
+    "majorX",
+    "majorY",
+    "minorDivisions",
     "xLabel",
     "yLabel",
   ].every((key) => dialog.querySelector(`[data-graph-field="${key}"]`)),
@@ -151,7 +152,9 @@ check(
     "equalUnits",
     "showXAxis",
     "showYAxis",
-    "showGrid",
+    "showMajorGrid",
+    "showTicks",
+    "linkXYIntervals",
     "showMinorGrid",
     "showTickLabels",
   ].every((key) => dialog.querySelector(`[data-graph-toggle="${key}"]`)),
