@@ -1,4 +1,4 @@
-# DAETUM - Anuj
+# DAETUM
 
 DAETUM is where an engineering student writes up a solution: the **written
 working** (LaTeX, usually produced by the OCR tool from a handwritten page)
