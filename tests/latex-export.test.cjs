@@ -48,7 +48,7 @@ function documentBody() {
   const line = { ...f.line({ x: 0, y: 50 }, { x: 100, y: 80 }, {}), id: "line-1", name: "Line 1" };
   const circle = { ...f.circle({ x: 150, y: 60 }, 20, {}), id: "circle-1", name: "Circle 1" };
   const note = {
-    ...annotate.createAnnotate({ kind: "note", position: { x: 20, y: 100 }, text: "50% of $load & {50 kN}_" }),
+    ...annotate.createAnnotate({ kind: "note", position: { x: 20, y: 100 }, text: "50% of $load & 50 kN" }),
     id: "note-1",
     name: "Note 1"
   };
@@ -121,7 +121,26 @@ test("text is escaped, so the file compiles", () => {
   assert.strictEqual(latexText("θ = 30° ± 2"), "$\\theta$ = 30$^{\\circ}$ $\\pm$ 2");
 
   const text = latex.writeLatexDocument(documentBody());
-  assert.match(text, /\{50\\% of \\\$load \\& \\\{50 kN\\\}\\_\}/);
+  assert.match(text, /\{50\\% of \\\$load \\& 50 kN\}/);
+});
+
+test("SVG text retains inline spans and separates positioned lines", () => {
+  const { JSDOM } = require("jsdom");
+  const dom = new JSDOM(`<svg xmlns="http://www.w3.org/2000/svg"><g data-feature-id="a"><text x="0" y="0">T<tspan baseline-shift="sub">1</tspan> &amp; load<tspan x="0" dy="20">next <tspan baseline-shift="super">2</tspan></tspan></text><text x="0" y="30"><tspan x="0" dy="0">first</tspan><tspan x="0" dy="20">second</tspan></text></g></svg>`);
+  const groups = svgToTikz(dom.window.document.querySelector("svg"), { toWorld: (x, y) => ({ x, y: -y }), unitsPerPx: 1, ptPerPx: 1, palette: createPalette() });
+
+  assert.match(groups[0].commands[0], /\{T1 \\& load \\\\ next 2\}/);
+  assert.match(groups[0].commands[1], /\{first \\\\ second\}/);
+});
+
+test("a note with inline math is retained in the exported picture", () => {
+  const body = documentBody();
+  body.sheets[0].objects[3].text = "T_1 & load";
+
+  const text = latex.writeLatexDocument(body);
+  const first = text.slice(text.indexOf("\\begin{tikzpicture}"), text.indexOf("\\end{tikzpicture}"));
+
+  assert.match(first, /\{T1 \\& load\}/);
 });
 
 test("the file reopens as exactly the document that was saved", () => {

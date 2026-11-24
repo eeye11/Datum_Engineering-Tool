@@ -208,7 +208,7 @@ test('body drag and shared shifts preserve route connections; connected rotation
   assert.equal((html.match(/data-feature-group="transform"/g)||[]).length,1);
   assert.doesNotMatch(html,/data-transform-input="rotate"|End A Width|End B Width|Transition Length|Pipe Width/);
   const group=m.schema.groupsFor(fitting).find(g=>g.id==='object');
-  assert.deepEqual(group.fields.map(f=>f.key),['name','reducerMode','fixed']);
+  assert.deepEqual(group.fields.map(f=>f.key),['name','fixed','reducerMode']);
 });
 
 test('Fix blocks fitting transforms and handles',async()=>{

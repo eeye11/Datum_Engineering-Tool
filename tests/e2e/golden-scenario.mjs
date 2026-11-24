@@ -91,7 +91,7 @@ const TOOLS = [
      */
     ["FLUIDS", "fluids-flow-paths", "pipe-duct", null, ["d:0.35,0.5,0.6,0.5", "Enter"]],
     ["THERMODYNAMICS", "control-volume"],
-    ["HEAT TRANSFER", "wall"], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
+    ["HEAT TRANSFER", "wall-slab", null, null, ["d:0.3,0.55,0.6,0.55"]], ["SOLID MECHANICS", "stress-element", null, null, ["d:0.3,0.55,0.6,0.55"]],
     ["MECHANICAL DESIGN", "gear"], ["CONTROLS", "block"],
     /* The Math / Analysis tools are its current ids - a graph tool with a
        sketch/expression mode pair, not the retired "function" entry. */
@@ -204,12 +204,24 @@ async function main() {
                     const input = sizing.querySelector("[data-creation-input], input[type=text]");
                     return { kind: "sizing", label: (input?.getAttribute("aria-label") || "").toLowerCase(), empty: !input?.value };
                 }
+                if ([...document.querySelectorAll(".sketch-ws-overlay")].some(shown)) return { kind: "sketch" };
                 const dialog = [...document.querySelectorAll("dialog[open], .engg-dialog-backdrop, [role=dialog]")].find(shown);
                 return dialog ? { kind: "dialog" } : null;
             });
             if (!popup) return;
             debug("popup", JSON.stringify(popup));
             if (popup.kind === "picked") { await sleep(150); continue; }
+            if (popup.kind === "sketch") {
+                await page.locator(".sketch-ws-overlay [data-sketch-draw-toggle]").click();
+                await page.locator(".sketch-ws-overlay [data-sketch-tool-line]").click();
+                const canvas = page.locator(".sketch-ws-overlay [data-sketch-svg]");
+                await canvas.click({ position: { x: 150, y: 150 } });
+                await canvas.click({ position: { x: 250, y: 200 } });
+                await page.locator(".sketch-ws-overlay [data-sketch-place]").click();
+                await page.locator(".sketch-ws-overlay").waitFor({ state: "detached" });
+                await click(P(0.5, 0.4));
+                continue;
+            }
             /*
              * A dimension's in-page field is answered with the scenario's
              * magnitude; the field opens pre-filled with the measurement, so
