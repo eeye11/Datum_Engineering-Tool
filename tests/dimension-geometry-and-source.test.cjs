@@ -600,3 +600,13 @@ test("a selected dimension's frame is its drawn extent, not its placement point"
     "and reaches the number it annotates"
   );
 });
+
+test("a coloured dimension defines the colour it draws with", () => {
+  const { dimension } = rectangleWithWidth();
+  dimension.style = { ...dimension.style, stroke: "#E8F5F3" };
+
+  const source = writer(dimension, { state, allObjects: state.objects });
+
+  assert.match(source, /draw=daetumCE8F5F3/);
+  assert.match(source, /\\definecolor\{daetumCE8F5F3\}\{HTML\}\{E8F5F3\}/);
+});

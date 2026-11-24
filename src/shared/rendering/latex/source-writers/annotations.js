@@ -1023,7 +1023,9 @@ function dimensionToTikz(object, graphics, colour) {
 
   const pens = dimensionPens(object?.style || {});
 
-  const definitions = [];
+  /* Define the colour `strokeOf` chose - its own stroke or the theme default. */
+  const stroke = colourNameOf(object?.style?.stroke) ? object.style.stroke : defaultColour();
+  const definitions = colourPrelude([stroke]);
   const commands = [];
 
   const push = (written, defs) => {
