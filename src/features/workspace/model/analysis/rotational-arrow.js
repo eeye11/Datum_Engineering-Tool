@@ -1,4 +1,5 @@
 /* Engineering drawing rotational arrow geometry - the ONE curved arrow. */
+import { MOMENT_DEFAULT_RADIUS } from "../../../../shared/rendering/latex/symbol-sizes.js";
 /*
  * The ONE curved arrow: a centre, a radius, a direction of sweep, and
  * an arrowhead sitting on the curve.
@@ -13,7 +14,8 @@
  * WHAT THIS IS NOT
  * ----------------
  * None of this is engineering arithmetic. The radius here is a
- * PRESENTATION property, in screen pixels, and it is deliberately
+ * PRESENTATION property, in MODEL units - the drawing's own length, the same
+ * unit the source writer states it in - and it is deliberately
  * not the moment's magnitude: a 500 N-m moment and a 5 N-m moment
  * are drawn at the same size, because a drawing shows which way
  * something turns, not how hard. The magnitude lives on the
@@ -57,8 +59,21 @@ const GAP_RADIANS = (30 * Math.PI) / 180;
  * member it sits on - and it is a DEFAULT only: a moment that has
  * an `arcRadius` of its own keeps it exactly, so existing drawings
  * and user-set sizes are untouched.
+ *
+ * ========================================================
+ * "PIXELS" IS A DRAWING LENGTH, AND THE ZOOM IS DIVIDED OUT
+ * ========================================================
+ *
+ * These bounds are stated in the drawing's own pixels - the same
+ * unit `scaledStrokeWidth` states a pen in - because they are
+ * compared against a radius that HAS had the camera divided out of
+ * it. The renderer projects the moment's centre, so a radius written
+ * in overlay pixels is painted `zoom` times over: at 400% a 20 px
+ * arc drew as an 80 px one, and a fitted view reached the ceiling
+ * and flattened every moment to the same size whatever the student
+ * chose. `drawnArcRadius` is where that conversion happens, once.
  */
-const DEFAULT_ARC_RADIUS_PX = 20;
+const DEFAULT_ARC_RADIUS_PX = MOMENT_DEFAULT_RADIUS;
 
 /*
  * The bounds on a student-edited radius, in screen pixels.
@@ -85,6 +100,43 @@ function clampArcRadius(value) {
 }
 
 /*
+ * THE RADIUS A MOMENT IS DRAWN AT, from its stored arcRadius.
+ *
+ * ========================================================
+ * THE SAME RULE THE SOURCE WRITER USES, TO THE UNIT
+ * ========================================================
+ *
+ * `serializeMoment` states the arc's radius in MODEL units:
+ *
+ *     stored `arcRadius`, if it has one, drawn as given
+ *     otherwise `symbolSize(MOMENT_DEFAULT_RADIUS)`
+ *
+ * The canvas must draw the same arc, so it makes the same two choices:
+ * a stored radius is used as a model length (carried through the camera by
+ * `worldLength`, exactly as the writer carries it through `point()`), and an
+ * absent one falls back to the shared `MOMENT_DEFAULT_RADIUS` from
+ * `latex/symbol-sizes.js` - the leaf module that exists so the writer and the
+ * canvas cannot disagree about how big a symbol is.
+ *
+ * IT USED TO BE TWO DIFFERENT DEFAULTS. The canvas fell back to 20 while the
+ * writer used 7, so a moment with no stored radius was drawn nearly three times
+ * larger on the sheet than in its own generated source.
+ *
+ * WHAT THIS REPLACED ON THE CANVAS SIDE was an exactly cancelling conversion -
+ * `worldLength(stored / zoom)` - which pinned the symbol to the SCREEN: a
+ * constant number of pixels at every magnification. Every other feature is a
+ * drawing length, so the moment was the one thing that did not hold still while
+ * the sheet was zoomed.
+ */
+function drawnArcRadius(value) {
+    const stored = Number(value);
+
+    return Number.isFinite(stored) && stored > 0
+        ? stored
+        : MOMENT_DEFAULT_RADIUS;
+}
+
+/*
  * The arc for a rotational feature, in SCREEN space.
  *
  * Angles are measured the SVG way - 0 to the right of the centre,
@@ -98,8 +150,18 @@ function clampArcRadius(value) {
  * already recognises as "this way round". Clockwise mirrors only
  * the sweep, never the centre.
  */
-function arcFor(center, clockwise, radiusPx) {
-    const radius = clampArcRadius(radiusPx);
+function arcFor(center, clockwise, radiusDrawn) {
+    /*
+     * THE RADIUS ARRIVES READY TO DRAW.
+     *
+     * Its caller has already settled which radius this is - the stored one, or
+     * the shared default - and converted it into the space the centre was
+     * projected into (`drawnArcRadius`, then `worldLength`). Clamping it here
+     * again would re-apply bounds meant for the STORED setting to a value that
+     * has since been scaled by the camera, which is how a moment's size came
+     * out different at different zooms.
+     */
+    const radius = Number(radiusDrawn) > 0 ? Number(radiusDrawn) : DEFAULT_ARC_RADIUS_PX;
     const half = GAP_RADIANS / 2;
 
     /*
@@ -383,6 +445,7 @@ const enggDrawingRotationalArrow = {
     MAX_ARC_RADIUS_PX,
     SWEEP_RADIANS,
     clampArcRadius,
+    drawnArcRadius,
     arcFor,
     arcPath,
     headPoints,

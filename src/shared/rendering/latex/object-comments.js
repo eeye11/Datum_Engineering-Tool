@@ -56,6 +56,28 @@ export const COMMENT_FIELDS = Object.freeze({
   type: "TYPE",
   part: "PART",
   parent: "PARENT",
+  /*
+   * HOW THIS BLOCK'S COORDINATES MAP BACK TO THE MODEL.
+   *
+   * A drawing is written through the export transform: every coordinate is
+   * multiplied by a fit factor and shifted to the drawing's own lower-left
+   * corner, so the figure starts at (0, 0) on the page. That is right for the
+   * picture - but it means the numbers in source are NOT the object's model
+   * coordinates, and a student who types `(25,15)` must get a point at model
+   * (25, 15), not at whatever model point happens to sit 25 units right of the
+   * drawing's corner.
+   *
+   * `TRANSFORM: <factor> <originX> <originY>` records the mapping that was
+   * applied, so the reader can undo it exactly:
+   *
+   *     source = (model - origin) * factor      (the writer)
+   *     model  = source / factor + origin       (the reader)
+   *
+   * A file written before this field existed simply has no line: the reader
+   * then treats the numbers as model coordinates, which is what those files
+   * always meant for drawings whose origin was already at (0, 0).
+   */
+  transform: "TRANSFORM",
   end: "END",
 });
 
@@ -280,7 +302,51 @@ export function objectCommentHeader(object, options = {}) {
     lines.push(`% ${COMMENT_PREFIX} VERSION: ${Number(options.version)}`);
   }
 
+  /*
+   * THE EXPORT MAPPING, WHEN IT IS NOT THE IDENTITY.
+   *
+   * Written only when it would change a number, so a drawing that already
+   * starts at the origin keeps the plain header it always had - and the source
+   * of an unshifted drawing stays free of a line that would say nothing. A
+   * rounded factor is never identity, so rounding cannot suppress a real one.
+   */
+  const transform = options.transform;
+
+  if (transform && typeof transform === "object") {
+    const factor = Number(transform.factor);
+    const originX = Number(transform.origin?.x) || 0;
+    const originY = Number(transform.origin?.y) || 0;
+
+    if (
+      Number.isFinite(factor) &&
+      factor > 0 &&
+      (factor !== 1 || originX !== 0 || originY !== 0)
+    ) {
+      lines.push(
+        `% ${COMMENT_PREFIX} ${COMMENT_FIELDS.transform}: ${formatTransformNumber(factor)} ${formatTransformNumber(originX)} ${formatTransformNumber(originY)}`,
+      );
+    }
+  }
+
   return lines;
+}
+
+/*
+ * A NUMBER THE READER CAN PARSE BACK EXACTLY.
+ *
+ * Twelve significant digits is far more than a drawing needs and well inside
+ * what a double round-trips at, so `parseFloat` of what is written recovers the
+ * value the writer used rather than a rounded near-miss that would drift the
+ * geometry by a fraction of a unit on every save.
+ */
+function formatTransformNumber(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "0";
+  }
+
+  return String(Number(number.toPrecision(12)));
 }
 
 /* The closing marker of a block. */

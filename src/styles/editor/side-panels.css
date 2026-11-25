@@ -45,19 +45,20 @@
     min-height: 0;
     min-width: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .drawing-panel-rail-left {
     border-right: 1px solid var(--cad-border);
 
-    /* The left panel's outer edge is the WINDOW's left: button first. */
+    /* The left rail's hide strip sits against the WINDOW's left edge. */
     flex-direction: row;
 }
 
 .drawing-panel-rail-right {
     border-left: 1px solid var(--cad-border);
 
-    /* The Features control sits on the panel's left edge, beside the canvas. */
+    /* The right rail's hide strip sits against the WINDOW's right edge. */
     flex-direction: row;
 }
 
@@ -94,10 +95,11 @@
  * costs the drawing nothing: a transparent hit area with a hairline rule
  * drawn inside it, the same shape as every other splitter in the application.
  *
- * IT IS A FLEX ITEM OF THE RAIL, and it is the LAST child of both rails: the
- * left rail is button-then-panel, so last is its right (canvas) edge; the
- * right rail is a `row` whose button is `order: -1` and whose panel is the
- * middle, so last is its left (canvas) edge too. One rule, both sides.
+ * IT IS PINNED TO THE RAIL'S CANVAS-FACING EDGE, as an absolutely-positioned
+ * overlay in the rail's last 7px (see the rail's own rule below). It is not a
+ * flex item, so it costs the panel no width, and it never shares a hit area
+ * with the Hide/Show button: the button is the item nearest the window edge and
+ * the handle is the 7px at the far edge.
  *
  * The drag itself writes the RAIL's width in `panel-resize.js`; nothing here
  * decides a size, so a script and a stylesheet can never disagree about how
@@ -156,6 +158,45 @@
 }
 
 /*
+ * A COLLAPSED RAIL IS A THIN STRIP AT ITS OWN FAR EDGE.
+ *
+ * It is 22px - the same track the Hide button and the responsive breakpoints
+ * write - so the canvas takes the whole panel's space back and nothing else
+ * about the layout moves. The strip's content is the SHOW arrow, which sits
+ * against the window edge on the left rail and the right rail alike.
+ *
+ * THE RESIZE HANDLE RIDES ON TOP OF IT (see the rail's own rule below), out of
+ * the flex flow and 7px wide, so it neither widens the track nor covers the
+ * arrow's press: the arrow is the way back, and the handle is the second one.
+ */
+.drawing-panel-rail-collapsed {
+    position: relative;
+    width: 22px;
+}
+
+/*
+ * THE HANDLE RIDES ON THE COLLAPSED STRIP, PINNED TO ITS CANVAS-FACING EDGE.
+ *
+ * Out of the flex flow, so it neither widens the 22px track nor takes the
+ * SHOW arrow's press: the arrow is the way back by button, and the handle is
+ * the way back by drag - two hit areas that never overlap.
+ */
+.drawing-panel-rail-collapsed > .drawing-panel-resizer {
+    bottom: 0;
+    left: auto;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 7px;
+    z-index: 6;
+}
+
+.drawing-panel-rail-right.drawing-panel-rail-collapsed > .drawing-panel-resizer {
+    left: 0;
+    right: auto;
+}
+
+/*
  * The arrow.
  *
  * Kept as a slim vertical strip with a rotated caption, so the
@@ -197,8 +238,46 @@
     width: 16px;
 }
 
+/*
+ * On the LEFT rail the Hide button stays the first item (order 0, its DOM
+ * position) and the handle overlays the rail's right edge. On the RIGHT rail the
+ * button is pulled to the far (window) side with a negative order, so the two
+ * controls never trade places.
+ */
 .drawing-panel-rail-left > .drawing-panel-toggle {
-    order: 1;
+    order: 0;
+}
+
+/*
+ * THE HIDE BUTTON SITS ON THE PANEL'S CANVAS-FACING EDGE, ON BOTH RAILS.
+ *
+ * The left rail reads [TOOLS][HIDE] and the right rail reads [HIDE][INSPECTOR],
+ * so in each case the control is at the side the panel actually ends - against
+ * the drawing. It stays a flex item of its own, which is what guarantees the
+ * resize handle beside it can never take its press.
+ */
+
+/*
+ * THE RESIZE HANDLE IS THE RAIL'S OUTERMOST EDGE - PAST THE HIDE BUTTON.
+ *
+ * It is positioned in the rail's last 7px as an overlay, not a flex item: a
+ * flex item of its own would take 7px of the panel's width away and, on the
+ * left rail, sit BETWEEN the panel and HIDE. Pinned like this it is always the
+ * rail's absolute canvas-facing edge, and it costs the panel nothing.
+ */
+.drawing-panel-rail > .drawing-panel-resizer {
+    bottom: 0;
+    left: auto;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 7px;
+    z-index: 5;
+}
+
+.drawing-panel-rail-right > .drawing-panel-resizer {
+    left: 0;
+    right: auto;
 }
 
 .drawing-panel-rail-left > .drawing-panel-toggle[aria-expanded="false"] svg {
@@ -210,8 +289,16 @@
     transform: rotate(0deg);
 }
 
+/*
+ * ON THE RIGHT RAIL THE HIDE BUTTON SITS ON THE WINDOW EDGE, NOT THE CANVAS ONE.
+ *
+ * It used to be pulled to the canvas side (`order: -2`), which put it in the
+ * exact 22px the resize handle overlays - so the handle's 7px covered the
+ * button's press. The button is pushed to the far end of the rail instead, and
+ * the handle keeps the canvas-facing edge to itself.
+ */
 .drawing-panel-rail-right > .drawing-panel-toggle {
-    order: -1;
+    order: 2;
 }
 
 .drawing-panel-rail-right > .drawing-panel-toggle[aria-expanded="false"] svg {
@@ -247,11 +334,6 @@
  * the canvas element itself on every render, so a wider canvas
  * simply shows more of the same drawing at the same zoom. That
  * is why collapsing the toolbar at 150% leaves it at 150%.
- */
-.drawing-panel-rail-collapsed {
-    width: 22px;
-}
-
 /*
  * The grid TRACK, not the element.
  *

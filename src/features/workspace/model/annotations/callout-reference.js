@@ -1,5 +1,6 @@
 /* Persist the arrow's attachment separately from the movable balloon. */
 import measurement from "../../../../shared/geometry/measurement-core.js";
+import { pixelsPerUnit } from "../../../../shared/geometry/drawing-units.js";
 import { dimensionEndpointAt, endpointPosition } from "../../annotate/dimension-endpoints.js";
 
 export function calloutReferenceAt(point, state, targetId = null) {
@@ -11,7 +12,7 @@ export function calloutReferenceAt(point, state, targetId = null) {
             const circle=object.geometry;
             if (object.type === "circle" && object.visible !== false && circle.center && circle.radius > 0) {
                 const radius=Math.hypot(point.x-circle.center.x,point.y-circle.center.y);
-                if (Math.abs(radius-circle.radius) <= 8/(2.4*(state.camera?.zoom||1)))
+                if (Math.abs(radius-circle.radius) <= 8/pixelsPerUnit(state.camera?.zoom||1))
                     return {kind:"circle-point",featureId:object.id,angle:Math.atan2(point.y-circle.center.y,point.x-circle.center.x)};
             }
             if (object.visible === false || !["rectangle", "rigid-body"].includes(object.type)) continue;

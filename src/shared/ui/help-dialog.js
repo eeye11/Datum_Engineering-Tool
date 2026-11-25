@@ -3,9 +3,17 @@
  * THE HELP DIALOGS
  * ============================================================
  *
- * Four short panels: the user guide, the drawing help, the feedback route, and
- * About. One dialog and one set of content, because they are the same kind of
- * thing - a block of text the student reads and closes.
+ * Four short panels: the drawing help, the feedback route, About, and - for a
+ * caller that reaches it directly - the original one-page guide. One dialog and
+ * one set of content, because they are the same kind of thing - a block of text
+ * the student reads and closes.
+ *
+ * THE USER GUIDE IS NOT ONE OF THESE ANY MORE. Help → User Guide now opens the
+ * full guide (`shared/guide/user-guide.js`): sections, tutorials and a tool
+ * reference over the drawing. The `guide` page below is kept because it is a
+ * true one-screen summary of the workspace and the dialog is still a perfectly
+ * good place to read it - but the menu does not route there, so there is one
+ * User Guide and not two.
  *
  * TWO HONESTY RULES, WHICH ARE THE REASON THIS IS WRITTEN OUT
  * ----------------------------------------------------------
@@ -42,9 +50,9 @@ const PAGES = {
             <h4>What DAETUM is</h4>
             <p>
                 An engineering drawing and statics workspace for written
-                solutions. There are two pages, chosen by the tabs at the top:
-                <strong>Written Solution</strong> and
-                <strong>Engineering Drawing</strong>.
+                solutions: geometry, statics bodies, loads and supports,
+                associative dimensions and analysis diagrams, for working through
+                written engineering problems.
             </p>
 
             <h4>The drawing workspace</h4>
@@ -57,13 +65,14 @@ const PAGES = {
             </p>
             <p>
                 On the left are the <strong>tools</strong> for the chosen
-                category - Geometry, Annotate, Statics and others. On the right
-                are the <strong>Features</strong> of whatever is selected.
+                toolset - Geometry, Annotate, Statics and the others. On the right
+                are the <strong>Objects</strong> on the sheet and the
+                <strong>Features</strong> of whatever is selected.
             </p>
 
             <h4>Drawing</h4>
             <p>
-                Choose a category, choose a tool, and work on the canvas. A tool
+                Choose a toolset, choose a tool, and work on the canvas. A tool
                 that makes a line or a shape can be used either by
                 <strong>pressing and dragging</strong> or by
                 <strong>clicking twice</strong> - once for each end.
@@ -72,6 +81,13 @@ const PAGES = {
                 Only the <strong>Select</strong> tool moves or edits work that is
                 already drawn. While any other tool is active, clicking existing
                 geometry does not disturb it.
+            </p>
+
+            <h4>Where to learn the tools</h4>
+            <p>
+                <strong>Help &rarr; User Guide</strong> opens the full guide:
+                eleven sections, a step-by-step tutorial for the workflows that
+                are written up, and a reference for every tool.
             </p>
 
             <h4>Documents</h4>

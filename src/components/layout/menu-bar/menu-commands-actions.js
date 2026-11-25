@@ -29,6 +29,7 @@ import { isLegacyResetTool, legacyPlaceholderMessage } from "../toolbar/phase-re
 import enggSettingsDialog from "../../../shared/ui/settings-dialog.js";
 import { zoomAtCanvasPoint } from "../workspace/viewport.js";
 import enggHelpDialog from "../../../shared/ui/help-dialog.js";
+import enggUserGuide from "../../../shared/guide/user-guide.js";
 import { renderProperties } from "../panels/feature-panel.js";
 import { syncWorkspaceSettingToggles } from "../workspace/sheet-controller.js";
 import { applyTheme, readThemePreference, setThemePreference, resolvedTheme, THEME_VALUES } from "../workspace/theme.js";
@@ -286,12 +287,22 @@ export function showSettings(pageId) {
 /*
  * SHOW A HELP PANEL.
  *
- * One dialog for all four entries - the guide, the drawing help, the feedback
- * route and About - because they are the same act: read a short block of text
- * and close it. The content lives in the dialog module; this is the command the
- * menu calls.
+ * FOUR ENTRIES, TWO KINDS OF THING.
+ *
+ * The User Guide is an interface of its own - sections, tutorials, a tool
+ * reference - so it is its own module. The other three are a short block of
+ * text and a close button, which is exactly what `help-dialog.js` is for, so
+ * they stay there rather than being rebuilt.
+ *
+ * The menu item is unchanged: it still calls `showHelp("guide")`, and this
+ * function is still the one place that decides what that means. So there is one
+ * door onto the guide, not a second one beside it.
  */
 export function showHelp(pageId) {
+  if (pageId === "guide") {
+    return enggUserGuide.open();
+  }
+
   return enggHelpDialog.open(pageId);
 }
 

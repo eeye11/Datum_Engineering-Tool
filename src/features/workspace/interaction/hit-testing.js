@@ -61,6 +61,7 @@ import { axisLabelPositions } from "../../../shared/geometry/axis-labels.js";
 import { drawingState } from "../editor-state.js";
 import { momentIsClockwise } from "../../../shared/rendering/vector-render.js";
 import { isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
+import enggStaticsLabel from "../../../shared/geometry/statics-label.js";
 
 /* Whether a point lies inside a triangle - the Flow Arrow's pickable area. */
 function pointInTriangle(point, a, b, c) {
@@ -735,7 +736,18 @@ export function objectAtPoint(
      * types: among dimensions and annotations themselves normal draw
      * order still decides, so overlapping labels behave as they look.
      */
+    /*
+     * A STATICS OBJECT'S OWN LABEL IS PICKED BY ITS WORDS, BEFORE THE GEOMETRY.
+     *
+     * The label is PART of the object - not a second feature - so a click on it
+     * must select the object it belongs to. It is tested ahead of the shape for
+     * the same reason a dimension is: a load's label sits close to its arrows
+     * and a force's past its head, so deciding by proximity alone would make
+     * the label unclickable and, with it, undraggable - and dragging it is the
+     * one gesture that moves it.
+     */
     const overlay =
+        pickStaticsLabel(point) ||
         pickDerivedMagnitude(point) ||
         pickDimensionOrAnnotation(point);
 
@@ -2539,6 +2551,53 @@ export function pickDerivedMagnitude(
  * beside it would make the drawing harder to work on, not easier.
  */
 const ANNOTATION_PICK_PADDING_PIXELS = 5;
+
+/*
+ * ========================================================
+ * A STATICS LABEL IS PICKED BY ITS OWN WORDS
+ * ========================================================
+ *
+ * The box is measured by `statics-label.js` against the same text size the
+ * renderer lays the words out with, so what a student can see is what they can
+ * click. An object with an EMPTY label has no ink and is not picked this way:
+ * its shape is still selectable, and "no label" must not turn an invisible spot
+ * beside every force into a click target.
+ */
+export function pickStaticsLabel(point) {
+    const padding =
+        ANNOTATION_PICK_PADDING_PIXELS /
+        Math.max(drawingState.camera.zoom, 0.25);
+
+    let best = null;
+
+    for (let i = drawingState.objects.length - 1; i >= 0; i -= 1) {
+        const object = drawingState.objects[i];
+
+        if (object.visible === false) continue;
+
+        const box = enggStaticsLabel?.labelBoxOf
+            ? enggStaticsLabel.labelBoxOf(object)
+            : null;
+
+        if (!box || !box.text) continue;
+
+        if (
+            point.x >= box.left - padding &&
+            point.x <= box.right + padding &&
+            point.y >= box.bottom - padding &&
+            point.y <= box.top + padding
+        ) {
+            const area = (box.right - box.left) * (box.top - box.bottom);
+
+            /* The smallest box wins, so a short label inside a long one is reachable. */
+            if (!best || area < best.area) {
+                best = { area, id: object.id, type: "statics-label", object };
+            }
+        }
+    }
+
+    return best;
+}
 
 /*
  * The wider, invisible target a dimension and an annotation are picked

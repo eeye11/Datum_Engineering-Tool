@@ -1,0 +1,1432 @@
+﻿/*
+ * =========================================================
+ * THE USER GUIDE AND THE TUTORIAL OVERLAY
+ * =========================================================
+ *
+ * Part of editor.css, which imports these files in order. The order is the
+ * cascade: a later file wins where two rules are equally specific.
+ *
+ * EVERY COLOUR IS A TOKEN, so the guide themes with the rest of the interface
+ * automatically - light and dark both - and a dialog that is only visible after
+ * a click is exactly where a hardcoded colour would go unnoticed. There is no
+ * literal colour anywhere in this file; `npm test` checks that.
+ *
+ * THE DIALOG USES THE SAME PATTERN AS THE SETTINGS AND HELP PANELS: one element
+ * that is itself the dimmed backdrop, a bordered panel centred inside it, and
+ * the backdrop closes on a click. That is the application's existing behaviour,
+ * not a second one.
+ */
+
+/*
+ * THE GUIDE STEPS ASIDE WHILE A TUTORIAL RUNS.
+ *
+ * A tutorial asks the student to use the real controls, and the guide's own
+ * dialog is a full-screen modal sitting between them and the workspace. While
+ * a walkthrough is open the dialog keeps its place in the page - so its state,
+ * its scroll and its focus survive - but it stops painting and stops taking
+ * input, and the tutorial overlay is the only thing on top of the drawing.
+ */
+.datum-guide-dialog.datum-guide-behind-tutorial {
+    pointer-events: none;
+    visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- the dialog */
+
+.datum-guide-dialog {
+    align-items: center;
+    background: var(--datum-overlay);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    padding: 24px;
+    position: fixed;
+    z-index: var(--z-dialog);
+}
+
+.datum-guide-panel {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--datum-shadow-soft);
+    color: var(--datum-ink);
+    display: flex;
+    flex-direction: column;
+    font-family: var(--datum-font);
+    font-size: 13px;
+    max-height: min(760px, calc(100dvh - 48px));
+    min-height: 0;
+    overflow: hidden;
+    width: 100%;
+    max-width: 860px;
+}
+
+/* ---------------------------------------------------------------- title bar */
+
+.datum-guide-title {
+    align-items: center;
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    flex: 0 0 auto;
+    gap: var(--space-2);
+    min-height: 42px;
+    padding: 8px 12px;
+}
+
+.datum-guide-title-text {
+    color: var(--datum-ink);
+    font-size: 13px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.datum-guide-title-spacer {
+    flex: 1 1 auto;
+}
+
+.datum-guide-back,
+.datum-guide-cancel {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1;
+    padding: 6px 10px;
+}
+
+.datum-guide-back[hidden] {
+    display: none;
+}
+
+.datum-guide-back {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+}
+
+.datum-guide-back:hover,
+.datum-guide-cancel:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border);
+    color: var(--datum-ink);
+}
+
+.datum-guide-cancel {
+    border-color: var(--datum-border);
+    color: var(--datum-ink);
+}
+
+/* ---------------------------------------------------------------- body */
+
+.datum-guide-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 20px 22px 24px;
+}
+
+.datum-guide-heading {
+    align-items: center;
+    color: var(--datum-ink);
+    display: flex;
+    font-size: 18px;
+    font-weight: 700;
+    gap: 8px;
+    margin: 0 0 2px;
+}
+
+.datum-guide-heading-icon {
+    color: var(--datum-green-ink);
+    display: inline-flex;
+}
+
+.datum-guide-subtitle {
+    color: var(--datum-muted);
+    font-size: 12.5px;
+    line-height: 1.5;
+    margin: 0 0 14px;
+    max-width: 68ch;
+}
+
+.datum-guide-lead {
+    color: var(--datum-muted);
+    font-size: 12px;
+    line-height: 1.55;
+    margin: 0 0 12px;
+    max-width: 72ch;
+}
+
+/* ---------------------------------------------------------------- search */
+
+.datum-guide-search {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+    max-width: 360px;
+    padding: 0 8px;
+}
+
+.datum-guide-search:focus-within {
+    border-color: var(--datum-focus);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.datum-guide-search-icon {
+    color: var(--datum-muted);
+    display: inline-flex;
+}
+
+.datum-guide-search input {
+    background: transparent;
+    border: 0;
+    caret-color: var(--datum-green);
+    color: var(--datum-ink);
+    flex: 1 1 auto;
+    font: inherit;
+    font-size: 12.5px;
+    height: 32px;
+    min-width: 0;
+    outline: none;
+}
+
+.datum-guide-search input::placeholder {
+    color: var(--datum-placeholder);
+}
+
+/* ---------------------------------------------------------------- section grid */
+
+.datum-guide-grid {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+}
+
+.datum-guide-card {
+    align-items: flex-start;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 10px;
+    padding: 12px;
+    text-align: left;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.datum-guide-card:hover,
+.datum-guide-card:focus-visible {
+    background: var(--datum-surface);
+    border-color: var(--datum-green);
+}
+
+.datum-guide-card:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+.datum-guide-card-icon {
+    color: var(--datum-green-ink);
+    display: inline-flex;
+    flex: 0 0 auto;
+    padding-top: 1px;
+}
+
+.datum-guide-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.datum-guide-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.datum-guide-card-blurb {
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+.datum-guide-card-meta {
+    color: var(--datum-subtle);
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    margin-top: 2px;
+    text-transform: uppercase;
+}
+
+.datum-guide-empty {
+    color: var(--datum-muted);
+    font-size: 12px;
+    margin: 18px 0;
+}
+
+/* ---------------------------------------------------------------- section header + tabs */
+
+.datum-guide-section-head {
+    margin-bottom: 12px;
+}
+
+.datum-guide-tabs {
+    border-bottom: 1px solid var(--datum-border);
+    display: flex;
+    gap: 2px;
+    margin-top: 4px;
+}
+
+.datum-guide-tab {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: var(--datum-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    margin-bottom: -1px;
+    padding: 8px 12px;
+}
+
+.datum-guide-tab:hover {
+    color: var(--datum-ink);
+}
+
+.datum-guide-tab[aria-selected="true"] {
+    border-bottom-color: var(--datum-gold);
+    color: var(--datum-green-ink);
+}
+
+.datum-guide-tab:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.datum-guide-tabpanel {
+    padding-top: 14px;
+}
+
+.datum-guide-loading {
+    color: var(--datum-muted);
+    font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- rows (tutorials and reference) */
+
+.datum-guide-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.datum-guide-row {
+    align-items: center;
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 11px 13px;
+    text-align: left;
+    width: 100%;
+}
+
+.datum-guide-row:hover,
+.datum-guide-row:focus-visible {
+    background: var(--datum-surface);
+    border-color: var(--datum-green);
+}
+
+.datum-guide-row:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+.datum-guide-row-main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.datum-guide-row-title {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.datum-guide-row-text {
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.datum-guide-row-meta {
+    align-items: center;
+    color: var(--datum-muted);
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 11px;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.datum-guide-row-go {
+    color: var(--datum-green-ink);
+    font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- placeholder */
+
+.datum-guide-placeholder {
+    background: var(--datum-panel);
+    border: 1px dashed var(--datum-border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 14px 16px;
+}
+
+.datum-guide-placeholder p {
+    margin: 0 0 6px;
+    max-width: 70ch;
+}
+
+.datum-guide-placeholder p:last-child {
+    margin-bottom: 0;
+}
+
+.datum-guide-placeholder-title {
+    color: var(--datum-ink);
+    font-weight: 700;
+}
+
+.datum-guide-inline-link {
+    background: none;
+    border: 0;
+    color: var(--datum-green-ink);
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+    text-decoration: underline;
+}
+
+.datum-guide-inline-link:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- reference entries */
+
+.datum-guide-list-reference {
+    gap: 3px;
+}
+
+.datum-guide-ref-details {
+    border-bottom: 1px solid var(--datum-border);
+}
+
+.datum-guide-ref-summary {
+    align-items: center;
+    color: var(--datum-ink);
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 12.5px;
+    font-weight: 600;
+    gap: 8px;
+    list-style: none;
+    padding: 8px 2px;
+}
+
+.datum-guide-ref-summary::-webkit-details-marker {
+    display: none;
+}
+
+/* A caret drawn in this stylesheet, so the row reads as expandable. */
+.datum-guide-ref-summary::before {
+    border-bottom: 1.2px solid currentColor;
+    border-right: 1.2px solid currentColor;
+    content: "";
+    flex: 0 0 auto;
+    height: 5px;
+    margin-right: 1px;
+    opacity: 0.55;
+    transform: rotate(-45deg);
+    transition: transform 120ms ease;
+    width: 5px;
+}
+
+.datum-guide-ref-details[open] > .datum-guide-ref-summary::before {
+    transform: rotate(45deg);
+}
+
+.datum-guide-ref-summary:hover {
+    color: var(--datum-green-ink);
+}
+
+.datum-guide-ref-summary:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -2px;
+}
+
+.datum-guide-ref-name {
+    color: var(--datum-ink);
+    font-weight: 700;
+}
+
+.datum-guide-ref-group {
+    color: var(--datum-muted);
+    font-size: 10.5px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.datum-guide-ref-tag {
+    border: 1px solid var(--datum-border);
+    border-radius: 999px;
+    color: var(--datum-muted);
+    font-size: 9.5px;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    text-transform: uppercase;
+}
+
+.datum-guide-kbd {
+    background: var(--datum-panel);
+    border: 1px solid var(--datum-border);
+    border-radius: 3px;
+    color: var(--datum-muted);
+    font-family: var(--datum-font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    padding: 0 4px;
+}
+
+.datum-guide-ref-body {
+    color: var(--datum-muted);
+    font-size: 12px;
+    line-height: 1.55;
+    padding: 2px 2px 12px 16px;
+}
+
+.datum-guide-ref-line {
+    margin: 0 0 6px;
+    max-width: 76ch;
+}
+
+.datum-guide-ref-label {
+    color: var(--datum-green-ink);
+    font-weight: 700;
+    margin-right: 4px;
+}
+
+.datum-guide-ref-inline {
+    color: var(--datum-muted);
+    font-size: 12px;
+    margin: 0;
+}
+
+.datum-guide-ref-todo {
+    color: var(--datum-muted);
+    font-style: italic;
+    margin: 0 0 6px;
+}
+
+.datum-guide-ref-tips {
+    margin: 6px 0 0;
+    padding-left: 18px;
+}
+
+.datum-guide-ref-tips li {
+    margin: 0 0 4px;
+}
+
+.datum-guide-ref-children {
+    list-style: none;
+    margin: 6px 0 0;
+    padding: 0;
+}
+
+.datum-guide-ref-children li {
+    border-top: 1px solid var(--datum-border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    padding: 6px 0;
+}
+
+/* ---------------------------------------------------------------- the device control */
+
+/*
+ * THE DEVICE ROW.
+ *
+ * A compact settings row, not a card: an icon, the question, and the dropdown
+ * on the right. On a narrow window it stacks, because a label and a long option
+ * side by side would either clip or squeeze the option to illegibility.
+ */
+.datum-guide-settings {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 14px;
+}
+
+.datum-device {
+    align-items: center;
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+}
+
+.datum-device-icon {
+    color: var(--datum-green-ink);
+    display: inline-flex;
+    flex: 0 0 auto;
+}
+
+.datum-device-label {
+    color: var(--datum-muted);
+    flex: 0 0 auto;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* The control: a native select, with the application's own caret beside it. */
+.datum-device-control {
+    align-items: center;
+    background: var(--datum-input);
+    border: 1px solid var(--datum-input-border);
+    border-radius: var(--radius-sm);
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    position: relative;
+}
+
+.datum-device-control:focus-within {
+    border-color: var(--datum-focus);
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+.datum-device-select {
+    /*
+     * THE SELECT IS THE CONTROL. It is transparent and stretched over the box,
+     * so the platform's own list opens - reachable by keyboard, by a screen
+     * reader and by touch - while the box's border and caret stay ours.
+     */
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    height: 30px;
+    max-width: 260px;
+    min-width: 0;
+    outline: none;
+    padding: 0 26px 0 8px;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.datum-device-caret {
+    color: var(--datum-muted);
+    display: inline-flex;
+    pointer-events: none;
+    position: absolute;
+    right: 8px;
+}
+
+/* The compact variant, for the tutorial header. */
+.datum-device-compact .datum-device-label {
+    font-size: 11px;
+}
+
+.datum-device-compact .datum-device-select {
+    height: 26px;
+    max-width: 210px;
+}
+
+/* =========================================================
+ * THE ACTIVE TUTORIAL
+ * =========================================================
+ *
+ * Its own view over the drawing: a compact header along the top, one
+ * instruction below it, and the workspace itself left alone in the middle.
+ *
+ * NOTHING HERE TAKES A CLICK EXCEPT THE HEADER AND THE PANEL. The student has
+ * to use the real controls while the guide is pointing at them, so every part
+ * of this overlay is `pointer-events: none` unless it holds a control of its
+ * own. That is what makes the tutorial a guide rather than a wall.
+ */
+
+.datum-tutorial-overlay {
+    inset: 0;
+    pointer-events: none;
+    position: fixed;
+    z-index: calc(var(--z-dialog) + 20);
+}
+
+.datum-tutorial-scrim,
+.datum-tutorial-scrim-part,
+.datum-tutorial-ring,
+.datum-tutorial-pointer {
+    pointer-events: none;
+}
+
+.datum-tutorial-scrim {
+    inset: 0;
+    position: absolute;
+}
+
+/*
+ * THE DIM, WITH A GENUINE HOLE.
+ *
+ * Four strips around the target leave the target itself at full brightness -
+ * the point is to look at the real control, and a mask that darkens it too
+ * would defeat that. The strips are quiet: this is a guide, not a spotlight.
+ */
+.datum-tutorial-scrim-part {
+    background: var(--datum-tutorial-scrim);
+    position: absolute;
+}
+
+.datum-tutorial-ring {
+    border: 1.5px solid var(--datum-guide-gold);
+    border-radius: var(--radius-md);
+    box-shadow: 0 0 0 1px var(--datum-guide-halo), 0 0 0 4px var(--datum-guide-gold-soft);
+    opacity: 0;
+    position: absolute;
+    transition: left 140ms ease, top 140ms ease, width 140ms ease,
+        height 140ms ease, opacity 180ms ease;
+}
+
+/* The outline appears as the pointer arrives, and then stays. */
+.datum-tutorial-ring-arrived {
+    opacity: 1;
+}
+
+.datum-tutorial-ring-done {
+    border-color: var(--datum-green);
+}
+
+/* ---------------------------------------------------------------- the header */
+
+/*
+ * THE HEADER IS A BAR, NOT A CHIP.
+ *
+ * A floating rounded card at the top centre overlapped the menu bar and read
+ * like a dialog dropped on the application. The tutorial is its own view, so
+ * its header is the view's title bar: full width, flush to the top edge, with a
+ * hairline under it. The panel below it is what carries the card treatment.
+ */
+.datum-tutorial-header {
+    align-items: center;
+    background: var(--datum-chrome);
+    border-bottom: 1px solid var(--datum-border);
+    box-shadow: var(--datum-shadow-soft);
+    color: var(--datum-ink);
+    display: flex;
+    font-family: var(--datum-font);
+    gap: 18px;
+    left: 0;
+    padding: 9px 18px;
+    pointer-events: auto;
+    position: fixed;
+    right: 0;
+    top: 0;
+    z-index: 2;
+}
+
+.datum-tutorial-header-main {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.datum-tutorial-eyebrow {
+    color: var(--datum-green-ink);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.datum-tutorial-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.datum-tutorial-header-progress {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 108px;
+}
+
+.datum-tutorial-counter {
+    color: var(--datum-muted);
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.datum-tutorial-progress {
+    background: var(--datum-panel);
+    border-radius: 999px;
+    display: block;
+    height: 3px;
+    overflow: hidden;
+}
+
+.datum-tutorial-progress-fill {
+    background: var(--datum-gold);
+    display: block;
+    height: 100%;
+    transition: width 220ms ease;
+}
+
+.datum-tutorial-exit {
+    background: transparent;
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 12px;
+}
+
+.datum-tutorial-exit:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-green);
+}
+
+.datum-tutorial-exit:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- the instruction panel */
+
+/*
+ * ALONG THE TOP EDGE, under the header.
+ *
+ * The top of the window is the one strip that is never the thing being pointed
+ * at - the canvas is below it and the tools are at the sides - so the panel
+ * lives there by default and moves aside only when the target itself is in that
+ * strip. `placePanel` decides, from measured rectangles rather than a guess.
+ */
+.datum-tutorial-panel {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--datum-shadow);
+    color: var(--datum-ink);
+    font-family: var(--datum-font);
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: min(560px, calc(100vw - 32px));
+    padding: 12px 14px;
+    pointer-events: auto;
+    position: fixed;
+    transition: left 160ms ease, top 160ms ease;
+    width: max-content;
+    z-index: 2;
+}
+
+.datum-tutorial-panel-head {
+    align-items: baseline;
+    display: flex;
+    gap: 10px;
+    justify-content: space-between;
+    margin-bottom: 3px;
+}
+
+.datum-tutorial-step-title {
+    color: var(--datum-ink);
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.datum-tutorial-gesture {
+    color: var(--datum-green-ink);
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.datum-tutorial-step-text {
+    color: var(--datum-muted);
+    margin: 0 0 8px;
+    max-width: 62ch;
+}
+
+/* ---------------------------------------------------------------- the action */
+
+.datum-tutorial-task {
+    background: var(--datum-gold-tint);
+    border-left: 3px solid var(--datum-gold);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--datum-ink);
+    font-size: 12.5px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    padding: 7px 10px;
+}
+
+.datum-tutorial-task-label {
+    color: var(--datum-green-ink);
+    display: block;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-bottom: 1px;
+    text-transform: uppercase;
+}
+
+.datum-tutorial-feedback {
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    margin: 0 0 6px;
+    padding: 6px 8px;
+}
+
+.datum-tutorial-feedback[data-tone="wrong"] {
+    background: var(--datum-warning-tint);
+    border-left: 2px solid var(--datum-warning);
+    color: var(--datum-ink);
+}
+
+.datum-tutorial-feedback[data-tone="none"] {
+    display: none;
+}
+
+.datum-tutorial-success {
+    background: var(--datum-green-tint);
+    border-left: 3px solid var(--datum-green);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    color: var(--datum-green-ink);
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    padding: 7px 10px;
+}
+
+.datum-tutorial-note {
+    color: var(--datum-muted);
+    font-size: 11px;
+    font-style: italic;
+    margin: 0;
+}
+
+.datum-tutorial-finish {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+/*
+ * PREVIOUS SITS ON ITS OWN LINE, QUIETLY.
+ *
+ * It is a reading control rather than a forward one, so it is a plain text-ish
+ * button at the left of the panel, visually subordinate to whatever the step's
+ * real action is. A student should never mistake it for the way on.
+ */
+.datum-tutorial-back {
+    border-top: 1px solid var(--datum-border);
+    margin-top: 8px;
+    padding-top: 8px;
+}
+
+.datum-tutorial-back .datum-tutorial-button {
+    background: transparent;
+    border-color: transparent;
+    color: var(--datum-muted);
+    font-size: 11.5px;
+    padding: 2px 4px;
+}
+
+.datum-tutorial-back .datum-tutorial-button:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-border);
+    color: var(--datum-ink);
+}
+
+.datum-tutorial-complete {
+    color: var(--datum-green-ink);
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.datum-tutorial-button {
+    background: var(--datum-surface);
+    border: 1px solid var(--datum-border);
+    border-radius: var(--radius-sm);
+    color: var(--datum-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+.datum-tutorial-button:hover {
+    background: var(--datum-menu-hover);
+    border-color: var(--datum-green);
+}
+
+.datum-tutorial-button:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: 1px;
+}
+
+/* The established primary treatment: the accent, with a legible label on it. */
+.datum-tutorial-button-primary {
+    background: var(--datum-green);
+    border-color: var(--datum-green);
+    color: var(--datum-surface);
+    font-weight: 700;
+}
+
+.datum-tutorial-button-primary:hover {
+    background: var(--datum-green-hover);
+    border-color: var(--datum-green-hover);
+    color: var(--datum-surface);
+}
+
+/* ---------------------------------------------------------------- the visual guide */
+
+/*
+ * THE HELP CURSOR.
+ *
+ * A zero-size positioning box whose mark is drawn around it, moved by
+ * `left`/`top` so the journey is one short CSS transition rather than a loop.
+ * Its SHAPE says which device is in hand - an angled arrow with a halo at its
+ * tip for a mouse, a fingertip with a contact halo for touch - so the guide
+ * agrees with the wording.
+ *
+ * IT IS A MARK, NOT A CURSOR. Academic gold over the application's dark green,
+ * with a halo that is EMPTY in the middle: the target control stays visible
+ * through it, so the mark never hides the thing it is naming. It can never be
+ * mistaken for the student's pointer, and it never touches it.
+ */
+.datum-tutorial-pointer {
+    color: var(--datum-guide-gold);
+    height: 0;
+    left: 0;
+    /*
+     * HIDDEN UNTIL IT HAS A JOURNEY.
+     *
+     * The mark is born at (0,0) and only placed once a step's first journey
+     * begins - so it is invisible until `pointer-live` says it is somewhere
+     * real. Without this it would flash in the top-left corner.
+     */
+    opacity: 0;
+    pointer-events: none;
+    position: fixed;
+    top: 0;
+    width: 0;
+    z-index: 1;
+}
+
+/*
+ * A LIVE MARK IS FULLY OPAQUE AT ALL TIMES.
+ *
+ * It travels by POSITION, not by fading: the student watches one pointer move
+ * across the window, so any opacity animation between steps would read as a
+ * teleport. Only the very first appearance fades in, once.
+ */
+.datum-tutorial-pointer-live {
+    animation: datum-tutorial-pointer-enter 140ms ease-out 1;
+    opacity: 1;
+}
+
+@keyframes datum-tutorial-pointer-enter {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.datum-tutorial-pointer-dot {
+    display: block;
+    height: 34px;
+    /*
+     * THREE LAYERS OF SEPARATION, and each does a different job:
+     *
+     *   the SVG's own bold outline   - the silhouette, in dark ink on light and
+     *                                  pale ice on dark (see `pointerMarkup`)
+     *   the drop shadow              - lifts the mark off busy drawing content
+     *   the light rim beneath        - a hairline that keeps the dark outline
+     *                                  visible even against the dark canvas
+     *
+     * Gold alone is not relied on: on a white sheet it is legible, but it is a
+     * MID tone - it needs the ink around it to read as a silhouette.
+     */
+    filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.9))
+        drop-shadow(0 2px 3px rgba(15, 23, 42, 0.45));
+    left: -17px;
+    position: absolute;
+    top: -17px;
+    width: 34px;
+}
+
+.datum-tutorial-pointer[data-mode="touch"] .datum-tutorial-pointer-dot {
+    height: 42px;
+    left: -21px;
+    top: -21px;
+    width: 42px;
+}
+
+/*
+ * THE HALO: a ring around the tip.
+ *
+ * It is 30px across - comfortably visible at normal viewing distance, still far
+ * too small to hide a toolbar button or a shape's corner - and its middle is
+ * empty, so whatever the pointer names is still visible underneath.
+ */
+.datum-tutorial-pointer-halo {
+    background: var(--datum-guide-gold-soft);
+    border: 2px solid var(--datum-guide-gold);
+    border-radius: 50%;
+    box-sizing: border-box;
+    box-shadow: 0 0 0 1px var(--datum-guide-outline);
+    height: 30px;
+    left: calc(var(--datum-tutorial-tip-x, -14px) - 15px);
+    opacity: 0;
+    position: absolute;
+    top: calc(var(--datum-tutorial-tip-y, -14px) - 15px);
+    transition: opacity 160ms ease;
+    width: 30px;
+}
+
+.datum-tutorial-pointer-arrived .datum-tutorial-pointer-halo {
+    opacity: 1;
+}
+
+/*
+ * THE CONTACT RING: one brief emphasis as the pointer ARRIVES.
+ *
+ * `animation-iteration-count: 1` is the whole point - a guide that keeps
+ * pulsing competes with the instruction and never lets the student settle. The
+ * halo above is what remains afterwards; this is only the arrival.
+ */
+.datum-tutorial-pointer-trail {
+    border: 2px solid var(--datum-guide-gold);
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: block;
+    height: 30px;
+    left: calc(var(--datum-tutorial-tip-x, -14px) - 15px);
+    opacity: 0;
+    position: absolute;
+    top: calc(var(--datum-tutorial-tip-y, -14px) - 15px);
+    width: 30px;
+}
+
+.datum-tutorial-pointer-arrived .datum-tutorial-pointer-trail {
+    animation: datum-tutorial-tap 520ms ease-out 1;
+}
+
+@keyframes datum-tutorial-tap {
+    0% {
+        opacity: 0.85;
+        transform: scale(0.6);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(2);
+    }
+}
+
+/* A completed step's mark fades back rather than vanishing. */
+.datum-tutorial-pointer-done .datum-tutorial-pointer-dot,
+.datum-tutorial-pointer-done .datum-tutorial-pointer-halo {
+    opacity: 0.4;
+}
+
+/*
+ * ---------------------------------------------------------------- the demonstration
+ *
+ * THE GESTURE, DRAWN ONCE.
+ *
+ * Everything here is a separate, absolutely-positioned layer over the canvas:
+ * it takes no input, joins no drawing and is removed with the step. Its colours
+ * are the help cursor's own - academic gold over the theme's outline ink - so
+ * the path reads as the same mark that guides every other step.
+ */
+.datum-tutorial-demo {
+    inset: 0;
+    pointer-events: none;
+    position: fixed;
+    z-index: 1;
+}
+
+.datum-tutorial-demo-trail {
+    height: 100%;
+    left: 0;
+    overflow: visible;
+    position: absolute;
+    top: 0;
+    width: 100%;
+}
+
+/*
+ * THE PATH IS TWO STROKES: a dark one under a gold one.
+ *
+ * A single gold rule disappears on a pale sheet on a sunny screen; the ink line
+ * beneath it gives the gold something to sit on, in both themes, without a glow
+ * wide enough to hide the drawing. The ink is the WIDE one and the gold the
+ * narrow one, so the gold is what reads and the ink is what makes it read.
+ */
+.datum-tutorial-demo-line {
+    stroke: var(--datum-guide-outline);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 6;
+    opacity: 0.9;
+}
+
+/* The gold rule, drawn over the ink one - see `pointerMarkup`'s pair. */
+.datum-tutorial-demo-gold {
+    opacity: 1;
+    stroke: var(--datum-guide-gold);
+    stroke-dasharray: none;
+    stroke-width: 3;
+}
+
+/*
+ * THE ENDPOINTS.
+ *
+ * A ring at the start and a filled ring at the end, both hollow enough to leave
+ * the drawing showing through. The start is labelled "Start" and the end
+ * "End" for a screen reader and for the legend the panel shows; visually they
+ * are told apart by weight and size, not by words on the sheet.
+ */
+.datum-tutorial-demo-marker {
+    background: transparent;
+    border: 2.5px solid var(--datum-guide-gold);
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px var(--datum-guide-outline),
+        0 1px 3px rgba(15, 23, 42, 0.35);
+    box-sizing: border-box;
+    height: 24px;
+    margin-left: -12px;
+    margin-top: -12px;
+    opacity: 0;
+    position: absolute;
+    transition: opacity 200ms ease, transform 200ms ease;
+    transform: scale(0.6);
+    width: 24px;
+}
+
+.datum-tutorial-demo-start {
+    background: transparent;
+    border-color: var(--datum-guide-outline);
+    box-shadow: 0 0 0 2px var(--datum-guide-gold),
+        0 1px 3px rgba(15, 23, 42, 0.35);
+    height: 18px;
+    margin-left: -9px;
+    margin-top: -9px;
+    width: 18px;
+}
+
+/* The end ring carries a pale gold fill, so start and end read apart. */
+.datum-tutorial-demo-end {
+    background: var(--datum-guide-gold-soft);
+    box-shadow: 0 0 0 1.5px var(--datum-guide-outline),
+        0 0 0 5px var(--datum-guide-gold-soft),
+        0 1px 3px rgba(15, 23, 42, 0.35);
+    height: 30px;
+    margin-left: -15px;
+    margin-top: -15px;
+    width: 30px;
+}
+
+.datum-tutorial-demo-marker[data-mode="touch"] {
+    border-width: 3px;
+    height: 30px;
+    margin-left: -15px;
+    margin-top: -15px;
+    width: 30px;
+}
+
+.datum-tutorial-demo-shown .datum-tutorial-demo-marker,
+.datum-tutorial-demo-arrived .datum-tutorial-demo-marker {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* The end marker waits for the gesture to reach it. */
+.datum-tutorial-demo-end {
+    opacity: 0;
+}
+
+.datum-tutorial-demo-arrived .datum-tutorial-demo-end,
+.datum-tutorial-demo-point .datum-tutorial-demo-start {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* The trail is drawn by the gesture: full length, hidden by its own dash. */
+.datum-tutorial-demo-line {
+    transition: stroke-dashoffset 720ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+/* A gesture that is only a PLACE does not draw a path at all. */
+.datum-tutorial-demo-point .datum-tutorial-demo-trail,
+.datum-tutorial-demo-point .datum-tutorial-demo-end {
+    display: none;
+}
+
+/* The live region speaks to a screen reader; it must not be seen. */
+.datum-tutorial-live {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+}
+
+/* ---------------------------------------------------------------- small screens */
+
+/*
+ * ONE PROGRESSIVE BREAKPOINT, DOWNWARDS, matching the rest of the sheet.
+ *
+ * The header stops being a single wide row and wraps its device control onto a
+ * second line; the panel takes the available width instead of sizing to its
+ * content; and the grid loses columns before anything is clipped.
+ */
+@media (max-width: 760px) {
+    .datum-tutorial-header {
+        flex-wrap: wrap;
+        gap: 8px 14px;
+        padding: 8px 12px;
+    }
+
+    .datum-tutorial-header-main {
+        flex: 1 1 140px;
+    }
+
+    .datum-tutorial-header-progress {
+        flex: 1 1 92px;
+    }
+
+    .datum-device-compact {
+        flex: 1 1 100%;
+    }
+
+    .datum-device-compact .datum-device-select {
+        max-width: none;
+    }
+
+    .datum-tutorial-panel {
+        max-width: calc(100vw - 24px);
+        width: calc(100vw - 24px);
+    }
+}
+
+@media (max-width: 620px) {
+    .datum-guide-dialog {
+        padding: 10px;
+    }
+
+    .datum-guide-panel {
+        max-height: calc(100dvh - 20px);
+    }
+
+    .datum-guide-body {
+        padding: 16px 14px 20px;
+    }
+
+    .datum-guide-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    }
+
+    /* The device row stacks, and the dropdown takes the full content width. */
+    .datum-guide-settings {
+        justify-content: stretch;
+    }
+
+    .datum-device {
+        align-items: stretch;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        width: 100%;
+    }
+
+    .datum-device-label {
+        white-space: normal;
+    }
+
+    .datum-device-control,
+    .datum-device-select {
+        max-width: none;
+        width: 100%;
+    }
+
+    .datum-guide-hint {
+        display: none;
+    }
+}
+
+/* A user who has asked for less motion gets the mark, not the animation. */
+@media (prefers-reduced-motion: reduce) {
+    .datum-tutorial-pointer-trail {
+        animation: none !important;
+    }
+
+    .datum-tutorial-pointer,
+    .datum-tutorial-ring,
+    .datum-tutorial-pointer-halo,
+    .datum-tutorial-panel,
+    .datum-tutorial-progress-fill,
+    .datum-guide-card {
+        transition: none;
+    }
+}

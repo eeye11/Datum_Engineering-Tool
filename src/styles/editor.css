@@ -27,12 +27,14 @@
 @import url("./editor/sketch-workspace.css");
 @import url("./editor/responsive.css");
 @import url("./editor/canvas.css");
+@import url("./editor/rulers.css");
 @import url("./editor/sheets-and-references.css");
 @import url("./editor/dialogs-and-launcher.css");
 @import url("./editor/value-popups.css");
 @import url("./editor/analysis-editors.css");
 @import url("./editor/latex-editor.css");
 @import url("./editor/panel-tabs.css");
+@import url("./editor/user-guide.css");
 
 .dimension-value-editor { position: fixed; left: 50%; top: 25%; transform: translateX(-50%); z-index: 1200; width: min(380px, calc(100vw - 32px)); padding: 18px; display: grid; gap: 12px; background: var(--datum-menu); color: var(--datum-ink); border: 1px solid var(--datum-border-strong); border-radius: var(--radius-md); box-shadow: var(--datum-shadow); }
 .dimension-value-editor label { display: grid; gap: 6px; }

@@ -910,13 +910,14 @@ function serializeCollection(collection) {
   };
 }
 
-const enggSheets = {
+export const enggSheets = {
   SHEET_ID_PREFIX,
   activeSheet,
   addSheet,
   applySheetContent,
   captureSheetContent,
   createCollection,
+  createSheet,
   createSheetContent,
   defaultSheetName,
   deleteSheet,

@@ -7,7 +7,7 @@
  * is finished, so no later renderer in the table runs for it.
  */
 import { ANALYSIS_DIAGRAM_AXES, ANALYSIS_DIAGRAM_TINTS, MAX_TICKS_PER_AXIS, analysisFrameExtents, analysisValueScale, appendAnalysisPlot, numberText, tickValues } from "../analysis-render.js";
-import { applyStyle, createSvgElement, paintColour, scaledStrokeWidth, zoomedFontHere } from "../svg-primitives.js";
+import { applyStyle, createSvgElement, paintColour, scaledStrokeWidth, worldLength, zoomedFontHere } from "../svg-primitives.js";
 import enggDiagramEquations from "../../../features/workspace/model/analysis/diagram-equations.js";
 import enggTheme from "../../../components/layout/workspace/theme.js";
 import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
@@ -92,8 +92,16 @@ import { BEAM_HALF_DEPTH } from "../latex/symbol-sizes.js";
                  * the same beam was twice as deep on the sheet as in the
                  * generated code, and the fit reserved only half of it. One
                  * constant, read by the canvas, the writer and the bounds.
+                 *
+                 * AND IT IS A DRAWING LENGTH. The constant is in the drawing's
+                 * own units - the same units the writer states it in - so it is
+                 * carried through the camera like every other symbol size, with
+                 * `worldLength`. Written as a bare number it was six OVERLAY
+                 * pixels: a beam kept one depth on screen however far the sheet
+                 * was zoomed, so a member four times as long looked a quarter as
+                 * deep, and the canvas disagreed with the picture beneath it.
                  */
-                const depth = BEAM_HALF_DEPTH;
+                 const depth = worldLength(BEAM_HALF_DEPTH);
 
                 svg.appendChild(
                     createSvgElement("polygon", {

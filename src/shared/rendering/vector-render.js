@@ -742,26 +742,32 @@ import { arrowHeadSize } from "./dimension-render.js";
             paintColour(style.stroke || enggTheme.defaultLineColour());
 
         /*
-         * THE RADIUS IS A SCREEN SIZE, CONVERTED BACK INTO THE WORLD.
+         * THE RADIUS IS A DRAWING LENGTH, NOT A SCREEN ONE.
          *
-         * `arcRadius` is stored in SCREEN pixels - it is the size the student
-         * chose for the symbol, and `arcFor` reads it as pixels around a centre
-         * that has already been projected. Drawn raw, the ring was therefore the
-         * same number of pixels at every magnification: correct at 100%, a
-         * hairline ring inside a huge member at 400%, and a ring swallowing a
-         * small one at 25%.
+         * `arcRadius` is stored in the drawing's own pixels - the size the
+         * student chose for the symbol, and the value the Features panel and
+         * the fitted view read as well - so it is passed through the SAME
+         * conversion every other symbol size uses.
          *
-         * Converting it into the drawing's own units and then back through the
-         * camera is what makes the symbol keep its size RELATIVE to everything
-         * else on the sheet - the same rule a support's triangle and an
-         * arrowhead follow, so the whole drawing stays in proportion.
+         * THIS USED TO DIVIDE THE ZOOM BACK OUT AND MULTIPLY IT IN AGAIN
+         * (`worldLength(screenRadius / zoom)`), which cancelled itself. The
+         * result was a symbol pinned to the SCREEN: the same number of pixels
+         * at every magnification, so at 400% a 20 px arc drew as 80 px inside
+         * a member four times its length, and a moment was the one feature on
+         * the sheet whose size did not hold still while everything else did.
+         *
+         * `drawnArcRadius` answers the MODEL length the source states, and
+         * `worldLength` carries it through the camera exactly as the writer
+         * carries it through `point()`. One rule, so the arc, the fitted view
+         * and the compiled picture agree about how big a moment is.
          */
-        const screenRadius =
-            Number(arcRadius) > 0 ? Number(arcRadius) : rotational.DEFAULT_ARC_RADIUS_PX;
-
-        const zoom = Number(activeZoom) > 0 ? Number(activeZoom) : 1;
-
-        const radius = worldLength(screenRadius / zoom);
+        const radius = worldLength(
+            rotational.drawnArcRadius
+                ? rotational.drawnArcRadius(arcRadius)
+                : Number(arcRadius) > 0
+                  ? Number(arcRadius)
+                  : rotational.DEFAULT_ARC_RADIUS_PX
+        );
 
         const arc =
             rotational.arcFor(

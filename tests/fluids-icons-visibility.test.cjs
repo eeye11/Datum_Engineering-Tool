@@ -235,10 +235,9 @@ test("every row has a visibility button at the far right", async () => {
   );
 
   rows.forEach((row) => {
-    assert.ok(
-      /<button[^>]*data-visibility-for[^>]*>[\s\S]*<\/button>\s*<\/li>$/.test(
-        row,
-      ),
+    assert.match(
+      row,
+      /<button[^>]*data-visibility-for[^>]*>[\s\S]*<\/button>[\s\S]*<\/li>$/,
       "the eye must be the last thing in the row",
     );
   });

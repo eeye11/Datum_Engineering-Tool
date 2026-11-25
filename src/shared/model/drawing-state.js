@@ -8,7 +8,35 @@ import enggMeasurement from "../geometry/measurement-core.js";
 import enggDrawingSnap from "../snapping/object-snap.js";
 import { deepClone } from "../util/clone.js";
 
-const BASE_PIXELS_PER_UNIT = 2.4;
+/*
+ * THE CAMERA'S SCALE: SCREEN PIXELS FOR ONE DRAWING UNIT AT 100% ZOOM.
+ *
+ *
+ * ONE PLACE, TWO MIRRORS.
+ * `src/shared/geometry/drawing-units.js` imports this value, and the camera
+ * transforms below use it directly - so the ruler, the status line, hit
+ * testing and the drawing itself all measure a millimetre the same way. It is
+ * duplicated in exactly one other spot (`canvas-typography.js`), which is a
+ * static re-export for the canvas font sizing; the two are asserted equal in
+ * `tests/` so they cannot drift.
+ *
+ * WHY IT WENT FROM 2.4 TO 3.6.
+ *
+ * The scale decides how much sheet a given number of pixels holds. At 2.4, the
+ * position that the ruler marks 150 was 150 * 2.4 = 360px from the centre. The
+ * drawing space was asked to show MORE sheet at the same screen size, so that
+ * the SAME physical distance now reads 100: 360px / 100 units = 3.6 px per
+ * unit. 2.4 x (150 / 100) = 3.6 exactly - a uniform increase, not a new unit
+ * and not a zoom.
+ *
+ * WHAT IS *NOT* TOUCHED. Every stored coordinate, dimension value, grid spacing
+ * in model units, snap tolerance and object property is a number in DRAWING
+ * units, and stays byte-identical. Only the ratio that maps those numbers onto
+ * screen pixels changes, so an existing drawing is neither rewritten nor
+ * stretched - it is shown at the new, larger scale, exactly like its
+ * neighbours.
+ */
+const BASE_PIXELS_PER_UNIT = 3.6;
 
 /*
  * Vertices of a regular polygon, derived from its

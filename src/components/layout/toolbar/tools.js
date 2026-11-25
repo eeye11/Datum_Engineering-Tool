@@ -1064,6 +1064,46 @@ export const drawToolDefinitions = [
 ];
 export const drawToolLabelById = Object.fromEntries(drawToolDefinitions.map(tool => [tool.id, tool.label]));
 
+/*
+ * ========================================================
+ * THE TWO FLAT TOOLSETS, WITH THEIR IDS
+ * ========================================================
+ *
+ * Controls and Mechanical Design are the two categories whose tools are a
+ * plain list rather than a list of groups. Their names were only ever written
+ * down as the label list below, which meant any reader that needed a tool's
+ * NAME beside its ID had to retype the pair - and `signal-line` is spelled
+ * differently from its label, which is exactly how such a copy goes wrong.
+ *
+ * These two tables are that pair, declared once. The toolbar and the User
+ * Guide's Tool Reference both read them, so naming a Controls tool is one
+ * statement of fact rather than two that can drift.
+ */
+export const CONTROL_TOOL_DEFINITIONS = [
+	{ id: "plant", label: "Plant" },
+	{ id: "block", label: "Block" },
+	{ id: "gain", label: "Gain" },
+	{ id: "sum", label: "Sum" },
+	{ id: "signal-line", label: "Signal Line" }
+];
+
+export const MECHANICAL_DESIGN_TOOL_DEFINITIONS = [
+	{ id: "part", label: "Part" },
+	{ id: "hole", label: "Hole" },
+	{ id: "gear", label: "Gear" },
+	{ id: "fastener", label: "Fastener" },
+	{ id: "section-view", label: "Section View" }
+];
+
+/*
+ * The flat categories, by the key they are registered under, so a caller asks
+ * "what is in CONTROLS?" rather than reaching for a named import.
+ */
+export const flatToolDefinitions = {
+	CONTROLS: CONTROL_TOOL_DEFINITIONS,
+	"MECHANICAL DESIGN": MECHANICAL_DESIGN_TOOL_DEFINITIONS
+};
+
 export const engineeringTools = {
 	GEOMETRY: sidebarToolDefinitions.map(tool => tool.label),
 	ANNOTATE: ["Length", "Angle", "Note / Text", "Label", "Leader", "Callout", "Symbol", "Table"],

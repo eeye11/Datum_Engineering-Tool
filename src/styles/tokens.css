@@ -161,6 +161,25 @@
     --datum-gold-tint: var(--precision-gold-100);
 
     /*
+     * THE GUIDE'S ACADEMIC GOLD.
+     *
+     * The interface's secondary highlight was folded into the one teal hue, so
+     * `--datum-gold` no longer carries any gold at all. The TUTORIAL CURSOR needs
+     * a mark that reads as guidance rather than as the active tool, and it needs
+     * to be the same mark on a white sheet, a dark panel and the dark theme - so
+     * it gets its own pair: the gold itself, and the dark ink that outlines it.
+     *
+     * IT IS USED ONLY BY THE HELP CURSOR AND ITS TARGET HALO. Nothing else in
+     * the application paints in it, which is what keeps gold meaning "the guide
+     * is pointing here".
+     */
+    --datum-guide-gold: #D8A73C;
+    --datum-guide-gold-soft: rgba(216, 167, 60, 0.22);
+    --datum-guide-gold-ink: #6B4E12;
+    --datum-guide-outline: #17322F;
+    --datum-guide-halo: rgba(23, 50, 47, 0.14);
+
+    /*
      * The neutral surfaces, from the backdrop up to the raised surface.
      *
      * DEPTH COMES FROM A STEP, NOT AN OUTLINE. The page is the ice-mint, the
@@ -308,6 +327,17 @@
     --datum-placeholder: var(--precision-slate-400);
 
     --datum-overlay: rgba(15, 23, 42, 0.28);
+
+    /*
+     * THE TUTORIAL'S DIM, WHICH IS ITS OWN WEIGHT.
+     *
+     * `--datum-overlay` is tuned for a DIALOG: a panel filling the window only
+     * needs the background explained away. A tutorial keeps most of the window
+     * visible and points at one control inside it, so the surrounding workspace
+     * has to recede enough that the eye goes to the target - and the value is
+     * deeper for exactly that reason. It is a token so it follows the theme.
+     */
+    --datum-tutorial-scrim: rgba(15, 23, 42, 0.52);
     --datum-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
     --datum-shadow-soft: 0 1px 3px rgba(15, 23, 42, 0.10);
 
@@ -512,6 +542,17 @@
     --datum-gold-ink: #4DD0C5;
     --datum-gold-tint: #203B3C;
 
+    /*
+     * THE GUIDE'S GOLD, LIFTED FOR THE DARK THEME. The hue is kept - the help
+     * cursor has to be recognisably the same mark - and the outline flips to the
+     * pale ice so the arrow still separates from a dark canvas.
+     */
+    --datum-guide-gold: #E7BC55;
+    --datum-guide-gold-soft: rgba(231, 188, 85, 0.26);
+    --datum-guide-gold-ink: #F3DCA6;
+    --datum-guide-outline: #E8F5F3;
+    --datum-guide-halo: rgba(232, 245, 243, 0.20);
+
     /* Deep teal-charcoal and ice - never blue-grey, never pure black. */
     --datum-ink: #E8F5F3;
     --datum-muted: #A8C6C3;
@@ -584,6 +625,7 @@
     --datum-placeholder: #8FA9A7;
 
     --datum-overlay: rgba(0, 0, 0, 0.55);
+    --datum-tutorial-scrim: rgba(0, 0, 0, 0.66);
     --datum-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
     --datum-shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.45);
 
@@ -832,6 +874,7 @@
         --datum-placeholder: #8FA9A7;
 
         --datum-overlay: rgba(0, 0, 0, 0.55);
+        --datum-tutorial-scrim: rgba(0, 0, 0, 0.66);
         --datum-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
         --datum-shadow-soft: 0 1px 4px rgba(0, 0, 0, 0.45);
 

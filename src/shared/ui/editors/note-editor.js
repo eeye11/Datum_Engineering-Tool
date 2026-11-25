@@ -516,7 +516,7 @@ function openLabelField(options, anchor) {
       : drawingState?.camera || {};
 
   const pixelsPerUnit = () =>
-    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4) *
+    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 3.6) *
     (Number(activeCamera().zoom) || 1);
 
   void drawingState;
@@ -1217,7 +1217,7 @@ function openInline(options, anchor) {
       : drawingState?.camera || {};
 
   const pixelsPerUnit = () =>
-    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4) *
+    Number(enggDrawingState.BASE_PIXELS_PER_UNIT || 3.6) *
     (Number(activeCamera().zoom) || 1);
 
   void drawingState;

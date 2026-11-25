@@ -30,12 +30,12 @@ import {
   beginFlowProfileToolSession,
   beginSectionToolSession
 } from "../../../features/workspace/interaction/fluids-schematic-tool.js";
-import { activeCategory, closePolygonSidesPrompt } from "./tool-menus.js";
+import { activeCategory, closePolygonSidesPrompt, isToolMenu } from "./tool-menus.js";
 import { renderEngineeringTools, setToolMessage } from "./toolbar-render.js";
 import { clearGlobalToolHighlight } from "../workspace/workspace-controls.js";
 import { isLegacyResetTool, legacyPlaceholderMessage } from "./phase-reset.js";
 import { isMathTool, mathInstruction } from "../../../features/workspace/math/math-tools.js";
-import { isHeatTool, heatGesture, isPlannedHeatTool } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
+import { isHeatTool, heatGesture, isPlannedHeatTool, heatArmedTool } from "../../../features/workspace/model/heat-transfer/heat-tools.js";
 import { beginHeatToolSession, heatToolInstruction } from "../../../features/workspace/interaction/heat-transfer-tool.js";
 
 export function activate2DCoordinateSystemTool() {
@@ -72,6 +72,18 @@ export function activate2DCoordinateSystemTool() {
 export function activateTool(
     toolId
 ) {
+    /*
+     * A MENU IS NOT A TOOL. An id that only opens a submenu names no drawing
+     * operation, so arming it would leave the status line announcing a tool the
+     * canvas cannot run. The real toolbar opens the menu instead; this refuses
+     * the dead id for every other caller (search, automation, a test) rather
+     * than letting it look armed.
+     */
+    if (isToolMenu(toolId)) {
+        setToolMessage("Choose a tool from this menu");
+        return;
+    }
+
     if (
         toolId ===
         "coordinate-system"
@@ -118,11 +130,24 @@ export function activateTool(
         return;
     }
 
+    /*
+     * A HEAT TRANSFER SHAPE ENTRY ARMS ITS GEOMETRY TOOL, exactly as a Fluids
+     * shape entry does. Only a HEAT entry - one with its own model and session -
+     * arms its own id. Without this, the Heat Transfer section's Reference Point
+     * and Reference Line started a heat drag session and placed nothing.
+     */
     const requestedTool = isFluidsTool(toolId)
         ? fluidsArmedTool(toolId)
-        : toolId;
+        : isHeatTool(toolId)
+            ? heatArmedTool(toolId)
+            : toolId;
 
-    const isHeat = isHeatTool(toolId);
+    /*
+     * A SESSION IS OPENED ONLY FOR A TOOL THAT HAS ONE. A shape entry has been
+     * redirected to its geometry tool above, so it must not begin a heat
+     * session - that is what made the reused tools unusable.
+     */
+    const isHeat = isHeatTool(toolId) && requestedTool === toolId;
     const heatPlacementGesture = isHeat ? heatGesture(toolId) : null;
 
     /*

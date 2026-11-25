@@ -466,10 +466,15 @@ const insertMenu = () => ({
  * HELP
  * ============================================================
  *
- * The guide and the help are honest about being brief. About reads the real
- * version from the document's metadata rather than inventing one - a made-up
- * version number is worse than none, because it is the first thing somebody
- * quotes when reporting a problem.
+ * THE GUIDE IS AN INTERFACE, NOT A PARAGRAPH. User Guide opens the full guide
+ * over the drawing - the eleven sections, their tutorials and a tool reference
+ * - and returns to the drawing unchanged when it is closed. The other three
+ * entries are the short panels they always were. All four still go through
+ * `showHelp`, so this menu has one door onto each and no second route exists.
+ *
+ * About reads the real version from the document's metadata rather than
+ * inventing one - a made-up version number is worse than none, because it is
+ * the first thing somebody quotes when reporting a problem.
  *
  * KEYBOARD SHORTCUTS IS DELIBERATELY NOT HERE: it belongs to Tools, where the
  * rest of the reference material lives, and listing it in two menus would be the

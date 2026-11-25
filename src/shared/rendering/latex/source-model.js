@@ -482,19 +482,42 @@ function shapeOfPath(body) {
   if (kinds === "point arc" && points.length === 1) {
     const arc = operations.find((operation) => operation.type === "arc");
 
-    return Number.isFinite(arc.startAngle) &&
-      Number.isFinite(arc.endAngle) &&
-      Number.isFinite(arc.radius) &&
-      arc.radius > 0
-      ? {
-          type: "arc",
-          centre: points[0].value,
-          radius: arc.radius,
-          startAngle: arc.startAngle,
-          endAngle: arc.endAngle,
-          deltaAngle: arc.deltaAngle ?? null
-        }
-      : null;
+    if (
+      !Number.isFinite(arc.startAngle) ||
+      !Number.isFinite(arc.endAngle) ||
+      !Number.isFinite(arc.radius) ||
+      !(arc.radius > 0)
+    ) {
+      return null;
+    }
+
+    /*
+     * THE POINT IS THE ARC'S START, NOT ITS CENTRE - SO THE CENTRE IS DERIVED.
+     *
+     * DAETUM writes an arc as `\draw (start) arc[start angle=.., end angle=..,
+     * radius=..]`, which is the form TikZ reads as "an arc beginning HERE": the
+     * coordinate is the point ON the circle at the start angle, not the middle
+     * of it. Treating that coordinate as the centre put every arc's middle a
+     * whole radius away from where it belongs, which is what made an arc move
+     * every time its block was re-read.
+     *
+     * Stepping BACK along the start angle by one radius recovers the centre -
+     * the exact inverse of the writer's `centre + radius * (cos, sin)`.
+     */
+    const start = points[0].value;
+    const angle = (arc.startAngle * Math.PI) / 180;
+
+    return {
+      type: "arc",
+      centre: {
+        x: start.x - arc.radius * Math.cos(angle),
+        y: start.y - arc.radius * Math.sin(angle),
+      },
+      radius: arc.radius,
+      startAngle: arc.startAngle,
+      endAngle: arc.endAngle,
+      deltaAngle: arc.deltaAngle ?? null,
+    };
   }
 
   /*
@@ -909,10 +932,21 @@ export function blockContents(source, map) {
         unclosed: Boolean(block.unclosed),
         /*
          * THE HEADER, AND THE BODY. A block's metadata lives in its header - an
-         * arrow's attachment, a schematic's own model line - so a reader that
-         * needs to know WHAT the block is must see both.
+         * arrow's attachment, a schematic's own model line, and the transform
+         * its coordinates were written through - so a reader that needs to know
+         * WHAT the block is must see both.
+         *
+         * THE HEADER ENDS WHERE THE COMMANDS BEGIN. `bodyStartLine` is the first
+         * line of the block's commands, so the metadata lines above it are the
+         * header. This used to stop at `Math.max(beginLine, bodyStart)`, which
+         * cut the header off at its first line - the readable name - so every
+         * metadata line after it (the id, the type, the schematic's own model
+         * line and the transform the coordinates were written through) was
+         * invisible to a reader. That is why a shape came back at its SOURCE
+         * coordinates instead of its model ones, and why a block's engine
+         * metadata had to be re-found from the body.
          */
-        header: lines.slice(block.beginLine, Math.max(block.beginLine, bodyStart)).join("\n"),
+        header: lines.slice(block.beginLine, bodyStart).join("\n"),
         body: bodyText,
         statements: inside.map((statement) => {
           const statementText = text.slice(statement.start, statement.end);

@@ -608,9 +608,6 @@ export function handleCanvasClick(
         selectFromCanvasClick(
             event
         );
-        selectFromCanvasClick(
-            event
-        );
 
         return;
     }

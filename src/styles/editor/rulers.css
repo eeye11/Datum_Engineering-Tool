@@ -1,0 +1,172 @@
+/*
+ * =========================================================
+ * THE MEASUREMENT RULERS
+ * =========================================================
+ *
+ * A ruler along the top edge of the drawing and one down its right edge,
+ * reading the sheet's own coordinates. They are children of the canvas, so
+ * they share its origin and cannot drift from it; see `rulers.js` for why
+ * that is the whole alignment story.
+ *
+ * THEY DO NOT TAKE SPACE FROM THE DRAWING AND THEY DO NOT TAKE ITS POINTER.
+ *
+ * Every box here is `position: absolute` inside the canvas, so the canvas's
+ * box - and therefore the viewport the drawing is fitted into - is exactly the
+ * size it was before. And every box is `pointer-events: none`, so a press that
+ * lands on a ruler travels through it to the canvas underneath: drawing,
+ * selection, dragging, snapping and the pan gesture are all unaffected.
+ *
+ * THE STRIP IS 19px AND THE BADGE 18px, and the ruler module's `TICK_DEPTH_PX`
+ * draws a major tick 9px into that strip and a minor one 4.5px, leaving room
+ * for the label above the tick. These are plain pixel values deliberately: a
+ * custom property here would look like a theme token, and this project's rule
+ * is that a custom property is always a theme colour.
+ *
+ * COLOUR IS ALL TOKENS. The surface is the interface's own neutral panel, the
+ * ticks are the muted ink and the labels the full ink, so contrast holds in
+ * both themes without a literal colour in this file. One accent - the deep
+ * teal `--datum-green` - is used for the corner badge, which is the only part
+ * of the rulers that is chrome rather than a measuring line.
+ */
+
+/* ------------------------------------------------------------ the strips */
+
+.drawing-ruler {
+  background: color-mix(in srgb, var(--datum-panel) 88%, var(--datum-surface));
+  border-color: var(--datum-border);
+  color: var(--datum-muted);
+  padding: 0;
+  pointer-events: none;
+  user-select: none;
+  z-index: 8;
+}
+
+.drawing-ruler[hidden] {
+  display: none;
+}
+
+/*
+ * THE TOP RULER: the canvas's full width, its top edge. The bottom border is
+ * the seam between the ruler and the sheet - the line the major ticks hang
+ * from.
+ */
+.drawing-ruler-x {
+  border-bottom: 1px solid var(--datum-border);
+  height: 19px;
+  left: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+/*
+ * THE RIGHT RULER: the canvas's full height, its right edge. It is turned the
+ * way a vertical scale is read - zero at the top, growing down the page - and
+ * its left border is the seam.
+ */
+.drawing-ruler-y {
+  border-left: 1px solid var(--datum-border);
+  bottom: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 19px;
+}
+
+.drawing-ruler-scale {
+  display: block;
+  overflow: visible;
+}
+
+/* ------------------------------------------------------------ the ticks */
+
+/*
+ * A THREE-STEP HIERARCHY: the minor ticks are the quietest, the majors step
+ * up, and the labels step up again - the same relationship the canvas grid
+ * uses, so the ruler reads as part of the same surface rather than a strip
+ * dropped over it.
+ */
+.drawing-ruler-ticks line {
+  stroke: var(--datum-border-strong);
+  stroke-width: 1;
+}
+
+/*
+ * THE MAJOR TICKS ARE MARKED ON THE ELEMENT, not counted from a fifth-child
+ * rule: the tick list is rebuilt on every pan, and its first minor is not
+ * always a major, so an nth-child rule would darken whichever tick happened to
+ * start the window. The `data-major` attribute is the one fact that survives a
+ * rebuild.
+ */
+.drawing-ruler-ticks line[data-major="true"] {
+  stroke: var(--datum-muted);
+}
+
+.drawing-ruler-labels text {
+  fill: var(--datum-muted);
+  font-family: var(--datum-font-mono, var(--datum-font));
+  font-size: 8.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ the corner badge */
+
+/*
+ * THE UNIT, NAMED WHERE BOTH AXES MEET.
+ *
+ * "mm" is what DAETUM's coordinates are - one drawing unit is one millimetre
+ * (see drawing-units.js). The badge is the one element here painted in the
+ * accent, because it is the one piece of information that is chrome rather
+ * than a measuring line, and it is the answer to "what do these numbers mean?"
+ */
+.drawing-ruler-unit {
+  align-items: center;
+  background: var(--datum-green);
+  border-bottom: 1px solid var(--datum-border);
+  border-left: 1px solid var(--datum-border);
+  color: var(--datum-surface);
+  display: flex;
+  font-family: var(--datum-font-mono, var(--datum-font));
+  font-size: 8px;
+  font-weight: 700;
+  height: 18px;
+  justify-content: center;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  top: 0;
+  user-select: none;
+  width: 18px;
+  z-index: 9;
+}
+
+.drawing-ruler-unit[hidden] {
+  display: none;
+}
+
+/*
+ * A THINNER STRIP ON THE SMALLEST SCREENS, so the rulers cost the drawing
+ * less of a narrow window.
+ */
+@media (max-width: 620px) {
+  .drawing-ruler-x {
+    height: 16px;
+  }
+
+  .drawing-ruler-y {
+    width: 16px;
+  }
+
+  .drawing-ruler-unit {
+    height: 16px;
+    width: 16px;
+  }
+
+  .drawing-ruler-labels text {
+    font-size: 8px;
+  }
+}

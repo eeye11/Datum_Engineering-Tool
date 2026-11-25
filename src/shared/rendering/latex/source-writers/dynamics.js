@@ -66,7 +66,7 @@ function finite(value, fallback = 0) {
  * canvas. The picture, though, is one paper millimetre per drawing unit - so
  * the one conversion between the two is stated here rather than at each call.
  */
-const BASE_PIXELS_PER_UNIT = enggDrawingState.BASE_PIXELS_PER_UNIT || 2.4;
+const BASE_PIXELS_PER_UNIT = enggDrawingState.BASE_PIXELS_PER_UNIT || 3.6;
 
 function pt(candidate) {
   return {

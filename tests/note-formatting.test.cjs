@@ -79,10 +79,15 @@ test('formatting survives save and produces escaped, formatted multiline TikZ',(
  const source=annotationSourceWriter({...note,text:'50% & safe\nNext line'});
  /*
   * THE SIZE STATES ITS UNIT. The numbers in `\fontsize` are TeX dimensions,
-  * and a unit-less form inside a node's option list is not portable - `18pt`
+  * and a unit-less form inside a node's option list is not portable - `24pt`
   * is the same physical size and compiles everywhere.
+  *
+  * AND IT IS THE SIZE THE CANVAS DRAWS. The note is 24 px on the sheet, one
+  * canvas pixel is one point in the figure, so the source states 24pt. A
+  * quarter-smaller figure (18pt) was the old behaviour and made every note
+  * disagree with the canvas it was drawn on.
   */
- assert.ok(source.includes('\\fontsize{18pt}{32.4pt}\\selectfont\\ttfamily\\bfseries\\itshape'),source);
+ assert.ok(source.includes('\\fontsize{24pt}{43.2pt}\\selectfont\\ttfamily\\bfseries\\itshape'),source);
  assert.ok(source.includes('align=center'),source);
  assert.ok(source.includes('\\underline{50\\% \\& safe}'),source);
  assert.ok(source.includes('(8,0)'),source);

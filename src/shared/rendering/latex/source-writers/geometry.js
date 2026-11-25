@@ -890,7 +890,20 @@ export function geometrySourceWriter(object, context = {}) {
          */
         const id = ensureObjectId(object, object.type);
 
-        return applyObjectComments({ ...object, id }, body, { type: object.type });
+        /*
+         * THE BLOCK STATES HOW ITS NUMBERS MAP BACK TO THE MODEL.
+         *
+         * The body above was written through `context.transform`, so its
+         * coordinates are export-scaled and shifted to the drawing's corner.
+         * The header records that mapping (see `object-comments.js`) so the
+         * reader can invert it: without it, re-reading the source of a drawing
+         * that does not start at the origin moves every shape by the drawing's
+         * corner, which is the "object jumps after a source edit" fault.
+         */
+        return applyObjectComments({ ...object, id }, body, {
+            type: object.type,
+            transform: context?.transform || null,
+        });
     });
 }
 

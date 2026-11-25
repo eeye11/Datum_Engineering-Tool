@@ -988,7 +988,17 @@ function serializeMoment(entity, object) {
   const geometry = object.geometry || {};
   const centre = pointOf(geometry.position || geometry.start);
 
-  const radius = finite(geometry.arcRadius) > 0 ? finite(geometry.arcRadius) : symbolSize(MOMENT_DEFAULT_RADIUS);
+  /*
+   * ONE RADIUS, IN MODEL UNITS, WHETHER OR NOT THE OBJECT STORES ONE.
+   *
+   * The arc below states `symbolSize(radius)`, so `radius` must be the MODEL
+   * value. Applying `symbolSize` here as well - as the fallback branch used to -
+   * scaled a default-size moment twice, so it came out smaller than a moment
+   * whose size had merely been touched. The canvas reads the same model value
+   * through `drawnArcRadius`, and the shared default comes from
+   * `latex/symbol-sizes.js`, so the sheet and its source describe one arc.
+   */
+  const radius = finite(geometry.arcRadius) > 0 ? finite(geometry.arcRadius) : MOMENT_DEFAULT_RADIUS;
   const clockwise = String(geometry.direction) === "CW";
 
   /*

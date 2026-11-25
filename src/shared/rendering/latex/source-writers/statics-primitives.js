@@ -33,6 +33,7 @@ import {
 } from "../../../../tool-library/shared/primitives/tikz-style.js";
 
 import { COMPONENT_COLOURS } from "../../component-colours.js";
+import enggStaticsLabel from "../../../geometry/statics-label.js";
 
 /* ============================================================
  * NUMBERS AND COORDINATES
@@ -943,6 +944,22 @@ function labelTextOf(object, fallback = "") {
         return texText(name);
     }
 
+    /*
+     * A LOAD HAS NO CONVENTIONAL SYMBOL, SO ITS FALLBACK LABEL IS EMPTY.
+     *
+     * Every reader of a label eventually reaches this function - the node
+     * writers through `labelTextOf`, and `staticsTextNodes` through its own
+     * `ownLabel` - and a load used to be given the literal fallback `w` here.
+     * That is the source of the stray `w` printed on every distributed load
+     * that nobody asked for: the student's own label wins above, so this only
+     * ever fired for a load whose label field was empty - which is every load
+     * as it is created. Refused by TYPE rather than by passing `""` at each
+     * call site, so no future caller can reintroduce it.
+     */
+    if (object?.type === "load" || object?.type === "varying-load") {
+        return "";
+    }
+
     return fallback ? texText(fallback) : "";
 }
 
@@ -970,6 +987,31 @@ function labelNode({ at, text, colour, font, anchor }) {
     return `\\node[anchor=${anchor || "south"}, text=${colour}, font=${fontSizeOption(size)}] at ${point(at.x, at.y)} {${text}};`;
 }
 
+/*
+ * WHERE THE SOURCE PUTS AN OBJECT'S OWN LABEL.
+ *
+ * THE SAME ANSWER THE CANVAS DRAWS FROM - `statics-label.js` - so the node in
+ * the code is at the point of the words in the picture. A writer that worked
+ * out its own offset put the label in one place and the canvas in another, and
+ * the two could only ever be reconciled by eye.
+ *
+ * It is the label's LEFT EDGE on its first line, which is why the node is
+ * anchored `west`: a TikZ node's anchor is the point it is placed by, and
+ * `west` makes that point the middle of its left side - exactly the origin the
+ * label was measured from.
+ */
+function ownLabelAnchorOf(object) {
+    const home = enggStaticsLabel?.labelHomeOf
+        ? enggStaticsLabel.labelHomeOf(object)
+        : null;
+
+    if (!home) {
+        return null;
+    }
+
+    return { at: home, anchor: "west" };
+}
+
 /* A force's own label and its magnitude, kept apart. */
 function forceNodes(object) {
     const geometry = object?.geometry || {};
@@ -984,11 +1026,11 @@ function forceNodes(object) {
     const reach = Number.isFinite(magnitude) ? Math.abs(magnitude) : 0;
 
     /*
-     * THE LABEL SITS AT THE ARROWHEAD THE SOURCE DRAWS - the stored `end`, the
-     * arrow the student drew. Placing it at `start + magnitude * direction`
-     * floated it away from the head whenever the typed value differed from
-     * the drawn length. A force with no stored end is drawn at its magnitude,
-     * and so is labelled there.
+     * THE VALUE SITS BESIDE THE ARROWHEAD THE SOURCE DRAWS - the stored `end`,
+     * the arrow the student drew. Placing it at `start + magnitude * direction`
+     * floated it away from the head whenever the typed value differed from the
+     * drawn length, which is the whole point of the two being separate. A force
+     * with no stored end is drawn at its magnitude, and so is labelled there.
      */
     const storedEnd =
         geometry.end && Number.isFinite(Number(geometry.end.x)) && Number.isFinite(Number(geometry.end.y))
@@ -997,27 +1039,31 @@ function forceNodes(object) {
 
     const end = storedEnd || { x: Number(start.x) + direction.x * reach, y: Number(start.y) + direction.y * reach };
 
-    const at = { x: Number(end.x) + direction.x * 3, y: Number(end.y) + direction.y * 3 };
+    const own = ownLabelAnchorOf(object);
+    const at = own ? own.at : { x: Number(end.x) + direction.x * 3, y: Number(end.y) + direction.y * 3 };
 
     const nodes = [];
 
     const label = labelTextOf(object);
 
     if (label) {
-        nodes.push(labelNode({ at, text: label, colour, font, anchor: direction.x >= 0 ? "west" : "east" }));
+        nodes.push(labelNode({ at, text: label, colour, font, anchor: own ? own.anchor : direction.x >= 0 ? "west" : "east" }));
     }
 
     if (valuesShown(object) && Number.isFinite(magnitude)) {
         const unit = unitOf(object);
         const text = `$F = ${formatNumber(magnitude)}${unit ? `\\ ${unit}` : ""}$`;
 
+        /* The value stands one line below the student's own label, never on it. */
+        const valueAt = own ? { x: at.x, y: at.y - font * 0.9 } : { x: at.x, y: at.y - font * 0.45 };
+
         nodes.push(
             labelNode({
-                at: { x: at.x, y: at.y - font * 0.45 },
+                at: valueAt,
                 text,
                 colour,
                 font,
-                anchor: direction.x >= 0 ? "west" : "east",
+                anchor: own ? own.anchor : direction.x >= 0 ? "west" : "east",
             }),
         );
     }
@@ -1039,16 +1085,22 @@ function loadNodes(object) {
     const normal = bodyNormal(geometry);
     const nodes = [];
 
+    /*
+     * THE LOAD'S OWN LABEL COMES FROM THE SHARED ANCHOR; the INTENSITIES
+     * below keep the load's own offset, because they are engineering values
+     * printed at the ends of the field rather than the student's words.
+     */
+    const own = ownLabelAnchorOf(object);
     const label = labelTextOf(object);
 
     if (label) {
         nodes.push(
             labelNode({
-                at: { x: mid.x + normal.x * 4, y: mid.y + normal.y * 4 },
+                at: own ? own.at : { x: mid.x + normal.x * 4, y: mid.y + normal.y * 4 },
                 text: label,
                 colour,
                 font,
-                anchor: normal.y >= 0 ? "south" : "north",
+                anchor: own ? own.anchor : normal.y >= 0 ? "south" : "north",
             }),
         );
     }
@@ -1090,10 +1142,28 @@ function loadNodes(object) {
     const intensity = Number(geometry.intensity);
 
     if (Number.isFinite(intensity)) {
+        /*
+         * A LOAD HAS NO CONVENTIONAL SYMBOL ON THE SHEET.
+         *
+         * The canvas draws a load's value as its intensity and unit - `20
+         * kN/m` - because the row of arrows already says which way it acts.
+         * This node used to state `$w = 20\ kN/m$` unconditionally, so the
+         * source printed a symbol the sheet did not, and a student who had
+         * typed a symbol of their own got both.
+         *
+         * So the symbol is written ONLY when the student stated one (the
+         * Features Label field, which the canvas reads as `magnitudeLabel`) -
+         * the same value in both places, from the same rule.
+         */
+        const symbol =
+            typeof object?.magnitudeLabel === "string"
+                ? object.magnitudeLabel.trim()
+                : "";
+
         nodes.push(
             labelNode({
                 at: { x: mid.x + normal.x * (font * 0.9), y: mid.y + normal.y * (font * 0.9) },
-                text: `$w = ${formatNumber(intensity)}${unit ? `\\ ${unit}` : ""}$`,
+                text: `$${symbol ? `${texText(symbol)} = ` : ""}${formatNumber(intensity)}${unit ? "\\ " + unit : ""}$`,
                 colour,
                 font,
                 anchor: normal.y >= 0 ? "south" : "north",
@@ -1113,14 +1183,16 @@ function momentNodes(object) {
     const position = geometry.position || { x: 0, y: 0 };
     const radius = Number(geometry.arcRadius) || 7;
 
-    const at = { x: Number(position.x) + radius * 0.35, y: Number(position.y) - radius - 1 };
+    const own = ownLabelAnchorOf(object);
+    const at = own ? own.at : { x: Number(position.x) + radius * 0.35, y: Number(position.y) - radius - 1 };
+    const anchor = own ? own.anchor : "south west";
 
     const nodes = [];
 
     const label = labelTextOf(object);
 
     if (label) {
-        nodes.push(labelNode({ at, text: label, colour, font, anchor: "south west" }));
+        nodes.push(labelNode({ at, text: label, colour, font, anchor }));
     }
 
     const magnitude = Number(geometry.magnitude);
@@ -1134,7 +1206,7 @@ function momentNodes(object) {
                 text: `$M = ${formatNumber(magnitude)}${unit ? `\\ ${unit}` : ""}$`,
                 colour,
                 font,
-                anchor: "south west",
+                anchor,
             }),
         );
     }
@@ -1152,14 +1224,24 @@ function resultantNodes(object) {
     const end = geometry.end || start;
 
     const direction = vector(geometry.angle);
-    const at = { x: Number(end.x) + direction.x * 3, y: Number(end.y) + direction.y * 3 };
+
+    const own = ownLabelAnchorOf(object);
+    const at = own ? own.at : { x: Number(end.x) + direction.x * 3, y: Number(end.y) + direction.y * 3 };
+    const anchor = own ? own.anchor : direction.x >= 0 ? "west" : "east";
 
     const nodes = [];
 
-    const label = labelTextOf(object, "R");
+    /*
+     * NO DEFAULT LETTER. A resultant used to print "R" whether or not the
+     * student wrote anything, which made an empty label field look filled in
+     * and gave them text they had not chosen. The calculated value below is
+     * still printed - that is the RESULT - but the student's own text is
+     * theirs to write.
+     */
+    const label = labelTextOf(object);
 
     if (label) {
-        nodes.push(labelNode({ at, text: label, colour, font, anchor: direction.x >= 0 ? "west" : "east" }));
+        nodes.push(labelNode({ at, text: label, colour, font, anchor }));
     }
 
     const magnitude = Number(geometry.magnitude);
@@ -1167,11 +1249,11 @@ function resultantNodes(object) {
     if (valuesShown(object) && Number.isFinite(magnitude)) {
         nodes.push(
             labelNode({
-                at: { x: at.x, y: at.y - font * 0.45 },
+                at: { x: at.x, y: at.y - font * 0.9 },
                 text: `$R = ${formatNumber(magnitude)}\\ ${unitOf(object)}$`,
                 colour,
                 font,
-                anchor: direction.x >= 0 ? "west" : "east",
+                anchor,
             }),
         );
     }
@@ -1457,20 +1539,25 @@ export function staticsTextNodes(object) {
     ]).has(object.type);
 
     if (ownLabel && !carriesOwnLabel && labelsShown(object)) {
-        const geometry = object.geometry || {};
         const colour = nodeColourOf(object);
         const font = fontFor(object.style);
 
-        const at = geometry.position || geometry.center || geometry.origin || geometry.start;
+        /*
+         * THE SAME PLACE THE CANVAS PRINTS IT. A member, a support or a
+         * reference with a label had its node four units up and right of an
+         * anchor the canvas never used - two placements for one string, which
+         * is what `statics-label.js` exists to end.
+         */
+        const home = ownLabelAnchorOf(object);
 
-        if (at && Number.isFinite(Number(at.x)) && Number.isFinite(Number(at.y))) {
+        if (home) {
             nodes.push(
                 labelNode({
-                    at: { x: Number(at.x) + 4, y: Number(at.y) + 4 },
+                    at: home.at,
                     text: texText(ownLabel),
                     colour,
                     font,
-                    anchor: "south west",
+                    anchor: home.anchor,
                 }),
             );
         }

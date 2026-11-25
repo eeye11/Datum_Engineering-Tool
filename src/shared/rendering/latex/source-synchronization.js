@@ -35,8 +35,9 @@ import {
 import { validateDrawingSource } from "./source-validation.js";
 import { clearSourceGenerationProblem, reportSourceGenerationProblem } from "./source-diagnostics.js";
 import { drawingBounds } from "./model-bounds.js";
-import { objectDisplayName } from "./object-comments.js";
+import { objectDisplayName, parseCommentLine, COMMENT_FIELDS } from "./object-comments.js";
 import { createExportContext, IDENTITY_EXPORT } from "./export-transform.js";
+import { blockContents } from "./source-model.js";
 
 /*
  * ============================================================
@@ -176,24 +177,108 @@ export function sourceForObject(object, context = {}) {
  * object that does not is appended as a new block - neither can touch anything
  * else in the text.
  */
+/*
+ * ============================================================
+ * THE MAPPING A BLOCK ALREADY STATES
+ * ============================================================
+ *
+ * Read from the text the student is editing, so a rewrite uses the same
+ * `factor`/`origin` the number under their caret was written with. The block's
+ * header carries it (`% DAETUM TRANSFORM: f ox oy`), and `blockContents` now
+ * hands a reader the whole header - see the note there for why it used to cut
+ * itself off at the first line.
+ */
+function recordedTransform(manager, object) {
+  try {
+    const source = manager.getSource();
+    const block = blockContents(source, manager.map()).blocks.find(
+      (candidate) => candidate.id === object.id,
+    );
+
+    return block ? readTransformFromHeader(block.header) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readTransformFromHeader(header) {
+  for (const line of String(header ?? "").split("\n")) {
+    const parsed = parseCommentLine(line);
+
+    if (!parsed || parsed.field !== COMMENT_FIELDS.transform.toLowerCase()) {
+      continue;
+    }
+
+    const [factor, originX, originY] = parsed.value
+      .split(/[\s,]+/)
+      .map((number) => Number(number));
+
+    return Number.isFinite(factor) && factor > 0
+      ? { factor, originX: originX || 0, originY: originY || 0 }
+      : null;
+  }
+
+  return null;
+}
+
+/* A transform object with the `point`/`length` methods a writer asks for. */
+function transformFromRecord({ factor, originX, originY }) {
+  return {
+    factor,
+    origin: { x: originX, y: originY },
+    identity: factor === 1,
+    point(x, y) {
+      return {
+        x: (Number(x) - originX) * factor,
+        y: (Number(y) - originY) * factor,
+      };
+    },
+    length(value) {
+      return Number(value) * factor;
+    },
+    width(value) {
+      return Number(value) * factor;
+    },
+    font(value) {
+      return Math.max(6, Number(value) * factor);
+    },
+  };
+}
+
 export function writeObjectIntoSource(manager, object, context = {}) {
   if (!manager || !object || !object.id) {
     return false;
   }
 
   /*
-   * THE OBJECT IS WRITTEN AT THE DRAWING'S EXPORT SCALE, not on its own.
+   * A BLOCK THAT IS BEING REWRITTEN KEEPS THE MAPPING IT ALREADY STATES.
    *
-   * `allObjects` is the drawing the object belongs to; without it the transform
-   * would be fitted to this one object, and a beam alone on a sheet would be
-   * drawn at a different scale from the same beam beside a graph. A caller that
-   * supplies the sheet - the panel, a reconcile, an Undo - passes it in the
-   * context; a caller that does not gets a single-object fit, which is the best
-   * answer available and is still consistent for that object.
+   * The export transform is fitted to the drawing's bounds, so it changes the
+   * moment an edit moves the drawing. Re-deriving it here would rewrite the
+   * number a student is typing UNDER a different scale - the value would be
+   * preserved but the text would silently change under their caret, and the
+   * canvas and the text would disagree about what that number means for one
+   * render.
+   *
+   * So an object whose block already records a transform is written through
+   * THAT record. Only a block with no record (a new one, or one from before the
+   * field existed) is written through the drawing's current transform.
    */
+  const recorded = recordedTransform(manager, object);
+
   const objects = Array.isArray(context.allObjects) ? context.allObjects : [object];
 
-  const commands = sourceForObject(object, writeContextFor(object, objects, context));
+  const writeContext = writeContextFor(object, objects, context);
+
+  const commands = sourceForObject(
+    object,
+    recorded
+      ? {
+          ...writeContext,
+          transform: transformFromRecord(recorded),
+        }
+      : writeContext,
+  );
 
   if (commands === null) {
     /*

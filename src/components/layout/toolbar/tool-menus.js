@@ -23,6 +23,32 @@ export function activeCategory() {
     );
 }
 
+/*
+ * ========================================================
+ * A MENU IS NOT A TOOL
+ * ========================================================
+ *
+ * Some toolbar entries exist only to OPEN a submenu - the Statics categories,
+ * the Fluids groups, the Heat Transfer groups. The real tool is one of the
+ * items inside, and it is that item the menu arms.
+ *
+ * PRESSING A MENU MUST NOT ARM THE MENU'S OWN ID. `activateTool` used to take
+ * whatever id it was given and set it as the active tool, so a programmatic
+ * press of a menu id (a search result built from a stale label, an automation
+ * hook, a test) left the status line announcing a tool that no click handler
+ * recognises: the button looked armed and the canvas did nothing. The real
+ * toolbar never reaches that path - it opens the menu instead - which is
+ * exactly why the guard belongs here, where every caller goes through.
+ */
+export function isToolMenu(toolId) {
+    const id = String(toolId || "");
+
+    return Boolean(
+        id &&
+            (STATICS_TOOL_MENUS[id] || FLUIDS_TOOL_MENUS[id])
+    );
+}
+
 export function toolDefinitionForLabel(label, { id = null } = {}) {
     const toolIdByLabel =
         Object.fromEntries(

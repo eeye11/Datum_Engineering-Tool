@@ -3,6 +3,7 @@
  */
 
 import enggDrawingState from "../../../shared/model/drawing-state.js";
+import { DRAWING_UNIT } from "../../../shared/geometry/drawing-units.js";
 import enggDrawingSnap from "../../../shared/snapping/object-snap.js";
 import enggLoadProfile from "../model/analysis/load-profile.js";
 import enggDrawingRenderer from "../../../shared/rendering/renderer.js";
@@ -1250,15 +1251,21 @@ export function updateInteractionFeedback(
                 afd: "kN",
             }[geometry.diagramType];
 
+        /*
+         * THE UNIT IS THE SHARED ONE, not this line's own literal. DAETUM's
+         * coordinates are millimetres (see `drawing-units.js`), and the ruler
+         * beside the canvas states the same unit - so the read-out and the
+         * scale cannot disagree about what a number means.
+         */
         drawingCoordinates.textContent =
             `X: ${Number(readable.x).toFixed(1)} ` +
-            `Y: ${Number(readable.y).toFixed(1)} mm` +
+            `Y: ${Number(readable.y).toFixed(1)} ${DRAWING_UNIT}` +
             (inDiagram && quantity && unit
                 ? `    |    x = ${
                       Number(inDiagram.x).toFixed(
                           1
                       )
-                  } mm    ${quantity} = ${
+                  } ${DRAWING_UNIT}    ${quantity} = ${
                       Number(inDiagram.y).toFixed(2)
                   } ${unit}`
                 : "");

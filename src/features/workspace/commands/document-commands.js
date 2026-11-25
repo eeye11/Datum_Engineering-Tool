@@ -278,6 +278,33 @@ export function documentHasUnsavedChanges() {
     return documentIsDirty();
 }
 
+/*
+ * ============================================================
+ * PUTTING THE UNSAVED FLAG BACK - FOR SOMETHING THAT PUTS THE
+ * DOCUMENT BACK
+ * ============================================================
+ *
+ * The User Guide's tutorial workspace swaps the document for a scratch sheet
+ * while the student practises, and puts the real one back afterwards. During
+ * that swap the sheet controller runs its ordinary activation path, which
+ * marks the document dirty - and the restore marks it clean - so without this
+ * the student's UNSAVED WORK would come back looking saved.
+ *
+ * This is the pair that lets a caller remember the flag and restore it,
+ * rather than a second dirty flag living somewhere else. It is deliberately
+ * narrow: it sets the one flag this module owns and redraws the header, and it
+ * is the only setter besides "an edit happened" and "a save happened".
+ */
+export function documentDirtyState() {
+    return documentDirty;
+}
+
+export function restoreDocumentDirtyState(state) {
+    documentDirty = Boolean(state);
+
+    refreshDocumentTitle();
+}
+
 export function documentIsLoading() {
     return documentLoading;
 }

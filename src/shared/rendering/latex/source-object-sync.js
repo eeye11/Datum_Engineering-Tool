@@ -44,7 +44,7 @@ import {
 import { blockContents, shapeFromStatement } from "./source-model.js";
 import { removeObjectRegion, setObjectRegion } from "./source-mapping.js";
 import { sourceForObject } from "./source-synchronization.js";
-import { objectDisplayName, objectTypeLabel } from "./object-comments.js";
+import { objectDisplayName, objectTypeLabel, parseCommentLine, COMMENT_FIELDS } from "./object-comments.js";
 import { splitStatements } from "./source-statements.js";
 import enggPipeDuct from "../../../features/workspace/model/fluids/pipe-duct.js";
 import enggFlowArrow from "../../../features/workspace/model/fluids/flow-arrow.js";
@@ -74,6 +74,105 @@ export function setFlowArrowSourceReader(reader) {
 
 function readFlowArrowBlock(source, options) {
   return flowArrowReader ? flowArrowReader(source, options) : null;
+}
+
+/* ============================================================
+ * THE BLOCK'S COORDINATE MAPPING
+ * ============================================================
+ *
+ * A block's commands are written through the drawing's EXPORT TRANSFORM: each
+ * coordinate is multiplied by a fit factor and shifted to the drawing's
+ * lower-left corner. The header records that mapping as
+ *
+ *     % DAETUM TRANSFORM: <factor> <originX> <originY>
+ *
+ * so a reader can put a typed coordinate back where the student meant it.
+ * Without the inverse, retyping a shape's own numbers moved it by the
+ * drawing's corner - a shape at model (10, 20) came back at (10 - originX,
+ * 20 - originY) - so a drawing that did not start at the origin shifted on
+ * every pass through the Source tab.
+ */
+function blockTransform(header) {
+  for (const line of String(header ?? "").split("\n")) {
+    const parsed = parseCommentLine(line);
+
+    if (!parsed || parsed.field !== COMMENT_FIELDS.transform.toLowerCase()) {
+      continue;
+    }
+
+    const [factor, originX, originY] = parsed.value
+      .split(/[\s,]+/)
+      .map((part) => Number(part));
+
+    if (
+      Number.isFinite(factor) &&
+      factor > 0 &&
+      Number.isFinite(originX) &&
+      Number.isFinite(originY)
+    ) {
+      return { factor, originX, originY };
+    }
+
+    return null;
+  }
+
+  return null;
+}
+
+/* A source point as the model point it stands for. */
+function toModelPoint(point, transform) {
+  if (!point || !transform) {
+    return point;
+  }
+
+  return {
+    x: Number(point.x) / transform.factor + transform.originX,
+    y: Number(point.y) / transform.factor + transform.originY
+  };
+}
+
+/* A source length as the model length it stands for. */
+function toModelLength(value, transform) {
+  return transform ? Number(value) / transform.factor : value;
+}
+
+/*
+ * ONE PARSED SHAPE, CONVERTED FROM SOURCE SPACE TO MODEL SPACE.
+ *
+ * The reader reports what the commands say - source coordinates - and this is
+ * the ONE place that turns them back into the numbers the object stores. Angle
+ * values are untouched: a rotation is the same angle at any scale.
+ */
+function shapeInModelSpace(shape, transform) {
+  if (!shape || !transform) {
+    return shape;
+  }
+
+  const converted = { ...shape };
+
+  ["from", "to", "centre", "center", "position", "pivot"].forEach((key) => {
+    if (converted[key]) {
+      converted[key] = toModelPoint(converted[key], transform);
+    }
+  });
+
+  if (Array.isArray(converted.points)) {
+    converted.points = converted.points.map((point) => toModelPoint(point, transform));
+  }
+
+  if (Number.isFinite(Number(converted.radius))) {
+    converted.radius = toModelLength(converted.radius, transform);
+  }
+
+  if (Number.isFinite(Number(converted.width))) {
+    converted.width = toModelLength(converted.width, transform);
+  }
+
+  if (Number.isFinite(Number(converted.height))) {
+    converted.height = toModelLength(converted.height, transform);
+  }
+
+  return converted;
 }
 
 /* ============================================================
@@ -218,7 +317,19 @@ function createObjectFromShape(type, shape, previous) {
         const bottom = Math.min(shape.from.y, shape.to.y);
         const top = Math.max(shape.from.y, shape.to.y);
 
-        return table.rectangle({ x: left, y: bottom }, right - left, top - bottom, 0, options);
+        /*
+         * THE FACTORY TAKES THE TOP-LEFT CORNER, and extends downward - the same
+         * convention `rectangleCorners` states. `top` is therefore the stored
+         * y; passing `bottom` put a rectangle made from Source its own height
+         * below where its block says it is.
+         */
+        return table.rectangle(
+          { x: left, y: top },
+          right - left,
+          top - bottom,
+          0,
+          options,
+        );
       }
       case "arc":
         return table.arc(shape.centre, shape.radius, shape.startAngle, shape.endAngle, options);
@@ -836,6 +947,12 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
       return;
     }
 
+    /*
+     * THE BLOCK'S OWN MAPPING FROM SOURCE COORDINATES TO MODEL COORDINATES,
+     * read once per block from its header (see `blockTransform` above).
+     */
+    const transform = blockTransform(block.header);
+
     const shapes = block.statements
       .filter(
         /*
@@ -850,7 +967,19 @@ export function readSourceIntoModel({ source, map, objects = [], isEditing = () 
          */
         (statement) => !/^\\definecolor\b/.test(String(statement.text ?? "").trim())
       )
-      .map((statement) => statement.shape);
+      .map((statement) => {
+        const shape = shapeInModelSpace(statement.shape, transform);
+
+        /*
+         * THE BLOCK'S MAPPING TRAVELS WITH THE SHAPE, so a field measured in
+         * SOURCE terms - a stroke width, which the writer reduces by the export
+         * factor like any other length - can be converted back exactly. It is a
+         * read-time annotation on the parsed shape, never stored on the object.
+         */
+        return shape && transform
+          ? Object.assign(shape, { blockTransform: { ...transform } })
+          : shape;
+      });
 
     /*
      * ============================================================

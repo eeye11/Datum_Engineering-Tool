@@ -31,6 +31,8 @@ import { ROUTE_PHASE, ELBOW_PHASE, finishRouteConstruction, finishElbowConstruct
 import { allowsDirectManipulation } from "./direct-manipulation.js";
 import { handleAtPoint, isConstructionInProgress } from "./handles.js";
 import { isDerivedFeature } from "../../../shared/model/feature-types.js";
+import { pickStaticsLabel } from "./hit-testing.js";
+import { openStaticsLabelEditor } from "../statics/statics-label-editor.js";
 import { selectionBounds, selectionCorners, selectionMembers } from "../../../shared/selection/selection-transform.js";
 import { movePlacement, placementPending } from "./placement-session.js";
 
@@ -323,6 +325,28 @@ export function installCanvasEvents() {
                         event.stopPropagation();
 
                         openNoteEditorFor(pointed);
+
+                        return;
+                    }
+
+                    /*
+                     * A STATICS LABEL IS WRITTEN WHERE IT IS DRAWN.
+                     *
+                     * The label is PART of its object - one row, one selection,
+                     * one undo entry - so double-clicking the words opens the
+                     * one inline field ON those words, and what is typed is
+                     * written to the object's own `label`. There is no second
+                     * popup and no separate preview: the field IS the text.
+                     */
+                    const staticsLabel = pickStaticsLabel(
+                        canvasPointFromEvent(event, false)
+                    );
+
+                    if (staticsLabel) {
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        openStaticsLabelEditor(staticsLabel.object);
 
                         return;
                     }

@@ -20,7 +20,8 @@ import { drawingState, editorState } from "../editor-state.js";
 import { renderProperties } from "../../../components/layout/panels/feature-panel.js";
 import { currentEngineeringMetadata, commitFreeformPolygon, freeformPolygonIsClosedShape } from "../geometry/geometry-creation.js";
 import { cancelManipulationDrag, isConstructionInProgress } from "./handles.js";
-import { objectAtPoint, pickDerivedMagnitude } from "./hit-testing.js";
+import { objectAtPoint, pickDerivedMagnitude, pickStaticsLabel } from "./hit-testing.js";
+import enggStaticsLabel from "../../../shared/geometry/statics-label.js";
 import { finishDistributedLoadConstruction, isLoadBuildPhase } from "../statics/load-tool.js";
 import { cancelModifySession } from "../commands/modify-tools.js";
 import { commitMomentPlacement } from "../geometry/preview.js";
@@ -202,6 +203,21 @@ export function beginAnnotationDrag(
      * alongside the magnitude labels, from the same hit test, so "click the
      * label to move it" is one rule rather than two.
      */
+    /*
+     * A STATICS OBJECT'S OWN LABEL MOVES THE SAME WAY, AND FIRST.
+     *
+     * The label is part of its object - one row in the Objects list, one
+     * selection, one undo entry - so grabbing the words moves the WORDS and
+     * nothing else: the arrow stays where it was drawn and the engineering
+     * value is untouched. What is written is the object's own `labelOffset`, in
+     * drawing units, which is also what the Source writer reads.
+     */
+    const staticsLabel = pickStaticsLabel(point);
+
+    if (staticsLabel) {
+        return startStaticsLabelDrag(event, staticsLabel, point);
+    }
+
     const picked =
         pickDerivedMagnitude(
             point
@@ -298,6 +314,57 @@ function startAxisLabelDrag(event, picked, point) {
     setToolMessage(
         picked.axis === "x" ? "Move X label" : "Move Y label"
     );
+
+    return true;
+}
+
+/*
+ * START DRAGGING ONE STATICS OBJECT'S OWN LABEL.
+ *
+ * The drag is recorded against the OBJECT, not against a text feature, because
+ * the label is not one: it lives in the object's geometry as an offset from the
+ * place the object would put it. The offset is what is set, measured from the
+ * label's position when the press happened, so the words stay under the exact
+ * spot on them that was grabbed.
+ */
+function startStaticsLabelDrag(event, picked, point) {
+    const object = picked.object;
+
+    if (!object || object.locked) {
+        return false;
+    }
+
+    const home = enggStaticsLabel.labelHomeOf(object);
+
+    if (!home) {
+        return false;
+    }
+
+    enggDrawingState.selectObject(drawingState, object.id);
+
+    editorState.selectionDrag = {
+        pointerId: event.pointerId,
+        previousObjects: enggDrawingState.snapshotDrawing(drawingState),
+        start: point,
+        current: point,
+        moved: false,
+        box: null,
+        staticsLabel: {
+            objectId: object.id,
+            home,
+            grabOffset: {
+                x: home.x - point.x,
+                y: home.y - point.y
+            }
+        }
+    };
+
+    drawingCanvas.setPointerCapture(event.pointerId);
+
+    editorState.selectionClickSuppressed = true;
+
+    renderProperties();
+    renderCurrentDrawing();
 
     return true;
 }
@@ -497,6 +564,37 @@ export function updateSelectionDrag(
         return;
     }
 
+    /*
+     * A STATICS LABEL FOLLOWS THE HAND ON THIS FRAME.
+     *
+     * The offset written is measured from the OBJECT'S OWN ANCHOR, not from
+     * the label's start, so the label trails the pointer by exactly the
+     * distance at which it was grabbed - and because the offset is a set, a
+     * drag of the same distance always gives the same answer.
+     */
+    if (editorState.selectionDrag.staticsLabel) {
+        const drag = editorState.selectionDrag.staticsLabel;
+
+        const object = drawingState.objects.find(
+            (candidate) => candidate.id === drag.objectId
+        );
+
+        const anchor = object ? enggStaticsLabel.labelAnchorOf(object) : null;
+
+        if (object && anchor) {
+            enggStaticsLabel.setLabelOffset(object, {
+                x: point.x + drag.grabOffset.x - anchor.x,
+                y: point.y + drag.grabOffset.y - anchor.y
+            });
+        }
+
+        drawingState.selectionClickSuppressed = true;
+
+        requestRender();
+
+        return;
+    }
+
     if (editorState.selectionDrag.derived) {
         const derivation =
             editorState.selectionDrag.derived;
@@ -677,6 +775,58 @@ export function finishSelectionDrag(
         editorState.selectionDrag = null;
 
         renderCurrentDrawing();
+
+        return;
+    }
+
+    /*
+     * A MOVED STATICS LABEL IS ONE UNDO STEP ON ONE OBJECT.
+     *
+     * The offset was written on every frame so the words followed the pointer;
+     * committing that per frame would fill Undo with the intermediate positions
+     * of a single movement. A press that never travelled restores the offset the
+     * label had, so clicking a label selects it without moving it.
+     */
+    if (currentSelection.staticsLabel) {
+        if (currentSelection.moved) {
+            enggDrawingState.commitDrawingChange(
+                drawingState,
+                currentSelection.previousObjects
+            );
+
+            setToolMessage("Moved the label");
+        } else {
+            const object = drawingState.objects.find(
+                (candidate) => candidate.id === currentSelection.staticsLabel.objectId
+            );
+
+            if (object) {
+                object.geometry = structuredClone(
+                    currentSelection.previousObjects.objects.find(
+                        (candidate) => candidate.id === object.id
+                    )?.geometry || object.geometry
+                );
+            }
+
+            setToolMessage("Ready");
+        }
+
+        editorState.selectionDrag = null;
+
+        syncSelectionInteraction();
+
+        renderProperties();
+        renderCurrentDrawing();
+
+        if (
+            drawingCanvas.hasPointerCapture(
+                event.pointerId
+            )
+        ) {
+            drawingCanvas.releasePointerCapture(
+                event.pointerId
+            );
+        }
 
         return;
     }

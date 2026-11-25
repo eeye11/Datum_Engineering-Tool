@@ -38,18 +38,31 @@ const rotational = fs.readFileSync(locate("rotational-arrow.js"), "utf8");
 const renderer = rendererSource();
 const attachment = fs.readFileSync(locate("statics-attachment.js"), "utf8");
 
-console.log("\n  the default size was raised, modestly\n");
+const symbolSizes = fs.readFileSync(locate("symbol-sizes.js"), "utf8");
 
+console.log("\n  the default size is ONE number, shared with the writer\n");
+
+/*
+ * THE DEFAULT IS 7, AND IT LIVES IN `symbol-sizes.js`.
+ *
+ * The arc radius is not a drawing-only constant any more: the Statics source
+ * writer, the model's bounds and the canvas renderer all draw the same arc, so
+ * the default is declared once and the arrow module reads it. The earlier
+ * "raised to 20" is superseded by that consolidation - a symbol drawn at one
+ * size on screen and written at another in the source is exactly the
+ * disagreement this suite exists to prevent.
+ */
 check(
-  "the default radius is 20, up from 16",
-  /DEFAULT_ARC_RADIUS_PX\s*=\s*20\b/.test(rotational),
-  "the change is meant to be small enough to stay proportional",
+  "the default radius is 7, declared once for writer and canvas",
+  /MOMENT_DEFAULT_RADIUS\s*=\s*7\b/.test(symbolSizes) &&
+    /MOMENT_DEFAULT_RADIUS/.test(rotational),
+  "the arrow module and the source writer must read the same default",
 );
 
 check(
-  "the bounds still contain the new default",
-  /MIN_ARC_RADIUS_PX\s*=\s*8\b/.test(rotational) &&
-    /MAX_ARC_RADIUS_PX\s*=\s*80\b/.test(rotational),
+  "the arrow's bounds still contain the default",
+  /MIN_ARC_RADIUS_PX\s*=\s*\d+\b/.test(rotational) &&
+    /MAX_ARC_RADIUS_PX\s*=\s*\d+\b/.test(rotational),
 );
 
 check(

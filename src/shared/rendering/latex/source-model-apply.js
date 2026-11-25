@@ -1,5 +1,6 @@
 import enggReducer from "../../../features/workspace/model/fluids/reducer-expander.js";
 import { propagatePipeWidth } from "../../../features/workspace/model/fluids/pipe-width.js";
+import { POINTS_PER_LINE_WIDTH } from "../../../tool-library/shared/primitives/tikz-style.js";
 /*
  * ============================================================
  * APPLYING A PARSE TO THE DRAWING
@@ -72,10 +73,19 @@ function geometryOf(shape) {
     case "circle":
       return { center: { ...shape.centre }, radius: shape.radius };
     case "rectangle":
+      /*
+       * A RECTANGLE'S STORED POSITION IS ITS TOP-LEFT CORNER, and its height
+       * extends DOWNWARD - that is the convention `rectangleCorners` in
+       * `feature-geometry.js` states, and the canvas, the handles and the
+       * writer all follow it. So the model position is the corner with the
+       * LARGEST y, not the smallest: the block's two corners are bounds, not
+       * an origin, and taking the bottom one moved every rectangle written
+       * and read back down by its own height.
+       */
       return {
         position: {
           x: Math.min(shape.from.x, shape.to.x),
-          y: Math.min(shape.from.y, shape.to.y)
+          y: Math.max(shape.from.y, shape.to.y)
         },
         width: Math.abs(shape.to.x - shape.from.x),
         height: Math.abs(shape.to.y - shape.from.y)
@@ -131,17 +141,36 @@ function styleOf(shape) {
       style.fill = shape.fill;
     }
   } else if (shape.filled === false) {
-    style.fillMode = "none";
+    /*
+     * AN UNFILLED SHAPE ONLY NEEDS SAYING WHEN THE OBJECT WAS FILLED.
+     *
+     * Writing `fillMode: "none"` unconditionally added a field to every object
+     * that already had none, so re-reading a drawing's own source reported it as
+     * CHANGED even though nothing about it had moved - a false "the source edit
+     * altered the drawing" signal on every pass. A shape whose model has no fill
+     * of its own is left exactly as it was.
+     */
+    if (style.fillMode === "solid") {
+      style.fillMode = "none";
+    }
   }
 
   /*
-   * TikZ's `line width` is a print width in millimetres; the model stores a
-   * multiplier of the standard 0.4pt line (0.56 is lineWidth 1). The same
-   * constant in reverse, so a width written to source and read back is the width
-   * it was.
+   * A LINE WIDTH READS BACK AS THE MODEL WIDTH IT WAS WRITTEN FROM.
+   *
+   * The writer emits `line width = model x POINTS_PER_LINE_WIDTH x factor`
+   * (see `nominalStrokePt` and `export-transform.js`), so the inverse is one
+   * division by each. This used to divide by 0.56 - a constant from an older
+   * calibration that no longer matched the writer - so every pass through the
+   * Source tab made the line thicker: Thin (0.5) came back as 2.143 on the
+   * second read, and each save compounded it. The two constants are the same
+   * 2.4, asked of the module that owns it.
    */
   if (Number.isFinite(shape.lineWidth) && shape.lineWidth > 0) {
-    style.lineWidth = Number((shape.lineWidth / 0.56).toFixed(3));
+    const factor = Number(shape.blockTransform?.factor) || 1;
+    const modelWidth = shape.lineWidth / (POINTS_PER_LINE_WIDTH * factor);
+
+    style.lineWidth = Number(modelWidth.toFixed(3));
   }
 
   return style;

@@ -1779,11 +1779,22 @@ function loadText(object) {
    * carries the unit its magnitude is stated in - kN/m or N/mm - and the
    * label reads that one value, so the drawing and the Features panel can
    * never show the same load in two different units.
+   *
+   * A LOAD HAS NO CONVENTIONAL SYMBOL, AND MUST NOT BE GIVEN ONE.
+   *
+   * This used to pass `"w"` as the label a load falls back to when the student
+   * has not typed one, so every distributed load printed a `w = 20 kN/m` box
+   * the student never asked for. A distributed load's conventional statement
+   * IS its intensity in its unit - `20 kN/m` - and the row of arrows already
+   * says which direction it acts. The abandoned parameter is spelled out here
+   * as `null` rather than dropped, so the reader below still gets four
+   * arguments and only a STUDENT'S OWN label (`magnitudeLabel`) can put a name
+   * in front of the number.
    */
   return featureValueText(
     object,
     "intensity",
-    "w",
+    null,
     loadUnitOf(object)
   );
 }

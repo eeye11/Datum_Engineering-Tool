@@ -88,6 +88,17 @@ const HEADER_FIELDS = new Set([
   COMMENT_FIELDS.parent,
 
   /*
+   * HOW THE BLOCK'S COORDINATES MAP BACK TO THE MODEL.
+   *
+   * It is part of the readable header like the fields above - so a block's
+   * body starts BELOW it rather than at it. Without this the transform line was
+   * counted as the first command, the header ended one line early, and a reader
+   * never saw the mapping it needs to put a typed coordinate back where the
+   * student meant it.
+   */
+  COMMENT_FIELDS.transform,
+
+  /*
    * A FEATURE'S OWN MACHINERY, written as one compact line. A Flow Arrow's
    * attachment names the pipe it sits on and how far along - which is how it is
    * FOUND again, not what it is - so it is stripped from the source the student
@@ -527,14 +538,17 @@ export function pictureBlockOrder(source) {
  * returned as they are. That is what keeps a writer that emits its own header
  * and a builder that adds one from producing two blocks for one object.
  */
-export function renderObjectBlock({ id, type, name, part, parent, source }) {
+export function renderObjectBlock({ id, type, name, part, parent, source, transform }) {
   const body = String(source ?? "").replace(/\s+$/, "");
 
   if (id && body.split("\n").some((line) => isObjectMarkerLine(line))) {
     return body;
   }
 
-  const header = objectCommentHeader({ id, type, name }, { type, part, parent });
+  const header = objectCommentHeader(
+    { id, type, name },
+    { type, part, parent, transform },
+  );
 
   return [...header, body].join("\n");
 }

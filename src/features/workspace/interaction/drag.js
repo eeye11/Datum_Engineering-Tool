@@ -46,6 +46,7 @@ import { controlNodeAlignmentOffset, isControlSymbol, isSum, setSumNodeAngle, su
 import { applyHeatHandle } from "./heat-handles.js";
 import enggHeatModel from "../model/heat-transfer/heat-model.js";
 import enggHeatLabels from "../model/heat-transfer/heat-labels.js";
+import enggStaticsHierarchy from "../../../shared/geometry/statics-hierarchy.js";
 
 /* How near the pivot (screen px) a rotation drag stops reading an angle. */
 const ROTATION_DEAD_ZONE_PX = 8;
@@ -304,7 +305,32 @@ export function beginManipulationDrag(
                             hit.object
                         )
                     )
-            }
+            },
+
+            /*
+             * WHAT A ROTATION MUST CARRY, SNAPSHOTTED BESIDE IT.
+             *
+             * Turning a body turns everything attached to it, and each attached
+             * object is restored from its own snapshot before it is turned - so
+             * one pointer position always gives one result. Kept apart from
+             * `originals` so the object's own entry stays the single, whole
+             * snapshot every drag takes.
+             */
+            rotationMembers:
+                hit.handle.kind === "rotate"
+                    ? Object.fromEntries(
+                          enggStaticsHierarchy
+                              .transformGroupOf(
+                                  hit.object,
+                                  drawingState.objects
+                              )
+                              .filter(item => item.id !== hit.object.id)
+                              .map(item => [
+                                  item.id,
+                                  JSON.parse(JSON.stringify(item))
+                              ])
+                      )
+                    : null
         };
 
         const sumNodeMatch = /^sum-node-(inputs|outputs)-(\d+)$/.exec(hit.handle.kind);
@@ -1151,6 +1177,41 @@ function applyManipulation(
             JSON.stringify(original.geometry)
         );
 
+        /*
+         * TURNING A BODY TURNS WHAT IT CARRIES.
+         *
+         * A beam's supports, loads and moments are attached to it, so a
+         * rotation that left them behind would slide them down the member and
+         * eventually off its end. Each attached child is restored from its own
+         * snapshot and turned by the SAME angle about the SAME pivot, so its
+         * station on the member is preserved exactly - it is the member turning
+         * with its cargo, which is what a rigid body does.
+         *
+         * An analysis diagram's frame travels with its body for the same
+         * reason: the diagram measures the beam it was drawn against.
+         */
+        enggStaticsHierarchy
+            .transformGroupOf(object, drawingState.objects)
+            .forEach(member => {
+                if (member === object) {
+                    return;
+                }
+
+                const saved = drag.rotationMembers?.[member.id];
+
+                if (saved?.geometry) {
+                    member.geometry = JSON.parse(
+                        JSON.stringify(saved.geometry)
+                    );
+                }
+
+                rotateObjectAbout(
+                    member,
+                    pivot,
+                    radians
+                );
+            });
+
         rotateObjectAbout(
             object,
             pivot,
@@ -1546,7 +1607,6 @@ function applyManipulation(
         drag.originals?.[object.id]?.geometry;
 
     if (object.type === "point") {
-        console.log("TRACE point branch");
         const target =
             g.position || g.point || g;
 
@@ -2593,7 +2653,6 @@ function applyManipulation(
     }
 
     if (isRectangleLike(object)) {
-        console.log("TRACE rectangle branch, kind:", drag.kind, "object:", object.type);
         if (object.metadata?.stressElement && drag.kind.startsWith("corner")) {
             Object.assign(g, resizeStressElement(original, Number(drag.kind.slice(6)), point));
             return;

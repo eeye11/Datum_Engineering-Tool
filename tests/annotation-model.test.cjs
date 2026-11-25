@@ -289,10 +289,10 @@ const loadAnnotation = model.createAnnotation({
 check(
   "states its intensity",
   model.textFor(loadAnnotation, state(load)),
-  "w = 5.00 kN/m"
+  "5.00 kN/m"
 );
 load.geometry.intensity = 12;
-check("and follows it", model.textFor(loadAnnotation, state(load)), "w = 12.0 kN/m");
+check("and follows it", model.textFor(loadAnnotation, state(load)), "12.0 kN/m");
 
 console.log("\nA varying load's profile");
 const varying = {

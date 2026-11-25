@@ -84,7 +84,23 @@ const report = runInFreshPage(String.raw`async ({ projectRoot, require, bootErro
 
   if (width) {
     await width.run();
-    await new Promise((resolve) => setTimeout(resolve, 40));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    /*
+     * PROBE: is the Transform box there, and does focus stick to it when it
+     * is focused by hand? A "yes" to both means something in the application
+     * takes the focus away after the setting opens.
+     */
+    const widthField = document.querySelector('[data-transform-input="width"]');
+    const before = document.activeElement?.dataset?.transformInput || "none";
+    widthField?.focus?.();
+
+    out.widthProbe = {
+      rendered: Boolean(widthField),
+      activeBefore: before,
+      afterManualFocus: document.activeElement?.dataset?.transformInput || "none",
+      inputs: document.querySelectorAll("[data-transform-input]").length
+    };
   }
 
   out.selectionAfter = drawingState.selection.selectedObjectIds || [];
@@ -170,7 +186,7 @@ check(
 check(
   "with the width control rendered and focused, ready to type",
   report.widthFieldRendered === true && report.focusedField === "width",
-  `rendered=${report.widthFieldRendered}, focused=${report.focusedField}`,
+  `rendered=${report.widthFieldRendered}, focused=${report.focusedField}, probe=${JSON.stringify(report.widthProbe)}`,
 );
 
 check(

@@ -7,6 +7,8 @@ import enggCanvasPalette from "./canvas-palette.js";
  */
 import { noteTextStyle } from "../typography/note-text-style.js";
 import enggDrawingState from "../model/drawing-state.js";
+import { pixelsPerUnit } from "../geometry/drawing-units.js";
+import enggStaticsLabel from "../geometry/statics-label.js";
 import enggAnnotationModel from "../../features/workspace/model/annotations/annotation-model.js";
 import enggAnnotate from "../../features/workspace/model/annotations/annotate-model.js";
 import { annotationSubscript } from "../../features/workspace/model/annotations/math-label.js";
@@ -512,10 +514,60 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
          */
         const typography = noteTextStyle(style);
         const note = entity.annotateKind === "note";
-        const baseTextAt = kind === "callout" ? end || anchor : anchor || end;
-        const textAt = note && geometry.position
-            ? toScreen({...geometry.position, x:geometry.position.x + typography.indent})
-            : baseTextAt;
+
+        /*
+         * A LABEL IS ANCHORED AT ITS `position`, NOT AT ITS LEADER'S START.
+         *
+         * A placed label stores where its words sit in `geometry.position` and
+         * what it points at in `geometry.start`/`end` - and for a label those
+         * two are different places, which is the whole point of a label: you
+         * move the words off a busy part of the drawing and keep the pen on the
+         * thing you are naming. Falling back to the END of that pen put the
+         * text at the anchor instead of where the student put it, at a spot
+         * that also moved with the pen rather than staying with the words.
+         *
+         * The same holds for a leader (the words go at its far end) and a
+         * callout (its words are inside its balloon). Only the kinds that name
+         * a point - an arrow, a bare leader with no placement - read `start`.
+         */
+        const baseTextAt =
+            kind === "callout" || kind === "leader" || kind === "label"
+                ? anchor || end || start
+                : anchor || end;
+
+        /*
+         * A NOTE'S INDENT IS A LENGTH IN THE SHEET'S UNITS - MILLIMETRES.
+         *
+         * It is the field the Features panel labels "Indent (mm)", and the
+         * other two places that use it agree: the model's text bounds add it to
+         * the note's drawing coordinate (`annotate-model.js`), and the source
+         * writer adds it to the node's own `x` (`source-writers/annotations.js`).
+         * Both are millimetres, so the canvas must add it in millimetres too.
+         *
+         * It used to be added as SCREEN PIXELS - divided by the zoom inside the
+         * text node's camera compensation - which made an indent of 8 draw as
+         * 8px beside a source that wrote 8mm: the glyphs, the source and the
+         * selection frame each put the note somewhere slightly different, and
+         * the disagreement changed with the zoom.
+         */
+        const textAt =
+            note && geometry.position
+                ? (() => {
+                      const projected = toScreen(geometry.position);
+
+                      return projected
+                          ? {
+                                x:
+                                    projected.x +
+                                    typography.indent *
+                                        pixelsPerUnit(
+                                            state?.camera?.zoom
+                                        ),
+                                y: projected.y,
+                            }
+                          : projected;
+                  })()
+                : baseTextAt;
 
         /*
          * WHAT IS DRAWN IS THE CONTENT, OR THE PLACEHOLDER WHEN THERE IS
@@ -1035,6 +1087,25 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
      * label" look the same on the sheet, and neither should leave a stray mark.
      */
     function labelAnchorFor(entity, toScreen) {
+        /*
+         * A STATICS OBJECT'S LABEL HAS ONE HOME, IN `statics-label.js`.
+         *
+         * A force's label belongs past its arrowhead, a load's over the middle
+         * of its field, a support's outside its symbol. Deciding that here
+         * would put the canvas in charge of a placement the hit test, the
+         * inline editor and the Source writer also need - and the moment those
+         * four are asked the question separately they start answering it
+         * differently. The module answers it once; this projects the answer.
+         */
+        const statics =
+            enggStaticsLabel?.labelHomeOf
+                ? enggStaticsLabel.labelHomeOf(entity)
+                : null;
+
+        if (statics) {
+            return toScreen(statics);
+        }
+
         const geometry = entity.geometry || {};
 
         /*
@@ -1161,11 +1232,6 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
             SECONDARY_FONT_PX
         );
 
-        const anchorMode =
-            ["start", "middle", "end"].includes(labelStyle.labelAnchor)
-                ? labelStyle.labelAnchor
-                : "start";
-
         /*
          * THE OFFSET IS A SCREEN DISTANCE, so it is divided by the camera before
          * it is added to a projected point: `labelOffsetFor` answers in drawing
@@ -1177,10 +1243,38 @@ function appendAnnotationEntity(svg, entity, state, toScreen, style) {
         const explicit = entity?.geometry?.labelOffset;
         const hasExplicit = explicit && Number.isFinite(Number(explicit.x)) && Number.isFinite(Number(explicit.y));
 
-        const at = {
-            x: anchor.x + (hasExplicit ? offset.x : (LABEL_OFFSET_PX)),
-            y: anchor.y + (hasExplicit ? offset.y : (-LABEL_OFFSET_PX))
-        };
+        /*
+         * A STATICS LABEL IS PLACED BY `statics-label.js`, IN DRAWING UNITS.
+         *
+         * Its anchor already includes the student's own offset, so the
+         * screen-space nudge below would move it a second time - and move it
+         * by the same few pixels at every zoom, which is exactly the drift that
+         * makes a label disagree with its Source node.
+         */
+        const staticsHome =
+            enggStaticsLabel?.labelHomeOf
+                ? enggStaticsLabel.labelHomeOf(entity)
+                : null;
+
+        const at = staticsHome
+            ? anchor
+            : {
+                  x: anchor.x + (hasExplicit ? offset.x : (LABEL_OFFSET_PX)),
+                  y: anchor.y + (hasExplicit ? offset.y : (-LABEL_OFFSET_PX))
+              };
+
+        /*
+         * A STATICS LABEL READS FROM ITS OWN POINT, LEFT TO RIGHT.
+         *
+         * The point `statics-label.js` answers is where the label's first line
+         * begins, which is where the inline editor puts its caret - so text
+         * stays where it was typed instead of jumping as it is committed.
+         */
+        const anchorMode = staticsHome
+            ? "start"
+            : ["start", "middle", "end"].includes(labelStyle.labelAnchor)
+              ? labelStyle.labelAnchor
+              : "start";
 
         const weight = labelStyle.labelBold === true ? "bold" : "normal";
         const slant = labelStyle.labelItalic === true ? "italic" : "normal";

@@ -143,19 +143,111 @@
     scrollbar-width: thin;
 }
 
+/*
+ * ============================================================
+ * A ROW IS ONE LINE; A GROUP IS A ROW AND A LIST BENEATH IT
+ * ============================================================
+ *
+ * The `<li>` is the TREE NODE, so it is a COLUMN: the row's own line first, then
+ * the children's list under it. It used to be the flex row itself, which is why a
+ * parent's children were laid out on the same line beside it instead of folded
+ * beneath it.
+ */
 .drawing-objects-item {
-    align-items: center;
     border-left: 2px solid transparent;
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     color: var(--datum-ink);
     cursor: pointer;
-    display: flex;
+    display: block;
     flex: 0 0 auto;
     font-size: 10.5px;
+    list-style: none;
+    min-height: 24px;
+    user-select: none;
+}
+
+/* THE ROW'S OWN LINE: one compact flex line, as a leaf row has always been. */
+.drawing-objects-row {
+    align-items: center;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    display: flex;
     gap: 7px;
     min-height: 24px;
     padding: 2px 6px 2px 5px;
-    user-select: none;
+}
+
+/*
+ * THE CHILDREN, INDENTED A LITTLE TO THE RIGHT AND UNDER THEIR PARENT.
+ *
+ * The indent is on the LIST, so every child at one level lines up however deep
+ * the tree goes, and a short guide rail marks the group's extent without drawing
+ * a box round it.
+ */
+.drawing-objects-children {
+    border-left: 1px solid var(--datum-border-strong);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    list-style: none;
+    margin: 0 0 1px 0;
+    padding: 0 0 0 12px;
+    margin-left: 13px;
+}
+
+.drawing-objects-children[hidden] {
+    display: none;
+}
+
+/*
+ * THE DISCLOSURE TRIANGLE.
+ *
+ * Its own button, so folding a group never selects or moves the parent. A leaf
+ * keeps an empty spacer of the same width, so every icon in the list lines up.
+ */
+/*
+ * The fold control sits at the row's TRAILING edge, beside the eye, so the list
+ * has one fixed column of eyes and one fixed column of folds. A leaf simply has
+ * no fold control, so nothing needs a spacer and the icons stay aligned.
+ */
+.drawing-objects-disclosure {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--datum-muted);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 14px;
+    height: 18px;
+    justify-content: center;
+    padding: 0;
+    width: 14px;
+}
+
+.drawing-objects-disclosure:hover {
+    background: var(--datum-green-wash);
+    color: var(--datum-ink);
+}
+
+.drawing-objects-disclosure:focus-visible {
+    outline: 2px solid var(--datum-focus);
+    outline-offset: -1px;
+}
+
+
+
+.drawing-objects-disclosure-mark {
+    border-left: 4px solid currentColor;
+    border-bottom: 4px solid transparent;
+    border-top: 4px solid transparent;
+    display: block;
+    height: 0;
+    transition: transform 120ms ease;
+    width: 0;
+}
+
+.drawing-objects-disclosure-mark.is-open {
+    transform: rotate(90deg);
 }
 
 /*
@@ -163,10 +255,11 @@
  * Hover is the list's own wash; focus is the model's ring; neither competes with
  * the selected row's accent rail and tint.
  */
-.drawing-objects-item:hover {
+.drawing-objects-item:hover > .drawing-objects-row {
     background: var(--datum-green-wash);
 }
 
+.drawing-objects-item:focus-visible > .drawing-objects-row,
 .drawing-objects-item:focus-visible {
     outline: 2px solid var(--datum-focus);
     outline-offset: -2px;
@@ -181,15 +274,33 @@
  * its rail and tints one step deeper, so "selected" is still the strongest
  * statement on the row.
  */
-.drawing-objects-item[aria-selected="true"] {
+/*
+ * THE SELECTED ROW'S RAIL AND TINT HAVE MOVED ONTO THE ROW ITSELF.
+ *
+ * The `<li>` is now a COLUMN holding the row and its children, so painting the
+ * tint there would tint a parent's whole subtree - every child would look
+ * selected because its parent was. The rail and the tint belong to the row line.
+ */
+.drawing-objects-item[aria-selected="true"] > .drawing-objects-row {
     background: var(--datum-green-tint);
-    border-left-color: var(--datum-green);
     color: var(--datum-green-ink);
     font-weight: 600;
 }
 
-.drawing-objects-item[aria-selected="true"]:hover {
+.drawing-objects-item[aria-selected="true"]:hover > .drawing-objects-row {
     background: var(--datum-green-line);
+}
+
+/*
+ * THE RAIL IS ON THE NODE, SO A GROUP AND ITS CHILDREN READ AS NESTED.
+ * A selected leaf still shows it through its own row, which fills the node.
+ */
+.drawing-objects-item[aria-selected="true"] {
+    border-left-color: var(--datum-green);
+}
+
+.drawing-objects-item[aria-selected="true"] > .drawing-objects-row > .drawing-objects-icon {
+    color: var(--datum-green);
 }
 
 .drawing-objects-icon {
@@ -205,7 +316,7 @@
     width: 100%;
 }
 
-.drawing-objects-item[aria-selected="true"] .drawing-objects-icon {
+.drawing-objects-item[aria-selected="true"] > .drawing-objects-row > .drawing-objects-icon {
     color: var(--datum-green);
 }
 
@@ -286,8 +397,8 @@
  * inspected in Features and shown again - so it is dimmed rather than struck
  * through, which is what a deleted or disabled row would look like.
  */
-.drawing-objects-item-hidden .drawing-objects-icon,
-.drawing-objects-item-hidden .drawing-objects-name {
+.drawing-objects-item-hidden > .drawing-objects-row .drawing-objects-icon,
+.drawing-objects-item-hidden > .drawing-objects-row .drawing-objects-name {
     opacity: 0.5;
 }
 

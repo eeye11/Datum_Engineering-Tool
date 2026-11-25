@@ -833,14 +833,23 @@ function geometryRenderedBounds(
         const rotational =
             enggDrawingRotationalArrow;
 
-        const reach = (
-            rotational
-                ? rotational.clampArcRadius(
-                    geometry.arcRadius ??
-                        rotational.DEFAULT_ARC_RADIUS_PX
+        /*
+         * A ROTATIONAL SYMBOL IS A CIRCLE ABOUT ITS APPLICATION POINT.
+         *
+         * Its radius is a MODEL length - `symbol-sizes.js` states it in drawing
+         * units and the renderer carries it through the camera - so the extent
+         * is that radius directly. It used to be divided by the camera's pixels
+         * per unit, which treated a millimetre measurement as if it were a
+         * screen size: at the old scale that was invisible, and at any other it
+         * reserves the wrong box for the symbol.
+         */
+        const reach = rotational
+            ? rotational.drawnArcRadius
+                ? rotational.drawnArcRadius(geometry.arcRadius)
+                : rotational.clampArcRadius(
+                    geometry.arcRadius ?? rotational.DEFAULT_ARC_RADIUS_PX,
                 )
-                : 16
-        ) / Math.max(scale, 1e-6);
+            : 7;
 
         return [
             {

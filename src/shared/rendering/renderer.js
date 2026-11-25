@@ -284,13 +284,40 @@ import { reconcileSurfaceArrows } from "../../features/workspace/model/heat-tran
          * Must be rendered before snap feedback so that
          * the snap marker remains visually on top.
          */
+        /*
+         * EACH PREVIEW IS DRAWN ONCE.
+         *
+         * `previewObjects` is a SET of ghosts - a Mirror's reflected copies,
+         * an unfinished load's pieces. A caller that also put the same object
+         * in `preview` drew it twice, one copy on top of the other, which is
+         * how a pending Point Force came to look like two features. The id (or
+         * the object itself, when it has none yet) decides: a ghost that is
+         * already on screen is not drawn again.
+         */
         const activePreview = state.interaction.preview;
+
+        const drawnPreviews = new Set();
+
         for (const preview of state.interaction.previewObjects || []) {
+            const key = preview?.id || preview;
+
+            if (drawnPreviews.has(key)) {
+                continue;
+            }
+
+            drawnPreviews.add(key);
+
             state.interaction.preview = preview;
             renderPreview(svg, state, bounds);
         }
+
         state.interaction.preview = activePreview;
-        renderPreview(svg, state, bounds);
+
+        const activeKey = activePreview?.id || activePreview;
+
+        if (activePreview && !drawnPreviews.has(activeKey)) {
+            renderPreview(svg, state, bounds);
+        }
 
         renderInferenceLine(
             svg,

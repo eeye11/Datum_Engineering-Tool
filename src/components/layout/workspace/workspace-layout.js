@@ -8,8 +8,10 @@ import { editorState } from "../../../features/workspace/editor-state.js";
 import { updateDrawingZoom } from "./viewport.js";
 import {
     installColumnSync,
+    installPanelCollapse,
     installPanelResize,
     installPanelResizeRedraw,
+    lastExpandedWidth,
     workspaceColumns,
 } from "./panel-resize.js";
 
@@ -161,10 +163,54 @@ function setPanelCollapsed(
         return;
     }
 
+    /*
+     * A PANEL THAT IS ABOUT TO BE HIDDEN REMEMBERS THE WIDTH IT HAD. It is read
+     * from the live rail while it is still open, because once the class is on its
+     * box is the 22px strip - so this is the only moment the expanded width can
+     * be measured. Showing it again restores exactly that width.
+     */
+    const side = rail.classList.contains("drawing-panel-rail-left")
+        ? "left"
+        : "right";
+
+    if (!collapsed) {
+        const remembered = lastExpandedWidth(side);
+
+        rail.dataset.railWidth = String(Math.round(remembered));
+    } else if (Number(rail.dataset.railWidth) > 0) {
+        /*
+         * A HIDDEN RAIL KEEPS THE WIDTH IT IS LEAVING. The dataset is the one
+         * place `syncWorkspaceColumns` reads a rail's width from, and a collapse
+         * that left it pointing at the last dragged-through value would have
+         * Show reopen the panel there.
+         */
+        rail.dataset.railWidth = String(Math.round(lastExpandedWidth(side)));
+    }
+
     rail.classList.toggle(
         "drawing-panel-rail-collapsed",
         collapsed
     );
+
+    /*
+     * SHOWING A PANEL PUTS BACK THE WIDTH IT HAD.
+     *
+     * The rail's box is the 22px arrow strip while collapsed, so without this
+     * the template would be re-derived from 22px and the panel would reopen at
+     * its arrow. The remembered width is the student's own - the size they
+     * dragged to, or the one they last had before pressing Hide.
+     */
+    if (!collapsed) {
+        const side = rail.classList.contains("drawing-panel-rail-left")
+            ? "left"
+            : "right";
+
+        const remembered = rail.dataset.railWidth;
+
+        if (!Number(remembered) || Number(remembered) <= 29) {
+            rail.dataset.railWidth = String(Math.round(lastExpandedWidth(side)));
+        }
+    }
 
     /*
      * The grid TRACK is what actually reclaims the space.
@@ -199,15 +245,18 @@ function setPanelCollapsed(
     );
 
     /*
-     * THE RESIZE HANDLE GOES WITH THE PANEL.
+     * THE RESIZE HANDLE STAYS ON THE COLLAPSED RAIL.
      *
-     * With no panel to size there is no edge to drag, and a handle left on a
-     * 22px arrow strip would fight the Hide button for the same few pixels.
+     * It used to be hidden with the panel, on the reasoning that there was no
+     * edge left to drag - but the collapsed strip still HAS an edge, and hiding
+     * the handle took away the second way back (dragging the panel open) and
+     * left only the arrow. It sits on the strip's own outer edge and is the way
+     * out as well as the way in.
      */
     const resizer = rail.querySelector(".drawing-panel-resizer");
 
     if (resizer) {
-        resizer.hidden = collapsed;
+        resizer.hidden = false;
     }
 
     const panelId =
@@ -228,19 +277,11 @@ function setPanelCollapsed(
         : "Hide panel";
 
     /*
-     * The caption names the ACTION, not the state.
-     *
-     * When the panel is open the strip reads HIDE, because that is
-     * what pressing it does. When the panel is closed the strip
-     * takes the panel's own name - FEATURES or TOOLS - because at
-     * that point the name is the only thing on the strip that
-     * tells the student what pressing it will bring back.
-     *
-     * A control that labelled itself with the current state would
-     * need the student to read it twice to work out which way it
-     * goes; naming the action means the strip is legible on its
-     * own, whether it is a twenty-pixel rail in the expanded
-     * state or the only thing left of a collapsed panel.
+     * The caption names the ACTION, not the state: HIDE while the panel is open,
+     * SHOW while it is collapsed. Both rails then read the same way at the edge
+     * of their strip, which is what the student is looking for after a panel has
+     * gone. The panel's own name is carried by the `title` and `aria-label`
+     * above, so a screen reader still hears which panel the control belongs to.
      */
     const caption =
         toggle.querySelector(
@@ -248,13 +289,8 @@ function setPanelCollapsed(
         );
 
     if (caption) {
-        const panelName =
-            panelId === "drawingFeaturesPanel"
-                ? "FEATURES"
-                : "TOOLS";
-
         caption.textContent = collapsed
-            ? panelName
+            ? "SHOW"
             : "HIDE";
     }
 
@@ -320,9 +356,13 @@ function syncWorkspaceColumns() {
         ) ?? false;
 
     /*
-     * A COLLAPSED RAIL REMEMBERS ITS WIDTH BEFORE IT GOES. The rail's own box is
-     * 22px while collapsed, so asking it for a width would answer with the arrow
-     * strip - and showing the panel again would give back 22px of panel.
+     * A COLLAPSED RAIL NEVER CONTRIBUTES ITS WIDTH.
+     *
+     * The template for a collapsed rail is the 22px strip whatever the rail's
+     * `data-rail-width` happens to hold, and that attribute is only a memo of the
+     * width to come back at. Reading it here is what let a mid-drag 104px stand
+     * in for the collapsed track: the class and the attribute disagreed for one
+     * frame, and the template was written from the stale one.
      */
     const widthOf = (rail, fallback) => {
         const remembered = Number(rail?.dataset?.railWidth);
@@ -335,8 +375,8 @@ function syncWorkspaceColumns() {
     };
 
     const columns = workspaceColumns({
-        left: widthOf(toolsRail, 202),
-        right: widthOf(featuresRail, 236),
+        left: widthOf(toolsRail, lastExpandedWidth("left")),
+        right: widthOf(featuresRail, lastExpandedWidth("right")),
         leftCollapsed: toolsCollapsed,
         rightCollapsed: featuresCollapsed,
     });
@@ -379,6 +419,26 @@ export function installWorkspaceLayout() {
      */
     installColumnSync(syncWorkspaceColumns);
     installPanelResizeRedraw(renderCurrentDrawing);
+
+    /*
+     * THE DRAG-US-TO-HIDDEN GESTURE IS THE HIDE BUTTON'S OWN STATE.
+     *
+     * A pointer-resize module cannot know how this layout hides a panel - the
+     * class, the toggle button, the caption, the arrow and the Show control are
+     * all owned here - so it is handed this function rather than growing a
+     * second, visually similar collapse of its own.
+     */
+    installPanelCollapse((side, collapsed) => {
+        const toggle = document.getElementById(
+            side === "left" ? "drawingToolPanelToggle" : "drawingFeaturesPanelToggle"
+        );
+
+        const rail = toggle?.closest(".drawing-panel-rail");
+
+        if (rail) {
+            setPanelCollapsed(toggle, rail, collapsed);
+        }
+    });
     installPanelResize();
 
     /*

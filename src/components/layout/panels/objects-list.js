@@ -38,6 +38,16 @@ let host = null;
  */
 let list = null;
 
+/*
+ * WHICH PARENT ROWS ARE FOLDED SHUT.
+ *
+ * A SET OF IDS, not a property on the object: whether a group is expanded is how
+ * the STUDENT has arranged their list, not something the drawing stores or a
+ * saved file should carry. Empty means every group is open, which is how a
+ * drawing arrives.
+ */
+const folded = new Set();
+
 function element(id) {
     return globalThis.document.getElementById(id);
 }
@@ -163,6 +173,12 @@ export function objectsListMarkup(
      * and eye; the only difference is indentation and the row it sits beneath. A
      * parent row is still just a row, so selecting it selects the assembly, and
      * selecting a child selects only that component.
+     *
+     * A PARENT IS FOLDABLE. Its children live in a list BENEATH it and indented a
+     * little to the right - not beside it on the same line, which is what a row
+     * that put its children inside its own flex line did. The disclosure triangle
+     * is a separate button, so folding a group open or shut never selects or moves
+     * the parent, and the state is kept across re-renders.
      */
     const ids = new Set(listed.map((object) => object.id));
 
@@ -181,28 +197,62 @@ export function objectsListMarkup(
 
     const isChild = (object) => Boolean(object.parentId) && ids.has(object.parentId) && object.parentId !== object.id;
 
+    /*
+     * THE ROW IS ONE ROW; ITS CHILDREN ARE THE LIST UNDER IT.
+     *
+     * The row's own parts - disclosure, icon, name, eye - are wrapped in one
+     * `drawing-objects-row` line. The children's `<ul>` is a SIBLING of that line,
+     * inside the same `<li>`, so it is laid out BELOW the parent and indented by
+     * the stylesheet. Putting children inside the row's flex line is what stacked
+     * them on the same line beside their parent.
+     */
     const rowMarkup = (object, depth = 0) => {
         const isSelected = selected.has(object.id);
         const isVisible = object.visible !== false;
         const name = displayNameOf(object);
         const type = typeLabelOf(object);
         const children = childrenOf.get(object.id) || [];
-
-        const indented = depth > 0 ? ` drawing-objects-item-child` : "";
+        const hasChildren = children.length > 0;
+        const expanded = hasChildren && !folded.has(object.id);
 
         return (
-            `<li class="drawing-objects-item${indented}${isVisible ? "" : " drawing-objects-item-hidden"}" role="option" ` +
+            `<li class="drawing-objects-item${hasChildren ? " drawing-objects-item-parent" : ""}` +
+            `${!hasChildren && depth > 0 ? " drawing-objects-item-child" : ""}` +
+            `${isVisible ? "" : " drawing-objects-item-hidden"}" ` +
             `aria-selected="${isSelected ? "true" : "false"}" ` +
             `aria-level="${depth + 1}" ` +
+            `role="option" ` +
+            `${hasChildren ? `aria-expanded="${expanded ? "true" : "false"}" ` : ""}` +
             `data-object-id="${escapeHtml(object.id)}" data-object-type="${escapeHtml(object.type)}" ` +
             `data-object-depth="${depth}" ` +
             `tabindex="${isSelected ? "0" : "-1"}" ` +
             `title="${escapeHtml(object.label ? `${name} — ${type}` : type)}">` +
+            `<span class="drawing-objects-row">` +
             `<span class="drawing-objects-icon" aria-hidden="true">${iconForObject(object)}</span>` +
             `<span class="drawing-objects-name">${escapeHtml(name)}</span>` +
+
+            /*
+             * THE DISCLOSURE SITS BEFORE THE EYE.
+             *
+             * The eye is the row's fixed LAST control - a long-standing
+             * contract of this list, and what keeps every eye in one column - so
+             * the fold control comes immediately before it, at the row's
+             * trailing edge. It is still part of the row's line, so folding a
+             * group never changes which line the eye is on.
+             */
+            (hasChildren
+                ? `<button type="button" class="drawing-objects-disclosure" ` +
+                  `data-disclosure-for="${escapeHtml(object.id)}" ` +
+                  `aria-expanded="${expanded ? "true" : "false"}" ` +
+                  `aria-label="${escapeHtml(expanded ? `Collapse ${name}` : `Expand ${name}`)}" ` +
+                  `title="${escapeHtml(expanded ? "Collapse" : "Expand")}">` +
+                  `<span class="drawing-objects-disclosure-mark${expanded ? " is-open" : ""}" aria-hidden="true"></span>` +
+                  `</button>`
+                : "") +
             visibilityButtonMarkup(object) +
-            (children.length
-                ? `<ul class="drawing-objects-children" role="group" aria-label="${escapeHtml(name)} members">` +
+            `</span>` +
+            (hasChildren
+                ? `<ul class="drawing-objects-children" role="group" aria-label="${escapeHtml(name)} members"${expanded ? "" : " hidden"}>` +
                   children.map((child) => rowMarkup(child, depth + 1)).join("") +
                   `</ul>`
                 : "") +
@@ -317,6 +367,32 @@ export function installObjectsPane() {
          * `stopPropagation` alone would still let a parent listener react, so
          * the row is checked for first and the event is consumed either way.
          */
+        /*
+          * THE DISCLOSURE TOGGLES THE GROUP AND NOTHING ELSE.
+          *
+          * It is a button inside the row, so without this the click would bubble
+          * to the row and SELECT the parent while the student was only folding
+          * its children away - the same fault the eye button has a guard for.
+          */
+        const disclosure = event.target.closest?.("[data-disclosure-for]");
+
+        if (disclosure) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const id = disclosure.dataset.disclosureFor;
+
+            if (folded.has(id)) {
+                folded.delete(id);
+            } else {
+                folded.add(id);
+            }
+
+            renderObjects();
+
+            return;
+        }
+
         const eye = event.target.closest?.("[data-visibility-for]");
 
         if (eye) {

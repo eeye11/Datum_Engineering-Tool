@@ -749,6 +749,46 @@ function commitStaticsAttachment(
                     body
                 )
             );
+
+        /*
+         * ========================================================
+         * A CONNECTION JOINS TWO BODIES, AND REMEMBERS BOTH
+         * ========================================================
+         *
+         * The first click named one body (`body`); the second landed wherever
+         * the student pointed, and the body under THAT point is the other end.
+         * Both are recorded on the one object - it is a single connection, not
+         * a link and a duplicate - so each endpoint can stay on the body it
+         * belongs to while the pair remains one row, one selection and one undo
+         * entry.
+         *
+         * `parentId` is the FIRST body only. A second parent id does not exist
+         * in the model, and inventing one would let a connection appear twice in
+         * the tree; the second endpoint is an ATTACHMENT, which is what it is.
+         */
+        const secondBody =
+            staticsBodyAtPoint(end) ||
+            (end.x === start.x && end.y === start.y ? body : null);
+
+        object.engineering = {
+            ...(object.engineering || {}),
+            startBodyId: body?.id || null,
+            endBodyId: secondBody?.id || null,
+            attachments: [
+                {
+                    bodyId: body?.id || null,
+                    point: { x: start.x, y: start.y }
+                },
+                {
+                    bodyId: secondBody?.id || null,
+                    point: { x: end.x, y: end.y }
+                }
+            ]
+        };
+
+        if (secondBody && secondBody.id !== body?.id) {
+            object.engineering.endParentId = secondBody.id;
+        }
     }
 
     if (!object) {

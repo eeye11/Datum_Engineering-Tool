@@ -235,7 +235,12 @@ const load = write(
 check("a load writes its loaded span", has(load, "(0,0) -- (100,0)"), load);
 check("a row of arrows standing off the body", count(load, /-{Latex}/g) >= 4, load);
 check("its envelope", has(load, "fill=daetumC193335") && has(load, "-- cycle"), load);
-check("its intensity", has(load, "w = 5"), load);
+check("its intensity", has(load, "5\\ kN/m"), load);
+check(
+  "and no symbol the student never typed",
+  !/\{\s*w\s*=\s*\d/.test(load),
+  load,
+);
 check("and not its internal name as text", !has(load, "{Distributed Load 1}"), load);
 
 const respaced = write(
@@ -258,7 +263,7 @@ check(
   count(respaced, /-{Latex}/g) < count(load, /-{Latex}/g),
   `${count(respaced, /-{Latex}/g)} vs ${count(load, /-{Latex}/g)}`,
 );
-check("and the intensity it states is unchanged", has(respaced, "w = 5"), respaced);
+check("and the intensity it states is unchanged", has(respaced, "5\\ kN/m"), respaced);
 
 /* ========================================== Varying Distributed Load */
 
@@ -418,7 +423,28 @@ const resultant = write(
 );
 
 check("a resultant is its calculated arrow", has(resultant, "(0,0) -- (30,40)"), resultant);
-check("with its label and magnitude", has(resultant, "{R}") && has(resultant, "R = 50"), resultant);
+
+/*
+ * THE CALCULATED VALUE IS PRINTED; THE STUDENT'S LABEL IS NOT INVENTED.
+ *
+ * A resultant used to print a default "R" whether or not the object carried
+ * one, which made an empty Label field look filled in. The value is the
+ * RESULT, so it stays; the letter is the student's own text, so an unlabelled
+ * resultant writes none.
+ */
+check("with its calculated magnitude", has(resultant, "R = 50"), resultant);
+check("and no letter the student did not write", !has(resultant, "{R}"), resultant);
+
+const labelledResultant = write({
+  ...objectOf("resultant", { start: { x: 0, y: 0 }, end: { x: 30, y: 40 }, magnitude: 50, angle: 53.13 }),
+  label: "R_{x}",
+});
+
+check(
+  "a label the student DID write is drawn",
+  has(labelledResultant, "{R\\_\\{x\\}}"),
+  labelledResultant,
+);
 
 const components = write(
   objectOf("force-components", {

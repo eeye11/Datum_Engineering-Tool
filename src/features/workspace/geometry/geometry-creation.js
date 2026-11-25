@@ -2194,11 +2194,20 @@ export function beginOrCompleteGeometry(
             drawingState.activeTool ===
             "point-force"
         ) {
-            // Keep the completed arrow visible while its value is pending.
-            // It enters the document only after confirmation, as one undo step.
+            /*
+             * KEEP THE COMPLETED ARROW VISIBLE WHILE ITS VALUE IS PENDING.
+             *
+             * IT IS THE ONE PREVIEW, NOT TWO. The renderer draws `preview` and
+             * then EVERY entry of `previewObjects`, so putting the same object
+             * in both drew the arrow twice, one on top of the other - the
+             * "Point Force makes two objects" fault, which looked like a
+             * duplicate feature and was a duplicate DRAW of one.
+             *
+             * It enters the document only after confirmation, as one undo step.
+             */
             drawingState.interaction.phase = "point-force-value";
             drawingState.interaction.preview = object;
-            drawingState.interaction.previewObjects = [object];
+            drawingState.interaction.previewObjects = [];
             renderCurrentDrawing();
 
             setToolMessage(

@@ -245,7 +245,13 @@ check(
 
 check(
   "switching tools clears any pending creation session",
-  /export function activateTool[\s\S]{0,3000}?clearInteraction/.test(
+  /*
+   * THE WINDOW IS GENEROUS ON PURPOSE. `activateTool` opens with guards that
+   * REFUSE an id rather than arm it - a submenu is not a tool, a planned tool
+   * has no behaviour - and those came before the clear. The question this check
+   * asks is whether arming always clears, which is still true.
+   */
+  /export function activateTool[\s\S]{0,6000}?clearInteraction/.test(
     fs.readFileSync(locate("tool-activation.js"), "utf8"),
   ),
 );

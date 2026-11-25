@@ -125,6 +125,35 @@ Tests for removed features were deleted; tests that still describe current
 behaviour were renamed or reframed (for example, drawn arrow length instead of
 Vector Scale). 257/257 pass; lint has 0 errors.
 
+## 7. One Statics architecture
+
+**Goal:** every Statics tool built on the same three ideas - ONE object, an
+ENGINEERING value separate from its DRAWING, and ONE label placed by one rule.
+
+The work is in three new modules, each with a single job:
+
+| Module | Answers |
+| --- | --- |
+| `shared/geometry/statics-label.js` | Where a Statics object's label sits, in drawing units. Asked by the renderer, the TikZ writer, the hit test and the inline editor, so the four cannot disagree. The student's own `labelOffset` is stored on the object. |
+| `shared/geometry/statics-hierarchy.js` | What follows what. Attached children follow their body, a fixed body fixes its children, a diagram's frame follows the body it reads, and reference objects are never parents. |
+| `shared/file/statics-migration.js` | Re-seats an older document's Statics objects in the current shape, from their own geometry. Idempotent, runs on every open, and never resizes an arrow. |
+
+| What changed | How |
+| --- | --- |
+| **A force is one object with three parts** | `magnitude` is engineering, `start`/`end` is the drawing, `label` + `labelOffset` is the text. Typing a magnitude leaves the arrow where it was drawn. There is no scale factor anywhere. |
+| **A label is edited where it is drawn** | `features/workspace/statics/statics-label-editor.js` opens the one inline field on the label's own point; the Features Label row, the canvas double-click and a placement prompt all go through it. |
+| **Labels are initialised empty** | The resultant's default "R" was removed; every label starts as the empty string, and an empty label draws nothing. |
+| **A consistent Features tab** | `STATICS_SECTIONS` in `feature-schema.js`: Object (Name, Label, Fix, then only the tool's own properties), Appearance (Line Style, Colour, Thickness, Fill), Transform. No Geometry section, no visibility checkbox. The Coordinate System keeps its axes and axis names inside those three. |
+| **The Objects list is a tree** | A parent row is one line with a disclosure; its children are a `<ul>` **below** it and indented, not on the same line. Folding is the student's arrangement and is not saved. |
+| **A body's children move and turn with it** | Hand-dragging, arrow-moving and the rotate handle all use `transformGroupOf`, so a load stays at its station on a beam that is dragged or turned. |
+| **Connections remember both bodies** | One object, `engineering.attachments` = two `{ bodyId, point }` entries; both are read (and older files migrated) but only one shape is ever written. |
+| **A Point Force is one arrow** | The pending-value preview was drawn twice - once from `previewObjects` and once from `preview`. The renderer now draws each preview once, whatever a caller passes. |
+| **The Source puts text where the canvas does** | The four per-type text-node writers (`forceNodes`, `loadNodes`, `momentNodes`, `resultantNodes`) and the shared label fallback all call `labelHomeOf`. |
+
+Checked with `tests/statics-object-architecture.test.cjs` (the three-parts rule,
+the shared label placement, empty labels, and the tree shape) plus the existing
+Statics, render, source and drag suites.
+
 ---
 
 ## Branches and what to do with them

@@ -156,6 +156,70 @@ const FILLABLE = new Set([
 const FLOW_PATH_FILLABLE = new Set(["pipe-duct", "elbow", "junction", "reducer-expander"]);
 
 /*
+ * ============================================================
+ * THE STATICS FEATURE TYPES
+ * ============================================================
+ *
+ * Every object the Statics toolbar can create, declared ONCE, so the Features
+ * tab, the reference set and the analysis set cannot disagree about which types
+ * they are talking about. A type added here is an Appearance and a Transform
+ * away from being edited like the rest of the sheet.
+ */
+const STATICS_BODY_TYPES = Object.freeze([
+    "particle",
+    "rigid-body",
+    "beam",
+    "truss",
+    "cable",
+    "shaft"
+]);
+
+const STATICS_LOAD_TYPES = Object.freeze(["force", "load", "varying-load", "moment"]);
+
+const STATICS_SUPPORT_TYPES = Object.freeze([
+    "pin-support",
+    "roller-support",
+    "fixed-support",
+    "smooth-support"
+]);
+
+const STATICS_CONNECTION_TYPES = Object.freeze([
+    "pin-connection",
+    "fixed-connection",
+    "slider-connection",
+    "connection"
+]);
+
+const STATICS_ANALYSIS_TYPES = Object.freeze([
+    "resultant",
+    "force-components",
+    "analysis-diagram",
+    "shear-force-diagram",
+    "bending-moment-diagram",
+    "axial-force-diagram"
+]);
+
+/* The four reference tools. Their geometry types are shared with ordinary
+ * drawing, so membership is decided by the Statics role recorded at creation
+ * - see `isStaticsReference`. */
+const STATICS_REFERENCE_GEOMETRY = Object.freeze(["point", "line", "arc"]);
+
+const STATICS_PANEL_TYPES = Object.freeze([
+    ...STATICS_BODY_TYPES,
+    ...STATICS_LOAD_TYPES,
+    ...STATICS_SUPPORT_TYPES,
+    ...STATICS_CONNECTION_TYPES,
+    ...STATICS_ANALYSIS_TYPES
+]);
+
+/*
+ * The types that carry a MAGNITUDE of their own. A moment states it as
+ * `magnitude` too, but edits it with its direction instead, so it is excluded
+ * where this set is used rather than being given two doors to one value.
+ */
+const FINITE_MAGNITUDE_TYPES = new Set(["force", "resultant", "load", "varying-load", "moment"]);
+
+/*
  * The types whose stroke can be dashed, dotted or otherwise styled.
  *
  * THE DYNAMICS SYMBOLS ARE HERE because every one of them is drawn with a pen:
@@ -248,7 +312,18 @@ const STROKE_TYPES = new Set([
     	"thermal-circuit-element",
     	"temperature-marker",
     	"isotherm",
-    	"control-volume"
+    	"control-volume",
+
+    	/*
+    	 * THE STATICS OBJECTS ARE ALL DRAWN WITH A PEN.
+    	 *
+    	 * A beam, a force, a load, a moment, a support and a connection are the
+    	 * drawing's own ink, so every one of them gets the SAME Line Style, Outline
+    	 * Colour and Thickness rows. Without them the Appearance section was empty
+    	 * for a support, which then lost the section altogether - so a beam could be
+    	 * re-coloured and the support standing on it could not.
+    	 */
+    	...STATICS_PANEL_TYPES
     ]);
 
 /*
@@ -2598,6 +2673,136 @@ const FIELDS = {
         unit: "px"
     },
 
+    /* ------------------------------------------- Statics
+     *
+     * THE ENGINEERING PROPERTIES, SEPARATE FROM THE DRAWING.
+     *
+     * A force's magnitude and direction describe the ENGINEERING quantity; the
+     * arrow's length and heading describe the DRAWING of it, and are written by
+     * its handles. Typing a new magnitude changes what the load IS, never how
+     * long its arrow is drawn - which is the rule the retired Vector Scale
+     * broke, by deriving one from the other.
+     */
+    staticsMagnitude: {
+        kind: "number",
+        label: "Magnitude",
+        applies: (object) =>
+            FINITE_MAGNITUDE_TYPES.has(object?.type) &&
+            object?.type !== "moment" &&
+            object?.type !== "force-components",
+        read: (object) => {
+            const value = Number(object?.geometry?.magnitude);
+
+            return Number.isFinite(value) ? value : 0;
+        },
+        write: (object, value) => {
+            const number = Number(value);
+
+            if (!Number.isFinite(number)) {
+                return false;
+            }
+
+            object.geometry = object.geometry || {};
+            object.geometry.magnitude = number;
+
+            return true;
+        },
+        min: 0,
+        step: 0.1
+    },
+
+    staticsDirection: {
+        kind: "number",
+        label: "Direction",
+        applies: (object) =>
+            object?.type === "force" || object?.type === "load" || object?.type === "varying-load",
+        read: (object) => {
+            const angle = Number(object?.geometry?.angle ?? object?.geometry?.direction);
+
+            return Number.isFinite(angle) ? angle : 0;
+        },
+        write: (object, value) => {
+            const angle = Number(value);
+
+            if (!Number.isFinite(angle)) {
+                return false;
+            }
+
+            object.geometry = object.geometry || {};
+
+            /*
+             * A load states its direction as `direction`; a force keeps `angle`
+             * as the direction its arrow was drawn in. Writing the field the
+             * object ALREADY has is what keeps one property in one place.
+             */
+            if (object.geometry.direction !== undefined || object.type !== "force") {
+                object.geometry.direction = angle;
+            } else {
+                object.geometry.angle = angle;
+            }
+
+            return true;
+        },
+        unit: "\u00B0",
+        step: 1
+    },
+
+    staticsLoadUnit: {
+        kind: "choice",
+        label: "Unit",
+        applies: (object) => object?.type === "load" || object?.type === "varying-load",
+        read: (object) => String(object?.geometry?.loadUnit || "kN/m"),
+        write: (object, value) => {
+            const unit = String(value || "");
+
+            if (!["kN/m", "N/mm", "N/m"].includes(unit)) {
+                return false;
+            }
+
+            object.geometry = object.geometry || {};
+            object.geometry.loadUnit = unit;
+
+            return true;
+        },
+        options: [
+            { value: "kN/m", label: "kN/m" },
+            { value: "N/m", label: "N/m" },
+            { value: "N/mm", label: "N/mm" }
+        ]
+    },
+
+    /*
+     * WHAT AN ANALYSIS OBJECT IS ABOUT.
+     *
+     * A RESULT, not an input: the student does not type the forces a resultant
+     * was made from, because those are the forces they selected. It is shown so
+     * the dependency is visible in the panel as well as in the Objects tree.
+     */
+    staticsAnalysisSource: {
+        kind: "text",
+        label: "From",
+        applies: (object) =>
+            object?.type === "resultant" || object?.type === "force-components",
+        read: (object) => {
+            const ids = object?.engineering?.sourceFeatureIds;
+
+            if (!Array.isArray(ids) || !ids.length) {
+                return "";
+            }
+
+            return ids
+                .map((id) => {
+                    const source = (drawingState.objects || []).find((item) => item.id === id);
+
+                    return source ? source.name || id : "(deleted)";
+                })
+                .join(", ");
+        },
+
+        /* Read-only: the sources are the forces the student selected. */
+        write: () => false
+    },
+
     fixed: {
         kind: "toggle",
         applies: isLockable,
@@ -2985,7 +3190,77 @@ export const GROUPS = [
 	 * shape. A group with nothing applicable to the selection is dropped by
 	 * `groupsFor`, so no empty heading is ever drawn.
 	 */
-	export const SCHEMATIC_GROUPS = Object.freeze({
+	/*
+ 	 * ============================================================
+ 	 * THE STATICS FEATURE PANEL - ONE SHAPE FOR EVERY TOOL
+ 	 * ============================================================
+ 	 *
+ 	 * Object, Appearance, Transform - in that order, for every Statics tool, with
+ 	 * its own property folded into the section it belongs to rather than given a
+ 	 * section of its own:
+ 	 *
+ 	 *   Magnitude, direction, the load's unit  -> Object, beside the Name
+ 	 *   Line style, colour, thickness, fill    -> Appearance
+ 	 *   X Shift, Y Shift, Rotate               -> Transform
+ 	 *
+ 	 * THERE IS NO GEOMETRY SECTION. A body's length, a load's span and a support's
+ 	 * attachment are edited with the object's handles, which is the same edit
+ 	 * through one control instead of two - and two ways of typing the same number
+ 	 * is how a panel comes to disagree with the drawing.
+ 	 *
+ 	 * VISIBILITY IS NOT HERE EITHER. It is the eye in the selected object's header,
+ 	 * synchronised with the Objects panel, so it is one control in one place.
+ 	 */
+ 	const STATICS_SECTIONS = Object.freeze({
+ 	    bodies: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+ 	    loads: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed", "staticsMagnitude", "staticsDirection", "staticsLoadUnit"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+ 	    supports: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+ 	    connections: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+ 	    analysis: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed", "staticsAnalysisSource"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+ 	    references: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ],
+
+ 	    /*
+ 	     * A COORDINATE SYSTEM IS A REFERENCE TOO, AND STILL HAS ITS OWN AXES.
+ 	     *
+ 	     * The three sections are the same; what changes is what is INSIDE them. Its
+ 	     * axes and their names are the symbol's own properties - which axis is
+ 	     * drawn, and what it is called - so they sit in Object and Appearance
+ 	     * rather than in a section of their own. The requirement names exactly
+ 	     * those three sections, and a reference is not an exception to it: a
+ 	     * student still has to be able to say which axes to draw.
+ 	     */
+ 	    coordinateSystem: [
+ 	        { id: "object", heading: "Object", fields: ["name", "label", "fixed", "showXAxis", "showYAxis", "showLabels"] },
+ 	        { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "xLabel", "yLabel", "originLabel"] },
+ 	        { id: "transform", heading: "Transform", fields: [], transform: true }
+ 	    ]
+ 	});
+
+ 	export const SCHEMATIC_GROUPS = Object.freeze({
             reducer: [
                 { id: "object", heading: "Object", fields: ["name", "fixed", "reducerMode"] },
                 { id: "appearance", heading: "Appearance", fields: ["lineType", "stroke", "lineWidth", "customWidth", "fillMode", "fill"] },
@@ -6369,6 +6644,23 @@ const SCHEMATIC_NAMED_SECTIONS = ["profile-axes", "label"];
 function orderSections(groups) {
     const byId = new Map();
 
+    /*
+     * A SECTION'S IDENTITY IS ITS ID, AND THE FIRST DECLARATION OWNS IT.
+     *
+     * `GROUPS` declares `object` and `appearance` more than once - the shared
+     * section, and a narrower copy beside a tool that needed a different field
+     * list. Merging every copy UNIONED their rows, so a plain Line ended up with
+     * Name and Fix twice (once in Object, once in the appearance copy) and a
+     * tool's own section (a Line's arrow controls) was pushed into Appearance
+     * ahead of the pen rows. What a student saw was an Appearance section that
+     * contained the object's name, and a Line with no arrowhead row at all.
+     *
+     * The first declaration is the canonical one: it is the shared Object /
+     * Appearance every object starts from. A later copy is a NARROWER variant
+     * for one tool, so it may only ADD the fields the canonical list does not
+     * already offer, and it can never contribute a field the canonical list
+     * already owns.
+     */
     const merge = (id, group) => {
         const existing = byId.get(id);
 
@@ -6699,6 +6991,76 @@ const MATH_GROUPS = Object.freeze({
 });
 
 /* Which set of sections a Math object uses, from its own type. */
+/*
+ * WHICH OF THE STATICS SECTIONS AN OBJECT USES, or null if it is not Statics.
+ *
+ * A Reference Point, Line or Arc is a PLAIN geometry type, so it is identified by
+ * the Statics role recorded when it was created - not by its type alone, which
+ * would claim every Line on the sheet.
+ */
+export function isStaticsReference(object) {
+    if (object?.engineering?.dynamicsType) {
+        return false;
+    }
+
+    return (
+        STATICS_REFERENCE_GEOMETRY.includes(object?.type) &&
+        String(object?.engineering?.staticsType || "").startsWith("reference-")
+    );
+}
+
+export function staticsSectionsFor(object) {
+    const type = object?.type;
+
+    /*
+     * A TYPE IS NOT ENOUGH TO MAKE AN OBJECT A STATICS OBJECT.
+     *
+     * A Dynamics vector reuses the same geometry type as a Statics one, and
+     * several tools share a plain `point` or `line`. So an object made by
+     * ANOTHER discipline is never claimed here, whatever its geometry is - it
+     * keeps its own panel, which is what its own tool defines.
+     */
+    const discipline = String(object?.engineering?.discipline || "");
+
+    if (discipline && discipline !== "statics") {
+        return null;
+    }
+
+    if (object?.engineering?.dynamicsType) {
+        return null;
+    }
+
+    if (STATICS_BODY_TYPES.includes(type)) {
+        return STATICS_SECTIONS.bodies;
+    }
+
+    if (STATICS_LOAD_TYPES.includes(type)) {
+        return STATICS_SECTIONS.loads;
+    }
+
+    if (STATICS_SUPPORT_TYPES.includes(type)) {
+        return STATICS_SECTIONS.supports;
+    }
+
+    if (STATICS_CONNECTION_TYPES.includes(type)) {
+        return STATICS_SECTIONS.connections;
+    }
+
+    if (STATICS_ANALYSIS_TYPES.includes(type)) {
+        return STATICS_SECTIONS.analysis;
+    }
+
+    if (type === COORDINATE_SYSTEM) {
+        return STATICS_SECTIONS.coordinateSystem;
+    }
+
+    if (isStaticsReference(object)) {
+        return STATICS_SECTIONS.references;
+    }
+
+    return null;
+}
+
 export function mathGroupsFor(object) {
     switch (object?.type) {
         case MATH_TYPES.point:
@@ -6889,6 +7251,30 @@ export function groupsFor(object) {
             ["object", "appearance", "transform"]
                 .map((id) => GROUPS.find((group) => group.id === id))
                 .filter(Boolean)
+                .map((group) => ({
+                    ...group,
+                    fields: group.fields
+                        .map((key) => ({ key, definition: definitionOf(key) }))
+                        .filter((entry) => entry.definition && entry.definition.applies(object))
+                }))
+                .filter((group) => group.transform || group.fields.length)
+        );
+    }
+
+    /*
+     * EVERY STATICS TOOL USES THE SAME THREE SECTIONS.
+     *
+     * Which section a type belongs to is decided from the type's own identity,
+     * and the rows inside it are filtered by their own `applies` predicates - so
+     * a beam never shows a magnitude and a resultant never shows a direction to
+     * type. A group with nothing applicable is dropped by the filter below, the
+     * same rule that drops an empty Appearance everywhere else.
+     */
+    const staticsSections = staticsSectionsFor(object);
+
+    if (staticsSections) {
+        return orderSections(
+            staticsSections
                 .map((group) => ({
                     ...group,
                     fields: group.fields

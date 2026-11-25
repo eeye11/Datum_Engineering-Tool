@@ -1658,7 +1658,7 @@ disappeared while I typed" failure.
      * and a listener that throws is dropped rather than allowed to break the
      * draw it was called from.
      */
-    announceCamera();
+    announceCameraNow();
 }
 
 const cameraListeners = new Set();
@@ -1692,26 +1692,35 @@ function cameraKey(state) {
     ].join("|");
 }
 
-function announceCamera() {
-    if (!cameraListeners.size) {
-        return;
+function announceCameraNow() {
+  const key = cameraKey(drawingState);
+
+  if (key === announcedCamera) {
+    return;
+  }
+
+  announcedCamera = key;
+
+  [...cameraListeners].forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      cameraListeners.delete(listener);
     }
+  });
+}
 
-    const key = cameraKey(drawingState);
-
-    if (key === announcedCamera) {
-        return;
-    }
-
-    announcedCamera = key;
-
-    [...cameraListeners].forEach((listener) => {
-        try {
-            listener();
-        } catch {
-            cameraListeners.delete(listener);
-        }
-    });
+/*
+ * THE SUITE'S WAY OF SAYING "THE VIEW MOVED".
+ *
+ * The camera is plain state, and every real change to it ends in a draw that
+ * calls `announceCamera`. A test that moves the camera directly - as a pan or
+ * a zoom does - has to run that same announcement, or the listeners it is
+ * testing are never called. Exposing the one function keeps the test on the
+ * real path rather than a second copy of it.
+ */
+export function __testAnnounceCamera() {
+    announceCameraNow();
 }
 
 /*

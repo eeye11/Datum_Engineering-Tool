@@ -27,9 +27,11 @@
  * than repeating the arithmetic - so the prompt sits on the node at every zoom
  * and pan, and cannot drift from where the node is actually drawn.
  *
- * NO IMPORTS, so a test can load it on its own and the editor can use it
- * without dragging the model in.
+ * THE ONE IMPORT IS THE STATICS LABEL PLACEMENT, which itself imports nothing -
+ * so this module still runs on its own and the editor can use it without
+ * dragging the model in.
  */
+import enggStaticsLabel from "../../geometry/statics-label.js";
 
 /* The DOM element the drawing is painted into. */
 export function canvasElement() {
@@ -247,6 +249,24 @@ function dimensionTextAnchor(object) {
 export function modelPointForTextEntry(object) {
   if (!object || typeof object !== "object") {
     return null;
+  }
+
+  /*
+     * A STATICS OBJECT'S LABEL IS EDITED WHERE IT IS DRAWN.
+     *
+     * `statics-label.js` decides where a force's, a load's, a moment's or a
+     * support's label sits - including any offset the student gave it - and the
+     * renderer draws it there. The editor must open on those same glyphs, so it
+     * asks the same module rather than a second, anchor-only rule that would put
+     * the caret somewhere the words are not.
+     */
+  const staticsHome =
+    enggStaticsLabel?.labelHomeOf
+            ? enggStaticsLabel.labelHomeOf(object)
+            : null;
+
+  if (staticsHome) {
+    return finitePoint(staticsHome);
   }
 
   const geometry = object.geometry || {};

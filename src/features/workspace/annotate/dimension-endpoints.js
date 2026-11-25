@@ -1,9 +1,22 @@
 /* Endpoint picking for the authored Dimension tool. Snaps are screen-sized;
  * edge fractions follow later geometry edits, while empty canvas stays free. */
 import measurement from "../../../shared/geometry/measurement-core.js";
+import { pixelsPerUnit } from "../../../shared/geometry/drawing-units.js";
+
+/*
+ * A SCREEN-SIZED CATCH, CONVERTED TO DRAWING UNITS.
+ *
+ * The tolerance is eight pixels on screen whatever the zoom - so it is divided
+ * by the LIVE pixels-per-unit ratio rather than by a copy of it. The ratio is
+ * the drawing's own scale (see `drawing-units.js`); a literal here would silently
+ * stop matching it the moment that scale is adjusted.
+ */
+function catchRadius(state) {
+    return 8 / pixelsPerUnit(state.camera?.zoom || 1);
+}
 
 export function dimensionEndpointAt(point, state) {
-    const radius = 8 / (2.4 * (state.camera?.zoom || 1));
+    const radius = catchRadius(state);
     let best = null;
     let bestDistance = radius;
     const objects = state.objects.filter(object => object.visible !== false &&
@@ -54,7 +67,7 @@ export function endpointPosition(ref, state) {
 
 export function endpointDimensionType(first, second, state) {
     const a = endpointPosition(first, state), b = endpointPosition(second, state);
-    const tolerance = 6 / (2.4 * (state.camera?.zoom || 1));
+    const tolerance = 6 / pixelsPerUnit(state.camera?.zoom || 1);
     if (Math.abs(a.y - b.y) <= tolerance) return "horizontal";
     if (Math.abs(a.x - b.x) <= tolerance) return "vertical";
     return "aligned";

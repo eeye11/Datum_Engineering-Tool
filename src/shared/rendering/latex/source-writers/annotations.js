@@ -312,7 +312,19 @@ function textAtPosition(object) {
 
   const note = object.annotateKind === "note";
   const typography = noteTextStyle(object.style);
-  const fontSize = note ? typography.fontSize * 0.75 : fontFor(object.style);
+
+  /*
+   * A NOTE IS WRITTEN AT THE SIZE IT IS DRAWN AT.
+   *
+   * `typography.fontSize` is the on-screen pixel size the canvas paints the
+   * note's glyphs at (see `canvas-typography.js`), and one canvas pixel is one
+   * point on the sheet - the calibration the whole generator uses. This used to
+   * write `fontSize * 0.75` for a note only, so every note in the compiled
+   * picture and in an export was a quarter smaller than the same note on the
+   * canvas: the Drawing Space and the figure disagreed about the one thing a
+   * student measures by eye, and the disagreement grew with the chosen size.
+   */
+  const fontSize = note ? typography.fontSize : fontFor(object.style);
   const family = typography.fontFamily === "Courier New" ? "\\ttfamily"
     : typography.fontFamily === "Times New Roman" ? "\\rmfamily" : "\\sffamily";
   const emphasis = `${typography.bold ? "\\bfseries" : ""}${typography.italic ? "\\itshape" : ""}`;

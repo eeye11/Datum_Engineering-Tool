@@ -297,9 +297,115 @@ test("both rails carry a resize handle on their inner edge", () => {
     "the handle has a rule",
   );
   assert.match(sidePanels, /cursor: col-resize/, "and it reads as a splitter");
+});
+
+/*
+ * A DRAG TO NOTHING IS THE HIDE BUTTON, NOT A THIRD STATE.
+ *
+ * The panel may be dragged all the way shut, and when it is, it must BE hidden -
+ * the same class, the same reclaimed track, the same Show control - rather than a
+ * separately-styled zero-width panel that only looks the same.
+ */
+test("dragging a sidebar to its minimum hides it through the Hide path", () => {
+  const panelResize = fs.readFileSync(modulePath("panel-resize.js"), "utf8");
+
+  assert.match(
+    panelResize,
+    /COLLAPSE_BELOW/,
+    "there is a threshold past which a drag means hidden",
+  );
+
+  assert.match(
+    panelResize,
+    /installPanelCollapse/,
+    "the collapse is the layout's own, handed in rather than re-implemented",
+  );
+
+  assert.match(
+    panelResize,
+    /applyCollapsed\(side, true\)/,
+    "a drag past the threshold calls that collapse",
+  );
+});
+
+/*
+ * THE MINIMUM IS ZERO, SO THE SLIDER HAS NOWHERE IT CANNOT GO.
+ *
+ * A positive floor would stop the drag short of the state the Hide button
+ * reaches, and the two gestures would disagree about how small a sidebar can be.
+ */
+test("the drag limits allow a completely hidden sidebar", () => {
+  const panelResize = fs.readFileSync(modulePath("panel-resize.js"), "utf8");
+
+  assert.match(
+    panelResize,
+    /return \{\s*min: 0,\s*max:/,
+    "the minimum width is zero - the hidden state",
+  );
+});
+
+/*
+ * HIDE KEEPS THE WIDTH IT LEAVES.
+ *
+ * A collapsed rail is its 22px strip, so the width to come back at has to be
+ * remembered - otherwise Show reopens the panel at the handle's own width.
+ */
+test("the last expanded width is remembered, never the collapsed strip", () => {
+  const panelResize = fs.readFileSync(modulePath("panel-resize.js"), "utf8");
+
+  assert.match(
+    panelResize,
+    /lastExpandedWidths\[side\] =/,
+    "the expanded width is recorded",
+  );
+
+  assert.match(
+    panelResize,
+    /function lastExpandedWidth\(side/,
+    "and answered by name",
+  );
+});
+
+/*
+ * THE WIDTHS OUTLIVE THE SESSION.
+ *
+ * The student's sidebar size is an interface preference, stored beside the other
+ * `datum:` preferences rather than in the drawing.
+ */
+test("the sidebar widths persist as a datum: preference", () => {
+  const panelResize = fs.readFileSync(modulePath("panel-resize.js"), "utf8");
+
+  assert.match(panelResize, /datum:sidebar-widths/, "under one key for the pair");
+  assert.match(panelResize, /JSON\.parse/, "read back through a parse that can fail");
+  assert.match(
+    panelResize,
+    /clampPanelWidth\(left, viewport, right\)/,
+    "and clamped against the viewport it is restored into",
+  );
+});
+
+/*
+ * THE HANDLE DOES NOT TAKE THE HIDE BUTTON'S PRESS, AND OUTLIVES A HIDE.
+ *
+ * It is pinned to the rail's canvas-facing edge rather than sharing the arrow's
+ * space, and it stays on the 22px strip so a hidden panel can be dragged open.
+ */
+test("the handle sits past the toggle and stays on a collapsed rail", () => {
+  const sidePanels = stylesheetSource("editor/side-panels.css");
+  const layout = fs.readFileSync(
+    modulePath("workspace-layout.js"),
+    "utf8",
+  );
+
   assert.match(
     sidePanels,
-    /\.drawing-panel-resizer\[hidden\]/,
-    "a collapsed rail has no edge to drag",
+    /\.drawing-panel-rail-collapsed > \.drawing-panel-resizer \{[\s\S]*?position: absolute/,
+    "the collapsed strip keeps its handle",
+  );
+
+  assert.match(
+    layout,
+    /resizer\.hidden = false/,
+    "hiding the panel does not take the handle away",
   );
 });

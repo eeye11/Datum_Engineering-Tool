@@ -166,8 +166,16 @@ export const ROLE_WEIGHTS = Object.freeze({
 export const CANVAS_BASELINE = "middle";
 export const LINE_SPACING = 1.2;
 
-/* Pi, as the drawing's coordinate system already uses. */
-export const BASE_PIXELS_PER_UNIT = 2.4;
+/*
+ * THE CAMERA'S SCALE, MIRRORED FOR STATIC READERS.
+ *
+ * This is the SAME value as `BASE_PIXELS_PER_UNIT` in
+ * `src/shared/model/drawing-state.js`, which is where it is owned and what the
+ * camera transforms actually use. It is restated here because the canvas font
+ * sizing needs the ratio before the model is loaded - and a test asserts the two
+ * are equal, so it cannot silently drift.
+ */
+export const BASE_PIXELS_PER_UNIT = 3.6;
 
 /* ============================================================
  * VALIDATION

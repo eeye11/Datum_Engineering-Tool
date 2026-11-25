@@ -481,7 +481,7 @@ export function drawMathVector({
         `Δx = ${numberText(dx)}`,
         {
           fill: componentStroke,
-          size: 11,
+          size: AUXILIARY_FONT_PX,
         },
       );
 
@@ -491,7 +491,7 @@ export function drawMathVector({
         `Δy = ${numberText(dy)}`,
         {
           fill: componentStroke,
-          size: 11,
+          size: AUXILIARY_FONT_PX,
           anchor: "start",
         },
       );
@@ -546,7 +546,7 @@ export function drawMathVector({
       details.join("   "),
       {
         fill: stroke,
-        size: 11,
+        size: AUXILIARY_FONT_PX,
       },
     );
   }
@@ -788,7 +788,7 @@ export function drawPlotFunctions({ svg, entity, style, toScreen }) {
 
         text(svg, { x: at.x, y: at.y - 14 }, `y = ${component.fitExpression}`, {
           fill: componentStroke,
-          size: 11,
+          size: AUXILIARY_FONT_PX,
         });
       }
     }
@@ -930,7 +930,7 @@ export function drawMathTangent({ svg, parentSvg, entity, style, toScreen }) {
   if (label) {
     text(svg, { x: end.x + 8, y: end.y - 8 }, label, {
       fill: stroke,
-      size: 11,
+      size: AUXILIARY_FONT_PX,
       anchor: "start",
     });
   }
@@ -1039,7 +1039,7 @@ export function drawMathSlopeTriangle({
         y: (start.y + end.y) / 2 + Number(offset.y || 0) - 10,
       },
       labels.join("   "),
-      { fill: stroke, size: 11 },
+      { fill: stroke, size: AUXILIARY_FONT_PX },
     );
   }
 

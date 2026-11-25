@@ -21,6 +21,8 @@ import enggSheets from "../../components/layout/workspace/sheets.js";
 
 const FORMAT = "daetum-document";
 
+import enggStaticsMigration from "./statics-migration.js";
+
 /* Format ids written by older builds, still read. */
 const LEGACY_FORMATS = new Set(["enggdraw", "engg-drawing"]);
 
@@ -229,6 +231,20 @@ function readDocument(parsed) {
   }
 
   const migrated = migrate(parsed.document, version);
+
+  /*
+   * AND THEN EACH STATICS OBJECT IS RE-SEATED IN THE CURRENT SHAPE.
+   *
+   * The version migration moves the DOCUMENT between formats (a drawing became
+   * a list of sheets); this one moves the OBJECTS inside it, from what older
+   * builds stored to what the current code reads - using each object's own
+   * geometry, and without resizing any arrow. It runs on every open, because it
+   * is idempotent, so a file written by the current build passes through
+   * untouched.
+   */
+  if (migrated) {
+    enggStaticsMigration.migrateStaticsDocument(migrated);
+  }
 
   if (!migrated) {
     return {

@@ -6,7 +6,7 @@ import { isDimensionTool } from "../../../features/workspace/annotate/dimension-
 import { drawingState } from "../../../features/workspace/editor-state.js";
 import { objectAtPoint } from "../../../features/workspace/interaction/hit-testing.js";
 import { isVaryingLoadTool } from "../../../features/workspace/statics/load-tool.js";
-import { STATICS_BODY_ATTACHED_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS } from "../../../features/workspace/statics/statics-tools.js";
+import { STATICS_BODY_ATTACHED_TOOLS, STATICS_PLACEMENT_TOOLS, STATICS_SPAN_TOOLS, isBodyAttachedTool } from "../../../features/workspace/statics/statics-tools.js";
 import {
     DYNAMICS_PLACEMENT_TOOLS,
     DYNAMICS_SPAN_TOOLS,
@@ -166,6 +166,26 @@ export function shouldClickSelectExistingObject(
         drawingState.activeTool;
 
     if (!toolId) {
+        return false;
+    }
+
+    /*
+     * A BODY SELECTION IS THE TOOL'S OWN INPUT, NOT A SELECTION.
+     *
+     * The load tools, the supports and the connections are body-attached: their
+     * FIRST click names the member they act on, and the body under the pointer
+     * is exactly what that click is asking for. Taken as a selection, that
+     * click was swallowed here - the student armed the Distributed Load, chose
+     * the beam, and got the beam SELECTED instead of loaded, so the tool could
+     * never get past its first step on any body it already had. The exemption
+     * is read from the interaction's own phase, so every body-attached tool is
+     * covered at once and no list has to be kept in step.
+     */
+    if (
+        drawingState.interaction.phase ===
+        "idle" &&
+        isBodyAttachedTool(toolId)
+    ) {
         return false;
     }
 

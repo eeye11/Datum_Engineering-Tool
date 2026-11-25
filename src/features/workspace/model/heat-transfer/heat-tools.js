@@ -541,6 +541,26 @@ export function heatGeometryTool(toolId) {
     : null;
 }
 
+/*
+ * WHAT ARMS WHEN A HEAT TRANSFER BUTTON IS PRESSED.
+ *
+ * A SHAPE entry reuses an ordinary geometry tool rather than having a Heat
+ * model of its own, so it arms THAT tool - `point`, `line` or
+ * `coordinate-system-2d`. A HEAT entry arms its own id, because it has its own
+ * session and its own object.
+ *
+ * THIS IS A CORRECTION, NOT A PREFERENCE. The Heat Transfer section also offers
+ * Reference Point, Reference Line and Coordinate System - the ordinary
+ * tools - and those ids were in the Heat registry, so arming one started a HEAT
+ * DRAG SESSION instead of placing anything: the status line said "Drag to draw
+ * the Region" and the click produced no object at all. Asking the capability
+ * is what keeps a reused tool on the pipeline that draws it, and it is the same
+ * rule the Fluids section already follows (`fluidsArmedTool`).
+ */
+export function heatArmedTool(toolId) {
+  return heatGeometryTool(toolId) || toolId;
+}
+
 /* The placement gesture a Heat Transfer `heat` entry takes, or null. */
 export function heatGesture(toolId) {
   const tool = HEAT_TOOLS[toolId];

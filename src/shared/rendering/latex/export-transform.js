@@ -313,6 +313,16 @@ export function createExportContext({
 
   const transform = {
     factor,
+    /*
+     * THE DRAWING'S CORNER, AND THE ONE PLACE THE SOURCE RECORD CAN READ IT.
+     *
+     * `point()` subtracts this, so the reader that turns source coordinates
+     * back into model coordinates must add it - and the header the writer emits
+     * (`% DAETUM TRANSFORM`) is built from exactly these numbers. Exposing it
+     * here is what lets the two sides agree instead of each re-deriving the
+     * origin from the object's own bounds.
+     */
+    origin: { ...origin },
     bounds: { ...padded },
     sourceBounds: bounds ? { ...bounds } : { ...EMPTY_BOUNDS },
     maxWidth,

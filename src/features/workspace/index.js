@@ -75,6 +75,7 @@ import { refreshDocumentHeader } from "./commands/document-commands.js";
 import { installDrawOrderControls } from "./commands/draw-order.js";
 import { installToolbarWiring } from "../../components/layout/toolbar/toolbar-wiring.js";
 import { installWorkspaceLayout } from "../../components/layout/workspace/workspace-layout.js";
+import { installDrawingRulers } from "../../components/layout/workspace/rulers.js";
 import { installDrawingPanel } from "../../components/layout/panels/drawing-panel.js";
 import { installCanvasEvents } from "./interaction/canvas-events.js";
 import { installGestureInput } from "./interaction/gesture-wiring.js";
@@ -105,6 +106,17 @@ installDocumentCommands();
 installDrawOrderControls();
 installToolbarWiring();
 installWorkspaceLayout();
+
+/*
+ * THE MEASUREMENT RULERS go on the canvas after the layout is wired, so the
+ * canvas is already the box the rulers will measure, and before the first
+ * sheet is loaded - the first paint then already shows the right scale.
+ *
+ * They are an AID beside the drawing, not a drawing surface: they live in the
+ * canvas, read its camera, and never write to the document.
+ */
+installDrawingRulers();
+
 installDrawingPanel();
 installCanvasEvents();
 installGestureInput();

@@ -29,6 +29,7 @@ import { HIT_PIXELS, handleTolerance } from "./pointer-precision.js";
 import { translateObject } from "../geometry/transforms.js";
 import { selectionBounds, selectionCorners } from "../../../shared/selection/selection-transform.js";
 import { STATICS_BODY_TYPES, isConnectionType, isSupportType } from "../../../shared/model/feature-types.js";
+import enggStaticsHierarchy from "../../../shared/geometry/statics-hierarchy.js";
 import { dynamicsTypeOf } from "../dynamics/dynamics-tools.js";
 import { heatHandlesFor } from "./heat-handles.js";
 
@@ -142,26 +143,7 @@ export function cancelManipulationDrag() {
 
 const MANIPULATION_PICK_PX = 9;
 
-/*
- * The features attached to a given body.
- *
- * Attachment is recorded as an authoritative parent id, so
- * the relationship is read from the feature collection and
- * never inferred from where a feature happens to sit.
- */
-function attachedChildren(
-    parentId
-) {
-    if (!parentId) {
-        return [];
-    }
 
-    return drawingState.objects.filter(
-        object =>
-            object.parentId ===
-                parentId
-    );
-}
 
 /*
  * Move a body and everything attached to it by the same
@@ -208,33 +190,31 @@ export function moveObjectAndChildren(
             );
     }
 
-    translateObject(
-        object,
-        deltaX,
-        deltaY
-    );
+    /*
+     * EVERYTHING THE BODY CARRIES MOVES WITH IT, by ONE list from ONE module.
+     *
+     * Structural children - the loads, moments and supports placed on it - and
+     * the frame of any analysis diagram drawn from it. `transformGroupOf` is
+     * the single answer to "what follows a beam", so the drag, the panel and
+     * the renderer cannot disagree about it.
+     */
+    enggStaticsHierarchy
+        .transformGroupOf(object, drawingState.objects)
+        .forEach(member => {
+            if (member !== object) {
+                const original = originals?.[member.id];
 
-    attachedChildren(
-        object.id
-    ).forEach(child => {
-        const original =
-            originals?.[child.id];
+                if (original) {
+                    member.geometry = JSON.parse(JSON.stringify(original));
+                }
+            }
 
-        if (original) {
-            child.geometry =
-                JSON.parse(
-                    JSON.stringify(
-                        original
-                    )
-                );
-        }
-
-        translateObject(
-            child,
-            deltaX,
-            deltaY
-        );
-    });
+            translateObject(
+                member,
+                deltaX,
+                deltaY
+            );
+        });
 }
 
 /*
