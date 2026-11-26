@@ -20,6 +20,7 @@
  * every category.
  */
 const { bootApp } = require("./helpers/boot-app.cjs");
+const { modulePath } = require("./helpers/source-path.cjs");
 
 let pass = 0;
 let fail = 0;
@@ -45,6 +46,10 @@ const categories = [...document.querySelectorAll(".drawing-category")].map(
 );
 
 check("the toolset bar has categories", categories.length > 0, categories.join(", "));
+
+const registeredCategories = Object.keys(require(modulePath("tools.js")).engineeringTools);
+const missingCategories = registeredCategories.filter((category) => !categories.includes(category));
+check("every registered toolset has a category button", missingCategories.length === 0, missingCategories.join(", "));
 
 const seen = [];
 
