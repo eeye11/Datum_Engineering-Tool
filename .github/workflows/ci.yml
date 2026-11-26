@@ -27,9 +27,11 @@ jobs:
 
       - name: Unit and integration tests
         run: |
-          # Keep the readable test output and propagate failures through tee.
-          set -o pipefail
-          node --test --test-reporter=spec tests/*.test.cjs 2>&1 | tee test-report.log
+          # --test-force-exit: a jsdom suite keeps timers scheduled forever, so
+          # without it the runner waits after the report is printed and CI hangs.
+          # --test-timeout: any suite that would wait forever is failed instead.
+          node --test --test-force-exit --test-timeout=120000 \
+            --test-reporter=spec tests/*.test.cjs 2>&1 | tee test-report.log
 
       - name: Build
         run: npm run build

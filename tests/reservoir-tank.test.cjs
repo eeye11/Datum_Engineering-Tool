@@ -32,7 +32,7 @@ test.after(() => {
 });
 
 /* Pixels per drawing unit at the camera zoom the tests use (zoom 1). */
-const PIXELS_PER_UNIT = 2.4;
+const PIXELS_PER_UNIT = 3.6;
 const CANVAS = {
   left: 0,
   top: 0,

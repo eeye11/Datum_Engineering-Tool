@@ -297,4 +297,12 @@ process.on("uncaughtException", (error) => {
   if (fail) {
     process.exitCode = 1;
   }
+
+  /*
+   * THE PROCESS IS ENDED HERE, NOT LEFT TO DRAIN. jsdom's visual clock keeps
+   * timers scheduled forever, so the event loop would never go idle and a test
+   * runner (and CI with it) would wait indefinitely after the report is
+   * complete. The exit code was already set above.
+   */
+  process.exit(fail ? 1 : 0);
 })();

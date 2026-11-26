@@ -229,7 +229,13 @@ test("the Sum tool places a circle with two signed inputs and one output", async
   assert.deepEqual(sum.metadata.inputSigns, ["+", "+"]);
   assert.equal(sum.metadata.outputs, 1);
   assert.equal(drawingState.activeTool, "select");
-  assert.ok(Math.abs(Number(liveSum.querySelector("circle")?.getAttribute("r")) - 43.2) < 0.001);
+  /*
+   * THE SUM'S DRAWN RADIUS. The tool stores 18 model units, and the canvas
+   * projects a unit at `BASE_PIXELS_PER_UNIT` (3.6) pixels at zoom 1 - so the
+   * circle on screen is 64.8px. The old 43.2 was 18 x 2.4, the scale before
+   * it was raised so the position marked 150 reads 100.
+   */
+  assert.ok(Math.abs(Number(liveSum.querySelector("circle")?.getAttribute("r")) - 18 * 3.6) < 0.001);
   assert.equal(liveSum.querySelectorAll("circle").length, 4, "the Sum has three nodes and its body");
   assert.deepEqual([...liveSum.querySelectorAll("text")].map((text) => text.textContent), ["+", "+"]);
   assert.equal(objectAtPoint({ x: 150, y: 0 })?.id, sum.id, "the circle interior selects the Sum");

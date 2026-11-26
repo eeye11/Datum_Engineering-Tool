@@ -812,6 +812,19 @@
         --datum-gold-ink: #4DD0C5;
         --datum-gold-tint: #203B3C;
 
+        /*
+         * THE GUIDE'S GOLD, LIFTED FOR THE OS-DARK FALLBACK.
+         *
+         * The same values the explicit dark theme declares - a user on System
+         * Default and one who picked Dark must get the same help cursor, and
+         * `theme-tokens.test.cjs` checks every palette declares every token.
+         */
+        --datum-guide-gold: #E7BC55;
+        --datum-guide-gold-soft: rgba(231, 188, 85, 0.26);
+        --datum-guide-gold-ink: #F3DCA6;
+        --datum-guide-outline: #E8F5F3;
+        --datum-guide-halo: rgba(232, 245, 243, 0.20);
+
         --datum-ink: #E8F5F3;
         --datum-muted: #A8C6C3;
         --datum-subtle: var(--precision-night-500);

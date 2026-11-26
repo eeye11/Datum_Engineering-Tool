@@ -72,14 +72,14 @@ export function canvasBounds(element = canvasElement()) {
  * third and fourth arguments exist so this can be used with no drawing state at
  * all - a test, or a caller holding a saved viewport.
  */
-export function createProjection(camera, size, basePixelsPerUnit = 2.4) {
+export function createProjection(camera, size, basePixelsPerUnit = 3.6) {
   const c = camera || {};
   const zoom = Number(c.zoom) || 1;
   const panX = Number(c.panX) || 0;
   const panY = Number(c.panY) || 0;
   const width = Number(size?.width) || 0;
   const height = Number(size?.height) || 0;
-  const scale = (Number(basePixelsPerUnit) || 2.4) * zoom;
+  const scale = (Number(basePixelsPerUnit) || 3.6) * zoom;
 
   return {
     scale,

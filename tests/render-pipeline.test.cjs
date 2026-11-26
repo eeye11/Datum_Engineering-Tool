@@ -191,7 +191,15 @@ const SANCTIONED = new Set([
    * same view-only surface the sketch canvas is, now shared by every surface
    * that shows a coordinate system. It is on this list for the same reason.
    */
-  "sketch-axes.js"
+  "sketch-axes.js",
+  /*
+   * THE TUTORIAL'S HELP CURSOR AND ITS DEMONSTRATION. Both are editor chrome:
+   * a fixed overlay that exists only while a tutorial runs, is never part of
+   * the document, and is never exported. The student's drawing is untouched -
+   * the path, the trail and the endpoints are drawn over the sheet and removed
+   * with the step.
+   */
+  "guide-tutorial.js"
 ]);
 
 /* The drawing controller (src/features/workspace/) builds its own canvas overlay. */

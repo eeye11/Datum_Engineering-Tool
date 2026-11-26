@@ -46,8 +46,14 @@ test('canvas glyphs, editing textarea, and selection bounds respect typography',
  assert.equal(text.getAttribute('font-size'),'24');assert.equal(text.getAttribute('font-weight'),'bold');
  assert.equal(text.getAttribute('font-style'),'italic');assert.equal(text.getAttribute('text-decoration'),'underline');
  assert.equal(text.getAttribute('text-anchor'),'middle');
- assert.equal(Number(text.querySelector('tspan').getAttribute('dy')),43.2);
- assert.equal(Number(text.getAttribute('x')),450+8*2.4);
+ /*
+  * THE SPACING THE RENDERER EMITS. `LINE_SPACING` is 1.2, and the note's
+  * own `lineSpacing` multiplies it, so a 24px note advances 43.2px per
+  * line - 24 x 1.8. An older 1.5 factor assumed a spacing the typography
+  * module never had.
+  */
+ assert.equal(Number(text.querySelector('tspan').getAttribute('dy')),24*1.8);
+ assert.equal(Number(text.getAttribute('x')),450+8*3.6);
  const before=annotations.textBoundsOf(note,state);
  const smaller=annotations.textBoundsOf({...note,style:{...note.style,fontSize:12}},state);
  assert.ok(before.maxX-before.minX>smaller.maxX-smaller.minX);

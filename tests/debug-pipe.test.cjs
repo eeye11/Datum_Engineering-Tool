@@ -5,7 +5,7 @@ const { locate } = require("./helpers/source-path.cjs");
 
 test.after(() => setImmediate(() => process.exit(process.exitCode || 0)));
 
-const PIXELS_PER_UNIT = 2.4;
+const PIXELS_PER_UNIT = 3.6;
 const CANVAS = {
   left: 0,
   top: 0,

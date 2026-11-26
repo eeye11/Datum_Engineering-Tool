@@ -431,11 +431,11 @@ test("a sheet of Statics tools keeps model, source and drawing together", async 
     bmd: ["-{Latex"],
     afd: ["-{Latex"],
     /* both axes, 25 either side of the stored origin, as the writer emits it */
-    "coordinate-system": ["6.4601,4.8893", "31.4601,4.8893", "6.4601,29.8893"],
+    "coordinate-system": ["6.78,0.1801", "31.78,0.1801", "6.78,25.1801"],
     "reference-point": [at(150, -120)],
     "reference-line": [at(140, -150), at(180, -150)],
     /* the sweep is unchanged by the scale; the radius is a length, so it scales */
-    "reference-arc": ["arc[start angle=0, end angle=120, radius=4.632"],
+    "reference-arc": ["arc[start angle=0, end angle=120, radius=4.8614"],
   };
 
   require("fs").writeFileSync(

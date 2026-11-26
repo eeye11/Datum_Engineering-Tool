@@ -112,12 +112,17 @@ console.log("\n  a nearly-vertical cursor snaps to exactly vertical\n");
 /*
  * 88.9 and 91.2 degrees are inside the shared 7-degree inference tolerance,
  * so the direction must come out EXACTLY vertical - not merely close.
+ *
+ * The offsets are stated in DRAWING UNITS, and the inference band is a
+ * SCREEN distance (24 px). At the drawing's scale of 3.6 px per unit that is
+ * 24 / 3.6 = 6.67 units, so a cursor a few units off the reference's column
+ * still catches it - exactly what these offsets exercise.
  */
 [
   { x: 150, y: 120, label: "dead vertical" },
-  { x: 154, y: 120, label: "1.9 degrees off" },
-  { x: 146, y: 120, label: "1.9 degrees the other way" },
-  { x: 158, y: 120, label: "3.8 degrees off" },
+  { x: 152.5, y: 120, label: "1.9 degrees off" },
+  { x: 147.5, y: 120, label: "1.9 degrees the other way" },
+  { x: 155, y: 120, label: "3.8 degrees off" },
 ].forEach(({ x, y, label }) => {
   const direction = directionFor({ x, y }, constantInteraction());
 

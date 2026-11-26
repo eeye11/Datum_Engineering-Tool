@@ -122,7 +122,8 @@ const editor = dom.window.enggNoteEditor;
 
 /* ---------------------------------------------------------------- helpers */
 
-const BASE = 2.4;
+/* The camera's pixels per drawing unit at 100%, as `drawing-state.js` owns it. */
+const BASE = 3.6;
 
 const camera = (zoom = 1, panX = 0, panY = 0) => ({ zoom, panX, panY });
 
@@ -515,7 +516,7 @@ console.log("----------------------------------------");
  * placed naively would be drawn over the inspector.
  */
 const rightEdge = entry.clientPointForObject(
-  note({ geometry: { position: { x: 166.7, y: 0 } } }),
+  note({ geometry: { position: { x: 111.1, y: 0 } } }),
   { camera: camera(1) },
 );
 
@@ -528,7 +529,7 @@ check(
 editor.open({
   text: "",
   multiline: false,
-  object: note({ geometry: { position: { x: 166.7, y: 0 } } }),
+  object: note({ geometry: { position: { x: 111.1, y: 0 } } }),
   camera: camera(1),
 });
 
